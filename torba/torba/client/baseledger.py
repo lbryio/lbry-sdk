@@ -560,12 +560,11 @@ class BaseLedger(metaclass=LedgerRegistry):
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
                 addresses.add(
-                    self.hash160_to_address(txi.txo_ref.txo.script.values['pubkey_hash'])
+                    self.hash160_to_address(txi.txo_ref.txo.pubkey_hash)
                 )
         for txo in tx.outputs:
-            addresses.add(
-                self.hash160_to_address(txo.script.values['pubkey_hash'])
-            )
+            if txo.has_address:
+                addresses.add(self.hash160_to_address(txo.pubkey_hash))
         records = await self.db.get_addresses(address__in=addresses)
         _, pending = await asyncio.wait([
             self.on_transaction.where(partial(

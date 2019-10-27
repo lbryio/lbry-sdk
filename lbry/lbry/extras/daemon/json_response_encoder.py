@@ -159,7 +159,7 @@ class JSONResponseEncoder(JSONEncoder):
             'nout': txo.position,
             'height': tx_height,
             'amount': dewies_to_lbc(txo.amount),
-            'address': txo.get_address(self.ledger),
+            'address': txo.get_address(self.ledger) if txo.has_address else None,
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
         }
@@ -176,6 +176,10 @@ class JSONResponseEncoder(JSONEncoder):
             output['claim_op'] = 'update'
         elif txo.script.is_support_claim:
             output['type'] = 'support'
+        elif txo.is_purchase_data:
+            output['type'] = 'purchase'
+            if txo.can_decode_purchase_data:
+                output['claim_id'] = txo.purchase_data.claim_id
         else:
             output['type'] = 'payment'
 

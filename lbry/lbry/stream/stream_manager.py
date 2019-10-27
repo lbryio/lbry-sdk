@@ -24,6 +24,7 @@ if typing.TYPE_CHECKING:
     from lbry.wallet import LbryWalletManager
     from lbry.wallet.transaction import Transaction
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
+    from torba.client.wallet import Wallet
 
 log = logging.getLogger(__name__)
 
@@ -65,12 +66,12 @@ def path_or_none(p) -> typing.Optional[str]:
 
 class StreamManager:
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
-                 wallet: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node'],
+                 wallet_manager: 'LbryWalletManager', storage: 'SQLiteStorage', node: typing.Optional['Node'],
                  analytics_manager: typing.Optional['AnalyticsManager'] = None):
         self.loop = loop
         self.config = config
         self.blob_manager = blob_manager
-        self.wallet = wallet
+        self.wallet_manager = wallet_manager
         self.storage = storage
         self.node = node
         self.analytics_manager = analytics_manager
@@ -309,7 +310,7 @@ class StreamManager:
         for url, txo in resolves.items():
             if isinstance(txo, Output):
                 tx_height = txo.tx_ref.height
-                best_height = self.wallet.ledger.headers.height
+                best_height = self.wallet_manager.ledger.headers.height
                 result[url] = {
                     'name': txo.claim_name,
                     'value': txo.claim,
@@ -322,9 +323,9 @@ class StreamManager:
                     'height': tx_height,
                     'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
                     'claim_sequence': -1,
-                    'address': txo.get_address(self.wallet.ledger),
+                    'address': txo.get_address(self.wallet_manager.ledger),
                     'valid_at_height': txo.meta.get('activation_height', None),
-                    'timestamp': self.wallet.ledger.headers[tx_height]['timestamp'],
+                    'timestamp': self.wallet_manager.ledger.headers[tx_height]['timestamp'],
                     'supports': []
                 }
             else:
@@ -337,7 +338,9 @@ class StreamManager:
                                        file_name: typing.Optional[str] = None,
                                        download_directory: typing.Optional[str] = None,
                                        save_file: typing.Optional[bool] = None,
-                                       resolve_timeout: float = 3.0) -> ManagedStream:
+                                       resolve_timeout: float = 3.0,
+                                       wallet: typing.Optional['Wallet'] = None) -> ManagedStream:
+        wallet = wallet or self.wallet_manager.default_wallet
         timeout = timeout or self.config.download_timeout
         start_time = self.loop.time()
         resolved_time = None
@@ -359,7 +362,7 @@ class StreamManager:
                 raise ResolveError("cannot download a channel claim, specify a /path")
             try:
                 resolved_result = self._convert_to_old_resolve_output(
-                    await asyncio.wait_for(self.wallet.ledger.resolve([uri]), resolve_timeout)
+                    await asyncio.wait_for(self.wallet_manager.ledger.resolve([uri]), resolve_timeout)
                 )
             except asyncio.TimeoutError:
                 raise ResolveTimeout(uri)
@@ -409,7 +412,7 @@ class StreamManager:
                     msg = f"fee of {fee_amount} exceeds max configured to allow of {max_fee_amount}"
                     log.warning(msg)
                     raise KeyFeeAboveMaxAllowed(msg)
-                balance = await self.wallet.default_account.get_balance()
+                balance = await self.wallet_manager.get_balance(wallet)
                 if lbc_to_dewies(str(fee_amount)) > balance:
                     msg = f"fee of {fee_amount} exceeds max available balance"
                     log.warning(msg)
@@ -429,8 +432,9 @@ class StreamManager:
             if to_replace:  # delete old stream now that the replacement has started downloading
                 await self.delete_stream(to_replace)
             elif fee_address:
-                stream.content_fee = await self.wallet.send_amount_to_address(
-                    lbc_to_dewies(str(fee_amount)), fee_address.encode('latin1')
+                stream.content_fee = await self.wallet_manager.buy_claim(
+                    stream.claim_id, lbc_to_dewies(str(fee_amount)),
+                    fee_address.encode('latin1'), wallet.accounts
                 )
                 log.info("paid fee of %s for %s", fee_amount, uri)
                 await self.storage.save_content_fee(stream.stream_hash, stream.content_fee)
@@ -451,7 +455,7 @@ class StreamManager:
         finally:
             if self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
                                                                  stream.downloader.time_to_first_bytes))):
-                server = self.wallet.ledger.network.client.server
+                server = self.wallet_manager.ledger.network.client.server
                 self.loop.create_task(
                     self.analytics_manager.send_time_to_first_bytes(
                         resolved_time, self.loop.time() - start_time, None if not stream else stream.download_id,
