@@ -83,7 +83,7 @@ def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
     async def get_balance(*_):
         return balance
 
-    mock_wallet.default_account.get_balance = get_balance
+    mock_wallet.get_balance = get_balance
     return mock_wallet, claim['permanent_url']
 
 
@@ -226,7 +226,8 @@ class TestStreamManager(BlobExchangeTestBase):
         start = self.loop.time()
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
         duration = self.loop.time() - start
-        self.assertTrue(4.0 >= duration >= 3.0)
+        self.assertLessEqual(duration, 4.7)
+        self.assertGreaterEqual(duration, 3.0)
 
     async def test_download_stop_resume_delete(self):
         await self.setup_stream_manager()
