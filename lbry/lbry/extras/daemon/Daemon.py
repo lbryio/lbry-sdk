@@ -927,14 +927,15 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               STREAM_MANAGER_COMPONENT)
-    async def jsonrpc_get(self, uri, file_name=None, download_directory=None, timeout=None, save_file=None):
+    async def jsonrpc_get(
+            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>]
+             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
 
 
         Options:
@@ -943,14 +944,17 @@ class Daemon(metaclass=JSONRPCServerType):
             --download_directory=<download_directory>  : (str) full path to the directory to download into
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
+            --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet
 
         Returns: {File}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if download_directory and not os.path.isdir(download_directory):
             return {"error": f"specified download directory \"{download_directory}\" does not exist"}
         try:
             stream = await self.stream_manager.download_stream_from_uri(
-                uri, self.exchange_rate_manager, timeout, file_name, download_directory, save_file=save_file
+                uri, self.exchange_rate_manager, timeout, file_name, download_directory,
+                save_file=save_file, wallet=wallet
             )
             if not stream:
                 raise DownloadSDTimeout(uri)

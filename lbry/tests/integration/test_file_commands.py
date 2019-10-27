@@ -348,7 +348,7 @@ class FileCommands(CommandTestCase):
         response = await self.daemon.jsonrpc_get('lbry://icanpay')
         raw_content_fee = response.content_fee.raw
         await self.ledger.wait(response.content_fee)
-        await self.assertBalance(self.account, '8.925555')
+        await self.assertBalance(self.account, '8.925538')
         self.assertEqual(len(self.file_list()), 1)
 
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
@@ -399,7 +399,7 @@ class FileCommands(CommandTestCase):
         await self.assertBalance(self.account, '9.483893')
         response = await self.daemon.jsonrpc_get('lbry://somename')
         await self.ledger.wait(response.content_fee)
-        await self.assertBalance(self.account, '8.483769')
+        await self.assertBalance(self.account, '8.483752')
 
         # Assert the file downloads
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)

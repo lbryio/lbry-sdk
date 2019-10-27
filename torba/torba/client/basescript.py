@@ -423,6 +423,12 @@ class BaseOutputScript(Script):
             'script_hash': script_hash
         })
 
+    @classmethod
+    def return_data(cls, data):
+        return cls(template=cls.RETURN_DATA, values={
+            'data': data
+        })
+
     @property
     def is_pay_pubkey(self):
         return self.template.name.endswith('pay_pubkey_full')

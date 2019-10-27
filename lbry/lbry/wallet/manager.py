@@ -161,10 +161,11 @@ class LbryWalletManager(BaseWalletManager):
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
 
-    async def send_amount_to_address(self, amount: int, destination_address: bytes, account=None):
-        account = account or self.default_account
-        tx = await Transaction.pay(amount, destination_address, [account], account)
-        await account.ledger.broadcast(tx)
+    async def buy_claim(self, claim_id: str, amount: int, destination_address: bytes, accounts):
+        tx = await Transaction.purchase(
+            claim_id, amount, destination_address, accounts, accounts[0]
+        )
+        await self.ledger.broadcast(tx)
         return tx
 
     async def get_transaction(self, txid):

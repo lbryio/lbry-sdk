@@ -14,6 +14,7 @@ from cryptography.exceptions import InvalidSignature
 from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
 from torba.client.hash import hash160, sha256, Base58
 from lbry.schema.claim import Claim
+from lbry.schema.purchase import Purchase
 from lbry.schema.url import normalize_name
 from lbry.wallet.account import Account
 from lbry.wallet.script import InputScript, OutputScript
@@ -188,9 +189,31 @@ class Output(BaseOutput):
         return cls(amount, script)
 
     @classmethod
-    def purchase_claim_pubkey_hash(cls, amount: int, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.purchase_claim_pubkey_hash(unhexlify(claim_id)[::-1], pubkey_hash)
-        return cls(amount, script)
+    def add_purchase_data(cls, purchase: Purchase) -> 'Output':
+        script = cls.script_class.return_data(purchase)
+        return cls(0, script)
+
+    @property
+    def is_purchase_data(self) -> bool:
+        return self.script.is_return_data and (
+            isinstance(self.script.values['data'], Purchase) or
+            Purchase.has_start_byte(self.script.values['data'])
+        )
+
+    @property
+    def purchase_data(self) -> Purchase:
+        if self.is_purchase_data:
+            if not isinstance(self.script.values['data'], Purchase):
+                self.script.values['data'] = Purchase.from_bytes(self.script.values['data'])
+            return self.script.values['data']
+        raise ValueError('Output does not have purchase data.')
+
+    @property
+    def can_decode_purchase_data(self):
+        try:
+            return self.purchase_data
+        except:
+            return False
 
 
 class Transaction(BaseTransaction):
@@ -246,13 +269,12 @@ class Transaction(BaseTransaction):
         return cls.create([], [support_output], funding_accounts, change_account)
 
     @classmethod
-    def purchase(cls, claim: Output, amount: int, merchant_address: bytes,
+    def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
                  funding_accounts: List[Account], change_account: Account):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        claim_output = Output.purchase_claim_pubkey_hash(
-            amount, claim.claim_id, ledger.address_to_hash160(merchant_address)
-        )
-        return cls.create([], [claim_output], funding_accounts, change_account)
+        payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
+        data = Output.add_purchase_data(Purchase(claim_id))
+        return cls.create([], [payment, data], funding_accounts, change_account)
 
     @property
     def my_inputs(self):
