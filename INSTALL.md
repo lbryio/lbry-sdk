@@ -1,10 +1,10 @@
 # Installing LBRY
 
-If only the JSON-RPC API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md)!
+The recommended way to install LBRY is to use a pre-built binary if only the JSON-RPC API server is needed. We provide binaries for all major operating systems. See the [README](README.md)!
 
 These instructions are for installing LBRY from source, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (godspeed, TempleOS users).
 
-Here's a video walkthrough of this setup, which is itself hosted by the LBRY network and provided via [spee.ch](https://github.com/lbryio/spee.ch):
+Here's a video walkthrough of this setup, which itself is hosted by the LBRY network and provided via [spee.ch](https://github.com/lbryio/spee.ch):
 [![Setup for development](https://spee.ch/2018-10-04-17-13-54-017046806.png)](https://spee.ch/967f99344308f1e90f0620d91b6c93e4dfb240e0/lbrynet-dev-setup.mp4)
 
 ## Prerequisites
@@ -41,7 +41,7 @@ sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv 
 
 On Raspbian, you will also need to install `python-pyparsing`.
 
-If you're running another Linux distro, install the equivalent of the above packages for your system.
+If you're running another Linux distro, install the equivalent of the above packages on your system.
 
 ## Installation
 
