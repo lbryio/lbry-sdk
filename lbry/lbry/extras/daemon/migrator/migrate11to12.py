@@ -40,12 +40,12 @@ def do_migration(conf):
 
     # step 5: transfer content from old to new
     select = "select * from file"
-    for (stream_hash, file_name, download_dir, data_rate, blob_rate, status, saved_file, fee) \
+    for (stream_hash, file_name, download_dir, blob_rate, status, saved_file, fee) \
             in cursor.execute(select).fetchall():
         added_on = int(time.time())
         cursor.execute(
             "insert into new_file values (?, ?, ?, ?, ?, ?, ?, ?)",
-            (stream_hash, file_name, download_dir, data_rate, blob_rate, status, saved_file, fee, added_on)
+            (stream_hash, file_name, download_dir, blob_rate, status, saved_file, fee, added_on)
         )
 
     # step 6: drop old table
