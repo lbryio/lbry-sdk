@@ -339,7 +339,6 @@ class DHTComponent(Component):
         self.external_udp_port = upnp_component.upnp_redirects.get("UDP", self.conf.udp_port)
         external_ip = upnp_component.external_ip
         if not external_ip:
-            log.warning("UPnP component failed to get external ip")
             external_ip = await utils.get_external_ip()
             if not external_ip:
                 log.warning("failed to get external ip")
@@ -577,6 +576,10 @@ class UPnPComponent(Component):
                     log.debug("set up upnp port redirects for gateway: %s", self.upnp.gateway.manufacturer_string)
         else:
             log.error("failed to setup upnp")
+        if not self.external_ip:
+            self.external_ip = await utils.get_external_ip()
+            if self.external_ip:
+                log.info("detected external ip using lbry.com fallback")
         if self.component_manager.analytics_manager:
             await self.component_manager.analytics_manager.send_upnp_setup_success_fail(
                 success, await self.get_status()
