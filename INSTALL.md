@@ -1,6 +1,6 @@
 # Installing LBRY
 
-If only the JSON-RPC API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md)!
+If only the JSON-RPC API server is needed, the recommended way to install LBRY is to use a pre-built binary. We provide binaries for all major operating systems. See the [README](README.md)
 
 These instructions are for installing LBRY from source, which is recommended if you are interested in doing development work or LBRY is not available on your operating system (godspeed, TempleOS users).
 
