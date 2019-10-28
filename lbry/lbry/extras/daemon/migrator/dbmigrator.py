@@ -35,8 +35,8 @@ def migrate_db(conf, start, end):
             raise Exception(f"DB migration of version {current} to {current+1} is not available")
         try:
             do_migration(conf)
-        except Exception as err:
-            log.info("failed to migrate database: %s", str(err))
+        except Exception:
+            log.exception("failed to migrate database")
             if os.path.exists(os.path.join(conf.data_dir, "lbrynet.sqlite")):
                 backup_name = f"rev_{current}_unmigrated_database"
                 count = 0
