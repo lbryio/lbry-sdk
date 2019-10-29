@@ -664,6 +664,9 @@ class KademliaProtocol(DatagramProtocol):
             log.error("Unexpected response: %s" % err)
             return peer.node_id, False
         except RemoteException as err:
+            if 'findValue() takes exactly 2 arguments (5 given)' in str(err):
+                log.debug("peer %s:%i is running an incompatible version of lbrynet", peer.address, peer.udp_port)
+                return peer.node_id, False
             if 'Invalid token' not in str(err):
                 log.exception("Unexpected error while storing blob_hash")
                 return peer.node_id, False
