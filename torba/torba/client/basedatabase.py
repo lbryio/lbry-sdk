@@ -398,7 +398,7 @@ class BaseDatabase(SQLiteMixin):
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
                 txo = txi.txo_ref.txo
-                if txo.get_address(self.ledger) == address:
+                if txo.has_address and txo.get_address(self.ledger) == address:
                     conn.execute(*self._insert_sql("txi", {
                         'txid': tx.id,
                         'txoid': txo.id,
