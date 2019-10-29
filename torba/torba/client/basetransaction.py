@@ -226,6 +226,10 @@ class BaseOutput(InputOutput):
     def pubkey_hash(self):
         return self.script.values['pubkey_hash']
 
+    @property
+    def has_address(self):
+        return 'pubkey_hash' in self.script.values
+
     def get_address(self, ledger):
         return ledger.hash160_to_address(self.pubkey_hash)
 
