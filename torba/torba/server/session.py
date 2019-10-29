@@ -125,7 +125,6 @@ class SessionManager:
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.servers: typing.Dict[str, asyncio.AbstractServer] = {}
         self.sessions: typing.Set['SessionBase'] = set()
-        self.max_subs = env.max_subs
         self.cur_group = SessionGroup(0)
         self.txs_sent = 0
         self.start_time = time.time()
@@ -272,11 +271,9 @@ class SessionManager:
                     ])
 
             # Consolidate small groups
-            bw_limit = self.env.bandwidth_limit
             group_map = self._group_map()
             groups = [group for group, sessions in group_map.items()
-                      if len(sessions) <= 5 and
-                      sum(s.bw_charge for s in sessions) < bw_limit]
+                      if len(sessions) <= 5]  # fixme: apply session cost here
             if len(groups) > 1:
                 new_group = groups[-1]
                 for group in groups:
@@ -511,10 +508,7 @@ class SessionManager:
             self.logger.info(f'max session count: {self.env.max_sessions:,d}')
             self.logger.info(f'session timeout: '
                              f'{self.env.session_timeout:,d} seconds')
-            self.logger.info(f'session bandwidth limit {self.env.bandwidth_limit:,d} bytes')
             self.logger.info(f'max response size {self.env.max_send:,d} bytes')
-            self.logger.info(f'max subscriptions across all sessions: {self.max_subs:,d}')
-            self.logger.info(f'max subscriptions per session: {self.env.max_session_subs:,d}')
             if self.env.drop_client is not None:
                 self.logger.info(f'drop clients matching: {self.env.drop_client.pattern}')
             # Start notifications; initialize hsub_results
@@ -613,14 +607,6 @@ class SessionManager:
         self.sessions.remove(session)
         self.session_event.set()
 
-    def new_subscription(self):
-        if self.subs_room <= 0:
-            self.subs_room = self.max_subs - self._sub_count()
-            if self.subs_room <= 0:
-                raise RPCError(BAD_REQUEST, f'server subscription limit '
-                               f'{self.max_subs:,d} reached')
-        self.subs_room -= 1
-
 
 class SessionBase(RPCSession):
     """Base class of ElectrumX JSON sessions.
@@ -648,7 +634,6 @@ class SessionBase(RPCSession):
         self.anon_logs = self.env.anon_logs
         self.txs_sent = 0
         self.log_me = False
-        self.bw_limit = self.env.bandwidth_limit
         self.daemon_request = self.session_mgr.daemon_request
         # Hijack the connection so we can log messages
         self._receive_message_orig = self.connection.receive_message
@@ -740,7 +725,6 @@ class ElectrumX(SessionBase):
         self.subscribe_headers = False
         self.subscribe_headers_raw = False
         self.connection.max_response_size = self.env.max_send
-        self.max_subs = self.env.max_session_subs
         self.hashX_subs = {}
         self.sv_seen = False
         self.mempool_statuses = {}
@@ -895,13 +879,6 @@ class ElectrumX(SessionBase):
                 if (utxo.tx_hash, utxo.tx_pos) not in spends]
 
     async def hashX_subscribe(self, hashX, alias):
-        # First check our limit.
-        if len(self.hashX_subs) >= self.max_subs:
-            raise RPCError(BAD_REQUEST, 'your address subscription limit '
-                           f'{self.max_subs:,d} reached')
-
-        # Now let the session manager check its limit
-        self.session_mgr.new_subscription()
         self.hashX_subs[hashX] = alias
         return await self.address_status(hashX)
 
