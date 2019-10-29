@@ -23,25 +23,25 @@ By default, `lbrynet` will provide a JSON-RPC server at `http://localhost:5279`.
 
 Our [quickstart guide](https://lbry.tech/playground) provides a simple walkthrough and examples for learning.
 
-With the daemon running, `lbrynet commands` will show you a list of commands.
+While the daemon is running, `lbrynet commands` will show you a list of commands.
 
-The full API is documented [here](https://lbry.tech/api/sdk).
+The full API can be found documented [here](https://lbry.tech/api/sdk).
 
 ## Running from source
 
-Installing from source is also relatively painless. Full instructions are in [INSTALL.md](INSTALL.md)
+Installing from source is also relatively easiest. Full instructions are provided in [INSTALL.md](INSTALL.md)
 
 ## Contributing
 
-Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.
+Contributions to this project are always welcome, encouraged, and compensated. For more details, please check out [this](https://lbry.tech/contribute) link.
 
 ## License
 
-This project is MIT licensed. For the full license, see [LICENSE](LICENSE).
+This project is MIT licensed. For the full license, check [LICENSE](LICENSE).
 
 ## Security
 
-We take security seriously. Please contact security@lbry.com regarding any security issues. [Our GPG key is here](https://lbry.com/faq/gpg-key) if you need it.
+We take security very seriously. Please contact security@lbry.com regarding any security issues. [Our GPG key is here](https://lbry.com/faq/gpg-key) in case if you need it.
 
 ## Contact
 
@@ -53,4 +53,4 @@ The documentation for the API can be found [here](https://lbry.tech/api/sdk).
 
 Daemon defaults, ports, and other settings are documented [here](https://lbry.tech/resources/daemon-settings).
 
-Settings can be configured using a daemon-settings.yml file. An example can be found [here](https://github.com/lbryio/lbry-sdk/blob/master/lbry/example_daemon_settings.yml).
+Settings can be configured using a daemon-settings.yml file. An example can also be found [here](https://github.com/lbryio/lbry-sdk/blob/master/lbry/example_daemon_settings.yml).
