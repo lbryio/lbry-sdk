@@ -9,8 +9,14 @@ from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
 from lbry.utils import generate_id
-from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, \
-    DownloadDataTimeout
+from torba.client.errors import InsufficientFundsError
+from lbry.error import KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, DownloadDataTimeout
+from torba.client.wallet import Wallet
+from torba.client.constants import CENT, NULL_HASH32
+from torba.client.basenetwork import ClientSession
+from lbry.conf import Config
+from lbry.wallet.ledger import MainNetLedger
+from lbry.wallet.transaction import Transaction, Input, Output
 from lbry.wallet.manager import LbryWalletManager
 from lbry.extras.daemon.analytics import AnalyticsManager
 from lbry.stream.stream_manager import StreamManager
@@ -39,52 +45,84 @@ def get_mock_node(peer=None):
     return mock_node
 
 
-def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
-    claim = {
-        "address": "bYFeMtSL7ARuG1iMpjFyrnTe4oJHSAVNXF",
-        "amount": "0.1",
-        "claim_id": "c49566d631226492317d06ad7fdbe1ed32925124",
-        "claim_sequence": 1,
-        "decoded_claim": True,
-        "confirmations": 1057,
-        "effective_amount": "0.1",
-        "has_signature": False,
-        "height": 514081,
-        "hex": "",
-        "name": "33rpm",
-        "nout": 0,
-        "permanent_url": "33rpm#c49566d631226492317d06ad7fdbe1ed32925124",
-        "supports": [],
-        "txid": "81ac52662af926fdf639d56920069e0f63449d4cde074c61717cb99ddde40e3c",
-    }
-    claim_obj = Claim()
+def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
+    return Transaction() \
+        .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
+        .outputs[0]
+
+
+def get_input():
+    return Input.spend(get_output())
+
+
+def get_transaction(txo=None):
+    return Transaction() \
+        .add_inputs([get_input()]) \
+        .add_outputs([txo or Output.pay_pubkey_hash(CENT, NULL_HASH32)])
+
+
+def get_claim_transaction(claim_name, claim=b''):
+    return get_transaction(
+        Output.pay_claim_name_pubkey_hash(CENT, claim_name, claim, NULL_HASH32)
+    )
+
+
+async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
+    claim = Claim()
     if fee:
         if fee['currency'] == 'LBC':
-            claim_obj.stream.fee.lbc = Decimal(fee['amount'])
+            claim.stream.fee.lbc = Decimal(fee['amount'])
         elif fee['currency'] == 'USD':
-            claim_obj.stream.fee.usd = Decimal(fee['amount'])
-    claim_obj.stream.title = "33rpm"
-    claim_obj.stream.languages.append("en")
-    claim_obj.stream.source.sd_hash = sd_hash
-    claim_obj.stream.source.media_type = "image/png"
-    claim['value'] = claim_obj
-    claim['protobuf'] = binascii.hexlify(claim_obj.to_bytes()).decode()
+            claim.stream.fee.usd = Decimal(fee['amount'])
+    claim.stream.title = "33rpm"
+    claim.stream.languages.append("en")
+    claim.stream.source.sd_hash = sd_hash
+    claim.stream.source.media_type = "image/png"
+
+    tx = get_claim_transaction("33rpm", claim.to_bytes())
+    tx.height = 514081
+    txo = tx.outputs[0]
+    txo.meta.update({
+        "permanent_url": "33rpm#c49566d631226492317d06ad7fdbe1ed32925124",
+
+    })
+
+    class FakeHeaders:
+        def __init__(self, height):
+            self.height = height
+
+        def __getitem__(self, item):
+            return {'timestamp': 1984}
+
+    wallet = Wallet()
+    ledger = MainNetLedger({
+        'db': MainNetLedger.database_class(':memory:'),
+        'headers': FakeHeaders(514082)
+    })
+    await ledger.db.open()
+    wallet.generate_account(ledger)
+    manager = LbryWalletManager()
+    manager.config = Config()
+    manager.wallets.append(wallet)
+    manager.ledgers[MainNetLedger] = ledger
+    manager.ledger.network.client = ClientSession(
+        network=manager.ledger.network, server=('fakespv.lbry.com', 50001)
+    )
 
     async def mock_resolve(*args):
-        await storage.save_claims([claim])
-        return {
-            claim['permanent_url']: claim
-        }
-
-    mock_wallet = mock.Mock(spec=LbryWalletManager)
-    mock_wallet.ledger.resolve = mock_resolve
-    mock_wallet.ledger.network.client.server = ('fakespv.lbry.com', 50001)
+        result = {txo.meta['permanent_url']: txo}
+        claims = [
+            StreamManager._convert_to_old_resolve_output(manager, result)[txo.meta['permanent_url']]
+        ]
+        await storage.save_claims(claims)
+        return result
+    manager.ledger.resolve = mock_resolve
 
     async def get_balance(*_):
         return balance
+    manager.get_balance = get_balance
 
-    mock_wallet.get_balance = get_balance
-    return mock_wallet, claim['permanent_url']
+    return manager, txo.meta['permanent_url']
 
 
 class TestStreamManager(BlobExchangeTestBase):
@@ -96,7 +134,7 @@ class TestStreamManager(BlobExchangeTestBase):
             self.loop, self.server_blob_manager.blob_dir, file_path, old_sort=old_sort
         )
         self.sd_hash = descriptor.sd_hash
-        self.mock_wallet, self.uri = get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
+        self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
         self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
                                             self.client_storage, get_mock_node(self.server_from_client),
                                             AnalyticsManager(self.client_config,
@@ -226,7 +264,7 @@ class TestStreamManager(BlobExchangeTestBase):
         start = self.loop.time()
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
         duration = self.loop.time() - start
-        self.assertLessEqual(duration, 4.7)
+        self.assertLessEqual(duration, 5)
         self.assertGreaterEqual(duration, 3.0)
 
     async def test_download_stop_resume_delete(self):

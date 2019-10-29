@@ -29,13 +29,19 @@ class Output(BaseOutput):
     script: OutputScript
     script_class = OutputScript
 
-    __slots__ = 'channel', 'private_key', 'meta'
+    __slots__ = (
+        'channel', 'private_key', 'meta',
+        'purchase', 'purchased_claim', 'purchase_receipt',
+    )
 
     def __init__(self, *args, channel: Optional['Output'] = None,
                  private_key: Optional[str] = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.channel = channel
         self.private_key = private_key
+        self.purchase: 'Output' = None  # txo containing purchase metadata
+        self.purchased_claim: 'Output' = None  # resolved claim pointed to by purchase
+        self.purchase_receipt: 'Output' = None  # txo representing purchase receipt for this claim
         self.meta = {}
 
     def update_annotations(self, annotated):
@@ -215,6 +221,26 @@ class Output(BaseOutput):
         except:
             return False
 
+    @property
+    def purchased_claim_id(self):
+        if self.purchase is not None:
+            return self.purchase.purchase_data.claim_id
+        if self.purchased_claim is not None:
+            return self.purchased_claim.claim_id
+
+    @property
+    def has_price(self):
+        if self.can_decode_claim:
+            claim = self.claim
+            if claim.is_stream:
+                stream = claim.stream
+                return stream.has_fee and stream.fee.amount and stream.fee.amount > 0
+        return False
+
+    @property
+    def price(self):
+        return self.claim.stream.fee
+
 
 class Transaction(BaseTransaction):
 
@@ -292,6 +318,11 @@ class Transaction(BaseTransaction):
             if not txo.is_my_account and f(txo.script):
                 yield txo
 
+    def _filter_any_outputs(self, f):
+        for txo in self.outputs:
+            if f(txo):
+                yield txo
+
     @property
     def my_claim_outputs(self):
         return self._filter_my_outputs(lambda s: s.is_claim_name)
@@ -303,6 +334,10 @@ class Transaction(BaseTransaction):
     @property
     def my_support_outputs(self):
         return self._filter_my_outputs(lambda s: s.is_support_claim)
+
+    @property
+    def any_purchase_outputs(self):
+        return self._filter_any_outputs(lambda o: o.purchase is not None)
 
     @property
     def other_support_outputs(self):

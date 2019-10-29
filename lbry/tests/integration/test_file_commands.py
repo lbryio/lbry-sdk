@@ -149,11 +149,11 @@ class FileCommands(CommandTestCase):
             f.flush()
         second_path = await self.daemon.jsonrpc_get('lbry://foo', save_file=True)
         await self.wait_files_to_complete()
-        self.assertNotEquals(first_path, second_path)
+        self.assertNotEqual(first_path, second_path)
 
     async def test_file_list_updated_metadata_on_resolve(self):
         await self.stream_create('foo', '0.01')
-        txo = (await self.daemon.resolve(['lbry://foo']))['lbry://foo']
+        txo = (await self.daemon.resolve(self.wallet.accounts, ['lbry://foo']))['lbry://foo']
         claim = txo.claim
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         txid = await self.blockchain_claim_name('bar', hexlify(claim.to_bytes()).decode(), '0.01')
@@ -325,7 +325,7 @@ class FileCommands(CommandTestCase):
         )
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
         response = await self.out(self.daemon.jsonrpc_get('lbry://expensive'))
-        self.assertEqual(response['error'], 'fee of 11.00000 exceeds max available balance')
+        self.assertEqual(response['error'], 'Not enough funds to cover this transaction.')
         self.assertEqual(len(self.file_list()), 0)
 
         # FAIL: beyond maximum key fee
@@ -336,7 +336,9 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.out(self.daemon.jsonrpc_get('lbry://maxkey'))
         self.assertEqual(len(self.file_list()), 0)
-        self.assertEqual(response['error'], 'fee of 111.00000 exceeds max configured to allow of 50.00000')
+        self.assertEqual(
+            response['error'], 'Purchase price of 111.0 LBC exceeds maximum configured price of 100.0 LBC (50.0 USD).'
+        )
 
         # PASS: purchase is successful
         await self.stream_create(

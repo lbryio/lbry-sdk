@@ -20,13 +20,19 @@ from lbry.extras.daemon.Components import (
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
 from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager as BaseExchangeRateManager, ExchangeRate
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
 from lbry.blob_exchange.server import BlobServer
 
 
-class ExchangeRateManager:
+class FakeExchangeRateManager(BaseExchangeRateManager):
+
+    def __init__(self):
+        super().__init__()
+        for i, feed in enumerate(self.market_feeds):
+            feed._save_price(i+1)
 
     def start(self):
         pass
@@ -34,22 +40,16 @@ class ExchangeRateManager:
     def stop(self):
         pass
 
-    def convert_currency(self, from_currency, to_currency, amount):
-        return amount
-
-    def fee_dict(self):
-        return {}
-
 
 class ExchangeRateManagerComponent(Component):
     component_name = EXCHANGE_RATE_MANAGER_COMPONENT
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.exchange_rate_manager = ExchangeRateManager()
+        self.exchange_rate_manager = FakeExchangeRateManager()
 
     @property
-    def component(self) -> ExchangeRateManager:
+    def component(self) -> BaseExchangeRateManager:
         return self.exchange_rate_manager
 
     async def start(self):
@@ -141,6 +141,7 @@ class CommandTestCase(IntegrationTestCase):
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
             PEER_PROTOCOL_SERVER_COMPONENT
         ]
+        wallet_node.manager.config = conf
 
         def wallet_maker(component_manager):
             wallet_component = WalletComponent(component_manager)

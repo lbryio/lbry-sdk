@@ -387,7 +387,7 @@ class BaseDatabase(SQLiteMixin):
         conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True))
 
         for txo in tx.outputs:
-            if txo.script.is_pay_pubkey_hash and txo.script.values['pubkey_hash'] == txhash:
+            if txo.script.is_pay_pubkey_hash and txo.pubkey_hash == txhash:
                 conn.execute(*self._insert_sql(
                     "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
                 )).fetchall()
@@ -433,7 +433,7 @@ class BaseDatabase(SQLiteMixin):
         return True
 
     async def select_transactions(self, cols, accounts=None, **constraints):
-        if not set(constraints) & {'txid', 'txid__in'}:
+        if not {'txid', 'txid__in'}.intersection(constraints):
             assert accounts, "'accounts' argument required when no 'txid' constraint is present"
             constraints.update({
                 f'$account{i}': a.public_key.address for i, a in enumerate(accounts)
@@ -517,10 +517,10 @@ class BaseDatabase(SQLiteMixin):
             return txs[0]
 
     async def select_txos(self, cols, **constraints):
-        sql = "SELECT {} FROM txo JOIN tx USING (txid)"
+        sql = f"SELECT {cols} FROM txo JOIN tx USING (txid)"
         if 'accounts' in constraints:
             sql += " JOIN account_address USING (address)"
-        return await self.db.execute_fetchall(*query(sql.format(cols), **constraints))
+        return await self.db.execute_fetchall(*query(sql, **constraints))
 
     async def get_txos(self, wallet=None, no_tx=False, **constraints):
         my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()

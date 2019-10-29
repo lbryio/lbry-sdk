@@ -837,15 +837,16 @@ class Daemon(metaclass=JSONRPCServerType):
         return platform_info
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve(self, urls: typing.Union[str, list]):
+    async def jsonrpc_resolve(self, urls: typing.Union[str, list], wallet_id=None):
         """
         Get the claim that a URL refers to.
 
         Usage:
-            resolve <urls>...
+            resolve <urls>... [--wallet_id=<wallet_id>]
 
         Options:
-            --urls=<urls>   : (str, list) one or more urls to resolve
+            --urls=<urls>           : (str, list) one or more urls to resolve
+            --wallet_id=<wallet_id> : (str) wallet to check for claim purchase reciepts
 
         Returns:
             Dictionary of results, keyed by url
@@ -903,6 +904,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     }
             }
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
 
         if isinstance(urls, str):
             urls = [urls]
@@ -917,7 +919,7 @@ class Daemon(metaclass=JSONRPCServerType):
             except ValueError:
                 results[u] = {"error": f"{u} is not a valid url"}
 
-        resolved = await self.resolve(list(valid_urls))
+        resolved = await self.resolve(wallet.accounts, list(valid_urls))
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri] if resolved[resolved_uri] is not None else \
@@ -944,7 +946,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --download_directory=<download_directory>  : (str) full path to the directory to download into
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
-            --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet
+            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase reciepts
 
         Returns: {File}
         """
@@ -1947,6 +1949,91 @@ class Daemon(metaclass=JSONRPCServerType):
         await stream.save_file(file_name, download_directory)
         return stream
 
+    PURCHASE_DOC = """
+    List and make purchases of claims.
+    """
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_purchase_list(
+            self, claim_id=None, resolve=False, account_id=None, wallet_id=None, page=None, page_size=None):
+        """
+        List my claim purchases.
+
+        Usage:
+            purchase_list [<claim_id> | --claim_id=<claim_id>] [--resolve]
+                          [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                          [--page=<page>] [--page_size=<page_size>]
+
+        Options:
+            --claim_id=<claim_id>      : (str) purchases for specific claim
+            --resolve                  : (str) include resolved claim information
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        constraints = {
+            "wallet": wallet,
+            "accounts": [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
+            "resolve": resolve,
+        }
+        if claim_id:
+            constraints["purchased_claim_id"] = claim_id
+        return paginate_rows(
+            self.ledger.get_purchases,
+            self.ledger.get_purchase_count,
+            page, page_size, **constraints
+        )
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_purchase_create(
+            self, claim_id, wallet_id=None, funding_account_ids=None,
+            allow_duplicate_purchase=False, override_max_key_fee=False, preview=False, blocking=False):
+        """
+        Purchase a claim.
+
+        Usage:
+            purchase_create (<claim_id> | --claim_id=<claim_id>) [--wallet_id=<wallet_id>]
+                    [--funding_account_ids=<funding_account_ids>...]
+                    [--allow_duplicate_purchase] [--override_max_key_fee] [--preview] [--blocking]
+
+        Options:
+            --claim_id=<claim_id>          : (str) id of claim to purchase
+            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
+          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --allow_duplicate_purchase     : (bool) allow purchasing claim_id you already own
+            --override_max_key_fee         : (bool) ignore max key fee for this purchase
+            --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
+
+        Returns: {Transaction}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
+        accounts = wallet.get_accounts_or_all(funding_account_ids)
+        txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id)
+        if not txo or not txo.is_claim:
+            raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
+        if not allow_duplicate_purchase and txo.purchase_receipt:
+            raise Exception(
+                f"You already have a purchase for claim_id '{claim_id}'. "
+                f"Use --allow-duplicate-purchase flag to override."
+            )
+        claim = txo.claim
+        if not claim.is_stream or not claim.stream.has_fee:
+            raise Exception(f"Claim '{claim_id}' does not have a purchase price.")
+        tx = await self.wallet_manager.create_purchase_transaction(
+            accounts, txo, self.exchange_rate_manager, override_max_key_fee
+        )
+        if not preview:
+            await self.broadcast_or_release(tx, blocking)
+        else:
+            await self.ledger.release_tx(tx)
+        return tx
+
     CLAIM_DOC = """
     List and search all types of claims.
     """
@@ -1988,7 +2075,8 @@ class Daemon(metaclass=JSONRPCServerType):
         eg. --height=">400000" would limit results to only claims above 400k block height.
 
         Usage:
-            claim_search [<name> | --name=<name>] [--claim_id=<claim_id>] [--txid=<txid>] [--nout=<nout>]
+            claim_search [<name> | --name=<name>] [--txid=<txid>] [--nout=<nout>]
+                         [--claim_id=<claim_id> | --claim_ids=<claim_ids>...]
                          [--channel=<channel> |
                              [[--channel_ids=<channel_ids>...] [--not_channel_ids=<not_channel_ids>...]]]
                          [--has_channel_signature] [--valid_channel_signature | --invalid_channel_signature]
@@ -2008,10 +2096,12 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
+                         [--wallet_id=<wallet_id>]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
             --claim_id=<claim_id>           : (str) full or partial claim id
+            --claim_ids=<claim_ids>         : (list) list of full claim ids
             --txid=<txid>                   : (str) transaction id
             --nout=<nout>                   : (str) position in the transaction
             --channel=<channel>             : (str) claims signed by this channel (argument is
@@ -2101,16 +2191,20 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     'trending_local', 'trending_global', 'activation_height'
             --no_totals                     : (bool) do not calculate the total number of pages and items in result set
                                                      (significant performance boost)
+            --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
 
         Returns: {Paginated[Output]}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
+        if {'claim_id', 'claim_ids'}.issubset(kwargs):
+            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
         if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, offset, total = await self.ledger.claim_search(**kwargs)
+        txos, offset, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
         result = {"items": txos, "page": page_num, "page_size": page_size}
         if not kwargs.pop('no_totals', False):
             result['total_pages'] = int((total + (page_size - 1)) / page_size)
@@ -2533,6 +2627,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (dict) Result dictionary
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+
         decoded = base58.b58decode(channel_data)
         data = json.loads(decoded)
         channel_private_key = ecdsa.SigningKey.from_pem(
@@ -2543,12 +2639,11 @@ class Daemon(metaclass=JSONRPCServerType):
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
         channels, _, _ = await self.ledger.claim_search(
-            public_key_id=self.ledger.public_key_to_address(public_key_der)
+            wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:
             holding_address = channels[0].get_address(self.ledger)
 
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account: LBCAccount = await self.ledger.get_account_for_address(wallet, holding_address)
         if account:
             # Case 1: channel holding address is in one of the accounts we already have
@@ -3188,7 +3283,7 @@ class Daemon(metaclass=JSONRPCServerType):
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         amount = self.get_dewies_or_error("amount", amount)
-        claim = await self.ledger.get_claim_by_claim_id(claim_id)
+        claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
             account = wallet.get_account_or_default(account_id)
@@ -3997,7 +4092,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids
         )
         claim_ids = {comment['claim_id'] for comment in comments}
-        claims = {cid: await self.ledger.get_claim_by_claim_id(claim_id=cid) for cid in claim_ids}
+        claims = {cid: await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id=cid) for cid in claim_ids}
         pieces = []
         for comment in comments:
             claim = claims.get(comment['claim_id'])
@@ -4015,13 +4110,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return await comment_client.jsonrpc_post(self.conf.comment_server, 'hide_comments', pieces=pieces)
 
     async def broadcast_or_release(self, tx, blocking=False):
-        try:
-            await self.ledger.broadcast(tx)
-            if blocking:
-                await self.ledger.wait(tx)
-        except:
-            await self.ledger.release_tx(tx)
-            raise
+        await self.wallet_manager.broadcast_or_release(tx, blocking)
 
     def valid_address_or_error(self, address):
         try:
@@ -4114,11 +4203,11 @@ class Daemon(metaclass=JSONRPCServerType):
         except ValueError as e:
             raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
 
-    async def resolve(self, urls):
-        results = await self.ledger.resolve(urls)
+    async def resolve(self, accounts, urls):
+        results = await self.ledger.resolve(accounts, urls)
         if results:
             try:
-                claims = self.stream_manager._convert_to_old_resolve_output(results)
+                claims = self.stream_manager._convert_to_old_resolve_output(self.wallet_manager, results)
                 await self.storage.save_claims_for_resolve([
                     value for value in claims.values() if 'error' not in value
                 ])

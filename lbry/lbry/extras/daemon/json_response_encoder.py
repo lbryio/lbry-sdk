@@ -38,6 +38,7 @@ def encode_txo_doc():
         'permanent_url': "when type is 'claim' or 'support', this is the long permanent claim URL",
         'signing_channel': "for signed claims only, metadata of signing channel",
         'is_channel_signature_valid': "for signed claims only, whether signature is valid",
+        'purchase_receipt': "metadata for the purchase transaction associated with this claim"
     }
 
 
@@ -176,10 +177,13 @@ class JSONResponseEncoder(JSONEncoder):
             output['claim_op'] = 'update'
         elif txo.script.is_support_claim:
             output['type'] = 'support'
-        elif txo.is_purchase_data:
+        elif txo.script.is_return_data:
+            output['type'] = 'data'
+        elif txo.purchase is not None:
             output['type'] = 'purchase'
-            if txo.can_decode_purchase_data:
-                output['claim_id'] = txo.purchase_data.claim_id
+            output['claim_id'] = txo.purchased_claim_id
+            if txo.purchased_claim is not None:
+                output['claim'] = self.encode_output(txo.purchased_claim)
         else:
             output['type'] = 'payment'
 
@@ -201,6 +205,8 @@ class JSONResponseEncoder(JSONEncoder):
                     output['value_type'] = txo.claim.claim_type
                     if self.include_protobuf:
                         output['protobuf'] = hexlify(txo.claim.to_bytes())
+                    if txo.purchase_receipt is not None:
+                        output['purchase_receipt'] = self.encode_output(txo.purchase_receipt)
                     if txo.claim.is_channel:
                         output['has_signing_key'] = txo.has_private_key
                     if check_signature and txo.claim.is_signed:
