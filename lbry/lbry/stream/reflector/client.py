@@ -98,8 +98,6 @@ class StreamReflectorClient(asyncio.Protocol):
                 self.reflected_blobs.append(sd_blob.blob_hash)
             else:
                 log.warning("Reflector failed to receive descriptor %s", sd_blob.blob_hash[:8])
-        if needed:
-            log.info("Reflector needs %i blobs for %s", len(needed), sd_blob.blob_hash[:8])
         return sent_sd, needed
 
     async def send_blob(self, blob_hash: str):

@@ -434,6 +434,8 @@ class ManagedStream:
             we_have = [
                 blob_hash for blob_hash in needed if blob_hash in self.blob_manager.completed_blob_hashes
             ]
+            log.info("we have %i/%i needed blobs needed by reflector for lbry://%s#%s", len(we_have), len(needed),
+                     self.claim_name, self.claim_id)
             for blob_hash in we_have:
                 await protocol.send_blob(blob_hash)
                 sent.append(blob_hash)
