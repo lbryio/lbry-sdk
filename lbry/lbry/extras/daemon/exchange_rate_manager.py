@@ -7,6 +7,7 @@ from typing import Optional
 from aiohttp.client_exceptions import ClientError
 from lbry.error import InvalidExchangeRateResponse, CurrencyConversionError
 from lbry.utils import aiohttp_request
+from lbry.wallet.dewies import lbc_to_dewies
 
 log = logging.getLogger(__name__)
 
@@ -222,19 +223,23 @@ class ExchangeRateManager:
         rates = [market.rate for market in self.market_feeds]
         log.debug("Converting %f %s to %s, rates: %s" % (amount, from_currency, to_currency, rates))
         if from_currency == to_currency:
-            return amount
+            return round(amount, 8)
 
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
                     market.rate.currency_pair == (from_currency, to_currency)):
-                return amount * Decimal(market.rate.spot)
+                return round(amount * Decimal(market.rate.spot), 8)
         for market in self.market_feeds:
             if (market.rate_is_initialized() and market.is_online() and
                     market.rate.currency_pair[0] == from_currency):
-                return self.convert_currency(
-                    market.rate.currency_pair[1], to_currency, amount * Decimal(market.rate.spot))
+                return round(self.convert_currency(
+                    market.rate.currency_pair[1], to_currency, amount * Decimal(market.rate.spot)), 8)
         raise CurrencyConversionError(
             f'Unable to convert {amount} from {from_currency} to {to_currency}')
+
+    def to_dewies(self, currency, amount) -> int:
+        converted = self.convert_currency(currency, "LBC", amount)
+        return lbc_to_dewies(str(converted))
 
     def fee_dict(self):
         return {market: market.rate.as_dict() for market in self.market_feeds}

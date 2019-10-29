@@ -135,6 +135,7 @@ def release(args):
     incompats = []
     release_texts = []
     unlabeled = []
+    fixups = []
     areas = {}
     for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry-sdk"):
         area_labels = list(get_labels(pr, 'area'))
@@ -145,7 +146,9 @@ def release(args):
                     incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
                 for release_text in get_release_text(pr.body or ""):
                     release_texts.append(f'{release_text.strip()} ({pr.html_url})')
-                if type_label != 'fixup':
+                if type_label == 'fixup':
+                    fixups.append(f'  * {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+                else:
                     area = areas.setdefault(area_name, [])
                     area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
         else:
@@ -181,6 +184,11 @@ def release(args):
     if unlabeled:
         print('The following PRs were skipped and not included in changelog:')
         for skipped in unlabeled:
+            print(skipped)
+
+    if fixups:
+        print('The following PRs were marked as fixups and not included in changelog:')
+        for skipped in fixups:
             print(skipped)
 
     if args.confirm:

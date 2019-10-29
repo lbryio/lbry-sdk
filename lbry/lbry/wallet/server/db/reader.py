@@ -45,7 +45,7 @@ INTEGER_PARAMS = {
 }
 
 SEARCH_PARAMS = {
-    'name', 'claim_id', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
+    'name', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
     'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
     'has_channel_signature', 'signature_valid',
     'any_tags', 'all_tags', 'not_tags',
@@ -226,6 +226,8 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
             constraints['claim.claim_id'] = claim_id
         else:
             constraints['claim.claim_id__like'] = f'{claim_id[:40]}%'
+    elif 'claim_ids' in constraints:
+        constraints['claim.claim_id__in'] = constraints.pop('claim_ids')
 
     if 'name' in constraints:
         constraints['claim.normalized'] = normalize_name(constraints.pop('name'))

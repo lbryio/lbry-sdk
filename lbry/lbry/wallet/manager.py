@@ -2,15 +2,20 @@ import os
 import json
 import logging
 from binascii import unhexlify
-
+from typing import Optional, List
+from decimal import Decimal
 
 from torba.client.basemanager import BaseWalletManager
 from torba.client.wallet import ENCRYPT_ON_DISK
 from torba.rpc.jsonrpc import CodeMessageError
 
+from lbry.error import KeyFeeAboveMaxAllowed
+from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.account import Account
 from lbry.wallet.ledger import MainNetLedger
-from lbry.wallet.transaction import Transaction
+from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.database import WalletDatabase
+from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.conf import Config
 
 
@@ -18,6 +23,10 @@ log = logging.getLogger(__name__)
 
 
 class LbryWalletManager(BaseWalletManager):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.config: Optional[Config] = None
 
     @property
     def ledger(self) -> MainNetLedger:
@@ -87,21 +96,21 @@ class LbryWalletManager(BaseWalletManager):
         return receiving_addresses, change_addresses
 
     @classmethod
-    async def from_lbrynet_config(cls, settings: Config):
+    async def from_lbrynet_config(cls, config: Config):
 
         ledger_id = {
             'lbrycrd_main':    'lbc_mainnet',
             'lbrycrd_testnet': 'lbc_testnet',
             'lbrycrd_regtest': 'lbc_regtest'
-        }[settings.blockchain_name]
+        }[config.blockchain_name]
 
         ledger_config = {
             'auto_connect': True,
-            'default_servers': settings.lbryum_servers,
-            'data_path': settings.wallet_dir,
+            'default_servers': config.lbryum_servers,
+            'data_path': config.wallet_dir,
         }
 
-        wallets_directory = os.path.join(settings.wallet_dir, 'wallets')
+        wallets_directory = os.path.join(config.wallet_dir, 'wallets')
         if not os.path.exists(wallets_directory):
             os.mkdir(wallets_directory)
 
@@ -112,11 +121,12 @@ class LbryWalletManager(BaseWalletManager):
         manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
             'wallets': [
-                os.path.join(wallets_directory, wallet_file) for wallet_file in settings.wallets
+                os.path.join(wallets_directory, wallet_file) for wallet_file in config.wallets
             ]
         })
+        manager.config = config
         ledger = manager.get_or_create_ledger(ledger_id)
-        ledger.coin_selection_strategy = settings.coin_selection_strategy
+        ledger.coin_selection_strategy = config.coin_selection_strategy
         default_wallet = manager.default_wallet
         if default_wallet.default_account is None:
             log.info('Wallet at %s is empty, generating a default account.', default_wallet.id)
@@ -161,13 +171,6 @@ class LbryWalletManager(BaseWalletManager):
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
 
-    async def buy_claim(self, claim_id: str, amount: int, destination_address: bytes, accounts):
-        tx = await Transaction.purchase(
-            claim_id, amount, destination_address, accounts, accounts[0]
-        )
-        await self.ledger.broadcast(tx)
-        return tx
-
     async def get_transaction(self, txid):
         tx = await self.db.get_transaction(txid=txid)
         if not tx:
@@ -181,3 +184,35 @@ class LbryWalletManager(BaseWalletManager):
             tx = self.ledger.transaction_class(unhexlify(raw))
             await self.ledger.maybe_verify_transaction(tx, height)
         return tx
+
+    async def create_purchase_transaction(
+            self, accounts: List[Account], txo: Output, exchange: ExchangeRateManager, override_max_key_fee=False):
+        fee = txo.claim.stream.fee
+        fee_amount = exchange.to_dewies(fee.currency, fee.amount)
+        if not override_max_key_fee and self.config.max_key_fee:
+            max_fee = self.config.max_key_fee
+            max_fee_amount = exchange.to_dewies(max_fee['currency'], Decimal(max_fee['amount']))
+            if max_fee_amount and fee_amount > max_fee_amount:
+                error_fee = f"{dewies_to_lbc(fee_amount)} LBC"
+                if fee.currency != 'LBC':
+                    error_fee += f" ({fee.amount} {fee.currency})"
+                error_max_fee = f"{dewies_to_lbc(max_fee_amount)} LBC"
+                if max_fee['currency'] != 'LBC':
+                    error_max_fee += f" ({max_fee['amount']} {max_fee['currency']})"
+                raise KeyFeeAboveMaxAllowed(
+                    f"Purchase price of {error_fee} exceeds maximum "
+                    f"configured price of {error_max_fee}."
+                )
+        fee_address = fee.address or txo.get_address(self.ledger)
+        return await Transaction.purchase(
+            txo.claim_id, fee_amount, fee_address, accounts, accounts[0]
+        )
+
+    async def broadcast_or_release(self, tx, blocking=False):
+        try:
+            await self.ledger.broadcast(tx)
+            if blocking:
+                await self.ledger.wait(tx)
+        except:
+            await self.ledger.release_tx(tx)
+            raise

@@ -8,6 +8,20 @@ from lbry.wallet.constants import TXO_TYPES
 
 class WalletDatabase(BaseDatabase):
 
+    SCHEMA_VERSION = f"{BaseDatabase.SCHEMA_VERSION}+1"
+
+    CREATE_TX_TABLE = """
+        create table if not exists tx (
+            txid text primary key,
+            raw blob not null,
+            height integer not null,
+            position integer not null,
+            is_verified boolean not null default 0,
+            purchased_claim_id text
+        );
+        create index if not exists tx_purchased_claim_id_idx on tx (purchased_claim_id);
+    """
+
     CREATE_TXO_TABLE = """
         create table if not exists txo (
             txid text references tx,
@@ -22,6 +36,7 @@ class WalletDatabase(BaseDatabase):
             claim_id text,
             claim_name text
         );
+        create index if not exists txo_txid_idx on txo (txid);
         create index if not exists txo_address_idx on txo (address);
         create index if not exists txo_claim_id_idx on txo (claim_id);
         create index if not exists txo_txo_type_idx on txo (txo_type);
@@ -31,10 +46,18 @@ class WalletDatabase(BaseDatabase):
         BaseDatabase.PRAGMAS +
         BaseDatabase.CREATE_ACCOUNT_TABLE +
         BaseDatabase.CREATE_PUBKEY_ADDRESS_TABLE +
-        BaseDatabase.CREATE_TX_TABLE +
+        CREATE_TX_TABLE +
         CREATE_TXO_TABLE +
         BaseDatabase.CREATE_TXI_TABLE
     )
+
+    def tx_to_row(self, tx):
+        row = super().tx_to_row(tx)
+        txos = tx.outputs
+        if len(txos) >= 2 and txos[1].can_decode_purchase_data:
+            txos[0].purchase = txos[1]
+            row['purchased_claim_id'] = txos[1].purchase_data.claim_id
+        return row
 
     def txo_to_row(self, tx, address, txo):
         row = super().txo_to_row(tx, address, txo)
@@ -45,10 +68,44 @@ class WalletDatabase(BaseDatabase):
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
+        elif txo.purchase is not None:
+            row['txo_type'] = TXO_TYPES['purchase']
+            row['claim_id'] = txo.purchased_claim_id
         if txo.script.is_claim_involved:
             row['claim_id'] = txo.claim_id
             row['claim_name'] = txo.claim_name
         return row
+
+    async def get_transactions(self, **constraints):
+        txs = await super().get_transactions(**constraints)
+        for tx in txs:
+            txos = tx.outputs
+            if len(txos) >= 2 and txos[1].can_decode_purchase_data:
+                txos[0].purchase = txos[1]
+        return txs
+
+    @staticmethod
+    def constrain_purchases(constraints):
+        accounts = constraints.pop('accounts', None)
+        assert accounts, "'accounts' argument required to find purchases"
+        if not {'purchased_claim_id', 'purchased_claim_id__in'}.intersection(constraints):
+            constraints['purchased_claim_id__is_not_null'] = True
+        constraints.update({
+            f'$account{i}': a.public_key.address for i, a in enumerate(accounts)
+        })
+        account_values = ', '.join([f':$account{i}' for i in range(len(accounts))])
+        constraints['txid__in'] = f"""
+            SELECT txid FROM txi JOIN account_address USING (address)
+            WHERE account_address.account IN ({account_values})
+        """
+
+    async def get_purchases(self, **constraints):
+        self.constrain_purchases(constraints)
+        return [tx.outputs[0] for tx in await self.get_transactions(**constraints)]
+
+    def get_purchase_count(self, **constraints):
+        self.constrain_purchases(constraints)
+        return self.get_transaction_count(**constraints)
 
     async def get_txos(self, wallet=None, no_tx=False, **constraints) -> List[Output]:
         txos = await super().get_txos(wallet=wallet, no_tx=no_tx, **constraints)

@@ -53,16 +53,34 @@ class MainNetLedger(BaseLedger):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
 
-    async def _inflate_outputs(self, query):
+    async def _inflate_outputs(self, query, accounts):
         outputs = Outputs.from_base64(await query)
         txs = []
         if len(outputs.txs) > 0:
-            txs = await asyncio.gather(*(self.cache_transaction(*tx) for tx in outputs.txs))
+            txs: List[Transaction] = await asyncio.gather(*(
+                self.cache_transaction(*tx) for tx in outputs.txs
+            ))
+            if accounts:
+                priced_claims = []
+                for tx in txs:
+                    for txo in tx.outputs:
+                        if txo.has_price:
+                            priced_claims.append(txo)
+                if priced_claims:
+                    receipts = {
+                        txo.purchased_claim_id: txo for txo in
+                        await self.db.get_purchases(
+                            accounts=accounts,
+                            purchased_claim_id__in=[c.claim_id for c in priced_claims]
+                        )
+                    }
+                    for txo in priced_claims:
+                        txo.purchase_receipt = receipts.get(txo.claim_id)
         return outputs.inflate(txs), outputs.offset, outputs.total
 
-    async def resolve(self, urls):
+    async def resolve(self, accounts, urls):
         resolve = partial(self.network.retriable_call, self.network.resolve)
-        txos = (await self._inflate_outputs(resolve(urls)))[0]
+        txos = (await self._inflate_outputs(resolve(urls), accounts))[0]
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
@@ -75,11 +93,11 @@ class MainNetLedger(BaseLedger):
                 result[url] = {'error': f'{url} did not resolve to a claim'}
         return result
 
-    async def claim_search(self, **kwargs) -> Tuple[List[Output], int, int]:
-        return await self._inflate_outputs(self.network.claim_search(**kwargs))
+    async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], int, int]:
+        return await self._inflate_outputs(self.network.claim_search(**kwargs), accounts)
 
-    async def get_claim_by_claim_id(self, claim_id) -> Output:
-        for claim in (await self.claim_search(claim_id=claim_id))[0]:
+    async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:
+        for claim in (await self.claim_search(accounts, claim_id=claim_id))[0]:
             return claim
 
     async def start(self):
@@ -122,6 +140,23 @@ class MainNetLedger(BaseLedger):
         self.constraint_spending_utxos(constraints)
         return super().get_utxo_count(**constraints)
 
+    async def get_purchases(self, resolve=False, **constraints):
+        purchases = await self.db.get_purchases(**constraints)
+        if resolve:
+            claim_ids = [p.purchased_claim_id for p in purchases]
+            try:
+                resolved, _, _ = await self.claim_search([], claim_ids=claim_ids)
+            except:
+                log.exception("Resolve failed while looking up purchased claim ids:")
+                resolved = []
+            lookup = {claim.claim_id: claim for claim in resolved}
+            for purchase in purchases:
+                purchase.purchased_claim = lookup.get(purchase.purchased_claim_id)
+        return purchases
+
+    def get_purchase_count(self, resolve=False, **constraints):
+        return self.db.get_purchase_count(**constraints)
+
     def get_claims(self, **constraints):
         return self.db.get_claims(**constraints)
 
@@ -147,7 +182,7 @@ class MainNetLedger(BaseLedger):
         return self.db.get_support_count(**constraints)
 
     async def get_transaction_history(self, **constraints):
-        txs = await self.db.get_transactions(**constraints)
+        txs: List[Transaction] = await self.db.get_transactions(**constraints)
         headers = self.headers
         history = []
         for tx in txs:
@@ -160,7 +195,8 @@ class MainNetLedger(BaseLedger):
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
-                'abandon_info': []
+                'abandon_info': [],
+                'purchase_info': []
             }
             is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
             if is_my_inputs:
@@ -236,6 +272,14 @@ class MainNetLedger(BaseLedger):
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
                     'claim_name': txo.claim_name,
+                    'nout': txo.position
+                })
+            for txo in tx.any_purchase_outputs:
+                item['purchase_info'].append({
+                    'address': txo.get_address(self),
+                    'balance_delta': dewies_to_lbc(txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.purchased_claim_id,
                     'nout': txo.position
                 })
             history.append(item)
