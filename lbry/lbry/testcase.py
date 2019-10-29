@@ -20,7 +20,7 @@ from lbry.extras.daemon.Components import (
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
 from lbry.extras.daemon.ComponentManager import ComponentManager
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager as BaseExchangeRateManager, ExchangeRate
+from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager as BaseExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
