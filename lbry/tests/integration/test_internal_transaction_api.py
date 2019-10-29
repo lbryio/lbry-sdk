@@ -59,7 +59,7 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
         self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.985786')
 
-        response = await self.ledger.resolve(['lbry://@bar/foo'])
+        response = await self.ledger.resolve([], ['lbry://@bar/foo'])
         self.assertEqual(response['lbry://@bar/foo'].claim.claim_type, 'stream')
 
         abandon_tx = await Transaction.create([Input.spend(stream_tx.outputs[0])], [], [self.account], self.account)
@@ -68,10 +68,10 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.ledger.wait(abandon_tx)
 
-        response = await self.ledger.resolve(['lbry://@bar/foo'])
+        response = await self.ledger.resolve([], ['lbry://@bar/foo'])
         self.assertIn('error', response['lbry://@bar/foo'])
 
         # checks for expected format in inexistent URIs
-        response = await self.ledger.resolve(['lbry://404', 'lbry://@404'])
+        response = await self.ledger.resolve([], ['lbry://404', 'lbry://@404'])
         self.assertEqual('lbry://404 did not resolve to a claim', response['lbry://404']['error'])
         self.assertEqual('lbry://@404 did not resolve to a claim', response['lbry://@404']['error'])
