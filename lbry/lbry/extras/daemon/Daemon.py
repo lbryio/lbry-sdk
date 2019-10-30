@@ -1127,7 +1127,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise Exception(f"Wallet at path '{wallet_path}' is already loaded.")
         if not os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' was not found.")
-        return self.wallet_manager.import_wallet(wallet_path)
+        wallet = self.wallet_manager.import_wallet(wallet_path)
+        if self.ledger.network.is_connected:
+            for account in wallet.accounts:
+                await self.ledger.subscribe_account(account)
+        return wallet
 
     @requires("wallet")
     def jsonrpc_wallet_remove(self, wallet_id):
