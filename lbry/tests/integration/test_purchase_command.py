@@ -108,6 +108,11 @@ class PurchaseCommandTests(CommandTestCase):
         tx = await self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
         await self.assertStreamPurchased(stream, tx)
 
+        # purchase by uri
+        abc_stream = await self.priced_stream('abc')
+        tx = await self.daemon.jsonrpc_purchase_create(url='lbry://abc')
+        await self.assertStreamPurchased(abc_stream, tx)
+
     async def test_purchase_and_transaction_list(self):
         self.assertItemCount(await self.daemon.jsonrpc_purchase_list(), 0)
         self.assertItemCount(await self.daemon.jsonrpc_transaction_list(), 1)
@@ -140,3 +145,10 @@ class PurchaseCommandTests(CommandTestCase):
         url = result[0]['canonical_url']
         resolve = await self.resolve(url)
         self.assertEqual(result[0]['claim_id'], resolve[url]['purchase_receipt']['claim_id'])
+
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
+        await self.daemon.jsonrpc_get('lbry://a')
+        await self.daemon.jsonrpc_get('lbry://b')
+        files = await self.file_list()
+        self.assertEqual(files[0]['claim_id'], files[0]['purchase_receipt']['claim_id'])
+        self.assertEqual(files[1]['claim_id'], files[1]['purchase_receipt']['claim_id'])

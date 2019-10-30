@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import os
 from binascii import hexlify
 
@@ -19,23 +18,23 @@ class FileCommands(CommandTestCase):
         await self.stream_create('foo', '0.01')
         await self.stream_create('foo2', '0.01')
 
-        file1, file2 = self.file_list('claim_name')
+        file1, file2 = await self.file_list('claim_name')
         self.assertEqual(file1['claim_name'], 'foo')
         self.assertEqual(file2['claim_name'], 'foo2')
 
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         await self.daemon.jsonrpc_file_delete(claim_name='foo2')
-        self.assertEqual(len(self.file_list()), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
 
         await self.daemon.jsonrpc_get('lbry://foo')
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
     async def test_announces(self):
         # announces on publish
         self.assertEqual(await self.daemon.storage.get_blobs_to_announce(), [])
         await self.stream_create('foo', '0.01')
-        stream = self.daemon.jsonrpc_file_list()['items'][0]
+        stream = (await self.daemon.jsonrpc_file_list())["items"][0]
         self.assertSetEqual(
             set(await self.daemon.storage.get_blobs_to_announce()),
             {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
@@ -53,7 +52,7 @@ class FileCommands(CommandTestCase):
         self.assertTrue(
             await self.daemon.jsonrpc_file_delete(claim_name=claim_name, delete_from_download_dir=True)
         )
-        self.assertItemCount(self.daemon.jsonrpc_file_list(), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
         self.assertFalse(os.path.isfile(full_path))
 
     async def test_publish_with_illegal_chars(self):
@@ -66,7 +65,7 @@ class FileCommands(CommandTestCase):
         prefix, suffix = 'derp?', '.ext.'
         san_prefix, san_suffix = 'derp', '.ext'
         tx = await self.stream_create(claim_name, '0.01', prefix=prefix, suffix=suffix)
-        stream = self.daemon.jsonrpc_file_list()['items'][0]
+        stream = (await self.daemon.jsonrpc_file_list())["items"][0]
         claim_id = self.get_claim_id(tx)
 
         # Assert that file list and source contains the local unsanitized name, but suggested name is sanitized
@@ -86,7 +85,7 @@ class FileCommands(CommandTestCase):
         # Re-download deleted file and assert that the file name is sanitized
         full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
         stream_file_name = os.path.basename(full_path)
-        stream = self.daemon.jsonrpc_file_list()['items'][0]
+        stream = (await self.daemon.jsonrpc_file_list())["items"][0]
         file_list_name = stream.file_name
         suggested_file_name = stream.descriptor.suggested_file_name
 
@@ -109,7 +108,7 @@ class FileCommands(CommandTestCase):
         san_prefix, san_suffix = 'derpyderp', '.ext'
         tx = await self.stream_update(claim_id, data=b'amazing content', prefix=prefix, suffix=suffix)
         full_path = (await self.daemon.jsonrpc_get('lbry://' + claim_name, save_file=True)).full_path
-        updated_stream = self.daemon.jsonrpc_file_list()['items'][0]
+        updated_stream = (await self.daemon.jsonrpc_file_list())["items"][0]
 
         stream_file_name = os.path.basename(full_path)
         source_file_name = tx['outputs'][0]['value']['source']['name']
@@ -124,14 +123,14 @@ class FileCommands(CommandTestCase):
 
     async def test_file_list_fields(self):
         await self.stream_create('foo', '0.01')
-        file_list = self.file_list()
+        file_list = await self.file_list()
         self.assertEqual(
             file_list[0]['timestamp'],
             None
         )
         self.assertEqual(file_list[0]['confirmations'], -1)
         await self.daemon.jsonrpc_resolve('foo')
-        file_list = self.file_list()
+        file_list = await self.file_list()
         self.assertEqual(
             file_list[0]['timestamp'],
             self.ledger.headers[file_list[0]['height']]['timestamp']
@@ -161,39 +160,39 @@ class FileCommands(CommandTestCase):
         claim.stream.description = "fix typos, fix the world"
         await self.blockchain_update_name(txid, hexlify(claim.to_bytes()).decode(), '0.01')
         await self.daemon.jsonrpc_resolve('lbry://bar')
-        file_list = self.daemon.jsonrpc_file_list()['items']
+        file_list = (await self.daemon.jsonrpc_file_list())['items']
         self.assertEqual(file_list[0].stream_claim_info.claim.stream.description, claim.stream.description)
 
     async def test_file_list_paginated_output(self):
         await self.create_streams_in_range(0, 20)
 
-        page = self.file_list(page_size=20)
+        page = await self.file_list(page_size=20)
         page_claim_ids = [item['claim_id'] for item in page]
         self.assertListEqual(page_claim_ids, self.stream_claim_ids)
 
-        page = self.file_list(page_size=6)
+        page = await self.file_list(page_size=6)
         page_claim_ids = [item['claim_id'] for item in page]
         self.assertListEqual(page_claim_ids, self.stream_claim_ids[:6])
 
-        page = self.file_list(page_size=6, page=2)
+        page = await self.file_list(page_size=6, page=2)
         page_claim_ids = [item['claim_id'] for item in page]
         self.assertListEqual(page_claim_ids, self.stream_claim_ids[6:12])
 
-        out_of_bounds = self.file_list(page=5, page_size=6)
+        out_of_bounds = await self.file_list(page=5, page_size=6)
         self.assertEqual(out_of_bounds, [])
 
-        complete = self.daemon.jsonrpc_file_list()
+        complete = await self.daemon.jsonrpc_file_list()
         self.assertEqual(complete['total_pages'], 1)
         self.assertEqual(complete['total_items'], 20)
 
-        page = self.daemon.jsonrpc_file_list(page_size=10, page=1)
+        page = await self.daemon.jsonrpc_file_list(page_size=10, page=1)
         self.assertEqual(page['total_pages'], 2)
         self.assertEqual(page['total_items'], 20)
         self.assertEqual(page['page'], 1)
 
-        full = self.sout(self.daemon.jsonrpc_file_list(page_size=20, page=1))
-        page1 = self.file_list(page=1, page_size=10)
-        page2 = self.file_list(page=2, page_size=10)
+        full = await self.out(self.daemon.jsonrpc_file_list(page_size=20, page=1))
+        page1 = await self.file_list(page=1, page_size=10)
+        page2 = await self.file_list(page=2, page_size=10)
         self.assertEqual(page1 + page2, full['items'])
 
     async def test_download_different_timeouts(self):
@@ -214,12 +213,12 @@ class FileCommands(CommandTestCase):
         self.assertEqual('Failed to download sd blob %s within timeout' % sd_hash, resp['error'])
 
     async def wait_files_to_complete(self):
-        while self.file_list(status='running'):
+        while await self.file_list(status='running'):
             await asyncio.sleep(0.01)
 
     async def test_filename_conflicts_management_on_resume_download(self):
         await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
-        file_info = self.file_list()[0]
+        file_info = (await self.file_list())[0]
         original_path = os.path.join(self.daemon.conf.download_dir, file_info['file_name'])
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         await self.daemon.jsonrpc_get('lbry://foo')
@@ -230,7 +229,7 @@ class FileCommands(CommandTestCase):
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
         stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
-        file_info = self.file_list()[0]
+        file_info = (await self.file_list())[0]
         self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
         self.assertEqual(stream.full_path, file_info['download_path'])
@@ -238,7 +237,7 @@ class FileCommands(CommandTestCase):
     async def test_incomplete_downloads_erases_output_file_on_stop(self):
         tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
-        file_info = self.file_list()[0]
+        file_info = (await self.file_list())[0]
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         blobs = await self.server_storage.get_blobs_for_stream(
             await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
@@ -278,8 +277,8 @@ class FileCommands(CommandTestCase):
         # start the download
         resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
-        self.assertEqual(len(self.file_list()), 1)
-        self.assertEqual('running', self.file_list()[0]['status'])
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertEqual('running', (await self.file_list())[0]['status'])
         await self.daemon.jsonrpc_file_set_status('stop', claim_name='foo')
 
         # recover blobs
@@ -291,7 +290,7 @@ class FileCommands(CommandTestCase):
 
         await self.daemon.jsonrpc_file_set_status('start', claim_name='foo')
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)
-        file_info = self.file_list()[0]
+        file_info = (await self.file_list())[0]
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
         self.assertEqual('finished', file_info['status'])
 
@@ -326,7 +325,7 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
         response = await self.out(self.daemon.jsonrpc_get('lbry://expensive'))
         self.assertEqual(response['error'], 'Not enough funds to cover this transaction.')
-        self.assertEqual(len(self.file_list()), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
 
         # FAIL: beyond maximum key fee
         await self.stream_create(
@@ -335,7 +334,7 @@ class FileCommands(CommandTestCase):
         )
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.out(self.daemon.jsonrpc_get('lbry://maxkey'))
-        self.assertEqual(len(self.file_list()), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
         self.assertEqual(
             response['error'], 'Purchase price of 111.0 LBC exceeds maximum configured price of 100.0 LBC (50.0 USD).'
         )
@@ -351,7 +350,7 @@ class FileCommands(CommandTestCase):
         raw_content_fee = response.content_fee.raw
         await self.ledger.wait(response.content_fee)
         await self.assertBalance(self.account, '8.925538')
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
 
@@ -367,8 +366,8 @@ class FileCommands(CommandTestCase):
 
         self.daemon.stream_manager.stop()
         await self.daemon.stream_manager.start()
-        self.assertEqual(len(self.file_list()), 1)
-        self.assertEqual(self.daemon.jsonrpc_file_list()['items'][0].content_fee.raw, raw_content_fee)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].content_fee.raw, raw_content_fee)
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
 
         # PASS: no fee address --> use the claim address to pay
@@ -379,12 +378,12 @@ class FileCommands(CommandTestCase):
             tx, fee_amount='2.0', fee_currency='LBC', claim_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='nofeeaddress')
-        self.assertEqual(len(self.file_list()), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
 
         response = await self.out(self.daemon.jsonrpc_get('lbry://nofeeaddress'))
-        self.assertIsNone(self.daemon.jsonrpc_file_list()['items'][0].stream_claim_info.claim.stream.fee.address)
+        self.assertIsNone((await self.daemon.jsonrpc_file_list())['items'][0].stream_claim_info.claim.stream.fee.address)
         self.assertIsNotNone(response['content_fee'])
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual(response['content_fee']['outputs'][0]['amount'], '2.0')
         self.assertEqual(response['content_fee']['outputs'][0]['address'], target_address)
 
@@ -405,7 +404,7 @@ class FileCommands(CommandTestCase):
 
         # Assert the file downloads
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
         # Assert the transaction is recorded to the blockchain
         starting_balance = await self.blockchain.get_balance()
@@ -424,7 +423,7 @@ class FileCommands(CommandTestCase):
         await self.__raw_value_update_no_fee_amount(tx, target_address)
         await self.daemon.jsonrpc_file_delete(claim_name='nullfee')
         response = await self.daemon.jsonrpc_get('lbry://nullfee')
-        self.assertEqual(len(self.file_list()), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertIsNone(response.content_fee)
         self.assertTrue(response.stream_claim_info.claim.stream.has_fee)
         self.assertDictEqual(

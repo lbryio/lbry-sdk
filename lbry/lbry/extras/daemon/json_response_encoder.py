@@ -153,6 +153,8 @@ class JSONResponseEncoder(JSONEncoder):
         }
 
     def encode_output(self, txo, check_signature=True):
+        if not txo:
+            return
         tx_height = txo.tx_ref.height
         best_height = self.ledger.headers.height
         output = {
@@ -283,6 +285,7 @@ class JSONResponseEncoder(JSONEncoder):
             'channel_name': managed_stream.channel_name,
             'claim_name': managed_stream.claim_name,
             'content_fee': managed_stream.content_fee,
+            'purchase_receipt': self.encode_output(managed_stream.purchase_receipt),
             'added_on': managed_stream.added_on,
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,

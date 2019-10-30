@@ -1772,7 +1772,9 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(STREAM_MANAGER_COMPONENT)
-    def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, page=None, page_size=None, **kwargs):
+    async def jsonrpc_file_list(
+            self, sort=None, reverse=False, comparison=None,
+            wallet_id=None, page=None, page_size=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1784,7 +1786,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
                       [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [--page=<page>] [--page_size=<page_size>]
+                      [--page=<page>] [--page_size=<page_size>] [--wallet_id=<wallet_id>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1806,14 +1808,27 @@ class Daemon(metaclass=JSONRPCServerType):
             --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
             --page=<page>                          : (int) page to return during paginating
             --page_size=<page_size>                : (int) number of items on page during pagination
+            --wallet_id=<wallet_id>                : (str) add purchase receipts from this wallet
 
         Returns: {Paginated[File]}
         """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
-        return paginate_list(
+        paginated = paginate_list(
             self.stream_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
         )
+        if paginated['items']:
+            receipts = {
+                txo.purchased_claim_id: txo for txo in
+                await self.ledger.db.get_purchases(
+                    accounts=wallet.accounts,
+                    purchased_claim_id__in=[s.claim_id for s in paginated['items']]
+                )
+            }
+            for stream in paginated['items']:
+                stream.purchase_receipt = receipts.get(stream.claim_id)
+        return paginated
 
     @requires(STREAM_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
@@ -1990,18 +2005,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_purchase_create(
-            self, claim_id, wallet_id=None, funding_account_ids=None,
+            self, claim_id=None, url=None, wallet_id=None, funding_account_ids=None,
             allow_duplicate_purchase=False, override_max_key_fee=False, preview=False, blocking=False):
         """
         Purchase a claim.
 
         Usage:
-            purchase_create (<claim_id> | --claim_id=<claim_id>) [--wallet_id=<wallet_id>]
+            purchase_create (--claim_id=<claim_id> | --url=<url>) [--wallet_id=<wallet_id>]
                     [--funding_account_ids=<funding_account_ids>...]
                     [--allow_duplicate_purchase] [--override_max_key_fee] [--preview] [--blocking]
 
         Options:
             --claim_id=<claim_id>          : (str) id of claim to purchase
+            --url=<url>                    : (str) lookup claim to purchase by url
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --allow_duplicate_purchase     : (bool) allow purchasing claim_id you already own
@@ -2014,9 +2030,17 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         accounts = wallet.get_accounts_or_all(funding_account_ids)
-        txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id)
-        if not txo or not txo.is_claim:
-            raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
+        txo = None
+        if claim_id:
+            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id)
+            if not isinstance(txo, Output) or not txo.is_claim:
+                raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
+        elif url:
+            txo = (await self.ledger.resolve(accounts, [url]))[url]
+            if not isinstance(txo, Output) or not txo.is_claim:
+                raise Exception(f"Could not find claim with url '{url}'. ")
+        else:
+            raise Exception(f"Missing argument claim_id or url. ")
         if not allow_duplicate_purchase and txo.purchase_receipt:
             raise Exception(
                 f"You already have a purchase for claim_id '{claim_id}'. "
