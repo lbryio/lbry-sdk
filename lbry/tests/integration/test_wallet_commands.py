@@ -4,6 +4,19 @@ from lbry.testcase import CommandTestCase
 from torba.client.wallet import ENCRYPT_ON_DISK
 
 
+class WalletCommands(CommandTestCase):
+
+    async def test_wallet_create_and_add_subscribe(self):
+        session = next(iter(self.conductor.spv_node.server.session_mgr.sessions))
+        self.assertEqual(len(session.hashX_subs), 27)
+        wallet = await self.daemon.jsonrpc_wallet_create('foo', create_account=True, single_key=True)
+        self.assertEqual(len(session.hashX_subs), 28)
+        await self.daemon.jsonrpc_wallet_remove(wallet.id)
+        self.assertEqual(len(session.hashX_subs), 27)
+        await self.daemon.jsonrpc_wallet_add(wallet.id)
+        self.assertEqual(len(session.hashX_subs), 28)
+
+
 class WalletEncryptionAndSynchronization(CommandTestCase):
 
     SEED = (

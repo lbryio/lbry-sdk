@@ -1134,7 +1134,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return wallet
 
     @requires("wallet")
-    def jsonrpc_wallet_remove(self, wallet_id):
+    async def jsonrpc_wallet_remove(self, wallet_id):
         """
         Remove an existing wallet.
 
@@ -1146,8 +1146,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Wallet}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallet_manager.get_wallet_or_error(wallet_id)
         self.wallet_manager.wallets.remove(wallet)
+        for account in wallet.accounts:
+            await self.ledger.unsubscribe_account(account)
         return wallet
 
     @requires("wallet")

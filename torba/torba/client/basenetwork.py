@@ -261,6 +261,9 @@ class BaseNetwork:
                 self.client.abort()
             raise asyncio.CancelledError()
 
+    def unsubscribe_address(self, address):
+        return self.rpc('blockchain.address.unsubscribe', [address], True)
+
     def get_server_features(self):
         return self.rpc('server.features', (), restricted=True)
 
