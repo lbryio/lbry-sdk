@@ -277,7 +277,7 @@ class MainNetLedger(BaseLedger):
             for txo in tx.any_purchase_outputs:
                 item['purchase_info'].append({
                     'address': txo.get_address(self),
-                    'balance_delta': dewies_to_lbc(txo.amount),
+                    'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.purchased_claim_id,
                     'nout': txo.position
