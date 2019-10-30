@@ -61,6 +61,7 @@ class ManagedStream:
         'download_id',
         'rowid',
         'content_fee',
+        'purchase_receipt',
         'downloader',
         'analytics_manager',
         'fully_reflected',
@@ -94,6 +95,7 @@ class ManagedStream:
         self.download_id = download_id or binascii.hexlify(generate_id()).decode()
         self.rowid = rowid
         self.content_fee = content_fee
+        self.purchase_receipt = None
         self._added_on = added_on
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
