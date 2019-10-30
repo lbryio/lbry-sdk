@@ -392,6 +392,10 @@ class BaseLedger(metaclass=LedgerRegistry):
             await self.subscribe_addresses(address_manager, await address_manager.get_addresses())
         await account.ensure_address_gap()
 
+    async def unsubscribe_account(self, account: baseaccount.BaseAccount):
+        for address in await account.get_addresses():
+            await self.network.unsubscribe_address(address)
+
     async def announce_addresses(self, address_manager: baseaccount.AddressManager, addresses: List[str]):
         await self.subscribe_addresses(address_manager, addresses)
         await self._on_address_controller.add(

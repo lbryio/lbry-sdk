@@ -882,6 +882,9 @@ class ElectrumX(SessionBase):
         self.hashX_subs[hashX] = alias
         return await self.address_status(hashX)
 
+    async def hashX_unsubscribe(self, hashX, alias):
+        del self.hashX_subs[hashX]
+
     def address_to_hashX(self, address):
         try:
             return self.coin.address_to_hashX(address)
@@ -915,6 +918,13 @@ class ElectrumX(SessionBase):
         address: the address to subscribe to"""
         hashX = self.address_to_hashX(address)
         return await self.hashX_subscribe(hashX, address)
+
+    async def address_unsubscribe(self, address):
+        """Unsubscribe an address.
+
+        address: the address to unsubscribe"""
+        hashX = self.address_to_hashX(address)
+        return await self.hashX_unsubscribe(hashX, address)
 
     async def get_balance(self, hashX):
         utxos = await self.db.all_utxos(hashX)
@@ -1284,6 +1294,7 @@ class ElectrumX(SessionBase):
                 'blockchain.address.get_mempool': self.address_get_mempool,
                 'blockchain.address.listunspent': self.address_listunspent,
                 'blockchain.address.subscribe': self.address_subscribe,
+                'blockchain.address.unsubscribe': self.address_unsubscribe,
             })
 
         self.request_handlers = handlers
