@@ -5,7 +5,7 @@ TRENDING_WINDOW = 134
 
 # TRENDING_DATA_POINTS says how many samples to use for the trending algorithm
 # i.e. only consider claims from the most recent (TRENDING_WINDOW * TRENDING_DATA_POINTS) blocks
-TRENDING_DATA_POINTS = 7
+TRENDING_DATA_POINTS = 28
 
 CREATE_TREND_TABLE = """
     create table if not exists trend (
