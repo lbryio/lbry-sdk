@@ -329,6 +329,14 @@ class SQLiteStorage(SQLiteMixin):
                 timestamp integer,
                 primary key (sd_hash, reflector_address)
             );
+
+            create table if not exists peer (
+                address text not null,
+                udp_port integer not null,
+                tcp_port integer,
+                node_id char(96) unique not null,
+                primary key (address, udp_port)
+            );
     """
 
     def __init__(self, conf: Config, path, loop=None, time_getter: typing.Optional[typing.Callable[[], float]] = None):
@@ -805,3 +813,20 @@ class SQLiteStorage(SQLiteMixin):
             "where r.timestamp is null or r.timestamp < ?",
             int(self.time_getter()) - 86400
         )
+
+    # # # # # # # # # # dht functions # # # # # # # # # # #
+    async def get_peers(self):
+        query = 'select node_id, address, udp_port, tcp_port from peer'
+        return [(binascii.unhexlify(n), a, u, t) for n, a, u, t in await self.db.execute_fetchall(query)]
+
+    async def update_peers(self, peers: typing.List['KademliaPeer']):
+        def _update_peers(transaction: sqlite3.Connection):
+            transaction.execute('delete from peer').fetchall()
+            transaction.executemany(
+                'insert into peer(node_id, address, udp_port, tcp_port) values (?, ?, ?, ?)', (
+                    tuple(
+                        [(binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers]
+                    )
+                )
+            ).fetchall()
+        return await self.db.run(_update_peers)
