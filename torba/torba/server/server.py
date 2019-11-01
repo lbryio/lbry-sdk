@@ -68,6 +68,11 @@ class Server:
     def __init__(self, env):
         self.env = env
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(
+            logging.Formatter("%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
+        )
+        self.log.addHandler(console_handler)
         if self.env.loggly_token:
             self.log.addHandler(get_loggly_handler('wallet-server', self.env.loggly_token))
         self.shutdown_event = asyncio.Event()
