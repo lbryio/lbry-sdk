@@ -45,7 +45,7 @@ async def run_times(executor, iterations, show=True):
 
 async def main():
     executor = ProcessPoolExecutor(
-        4, initializer=reader.initializer, initargs=(log, db_path, 'mainnet', 1.0, True)
+        4, initializer=reader.initializer, initargs=(db_path, 'mainnet', 1.0, True)
     )
     #await run_times(executor, 4, show=False)
     #await run_times(executor, 1)

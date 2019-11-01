@@ -67,7 +67,7 @@ class LBRYSessionManager(SessionManager):
         path = os.path.join(self.env.db_dir, 'claims.db')
         args = dict(
             initializer=reader.initializer,
-            initargs=(self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
+            initargs=(path, self.env.coin.NET, self.env.database_query_timeout,
                       self.env.track_metrics)
         )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:

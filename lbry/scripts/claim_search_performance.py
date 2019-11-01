@@ -112,7 +112,7 @@ async def search(executor, kwargs):
 
 
 async def main(db_path, max_query_time):
-    args = dict(initializer=initializer, initargs=(log, db_path, MainNetLedger, 0.25))
+    args = dict(initializer=initializer, initargs=(db_path, MainNetLedger, 0.25))
     workers = max(os.cpu_count(), 4)
     log.info(f"using {workers} reader processes")
     query_executor = ProcessPoolExecutor(workers, **args)

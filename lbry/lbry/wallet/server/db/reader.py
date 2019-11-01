@@ -1,7 +1,6 @@
 import time
 import struct
 import sqlite3
-import logging
 from operator import itemgetter
 from typing import Tuple, List, Dict, Union, Type, Optional
 from binascii import unhexlify
@@ -74,7 +73,6 @@ class ReaderState:
     is_tracking_metrics: bool
     ledger: Type[BaseLedger]
     query_timeout: float
-    log: logging.Logger
 
     def close(self):
         self.db.close()
@@ -97,14 +95,14 @@ class ReaderState:
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
-def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
+def initializer(_path, _ledger_name, query_timeout, _measure=False):
     db = sqlite3.connect(_path, isolation_level=None, uri=True)
     db.row_factory = sqlite3.Row
     ctx.set(
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
             ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger,
-            query_timeout=query_timeout, log=log
+            query_timeout=query_timeout
         )
     )
 
@@ -172,9 +170,7 @@ def execute_query(sql, values) -> List:
         if context.is_tracking_metrics:
             context.metrics['execute_query'][-1]['sql'] = plain_sql
         if str(err) == "interrupted":
-            context.log.warning("interrupted slow sqlite query:\n%s", plain_sql)
             raise SQLiteInterruptedError(context.metrics)
-        context.log.exception('failed running query', exc_info=err)
         raise SQLiteOperationalError(context.metrics)
 
 

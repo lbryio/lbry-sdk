@@ -46,7 +46,7 @@ class TestSQLDB(unittest.TestCase):
         db_url = 'file:test_sqldb?mode=memory&cache=shared'
         self.sql = writer.SQLDB(self, db_url)
         self.addCleanup(self.sql.close)
-        reader.initializer(logging.getLogger(__name__), db_url, 'regtest', self.query_timeout)
+        reader.initializer(db_url, 'regtest', self.query_timeout)
         self.addCleanup(reader.cleanup)
         self.timer = Timer('BlockProcessor')
         self.sql.open()
