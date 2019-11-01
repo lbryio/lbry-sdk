@@ -264,7 +264,7 @@ class TestStreamManager(BlobExchangeTestBase):
         start = self.loop.time()
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
         duration = self.loop.time() - start
-        self.assertLessEqual(duration, 5)
+        self.assertLessEqual(duration, 4)
         self.assertGreaterEqual(duration, 3.0)
 
     async def test_download_stop_resume_delete(self):

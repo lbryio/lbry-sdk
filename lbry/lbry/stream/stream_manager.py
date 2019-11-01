@@ -7,7 +7,8 @@ import typing
 from typing import Optional
 from aiohttp.web import Request
 from lbry.error import ResolveError, InvalidStreamDescriptorError
-from lbry.error import ResolveTimeout, DownloadDataTimeout
+from lbry.error import ResolveTimeout, DownloadDataTimeout, DownloadSDTimeout
+from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowed
 from lbry.utils import cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.stream.managed_stream import ManagedStream
@@ -347,7 +348,6 @@ class StreamManager:
         start_time = self.loop.time()
         resolved_time = None
         stream = None
-        txo: Optional[Output] = None
         error = None
         outpoint = None
         if save_file is None:
@@ -439,7 +439,12 @@ class StreamManager:
         except asyncio.TimeoutError:
             error = DownloadDataTimeout(stream.sd_hash)
             raise error
-        except Exception as err:  # forgive data timeout, don't delete stream
+        except (ResolveTimeout, DownloadSDTimeout, DownloadDataTimeout, InsufficientFundsError,
+                KeyFeeAboveMaxAllowed) as expected_err:
+            log.warning("Error downloading '%s' - %s", uri, expected_err)
+            error = expected_err
+            raise
+        except Exception as err:
             log.exception("Unexpected error downloading stream:")
             error = err
             raise
