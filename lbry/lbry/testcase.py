@@ -204,15 +204,11 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    async def stream_repost(self, claim_id, name='repost', bid='1.0', **kwargs):
-        tx = await self.out(
-            self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs)
+    def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
+        return self.confirm_and_render(
+            self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs),
+            confirm
         )
-        if kwargs.get('confirm', True):
-            await self.on_transaction_dict(tx)
-            await self.generate(1)
-            await self.on_transaction_dict(tx)
-        return tx
 
     async def confirm_and_render(self, awaitable, confirm) -> Transaction:
         tx = await awaitable
