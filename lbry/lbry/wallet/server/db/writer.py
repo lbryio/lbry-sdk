@@ -122,6 +122,7 @@ class SQLDB:
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
         create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
         create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
+        create unique index if not exists claim_trending_group_mixed_idx on claim (trending_group, trending_mixed, claim_hash);
         create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
 
         create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_global, trending_mixed, claim_hash);
