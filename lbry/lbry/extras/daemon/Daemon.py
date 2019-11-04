@@ -1159,27 +1159,24 @@ class Daemon(metaclass=JSONRPCServerType):
         return wallet
 
     @requires("wallet")
-    async def jsonrpc_wallet_balance(self, wallet_id=None, confirmations=0, reserved_subtotals=False):
+    async def jsonrpc_wallet_balance(self, wallet_id=None, confirmations=0):
         """
         Return the balance of a wallet
 
         Usage:
-            wallet_balance [--wallet_id=<wallet_id>] [--confirmations=<confirmations>] [--reserved_subtotals]
+            wallet_balance [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]
 
         Options:
             --wallet_id=<wallet_id>         : (str) balance for specific wallet
             --confirmations=<confirmations> : (int) Only include transactions with this many
                                               confirmed blocks.
-            --reserved_subtotals            : (bool) Include detailed reserved balances on
-                                              claims, tips and supports.
 
         Returns:
             (decimal) amount of lbry credits in wallet
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         balance = await self.ledger.get_detailed_balance(
-            accounts=wallet.accounts, confirmations=confirmations,
-            reserved_subtotals=reserved_subtotals
+            accounts=wallet.accounts, confirmations=confirmations
         )
         return dict_values_to_lbc(balance)
 
@@ -1362,13 +1359,13 @@ class Daemon(metaclass=JSONRPCServerType):
             return paginate_list(await wallet.get_detailed_accounts(**kwargs), page, page_size)
 
     @requires("wallet")
-    async def jsonrpc_account_balance(self, account_id=None, wallet_id=None, confirmations=0, reserved_subtotals=False):
+    async def jsonrpc_account_balance(self, account_id=None, wallet_id=None, confirmations=0):
         """
         Return the balance of an account
 
         Usage:
             account_balance [<account_id>] [<address> | --address=<address>] [--wallet_id=<wallet_id>]
-                            [<confirmations> | --confirmations=<confirmations>] [--reserved_subtotals]
+                            [<confirmations> | --confirmations=<confirmations>]
 
         Options:
             --account_id=<account_id>       : (str) If provided only the balance for this
@@ -1376,8 +1373,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>         : (str) balance for specific wallet
             --confirmations=<confirmations> : (int) Only include transactions with this many
                                               confirmed blocks.
-            --reserved_subtotals            : (bool) Include detailed reserved balances on
-                                              claims, tips and supports.
 
         Returns:
             (decimal) amount of lbry credits in wallet
@@ -1385,7 +1380,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
         balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=reserved_subtotals
+            confirmations=confirmations, reserved_subtotals=True
         )
         return dict_values_to_lbc(balance)
 

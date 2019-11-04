@@ -5,7 +5,8 @@ from functools import partial
 from typing import Tuple, List
 from datetime import datetime
 
-from torba.client.baseledger import BaseLedger
+import pylru
+from torba.client.baseledger import BaseLedger, TransactionEvent
 from torba.client.baseaccount import SingleKey
 from lbry.schema.result import Outputs
 from lbry.schema.url import URL
@@ -52,6 +53,7 @@ class MainNetLedger(BaseLedger):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
+        self._balance_cache = pylru.lrucache(100000)
 
     async def _inflate_outputs(self, query, accounts):
         outputs = Outputs.from_base64(await query)
@@ -105,6 +107,7 @@ class MainNetLedger(BaseLedger):
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         await self._report_state()
+        self.on_transaction.listen(self._reset_balance_cache)
 
     async def _report_state(self):
         try:
@@ -127,6 +130,14 @@ class MainNetLedger(BaseLedger):
             log.exception(
                 'Failed to display wallet state, please file issue '
                 'for this bug along with the traceback you see below:')
+
+    async def _reset_balance_cache(self, e: TransactionEvent):
+        account_ids = [
+            r['account'] for r in await self.db.get_addresses(('account',), address=e.address)
+        ]
+        for account_id in account_ids:
+            if account_id in self._balance_cache:
+                del self._balance_cache[account_id]
 
     @staticmethod
     def constraint_spending_utxos(constraints):
@@ -288,17 +299,18 @@ class MainNetLedger(BaseLedger):
     def get_transaction_history_count(self, **constraints):
         return self.db.get_transaction_count(**constraints)
 
-    @staticmethod
-    async def get_detailed_balance(accounts, confirmations=0, reserved_subtotals=False):
+    async def get_detailed_balance(self, accounts, confirmations=0):
         result = {}
         for account in accounts:
-            balance = await account.get_detailed_balance(confirmations, reserved_subtotals)
+            balance = self._balance_cache.get(account.id)
+            if not balance:
+                balance = self._balance_cache[account.id] =\
+                    await account.get_detailed_balance(confirmations, reserved_subtotals=True)
             if result:
                 for key, value in balance.items():
                     if key == 'reserved_subtotals':
-                        if value is not None:
-                            for subkey, subvalue in value.items():
-                                result['reserved_subtotals'][subkey] += subvalue
+                        for subkey, subvalue in value.items():
+                            result['reserved_subtotals'][subkey] += subvalue
                     else:
                         result[key] += value
             else:
