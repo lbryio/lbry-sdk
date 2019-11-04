@@ -6,7 +6,7 @@ SNAPSHOT_URL="${SNAPSHOT_URL:-}" #off by default. latest snapshot at https://lbr
 
 if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/claims.db ]]; then
   echo "Downloading wallet snapshot from $SNAPSHOT_URL"
-  wget -O wallet_snapshot.tar.bz2 "$SNAPSHOT_URL"
+  wget --no-verbose -O wallet_snapshot.tar.bz2 "$SNAPSHOT_URL"
   echo "Extracting snapshot..."
   tar xvjf wallet_snapshot.tar.bz2 --directory /database
   rm wallet_snapshot.tar.bz2
