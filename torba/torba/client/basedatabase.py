@@ -20,6 +20,7 @@ class AIOSQLite:
         self.executor = ThreadPoolExecutor(max_workers=1)
         self.connection: sqlite3.Connection = None
         self._closing = False
+        self.query_count = 0
 
     @classmethod
     async def connect(cls, path: Union[bytes, str], *args, **kwargs):
@@ -65,6 +66,7 @@ class AIOSQLite:
     def __run_transaction(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs):
         self.connection.execute('begin')
         try:
+            self.query_count += 1
             result = fun(self.connection, *args, **kwargs)  # type: ignore
             self.connection.commit()
             return result
@@ -605,11 +607,12 @@ class BaseDatabase(SQLiteMixin):
             'pubkey', 'chain_code', 'n', 'depth'
         )
         addresses = rows_to_dict(await self.select_addresses(', '.join(cols), **constraints), cols)
-        for address in addresses:
-            address['pubkey'] = PubKey(
-                self.ledger, address.pop('pubkey'), address.pop('chain_code'),
-                address.pop('n'), address.pop('depth')
-            )
+        if 'pubkey' in cols:
+            for address in addresses:
+                address['pubkey'] = PubKey(
+                    self.ledger, address.pop('pubkey'), address.pop('chain_code'),
+                    address.pop('n'), address.pop('depth')
+                )
         return addresses
 
     async def get_address_count(self, cols=None, **constraints):
