@@ -300,21 +300,27 @@ class MainNetLedger(BaseLedger):
         return self.db.get_transaction_count(**constraints)
 
     async def get_detailed_balance(self, accounts, confirmations=0):
-        result = {}
+        result = {
+            'total': 0,
+            'available': 0,
+            'reserved': 0,
+            'reserved_subtotals': {
+                'claims': 0,
+                'supports': 0,
+                'tips': 0
+            }
+        }
         for account in accounts:
             balance = self._balance_cache.get(account.id)
             if not balance:
                 balance = self._balance_cache[account.id] =\
                     await account.get_detailed_balance(confirmations, reserved_subtotals=True)
-            if result:
-                for key, value in balance.items():
-                    if key == 'reserved_subtotals':
-                        for subkey, subvalue in value.items():
-                            result['reserved_subtotals'][subkey] += subvalue
-                    else:
-                        result[key] += value
-            else:
-                result = balance
+            for key, value in balance.items():
+                if key == 'reserved_subtotals':
+                    for subkey, subvalue in value.items():
+                        result['reserved_subtotals'][subkey] += subvalue
+                else:
+                    result[key] += value
         return result
 
 

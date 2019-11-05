@@ -1,7 +1,9 @@
 import asyncio
 import json
-from lbry.testcase import CommandTestCase
+
 from torba.client.wallet import ENCRYPT_ON_DISK
+from lbry.testcase import CommandTestCase
+from lbry.wallet.dewies import dict_values_to_lbc
 
 
 class WalletCommands(CommandTestCase):
@@ -17,40 +19,52 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(len(session.hashX_subs), 28)
 
     async def test_balance_caching(self):
-        self.merchant_address = await self.blockchain.get_raw_change_address()
+        account2 = await self.daemon.jsonrpc_account_create("Tip-er")
+        address2 = await self.daemon.jsonrpc_address_unused(account2.id)
+        sendtxid = await self.blockchain.send_to_address(address2, 10)
+        await self.confirm_tx(sendtxid)
+        await self.generate(1)
+
         wallet_balance = self.daemon.jsonrpc_wallet_balance
         ledger = self.ledger
         query_count = self.ledger.db.db.query_count
 
         expected = {
-            'total': '10.0',
-            'available': '10.0',
+            'total': '20.0',
+            'available': '20.0',
             'reserved': '0.0',
             'reserved_subtotals': {'claims': '0.0', 'supports': '0.0', 'tips': '0.0'}
         }
         self.assertIsNone(ledger._balance_cache.get(self.account.id))
 
-        query_count += 3
+        query_count += 6
         self.assertEqual(await wallet_balance(), expected)
         self.assertEqual(self.ledger.db.db.query_count, query_count)
-        self.assertEqual(ledger._balance_cache.get(self.account.id), expected)
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
         # calling again uses cache
         self.assertEqual(await wallet_balance(), expected)
         self.assertEqual(self.ledger.db.db.query_count, query_count)
-        self.assertEqual(ledger._balance_cache.get(self.account.id), expected)
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
         await self.stream_create()
+        await self.generate(1)
 
         expected = {
-            'total': '9.979893',
-            'available': '8.979893',
+            'total': '19.979893',
+            'available': '18.979893',
             'reserved': '1.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '0.0', 'tips': '0.0'}
         }
         # on_transaction event reset balance cache
+        query_count = self.ledger.db.db.query_count
         self.assertEqual(await wallet_balance(), expected)
-        self.assertEqual(ledger._balance_cache.get(self.account.id), expected)
+        query_count += 3  # only one of the accounts changed
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '9.979893')
+        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
+        self.assertEqual(self.ledger.db.db.query_count, query_count)
 
     async def test_granular_balances(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
