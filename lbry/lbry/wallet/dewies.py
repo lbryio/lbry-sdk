@@ -34,9 +34,12 @@ def dewies_to_lbc(dewies) -> str:
 
 
 def dict_values_to_lbc(d):
+    lbc_dict = {}
     for key, value in d.items():
         if isinstance(value, int):
-            d[key] = dewies_to_lbc(value)
+            lbc_dict[key] = dewies_to_lbc(value)
         elif isinstance(value, dict):
-            dict_values_to_lbc(value)
-    return d
+            lbc_dict[key] = dict_values_to_lbc(value)
+        else:
+            lbc_dict[key] = value
+    return lbc_dict
