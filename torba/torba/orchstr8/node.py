@@ -205,7 +205,7 @@ class SPVNode:
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
 
-    async def start(self, blockchain_node: 'BlockchainNode'):
+    async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
         conf = {
             'DB_DIRECTORY': self.data_path,
@@ -218,6 +218,8 @@ class SPVNode:
             'INDIVIDUAL_TAG_INDEXES': '',
             'RPC_PORT': self.rpc_port
         }
+        if extraconf:
+            conf.update(extraconf)
         # TODO: don't use os.environ
         os.environ.update(conf)
         self.server = Server(Env(self.coin_class))

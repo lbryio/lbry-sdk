@@ -48,7 +48,7 @@ INTEGER_PARAMS = {
 SEARCH_PARAMS = {
     'name', 'text', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
     'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
-    'has_channel_signature', 'signature_valid',
+    'has_channel_signature', 'signature_valid', 'blocklist_channel_ids',
     'any_tags', 'all_tags', 'not_tags', 'reposted_claim_id',
     'any_locations', 'all_locations', 'not_locations',
     'any_languages', 'all_languages', 'not_languages',
@@ -260,6 +260,16 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
                     'claim.signature_valid__is_null': True,
                     'claim.channel_hash__not_in': not_channel_ids_binary
                 }
+    if 'blocklist_channel_ids' in constraints:
+        blocklist_ids = constraints.pop('blocklist_channel_ids')
+        if blocklist_ids:
+            not_repost_from_channel_ids = [
+                sqlite3.Binary(unhexlify(channel_id)[::-1]) for channel_id in blocklist_ids
+            ]
+            constraints['null_or_not_reposted_by__or'] = {
+                'repost.channel_hash__not_in': not_repost_from_channel_ids,
+                'repost.channel_hash__is_null': True
+            }
     if 'signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
         if has_channel_signature:
@@ -304,7 +314,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         constraints["order_by"] = FTS_ORDER_BY
         select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
     else:
-        select = f"SELECT {cols} FROM claim"
+        select = f"SELECT {cols} FROM claim LEFT JOIN claim as repost ON (claim.claim_hash=repost.reposted_claim_hash)"
 
     sql, values = query(
         select if for_count else select+"""

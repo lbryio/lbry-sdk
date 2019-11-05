@@ -107,11 +107,8 @@ class LBRYElectrumX(ElectrumX):
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYDB = self.bp.db
         # space separated list of channel URIs used for filtering bad content
-        filtering_channels = self.env.default('FILTERING_CHANNELS', '')
-        if ' ' in filtering_channels:
-            self.filtering_channels_uris = filtering_channels.split(' ')
-        else:
-            self.filtering_channels_uris = []
+        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '1111')
+        self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
 
     def set_request_handlers(self, ptuple):
         super().set_request_handlers(ptuple)
@@ -186,6 +183,7 @@ class LBRYElectrumX(ElectrumX):
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
+            kwargs['blocklist_channel_ids'] = self.filtering_channels_ids
             return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
 
     async def claimtrie_resolve(self, *urls):
