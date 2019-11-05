@@ -750,12 +750,30 @@ class StreamCommands(ClaimTestCase):
             {claim['claim_id'] for claim in reposts_on_claim_list}
         )
         # check that it resolves fine too
-        # todo: should resolve show the repost information?
         resolved_reposts = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
         self.assertEqual(
             [resolution['claim_id'] for resolution in resolved_reposts.values()],
             [claim['claim_id'] for claim in reposts_on_claim_list]
         )
+
+    async def test_filtering_channels_for_removing_content(self):
+        await self.out(self.channel_create('@badstuff', '1.0'))
+        await self.out(self.stream_create('not_bad', '1.1', channel_name='@badstuff'))
+        tx = await self.out(self.stream_create('too_bad', '1.1', channel_name='@badstuff'))
+        claim_id = tx['outputs'][0]['claim_id']
+        filtering1 = await self.out(self.channel_create('@filtering1', '1.0'))
+        filtering1 = filtering1['outputs'][0]['claim_id']
+        await self.stream_repost(claim_id, 'filter1', '1.1', channel_name='@filtering1')
+        await self.conductor.spv_node.stop()
+        await self.conductor.spv_node.start(
+            self.conductor.blockchain_node, extraconf={'FILTERING_CHANNELS_IDS': filtering1}
+        )
+        await self.ledger.stop()
+        await self.ledger.start()
+        filtered_claim_search = await self.claim_search(name='too_bad')
+        self.assertEqual(filtered_claim_search, [])
+        filtered_claim_search = await self.claim_search(name='not_bad')
+        self.assertEqual(len(filtered_claim_search), 1)
 
     async def test_publish_updates_file_list(self):
         tx = await self.out(self.stream_create(title='created'))
