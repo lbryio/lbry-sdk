@@ -16,6 +16,7 @@ from lbry.wallet.server.db.writer import LBRYDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
+from lbry import __version__ as sdk_version
 
 
 class ResultCacheItem:
@@ -94,6 +95,7 @@ class LBRYElectrumX(ElectrumX):
     PROTOCOL_MIN = (0, 0)  # temporary, for supporting 0.10 protocol
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
     session_mgr: LBRYSessionManager
+    version = sdk_version
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

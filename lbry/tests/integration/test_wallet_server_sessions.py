@@ -2,13 +2,14 @@ import asyncio
 import os
 
 import lbry.wallet
+from lbry import __version__ as sdk_version
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.Components import HeadersComponent
 from torba.client.basenetwork import ClientSession
 from torba.testcase import IntegrationTestCase
 
 
-class TestSessionBloat(IntegrationTestCase):
+class TestSessions(IntegrationTestCase):
     """
     Tests that server cleans up stale connections after session timeout and client times out too.
     """
@@ -32,6 +33,10 @@ class TestSessionBloat(IntegrationTestCase):
             await session.send_request('server.banner', ())
         self.assertTrue(session.is_closing())
         self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
+
+    async def test_proper_version(self):
+        info = await self.ledger.network.get_server_features()
+        self.assertEqual(sdk_version, info['server_version'])
 
 
 class TestSegwitServer(IntegrationTestCase):
