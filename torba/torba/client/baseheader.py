@@ -121,16 +121,13 @@ class BaseHeaders:
                 h.update(buf.read(verifiable_bytes))
                 if h.hexdigest().encode() == self.checkpoint[1]:
                     buf.seek(0)
-                    self.io.seek(self.bytes_size, os.SEEK_SET)
-                    self.io.write(buf.read(verifiable_bytes))
-                    self.io.flush()
-                    self._size = None
+                    self._write(len(self), buf.read(verifiable_bytes))
                     remaining = buf.read()
                     buf.seek(0)
                     buf.write(remaining)
                     buf.truncate()
                 else:
-                    log.warning("Checkpoing mismatch, connecting headers through slow method.")
+                    log.warning("Checkpoint mismatch, connecting headers through slow method.")
             if buf.tell() > 0:
                 await self.connect(len(self), buf.getvalue())
 
@@ -144,19 +141,20 @@ class BaseHeaders:
             except InvalidHeader as e:
                 bail = True
                 chunk = chunk[:(height-e.height)*self.header_size]
-            written = 0
-            if chunk:
-                self.io.seek(height * self.header_size, os.SEEK_SET)
-                written = self.io.write(chunk) // self.header_size
-                self.io.truncate()
-                # .seek()/.write()/.truncate() might also .flush() when needed
-                # the goal here is mainly to ensure we're definitely flush()'ing
-                self.io.flush()
-                self._size = self.io.tell() // self.header_size
-            added += written
+            added += self._write(height, chunk) if chunk else 0
             if bail:
                 break
         return added
+
+    def _write(self, height, verified_chunk):
+        self.io.seek(height * self.header_size, os.SEEK_SET)
+        written = self.io.write(verified_chunk) // self.header_size
+        self.io.truncate()
+        # .seek()/.write()/.truncate() might also .flush() when needed
+        # the goal here is mainly to ensure we're definitely flush()'ing
+        self.io.flush()
+        self._size = self.io.tell() // self.header_size
+        return written
 
     def validate_chunk(self, height, chunk):
         previous_hash, previous_header, previous_previous_header = None, None, None
