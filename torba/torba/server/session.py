@@ -618,6 +618,7 @@ class SessionBase(RPCSession):
     MAX_CHUNK_SIZE = 2016
     session_counter = itertools.count()
     request_handlers: typing.Dict[str, typing.Callable] = {}
+    version = '0.5.7'
 
     def __init__(self, session_mgr, db, mempool, peer_mgr, kind):
         connection = JSONRPCConnection(JSONRPCAutoDetect)
@@ -742,7 +743,7 @@ class ElectrumX(SessionBase):
         return {
             'hosts': env.hosts_dict(),
             'pruning': None,
-            'server_version': torba.__version__,
+            'server_version': cls.version,
             'protocol_min': min_str,
             'protocol_max': max_str,
             'genesis_hash': env.coin.GENESIS_HASH,
@@ -758,7 +759,7 @@ class ElectrumX(SessionBase):
     @classmethod
     def server_version_args(cls):
         """The arguments to a server.version RPC call to a peer."""
-        return [torba.__version__, cls.protocol_min_max_strings()]
+        return [cls.version, cls.protocol_min_max_strings()]
 
     def protocol_version_string(self):
         return util.version_string(self.protocol_tuple)
@@ -1063,7 +1064,7 @@ class ElectrumX(SessionBase):
         revision //= 100
         daemon_version = f'{major:d}.{minor:d}.{revision:d}'
         for pair in [
-                ('$SERVER_VERSION', torba.__version__),
+                ('$SERVER_VERSION', self.version),
                 ('$DAEMON_VERSION', daemon_version),
                 ('$DAEMON_SUBVERSION', network_info['subversion']),
                 ('$DONATION_ADDRESS', self.env.donation_address),
@@ -1077,7 +1078,7 @@ class ElectrumX(SessionBase):
 
     async def banner(self):
         """Return the server banner text."""
-        banner = f'You are connected to an {torba.__version__} server.'
+        banner = f'You are connected to an {self.version} server.'
 
         if self.is_tor():
             banner_file = self.env.tor_banner_file
@@ -1147,7 +1148,7 @@ class ElectrumX(SessionBase):
                            f'unsupported protocol version: {protocol_version}')
         self.set_request_handlers(ptuple)
 
-        return torba.__version__, self.protocol_version_string()
+        return self.version, self.protocol_version_string()
 
     async def transaction_broadcast(self, raw_tx):
         """Broadcast a raw transaction to the network.
