@@ -316,7 +316,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         target = self.network.remote_height
         current = len(self.headers)
         get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
-        chunks = [asyncio.ensure_future(get_chunk(height)) for height in range(current, target, 4096)]
+        chunks = [asyncio.create_task(get_chunk(height)) for height in range(current, target, 4096)]
         total = 0
         async with self.headers.checkpointed_connector() as connector:
             for chunk in chunks:
