@@ -141,7 +141,6 @@ class Node:
         self.protocol.ping_queue.start()
         self._refresh_task = self.loop.create_task(self.refresh_node())
 
-        seed_peers = peers_from_urls(await self._storage.get_persisted_kademlia_peers()) if self._storage else []
         while True:
             if self.protocol.routing_table.get_peers():
                 if not self.joined.is_set():
@@ -153,14 +152,22 @@ class Node:
             else:
                 if self.joined.is_set():
                     self.joined.clear()
+                seed_peers = peers_from_urls(
+                    await self._storage.get_persisted_kademlia_peers()
+                ) if self._storage else []
+                if not seed_peers:
+                    try:
+                        seed_peers.extend(peers_from_urls([
+                            (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
+                            for address, udp_port in known_node_urls or []
+                        ]))
+                    except asyncio.TimeoutError:
+                        await asyncio.sleep(30)
+                        continue
+
                 self.protocol.peer_manager.reset()
                 self.protocol.ping_queue.enqueue_maybe_ping(*seed_peers, delay=0.0)
-                seed_peers.extend(await self.peer_search(self.protocol.node_id, shortlist=seed_peers, count=32))
-                if not seed_peers or not self.protocol.routing_table.get_peers():
-                    seed_peers.extend(peers_from_urls([
-                        (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
-                        for address, udp_port in known_node_urls or []
-                    ]))
+                await self.peer_search(self.protocol.node_id, shortlist=seed_peers, count=32)
 
             await asyncio.sleep(1, loop=self.loop)
 
