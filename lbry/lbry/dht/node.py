@@ -53,7 +53,7 @@ class Node:
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
 
             if self._storage:
-                await self._storage.update_peers(self.protocol.routing_table.get_peers())
+                await self._storage.save_kademlia_peers(self.protocol.routing_table.get_peers())
 
             if self.protocol.routing_table.get_peers():
                 # if we have node ids to look up, perform the iterative search until we have k results
@@ -136,42 +136,33 @@ class Node:
                     peer_addresses.append((node_id, address, udp_port, tcp_port))
             return [make_kademlia_peer(*peer_address) for peer_address in peer_addresses]
 
-        def set_joined():
-            self.joined.set()
-            log.info(
-                "joined dht, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
-                self.protocol.routing_table.buckets_with_contacts()
-            )
-
         if not self.listening_port:
             await self.start_listening(interface)
         self.protocol.ping_queue.start()
         self._refresh_task = self.loop.create_task(self.refresh_node())
 
-        restored_peers = peers_from_urls(await self._storage.get_peers()) if self._storage else []
-
-        fixed_peers = peers_from_urls([
-            (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
-            for address, udp_port in known_node_urls or []
-        ])
-
-        seed_peers = restored_peers or fixed_peers
-        fallback = False
-        while seed_peers:
+        seed_peers = peers_from_urls(await self._storage.get_persisted_kademlia_peers()) if self._storage else []
+        while True:
             if self.protocol.routing_table.get_peers():
                 if not self.joined.is_set():
-                    set_joined()
+                    self.joined.set()
+                    log.info(
+                        "joined dht, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
+                        self.protocol.routing_table.buckets_with_contacts()
+                    )
             else:
                 if self.joined.is_set():
                     self.joined.clear()
-                seed_peers = fixed_peers if fallback else seed_peers
                 self.protocol.peer_manager.reset()
                 self.protocol.ping_queue.enqueue_maybe_ping(*seed_peers, delay=0.0)
                 seed_peers.extend(await self.peer_search(self.protocol.node_id, shortlist=seed_peers, count=32))
-                fallback = not self.protocol.routing_table.get_peers()
-            await asyncio.sleep(1, loop=self.loop)
+                if not seed_peers or not self.protocol.routing_table.get_peers():
+                    seed_peers.extend(peers_from_urls([
+                        (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
+                        for address, udp_port in known_node_urls or []
+                    ]))
 
-        set_joined()
+            await asyncio.sleep(1, loop=self.loop)
 
     def start(self, interface: str, known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
         self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))

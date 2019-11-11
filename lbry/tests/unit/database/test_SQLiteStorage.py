@@ -256,6 +256,6 @@ class UpdatePeersTest(StorageTest):
         node_id = hashlib.sha384("1234".encode()).digest()
         args = (node_id, '73.186.148.72', 4444, None)
         fake_peer = make_kademlia_peer(*args)
-        await self.storage.update_peers([fake_peer])
-        peers = await self.storage.get_peers()
+        await self.storage.save_kademlia_peers([fake_peer])
+        peers = await self.storage.get_persisted_kademlia_peers()
         self.assertTupleEqual(args, peers[0])

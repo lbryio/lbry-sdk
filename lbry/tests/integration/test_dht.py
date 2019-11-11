@@ -44,10 +44,10 @@ class DHTIntegrationTest(AsyncioTestCase):
 
         for node in self.nodes:
             node.start(external_ip, self.known_node_addresses[:seed_nodes])
-        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
 
     async def test_replace_bad_nodes(self):
         await self.setup_network(20)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
         self.assertEqual(len(self.nodes), 20)
         node = self.nodes[0]
         bad_peers = []
@@ -68,6 +68,7 @@ class DHTIntegrationTest(AsyncioTestCase):
 
     async def test_re_join(self):
         await self.setup_network(20, seed_nodes=10)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
         node = self.nodes[-1]
         self.assertTrue(node.joined.is_set())
         self.assertTrue(node.protocol.routing_table.get_peers())
@@ -95,6 +96,7 @@ class DHTIntegrationTest(AsyncioTestCase):
 
     async def test_get_token_on_announce(self):
         await self.setup_network(2, seed_nodes=2)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
         node1, node2 = self.nodes
         node1.protocol.peer_manager.clear_token(node2.protocol.node_id)
         blob_hash = hexlify(constants.generate_id(1337)).decode()
@@ -112,6 +114,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         # imagine that you only got bad peers and refresh will happen in one hour
         # instead of failing for one hour we should be able to recover by scheduling pings to bad peers we find
         await self.setup_network(2, seed_nodes=2)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
         node1, node2 = self.nodes
         node2.stop()
         # forcefully make it a bad peer but don't remove it from routing table
@@ -129,38 +132,36 @@ class DHTIntegrationTest(AsyncioTestCase):
         self.assertFalse(node1.protocol.routing_table.get_peers())
 
     async def test_peer_persistance(self):
-        num_peers = 5
+        num_nodes = 6
         start_port = 40000
+        num_seeds = 2
         external_ip = '127.0.0.1'
 
         # Start a node
-        node1 = await self.create_node(constants.generate_id(num_peers), start_port+num_peers)
-        node1.start(external_ip)
+        await self.setup_network(num_nodes, start_port=start_port, seed_nodes=num_seeds)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
 
-        # Add peers
-        peer_args = [(n.protocol.nodeid, n.protocol.external_ip, n.protocol.udp_port) for n in self.nodes]
+        node1 = self.nodes[-1]
+        peer_args = [(n.protocol.node_id, n.protocol.external_ip, n.protocol.udp_port, n.protocol.peer_port) for n in
+                     self.nodes[:num_seeds]]
         peers = [make_kademlia_peer(*args) for args in peer_args]
-        for peer in peers:
-            await node1.protocol._add_peer(peer)
 
-        await asyncio.sleep(.3)
-        self.assertTrue(node1.joined.is_set())
+        # node1 is bootstrapped from the fixed seeds
         self.assertCountEqual(peers, node1.protocol.routing_table.get_peers())
 
         # Refresh and assert that the peers were persisted
         await node1.refresh_node(True)
-        self.assertCountEqual(peer_args, await node1._storage.get_peers())
+        self.assertEqual(len(peer_args), len(await node1._storage.get_persisted_kademlia_peers()))
         node1.stop()
 
-        # Start a fresh node with the same node_id and storage
-        node2 = await self.create_node(constants.generate_id(num_peers), start_port+num_peers+1)
+        # Start a fresh node with the same node_id and storage, but no known peers
+        node2 = await self.create_node(constants.generate_id(num_nodes-1), start_port+num_nodes-1)
         node2._storage = node1._storage
-        node2.start(external_ip)
+        node2.start(external_ip, [])
+        await node2.joined.wait()
 
         # The peers are restored
-        await asyncio.sleep(.3)
-        self.assertTrue(node2.joined.is_set())
-        self.assertCountEqual(peers, node2.protocol.routing_table.get_peers())
+        self.assertEqual(num_seeds, len(node2.protocol.routing_table.get_peers()))
         for bucket1, bucket2 in zip(node1.protocol.routing_table.buckets, node2.protocol.routing_table.buckets):
             self.assertEqual((bucket1.range_min, bucket1.range_max), (bucket2.range_min, bucket2.range_max))
 
@@ -170,6 +171,7 @@ class DHTIntegrationTest(AsyncioTestCase):
         external_ip = '127.0.0.1'
 
         await self.setup_network(num_peers, seed_nodes=num_peers // 2, start_port=start_port)
+        await asyncio.gather(*[node.joined.wait() for node in self.nodes])
         peer_args = [
             (n.protocol.node_id, n.protocol.external_ip, n.protocol.udp_port) for n in self.nodes
         ]
@@ -180,7 +182,7 @@ class DHTIntegrationTest(AsyncioTestCase):
 
         # Create node with the persisted nodes in storage
         node = await self.create_node(constants.generate_id(num_peers), start_port+num_peers)
-        await node._storage.update_peers(persisted_peers)
+        await node._storage.save_kademlia_peers(persisted_peers)
 
         # Stop known peers so they stop replying and won't be added
         for n in known_nodes:
