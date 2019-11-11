@@ -101,14 +101,26 @@ class Deserializer:
         self.binary = binary
         self.binary_length = len(binary)
         self.cursor = start
+        self.flags = 0
 
     def read_tx(self):
         """Return a deserialized transaction."""
+        version = self._read_le_int32()
+        inputs = self._read_inputs()
+        outputs = self._read_outputs()
+        if self.flags == 1:
+            # drain witness portion of transaction
+            # too many witnesses for no crime
+            for i in range(len(inputs)):
+                for v in range(self._read_varint()):
+                    self._read_varbytes()
+            self.flags = 0
+        locktime = self._read_le_uint32()
         return Tx(
-            self._read_le_int32(),  # version
-            self._read_inputs(),    # inputs
-            self._read_outputs(),   # outputs
-            self._read_le_uint32()  # locktime
+            version,
+            inputs,
+            outputs,
+            locktime
         )
 
     def read_tx_and_hash(self):
@@ -132,7 +144,11 @@ class Deserializer:
 
     def _read_inputs(self):
         read_input = self._read_input
-        return [read_input() for i in range(self._read_varint())]
+        num_inputs = self._read_varint()
+        if num_inputs == 0:
+            self.flags = self._read_byte()
+            num_inputs = self._read_varint()
+        return [read_input() for i in range(num_inputs)]
 
     def _read_input(self):
         return TxInput(
