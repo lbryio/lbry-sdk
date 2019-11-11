@@ -425,6 +425,10 @@ class BaseTransaction:
             stream = BCDataStream(self._raw)
             self.version = stream.read_uint32()
             input_count = stream.read_compact_size()
+            flag = 0
+            if input_count == 0:
+                flag = stream.read_uint8()
+                input_count = stream.read_compact_size()
             self._add(self._inputs, [
                 self.input_class.deserialize_from(stream) for _ in range(input_count)
             ])
@@ -432,6 +436,12 @@ class BaseTransaction:
             self._add(self._outputs, [
                 self.output_class.deserialize_from(stream) for _ in range(output_count)
             ])
+            if flag == 1:
+                # drain witness portion of transaction
+                # too many witnesses for no crime
+                for _ in range(input_count):
+                    for _ in range(stream.read_compact_size()):
+                        stream.read(stream.read_compact_size())
             self.locktime = stream.read_uint32()
 
     @classmethod
