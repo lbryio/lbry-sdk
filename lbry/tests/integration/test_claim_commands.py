@@ -761,6 +761,8 @@ class StreamCommands(ClaimTestCase):
         await self.out(self.stream_create('not_bad', '1.1', channel_name='@badstuff'))
         tx = await self.out(self.stream_create('too_bad', '1.1', channel_name='@badstuff'))
         claim_id = tx['outputs'][0]['claim_id']
+        await self.out(self.channel_create('@reposts', '1.0'))
+        await self.stream_repost(claim_id, 'normal_repost', '1.2', channel_name='@reposts')
         filtering1 = await self.out(self.channel_create('@filtering1', '1.0'))
         filtering1 = filtering1['outputs'][0]['claim_id']
         await self.stream_repost(claim_id, 'filter1', '1.1', channel_name='@filtering1')
