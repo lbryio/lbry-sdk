@@ -710,19 +710,19 @@ class StreamCommands(ClaimTestCase):
         )
 
     async def test_preview_works_with_signed_streams(self):
-        await self.out(self.channel_create('@spam', '1.0'))
-        signed = await self.out(self.stream_create('bar', '1.0', channel_name='@spam', preview=True, confirm=False))
+        await self.channel_create('@spam', '1.0')
+        signed = await self.stream_create('bar', '1.0', channel_name='@spam', preview=True, confirm=False)
         self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
 
     async def test_repost(self):
-        await self.out(self.channel_create('@goodies', '1.0'))
-        tx = await self.out(self.stream_create('newstuff', '1.1', channel_name='@goodies'))
+        await self.channel_create('@goodies', '1.0')
+        tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies')
         claim_id = tx['outputs'][0]['claim_id']
         await self.stream_repost(claim_id, 'newstuff-again', '1.1')
         claim_list = (await self.out(self.daemon.jsonrpc_claim_list()))['items']
         reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
         self.assertEqual(len(reposts_on_claim_list), 1)
-        await self.out(self.channel_create('@reposting-goodies', '1.0'))
+        await self.channel_create('@reposting-goodies', '1.0')
         await self.stream_repost(claim_id, 'repost-on-channel', '1.1', channel_name='@reposting-goodies')
         claim_list = (await self.out(self.daemon.jsonrpc_claim_list()))['items']
         reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
@@ -757,14 +757,14 @@ class StreamCommands(ClaimTestCase):
         )
 
     async def test_filtering_channels_for_removing_content(self):
-        await self.out(self.channel_create('@badstuff', '1.0'))
-        await self.out(self.stream_create('not_bad', '1.1', channel_name='@badstuff'))
-        tx = await self.out(self.stream_create('too_bad', '1.1', channel_name='@badstuff'))
-        claim_id = tx['outputs'][0]['claim_id']
-        await self.out(self.channel_create('@reposts', '1.0'))
+        await self.channel_create('@badstuff', '1.0')
+        await self.stream_create('not_bad', '1.1', channel_name='@badstuff')
+        tx = await self.stream_create('too_bad', '1.1', channel_name='@badstuff')
+        claim_id = self.get_claim_id(tx)
+        await self.channel_create('@reposts', '1.0')
         await self.stream_repost(claim_id, 'normal_repost', '1.2', channel_name='@reposts')
-        filtering1 = await self.out(self.channel_create('@filtering1', '1.0'))
-        filtering1 = filtering1['outputs'][0]['claim_id']
+        filtering1 = await self.channel_create('@filtering1', '1.0')
+        filtering1 = self.get_claim_id(filtering1)
         await self.stream_repost(claim_id, 'filter1', '1.1', channel_name='@filtering1')
         await self.conductor.spv_node.stop()
         await self.conductor.spv_node.start(
@@ -776,9 +776,11 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(filtered_claim_search, [])
         filtered_claim_search = await self.claim_search(name='not_bad')
         self.assertEqual(len(filtered_claim_search), 1)
+        filtered_claim_search = await self.claim_search(name='normal_repost')
+        self.assertEqual(len(filtered_claim_search), 1)
 
     async def test_publish_updates_file_list(self):
-        tx = await self.out(self.stream_create(title='created'))
+        tx = await self.stream_create(title='created')
         txo = tx['outputs'][0]
         claim_id, expected = txo['claim_id'], txo['value']
         files = await self.file_list()
@@ -787,7 +789,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(expected, files[0]['metadata'])
 
         # update with metadata-only changes
-        tx = await self.out(self.stream_update(claim_id, title='update 1'))
+        tx = await self.stream_update(claim_id, title='update 1')
         files = await self.file_list()
         expected['title'] = 'update 1'
         self.assertEqual(1, len(files))
@@ -795,7 +797,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(expected, files[0]['metadata'])
 
         # update with new data
-        tx = await self.out(self.stream_update(claim_id, title='update 2', data=b'updated data'))
+        tx = await self.stream_update(claim_id, title='update 2', data=b'updated data')
         expected = tx['outputs'][0]['value']
         files = await self.file_list()
         self.assertEqual(1, len(files))
