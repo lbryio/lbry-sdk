@@ -263,13 +263,17 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'blocklist_channel_ids' in constraints:
         blocklist_ids = constraints.pop('blocklist_channel_ids')
         if blocklist_ids:
-            not_repost_from_channel_ids = [
+            blocking_channels = [
                 sqlite3.Binary(unhexlify(channel_id)[::-1]) for channel_id in blocklist_ids
             ]
-            constraints['null_or_not_reposted_by__or'] = {
-                'repost.channel_hash__not_in': not_repost_from_channel_ids,
-                'repost.channel_hash__is_null': True
-            }
+            constraints.update({
+                f'$blocking_channels{i}': a for i, a in enumerate(blocking_channels)
+            })
+            blocklist = ', '.join([f':$blocking_channels{i}' for i in range(len(blocking_channels))])
+            constraints['claim.claim_hash__not_in'] = f"""
+                SELECT reposted_claim_hash FROM claim
+                WHERE channel_hash IN ({blocklist})
+            """
     if 'signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
         if has_channel_signature:
@@ -314,7 +318,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         constraints["order_by"] = FTS_ORDER_BY
         select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
     else:
-        select = f"SELECT {cols} FROM claim LEFT JOIN claim as repost ON (claim.claim_hash=repost.reposted_claim_hash)"
+        select = f"SELECT {cols} FROM claim"
 
     sql, values = query(
         select if for_count else select+"""
