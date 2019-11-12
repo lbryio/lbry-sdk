@@ -2,9 +2,11 @@ import asyncio
 import typing
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
+from lbry.conf import Config
 from lbry.dht import constants
 from lbry.dht.node import Node
 from lbry.dht.peer import PeerManager, make_kademlia_peer
+from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):
@@ -84,3 +86,66 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
             # teardown
             for n in nodes.values():
                 n.stop()
+
+
+class TestTemporarilyLosingConnetction(AsyncioTestCase):
+
+    async def test_losing_connection(self):
+        loop = asyncio.get_event_loop()
+        loop.set_debug(False)
+
+        peer_addresses = [
+            (f'127.0.0.1', 40000+i) for i in range(10)
+        ]
+        node_ids = [constants.generate_id(i) for i in range(10)]
+
+        nodes = [
+            Node(
+                loop, PeerManager(loop), node_id, udp_port, udp_port, 3333, address,
+                storage=SQLiteStorage(Config(), ":memory:", self.loop, self.loop.time)
+            )
+            for node_id, (address, udp_port) in zip(node_ids, peer_addresses)
+        ]
+        dht_network = {peer_addresses[i]: node.protocol for i, node in enumerate(nodes)}
+        num_seeds = 3
+
+        with dht_mocks.mock_network_loop(loop, dht_network):
+            for i, n in enumerate(nodes):
+                await n._storage.open()
+                n.start(peer_addresses[i][0], peer_addresses[:num_seeds])
+
+            node = nodes[-1]
+            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            await advance(1000)
+
+            # Join the network, assert that at least the known peers are in RT
+            self.assertTrue(node.joined.is_set())
+            self.assertTrue(len(node.protocol.routing_table.get_peers()) >= num_seeds)
+
+            # Refresh, so that the peers are persisted
+            await advance(4000)
+            self.assertTrue(len(await node._storage.get_persisted_kademlia_peers()) > num_seeds)
+
+            # We lost internet connection - all the peers stop responding
+            popped_protocols = []
+            for peer_address in peer_addresses[:-1]:
+                popped_protocols.append(dht_network.pop(peer_address))
+
+            # The peers are cleared on refresh from RT and storage
+            await advance(4000)
+            self.assertFalse(node.protocol.routing_table.get_peers())
+            self.assertFalse(await node._storage.get_persisted_kademlia_peers())
+
+            # Reconnect some of the previously stored - node shouldn't connect
+            for peer_address, protocol in zip(peer_addresses[num_seeds+1:-2], popped_protocols[num_seeds+1:-2]):
+                dht_network[peer_address] = protocol
+            await advance(1000)
+            self.assertEqual(0, len(node.protocol.routing_table.get_peers()))
+
+            # Reconnect some of the seed nodes
+            for peer_address, protocol in zip(peer_addresses[:num_seeds], popped_protocols[:num_seeds]):
+                dht_network[peer_address] = protocol
+
+            # Check that node reconnects at least to them
+            await advance(1000)
+            self.assertTrue(len(node.protocol.routing_table.get_peers()) >= num_seeds)

@@ -2,6 +2,7 @@ import logging
 import asyncio
 import typing
 import binascii
+import socket
 from lbry.utils import resolve_host
 from lbry.dht import constants
 from lbry.dht.peer import make_kademlia_peer
@@ -52,9 +53,6 @@ class Node:
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
                     node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
 
-            if self._storage:
-                await self._storage.save_kademlia_peers(self.protocol.routing_table.get_peers())
-
             if self.protocol.routing_table.get_peers():
                 # if we have node ids to look up, perform the iterative search until we have k results
                 while node_ids:
@@ -72,6 +70,8 @@ class Node:
             to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
                 self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
+            if self._storage:
+                await self._storage.save_kademlia_peers(self.protocol.routing_table.get_peers())
             if force_once:
                 break
 
@@ -161,7 +161,7 @@ class Node:
                             (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
                             for address, udp_port in known_node_urls or []
                         ]))
-                    except asyncio.TimeoutError:
+                    except socket.gaierror:
                         await asyncio.sleep(30)
                         continue
 
