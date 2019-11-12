@@ -192,6 +192,22 @@ class Source(Metadata):
         self.message.sd_hash = sd_hash
 
     @property
+    def bt_infohash(self) -> str:
+        return hexlify(self.message.bt_infohash).decode()
+
+    @bt_infohash.setter
+    def bt_infohash(self, bt_infohash: str):
+        self.message.bt_infohash = unhexlify(bt_infohash.encode())
+
+    @property
+    def bt_infohash_bytes(self) -> bytes:
+        return self.message.bt_infohash.decode()
+
+    @bt_infohash_bytes.setter
+    def bt_infohash_bytes(self, bt_infohash: bytes):
+        self.message.bt_infohash = bt_infohash
+
+    @property
     def url(self) -> str:
         return self.message.url
 

@@ -195,6 +195,8 @@ class Stream(BaseClaim):
                 claim['source']['hash'] = self.source.file_hash
             if 'sd_hash' in claim['source']:
                 claim['source']['sd_hash'] = self.source.sd_hash
+            elif 'bt_infohash' in claim['source']:
+                claim['source']['bt_infohash'] = self.source.bt_infohash
             if 'media_type' in claim['source']:
                 claim['stream_type'] = guess_stream_type(claim['source']['media_type'])
         fee = claim.get('fee', {})
@@ -216,6 +218,8 @@ class Stream(BaseClaim):
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
+        elif 'bt_infohash' in kwargs:
+            self.source.bt_infohash = kwargs.pop('bt_infohash')
         if 'file_name' in kwargs:
             self.source.name = kwargs.pop('file_name')
         if 'file_hash' in kwargs:
