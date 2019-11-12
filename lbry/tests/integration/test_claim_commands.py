@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 
 
 class ClaimTestCase(CommandTestCase):
-
+# add collection tests
     files_directory = os.path.join(os.path.dirname(__file__), 'files')
     video_file_url = 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4'
     video_file_name = os.path.join(files_directory, 'ForBiggerEscapes.mp4')
