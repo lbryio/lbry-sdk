@@ -144,6 +144,11 @@ class WalletDatabase(BaseDatabase):
             TXO_TYPES['stream'], TXO_TYPES['channel']
         ]
 
+    def constrain_claims(constraints):
+        constraints['txo_type__in'] = [
+            TXO_TYPES['stream'], TXO_TYPES['channel']
+        ]
+
     async def get_claims(self, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
         return await self.get_utxos(**constraints)
@@ -185,6 +190,18 @@ class WalletDatabase(BaseDatabase):
         return self.get_utxos(**constraints)
 
     def get_support_count(self, **constraints):
+        self.constrain_supports(constraints)
+        return self.get_utxo_count(**constraints)
+
+    @staticmethod
+    def constrain_collections(constraints):
+        constraints['txo_type'] = TXO_TYPES['collection']
+
+    def get_collections(self, **constraints):
+        self.constrain_supports(constraints)
+        return self.get_utxos(**constraints)
+
+    def get_collection_count(self, **constraints):
         self.constrain_supports(constraints)
         return self.get_utxo_count(**constraints)
 

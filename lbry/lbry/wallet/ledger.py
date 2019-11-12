@@ -186,6 +186,12 @@ class MainNetLedger(BaseLedger):
     def get_channel_count(self, **constraints):
         return self.db.get_channel_count(**constraints)
 
+    def get_collections(self, **constraints):
+        return self.db.get_collections(**constraints)
+
+    def get_collection_count(self, **constraints):
+        return self.db.get_collection_count(**constraints)
+
     def get_supports(self, **constraints):
         return self.db.get_supports(**constraints)
 

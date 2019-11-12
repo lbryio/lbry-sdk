@@ -4154,6 +4154,22 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception("Invalid stream name.")
 
     @staticmethod
+    # assume stream and collection have the same naming rules
+    def valid_collection_name_or_error(name: str):
+        try:
+            if not name:
+                raise Exception('Collection name cannot be blank.')
+            parsed = URL.parse(name)
+            if parsed.has_channel:
+                raise Exception(
+                    "Collection names cannot start with '@' symbol. This is reserved for channels claims."
+                )
+            if not parsed.has_stream or parsed.stream.name != name:
+                raise Exception('Collection name has invalid characters.')
+        except (TypeError, ValueError):
+            raise Exception("Invalid collection name.")
+
+    @staticmethod
     def valid_channel_name_or_error(name: str):
         try:
             if not name:
