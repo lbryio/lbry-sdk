@@ -37,7 +37,7 @@ def variance(times):
 async def wait_for_done(conf, claim_name, timeout):
     blobs_completed, last_completed = 0, time.perf_counter()
     while True:
-        file = (await daemon_rpc(conf, "file_list", claim_name=claim_name))[0]
+        file = (await daemon_rpc(conf, "file_list", claim_name=claim_name))['items'][0]
         if file['status'] in ['finished', 'stopped']:
             return True, file['blobs_completed'], file['blobs_in_stream']
         elif blobs_completed < int(file['blobs_completed']):
