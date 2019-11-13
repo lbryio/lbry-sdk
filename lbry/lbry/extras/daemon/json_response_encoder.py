@@ -201,6 +201,8 @@ class JSONResponseEncoder(JSONEncoder):
                 output['short_url'] = output['meta'].pop('short_url')
             if 'canonical_url' in output['meta']:
                 output['canonical_url'] = output['meta'].pop('canonical_url')
+            if txo.claims is not None:
+                output['claims'] = [self.encode_output(o) for o in txo.claims]
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
                     output['value'] = txo.claim

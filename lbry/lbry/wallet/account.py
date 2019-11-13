@@ -5,7 +5,7 @@ from hashlib import sha256
 from string import hexdigits
 
 import ecdsa
-from lbry.wallet.constants import TXO_TYPES
+from lbry.wallet.constants import CLAIM_TYPES
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
@@ -91,7 +91,7 @@ class Account(BaseAccount):
         get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
-            claims_balance = await get_total_balance(txo_type__in=[TXO_TYPES['stream'], TXO_TYPES['channel']])
+            claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPES)
             for amount, spent, from_me, to_me, height in await self.get_support_summary():
                 if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
                     continue
@@ -162,6 +162,12 @@ class Account(BaseAccount):
 
     def get_channel_count(self, **constraints):
         return self.ledger.get_channel_count(wallet=self.wallet, accounts=[self], **constraints)
+
+    def get_collections(self, **constraints):
+        return self.ledger.get_collections(wallet=self.wallet, accounts=[self], **constraints)
+
+    def get_collection_count(self, **constraints):
+        return self.ledger.get_collection_count(wallet=self.wallet, accounts=[self], **constraints)
 
     def get_supports(self, **constraints):
         return self.ledger.get_supports(wallet=self.wallet, accounts=[self], **constraints)

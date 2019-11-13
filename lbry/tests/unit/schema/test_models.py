@@ -1,7 +1,7 @@
 from unittest import TestCase
 from decimal import Decimal
 
-from lbry.schema.claim import Claim, Stream
+from lbry.schema.claim import Claim, Stream, Collection
 
 
 class TestClaimContainerAwareness(TestCase):
@@ -116,6 +116,26 @@ class TestTags(TestCase):
 
         claim.channel.update(tags='Anime')
         self.assertEqual(claim.channel.tags, ['anime'])
+
+
+class TestCollection(TestCase):
+
+    def test_collection(self):
+        collection = Collection()
+
+        collection.update(claims=['abc123', 'def123'])
+        self.assertListEqual(collection.claims.ids, ['abc123', 'def123'])
+
+        collection.update(claims=['abc123', 'bbb123'])
+        self.assertListEqual(collection.claims.ids, ['abc123', 'def123', 'abc123', 'bbb123'])
+
+        collection.update(clear_claims=True, claims=['bbb987', 'bb'])
+        self.assertListEqual(collection.claims.ids, ['bbb987', 'bb'])
+
+        self.assertEqual(collection.to_dict(), {'claims': ['bbb987', 'bb']})
+
+        collection.update(clear_claims=True)
+        self.assertListEqual(collection.claims.ids, [])
 
 
 class TestLocations(TestCase):

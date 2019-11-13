@@ -3,7 +3,7 @@ from typing import List
 from torba.client.basedatabase import BaseDatabase
 
 from lbry.wallet.transaction import Output
-from lbry.wallet.constants import TXO_TYPES
+from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES
 
 
 class WalletDatabase(BaseDatabase):
@@ -140,14 +140,7 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_claims(constraints):
-        constraints['txo_type__in'] = [
-            TXO_TYPES['stream'], TXO_TYPES['channel']
-        ]
-
-    def constrain_claims(constraints):
-        constraints['txo_type__in'] = [
-            TXO_TYPES['stream'], TXO_TYPES['channel']
-        ]
+        constraints['txo_type__in'] = CLAIM_TYPES
 
     async def get_claims(self, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
@@ -198,11 +191,11 @@ class WalletDatabase(BaseDatabase):
         constraints['txo_type'] = TXO_TYPES['collection']
 
     def get_collections(self, **constraints):
-        self.constrain_supports(constraints)
+        self.constrain_collections(constraints)
         return self.get_utxos(**constraints)
 
     def get_collection_count(self, **constraints):
-        self.constrain_supports(constraints)
+        self.constrain_collections(constraints)
         return self.get_utxo_count(**constraints)
 
     async def release_all_outputs(self, account):

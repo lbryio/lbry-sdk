@@ -347,10 +347,6 @@ class ClaimList(BaseMessageList[ClaimReference]):
     __slots__ = ()
     item_class = ClaimReference
 
-    @property
-    def _message(self):
-        return self.message.claim_references
-
     def append(self, value):
         self.add().claim_id = value
 
