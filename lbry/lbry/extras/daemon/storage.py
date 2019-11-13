@@ -823,10 +823,7 @@ class SQLiteStorage(SQLiteMixin):
         def _save_kademlia_peers(transaction: sqlite3.Connection):
             transaction.execute('delete from peer').fetchall()
             transaction.executemany(
-                'insert into peer(node_id, address, udp_port, tcp_port) values (?, ?, ?, ?)', (
-                    tuple(
-                        [(binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers]
-                    )
-                )
+                'insert into peer(node_id, address, udp_port, tcp_port) values (?, ?, ?, ?)',
+                tuple([(binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers])
             ).fetchall()
         return await self.db.run(_save_kademlia_peers)

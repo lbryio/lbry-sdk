@@ -162,7 +162,7 @@ class Node:
                             for address, udp_port in known_node_urls or []
                         ]))
                     except socket.gaierror:
-                        await asyncio.sleep(30)
+                        await asyncio.sleep(30, loop=self.loop)
                         continue
 
                 self.protocol.peer_manager.reset()

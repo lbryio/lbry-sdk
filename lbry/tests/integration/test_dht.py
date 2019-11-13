@@ -31,7 +31,6 @@ class DHTIntegrationTest(AsyncioTestCase):
         self.addCleanup(node.stop)
         node.protocol.rpc_timeout = .5
         node.protocol.ping_queue._default_delay = .5
-        node._peer_search_timeout = .5
         return node
 
     async def setup_network(self, size: int, start_port=40000, seed_nodes=1, external_ip='127.0.0.1'):
