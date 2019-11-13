@@ -5,3 +5,9 @@ TXO_TYPES = {
     "purchase": 4,
     "collection": 5
 }
+
+CLAIM_TYPES = [
+    TXO_TYPES['stream'],
+    TXO_TYPES['channel'],
+    TXO_TYPES['collection'],
+]

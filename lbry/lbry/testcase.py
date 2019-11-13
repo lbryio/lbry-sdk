@@ -267,10 +267,25 @@ class CommandTestCase(IntegrationTestCase):
         return await self.confirm_and_render(
             self.daemon.jsonrpc_channel_abandon(*args, **kwargs), confirm
         )
+# ClaimIDs = ....
+    async def collection_create(
+            self, name='firstcollection', bid='1.0', confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_collection_create(name, bid, **kwargs), confirm
+        )
+# ClaimIDs = ....
+    async def collection_update(
+            self, claim_id, confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_collection_update(claim_id, **kwargs), confirm
+        )
 
-    # async def collection_create
-    # async def collection_update
-    # async def collection_abandon
+    async def collection_abandon(self, *args, confirm=True, **kwargs):
+        if 'blocking' not in kwargs:
+            kwargs['blocking'] = False
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_stream_abandon(*args, **kwargs), confirm
+        )
 
     async def support_create(self, claim_id, bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(

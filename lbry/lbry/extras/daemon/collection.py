@@ -9,6 +9,7 @@ async def jsonrpc_collection_create(
 
     Usage:
         collection_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
+                       ( --claims=<claimIds> )
                        [--allow_duplicate_name=<allow_duplicate_name>]
                        [--title=<title>] [--description=<description>]
                        [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
@@ -20,12 +21,14 @@ async def jsonrpc_collection_create(
     Options:
         --name=<name>                  : (str) name of the collection
         --bid=<bid>                    : (decimal) amount to back the claim
-    --allow_duplicate_name=<allow_duplicate_name> : (bool) create new collection even if one already exists with
+        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new collection even if one already exists with
                                           given name. default: false.
-        --claims=<claims>              : (list) claim ids
-        --title=<title>                : (str) title of the publication
-        --description=<description>    : (str) description of the publication
+        --claims=<claimIds>            : (list) claim ids
+        --title=<title>                : (str) title of the collection
+        --description=<description>    : (str) description of the collection
+        --clear_languages              : (bool) clear existing languages (prior to adding new ones)
         --tags=<tags>                  : (list) content tags
+        --clear_languages              : (bool) clear existing languages (prior to adding new ones)
         --languages=<languages>        : (list) languages used by the collection,
                                                 using RFC 5646 format, eg:
                                                 for English `--languages=en`
@@ -65,7 +68,7 @@ async def jsonrpc_collection_create(
                                                       ... --locations="{'country': 'US', 'state': 'NH'}"
 
         --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-        # --cover_url=<cover_url>        : (str) url of cover image
+        # --cover_url=<cover_url>      : (str) url of cover image
         --account_id=<account_id>      : (str) account to use for holding the transaction
         --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
         --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
@@ -94,7 +97,7 @@ async def jsonrpc_collection_create(
             )
 
     claim = Claim()
-    claim.collection.update(**kwargs) #maybe specify claims=[]
+    claim.collection.update(**kwargs) #maybe specify claims=[] # here
     tx = await Transaction.claim_create(
         name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
     )
@@ -138,8 +141,10 @@ async def jsonrpc_collection_update(
     Options:
         --claim_id=<claim_id>          : (str) claim_id of the collection to update
         --bid=<bid>                    : (decimal) amount to back the claim
-        --title=<title>                : (str) title of the publication
-        --description=<description>    : (str) description of the publication
+        --claims=<claim_ids>            : (list) claim ids
+        --clear_claims                 : (bool) clear existing claim references (prior to adding new ones)
+        --title=<title>                : (str) title of the collection
+        --description=<description>    : (str) description of the collection
         --tags=<tags>                  : (list) add content tags
         --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
         --languages=<languages>        : (list) languages used by the collection,

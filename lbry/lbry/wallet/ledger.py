@@ -186,10 +186,29 @@ class MainNetLedger(BaseLedger):
     def get_channel_count(self, **constraints):
         return self.db.get_channel_count(**constraints)
 
-    def get_collections(self, **constraints):
-        return self.db.get_collections(**constraints)
+    async def get_collections(self, resolve=False, **constraints):
+        collections = await self.db.get_collections(**constraints)
+        if resolve:
+            for collection in collections:
+                claim_ids = collection.claim.collection.claims.ids;
+                try:
+                    resolve_results, _, _ = await self.claim_search([], claim_ids=collection.claim.collection.claims.ids)
+                except:
+                    log.exception("Resolve failed while looking up collection claim ids:")
+                claims = []
+                for claim_id in claim_ids:
+                    found = False
+                    for txo in resolve_results:
+                        if txo.claim_id == claim_id:
+                            claims.append(txo)
+                            found = True
+                            break
+                    if not found:
+                        claims.append(None)
+                collection.claims = claims
+        return collections
 
-    def get_collection_count(self, **constraints):
+    def get_collection_count(self, resolve=False, **constraints):
         return self.db.get_collection_count(**constraints)
 
     def get_supports(self, **constraints):
