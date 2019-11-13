@@ -92,7 +92,7 @@ async def monitor(db, server):
             async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(10)) as session:
                 try:
                     ws = await session.ws_connect(server)
-                except (aiohttp.ClientConnectorError, asyncio.TimeoutError):
+                except (aiohttp.ClientConnectionError, asyncio.TimeoutError):
                     if first_attempt:
                         print(f"failed connecting to {server}")
                         await boris_says(random.choice([
@@ -130,7 +130,7 @@ async def monitor(db, server):
                     await handle_analytics_event(c, event, server)
                     db.commit()
 
-        except (aiohttp.ClientConnectorError, asyncio.TimeoutError):
+        except (aiohttp.ClientConnectionError, asyncio.TimeoutError):
             await boris_says(random.choice([
                 f"<!channel> Guys, we have a problem! Nobody home at {server}. Will check on it again in {delay} seconds.",
                 f"<!channel> Something wrong with {server}. I think dead. Will poke it again in {delay} seconds.",
