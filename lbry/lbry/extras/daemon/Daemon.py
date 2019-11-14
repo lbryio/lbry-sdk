@@ -3272,7 +3272,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.get_est_cost_from_uri(uri)
 
     COLLECTION_DOC = """
-    Create, list and abandon collections.
+    Create, update, list, resolve, and abandon collections.
     """
 
     @requires(WALLET_COMPONENT)
@@ -3372,7 +3372,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 )
 
         claim = Claim()
-        claim.collection.update(claims=claims, **kwargs)  # maybe specify claims=[] # here
+        claim.collection.update(claims=claims, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
@@ -3383,10 +3383,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await tx.sign(funding_accounts)
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
-            )])
-            # await self.analytics_manager.send_new_channel()
+            await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
 
@@ -3394,7 +3391,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_collection_update(
-            self, claim_id, bid=None, claim=None, allow_duplicate_name=False,
+            self, claim_id, bid=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, replace=False, **kwargs):
@@ -3403,7 +3400,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             collection_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>]
-                            [--claims=<claims>...] [--clear_claim_ids]
+                            [--claims=<claims>...] [--clear_claims]
                            [--title=<title>] [--description=<description>]
                            [--tags=<tags>...] [--clear_tags]
                            [--languages=<languages>...] [--clear_languages]
@@ -3464,7 +3461,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
             --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            #--cover_url=<cover_url>        : (str) url of cover image
             --account_id=<account_id>      : (str) account in which to look for collection (default: all)
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
@@ -3496,11 +3492,10 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(
                 f"Can't find the collection '{claim_id}' in account(s) {account_ids}."
             )
-        # Here we might have a problem of replacing a stream with a collection
         old_txo = existing_collections[0]
-        if not old_txo.claim.is_collection:  # as we're only checking @ or not, this is not definitive
+        if not old_txo.claim.is_collection:
             raise Exception(
-                f"A claim with id '{claim_id}' was found but it is not a stream or collection."
+                f"A claim with id '{claim_id}' was found but it is not a collection."
             )
 
         if bid is not None:
@@ -3525,7 +3520,6 @@ class Daemon(metaclass=JSONRPCServerType):
             claim.collection.message.source.CopyFrom(
                 old_txo.claim.collection.message.source
             )
-
             claim.collection.update(**kwargs)
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
@@ -4522,7 +4516,6 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception("Invalid stream name.")
 
     @staticmethod
-    # assume stream and collection have the same naming rules
     def valid_collection_name_or_error(name: str):
         try:
             if not name:

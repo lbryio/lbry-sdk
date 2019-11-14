@@ -1297,6 +1297,10 @@ class CollectionCommands(CommandTestCase):
         claim_id2 = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 2)
 
+        await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
+        collections = await self.out(self.daemon.jsonrpc_collection_list())
+        self.assertEquals(len(collections['items']), 2)
+
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
@@ -1319,3 +1323,6 @@ class CollectionCommands(CommandTestCase):
         self.assertEqual(claims['items'][0]['name'], 'stream-one')
         self.assertEqual(claims['items'][1]['name'], 'stream-two')
         self.assertEqual(claims['items'][2]['name'], 'stream-one')
+
+
+
