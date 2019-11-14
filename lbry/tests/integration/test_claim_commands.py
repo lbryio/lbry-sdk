@@ -1293,13 +1293,18 @@ class CollectionCommands(CommandTestCase):
         self.assertEqual(collections['items'][0]['value']['claims'], claim_ids)
         self.assertNotIn('claims', collections['items'][0])
 
-        await self.collection_create('radjingles', claims=claim_ids, allow_duplicate_name=True)
+        tx = await self.collection_create('radjingles', claims=claim_ids, allow_duplicate_name=True)
+        claim_id2 = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 2)
 
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
-        collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=True))
+        collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=2))
+        self.assertEquals(len(collections['items'][0]['claims']), 2)
+
+        collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=10))
+        self.assertEqual(len(collections['items'][0]['claims']), 4)
         self.assertEqual(collections['items'][0]['claims'][0]['name'], 'stream-one')
         self.assertEqual(collections['items'][0]['claims'][1]['name'], 'stream-two')
         self.assertEqual(collections['items'][0]['claims'][2]['name'], 'stream-one')
@@ -1307,5 +1312,10 @@ class CollectionCommands(CommandTestCase):
 
         claims = await self.out(self.daemon.jsonrpc_claim_list())
         self.assertEqual(claims['items'][0]['name'], 'radjingles')
+        self.assertEqual(claims['items'][1]['name'], 'stream-two')
+        self.assertEqual(claims['items'][2]['name'], 'stream-one')
+
+        claims = await self.out(self.daemon.jsonrpc_collection_resolve(claim_id2))
+        self.assertEqual(claims['items'][0]['name'], 'stream-one')
         self.assertEqual(claims['items'][1]['name'], 'stream-two')
         self.assertEqual(claims['items'][2]['name'], 'stream-one')
