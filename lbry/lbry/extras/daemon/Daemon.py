@@ -3573,8 +3573,8 @@ class Daemon(metaclass=JSONRPCServerType):
         List my collection claims.
 
         Usage:
-            collection_list [--resolve_claims=<resolve_claims>] [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--page=<page>] [--page_size=<page_size>]
+            collection_list [--resolve_claims=<resolve_claims>] [<account_id> | --account_id=<account_id>]
+                [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --resolve_claims=<resolve_claims> : (int) resolve every claim
