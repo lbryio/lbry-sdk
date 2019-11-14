@@ -3282,7 +3282,7 @@ class Daemon(metaclass=JSONRPCServerType):
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, **kwargs):
         """
-        Create a new collection ....
+        Create a new collection.
 
         Usage:
             collection_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
@@ -3414,7 +3414,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the collection to update
             --bid=<bid>                    : (decimal) amount to back the claim
-            --claims=<claim_ids>            : (list) claim ids
+            --claims=<claims>              : (list) claim ids
             --clear_claims                 : (bool) clear existing claim references (prior to adding new ones)
             --title=<title>                : (str) title of the collection
             --description=<description>    : (str) description of the collection
@@ -3630,8 +3630,13 @@ class Daemon(metaclass=JSONRPCServerType):
         items = await self.ledger.resolve_collection(txo, page_size * (page_num - 1), page_size)
         total_items = len(txo.claim.collection.claims.ids)
 
-        return {"items": items, 'total_pages': int((total_items + (page_size - 1)) / page_size),
-                  'total_items': total_items, 'page_size': page_size, 'page': page_num}
+        return {
+            "items": items,
+            "total_pages": int((total_items + (page_size - 1)) / page_size),
+            "total_items": total_items,
+            "page_size": page_size,
+            "page": page
+        }
 
     SUPPORT_DOC = """
     Create, list and abandon all types of supports.

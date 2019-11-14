@@ -1275,6 +1275,7 @@ class CollectionCommands(CommandTestCase):
         collections = await self.out(self.daemon.jsonrpc_collection_list())
         self.assertEqual(collections['items'][0]['value']['title'], 'boring title')
         self.assertEqual(collections['items'][0]['value']['claims'], claim_ids)
+        self.assertEqual(collections['items'][0]['value_type'], 'collection')
 
         self.assertItemCount(collections, 1)
         await self.assertBalance(self.account, '6.939679')
@@ -1324,5 +1325,5 @@ class CollectionCommands(CommandTestCase):
         self.assertEqual(claims['items'][1]['name'], 'stream-two')
         self.assertEqual(claims['items'][2]['name'], 'stream-one')
 
-
-
+        claims = await self.out(self.daemon.jsonrpc_collection_resolve(claim_id2, page=10))
+        self.assertEqual(claims['items'], [])
