@@ -328,6 +328,38 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([image], media_types=['image/png'])
         await self.assertFindsClaims([image, video], media_types=['video/mp4', 'image/png'])
 
+    async def test_search_by_text(self):
+        chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))
+        chan2_id = self.get_claim_id(await self.channel_create('@Bitcoin'))
+        chan3_id = self.get_claim_id(await self.channel_create('@IAmSatoshi'))
+
+        claim1 = await self.stream_create(
+            "the-real-satoshi", title="The Real Satoshi Nakamoto",
+            description="Documentary about the real Satoshi Nakamoto, creator of bitcoin.",
+            tags=['satoshi nakamoto', 'bitcoin', 'documentary']
+        )
+        claim2 = await self.stream_create(
+            "about-me", channel_id=chan1_id, title="Satoshi Nakamoto Autobiography",
+            description="I am Satoshi Nakamoto and this is my autobiography.",
+            tags=['satoshi nakamoto', 'bitcoin', 'documentary', 'autobiography']
+        )
+        claim3 = await self.stream_create(
+            "history-of-bitcoin", channel_id=chan2_id, title="History of Bitcoin",
+            description="History of bitcoin and its creator Satoshi Nakamoto.",
+            tags=['satoshi nakamoto', 'bitcoin', 'documentary', 'history']
+        )
+        claim4 = await self.stream_create(
+            "satoshi-conspiracies", channel_id=chan3_id, title="Satoshi Nakamoto Conspiracies",
+            description="Documentary detailing various conspiracies surrounding Satoshi Nakamoto.",
+            tags=['conspiracies', 'bitcoin', 'satoshi nakamoto']
+        )
+
+        await self.assertFindsClaims([], text='cheese')
+        await self.assertFindsClaims([claim3], text='history')
+        await self.assertFindsClaims([claim4], text='conspiracy')
+        await self.assertFindsClaims([claim1, claim4, claim2, claim3], text='documentary')
+        await self.assertFindsClaims([claim4, claim1, claim2, claim3], text='satoshi')
+
 
 class ChannelCommands(CommandTestCase):
 

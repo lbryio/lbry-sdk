@@ -13,6 +13,7 @@ from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import MainNetLedger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
+from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH
 from lbry.wallet.server.db.trending import (
     CREATE_TREND_TABLE, calculate_trending, register_trending_functions
 )
@@ -48,6 +49,10 @@ class SQLDB:
 
             short_url text not null, -- normalized#shortest-unique-claim_id
             canonical_url text, -- channel's-short_url/normalized#shortest-unique-claim_id-within-channel
+
+            title text,
+            author text,
+            description text,
 
             claim_type integer,
 
@@ -151,6 +156,7 @@ class SQLDB:
         PRAGMAS +
         CREATE_CLAIM_TABLE +
         CREATE_TREND_TABLE +
+        CREATE_FULL_TEXT_SEARCH +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
         CREATE_TAG_TABLE
@@ -233,12 +239,15 @@ class SQLDB:
                 'amount': txo.amount,
                 'timestamp': header['timestamp'],
                 'height': tx.height,
+                'title': None,
+                'description': None,
+                'author': None,
                 'claim_type': None,
                 'stream_type': None,
                 'media_type': None,
                 'release_time': None,
                 'fee_currency': None,
-                'fee_amount': 0
+                'fee_amount': 0,
             }
             claims.append(claim_record)
 
@@ -252,6 +261,9 @@ class SQLDB:
                 claim_record['claim_type'] = CLAIM_TYPES['stream']
                 claim_record['media_type'] = claim.stream.source.media_type
                 claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
+                claim_record['title'] = claim.stream.title
+                claim_record['description'] = claim.stream.description
+                claim_record['author'] = claim.stream.author
                 if claim.stream.release_time:
                     claim_record['release_time'] = claim.stream.release_time
                 if claim.stream.has_fee:
@@ -283,12 +295,12 @@ class SQLDB:
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp,
-                    fee_currency, fee_amount, height,
+                    fee_currency, fee_amount, title, description, author, height,
                     creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
                     :claim_type, :media_type, :stream_type, :timestamp, :timestamp,
-                    :fee_currency, :fee_amount, :height, :height,
+                    :fee_currency, :fee_amount, :title, :description, :author, :height, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
@@ -306,6 +318,7 @@ class SQLDB:
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
                     timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency,
+                    title=:title, description=:description, author=:author,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
@@ -692,10 +705,18 @@ class SQLDB:
         expire_timer.stop()
 
         r = timer.run
+        r(update_full_text_search, 'before-delete',
+          delete_claim_hashes, self.db, height, daemon_height, self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
+        r(update_full_text_search, 'after-insert',
+          [txo.claim_hash for txo in insert_claims], self.db, height, daemon_height, self.main.first_sync)
+        r(update_full_text_search, 'before-update',
+          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
         r(self.update_claims, update_claims, header)
+        r(update_full_text_search, 'after-update',
+          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
