@@ -186,29 +186,33 @@ class MainNetLedger(BaseLedger):
     def get_channel_count(self, **constraints):
         return self.db.get_channel_count(**constraints)
 
-    async def get_collections(self, resolve=False, **constraints):
+    async def resolve_collection(self, collection, offset=0, page_size=1):
+        claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
+        try:
+            resolve_results, _, _ = await self.claim_search([], claim_ids=claim_ids)
+        except:
+            log.exception("Resolve failed while looking up collection claim ids:")
+            return []
+        claims = []
+        for claim_id in claim_ids:
+            found = False
+            for txo in resolve_results:
+                if txo.claim_id == claim_id:
+                    claims.append(txo)
+                    found = True
+                    break
+            if not found:
+                claims.append(None)
+        return claims
+
+    async def get_collections(self, resolve_claims=0, **constraints):
         collections = await self.db.get_collections(**constraints)
-        if resolve:
+        if resolve_claims > 0:
             for collection in collections:
-                claim_ids = collection.claim.collection.claims.ids;
-                try:
-                    resolve_results, _, _ = await self.claim_search([], claim_ids=collection.claim.collection.claims.ids)
-                except:
-                    log.exception("Resolve failed while looking up collection claim ids:")
-                claims = []
-                for claim_id in claim_ids:
-                    found = False
-                    for txo in resolve_results:
-                        if txo.claim_id == claim_id:
-                            claims.append(txo)
-                            found = True
-                            break
-                    if not found:
-                        claims.append(None)
-                collection.claims = claims
+                collection.claims = await self.resolve_collection(collection, page_size=resolve_claims)
         return collections
 
-    def get_collection_count(self, resolve=False, **constraints):
+    def get_collection_count(self, resolve_claims=0, **constraints):
         return self.db.get_collection_count(**constraints)
 
     def get_supports(self, **constraints):

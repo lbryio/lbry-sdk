@@ -2011,7 +2011,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--allow_duplicate_purchase] [--override_max_key_fee] [--preview] [--blocking]
 
         Options:
-            --claim_id=<claim_id>          : (str) id of claim to purchase
+            --claim_id=<claim_id>          : (str) claim id of claim to purchase
             --url=<url>                    : (str) lookup claim to purchase by url
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
@@ -3574,20 +3574,20 @@ class Daemon(metaclass=JSONRPCServerType):
         return await self.jsonrpc_stream_abandon(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_collection_list(self, resolve_claims=False, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_collection_list(self, resolve_claims=0, account_id=None, wallet_id=None, page=None, page_size=None):
         """
         List my collection claims.
 
         Usage:
-            collection_list [--resolve_claims] [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+            collection_list [--resolve_claims=<resolve_claims>] [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
-            --resolve_claims           : (bool) resolve every claim
-            --account_id=<account_id>  : (str) id of the account to use
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
+            --resolve_claims=<resolve_claims> : (int) resolve every claim
+            --account_id=<account_id>         : (str) id of the account to use
+            --wallet_id=<wallet_id>           : (str) restrict results to specific wallet
+            --page=<page>                     : (int) page to return during paginating
+            --page_size=<page_size>           : (int) number of items on page during pagination
 
         Returns: {Paginated[Output]}
         """
@@ -3599,8 +3599,45 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             collections = partial(self.ledger.get_collections, wallet=wallet, accounts=wallet.accounts)
             collection_count = partial(self.ledger.get_collection_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(collections, collection_count, page, page_size, resolve=resolve_claims)
+        return paginate_rows(collections, collection_count, page, page_size, resolve_claims=resolve_claims)
 
+    async def jsonrpc_collection_resolve(
+            self, claim_id=None, url=None, wallet_id=None, page=1, page_size=DEFAULT_PAGE_SIZE):
+        """
+        Resolve claims in the collection.
+
+        Usage:
+            collection_resolve (--claim_id=<claim_id> | --url=<url>)
+                [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
+
+        Options:
+            --claim_id=<claim_id>      : (str) claim id of the collection
+            --url=<url>                : (str) url of the collection
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
+
+        Returns: {Paginated[Output]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+
+        if claim_id:
+            txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+            if not isinstance(txo, Output) or not txo.is_claim:
+                raise Exception(f"Could not find collection with claim_id '{claim_id}'. ")
+        elif url:
+            txo = (await self.ledger.resolve(wallet.accounts, [url]))[url]
+            if not isinstance(txo, Output) or not txo.is_claim:
+                raise Exception(f"Could not find collection with url '{url}'. ")
+        else:
+            raise Exception(f"Missing argument claim_id or url. ")
+
+        page_num, page_size = abs(page), min(abs(page_size), 50)
+        items = await self.ledger.resolve_collection(txo, page_size * (page_num - 1), page_size)
+        total_items = len(txo.claim.collection.claims.ids)
+
+        return {"items": items, 'total_pages': int((total_items + (page_size - 1)) / page_size),
+                  'total_items': total_items, 'page_size': page_size, 'page': page_num}
 
     SUPPORT_DOC = """
     Create, list and abandon all types of supports.
