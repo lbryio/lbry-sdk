@@ -18,6 +18,7 @@ from lbry.schema.result import Outputs
 from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
+from .full_text_search import FTS_ORDER_BY
 
 
 class SQLiteOperationalError(sqlite3.OperationalError):
@@ -45,7 +46,7 @@ INTEGER_PARAMS = {
 }
 
 SEARCH_PARAMS = {
-    'name', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
+    'name', 'text', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
     'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
     'has_channel_signature', 'signature_valid',
     'any_tags', 'all_tags', 'not_tags',
@@ -295,7 +296,12 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, for_count)
     _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, for_count)
 
-    select = f"SELECT {cols} FROM claim"
+    if 'text' in constraints:
+        constraints["search"] = constraints.pop("text")
+        constraints["order_by"] = FTS_ORDER_BY
+        select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
+    else:
+        select = f"SELECT {cols} FROM claim"
 
     sql, values = query(
         select if for_count else select+"""

@@ -2094,7 +2094,7 @@ class Daemon(metaclass=JSONRPCServerType):
         eg. --height=">400000" would limit results to only claims above 400k block height.
 
         Usage:
-            claim_search [<name> | --name=<name>] [--txid=<txid>] [--nout=<nout>]
+            claim_search [<name> | --name=<name>] [--text=<text>] [--txid=<txid>] [--nout=<nout>]
                          [--claim_id=<claim_id> | --claim_ids=<claim_ids>...]
                          [--channel=<channel> |
                              [[--channel_ids=<channel_ids>...] [--not_channel_ids=<not_channel_ids>...]]]
@@ -2119,6 +2119,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
+            --text=<text>                   : (str) full text search
             --claim_id=<claim_id>           : (str) full or partial claim id
             --claim_ids=<claim_ids>         : (list) list of full claim ids
             --txid=<txid>                   : (str) transaction id
