@@ -391,11 +391,10 @@ class Collection(BaseClaim):
 
     def to_dict(self):
         claim = super().to_dict()
-        if 'claim_references' in claim:
+        if claim.pop('claim_references', None):
             claim['claims'] = self.claims.ids
-            del claim['claim_references']
         return claim
 
     @property
     def claims(self) -> ClaimList:
-        return ClaimList(self.message.claim_references)
+        return ClaimList(self.message)
