@@ -106,7 +106,6 @@ class BaseHeaders:
     @asynccontextmanager
     async def checkpointed_connector(self):
         buf = BytesIO()
-        buf.connect = lambda _, headers: buf.write(headers)
         try:
             yield buf
         finally:

@@ -130,15 +130,15 @@ class BasicHeadersTests(BitcoinHeadersTestCase):
         headers = MainHeaders(':memory:')
         headers.checkpoint = 100, hexlify(sha256(self.get_bytes(block_bytes(100))))
         genblocks = lambda start, end: self.get_bytes(block_bytes(end - start), block_bytes(start))
-        async with headers.checkpointed_connector() as connector:
-            connector.connect(0, genblocks(0, 10))
+        async with headers.checkpointed_connector() as buff:
+            buff.write(genblocks(0, 10))
         self.assertEqual(len(headers), 10)
-        async with headers.checkpointed_connector() as connector:
-            connector.connect(10, genblocks(10, 100))
+        async with headers.checkpointed_connector() as buff:
+            buff.write(genblocks(10, 100))
         self.assertEqual(len(headers), 100)
         headers = MainHeaders(':memory:')
-        async with headers.checkpointed_connector() as connector:
-            connector.connect(0, genblocks(0, 300))
+        async with headers.checkpointed_connector() as buff:
+            buff.write(genblocks(0, 300))
         self.assertEqual(len(headers), 300)
 
     async def test_concurrency(self):

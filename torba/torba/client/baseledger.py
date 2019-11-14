@@ -313,20 +313,19 @@ class BaseLedger(metaclass=LedgerRegistry):
         return max(self.headers.height, self._download_height)
 
     async def initial_headers_sync(self):
-        target = self.network.remote_height
+        target = self.network.remote_height + 1
         current = len(self.headers)
         get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
         chunks = [asyncio.create_task(get_chunk(height)) for height in range(current, target, 4096)]
         total = 0
-        async with self.headers.checkpointed_connector() as connector:
+        async with self.headers.checkpointed_connector() as buffer:
             for chunk in chunks:
                 headers = await chunk
                 total += len(headers['base64'])
-                connector.connect(
-                    len(self.headers),
+                buffer.write(
                     zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
                 )
-                self._download_height = len(self.headers) + connector.tell() // self.headers.header_size
+                self._download_height = current + buffer.tell() // self.headers.header_size
                 log.info("Headers sync: %s / %s", self._download_height, target)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
