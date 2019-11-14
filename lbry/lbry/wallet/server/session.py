@@ -3,6 +3,7 @@ import math
 import time
 import base64
 import asyncio
+import logging
 from binascii import hexlify
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
@@ -17,6 +18,8 @@ from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry import __version__ as sdk_version
+
+log = logging.getLogger(__name__)
 
 
 class ResultCacheItem:
@@ -131,6 +134,8 @@ class LBRYElectrumX(ElectrumX):
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
+        except asyncio.CancelledError:
+            raise
         except reader.SQLiteInterruptedError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_interrupt(start, error.metrics)
@@ -139,7 +144,8 @@ class LBRYElectrumX(ElectrumX):
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, error.metrics)
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
-        except:
+        except Exception:
+            log.exception("dear devs, please handle this exception better")
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, {})
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
