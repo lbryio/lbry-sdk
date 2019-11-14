@@ -267,13 +267,13 @@ class CommandTestCase(IntegrationTestCase):
         return await self.confirm_and_render(
             self.daemon.jsonrpc_channel_abandon(*args, **kwargs), confirm
         )
-# ClaimIDs = ....
+
     async def collection_create(
             self, name='firstcollection', bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(
             self.daemon.jsonrpc_collection_create(name, bid, **kwargs), confirm
         )
-# ClaimIDs = ....
+
     async def collection_update(
             self, claim_id, confirm=True, **kwargs):
         return await self.confirm_and_render(
