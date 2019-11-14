@@ -355,10 +355,24 @@ class ClaimSearchCommand(ClaimTestCase):
         )
 
         await self.assertFindsClaims([], text='cheese')
+        await self.assertFindsClaims([claim2], text='autobiography')
         await self.assertFindsClaims([claim3], text='history')
         await self.assertFindsClaims([claim4], text='conspiracy')
+        await self.assertFindsClaims([], text='conspiracy AND history')
+        await self.assertFindsClaims([claim4, claim3], text='conspiracy OR history')
         await self.assertFindsClaims([claim1, claim4, claim2, claim3], text='documentary')
         await self.assertFindsClaims([claim4, claim1, claim2, claim3], text='satoshi')
+
+        claim2 = await self.stream_update(
+            self.get_claim_id(claim2), clear_tags=True, tags=['cloud'],
+            title="Satoshi Nakamoto Nography",
+            description="I am Satoshi Nakamoto and this is my nography.",
+        )
+        await self.assertFindsClaims([], text='autobiography')
+        await self.assertFindsClaims([claim2], text='cloud')
+
+        await self.stream_abandon(self.get_claim_id(claim2))
+        await self.assertFindsClaims([], text='cloud')
 
 
 class ChannelCommands(CommandTestCase):
