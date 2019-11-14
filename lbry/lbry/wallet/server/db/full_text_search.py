@@ -22,7 +22,7 @@ def fts_action_sql(claims=None, action='insert'):
         'tags': "(select group_concat(tag, ' ') from tag where tag.claim_hash=claim.claim_hash)"
     }
     if action == 'delete':
-        select['search'] = 'delete'
+        select['search'] = '"delete"'
 
     where, values = "", {}
     if claims:
