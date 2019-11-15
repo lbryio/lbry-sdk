@@ -3681,7 +3681,6 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         if not preview:
-            await tx.sign(funding_accounts)
             await self.broadcast_or_release(tx, blocking)
             await self.storage.save_supports({claim_id: [{
                 'txid': tx.id,
