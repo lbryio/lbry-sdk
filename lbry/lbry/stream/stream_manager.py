@@ -20,7 +20,7 @@ if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
-    from lbry.extras.daemon.storage import SQLiteStorage, StoredStreamClaim
+    from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
     from lbry.wallet import LbryWalletManager
     from lbry.wallet.transaction import Transaction
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
@@ -117,7 +117,7 @@ class StreamManager:
 
     async def add_stream(self, rowid: int, sd_hash: str, file_name: Optional[str],
                          download_directory: Optional[str], status: str,
-                         claim: Optional['StoredStreamClaim'], content_fee: Optional['Transaction'],
+                         claim: Optional['StoredContentClaim'], content_fee: Optional['Transaction'],
                          added_on: Optional[int]):
         try:
             descriptor = await self.blob_manager.get_stream_descriptor(sd_hash)

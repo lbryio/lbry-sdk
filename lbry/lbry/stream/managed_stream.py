@@ -11,7 +11,7 @@ from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 from lbry.stream.reflector.client import StreamReflectorClient
-from lbry.extras.daemon.storage import StoredStreamClaim
+from lbry.extras.daemon.storage import StoredContentClaim
 from lbry.blob import MAX_BLOB_SIZE
 
 if typing.TYPE_CHECKING:
@@ -78,7 +78,7 @@ class ManagedStream:
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  sd_hash: str, download_directory: typing.Optional[str] = None, file_name: typing.Optional[str] = None,
-                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredStreamClaim] = None,
+                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredContentClaim] = None,
                  download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
                  descriptor: typing.Optional[StreamDescriptor] = None,
                  content_fee: typing.Optional['Transaction'] = None,
@@ -452,8 +452,8 @@ class ManagedStream:
         return sent
 
     def set_claim(self, claim_info: typing.Dict, claim: 'Claim'):
-        self.stream_claim_info = StoredStreamClaim(
-            self.stream_hash, f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
+        self.stream_claim_info = StoredContentClaim(
+            f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
             claim_info['name'], claim_info['amount'], claim_info['height'],
             binascii.hexlify(claim.to_bytes()).decode(), claim.signing_channel_id, claim_info['address'],
             claim_info['claim_sequence'], claim_info.get('channel_name')

@@ -28,12 +28,11 @@ def calculate_effective_amount(amount: str, supports: typing.Optional[typing.Lis
     )
 
 
-class StoredStreamClaim:
-    def __init__(self, stream_hash: str, outpoint: opt_str = None, claim_id: opt_str = None, name: opt_str = None,
+class StoredContentClaim:
+    def __init__(self, outpoint: opt_str = None, claim_id: opt_str = None, name: opt_str = None,
                  amount: opt_int = None, height: opt_int = None, serialized: opt_str = None,
                  channel_claim_id: opt_str = None, address: opt_str = None, claim_sequence: opt_int = None,
                  channel_name: opt_str = None):
-        self.stream_hash = stream_hash
         self.claim_id = claim_id
         self.outpoint = outpoint
         self.claim_name = name
@@ -71,8 +70,16 @@ class StoredStreamClaim:
         }
 
 
+def _get_content_claims(transaction: sqlite3.Connection, query: str,
+                        source_hashes: typing.List[str]) -> typing.Dict[str, StoredContentClaim]:
+    claims = {}
+    for claim_info in _batched_select(transaction, query, source_hashes):
+        claims[claim_info[0]] = StoredContentClaim(*claim_info[1:])
+    return claims
+
+
 def get_claims_from_stream_hashes(transaction: sqlite3.Connection,
-                                  stream_hashes: typing.List[str]) -> typing.Dict[str, StoredStreamClaim]:
+                                  stream_hashes: typing.List[str]) -> typing.Dict[str, StoredContentClaim]:
     query = (
         "select content_claim.stream_hash, c.*, case when c.channel_claim_id is not null then "
         "   (select claim_name from claim where claim_id==c.channel_claim_id) "
@@ -81,13 +88,20 @@ def get_claims_from_stream_hashes(transaction: sqlite3.Connection,
         " inner join claim c on c.claim_outpoint=content_claim.claim_outpoint and content_claim.stream_hash in {}"
         " order by c.rowid desc"
     )
-    return {
-        claim_info.stream_hash: claim_info
-        for claim_info in [
-            None if not claim_info else StoredStreamClaim(*claim_info)
-            for claim_info in _batched_select(transaction, query, stream_hashes)
-        ]
-    }
+    return _get_content_claims(transaction, query, stream_hashes)
+
+
+def get_claims_from_torrent_info_hashes(transaction: sqlite3.Connection,
+                                        info_hashes: typing.List[str]) -> typing.Dict[str, StoredContentClaim]:
+    query = (
+        "select content_claim.bt_infohash, c.*, case when c.channel_claim_id is not null then "
+        "   (select claim_name from claim where claim_id==c.channel_claim_id) "
+        "   else null end as channel_name "
+        " from content_claim "
+        " inner join claim c on c.claim_outpoint=content_claim.claim_outpoint and content_claim.bt_infohash in {}"
+        " order by c.rowid desc"
+    )
+    return _get_content_claims(transaction, query, info_hashes)
 
 
 def _batched_select(transaction, query, parameters, batch_size=900):
@@ -135,7 +149,7 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
                          "inner join claim c on cc.claim_outpoint=c.claim_outpoint "
                          "where file.stream_hash in {} "
                          "order by c.rowid desc", stream_hashes):
-        claim = StoredStreamClaim(stream_hash, *claim_args)
+        claim = StoredContentClaim(*claim_args)
         if claim.channel_claim_id:
             if claim.channel_claim_id not in signed_claims:
                 signed_claims[claim.channel_claim_id] = []
