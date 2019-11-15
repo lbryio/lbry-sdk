@@ -204,6 +204,15 @@ def delete_stream(transaction: sqlite3.Connection, descriptor: 'StreamDescriptor
     transaction.executemany("delete from blob where blob_hash=?", blob_hashes).fetchall()
 
 
+def delete_torrent(transaction: sqlite3.Connection, bt_infohash: str):
+    transaction.execute("delete from content_claim where bt_infohash=?", (bt_infohash, )).fetchall()
+    transaction.execute("delete from torrent_tracker where bt_infohash=?", (bt_infohash,)).fetchall()
+    transaction.execute("delete from torrent_node where bt_infohash=?", (bt_infohash,)).fetchall()
+    transaction.execute("delete from torrent_http_seed where bt_infohash=?", (bt_infohash,)).fetchall()
+    transaction.execute("delete from file where bt_infohash=?", (bt_infohash,)).fetchall()
+    transaction.execute("delete from torrent where bt_infohash=?", (bt_infohash,)).fetchall()
+
+
 def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
                download_directory: typing.Optional[str], data_payment_rate: float, status: str,
                content_fee: typing.Optional[Transaction], added_on: typing.Optional[int] = None) -> int:
@@ -495,6 +504,9 @@ class SQLiteStorage(SQLiteMixin):
 
     def delete_stream(self, descriptor: 'StreamDescriptor'):
         return self.db.run_with_foreign_keys_disabled(delete_stream, descriptor)
+
+    async def delete_torrent(self, bt_infohash: str):
+        return await self.db.run(delete_torrent, bt_infohash)
 
     # # # # # # # # # file stuff # # # # # # # # #
 
