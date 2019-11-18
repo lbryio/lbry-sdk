@@ -35,6 +35,13 @@ class TestSessions(IntegrationTestCase):
         info = await self.ledger.network.get_server_features()
         self.assertEqual(sdk_version, info['server_version'])
 
+    async def test_client_errors(self):
+        # Goal is ensuring thsoe are raised and not trapped accidentally
+        with self.assertRaisesRegex(Exception, 'not a valid address'):
+            await self.ledger.network.get_history('of the world')
+        with self.assertRaisesRegex(Exception, 'rejected by network rules.*TX decode failed'):
+            await self.ledger.network.broadcast('13370042004200')
+
 
 class TestSegwitServer(IntegrationTestCase):
     LEDGER = lbry.wallet
