@@ -176,10 +176,10 @@ class LbryWalletManager(BaseWalletManager):
         if not tx:
             try:
                 raw = await self.ledger.network.get_transaction(txid)
-                if not raw:
-                    return {'success': False, 'code': 404, 'message': 'transaction not found'}
                 height = await self.ledger.network.get_transaction_height(txid)
             except CodeMessageError as e:
+                if 'No such mempool or blockchain transaction.' in e.message:
+                    return {'success': False, 'code': 404, 'message': 'transaction not found'}
                 return {'success': False, 'code': e.code, 'message': e.message}
             tx = self.ledger.transaction_class(unhexlify(raw))
             await self.ledger.maybe_verify_transaction(tx, height)

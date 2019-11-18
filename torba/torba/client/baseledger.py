@@ -550,12 +550,8 @@ class BaseLedger(metaclass=LedgerRegistry):
             if tx is None:
                 # fetch from network
                 _raw = await self.network.retriable_call(self.network.get_transaction, txid, remote_height)
-                if _raw:
-                    tx = self.transaction_class(unhexlify(_raw))
-                    cache_item.tx = tx  # make sure it's saved before caching it
-
-            if tx is None:
-                raise ValueError(f'Transaction {txid} was not in database and not on network.')
+                tx = self.transaction_class(unhexlify(_raw))
+                cache_item.tx = tx  # make sure it's saved before caching it
 
             await self.maybe_verify_transaction(tx, remote_height)
             return tx
