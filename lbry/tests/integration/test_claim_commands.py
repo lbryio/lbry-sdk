@@ -717,44 +717,38 @@ class StreamCommands(ClaimTestCase):
     async def test_repost(self):
         await self.channel_create('@goodies', '1.0')
         tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies')
-        claim_id = tx['outputs'][0]['claim_id']
-        await self.stream_repost(claim_id, 'newstuff-again', '1.1')
-        claim_list = (await self.out(self.daemon.jsonrpc_claim_list()))['items']
-        reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
-        self.assertEqual(len(reposts_on_claim_list), 1)
+        claim_id = self.get_claim_id(tx)
+
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+
+        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1')
+        repost_id = self.get_claim_id(tx)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
+        self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+
         await self.channel_create('@reposting-goodies', '1.0')
         await self.stream_repost(claim_id, 'repost-on-channel', '1.1', channel_name='@reposting-goodies')
-        claim_list = (await self.out(self.daemon.jsonrpc_claim_list()))['items']
-        reposts_on_claim_list = [claim for claim in claim_list if claim['value_type'] == 'repost']
-        self.assertEqual(len(reposts_on_claim_list), 2)
-        signed_reposts = [repost for repost in reposts_on_claim_list if repost.get('is_channel_signature_valid')]
-        self.assertEqual(len(signed_reposts), 1)
-        # check that its directly searchable (simplest case, by name)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(reposted_claim_id=claim_id), 2)
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 2)
+
+        search_results = await self.claim_search(reposted='>=2')
+        self.assertEqual(len(search_results), 1)
+        self.assertEqual(search_results[0]['name'], 'newstuff')
+
         search_results = await self.claim_search(name='repost-on-channel')
         self.assertEqual(len(search_results), 1)
-        self.assertTrue(
-            any(claim['claim_id'] for claim in reposts_on_claim_list
-                if claim['name'] == 'repost-on-channel' and claim['claim_id'] == search_results[0]['claim_id'])
-        )
-        search_results = await self.claim_search(name='newstuff-again')
-        self.assertEqual(len(search_results), 1)
-        self.assertTrue(
-            any(claim['claim_id'] for claim in reposts_on_claim_list
-                if claim['name'] == 'newstuff-again' and claim['claim_id'] == search_results[0]['claim_id'])
-        )
-        # complex case, reverse search (reposts for claim id)
-        reposts = await self.claim_search(reposted_claim_id=claim_id)
-        self.assertEqual(len(reposts), 2)
-        self.assertSetEqual(
-            {repost['claim_id'] for repost in reposts},
-            {claim['claim_id'] for claim in reposts_on_claim_list}
-        )
-        # check that it resolves fine too
-        resolved_reposts = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
-        self.assertEqual(
-            [resolution['claim_id'] for resolution in resolved_reposts.values()],
-            [claim['claim_id'] for claim in reposts_on_claim_list]
-        )
+        search = search_results[0]
+        self.assertEqual(search['name'], 'repost-on-channel')
+        self.assertEqual(search['signing_channel']['name'], '@reposting-goodies')
+        self.assertEqual(search['reposted_claim']['name'], 'newstuff')
+        self.assertEqual(search['reposted_claim']['meta']['reposted'], 2)
+        self.assertEqual(search['reposted_claim']['signing_channel']['name'], '@goodies')
+
+        resolved = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
+        self.assertEqual(resolved['@reposting-goodies/repost-on-channel'], search)
+        self.assertEqual(resolved['newstuff-again']['reposted_claim']['name'], 'newstuff')
 
     async def test_filtering_channels_for_removing_content(self):
         await self.channel_create('@badstuff', '1.0')

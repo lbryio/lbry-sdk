@@ -19,7 +19,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   package='pb',
   syntax='proto3',
   serialized_options=None,
-  serialized_pb=_b('\n\x0cresult.proto\x12\x02pb\"b\n\x07Outputs\x12\x18\n\x04txos\x18\x01 \x03(\x0b\x32\n.pb.Output\x12\x1e\n\nextra_txos\x18\x02 \x03(\x0b\x32\n.pb.Output\x12\r\n\x05total\x18\x03 \x01(\r\x12\x0e\n\x06offset\x18\x04 \x01(\r\"{\n\x06Output\x12\x0f\n\x07tx_hash\x18\x01 \x01(\x0c\x12\x0c\n\x04nout\x18\x02 \x01(\r\x12\x0e\n\x06height\x18\x03 \x01(\r\x12\x1e\n\x05\x63laim\x18\x07 \x01(\x0b\x32\r.pb.ClaimMetaH\x00\x12\x1a\n\x05\x65rror\x18\x0f \x01(\x0b\x32\t.pb.ErrorH\x00\x42\x06\n\x04meta\"\x81\x03\n\tClaimMeta\x12\x1b\n\x07\x63hannel\x18\x01 \x01(\x0b\x32\n.pb.Output\x12\x11\n\tshort_url\x18\x02 \x01(\t\x12\x15\n\rcanonical_url\x18\x03 \x01(\t\x12\x16\n\x0eis_controlling\x18\x04 \x01(\x08\x12\x18\n\x10take_over_height\x18\x05 \x01(\r\x12\x17\n\x0f\x63reation_height\x18\x06 \x01(\r\x12\x19\n\x11\x61\x63tivation_height\x18\x07 \x01(\r\x12\x19\n\x11\x65xpiration_height\x18\x08 \x01(\r\x12\x19\n\x11\x63laims_in_channel\x18\t \x01(\r\x12\x18\n\x10\x65\x66\x66\x65\x63tive_amount\x18\n \x01(\x04\x12\x16\n\x0esupport_amount\x18\x0b \x01(\x04\x12\x16\n\x0etrending_group\x18\x0c \x01(\r\x12\x16\n\x0etrending_mixed\x18\r \x01(\x02\x12\x16\n\x0etrending_local\x18\x0e \x01(\x02\x12\x17\n\x0ftrending_global\x18\x0f \x01(\x02\"i\n\x05\x45rror\x12\x1c\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x0e.pb.Error.Code\x12\x0c\n\x04text\x18\x02 \x01(\t\"4\n\x04\x43ode\x12\x10\n\x0cUNKNOWN_CODE\x10\x00\x12\r\n\tNOT_FOUND\x10\x01\x12\x0b\n\x07INVALID\x10\x02\x62\x06proto3')
+  serialized_pb=_b('\n\x0cresult.proto\x12\x02pb\"b\n\x07Outputs\x12\x18\n\x04txos\x18\x01 \x03(\x0b\x32\n.pb.Output\x12\x1e\n\nextra_txos\x18\x02 \x03(\x0b\x32\n.pb.Output\x12\r\n\x05total\x18\x03 \x01(\r\x12\x0e\n\x06offset\x18\x04 \x01(\r\"{\n\x06Output\x12\x0f\n\x07tx_hash\x18\x01 \x01(\x0c\x12\x0c\n\x04nout\x18\x02 \x01(\r\x12\x0e\n\x06height\x18\x03 \x01(\r\x12\x1e\n\x05\x63laim\x18\x07 \x01(\x0b\x32\r.pb.ClaimMetaH\x00\x12\x1a\n\x05\x65rror\x18\x0f \x01(\x0b\x32\t.pb.ErrorH\x00\x42\x06\n\x04meta\"\xaf\x03\n\tClaimMeta\x12\x1b\n\x07\x63hannel\x18\x01 \x01(\x0b\x32\n.pb.Output\x12\x1a\n\x06repost\x18\x02 \x01(\x0b\x32\n.pb.Output\x12\x11\n\tshort_url\x18\x03 \x01(\t\x12\x15\n\rcanonical_url\x18\x04 \x01(\t\x12\x16\n\x0eis_controlling\x18\x05 \x01(\x08\x12\x18\n\x10take_over_height\x18\x06 \x01(\r\x12\x17\n\x0f\x63reation_height\x18\x07 \x01(\r\x12\x19\n\x11\x61\x63tivation_height\x18\x08 \x01(\r\x12\x19\n\x11\x65xpiration_height\x18\t \x01(\r\x12\x19\n\x11\x63laims_in_channel\x18\n \x01(\r\x12\x10\n\x08reposted\x18\x0b \x01(\r\x12\x18\n\x10\x65\x66\x66\x65\x63tive_amount\x18\x14 \x01(\x04\x12\x16\n\x0esupport_amount\x18\x15 \x01(\x04\x12\x16\n\x0etrending_group\x18\x16 \x01(\r\x12\x16\n\x0etrending_mixed\x18\x17 \x01(\x02\x12\x16\n\x0etrending_local\x18\x18 \x01(\x02\x12\x17\n\x0ftrending_global\x18\x19 \x01(\x02\"i\n\x05\x45rror\x12\x1c\n\x04\x63ode\x18\x01 \x01(\x0e\x32\x0e.pb.Error.Code\x12\x0c\n\x04text\x18\x02 \x01(\t\"4\n\x04\x43ode\x12\x10\n\x0cUNKNOWN_CODE\x10\x00\x12\r\n\tNOT_FOUND\x10\x01\x12\x0b\n\x07INVALID\x10\x02\x62\x06proto3')
 )
 
 
@@ -45,8 +45,8 @@ _ERROR_CODE = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=686,
-  serialized_end=738,
+  serialized_start=732,
+  serialized_end=784,
 )
 _sym_db.RegisterEnumDescriptor(_ERROR_CODE)
 
@@ -180,99 +180,113 @@ _CLAIMMETA = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='short_url', full_name='pb.ClaimMeta.short_url', index=1,
-      number=2, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=_b("").decode('utf-8'),
+      name='repost', full_name='pb.ClaimMeta.repost', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='canonical_url', full_name='pb.ClaimMeta.canonical_url', index=2,
+      name='short_url', full_name='pb.ClaimMeta.short_url', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=_b("").decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='is_controlling', full_name='pb.ClaimMeta.is_controlling', index=3,
-      number=4, type=8, cpp_type=7, label=1,
+      name='canonical_url', full_name='pb.ClaimMeta.canonical_url', index=3,
+      number=4, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=_b("").decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='is_controlling', full_name='pb.ClaimMeta.is_controlling', index=4,
+      number=5, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='take_over_height', full_name='pb.ClaimMeta.take_over_height', index=4,
-      number=5, type=13, cpp_type=3, label=1,
-      has_default_value=False, default_value=0,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR),
-    _descriptor.FieldDescriptor(
-      name='creation_height', full_name='pb.ClaimMeta.creation_height', index=5,
+      name='take_over_height', full_name='pb.ClaimMeta.take_over_height', index=5,
       number=6, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='activation_height', full_name='pb.ClaimMeta.activation_height', index=6,
+      name='creation_height', full_name='pb.ClaimMeta.creation_height', index=6,
       number=7, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='expiration_height', full_name='pb.ClaimMeta.expiration_height', index=7,
+      name='activation_height', full_name='pb.ClaimMeta.activation_height', index=7,
       number=8, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='claims_in_channel', full_name='pb.ClaimMeta.claims_in_channel', index=8,
+      name='expiration_height', full_name='pb.ClaimMeta.expiration_height', index=8,
       number=9, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='effective_amount', full_name='pb.ClaimMeta.effective_amount', index=9,
-      number=10, type=4, cpp_type=4, label=1,
+      name='claims_in_channel', full_name='pb.ClaimMeta.claims_in_channel', index=9,
+      number=10, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='support_amount', full_name='pb.ClaimMeta.support_amount', index=10,
-      number=11, type=4, cpp_type=4, label=1,
+      name='reposted', full_name='pb.ClaimMeta.reposted', index=10,
+      number=11, type=13, cpp_type=3, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='trending_group', full_name='pb.ClaimMeta.trending_group', index=11,
-      number=12, type=13, cpp_type=3, label=1,
+      name='effective_amount', full_name='pb.ClaimMeta.effective_amount', index=11,
+      number=20, type=4, cpp_type=4, label=1,
       has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='trending_mixed', full_name='pb.ClaimMeta.trending_mixed', index=12,
-      number=13, type=2, cpp_type=6, label=1,
+      name='support_amount', full_name='pb.ClaimMeta.support_amount', index=12,
+      number=21, type=4, cpp_type=4, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='trending_group', full_name='pb.ClaimMeta.trending_group', index=13,
+      number=22, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR),
+    _descriptor.FieldDescriptor(
+      name='trending_mixed', full_name='pb.ClaimMeta.trending_mixed', index=14,
+      number=23, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='trending_local', full_name='pb.ClaimMeta.trending_local', index=13,
-      number=14, type=2, cpp_type=6, label=1,
+      name='trending_local', full_name='pb.ClaimMeta.trending_local', index=15,
+      number=24, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR),
     _descriptor.FieldDescriptor(
-      name='trending_global', full_name='pb.ClaimMeta.trending_global', index=14,
-      number=15, type=2, cpp_type=6, label=1,
+      name='trending_global', full_name='pb.ClaimMeta.trending_global', index=16,
+      number=25, type=2, cpp_type=6, label=1,
       has_default_value=False, default_value=float(0),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -290,7 +304,7 @@ _CLAIMMETA = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=246,
-  serialized_end=631,
+  serialized_end=677,
 )
 
 
@@ -328,8 +342,8 @@ _ERROR = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=633,
-  serialized_end=738,
+  serialized_start=679,
+  serialized_end=784,
 )
 
 _OUTPUTS.fields_by_name['txos'].message_type = _OUTPUT
@@ -343,6 +357,7 @@ _OUTPUT.oneofs_by_name['meta'].fields.append(
   _OUTPUT.fields_by_name['error'])
 _OUTPUT.fields_by_name['error'].containing_oneof = _OUTPUT.oneofs_by_name['meta']
 _CLAIMMETA.fields_by_name['channel'].message_type = _OUTPUT
+_CLAIMMETA.fields_by_name['repost'].message_type = _OUTPUT
 _ERROR.fields_by_name['code'].enum_type = _ERROR_CODE
 _ERROR_CODE.containing_type = _ERROR
 DESCRIPTOR.message_types_by_name['Outputs'] = _OUTPUTS

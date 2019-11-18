@@ -204,12 +204,6 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
-        return self.confirm_and_render(
-            self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs),
-            confirm
-        )
-
     async def confirm_and_render(self, awaitable, confirm) -> Transaction:
         tx = await awaitable
         if confirm:
@@ -243,6 +237,11 @@ class CommandTestCase(IntegrationTestCase):
             )
         return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_update(claim_id, **kwargs), confirm
+        )
+
+    def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
+        return self.confirm_and_render(
+            self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs), confirm
         )
 
     async def stream_abandon(self, *args, confirm=True, **kwargs):
@@ -306,6 +305,9 @@ class CommandTestCase(IntegrationTestCase):
 
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']
+
+    async def claim_list(self, *args, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 
     @staticmethod
     def get_claim_id(tx):

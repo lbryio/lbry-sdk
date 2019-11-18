@@ -28,14 +28,16 @@ def encode_txo_doc():
         'confirmations': "number of confirmed blocks",
         'is_change': "payment to change address, only available when it can be determined",
         'is_mine': "payment to one of your accounts, only available when it can be determined",
-        'type': "one of 'claim', 'support' or 'payment'",
+        'type': "one of 'claim', 'support' or 'purchase'",
         'name': "when type is 'claim' or 'support', this is the claim name",
-        'claim_id': "when type is 'claim' or 'support', this is the claim id",
+        'claim_id': "when type is 'claim', 'support' or 'purchase', this is the claim id",
         'claim_op': "when type is 'claim', this determines if it is 'create' or 'update'",
         'value': "when type is 'claim' or 'support' with payload, this is the decoded protobuf payload",
         'value_type': "determines the type of the 'value' field: 'channel', 'stream', etc",
         'protobuf': "hex encoded raw protobuf version of 'value' field",
         'permanent_url': "when type is 'claim' or 'support', this is the long permanent claim URL",
+        'claim': "for purchase outputs only, metadata of purchased claim",
+        'reposted_claim': "for repost claims only, metadata of claim being reposted",
         'signing_channel': "for signed claims only, metadata of signing channel",
         'is_channel_signature_valid': "for signed claims only, whether signature is valid",
         'purchase_receipt': "metadata for the purchase transaction associated with this claim"
@@ -203,6 +205,8 @@ class JSONResponseEncoder(JSONEncoder):
                 output['canonical_url'] = output['meta'].pop('canonical_url')
             if txo.claims is not None:
                 output['claims'] = [self.encode_output(o) for o in txo.claims]
+            if txo.reposted_claim is not None:
+                output['reposted_claim'] = self.encode_output(txo.reposted_claim)
             if txo.script.is_claim_name or txo.script.is_update_claim:
                 try:
                     output['value'] = txo.claim

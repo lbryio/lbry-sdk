@@ -1,6 +1,6 @@
 import base64
 import struct
-from typing import List
+from typing import List, Optional, Tuple
 from binascii import hexlify
 from itertools import chain
 
@@ -33,6 +33,7 @@ class Outputs:
             txo.meta = {
                 'short_url': f'lbry://{claim.short_url}',
                 'canonical_url': f'lbry://{claim.canonical_url or claim.short_url}',
+                'reposted': claim.reposted,
                 'is_controlling': claim.is_controlling,
                 'take_over_height': claim.take_over_height,
                 'creation_height': claim.creation_height,
@@ -47,6 +48,8 @@ class Outputs:
             }
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
+            if claim.HasField('repost'):
+                txo.reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
             try:
                 if txo.claim.is_channel:
                     txo.meta['claims_in_channel'] = claim.claims_in_channel
@@ -80,13 +83,13 @@ class Outputs:
         if total is not None:
             page.total = total
         for row in txo_rows:
-            cls.row_to_message(row, page.txos.add())
+            cls.row_to_message(row, page.txos.add(), extra_txo_rows)
         for row in extra_txo_rows:
-            cls.row_to_message(row, page.extra_txos.add())
+            cls.row_to_message(row, page.extra_txos.add(), extra_txo_rows)
         return page.SerializeToString()
 
     @classmethod
-    def row_to_message(cls, txo, txo_message):
+    def row_to_message(cls, txo, txo_message, extra_txo_rows):
         if isinstance(txo, Exception):
             txo_message.error.text = txo.args[0]
             if isinstance(txo, ValueError):
@@ -98,6 +101,7 @@ class Outputs:
         txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
         txo_message.height = txo['height']
         txo_message.claim.short_url = txo['short_url']
+        txo_message.claim.reposted = txo['reposted']
         if txo['canonical_url'] is not None:
             txo_message.claim.canonical_url = txo['canonical_url']
         txo_message.claim.is_controlling = bool(txo['is_controlling'])
@@ -114,8 +118,16 @@ class Outputs:
         txo_message.claim.trending_mixed = txo['trending_mixed']
         txo_message.claim.trending_local = txo['trending_local']
         txo_message.claim.trending_global = txo['trending_global']
-        if txo['channel_txo_hash']:
-            channel = txo_message.claim.channel
-            channel.tx_hash = txo['channel_txo_hash'][:32]
-            channel.nout, = struct.unpack('<I', txo['channel_txo_hash'][32:])
-            channel.height = txo['channel_height']
+        cls.set_reference(txo_message, 'channel', txo['channel_hash'], extra_txo_rows)
+        cls.set_reference(txo_message, 'repost', txo['reposted_claim_hash'], extra_txo_rows)
+
+    @staticmethod
+    def set_reference(message, attr, claim_hash, rows):
+        if claim_hash:
+            for txo in rows:
+                if claim_hash == txo['claim_hash']:
+                    reference = getattr(message.claim, attr)
+                    reference.tx_hash = txo['txo_hash'][:32]
+                    reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
+                    reference.height = txo['height']
+                    break
