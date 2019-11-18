@@ -386,11 +386,15 @@ class SQLDB:
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
 
-    def calculate_reposts(self, claims: List[Output]):
+    def calculate_reposts(self, txos: List[Output]):
         targets = set()
-        for claim in claims:
-            if claim.claim.is_repost:
-                targets.add((claim.claim.repost.reference.claim_hash,))
+        for txo in txos:
+            try:
+                claim = txo.claim
+            except:
+                continue
+            if claim.is_repost:
+                targets.add((claim.repost.reference.claim_hash,))
         if targets:
             self.db.executemany(
                 """
