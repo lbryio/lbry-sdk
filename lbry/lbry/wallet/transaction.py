@@ -32,7 +32,7 @@ class Output(BaseOutput):
     __slots__ = (
         'channel', 'private_key', 'meta',
         'purchase', 'purchased_claim', 'purchase_receipt',
-        'claims',
+        'reposted_claim', 'claims',
     )
 
     def __init__(self, *args, channel: Optional['Output'] = None,
@@ -43,6 +43,7 @@ class Output(BaseOutput):
         self.purchase: 'Output' = None  # txo containing purchase metadata
         self.purchased_claim: 'Output' = None  # resolved claim pointed to by purchase
         self.purchase_receipt: 'Output' = None  # txo representing purchase receipt for this claim
+        self.reposted_claim: 'Output' = None  # txo representing claim being reposted
         self.claims: List['Output'] = None  # resolved claims for collection
         self.meta = {}
 

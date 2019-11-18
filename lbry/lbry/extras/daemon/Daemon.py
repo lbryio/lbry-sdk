@@ -2061,15 +2061,17 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_claim_list(self, claim_type=None, account_id=None, wallet_id=None, page=None, page_size=None):
         """
         List my stream and channel claims.
 
         Usage:
-            claim_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+            claim_list [--claim_type=<claim_type>]
+                       [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
 
         Options:
+            --claim_type=<claim_type>  : (str) claim type: channel, stream, repost, collection
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2085,7 +2087,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_claims, wallet=wallet, accounts=wallet.accounts)
             claim_count = partial(self.ledger.get_claim_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(claims, claim_count, page, page_size)
+        return paginate_rows(claims, claim_count, page, page_size, claim_type=claim_type)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(self, **kwargs):
@@ -2110,6 +2112,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--support_amount=<support_amount>] [--trending_group=<trending_group>]
                          [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
                          [--trending_global=<trending_global]
+                         [--reposted_claim_id=<reposted_claim_id>] [--reposted=<reposted>]
                          [--claim_type=<claim_type>] [--stream_types=<stream_types>...] [--media_types=<media_types>...]
                          [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
@@ -2189,6 +2192,9 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     equality constraints)
             --trending_global=<trending_global>: (int) trending value calculated relative to all
                                                     trending content globally (supports
+                                                    equality constraints)
+            --reposted_claim_id=<reposted_claim_id>: (str) all reposts of the specified original claim id
+            --reposted=<reposted>           : (int) claims reposted this many times (supports
                                                     equality constraints)
             --claim_type=<claim_type>       : (str) filter by 'channel', 'stream' or 'unknown'
             --stream_types=<stream_types>   : (list) filter by 'video', 'image', 'document', etc
@@ -2345,8 +2351,9 @@ class Daemon(metaclass=JSONRPCServerType):
         txo = tx.outputs[0]
         txo.generate_channel_private_key()
 
+        await tx.sign(funding_accounts)
+
         if not preview:
-            await tx.sign(funding_accounts)
             account.add_channel_private_key(txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
@@ -2500,8 +2507,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         new_txo.script.generate()
 
+        await tx.sign(funding_accounts)
+
         if not preview:
-            await tx.sign(funding_accounts)
             account.add_channel_private_key(new_txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
@@ -2818,8 +2826,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_repost(self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
                                     channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
-                                    claim_address=None, funding_account_ids=None, preview=False, blocking=False,
-                                    **kwargs):
+                                    claim_address=None, funding_account_ids=None, preview=False, blocking=False):
         """
             Creates a claim that references an existing stream by its claim id.
 
@@ -2875,16 +2882,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         new_txo = tx.outputs[0]
 
-        if not preview:
-            new_txo.script.generate()
-
         if channel:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            # await self.analytics_manager.send_claim_action('publish') todo: what to send?
+            await self.analytics_manager.send_claim_action('publish')
         else:
             await account.ledger.release_tx(tx)
 
@@ -3459,6 +3463,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if channel:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
+
         if not preview:
             await self.broadcast_or_release(tx, blocking)
             await self.analytics_manager.send_claim_action('publish')

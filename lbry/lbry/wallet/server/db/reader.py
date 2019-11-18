@@ -39,7 +39,7 @@ ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
     'timestamp', 'creation_timestamp', 'release_time', 'fee_amount',
-    'tx_position', 'channel_join',
+    'tx_position', 'channel_join', 'reposted',
     'amount', 'effective_amount', 'support_amount',
     'trending_group', 'trending_mixed',
     'trending_local', 'trending_global',
@@ -267,12 +267,13 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
                 sqlite3.Binary(unhexlify(channel_id)[::-1]) for channel_id in blocklist_ids
             ]
             constraints.update({
-                f'$blocking_channels{i}': a for i, a in enumerate(blocking_channels)
+                f'$blocking_channel{i}': a for i, a in enumerate(blocking_channels)
             })
-            blocklist = ', '.join([f':$blocking_channels{i}' for i in range(len(blocking_channels))])
-            constraints['claim.claim_hash__not_in'] = f"""
-                SELECT reposted_claim_hash FROM claim
-                WHERE channel_hash IN ({blocklist})
+            blocklist = ', '.join([
+                f':$blocking_channel{i}' for i in range(len(blocking_channels))
+            ])
+            constraints['claim.claim_hash__not_in#blocklist_channel_ids'] = f"""
+                SELECT reposted_claim_hash FROM claim WHERE channel_hash IN ({blocklist})
             """
     if 'signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
@@ -319,14 +320,9 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
     else:
         select = f"SELECT {cols} FROM claim"
-
-    sql, values = query(
-        select if for_count else select+"""
-        LEFT JOIN claimtrie USING (claim_hash)
-        LEFT JOIN claim as channel ON (claim.channel_hash=channel.claim_hash)
-        """, **constraints
-    )
-    return sql, values
+    if not for_count:
+        select += " LEFT JOIN claimtrie USING (claim_hash)"
+    return query(select, **constraints)
 
 
 def get_claims(cols, for_count=False, **constraints) -> List:
@@ -350,6 +346,46 @@ def get_claims_count(**constraints) -> int:
     return count[0][0]
 
 
+def _search(**constraints):
+    return get_claims(
+        """
+        claimtrie.claim_hash as is_controlling,
+        claimtrie.last_take_over_height,
+        claim.claim_hash, claim.txo_hash,
+        claim.claims_in_channel, claim.reposted,
+        claim.height, claim.creation_height,
+        claim.activation_height, claim.expiration_height,
+        claim.effective_amount, claim.support_amount,
+        claim.trending_group, claim.trending_mixed,
+        claim.trending_local, claim.trending_global,
+        claim.short_url, claim.canonical_url,
+        claim.channel_hash, claim.reposted_claim_hash,
+        claim.signature_valid
+        """, **constraints
+    )
+
+
+def _get_referenced_rows(txo_rows: List[sqlite3.Row]):
+    repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
+    channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
+
+    reposted_txos = []
+    if repost_hashes:
+        reposted_txos = _search(
+            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in repost_hashes]}
+        )
+        channel_hashes |= set(filter(None, map(itemgetter('channel_hash'), reposted_txos)))
+
+    channel_txos = []
+    if channel_hashes:
+        channel_txos = _search(
+            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
+        )
+
+    # channels must come first for client side inflation to work properly
+    return channel_txos + reposted_txos
+
+
 @measure
 def search(constraints) -> Tuple[List, List, int, int]:
     assert set(constraints).issubset(SEARCH_PARAMS), \
@@ -362,49 +398,15 @@ def search(constraints) -> Tuple[List, List, int, int]:
     if 'order_by' not in constraints:
         constraints['order_by'] = ["claim_hash"]
     txo_rows = _search(**constraints)
-    channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
-    extra_txo_rows = []
-    if channel_hashes:
-        extra_txo_rows = _search(
-            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
-        )
+    extra_txo_rows = _get_referenced_rows(txo_rows)
     return txo_rows, extra_txo_rows, constraints['offset'], total
-
-
-def _search(**constraints):
-    return get_claims(
-        """
-        claimtrie.claim_hash as is_controlling,
-        claimtrie.last_take_over_height,
-        claim.claim_hash, claim.txo_hash,
-        claim.claims_in_channel,
-        claim.height, claim.creation_height,
-        claim.activation_height, claim.expiration_height,
-        claim.effective_amount, claim.support_amount,
-        claim.trending_group, claim.trending_mixed,
-        claim.trending_local, claim.trending_global,
-        claim.short_url, claim.canonical_url, claim.reposted_claim_hash,
-        claim.channel_hash, channel.txo_hash AS channel_txo_hash,
-        channel.height AS channel_height, claim.signature_valid
-        """, **constraints
-    )
 
 
 @measure
 def resolve(urls) -> Tuple[List, List]:
-    result = []
-    channel_hashes = set()
-    for raw_url in urls:
-        match = resolve_url(raw_url)
-        result.append(match)
-        if isinstance(match, sqlite3.Row) and match['channel_hash']:
-            channel_hashes.add(match['channel_hash'])
-    extra_txo_rows = []
-    if channel_hashes:
-        extra_txo_rows = _search(
-            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
-        )
-    return result, extra_txo_rows
+    txo_rows = [resolve_url(raw_url) for raw_url in urls]
+    extra_txo_rows = _get_referenced_rows([r for r in txo_rows if isinstance(r, sqlite3.Row)])
+    return txo_rows, extra_txo_rows
 
 
 @measure

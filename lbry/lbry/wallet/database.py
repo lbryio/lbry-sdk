@@ -140,7 +140,11 @@ class WalletDatabase(BaseDatabase):
 
     @staticmethod
     def constrain_claims(constraints):
-        constraints['txo_type__in'] = CLAIM_TYPES
+        claim_type = constraints.pop('claim_type', None)
+        if claim_type is not None:
+            constraints['txo_type'] = TXO_TYPES[claim_type]
+        else:
+            constraints['txo_type__in'] = CLAIM_TYPES
 
     async def get_claims(self, **constraints) -> List[Output]:
         self.constrain_claims(constraints)

@@ -55,6 +55,7 @@ class SQLDB:
             description text,
 
             claim_type integer,
+            reposted integer default 0,
 
             -- streams
             stream_type text,
@@ -384,6 +385,21 @@ class SQLDB:
             self.execute(*self._delete_sql(
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
+
+    def calculate_reposts(self, claims: List[Output]):
+        targets = set()
+        for claim in claims:
+            if claim.claim.is_repost:
+                targets.add((claim.claim.repost.reference.claim_hash,))
+        if targets:
+            self.db.executemany(
+                """
+                UPDATE claim SET reposted = (
+                    SELECT count(*) FROM claim AS repost WHERE repost.reposted_claim_hash = claim.claim_hash
+                )
+                WHERE claim_hash = ?
+                """, targets
+            )
 
     def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:
@@ -716,6 +732,7 @@ class SQLDB:
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
+        r(self.calculate_reposts, insert_claims)
         r(update_full_text_search, 'after-insert',
           [txo.claim_hash for txo in insert_claims], self.db, height, daemon_height, self.main.first_sync)
         r(update_full_text_search, 'before-update',
