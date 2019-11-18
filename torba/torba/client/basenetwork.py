@@ -72,9 +72,6 @@ class ClientSession(BaseClientSession):
             log.debug("got reply for %s from %s:%i", method, *self.server)
             return reply
         except (RPCError, ProtocolError) as e:
-            if str(e).find('.*no such .*transaction.*'):
-                # shouldn't the server return none instead?
-                return None
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
             raise e
