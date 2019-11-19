@@ -9,7 +9,7 @@ from torba.client.basemanager import BaseWalletManager
 from torba.client.wallet import ENCRYPT_ON_DISK
 from torba.rpc.jsonrpc import CodeMessageError
 
-from lbry.error import KeyFeeAboveMaxAllowed
+from lbry.error import KeyFeeAboveMaxAllowedError
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.wallet.account import Account
 from lbry.wallet.ledger import MainNetLedger
@@ -199,7 +199,7 @@ class LbryWalletManager(BaseWalletManager):
                 error_max_fee = f"{dewies_to_lbc(max_fee_amount)} LBC"
                 if max_fee['currency'] != 'LBC':
                     error_max_fee += f" ({max_fee['amount']} {max_fee['currency']})"
-                raise KeyFeeAboveMaxAllowed(
+                raise KeyFeeAboveMaxAllowedError(
                     f"Purchase price of {error_fee} exceeds maximum "
                     f"configured price of {error_max_fee}."
                 )

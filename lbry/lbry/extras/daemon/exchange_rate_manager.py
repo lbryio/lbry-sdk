@@ -5,7 +5,7 @@ import json
 from decimal import Decimal
 from typing import Optional
 from aiohttp.client_exceptions import ClientError
-from lbry.error import InvalidExchangeRateResponse, CurrencyConversionError
+from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
 from lbry.wallet.dewies import lbc_to_dewies
 
@@ -81,7 +81,7 @@ class MarketFeed:
             try:
                 response = await asyncio.wait_for(self._make_request(), self.REQUESTS_TIMEOUT)
                 self._save_price(self._subtract_fee(self._handle_response(response)))
-            except (asyncio.TimeoutError, InvalidExchangeRateResponse, ClientError) as err:
+            except (asyncio.TimeoutError, InvalidExchangeRateResponseError, ClientError) as err:
                 self._on_error(err)
             await asyncio.sleep(self.EXCHANGE_RATE_UPDATE_RATE_SEC)
 
@@ -108,14 +108,14 @@ class BittrexFeed(MarketFeed):
     def _handle_response(self, response):
         json_response = json.loads(response)
         if 'result' not in json_response:
-            raise InvalidExchangeRateResponse(self.name, 'result not found')
+            raise InvalidExchangeRateResponseError(self.name, 'result not found')
         trades = json_response['result']
         if len(trades) == 0:
-            raise InvalidExchangeRateResponse(self.market, 'trades not found')
+            raise InvalidExchangeRateResponseError(self.market, 'trades not found')
         totals = sum([i['Total'] for i in trades])
         qtys = sum([i['Quantity'] for i in trades])
         if totals <= 0 or qtys <= 0:
-            raise InvalidExchangeRateResponse(self.market, 'quantities were not positive')
+            raise InvalidExchangeRateResponseError(self.market, 'quantities were not positive')
         vwap = totals / qtys
         return float(1.0 / vwap)
 
@@ -133,7 +133,7 @@ class LBRYioFeed(MarketFeed):
     def _handle_response(self, response):
         json_response = json.loads(response)
         if 'data' not in json_response:
-            raise InvalidExchangeRateResponse(self.name, 'result not found')
+            raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return 1.0 / json_response['data']['lbc_btc']
 
 
@@ -151,9 +151,9 @@ class LBRYioBTCFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse(self.name, "invalid rate response : %s" % response)
+            raise InvalidExchangeRateResponseError(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
-            raise InvalidExchangeRateResponse(self.name, 'result not found')
+            raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return 1.0 / json_response['data']['btc_usd']
 
 
@@ -171,10 +171,10 @@ class CryptonatorBTCFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse(self.name, "invalid rate response")
+            raise InvalidExchangeRateResponseError(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
-            raise InvalidExchangeRateResponse(self.name, 'result not found')
+            raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return float(json_response['ticker']['price'])
 
 
@@ -192,10 +192,10 @@ class CryptonatorFeed(MarketFeed):
         try:
             json_response = json.loads(response)
         except ValueError:
-            raise InvalidExchangeRateResponse(self.name, "invalid rate response")
+            raise InvalidExchangeRateResponseError(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
-            raise InvalidExchangeRateResponse(self.name, 'result not found')
+            raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return float(json_response['ticker']['price'])
 
 

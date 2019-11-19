@@ -6,7 +6,7 @@ import logging
 import binascii
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbry.utils import generate_id
-from lbry.error import DownloadSDTimeout
+from lbry.error import DownloadSDTimeoutError
 from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
@@ -253,7 +253,7 @@ class ManagedStream:
             await asyncio.wait_for(self.downloader.start(node), timeout, loop=self.loop)
         except asyncio.TimeoutError:
             self._running.clear()
-            raise DownloadSDTimeout(self.sd_hash)
+            raise DownloadSDTimeoutError(self.sd_hash)
 
         if self.delayed_stop_task and not self.delayed_stop_task.done():
             self.delayed_stop_task.cancel()
