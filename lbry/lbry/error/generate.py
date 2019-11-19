@@ -47,7 +47,7 @@ def main():
             if len(args) > 1:
                 fmt = "f"
             if comment:
-                comment = f'\n{INDENT}"""\n{INDENT}{comment}\n{INDENT}"""'
+                comment = f'\n{INDENT}"""\n{indent(fill(comment, 100), INDENT)}\n{INDENT}"""'
             print((CLASS+INIT).format(
                 name=code, parent=parent, args=', '.join(args),
                 desc=desc, doc=comment, format=fmt
