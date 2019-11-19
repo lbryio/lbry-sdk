@@ -53,8 +53,8 @@ Code | Name | Message | Comment
 **32x** | ChannelSigning | Channel signing.
 320 | ChannelKeyNotFound | Channel signing key not found.
 321 | ChannelKeyInvalid | Channel signing key is out of date. | For example, channel was updated but you don't have the updated key.
-**33x** | Resolve | Errors while resolving urls.
-331 | ResolveError | Failed to resolve '{uri}'.
+**33x** | GeneralResolve | Errors while resolving urls.
+331 | Resolve | Failed to resolve '{uri}'.
 332 | ResolveTimeout | Failed to resolve '{uri}' within the timeout.
 **4xx** | Blob | **Blobs**
 **40x** | BlobAvailability | Blob availability.

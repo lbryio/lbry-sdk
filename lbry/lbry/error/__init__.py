@@ -313,18 +313,18 @@ class ChannelKeyInvalidError(ChannelSigningError):
         super().__init__("Channel signing key is out of date.")
 
 
-class ResolveError(BlockchainError):
+class GeneralResolveError(BlockchainError):
     """
     Errors while resolving urls.
     """
 
 
-class ResolveErrorError(ResolveError):
+class ResolveError(GeneralResolveError):
     def __init__(self, uri):
         super().__init__(f"Failed to resolve '{uri}'.")
 
 
-class ResolveTimeoutError(ResolveError):
+class ResolveTimeoutError(GeneralResolveError):
     def __init__(self, uri):
         super().__init__(f"Failed to resolve '{uri}' within the timeout.")
 
