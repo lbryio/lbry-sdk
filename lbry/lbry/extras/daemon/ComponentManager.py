@@ -1,7 +1,7 @@
 import logging
 import asyncio
 from lbry.conf import Config
-from lbry.error import ComponentStartConditionNotMet
+from lbry.error import ComponentStartConditionNotMetError
 from lbry.dht.peer import PeerManager
 
 log = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class ComponentManager:
                 staged.update(to_stage)
                 steps.append(step)
             elif components:
-                raise ComponentStartConditionNotMet("Unresolved dependencies for: %s" % components)
+                raise ComponentStartConditionNotMetError(components)
         if reverse:
             steps.reverse()
         return steps

@@ -25,8 +25,7 @@ from lbry.conf import Config, Setting
 from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
-from lbry.error import DownloadSDTimeout, ComponentsNotStarted
-from lbry.error import NullFundsError, NegativeFundsError, ComponentStartConditionNotMet
+from lbry.error import DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
@@ -68,10 +67,11 @@ def requires(*components, **conditions):
             for condition_name in condition_names:
                 condition_result, err_msg = component_manager.evaluate_condition(condition_name)
                 if not condition_result:
-                    raise ComponentStartConditionNotMet(err_msg)
+                    raise ComponentStartConditionNotMetError(err_msg)
             if not component_manager.all_components_running(*components):
-                raise ComponentsNotStarted("the following required components have not yet started: "
-                                           "%s" % json.dumps(components))
+                raise ComponentsNotStartedError(
+                    f"the following required components have not yet started: {json.dumps(components)}"
+                )
             return fn(*args, **kwargs)
 
         return _inner
@@ -962,7 +962,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 save_file=save_file, wallet=wallet
             )
             if not stream:
-                raise DownloadSDTimeout(uri)
+                raise DownloadSDTimeoutError(uri)
         except Exception as e:
             log.warning("Error downloading %s: %s", uri, str(e))
             return {"error": str(e)}
@@ -1292,10 +1292,6 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = wallet.get_accounts_or_all(funding_account_ids)
 
         amount = self.get_dewies_or_error("amount", amount)
-        if not amount:
-            raise NullFundsError
-        if amount < 0:
-            raise NegativeFundsError()
 
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]

@@ -7,7 +7,7 @@ import typing
 from typing import Optional
 from aiohttp.web import Request
 from lbry.error import ResolveError, InvalidStreamDescriptorError
-from lbry.error import ResolveTimeout, DownloadDataTimeout
+from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError
 from lbry.utils import cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.stream.managed_stream import ManagedStream
@@ -371,7 +371,7 @@ class StreamManager:
                 )
                 resolved_result = self._convert_to_old_resolve_output(manager, response)
             except asyncio.TimeoutError:
-                raise ResolveTimeout(uri)
+                raise ResolveTimeoutError(uri)
             except Exception as err:
                 if isinstance(err, asyncio.CancelledError):
                     raise
@@ -437,7 +437,7 @@ class StreamManager:
                                        loop=self.loop)
             return stream
         except asyncio.TimeoutError:
-            error = DownloadDataTimeout(stream.sd_hash)
+            error = DownloadDataTimeoutError(stream.sd_hash)
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
             log.exception("Unexpected error downloading stream:")

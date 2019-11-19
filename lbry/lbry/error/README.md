@@ -1,12 +1,12 @@
 Code | Name | Message | Comment
 ---:|---|---|---
-**1xx** | External | **Daemon `start` and other CLI command failures (non-recoverable)**
-**10x** | Meta | Meta error codes not presented by `lbrynet` itself but from apps trying to interact with `lbrynet`.
-104 | SDKConnectionError | Failed to establish HTTP connection to `lbrynet`. (Is it running?)
-105 | SDKRPCUnresponsive | HTTP connection established but daemon is not responding to commands.
-106 | SDKWebSocketUnresponsive | Failed to establish WebSocket connection to `lbrynet`. (Is it running?)
-107 | SDKWebSocketConnectionError | WebSocket connection established but daemon is not responding to commands.
-**11x** | System | Enough of `lbrynet` was able to start to determine external factors causing eventual failure.
+**1xx** | Initialization | **Daemon `start` and other CLI command failures (non-recoverable)**
+**10x** | Client | Error codes reported by clients connecting to `lbrynet` daemon.
+101 | RPCConnection | Failed to establish HTTP connection to `lbrynet`. (Is it running?)
+102 | RPCUnresponsive | HTTP connection established but daemon is not responding to commands.
+103 | WebSocketConnection | WebSocket connection established but daemon is not responding to commands.
+104 | WebSocketUnresponsive | Failed to establish WebSocket connection to `lbrynet`. (Is it running?)
+**11x** | Hardware | Enough of `lbrynet` was able to start to determine external factors causing eventual failure.
 110 | OutOfSpace | Out of disk space.
 111 | OutOfRAM | Out of RAM.
 **12x** | Environment | Internal factors preventing `lbrynet` from bootstrapping itself.
@@ -53,6 +53,9 @@ Code | Name | Message | Comment
 **32x** | ChannelSigning | Channel signing.
 320 | ChannelKeyNotFound | Channel signing key not found.
 321 | ChannelKeyInvalid | Channel signing key is out of date. | For example, channel was updated but you don't have the updated key.
+**33x** | Resolve | Errors while resolving urls.
+331 | ResolveError | Failed to resolve '{uri}'.
+332 | ResolveTimeout | Failed to resolve '{uri}' within the timeout.
 **4xx** | Blob | **Blobs**
 **40x** | BlobAvailability | Blob availability.
 400 | BlobNotFound | Blob not found.
@@ -64,3 +67,19 @@ Code | Name | Message | Comment
 411 | CorruptBlob | Blobs is corrupted.
 **42x** | BlobEncryption | Encrypting / Creating
 420 | BlobFailedEncryption | Failed to encrypt blob.
+**43x** | BlobRelated | Exceptions carried over from old error system.
+431 | DownloadCancelled | Download was canceled.
+432 | DownloadSDTimeout | Failed to download sd blob {download} within timeout.
+433 | DownloadDataTimeout | Failed to download data blobs for sd hash {download} within timeout.
+434 | InvalidStreamDescriptor | {message}
+435 | InvalidData | {message}
+436 | InvalidBlobHash | {message}
+**5xx** | Component | **Components**
+501 | ComponentStartConditionNotMet | Unresolved dependencies for: {components}
+502 | ComponentsNotStarted | {message}
+**6xx** | CurrencyExchange | **Currency Exchange**
+601 | InvalidExchangeRateResponse | Failed to get exchange rate from {source}: {reason}
+602 | CurrencyConversion | {message}
+603 | InvalidCurrency | Invalid currency: {currency} is not a supported currency.
+**7xx** | Purchase | Purchase process errors.
+701 | KeyFeeAboveMaxAllowed | {message}
