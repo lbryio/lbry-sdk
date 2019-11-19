@@ -287,11 +287,19 @@ class TransactionInvalidSignatureError(TransactionRejectionError):
         super().__init__("Invalid signature.")
 
 
-class InsufficientFundsError(BlockchainError):
+class BalanceError(BlockchainError):
+    """
+    Errors related to your available balance.
+    """
+
+
+class InsufficientFundsError(BalanceError):
     """
     determined by wallet prior to attempting to broadcast a tx; this is different for example from a TX
     being created and sent but then rejected by lbrycrd for unspendable utxos.
     """
+    def __init__(self):
+        super().__init__("Insufficient funds.")
 
 
 class ChannelSigningError(BlockchainError):
@@ -320,13 +328,13 @@ class GeneralResolveError(BlockchainError):
 
 
 class ResolveError(GeneralResolveError):
-    def __init__(self, uri):
-        super().__init__(f"Failed to resolve '{uri}'.")
+    def __init__(self, url):
+        super().__init__(f"Failed to resolve '{url}'.")
 
 
 class ResolveTimeoutError(GeneralResolveError):
-    def __init__(self, uri):
-        super().__init__(f"Failed to resolve '{uri}' within the timeout.")
+    def __init__(self, url):
+        super().__init__(f"Failed to resolve '{url}' within the timeout.")
 
 
 class BlobError(BaseError):

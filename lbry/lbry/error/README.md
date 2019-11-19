@@ -49,13 +49,14 @@ Code | Name | Message | Comment
 300 | TransactionRejected | Transaction rejected, unknown reason.
 301 | TransactionFeeTooLow | Fee too low.
 302 | TransactionInvalidSignature | Invalid signature.
-**31x** | InsufficientFunds | Insufficient funds. | determined by wallet prior to attempting to broadcast a tx; this is different for example from a TX being created and sent but then rejected by lbrycrd for unspendable utxos.
+**31x** | Balance | Errors related to your available balance.
+311 | InsufficientFunds |  Insufficient funds. | determined by wallet prior to attempting to broadcast a tx; this is different for example from a TX being created and sent but then rejected by lbrycrd for unspendable utxos.
 **32x** | ChannelSigning | Channel signing.
 320 | ChannelKeyNotFound | Channel signing key not found.
 321 | ChannelKeyInvalid | Channel signing key is out of date. | For example, channel was updated but you don't have the updated key.
 **33x** | GeneralResolve | Errors while resolving urls.
-331 | Resolve | Failed to resolve '{uri}'.
-332 | ResolveTimeout | Failed to resolve '{uri}' within the timeout.
+331 | Resolve | Failed to resolve '{url}'.
+332 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
 **4xx** | Blob | **Blobs**
 **40x** | BlobAvailability | Blob availability.
 400 | BlobNotFound | Blob not found.
