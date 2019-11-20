@@ -10,7 +10,7 @@ from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
 from lbry.utils import generate_id
 from torba.client.errors import InsufficientFundsError
-from lbry.error import KeyFeeAboveMaxAllowed, ResolveError, DownloadSDTimeout, DownloadDataTimeout
+from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
 from torba.client.wallet import Wallet
 from torba.client.constants import CENT, NULL_HASH32
 from torba.client.basenetwork import ClientSession
@@ -214,10 +214,10 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['connection_failures_count'],  1)
             self.assertEqual(
-                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout'
+                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout.'
             )
 
-        await self._test_time_to_first_bytes(check_post, DownloadSDTimeout, after_setup=after_setup)
+        await self._test_time_to_first_bytes(check_post, DownloadSDTimeoutError, after_setup=after_setup)
 
     async def test_override_fixed_peer_delay_dht_disabled(self):
         self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
@@ -251,18 +251,18 @@ class TestStreamManager(BlobExchangeTestBase):
 
         def check_post(event):
             self.assertEqual(event['event'], 'Time To First Bytes')
-            self.assertEqual(event['properties']['error'], 'DownloadSDTimeout')
+            self.assertEqual(event['properties']['error'], 'DownloadSDTimeoutError')
             self.assertEqual(event['properties']['tried_peers_count'], 0)
             self.assertEqual(event['properties']['active_peer_count'], 0)
             self.assertFalse(event['properties']['use_fixed_peers'])
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertIsNone(event['properties']['fixed_peer_delay'])
             self.assertEqual(
-                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout'
+                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout.'
             )
 
         start = self.loop.time()
-        await self._test_time_to_first_bytes(check_post, DownloadSDTimeout)
+        await self._test_time_to_first_bytes(check_post, DownloadSDTimeoutError)
         duration = self.loop.time() - start
         self.assertLessEqual(duration, 5)
         self.assertGreaterEqual(duration, 3.0)
@@ -360,7 +360,7 @@ class TestStreamManager(BlobExchangeTestBase):
             'version': '_0_0_1'
         }
         await self.setup_stream_manager(1000000.0, fee)
-        await self._test_download_error_on_start(KeyFeeAboveMaxAllowed, "")
+        await self._test_download_error_on_start(KeyFeeAboveMaxAllowedError, "")
 
     async def test_resolve_error(self):
         await self.setup_stream_manager()
@@ -371,7 +371,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.server.stop_server()
         await self.setup_stream_manager()
         await self._test_download_error_analytics_on_start(
-            DownloadSDTimeout, f'Failed to download sd blob {self.sd_hash} within timeout', timeout=1
+            DownloadSDTimeoutError, f'Failed to download sd blob {self.sd_hash} within timeout.', timeout=1
         )
 
     async def test_download_data_timeout(self):
@@ -380,7 +380,7 @@ class TestStreamManager(BlobExchangeTestBase):
             head_blob_hash = json.loads(sdf.read())['blobs'][0]['blob_hash']
         self.server_blob_manager.delete_blob(head_blob_hash)
         await self._test_download_error_analytics_on_start(
-            DownloadDataTimeout, f'Failed to download data blobs for sd hash {self.sd_hash} within timeout', timeout=1
+            DownloadDataTimeoutError, f'Failed to download data blobs for sd hash {self.sd_hash} within timeout.', timeout=1
         )
 
     async def test_unexpected_error(self):
