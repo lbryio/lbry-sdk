@@ -2838,6 +2838,7 @@ class Daemon(metaclass=JSONRPCServerType):
             Options:
                 --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
                 --bid=<bid>                    : (decimal) amount to back the claim
+                --claim_id=<claim_id>          : (str) id of the claim being reposted
                 --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
                                                                        given name. default: false.
                 --channel_id=<channel_id>      : (str) claim id of the publisher channel
