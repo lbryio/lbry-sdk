@@ -22,6 +22,7 @@ from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
+sqlite3.enable_callback_tracebacks(True)
 
 
 class SQLDB:
