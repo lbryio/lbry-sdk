@@ -11,3 +11,4 @@ __pycache__
 _trial_temp/
 
 /tests/integration/files
+/tests/.coverage.*

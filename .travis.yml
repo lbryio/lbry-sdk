@@ -55,17 +55,15 @@ jobs:
       env: OS=linux
       install:
         - pip install pyinstaller awscli
-        - cd torba && pip install -e . && cd ..
-        - cd lbry
-        - python scripts/set_build.py
-        - pip install -e .
+        - python docker/set_build.py
+        - pip install -e torba/.
+        - pip install -e lbry/.
       script:
-        - pyinstaller -F -n lbrynet lbry/extras/cli.py
-        - cd dist
-        - chmod +x lbrynet
-        - zip -j lbrynet-${OS}.zip lbrynet
+        - pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
+        - chmod +x dist/lbrynet
+        - zip --junk-paths lbrynet-${OS}.zip dist/lbrynet
         - shasum -a 256 -b lbrynet-${OS}.zip
-        - ./lbrynet --version
+        - dist/lbrynet --version
       after_success:
         - aws configure set aws_access_key_id $ARTIFACTS_KEY
         - aws configure set aws_secret_access_key $ARTIFACTS_SECRET
@@ -110,7 +108,7 @@ jobs:
         - python -m pip install --upgrade pip
         - pip install pywin32
       script:
-        - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
+        - pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
         - cd dist
         - 7z a -tzip lbrynet-windows.zip lbrynet.exe
         - sha256sum -b lbrynet-windows.zip
@@ -122,7 +120,7 @@ jobs:
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -t lbry/wallet-server:latest-release -f lbry/scripts/Dockerfile.wallet_server .
+          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -t lbry/wallet-server:latest-release -f docker/Dockerfile.wallet_server .
           - docker push lbry/wallet-server:$TRAVIS_TAG
           - docker push lbry/wallet-server:latest-release
 
@@ -132,7 +130,7 @@ jobs:
       script:
           - set -e
           - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:master -f lbry/scripts/Dockerfile.wallet_server .
+          - travis_retry docker build -t lbry/wallet-server:master -f docker/Dockerfile.wallet_server .
           - docker push lbry/wallet-server:master
 
 cache:

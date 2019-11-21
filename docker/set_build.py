@@ -23,10 +23,13 @@ def get_build_type(ci_tag=None):
 
 def main():
     root_dir = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    build_type_path = os.path.join(root_dir, 'lbry', 'build_type.py')
+    build_type_path = os.path.join(root_dir, 'lbry', 'lbry', 'build_type.py')
     log.debug("configuring build type file: %s", build_type_path)
-    commit_hash = os.getenv('CI_COMMIT_SHA', os.getenv('TRAVIS_COMMIT', None))[:6]
-    build_type = get_build_type(os.getenv('CI_COMMIT_TAG', os.getenv('TRAVIS_TAG', None)))
+    commit_hash = os.getenv('CI_COMMIT_SHA', os.getenv('TRAVIS_COMMIT'))
+    if commit_hash is None:
+        raise ValueError("Commit hash not found in env vars")
+    commit_hash = commit_hash[:6]
+    build_type = get_build_type(os.getenv('CI_COMMIT_TAG', os.getenv('TRAVIS_TAG')))
     log.debug("setting build type=%s, build commit=%s", build_type, commit_hash)
     with open(build_type_path, 'w') as f:
         f.write(f"BUILD = \"{build_type}\"\nBUILD_COMMIT = \"{commit_hash}\"\n")
