@@ -11,6 +11,7 @@ from torba.client.basetransaction import BaseTransaction, TXRefImmutable
 from torba.client.bip32 import PubKey
 
 log = logging.getLogger(__name__)
+sqlite3.enable_callback_tracebacks(True)
 
 
 class AIOSQLite:
@@ -24,6 +25,7 @@ class AIOSQLite:
 
     @classmethod
     async def connect(cls, path: Union[bytes, str], *args, **kwargs):
+        sqlite3.enable_callback_tracebacks(True)
         def _connect():
             return sqlite3.connect(path, *args, **kwargs)
         db = cls()

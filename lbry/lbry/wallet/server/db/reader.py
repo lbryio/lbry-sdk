@@ -34,7 +34,7 @@ class SQLiteInterruptedError(sqlite3.OperationalError):
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
-
+sqlite3.enable_callback_tracebacks(True)
 
 INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
