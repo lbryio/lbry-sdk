@@ -11,6 +11,8 @@ class AddressManagement(CommandTestCase):
         self.assertItemCount(single, 1)
         self.assertEqual(single['items'][0], addresses['items'][11])
 
+class SettingsManagement(CommandTestCase):
+
     async def test_settings(self):
         settings = self.daemon.jsonrpc_settings_get()
         self.assertNotEqual(settings['lbryum_servers'][0],('127.0.0.1', 50002))
