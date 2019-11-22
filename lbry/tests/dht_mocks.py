@@ -50,7 +50,7 @@ def get_time_accelerator(loop: asyncio.AbstractEventLoop,
 @contextlib.contextmanager
 def mock_network_loop(loop: asyncio.AbstractEventLoop,
                       dht_network: typing.Optional[typing.Dict[typing.Tuple[str, int], 'KademliaProtocol']] = None):
-    dht_network: typing.Dict[typing.Tuple[str, int], 'KademliaProtocol'] = dht_network or {}
+    dht_network: typing.Dict[typing.Tuple[str, int], 'KademliaProtocol'] = dht_network if dht_network is not None else {}
 
     async def create_datagram_endpoint(proto_lam: typing.Callable[[], 'KademliaProtocol'],
                                        from_addr: typing.Tuple[str, int]):
