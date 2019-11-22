@@ -1,3 +1,4 @@
+import os
 import sys
 import logging
 import functools
@@ -61,7 +62,7 @@ class AsyncioTestCase(unittest.TestCase):
     # Implementation inspired by discussion:
     #  https://bugs.python.org/issue32972
 
-    LOOP_SLOW_CALLBACK_DURATION = 0.2
+    LOOP_SLOW_CALLBACK_DURATION = 10 if os.environ.get('CI', False) else 0.2  # dont show warning when CI runs tests
 
     maxDiff = None
 
