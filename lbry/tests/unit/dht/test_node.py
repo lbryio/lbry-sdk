@@ -130,24 +130,15 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
             self.assertTrue(len(await node._storage.get_persisted_kademlia_peers()) > num_seeds)
 
             # We lost internet connection - all the peers stop responding
-            popped_protocols = []
-            for peer_address in peer_addresses[:-1]:
-                popped_protocols.append(dht_network.pop(peer_address))
+            dht_network.pop((node.protocol.external_ip, node.protocol.udp_port))
 
             # The peers are cleared on refresh from RT and storage
             await advance(4000)
             self.assertListEqual([], node.protocol.routing_table.get_peers())
             self.assertListEqual([], await node._storage.get_persisted_kademlia_peers())
 
-            # Reconnect some of the previously stored - node shouldn't connect
-            for peer_address, protocol in zip(peer_addresses[num_seeds+1:-2], popped_protocols[num_seeds+1:-2]):
-                dht_network[peer_address] = protocol
-            await advance(1000)
-            self.assertListEqual([], node.protocol.routing_table.get_peers())
-
-            # Reconnect some of the seed nodes
-            for peer_address, protocol in zip(peer_addresses[:num_seeds], popped_protocols[:num_seeds]):
-                dht_network[peer_address] = protocol
+            # Reconnect
+            dht_network[(node.protocol.external_ip, node.protocol.udp_port)] = node.protocol
 
             # Check that node reconnects at least to them
             await advance(1000)
