@@ -21,7 +21,7 @@ from torba.client.wallet import Wallet, ENCRYPT_ON_DISK
 from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbry import utils
-from lbry.conf import Config, Setting
+from lbry.conf import Config, Setting, NOT_SET
 from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
@@ -1006,6 +1006,23 @@ class Daemon(metaclass=JSONRPCServerType):
             cleaned = attr.deserialize(value)
             setattr(c, key, cleaned)
         return {key: cleaned}
+
+    def jsonrpc_settings_clear(self, key):
+        """
+        Clear daemon settings
+
+        Usage:
+            settings_clear (<key>)
+
+        Options:
+            None
+
+        Returns:
+            (dict) Updated dictionary of daemon settings
+        """
+        with self.conf.update_config() as c:
+            setattr(c, key, NOT_SET)
+        return
 
     PREFERENCE_DOC = """
     Preferences management.
