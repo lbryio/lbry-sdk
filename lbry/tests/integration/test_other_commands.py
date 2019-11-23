@@ -14,21 +14,12 @@ class AddressManagement(CommandTestCase):
 class SettingsManagement(CommandTestCase):
 
     async def test_settings(self):
-        settings = self.daemon.jsonrpc_settings_get()
-        self.assertNotEqual(settings['lbryum_servers'][0],('127.0.0.1', 50002))
-        self.assertEqual(settings['lbryum_servers'][0],('127.0.0.1', 50001))
+        self.assertEqual(self.daemon.jsonrpc_settings_get()['lbryum_servers'][0], ('127.0.0.1', 50001))
 
-        servers = ['server:50001', 'server2:50001']
-        setting = self.daemon.jsonrpc_settings_set('lbryum_servers', servers)
+        setting = self.daemon.jsonrpc_settings_set('lbryum_servers', ['server:50001'])
         self.assertEqual(setting['lbryum_servers'][0], ('server', 50001))
+        self.assertEqual(self.daemon.jsonrpc_settings_get()['lbryum_servers'][0], ('server', 50001))
 
-        self.daemon.jsonrpc_settings_set('use_upnp', True)
-        settings2 = self.daemon.jsonrpc_settings_get()
-        self.assertEqual(settings2['lbryum_servers'][0], ('server', 50001))
-        self.assertEqual(settings2['use_upnp'], True)
-
-        clearing = self.daemon.jsonrpc_settings_clear('lbryum_servers')
-        self.assertEqual(clearing['lbryum_servers'][0], ('spv1.lbry.com', 50001))
-        settings3 = self.daemon.jsonrpc_settings_get()
-        self.assertNotEqual(settings3['lbryum_servers'][0], ('spv1.lbry.com', 50002))
-        self.assertEqual(settings3['lbryum_servers'][0], ('spv1.lbry.com', 50001))
+        setting = self.daemon.jsonrpc_settings_clear('lbryum_servers')
+        self.assertEqual(setting['lbryum_servers'][0], ('spv1.lbry.com', 50001))
+        self.assertEqual(self.daemon.jsonrpc_settings_get()['lbryum_servers'][0], ('spv1.lbry.com', 50001))
