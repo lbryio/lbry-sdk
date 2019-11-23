@@ -1022,8 +1022,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         with self.conf.update_config() as c:
             setattr(c, key, NOT_SET)
-            setting = self.conf.settings_dict[key]
-        return {key: setting}
+        return {key: self.conf.settings_dict[key]}
 
     PREFERENCE_DOC = """
     Preferences management.
