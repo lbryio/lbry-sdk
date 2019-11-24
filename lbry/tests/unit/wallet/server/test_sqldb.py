@@ -477,3 +477,9 @@ class TestTrending(TestSQLDB):
         self.assertEqual([53, 38, -32, 0, -6], [int(c['trending_global']) for c in results])
         self.assertEqual([4, 4, 2, 0, 1], [int(c['trending_group']) for c in results])
         self.assertEqual([53, 38, 2, 0, -6], [int(c['trending_mixed']) for c in results])
+
+    def test_edge(self):
+        problematic = self.get_stream('Problem', COIN)
+        self.advance(1, [problematic])
+        self.advance(TRENDING_WINDOW, [self.get_support(problematic, 53000000000)])
+        self.advance(TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
