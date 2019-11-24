@@ -107,25 +107,34 @@ class WalletComponent(Component):
         return self.wallet_manager
 
     async def get_status(self):
-        if self.wallet_manager and self.wallet_manager.ledger.network.remote_height:
-            local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
-            remote_height = self.wallet_manager.ledger.network.remote_height
-            best_hash = self.wallet_manager.get_best_blockhash()
-            progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
-            return {
-                'connected_servers': [
-                    {
-                        'host': session.server[0],
-                        'port': session.server[1],
-                        'latency': round(session.connection_latency, 2),
-                    } for session in self.wallet_manager.ledger.network.session_pool.sessions
-                    if session and session.available
-                ],
-                'headers_synchronization_progress': progress,
-                'blocks': max(local_height, 0),
-                'blocks_behind': max(remote_height - local_height, 0),
-                'best_blockhash': best_hash,
-            }
+        if self.wallet_manager:
+            sessions = self.wallet_manager.ledger.network.session_pool.sessions
+            if self.wallet_manager.ledger.network.remote_height:
+                local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
+                remote_height = self.wallet_manager.ledger.network.remote_height
+                best_hash = self.wallet_manager.get_best_blockhash()
+                progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
+                return {
+                    'connected_servers': [
+                        {
+                            'host': session.server[0],
+                            'port': session.server[1],
+                            'latency': round(session.connection_latency, 2),
+                        } for session in sessions
+                        if session and session.available
+                    ],
+                    'headers_synchronization_progress': progress,
+                    'blocks': max(local_height, 0),
+                    'blocks_behind': max(remote_height - local_height, 0),
+                    'best_blockhash': best_hash,
+                    'known_servers': len(sessions),
+                    'available_servers': sum(s.available is True for s in sessions)
+                }
+            else:
+                return {
+                    'known_servers': len(sessions),
+                    'available_servers': sum(s.available is True for s in sessions)
+                }
 
     async def start(self):
         log.info("Starting torba wallet")
