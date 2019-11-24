@@ -91,6 +91,15 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 class TestTemporarilyLosingConnection(AsyncioTestCase):
 
     async def test_losing_connection(self):
+        async def wait_for(check_ok, insist, timeout=20):
+            start = loop.time()
+            while loop.time() - start < timeout:
+                if check_ok():
+                    break
+                await asyncio.sleep(0)
+            else:
+                insist()
+
         loop = self.loop
         loop.set_debug(False)
 
@@ -134,12 +143,18 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
 
             # The peers are cleared on refresh from RT and storage
             await advance(4000)
-            self.assertListEqual([], node.protocol.routing_table.get_peers())
             self.assertListEqual([], await node._storage.get_persisted_kademlia_peers())
+            await wait_for(
+                lambda: len(node.protocol.routing_table.get_peers()) == 0,
+                lambda: self.assertListEqual(node.protocol.routing_table.get_peers(), [])
+            )
 
             # Reconnect
             dht_network[(node.protocol.external_ip, node.protocol.udp_port)] = node.protocol
 
             # Check that node reconnects at least to them
             await advance(1000)
-            self.assertTrue(len(node.protocol.routing_table.get_peers()) >= num_seeds)
+            await wait_for(
+                lambda: len(node.protocol.routing_table.get_peers()) >= num_seeds,
+                lambda: self.assertTrue(len(node.protocol.routing_table.get_peers()) >= num_seeds)
+            )
