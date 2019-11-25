@@ -6,8 +6,8 @@ import random
 import typing
 from typing import Optional
 from aiohttp.web import Request
-from lbry.error import ResolveError, InvalidStreamDescriptorError
-from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError
+from lbry.error import ResolveError, InvalidStreamDescriptorError, DownloadSDTimeoutError, InsufficientFundsError
+from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
 from lbry.utils import cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.stream.managed_stream import ManagedStream
@@ -440,7 +440,14 @@ class StreamManager:
             error = DownloadDataTimeoutError(stream.sd_hash)
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
-            log.exception("Unexpected error downloading stream:")
+            expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
+                        KeyFeeAboveMaxAllowedError)
+            if isinstance(err, expected):
+                log.warning("Failed to download %s: %s", uri, str(err))
+            elif isinstance(err, asyncio.CancelledError):
+                pass
+            else:
+                log.exception("Unexpected error downloading stream:")
             error = err
             raise
         finally:
