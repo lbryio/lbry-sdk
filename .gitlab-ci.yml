@@ -17,12 +17,6 @@ stages:
   - release
 
 
-# could also use extends: instead of yaml anchors (https://docs.gitlab.com/ee/ci/yaml/README.html#extends)
-.codecov.io: &codecovio
-  after_script:
-    - coverage combine lbry/
-    - bash <(curl -s https://codecov.io/bash)
-
 test:lint:
   stage: test
   script:
@@ -34,7 +28,6 @@ test:lbry-unit:
   script:
     - make install
     - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
-#  <<: *codecovio
 
 
 test:lbry-integ:
@@ -42,7 +35,6 @@ test:lbry-integ:
   script:
     - pip install coverage tox-travis
     - cd lbry && tox
-#  <<: *codecovio
 
 
 .torba-tests: &torba_tests
@@ -50,7 +42,6 @@ test:lbry-integ:
   script:
     - pip install coverage tox-travis
     - cd torba && tox
-#  <<: *codecovio
 
 test:torba-unit:
   before_script:
@@ -67,7 +58,6 @@ test:json-api:
   script:
     - make install
     - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
-#  <<: *codecovio
 
 
 
