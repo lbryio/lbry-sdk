@@ -41,18 +41,8 @@ ZERO = bytes(32)
 MINUS_1 = 4294967295
 
 
-class Tx(namedtuple("Tx", "version inputs outputs locktime")):
+class Tx(namedtuple("Tx", "version inputs outputs locktime raw")):
     """Class representing a transaction."""
-
-    def serialize(self):
-        return b''.join((
-            pack_le_int32(self.version),
-            pack_varint(len(self.inputs)),
-            b''.join(tx_in.serialize() for tx_in in self.inputs),
-            pack_varint(len(self.outputs)),
-            b''.join(tx_out.serialize() for tx_out in self.outputs),
-            pack_le_uint32(self.locktime)
-        ))
 
 
 class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
@@ -105,22 +95,13 @@ class Deserializer:
 
     def read_tx(self):
         """Return a deserialized transaction."""
-        version = self._read_le_int32()
-        inputs = self._read_inputs()
-        outputs = self._read_outputs()
-        if self.flags == 1:
-            # drain witness portion of transaction
-            # too many witnesses for no crime
-            for i in range(len(inputs)):
-                for v in range(self._read_varint()):
-                    self._read_varbytes()
-            self.flags = 0
-        locktime = self._read_le_uint32()
+        start = self.cursor
         return Tx(
-            version,
-            inputs,
-            outputs,
-            locktime
+            self._read_le_int32(),  # version
+            self._read_inputs(),  # inputs
+            self._read_outputs(),  # outputs
+            self._read_le_uint32(),  # locktime
+            self.binary[start:self.cursor],
         )
 
     def read_tx_and_hash(self):
@@ -144,11 +125,7 @@ class Deserializer:
 
     def _read_inputs(self):
         read_input = self._read_input
-        num_inputs = self._read_varint()
-        if num_inputs == 0:
-            self.flags = self._read_byte()
-            num_inputs = self._read_varint()
-        return [read_input() for i in range(num_inputs)]
+        return [read_input() for i in range(self._read_varint())]
 
     def _read_input(self):
         return TxInput(
@@ -220,7 +197,7 @@ class Deserializer:
 
 
 class TxSegWit(namedtuple("Tx", "version marker flag inputs outputs "
-                          "witness locktime")):
+                          "witness locktime raw")):
     """Class representing a SegWit transaction."""
 
 
@@ -266,7 +243,7 @@ class DeserializerSegWit(Deserializer):
         vsize = (3 * base_size + self.binary_length) // 4
 
         return TxSegWit(version, marker, flag, inputs, outputs, witness,
-                        locktime), self.TX_HASH_FN(orig_ser), vsize
+                        locktime, orig_ser), self.TX_HASH_FN(orig_ser), vsize
 
     def read_tx(self):
         return self._read_tx_parts()[0]

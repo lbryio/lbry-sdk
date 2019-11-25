@@ -688,7 +688,7 @@ class SQLDB:
         body_timer = timer.add_timer('body')
         for position, (etx, txid) in enumerate(all_txs):
             tx = timer.run(
-                Transaction, etx.serialize(), height=height, position=position
+                Transaction, etx.raw, height=height, position=position
             )
             # Inputs
             spent_claims, spent_supports, spent_others = timer.run(
