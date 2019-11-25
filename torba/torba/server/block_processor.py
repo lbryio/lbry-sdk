@@ -651,6 +651,8 @@ class BlockProcessor:
                 self.prefetcher.main_loop(self.height),
                 self._process_prefetched_blocks()
             ])
+        except asyncio.CancelledError:
+            raise
         except:
             self.logger.exception("Block processing failed!")
             raise
