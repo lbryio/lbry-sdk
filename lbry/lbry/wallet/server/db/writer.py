@@ -13,7 +13,7 @@ from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import MainNetLedger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
-from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH
+from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
 from lbry.wallet.server.db.trending import (
     CREATE_TREND_TABLE, calculate_trending, register_trending_functions
 )
@@ -173,6 +173,7 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = MainNetLedger if self.main.coin.NET == 'mainnet' else RegTestLedger
+        self._fts_synced = False
 
     def open(self):
         self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False, uri=True)
@@ -733,23 +734,26 @@ class SQLDB:
 
         r = timer.run
         r(update_full_text_search, 'before-delete',
-          delete_claim_hashes, self.db, height, daemon_height, self.main.first_sync)
+          delete_claim_hashes, self.db, self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.calculate_reposts, insert_claims)
         r(update_full_text_search, 'after-insert',
-          [txo.claim_hash for txo in insert_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in insert_claims], self.db, self.main.first_sync)
         r(update_full_text_search, 'before-update',
-          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
         r(self.update_claims, update_claims, header)
         r(update_full_text_search, 'after-update',
-          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, daemon_height)
+        if not self._fts_synced and self.main.first_sync and height == daemon_height:
+            r(first_sync_finished, self.db)
+            self._fts_synced = True
 
 
 class LBRYDB(DB):
