@@ -19,7 +19,6 @@ jobs:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
       after_success:
         - coverage combine lbry/
-        - bash <(curl -s https://codecov.io/bash)
 
     - name: "LBRY Integration Tests"
       install:
@@ -28,7 +27,6 @@ jobs:
       script: cd lbry && tox
       after_success:
         - coverage combine lbry
-        - bash <(curl -s https://codecov.io/bash)
 
     - &torba-tests
       name: "Torba Unit Tests"
@@ -38,7 +36,6 @@ jobs:
       script: cd torba && tox
       after_success:
         - coverage combine torba/tests
-        - bash <(curl -s https://codecov.io/bash)
 
     - <<: *torba-tests
       name: "Torba Integration Tests"
@@ -51,7 +48,6 @@ jobs:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
       after_success:
         - coverage combine lbry
-        - bash <(curl -s https://codecov.io/bash)
 
     - &build
       stage: build
