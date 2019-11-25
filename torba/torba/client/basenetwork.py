@@ -13,8 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
-    PROTOCOL_VERSION = '2.0'
-
     def __init__(self, *args, network, server, timeout=30, on_connect_callback=None, **kwargs):
         self.network = network
         self.server = server
@@ -119,9 +117,9 @@ class ClientSession(BaseClientSession):
                 self.trigger_urgent_reconnect.clear()
 
     async def ensure_server_version(self, required=None, timeout=3):
+        required = required or self.network.PROTOCOL_VERSION
         return await asyncio.wait_for(
-            self.send_request(
-                'server.version', [__version__, required or self.PROTOCOL_VERSION]), timeout=timeout
+            self.send_request('server.version', [__version__, required]), timeout=timeout
         )
 
     async def create_connection(self, timeout=6):
@@ -145,6 +143,7 @@ class ClientSession(BaseClientSession):
 
 
 class BaseNetwork:
+    PROTOCOL_VERSION = '1.2'
 
     def __init__(self, ledger):
         self.config = ledger.config
