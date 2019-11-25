@@ -645,12 +645,15 @@ class BlockProcessor:
         could be lost.
         """
         self._caught_up_event = caught_up_event
-        await self._first_open_dbs()
         try:
+            await self._first_open_dbs()
             await asyncio.wait([
                 self.prefetcher.main_loop(self.height),
                 self._process_prefetched_blocks()
             ])
+        except:
+            self.logger.exception("Block processing failed!")
+            raise
         finally:
             # Shut down block processing
             self.logger.info('flushing to DB for a clean shutdown...')
