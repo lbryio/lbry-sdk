@@ -28,14 +28,6 @@ def get_tx():
     return Transaction().add_inputs([get_input()])
 
 
-class OldWalletServerTransaction:
-    def __init__(self, tx):
-        self.tx = tx
-
-    def serialize(self):
-        return self.tx.raw
-
-
 class TestSQLDB(unittest.TestCase):
     query_timeout = 0.25
 
@@ -58,7 +50,7 @@ class TestSQLDB(unittest.TestCase):
         if txi is not None:
             tx.add_inputs([txi])
         self._txos[output.ref.hash] = output
-        return OldWalletServerTransaction(tx), tx.hash
+        return tx, tx.hash
 
     def _set_channel_key(self, channel, key):
         private_key = ecdsa.SigningKey.from_string(key*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
@@ -87,12 +79,12 @@ class TestSQLDB(unittest.TestCase):
         claim.stream.title = title
         result = self._make_tx(Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc'))
         if channel:
-            result[0].tx.outputs[0].sign(channel)
-            result[0].tx._reset()
+            result[0].outputs[0].sign(channel)
+            result[0]._reset()
         return result
 
     def get_stream_update(self, tx, amount, channel=None):
-        stream = Transaction(tx[0].serialize()).outputs[0]
+        stream = Transaction(tx[0].raw).outputs[0]
         result = self._make_tx(
             Output.pay_update_claim_pubkey_hash(
                 amount, stream.claim_name, stream.claim_id, stream.claim, b'abc'
@@ -100,19 +92,19 @@ class TestSQLDB(unittest.TestCase):
             Input.spend(stream)
         )
         if channel:
-            result[0].tx.outputs[0].sign(channel)
-            result[0].tx._reset()
+            result[0].outputs[0].sign(channel)
+            result[0]._reset()
         return result
 
     def get_abandon(self, tx):
-        claim = Transaction(tx[0].serialize()).outputs[0]
+        claim = Transaction(tx[0].raw).outputs[0]
         return self._make_tx(
             Output.pay_pubkey_hash(claim.amount, b'abc'),
             Input.spend(claim)
         )
 
     def get_support(self, tx, amount):
-        claim = Transaction(tx[0].serialize()).outputs[0]
+        claim = Transaction(tx[0].raw).outputs[0]
         return self._make_tx(
             Output.pay_support_pubkey_hash(
                 amount, claim.claim_name, claim.claim_id, b'abc'
@@ -147,7 +139,7 @@ class TestSQLDB(unittest.TestCase):
     def advance(self, height, txs):
         self._current_height = height
         self.sql.advance_txs(height, txs, {'timestamp': 1}, self.daemon_height, self.timer)
-        return [otx[0].tx.outputs[0] for otx in txs]
+        return [otx[0].outputs[0] for otx in txs]
 
     def state(self, controlling=None, active=None, accepted=None):
         self.assertEqual(controlling, self.get_controlling())
@@ -328,7 +320,7 @@ class TestClaimtrie(TestSQLDB):
         iterations = cached_iteration+1 if cached_iteration else 100
         for i in range(cached_iteration or 1, iterations):
             stream = getter(f'claim #{i}', COIN, **kwargs)
-            if stream[0].tx.outputs[0].claim_id.startswith(prefix):
+            if stream[0].outputs[0].claim_id.startswith(prefix):
                 cached_iteration is None and print(f'Found "{prefix}" in {i} iterations.')
                 return stream
         if cached_iteration:
@@ -346,8 +338,8 @@ class TestClaimtrie(TestSQLDB):
 
         tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
         tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
-        txo_chan_a = tx_chan_a[0].tx.outputs[0]
-        txo_chan_ab = tx_chan_ab[0].tx.outputs[0]
+        txo_chan_a = tx_chan_a[0].outputs[0]
+        txo_chan_ab = tx_chan_ab[0].outputs[0]
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
         r_ab, r_a = reader._search(order_by=['creation_height'], limit=2)
@@ -373,8 +365,8 @@ class TestClaimtrie(TestSQLDB):
 
         tx_a2 = self.get_stream_with_claim_id_prefix('a', 7, channel=txo_chan_a)
         tx_ab2 = self.get_stream_with_claim_id_prefix('ab', 23, channel=txo_chan_a)
-        a2_claim = tx_a2[0].tx.outputs[0]
-        ab2_claim = tx_ab2[0].tx.outputs[0]
+        a2_claim = tx_a2[0].outputs[0]
+        ab2_claim = tx_ab2[0].outputs[0]
         advance(6, [tx_a2])
         advance(7, [tx_ab2])
         r_ab2, r_a2 = reader._search(order_by=['creation_height'], limit=2)
@@ -430,8 +422,8 @@ class TestClaimtrie(TestSQLDB):
 
         tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
         tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
-        txo_chan_a = tx_chan_a[0].tx.outputs[0]
-        txo_chan_ab = tx_chan_ab[0].tx.outputs[0]
+        txo_chan_a = tx_chan_a[0].outputs[0]
+        txo_chan_ab = tx_chan_ab[0].outputs[0]
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
 
