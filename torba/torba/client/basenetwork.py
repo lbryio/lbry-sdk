@@ -13,6 +13,8 @@ log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
+    PROTOCOL_VERSION = '2.0'
+
     def __init__(self, *args, network, server, timeout=30, on_connect_callback=None, **kwargs):
         self.network = network
         self.server = server
@@ -102,6 +104,9 @@ class ClientSession(BaseClientSession):
                 if (perf_counter() - self.last_send) > self.max_seconds_idle or self.response_time is None:
                     await self.ensure_server_version()
                 retry_delay = default_delay
+            except RPCError as e:
+                log.warning("Server error, ignoring for 1h: %s:%d -- %s", *self.server, e.message)
+                retry_delay = 60 * 60
             except (asyncio.TimeoutError, OSError):
                 await self.close()
                 retry_delay = min(60, retry_delay * 2)
@@ -113,9 +118,10 @@ class ClientSession(BaseClientSession):
             finally:
                 self.trigger_urgent_reconnect.clear()
 
-    async def ensure_server_version(self, required='1.2', timeout=3):
+    async def ensure_server_version(self, required=None, timeout=3):
         return await asyncio.wait_for(
-            self.send_request('server.version', [__version__, required]), timeout=timeout
+            self.send_request(
+                'server.version', [__version__, required or self.PROTOCOL_VERSION]), timeout=timeout
         )
 
     async def create_connection(self, timeout=6):

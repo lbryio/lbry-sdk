@@ -95,7 +95,8 @@ class LBRYSessionManager(SessionManager):
 
 
 class LBRYElectrumX(ElectrumX):
-    PROTOCOL_MIN = (0, 0)  # temporary, for supporting 0.10 protocol
+    PROTOCOL_MIN = (2, 0)  # v0.48 is backwards incompatible, forking a new protocol
+    PROTOCOL_MAX = (2, 0)
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
     session_mgr: LBRYSessionManager
     version = sdk_version
@@ -111,7 +112,7 @@ class LBRYElectrumX(ElectrumX):
         self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
 
     def set_request_handlers(self, ptuple):
-        super().set_request_handlers(ptuple)
+        super().set_request_handlers((1, 2) if ptuple == (2, 0) else ptuple)  # our "2.0" is electrumx 1.2
         handlers = {
             'blockchain.transaction.get_height': self.transaction_get_height,
             'blockchain.claimtrie.search': self.claimtrie_search,
