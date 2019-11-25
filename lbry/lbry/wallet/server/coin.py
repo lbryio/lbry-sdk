@@ -5,6 +5,7 @@ from torba.server.script import ScriptPubKey, OpCodes
 from torba.server.util import cachedproperty
 from torba.server.hash import hash_to_hex_str, HASHX_LEN
 from torba.server.coins import Coin, CoinError
+from torba.server.tx import DeserializerSegWit
 
 from lbry.wallet.script import OutputScript
 from .session import LBRYElectrumX, LBRYSessionManager
@@ -18,6 +19,7 @@ class LBC(Coin):
     SESSIONCLS = LBRYElectrumX
     BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
+    DESERIALIZER = DeserializerSegWit
     DB = LBRYDB
     NAME = "LBRY"
     SHORTNAME = "LBC"
