@@ -115,13 +115,13 @@ class WalletComponent(Component):
                 best_hash = self.wallet_manager.get_best_blockhash()
                 progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
                 return {
-                    'connected_servers': [
+                    'servers': [
                         {
                             'host': session.server[0],
                             'port': session.server[1],
-                            'latency': round(session.connection_latency, 2),
+                            'latency': round(session.connection_latency, 2) if session.connection_latency else None,
+                            'availability': session.available,
                         } for session in sessions
-                        if session and session.available
                     ],
                     'headers_synchronization_progress': progress,
                     'blocks': max(local_height, 0),
@@ -132,6 +132,14 @@ class WalletComponent(Component):
                 }
             else:
                 return {
+                    'servers': [
+                        {
+                            'host': session.server[0],
+                            'port': session.server[1],
+                            'latency': round(session.connection_latency, 2) if session.connection_latency else None,
+                            'availability': session.available,
+                        } for session in sessions
+                    ],
                     'known_servers': len(sessions),
                     'available_servers': sum(s.available is True for s in sessions)
                 }
