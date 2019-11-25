@@ -38,10 +38,8 @@ def fts_action_sql(claims=None, action='insert'):
     """, values
 
 
-def update_full_text_search(action, outputs, db, height, final_height, is_first_sync):
+def update_full_text_search(action, outputs, db, is_first_sync):
     if is_first_sync:
-        if height == final_height:
-            db.execute(*fts_action_sql())
         return
     if not outputs:
         return
@@ -51,3 +49,7 @@ def update_full_text_search(action, outputs, db, height, final_height, is_first_
         db.execute(*fts_action_sql(outputs, 'insert'))
     else:
         raise ValueError(f"Invalid action for updating full text search: '{action}'")
+
+
+def first_sync_finished(db):
+    db.execute(*fts_action_sql())
