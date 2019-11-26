@@ -84,7 +84,10 @@ class SQLDB:
             trending_group integer not null default 0,
             trending_mixed integer not null default 0,
             trending_local integer not null default 0,
-            trending_global integer not null default 0
+            trending_global integer not null default 0,
+            trending_ar_y integer not null default 1.0E-6,
+            trending_ar_final integer not null default 1.0E-6,
+            old_total_amount integer not null default 1
         );
 
         create index if not exists claim_normalized_idx on claim (normalized, activation_height);
