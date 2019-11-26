@@ -130,7 +130,7 @@ def calculate_trending(db, height, final_height):
                 end="", flush=True)
     db.execute(f"""
     UPDATE claim SET
-        trending_ar_y = decay(trending_ar_y) -- + soften(amount + support_amount) - soften(old_total_amount);
+        trending_ar_y = decay(trending_ar_y) + soften(amount + support_amount) - soften(old_total_amount);
     """)
     db.execute(f"""
     UPDATE claim SET
