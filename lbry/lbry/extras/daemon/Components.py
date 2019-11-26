@@ -107,42 +107,36 @@ class WalletComponent(Component):
         return self.wallet_manager
 
     async def get_status(self):
-        if self.wallet_manager:
-            sessions = self.wallet_manager.ledger.network.session_pool.sessions
-            if self.wallet_manager.ledger.network.remote_height:
-                local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
-                remote_height = self.wallet_manager.ledger.network.remote_height
-                best_hash = self.wallet_manager.get_best_blockhash()
-                progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
-                return {
-                    'servers': [
-                        {
-                            'host': session.server[0],
-                            'port': session.server[1],
-                            'latency': round(session.connection_latency, 2) if session.connection_latency else None,
-                            'availability': session.available,
-                        } for session in sessions
-                    ],
-                    'headers_synchronization_progress': progress,
-                    'blocks': max(local_height, 0),
-                    'blocks_behind': max(remote_height - local_height, 0),
-                    'best_blockhash': best_hash,
-                    'known_servers': len(sessions),
-                    'available_servers': sum(s.available is True for s in sessions)
-                }
-            else:
-                return {
-                    'servers': [
-                        {
-                            'host': session.server[0],
-                            'port': session.server[1],
-                            'latency': round(session.connection_latency, 2) if session.connection_latency else None,
-                            'availability': session.available,
-                        } for session in sessions
-                    ],
-                    'known_servers': len(sessions),
-                    'available_servers': sum(s.available is True for s in sessions)
-                }
+        if self.wallet_manager is None:
+            return
+        session_pool = self.wallet_manager.ledger.network.session_pool
+        sessions = session_pool.sessions
+        result = {
+            'servers': [
+                {
+                    'host': session.server[0],
+                    'port': session.server[1],
+                    'latency': session.connection_latency,
+                    'availability': session.available,
+                } for session in sessions
+            ],
+            'known_servers': len(sessions),
+            'available_servers': len(list(session_pool.available_sessions))
+        }
+
+        if self.wallet_manager.ledger.network.remote_height:
+            local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
+            remote_height = self.wallet_manager.ledger.network.remote_height
+            best_hash = self.wallet_manager.get_best_blockhash()
+            progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
+            result.update({
+                'headers_synchronization_progress': progress,
+                'blocks': max(local_height, 0),
+                'blocks_behind': max(remote_height - local_height, 0),
+                'best_blockhash': best_hash,
+            })
+
+        return result
 
     async def start(self):
         log.info("Starting torba wallet")
@@ -305,7 +299,7 @@ class StreamManagerComponent(Component):
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        node = self.component_manager.get_component(DHT_COMPONENT)\
+        node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
