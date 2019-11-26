@@ -751,7 +751,7 @@ class ElectrumX(SessionBase):
             'protocol_max': max_str,
             'genesis_hash': env.coin.GENESIS_HASH,
             'description': env.description,
-            'payment_address': env.donation_address,
+            'payment_address': env.payment_address,
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
         }
@@ -1073,14 +1073,14 @@ class ElectrumX(SessionBase):
                 ('$SERVER_VERSION', self.version),
                 ('$DAEMON_VERSION', daemon_version),
                 ('$DAEMON_SUBVERSION', network_info['subversion']),
-                ('$DONATION_ADDRESS', self.env.donation_address),
+                ('$PAYMENT_ADDRESS', self.env.payment_address),
         ]:
             banner = banner.replace(*pair)
         return banner
 
-    async def donation_address(self):
-        """Return the donation address as a string, empty if there is none."""
-        return self.env.donation_address
+    async def payment_address(self):
+        """Return the payment address as a string, empty if there is none."""
+        return self.env.payment_address
 
     async def banner(self):
         """Return the server banner text."""
@@ -1265,7 +1265,7 @@ class ElectrumX(SessionBase):
             'blockchain.transaction.get_merkle': self.transaction_merkle,
             'server.add_peer': self.add_peer,
             'server.banner': self.banner,
-            'server.donation_address': self.donation_address,
+            'server.payment_address': self.payment_address,
             'server.features': self.server_features_async,
             'server.peers.subscribe': self.peers_subscribe,
             'server.version': self.server_version,
