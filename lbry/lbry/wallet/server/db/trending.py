@@ -16,6 +16,28 @@ CREATE_TREND_TABLE = """
     ) without rowid;
 """
 
+# Parameters for AR trending
+ar_trending_params = { "coeff": 0.85, "floor": 100.0, "a": 0.05 }
+
+
+def soften(x):
+    """
+    Softening function
+    """
+    return sqrt((x + ar_trending_params["floor"])/1.0E8)\
+                    - sqrt(ar_trending_params["floor"]/1.0E8)
+
+def decay(x):
+    return ar_trending_params["coeff"]*x
+
+def power(x):
+    """
+    Power function
+    """
+    if x < 0.0:
+        return 0.0
+    return (x/1.0E8)**ar_trending_params["a"]
+
 
 class ZScore:
     __slots__ = 'count', 'total', 'power', 'last'
@@ -39,8 +61,7 @@ class ZScore:
 
     @property
     def standard_deviation(self):
-        value = (self.power / self.count) - self.mean ** 2
-        return sqrt(value) if value > 0 else 0
+        return sqrt((self.power / self.count) - self.mean ** 2)
 
     def finalize(self):
         if self.count == 0:
@@ -51,11 +72,17 @@ class ZScore:
 def register_trending_functions(connection):
     connection.create_aggregate("zscore", 1, ZScore)
 
+    # For AR trending
+    connection.create_function("decay", 1, decay)
+    connection.create_function("power", 1, power)
+    connection.create_function("soften", 1, soften)
+
+
 
 def calculate_trending(db, height, final_height):
-    # don't start tracking until we're at the end of initial sync
-    if height < (final_height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)):
-        return
+#    # don't start tracking until we're at the end of initial sync
+#    if height < (final_height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)):
+#        return
 
     if height % TRENDING_WINDOW != 0:
         return
@@ -64,55 +91,74 @@ def calculate_trending(db, height, final_height):
     DELETE FROM trend WHERE height < {height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)}
     """)
 
-    start = (height - TRENDING_WINDOW) + 1
-    db.execute(f"""
-    INSERT OR IGNORE INTO trend (claim_hash, height, amount)
-    SELECT claim_hash, {start}, COALESCE(
-            (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
-             AND height >= {start}), 0
-        ) AS support_sum
-    FROM claim WHERE support_sum > 0
-    """)
+#    start = (height - TRENDING_WINDOW) + 1
+#    db.execute(f"""
+#    INSERT OR IGNORE INTO trend (claim_hash, height, amount)
+#    SELECT claim_hash, {start}, COALESCE(
+#            (SELECT SUM(amount) FROM support WHERE claim_hash=claim.claim_hash
+#             AND height >= {start}), 0
+#        ) AS support_sum
+#    FROM claim WHERE support_sum > 0
+#    """)
 
-    zscore = ZScore()
-    for (global_sum,) in db.execute("SELECT AVG(amount) FROM trend GROUP BY height"):
-        zscore.step(global_sum)
-    global_mean, global_deviation = 0, 1
-    if zscore.count > 0:
-        global_mean = zscore.mean
-        global_deviation = zscore.standard_deviation
+#    zscore = ZScore()
+#    for (global_sum,) in db.execute("SELECT AVG(amount) FROM trend GROUP BY height"):
+#        zscore.step(global_sum)
+#    global_mean, global_deviation = 0, 1
+#    if zscore.count > 0:
+#        global_mean = zscore.mean
+#        global_deviation = zscore.standard_deviation
 
+
+#    db.execute(f"""
+#    UPDATE claim SET
+#        trending_local = COALESCE((
+#            SELECT zscore(amount) FROM trend
+#            WHERE claim_hash=claim.claim_hash ORDER BY height DESC
+#        ), 0),
+#        trending_global = COALESCE((
+#            SELECT (amount - {global_mean}) / {global_deviation} FROM trend
+#            WHERE claim_hash=claim.claim_hash AND height = {start}
+#        ), 0),
+#        trending_group = 0,
+#        trending_mixed = 0
+#    """)
+
+
+    # AR trending update
+    print("Calculating AR trending at block {h}...".format(h=height),
+                end="", flush=True)
     db.execute(f"""
     UPDATE claim SET
-        trending_local = COALESCE((
-            SELECT zscore(amount) FROM trend
-            WHERE claim_hash=claim.claim_hash ORDER BY height DESC
-        ), 0),
-        trending_global = COALESCE((
-            SELECT (amount - {global_mean}) / {global_deviation} FROM trend
-            WHERE claim_hash=claim.claim_hash AND height = {start}
-        ), 0),
-        trending_group = 0,
-        trending_mixed = 0
+        trending_ar_y = decay(trending_ar_y) -- + soften(amount + support_amount) - soften(old_total_amount);
     """)
+    db.execute(f"""
+    UPDATE claim SET
+        old_total_amount = amount + support_amount;
+    """)
+    db.execute(f"""
+    UPDATE claim SET
+        trending_ar_final = trending_ar_y*power(old_total_amount);
+    """)
+    print("done.")
 
     # trending_group and trending_mixed determine how trending will show in query results
     # normally the SQL will be: "ORDER BY trending_group, trending_mixed"
     # changing the trending_group will have significant impact on trending results
     # changing the value used for trending_mixed will only impact trending within a trending_group
-    db.execute(f"""
-    UPDATE claim SET
-        trending_group = CASE 
-        WHEN trending_local > 0 AND trending_global > 0 THEN 4
-        WHEN trending_local <= 0 AND trending_global > 0 THEN 3
-        WHEN trending_local > 0 AND trending_global <= 0 THEN 2
-        WHEN trending_local <= 0 AND trending_global <= 0 THEN 1
-        END,
-        trending_mixed = CASE 
-        WHEN trending_local > 0 AND trending_global > 0 THEN trending_global
-        WHEN trending_local <= 0 AND trending_global > 0 THEN trending_local
-        WHEN trending_local > 0 AND trending_global <= 0 THEN trending_local
-        WHEN trending_local <= 0 AND trending_global <= 0 THEN trending_global
-        END
-    WHERE trending_local <> 0 OR trending_global <> 0
-    """)
+#    db.execute(f"""
+#    UPDATE claim SET
+#        trending_group = CASE 
+#        WHEN trending_local > 0 AND trending_global > 0 THEN 4
+#        WHEN trending_local <= 0 AND trending_global > 0 THEN 3
+#        WHEN trending_local > 0 AND trending_global <= 0 THEN 2
+#        WHEN trending_local <= 0 AND trending_global <= 0 THEN 1
+#        END,
+#        trending_mixed = CASE 
+#        WHEN trending_local > 0 AND trending_global > 0 THEN trending_global
+#        WHEN trending_local <= 0 AND trending_global > 0 THEN trending_local
+#        WHEN trending_local > 0 AND trending_global <= 0 THEN trending_local
+#        WHEN trending_local <= 0 AND trending_global <= 0 THEN trending_global
+#        END
+#    WHERE trending_local <> 0 OR trending_global <> 0
+#    """)
