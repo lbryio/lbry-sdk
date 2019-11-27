@@ -61,7 +61,8 @@ class ZScore:
 
     @property
     def standard_deviation(self):
-        return sqrt((self.power / self.count) - self.mean ** 2)
+        value = (self.power / self.count) - self.mean ** 2
+        return sqrt(value) if value > 0 else 0
 
     def finalize(self):
         if self.count == 0:
