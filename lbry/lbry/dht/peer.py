@@ -15,14 +15,26 @@ log = logging.getLogger(__name__)
 @lru_cache(1024)
 def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
                        udp_port: typing.Optional[int] = None,
-                       tcp_port: typing.Optional[int] = None) -> 'KademliaPeer':
-    return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port)
+                       tcp_port: typing.Optional[int] = None,
+                       allow_localhost: bool = False) -> 'KademliaPeer':
+    return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port, allow_localhost=allow_localhost)
 
 
-def is_valid_ipv4(address):
+# the ipaddress module does not show these subnets as reserved
+carrier_grade_NAT_subnet = ipaddress.ip_network('100.64.0.0/10')
+ip4_to_6_relay_subnet = ipaddress.ip_network('192.88.99.0/24')
+
+
+def is_valid_public_ipv4(address, allow_localhost: bool = False):
     try:
-        ip = ipaddress.ip_address(address)
-        return ip.version == 4
+        parsed_ip = ipaddress.ip_address(address)
+        if parsed_ip.is_loopback and allow_localhost:
+            return True
+        return not any((parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local,
+                        parsed_ip.is_loopback, parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private,
+                        parsed_ip.is_reserved,
+                        carrier_grade_NAT_subnet.supernet_of(ipaddress.ip_network(f"{address}/32")),
+                        ip4_to_6_relay_subnet.supernet_of(ipaddress.ip_network(f"{address}/32"))))
     except ipaddress.AddressValueError:
         return False
 
@@ -151,6 +163,7 @@ class KademliaPeer:
     udp_port: typing.Optional[int] = field(hash=True)
     tcp_port: typing.Optional[int] = field(compare=False, hash=False)
     protocol_version: typing.Optional[int] = field(default=1, compare=False, hash=False)
+    allow_localhost: bool = field(default=False, compare=False, hash=False)
 
     def __post_init__(self):
         if self._node_id is not None:
@@ -160,7 +173,7 @@ class KademliaPeer:
             raise ValueError("invalid udp port")
         if self.tcp_port is not None and not 1 <= self.tcp_port <= 65535:
             raise ValueError("invalid tcp port")
-        if not is_valid_ipv4(self.address):
+        if not is_valid_public_ipv4(self.address, self.allow_localhost):
             raise ValueError(f"invalid ip address: '{self.address}'")
 
     def update_tcp_port(self, tcp_port: int):

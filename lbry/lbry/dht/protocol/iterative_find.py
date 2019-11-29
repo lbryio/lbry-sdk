@@ -153,7 +153,11 @@ class IterativeFinder:
         self._add_active(peer)
         for contact_triple in response.get_close_triples():
             node_id, address, udp_port = contact_triple
-            self._add_active(make_kademlia_peer(node_id, address, udp_port))
+            try:
+                self._add_active(make_kademlia_peer(node_id, address, udp_port))
+            except ValueError:
+                log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer.address,
+                            peer.udp_port, address, udp_port)
         self.check_result_ready(response)
 
     async def _send_probe(self, peer: 'KademliaPeer'):
@@ -328,10 +332,17 @@ class IterativeValueFinder(IterativeFinder):
         if not parsed.found:
             return parsed
         already_known = len(self.discovered_peers[peer])
-        self.discovered_peers[peer].update({
-            self.peer_manager.decode_tcp_peer_from_compact_address(compact_addr)
-            for compact_addr in parsed.found_compact_addresses
-        })
+        decoded_peers = set()
+        for compact_addr in parsed.found_compact_addresses:
+            try:
+                decoded_peers.add(self.peer_manager.decode_tcp_peer_from_compact_address(compact_addr))
+            except ValueError:
+                log.warning("misbehaving peer %s:%i returned invalid peer for blob",
+                            peer.address, peer.udp_port)
+                self.peer_manager.report_failure(peer.address, peer.udp_port)
+                parsed.found_compact_addresses.clear()
+                return parsed
+        self.discovered_peers[peer].update(decoded_peers)
         log.debug("probed %s:%i page %i, %i known", peer.address, peer.udp_port, page,
                   already_known + len(parsed.found_compact_addresses))
         if len(self.discovered_peers[peer]) != already_known + len(parsed.found_compact_addresses):
