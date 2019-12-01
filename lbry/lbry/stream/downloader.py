@@ -51,7 +51,7 @@ class StreamDownloader:
         def _delayed_add_fixed_peers():
             self.added_fixed_peers = True
             self.peer_queue.put_nowait([
-                make_kademlia_peer(None, address, None, tcp_port=port + 1)
+                make_kademlia_peer(None, address, None, tcp_port=port + 1, allow_localhost=True)
                 for address, port in addresses
             ])
 

@@ -119,7 +119,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
     async def test_popular_blob(self):
         peer_count = 150
         addresses = [
-            (constants.generate_id(i + 1), socket.inet_ntoa(int(i + 1).to_bytes(length=4, byteorder='big')))
+            (constants.generate_id(i + 1), socket.inet_ntoa(int(i + 0x01000001).to_bytes(length=4, byteorder='big')))
             for i in range(peer_count)
         ]
         blob_hash = b'1' * 48

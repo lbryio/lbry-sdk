@@ -111,7 +111,7 @@ class TestManagedStream(BlobExchangeTestBase):
         mock_node = mock.Mock(spec=Node)
         q = asyncio.Queue()
 
-        bad_peer = make_kademlia_peer(b'2' * 48, "127.0.0.1", tcp_port=3334)
+        bad_peer = make_kademlia_peer(b'2' * 48, "127.0.0.1", tcp_port=3334, allow_localhost=True)
 
         def _mock_accumulate_peers(q1, q2):
             async def _task():
