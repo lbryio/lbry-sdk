@@ -24,8 +24,11 @@ def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional
 carrier_grade_NAT_subnet = ipaddress.ip_network('100.64.0.0/10')
 ip4_to_6_relay_subnet = ipaddress.ip_network('192.88.99.0/24')
 
+ALLOW_LOCALHOST = False
+
 
 def is_valid_public_ipv4(address, allow_localhost: bool = False):
+    allow_localhost = bool(allow_localhost or ALLOW_LOCALHOST)
     try:
         parsed_ip = ipaddress.ip_address(address)
         if parsed_ip.is_loopback and allow_localhost:

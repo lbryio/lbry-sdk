@@ -3,6 +3,7 @@ from binascii import hexlify
 
 from lbry.dht import constants
 from lbry.dht.node import Node
+from lbry.dht import peer as dht_peer
 from lbry.dht.peer import PeerManager, make_kademlia_peer
 from torba.testcase import AsyncioTestCase
 
@@ -10,6 +11,8 @@ from torba.testcase import AsyncioTestCase
 class DHTIntegrationTest(AsyncioTestCase):
 
     async def asyncSetUp(self):
+        dht_peer.ALLOW_LOCALHOST = True
+        self.addCleanup(setattr, dht_peer, 'ALLOW_LOCALHOST', False)
         import logging
         logging.getLogger('asyncio').setLevel(logging.ERROR)
         logging.getLogger('lbry.dht').setLevel(logging.WARN)
