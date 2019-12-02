@@ -163,7 +163,10 @@ class AbstractBlob:
         if not self.is_readable():
             raise OSError('blob files cannot be read')
         with self.reader_context() as handle:
-            return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
+            try:
+                return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
+            except (ConnectionResetError, BrokenPipeError, RuntimeError, OSError, AttributeError):
+                return -1
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
         """
