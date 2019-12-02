@@ -404,7 +404,12 @@ class ManagedStream:
         )
         await self.update_status(ManagedStream.STATUS_RUNNING)
         self.file_output_task = self.loop.create_task(self._save_file(self.full_path))
-        await self.started_writing.wait()
+        try:
+            await asyncio.wait_for(self.started_writing.wait(), self.config.download_timeout, loop=self.loop)
+        except asyncio.TimeoutError:
+            log.warning("timeout starting to write data for lbry://%s#%s", self.claim_name, self.claim_id)
+            self.stop_tasks()
+            await self.update_status(ManagedStream.STATUS_STOPPED)
 
     def stop_tasks(self):
         if self.file_output_task and not self.file_output_task.done():
