@@ -4,6 +4,7 @@ from textwrap import fill, indent
 
 CLASS = """
 class {name}Error({parent}Error):{doc}
+    log_level = {log_level}
 """
 
 INIT = """\
@@ -16,20 +17,25 @@ INDENT = ' ' * 4
 
 def main():
     with open('README.md', 'r') as readme:
+        lines = readme.readlines()
+        for line in lines:
+            if line.startswith('## Error Table'):
+                break
         print('from .base import BaseError\n')
         stack = {}
         started = False
-        for line in readme.readlines():
+        for line in lines:
             if not started:
                 started = line.startswith('---:|')
                 continue
             if not line:
                 break
             parent = 'Base'
-            columns = [c.strip() for c in line.split('|')]
-            (h, code, desc), comment = columns[:3], ""
-            if len(columns) == 4:
-                comment = columns[3].strip()
+            h, log_level, code, desc = [c.strip() for c in line.split('|')]
+            comment = ""
+            if '--' in desc:
+                desc, comment = [s.strip() for s in desc.split('--')]
+            log_level += "0"
             if h.startswith('**'):
                 if h.count('x') == 1:
                     parent = stack[h[2:3]][0]
@@ -37,7 +43,7 @@ def main():
                 if h.count('x') == 2:
                     stack[h.replace('**', '').replace('x', '')+'0'] = (code, desc)
                 comment = f'\n{INDENT}"""\n{indent(fill(comment or desc, 100), INDENT)}\n{INDENT}"""'
-                print(CLASS.format(name=code, parent=parent, doc=comment))
+                print(CLASS.format(name=code, parent=parent, doc=comment, log_level=log_level))
                 continue
             parent = stack[h[:2]][0]
             args = ['self']
@@ -49,7 +55,7 @@ def main():
             if comment:
                 comment = f'\n{INDENT}"""\n{indent(fill(comment, 100), INDENT)}\n{INDENT}"""'
             print((CLASS+INIT).format(
-                name=code, parent=parent, args=', '.join(args),
+                name=code, parent=parent, args=', '.join(args), log_level=log_level,
                 desc=desc, doc=comment, format=fmt
             ))
 
