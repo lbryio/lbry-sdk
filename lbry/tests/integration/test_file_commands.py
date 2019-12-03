@@ -294,26 +294,6 @@ class FileCommands(CommandTestCase):
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
         self.assertEqual('finished', file_info['status'])
 
-    async def test_unban_recovers_stream(self):
-        BlobDownloader.BAN_FACTOR = .5  # fixme: temporary field, will move to connection manager or a conf
-        tx = await self.stream_create('foo', '0.01', data=bytes([0] * (1 << 23)))
-        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
-        missing_blob_hash = (await self.daemon.jsonrpc_blob_list(sd_hash=sd_hash))['items'][-2]
-        await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        # backup blob
-        missing_blob = self.server_blob_manager.get_blob(missing_blob_hash)
-        os.rename(missing_blob.file_path, missing_blob.file_path + '__')
-        self.server_blob_manager.delete_blob(missing_blob_hash)
-        await self.daemon.jsonrpc_get('lbry://foo')
-        with self.assertRaises(asyncio.TimeoutError):
-            await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
-        # restore blob
-        os.rename(missing_blob.file_path + '__', missing_blob.file_path)
-        self.server_blob_manager.blobs.clear()
-        missing_blob = self.server_blob_manager.get_blob(missing_blob_hash)
-        self.server_blob_manager.blob_completed(missing_blob)
-        await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
-
     async def test_paid_download(self):
         target_address = await self.blockchain.get_raw_change_address()
 

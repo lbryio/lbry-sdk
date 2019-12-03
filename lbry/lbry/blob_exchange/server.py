@@ -101,16 +101,21 @@ class BlobServerProtocol(asyncio.Protocol):
                 self.started_transfer.set()
                 try:
                     sent = await asyncio.wait_for(blob.sendfile(self), self.transfer_timeout, loop=self.loop)
-                    self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, sent)
-                    log.info("sent %s (%i bytes) to %s:%i", bh, sent, peer_address, peer_port)
-                except (ConnectionResetError, BrokenPipeError, RuntimeError, OSError, asyncio.TimeoutError) as err:
+                    if sent and sent > 0:
+                        self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, sent)
+                        log.info("sent %s (%i bytes) to %s:%i", bh, sent, peer_address, peer_port)
+                    else:
+                        log.debug("stopped sending %s to %s:%i", bh, peer_address, peer_port)
+                except (OSError, asyncio.TimeoutError) as err:
                     if isinstance(err, asyncio.TimeoutError):
                         log.debug("timed out sending blob %s to %s", bh, peer_address)
                     else:
-                        log.debug("stopped sending %s to %s:%i", bh, peer_address, peer_port)
+                        log.warning("could not read blob %s to send %s:%i", bh, peer_address, peer_port)
                     self.close()
                 finally:
                     self.transfer_finished.set()
+            else:
+                log.info("don't have %s to send %s:%i", blob.blob_hash[:8], peer_address, peer_port)
         if responses:
             self.send_response(responses)
 
