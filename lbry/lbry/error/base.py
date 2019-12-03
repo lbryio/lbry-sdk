@@ -1,2 +1,2 @@
 class BaseError(Exception):
-    pass
+    log_level = 50

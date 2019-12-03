@@ -25,7 +25,10 @@ from lbry.conf import Config, Setting, NOT_SET
 from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
-from lbry.error import DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError
+from lbry.error import (
+    BaseError, DownloadSDTimeoutError,
+    ComponentsNotStartedError, ComponentStartConditionNotMetError
+)
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
@@ -596,6 +599,14 @@ class Daemon(metaclass=JSONRPCServerType):
         except asyncio.CancelledError:
             log.info("cancelled API call for: %s", function_name)
             raise
+        except BaseError as e:
+            if log.isEnabledFor(e.log_level):
+                log.exception("SDK generated the following exception:")
+            return JSONRPCError(
+                f"Error calling {function_name} with args {args}\n" + str(e),
+                JSONRPCError.CODE_APPLICATION_ERROR,
+                format_exc()
+            )
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
             return JSONRPCError(
