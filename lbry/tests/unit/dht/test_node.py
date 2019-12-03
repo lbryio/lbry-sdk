@@ -104,7 +104,7 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
         loop.set_debug(False)
 
         peer_addresses = [
-            ('127.0.0.1', 40000+i) for i in range(10)
+            ('1.2.3.4', 40000+i) for i in range(10)
         ]
         node_ids = [constants.generate_id(i) for i in range(10)]
 
