@@ -50,7 +50,7 @@ class DatabaseComponent(Component):
 
     @staticmethod
     def get_current_db_revision():
-        return 13
+        return 14
 
     @property
     def revision_filename(self):
@@ -189,7 +189,7 @@ class BlobComponent(Component):
 
 class DHTComponent(Component):
     component_name = DHT_COMPONENT
-    depends_on = [UPNP_COMPONENT]
+    depends_on = [UPNP_COMPONENT, DATABASE_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -223,6 +223,7 @@ class DHTComponent(Component):
         self.external_peer_port = upnp_component.upnp_redirects.get("TCP", self.conf.tcp_port)
         self.external_udp_port = upnp_component.upnp_redirects.get("UDP", self.conf.udp_port)
         external_ip = upnp_component.external_ip
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
         if not external_ip:
             external_ip = await utils.get_external_ip()
             if not external_ip:
@@ -237,11 +238,10 @@ class DHTComponent(Component):
             external_ip=external_ip,
             peer_port=self.external_peer_port,
             rpc_timeout=self.conf.node_rpc_timeout,
-            split_buckets_under_index=self.conf.split_buckets_under_index
+            split_buckets_under_index=self.conf.split_buckets_under_index,
+            storage=storage
         )
-        self.dht_node.start(
-            interface=self.conf.network_interface, known_node_urls=self.conf.known_dht_nodes
-        )
+        self.dht_node.start(self.conf.network_interface, self.conf.known_dht_nodes)
         log.info("Started the dht")
 
     async def stop(self):

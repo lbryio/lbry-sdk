@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import asyncio
 import logging
+import hashlib
 from torba.testcase import AsyncioTestCase
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
@@ -10,6 +11,7 @@ from lbry.blob.blob_info import BlobInfo
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.descriptor import StreamDescriptor
 from tests.test_utils import random_lbry_hash
+from lbry.dht.peer import make_kademlia_peer
 
 log = logging.getLogger()
 
@@ -247,3 +249,13 @@ class ContentClaimStorageTests(StorageTest):
         current_claim_info = await self.storage.get_content_claim(stream_hash)
         # this should still be the previous update
         self.assertDictEqual(current_claim_info, update_info)
+
+
+class UpdatePeersTest(StorageTest):
+    async def test_update_get_peers(self):
+        node_id = hashlib.sha384("1234".encode()).digest()
+        args = (node_id, '73.186.148.72', 4444, None)
+        fake_peer = make_kademlia_peer(*args)
+        await self.storage.save_kademlia_peers([fake_peer])
+        peers = await self.storage.get_persisted_kademlia_peers()
+        self.assertTupleEqual(args, peers[0])

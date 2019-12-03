@@ -2,6 +2,7 @@ import logging
 import asyncio
 import typing
 import binascii
+import socket
 from lbry.utils import resolve_host
 from lbry.dht import constants
 from lbry.dht.peer import make_kademlia_peer
@@ -19,7 +20,8 @@ log = logging.getLogger(__name__)
 class Node:
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.rpc_timeout,
-                 split_buckets_under_index: int = constants.split_buckets_under_index):
+                 split_buckets_under_index: int = constants.split_buckets_under_index,
+                 storage: typing.Optional['SQLiteStorage'] = None):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
         self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
@@ -28,6 +30,7 @@ class Node:
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
+        self._storage = storage
 
     async def refresh_node(self, force_once=False):
         while True:
@@ -67,6 +70,8 @@ class Node:
             to_ping = [peer for peer in set(total_peers) if self.protocol.peer_manager.peer_is_good(peer) is not True]
             if to_ping:
                 self.protocol.ping_queue.enqueue_maybe_ping(*to_ping, delay=0)
+            if self._storage:
+                await self._storage.save_kademlia_peers(self.protocol.routing_table.get_peers())
             if force_once:
                 break
 
@@ -111,7 +116,7 @@ class Node:
         self.listening_port = None
         log.info("Stopped DHT node")
 
-    async def start_listening(self, interface: str = '') -> None:
+    async def start_listening(self, interface: str = '0.0.0.0') -> None:
         if not self.listening_port:
             self.listening_port, _ = await self.loop.create_datagram_endpoint(
                 lambda: self.protocol, (interface, self.internal_udp_port)
@@ -121,56 +126,53 @@ class Node:
         else:
             log.warning("Already bound to port %s", self.listening_port)
 
-    async def join_network(self, interface: typing.Optional[str] = '',
+    async def join_network(self, interface: str = '0.0.0.0',
                            known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+        def peers_from_urls(urls: typing.Optional[typing.List[typing.Tuple[bytes, str, int, int]]]):
+            peer_addresses = []
+            for node_id, address, udp_port, tcp_port in urls:
+                if (node_id, address, udp_port, tcp_port) not in peer_addresses and \
+                        (address, udp_port) != (self.protocol.external_ip, self.protocol.udp_port):
+                    peer_addresses.append((node_id, address, udp_port, tcp_port))
+            return [make_kademlia_peer(*peer_address) for peer_address in peer_addresses]
+
         if not self.listening_port:
             await self.start_listening(interface)
         self.protocol.ping_queue.start()
         self._refresh_task = self.loop.create_task(self.refresh_node())
 
-        # resolve the known node urls
-        known_node_addresses = []
-        url_to_addr = {}
-
-        if known_node_urls:
-            for host, port in known_node_urls:
-                address = await resolve_host(host, port, proto='udp')
-                if (address, port) not in known_node_addresses and\
-                        (address, port) != (self.protocol.external_ip, self.protocol.udp_port):
-                    known_node_addresses.append((address, port))
-                    url_to_addr[address] = host
-
-        if known_node_addresses:
-            peers = [
-                make_kademlia_peer(None, address, port)
-                for (address, port) in known_node_addresses
-            ]
-            while True:
-                if not self.protocol.routing_table.get_peers():
-                    if self.joined.is_set():
-                        self.joined.clear()
-                    self.protocol.peer_manager.reset()
-                    self.protocol.ping_queue.enqueue_maybe_ping(*peers, delay=0.0)
-                    peers.extend(await self.peer_search(self.protocol.node_id, shortlist=peers, count=32))
-                    if self.protocol.routing_table.get_peers():
-                        self.joined.set()
-                        log.info(
-                            "Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
-                            self.protocol.routing_table.buckets_with_contacts())
-                    else:
+        while True:
+            if self.protocol.routing_table.get_peers():
+                if not self.joined.is_set():
+                    self.joined.set()
+                    log.info(
+                        "joined dht, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
+                        self.protocol.routing_table.buckets_with_contacts()
+                    )
+            else:
+                if self.joined.is_set():
+                    self.joined.clear()
+                seed_peers = peers_from_urls(
+                    await self._storage.get_persisted_kademlia_peers()
+                ) if self._storage else []
+                if not seed_peers:
+                    try:
+                        seed_peers.extend(peers_from_urls([
+                            (None, await resolve_host(address, udp_port, 'udp'), udp_port, None)
+                            for address, udp_port in known_node_urls or []
+                        ]))
+                    except socket.gaierror:
+                        await asyncio.sleep(30, loop=self.loop)
                         continue
-                await asyncio.sleep(1, loop=self.loop)
 
-        log.info("Joined DHT, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
-                 self.protocol.routing_table.buckets_with_contacts())
-        self.joined.set()
+                self.protocol.peer_manager.reset()
+                self.protocol.ping_queue.enqueue_maybe_ping(*seed_peers, delay=0.0)
+                await self.peer_search(self.protocol.node_id, shortlist=seed_peers, count=32)
 
-    def start(self, interface: str, known_node_urls: typing.List[typing.Tuple[str, int]]):
-        self._join_task = self.loop.create_task(
-            self.join_network(
-                interface=interface, known_node_urls=known_node_urls
-            )
-        )
+            await asyncio.sleep(1, loop=self.loop)
+
+    def start(self, interface: str, known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+        self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                   bottom_out_limit: int = constants.bottom_out_limit,

@@ -329,6 +329,14 @@ class SQLiteStorage(SQLiteMixin):
                 timestamp integer,
                 primary key (sd_hash, reflector_address)
             );
+
+            create table if not exists peer (
+                node_id char(96) not null primary key,
+                address text not null,
+                udp_port integer not null,
+                tcp_port integer,
+                unique (address, udp_port)
+            );
     """
 
     def __init__(self, conf: Config, path, loop=None, time_getter: typing.Optional[typing.Callable[[], float]] = None):
@@ -805,3 +813,17 @@ class SQLiteStorage(SQLiteMixin):
             "where r.timestamp is null or r.timestamp < ?",
             int(self.time_getter()) - 86400
         )
+
+    # # # # # # # # # # dht functions # # # # # # # # # # #
+    async def get_persisted_kademlia_peers(self) -> typing.List[typing.Tuple[bytes, str, int, int]]:
+        query = 'select node_id, address, udp_port, tcp_port from peer'
+        return [(binascii.unhexlify(n), a, u, t) for n, a, u, t in await self.db.execute_fetchall(query)]
+
+    async def save_kademlia_peers(self, peers: typing.List['KademliaPeer']):
+        def _save_kademlia_peers(transaction: sqlite3.Connection):
+            transaction.execute('delete from peer').fetchall()
+            transaction.executemany(
+                'insert into peer(node_id, address, udp_port, tcp_port) values (?, ?, ?, ?)',
+                tuple([(binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers])
+            ).fetchall()
+        return await self.db.run(_save_kademlia_peers)
