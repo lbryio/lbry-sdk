@@ -17,8 +17,19 @@ CREATE_TREND_TABLE = """
 # Half life in blocks
 half_life = 576
 
-# Decay coefficient
+# Decay coefficient per block
 decay = 0.5**(1.0/half_life)
+
+# How frequently to write trending values to the db
+save_interval = 10
+
+# Renormalisation interval
+renorm_interval = 1000
+
+# Decay coefficient per renormalisation interval
+decay_per_renorm = decay**renorm_interval
+
+assert renorm_interval % save_interval == 0
 
 
 def soften(delta):
@@ -39,7 +50,7 @@ class TrendingData:
     """
     def __init__(self):
 
-        # Dict from claim_id to [total_amount, trending_score]
+        # Dict from claim_id to [total_amount, trending_score, changed_flag]
         self.claims = {}
         self.initialised = False
 
@@ -52,23 +63,22 @@ class TrendingData:
         if claim_id in self.claims:
             return
 
-        self.claims[claim_id] = [total_amount, trending_score]
+        self.claims[claim_id] = [total_amount, trending_score, False]
 
 
-    def update_claim(self, claim_id, total_amount):
+    def update_claim(self, time_boost, claim_id, total_amount):
         """
         Update trending data for a claim, given its new total amount.
         """
-
         # Extract existing total amount and trending score
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [0.0, 0.0]
+            old_data = [0.0, 0.0, False]
 
-        trending_score = decay*old_data[1] \
-                            + soften(1E-8*(total_amount - old_data[0]))
-        self.claims[claim_id] = [total_amount, trending_score]
+        change = total_amount - old_data[0]
+        old_data[1] += soften(1E-8*time_boost*change)
+        self.claims[claim_id] = [total_amount, old_data[1], change != 0.0]
 
 
 # One global instance
@@ -96,20 +106,38 @@ def calculate_trending(db, height, final_height):
         trending_data.initialised = True
 
     # Update all claims from db
+    time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
                           SELECT claim_id, amount, support_amount
                           FROM claim;
                           """):
-        trending_data.update_claim(row[0], row[1] + row[2])
+        trending_data.update_claim(time_boost, row[0], row[1] + row[2])
+
+
+    # Renormalise trending scores and mark all as having changed
+    if height % renorm_interval == 0:
+        keys = trending_data.claims.keys()
+        for key in keys:
+            trending_data.claims[key][1] *= decay_per_renorm
+            trending_data.claims[key][2] = True
+
 
     # Write trending scores to DB
-    if height % 20 == 0: # and height >= (final_height - 100):
+    if height % save_interval == 0:
         the_list = []
         keys = trending_data.claims.keys()
         for key in keys:
-            the_list.append((trending_data.claims[key][1], key))
+            if trending_data.claims[key][2]:
+                the_list.append((trending_data.claims[key][1], key))
         db.executemany("UPDATE claim SET trending_global=? WHERE claim_id=?;",
                         the_list)
+
+    # Mark claims as not having changed
+    if height % renorm_interval == 0:
+        keys = trending_data.claims.keys()
+        for key in keys:
+            trending_data.claims[key][2] = False
+
 
     print("done. Took {time} seconds.".format(time=time.time() - start))
 
