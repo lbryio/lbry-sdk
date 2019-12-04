@@ -1,6 +1,9 @@
 from math import sqrt
 import time
 
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 CREATE_TREND_TABLE = """
     create table if not exists trend (
         claim_hash bytes not null,
@@ -110,14 +113,22 @@ def calculate_trending(db, height, final_height):
 
     print("done. Took {time} seconds.".format(time=time.time() - start))
 
-
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 # TRENDING_WINDOW is the number of blocks in ~6hr period (21600 seconds / 161 seconds per block)
 TRENDING_WINDOW = 134
 
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 # TRENDING_DATA_POINTS says how many samples to use for the trending algorithm
 # i.e. only consider claims from the most recent (TRENDING_WINDOW * TRENDING_DATA_POINTS) blocks
 TRENDING_DATA_POINTS = 28
 
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 CREATE_TREND_TABLE = """
     create table if not exists trend (
         claim_hash bytes not null,
@@ -128,6 +139,10 @@ CREATE_TREND_TABLE = """
 """
 
 
+
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 class ZScore:
     __slots__ = 'count', 'total', 'power', 'last'
 
@@ -159,5 +174,8 @@ class ZScore:
         return (self.last - self.mean) / (self.standard_deviation or 1)
 
 
+#######################################################
+################### DEPRECATED ########################
+#######################################################
 def register_trending_functions(connection):
     connection.create_aggregate("zscore", 1, ZScore)
