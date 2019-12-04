@@ -77,8 +77,9 @@ class TrendingData:
             old_data = [0.0, 0.0, False]
 
         change = total_amount - old_data[0]
-        old_data[1] += soften(1E-8*time_boost*change)
-        self.claims[claim_id] = [total_amount, old_data[1], change != 0.0]
+        if change != 0.0:
+            old_data[1] += soften(1E-8*time_boost*change)
+            self.claims[claim_id] = [total_amount, old_data[1], True]
 
 
 # One global instance
