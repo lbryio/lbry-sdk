@@ -95,8 +95,7 @@ def calculate_trending(db, height, final_height):
     start = time.time()
 
     # I'm using the original column names
-    # trending_global = my trending score
-    # trending_local  = old total amount
+    # trending_mixed = my trending score
     print("Calculating AR trending at block {h}...".format(h=height),
                 end="", flush=True)
 
@@ -104,7 +103,7 @@ def calculate_trending(db, height, final_height):
     # Read all values from db to re-init trending_data
     if not trending_data.initialised:
         for row in db.execute("""
-                          SELECT claim_id, amount, support_amount, trending_global
+                          SELECT claim_id, amount, support_amount, trending_mixed
                           FROM claim;
                           """):
             trending_data.insert_claim(row[0], row[1] + row[2], row[3])  
@@ -134,7 +133,7 @@ def calculate_trending(db, height, final_height):
         for key in keys:
             if trending_data.claims[key][2]:
                 the_list.append((trending_data.claims[key][1], key))
-        db.executemany("UPDATE claim SET trending_global=? WHERE claim_id=?;",
+        db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
 
     # Mark claims as not having changed
