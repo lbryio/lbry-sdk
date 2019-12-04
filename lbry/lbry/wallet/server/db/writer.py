@@ -87,6 +87,7 @@ class SQLDB:
             trending_global integer not null default 0
         );
 
+        create index if not exists claim_id_idx on claim(claim_id);
         create index if not exists claim_normalized_idx on claim (normalized, activation_height);
         create index if not exists claim_channel_hash_idx on claim (channel_hash, signature, claim_hash);
         create index if not exists claim_claims_in_channel_idx on claim (signature_valid, channel_hash, normalized);
