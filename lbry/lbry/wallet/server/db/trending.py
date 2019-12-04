@@ -88,6 +88,10 @@ trending_data = TrendingData()
 
 def calculate_trending(db, height, final_height):
 
+
+    if height < final_height - 100:
+        return
+
     start = time.time()
 
     # I'm using the original column names
