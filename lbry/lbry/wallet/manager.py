@@ -145,6 +145,21 @@ class LbryWalletManager(BaseWalletManager):
                 await ledger.db.close()
         return manager
 
+    async def reset(self):
+        ledger_id = {
+            'lbrycrd_main':    'lbc_mainnet',
+            'lbrycrd_testnet': 'lbc_testnet',
+            'lbrycrd_regtest': 'lbc_regtest'
+        }[self.config.blockchain_name]
+        ledger = self.get_or_create_ledger(ledger_id)
+        ledger.config = {
+            'auto_connect': True,
+            'default_servers': self.config.lbryum_servers,
+            'data_path': self.config.wallet_dir,
+        }
+        await self.ledger.stop()
+        await self.ledger.start()
+
     async def _migrate_addresses(self, receiving_addresses: set, change_addresses: set):
         async with self.default_account.receiving.address_generator_lock:
             migrated_receiving = set(await self.default_account.receiving._generate_keys(0, len(receiving_addresses)))
