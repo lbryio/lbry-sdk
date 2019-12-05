@@ -1096,6 +1096,19 @@ class Daemon(metaclass=JSONRPCServerType):
             return paginate_list([self.wallet_manager.get_wallet_or_error(wallet_id)], 1, 1)
         return paginate_list(self.wallet_manager.wallets, page, page_size)
 
+    def jsonrpc_wallet_restart(self):
+        """
+        Restarts ledger, applying new configurations.
+
+        Usage:
+            wallet_restart
+
+        Options:
+
+        Returns: None
+        """
+        return self.wallet_manager.reset()
+
     @requires("wallet")
     async def jsonrpc_wallet_create(
             self, wallet_id, skip_on_startup=False, create_account=False, single_key=False):
