@@ -82,7 +82,7 @@ class SQLDB:
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
             trending_group integer not null default 0,
-            trending_mixed integer not null default 0,
+            trending_mixed real not null default 0,
             trending_local integer not null default 0,
             trending_global integer not null default 0
         );
