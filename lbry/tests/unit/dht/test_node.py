@@ -1,4 +1,5 @@
 import asyncio
+import unittest
 import typing
 from torba.testcase import AsyncioTestCase
 from tests import dht_mocks
@@ -89,7 +90,7 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 
 
 class TestTemporarilyLosingConnection(AsyncioTestCase):
-
+    @unittest.SkipTest
     async def test_losing_connection(self):
         async def wait_for(check_ok, insist, timeout=20):
             start = loop.time()
