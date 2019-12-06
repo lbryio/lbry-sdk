@@ -66,7 +66,7 @@ f.close()
 def calculate_trending(db, height, final_height):
 
 
-    if height < final_height - 3*half_life:
+    if height < final_height - 5:
         return
 
     start = time.time()
@@ -80,7 +80,8 @@ def calculate_trending(db, height, final_height):
     f.flush()
 
     # Update all claims from db
-    f.write("    Updating all claims from db...")
+    f.write("    Reading all total_amounts from db and updating trending scores...")
+    f.flush()
     time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
                           SELECT claim_id, amount, support_amount
@@ -113,7 +114,7 @@ def calculate_trending(db, height, final_height):
         keys = trending_data.claims.keys()
         for key in keys:
             if trending_data.claims[key][2]:
-                the_list.append((trending_data.claims[key][1], key))
+                the_list.append((int(trending_data.claims[key][1]*10000), key))
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
         f.write("done.\n")
