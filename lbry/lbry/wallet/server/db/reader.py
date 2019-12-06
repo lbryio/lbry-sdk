@@ -356,7 +356,6 @@ def _search(**constraints):
         claim.activation_height, claim.expiration_height,
         claim.effective_amount, claim.support_amount,
         claim.trending_group, claim.trending_mixed,
-        claim.trending_local, claim.trending_global,
         claim.short_url, claim.canonical_url,
         claim.channel_hash, claim.reposted_claim_hash,
         claim.signature_valid
