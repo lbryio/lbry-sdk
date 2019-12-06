@@ -82,7 +82,7 @@ class SQLDB:
             effective_amount integer not null default 0,
             support_amount integer not null default 0,
             trending_group integer not null default 0,
-            trending_mixed real not null default 0
+            trending_mixed integer not null default 0
         );
 
         create index if not exists claim_id_idx on claim(claim_id);
