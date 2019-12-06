@@ -248,6 +248,7 @@ class SQLDB:
                 'release_time': None,
                 'fee_currency': None,
                 'fee_amount': 0,
+                'reposted_claim_hash': None
             }
             claims.append(claim_record)
 
