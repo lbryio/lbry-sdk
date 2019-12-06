@@ -42,7 +42,6 @@ INTEGER_PARAMS = {
     'tx_position', 'channel_join', 'reposted',
     'amount', 'effective_amount', 'support_amount',
     'trending_group', 'trending_mixed',
-    'trending_local', 'trending_global',
 }
 
 SEARCH_PARAMS = {
