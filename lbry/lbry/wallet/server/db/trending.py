@@ -1,19 +1,6 @@
 from math import sqrt
 import time
 
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-CREATE_TREND_TABLE = """
-    create table if not exists trend (
-        claim_hash bytes not null,
-        height integer not null,
-        amount integer not null,
-        primary key (claim_hash, height)
-    ) without rowid;
-"""
-
-
 # Half life in blocks
 half_life = 576
 
@@ -52,18 +39,6 @@ class TrendingData:
 
         # Dict from claim_id to [total_amount, trending_score, changed_flag]
         self.claims = {}
-        self.initialised = False
-
-
-    def insert_claim(self, claim_id, total_amount, trending_score):
-        """
-        Insert a claim (happens upon re-running wallet server to
-        repopulate trending data from the DB)
-        """
-        if claim_id in self.claims:
-            return
-
-        self.claims[claim_id] = [total_amount, trending_score, False]
 
 
     def update_claim(self, time_boost, claim_id, total_amount):
@@ -84,50 +59,56 @@ class TrendingData:
 
 # One global instance
 trending_data = TrendingData()
+f = open("trending.log", "w")
+f.close()
 
 
 def calculate_trending(db, height, final_height):
 
 
-    if height < final_height - 1000:
+    if height < final_height - 3*half_life:
         return
 
     start = time.time()
+    f = open("trending.log", "a")
 
     # I'm using the original column names
     # trending_mixed = my trending score
-    print("Calculating AR trending at block {h}...".format(h=height),
-                end="", flush=True)
-
-
-    # Read all values from db to re-init trending_data
-    if not trending_data.initialised:
-        for row in db.execute("""
-                          SELECT claim_id, amount, support_amount, trending_mixed
-                          FROM claim;
-                          """):
-            trending_data.insert_claim(row[0], row[1] + row[2], row[3])  
-        trending_data.initialised = True
+    f.write("Calculating AR trending at block {h}.\n")
+    f.flush()
+    f.write("    Length of trending data = {l}.\n".format(l=len(trending_data.claims)))
+    f.flush()
 
     # Update all claims from db
+    f.write("    Updating all claims from db...")
     time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
                           SELECT claim_id, amount, support_amount
                           FROM claim;
                           """):
         trending_data.update_claim(time_boost, row[0], row[1] + row[2])
-
+    f.write("done.\n")
+    f.flush()
 
     # Renormalise trending scores and mark all as having changed
     if height % renorm_interval == 0:
+        f.write("    Renormalising trending scores...")
+        f.flush()
+
         keys = trending_data.claims.keys()
         for key in keys:
             trending_data.claims[key][1] *= decay_per_renorm
             trending_data.claims[key][2] = True
+        f.write("done.\n")
+        f.flush()
+
 
 
     # Write trending scores to DB
     if height % save_interval == 0:
+        f.write("    Writing trending scores to db...")
+        f.flush()
+
         the_list = []
         keys = trending_data.claims.keys()
         for key in keys:
@@ -135,79 +116,21 @@ def calculate_trending(db, height, final_height):
                 the_list.append((trending_data.claims[key][1], key))
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
+        f.write("done.\n")
+
 
     # Mark claims as not having changed
     if height % renorm_interval == 0:
+        f.write("    Marking claims as unchanged...")
+        f.flush()
+
         keys = trending_data.claims.keys()
         for key in keys:
             trending_data.claims[key][2] = False
+        f.write("done.\n")
+        f.flush()
 
+    f.write("Trending operations took {time} seconds.\n\n".format(time=time.time() - start))
+    f.flush()
+    f.close()
 
-    print("done. Took {time} seconds.".format(time=time.time() - start))
-
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-# TRENDING_WINDOW is the number of blocks in ~6hr period (21600 seconds / 161 seconds per block)
-TRENDING_WINDOW = 134
-
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-# TRENDING_DATA_POINTS says how many samples to use for the trending algorithm
-# i.e. only consider claims from the most recent (TRENDING_WINDOW * TRENDING_DATA_POINTS) blocks
-TRENDING_DATA_POINTS = 28
-
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-CREATE_TREND_TABLE = """
-    create table if not exists trend (
-        claim_hash bytes not null,
-        height integer not null,
-        amount integer not null,
-        primary key (claim_hash, height)
-    ) without rowid;
-"""
-
-
-
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-class ZScore:
-    __slots__ = 'count', 'total', 'power', 'last'
-
-    def __init__(self):
-        self.count = 0
-        self.total = 0
-        self.power = 0
-        self.last = None
-
-    def step(self, value):
-        if self.last is not None:
-            self.count += 1
-            self.total += self.last
-            self.power += self.last ** 2
-        self.last = value
-
-    @property
-    def mean(self):
-        return self.total / self.count
-
-    @property
-    def standard_deviation(self):
-        value = (self.power / self.count) - self.mean ** 2
-        return sqrt(value) if value > 0 else 0
-
-    def finalize(self):
-        if self.count == 0:
-            return self.last
-        return (self.last - self.mean) / (self.standard_deviation or 1)
-
-
-#######################################################
-################### DEPRECATED ########################
-#######################################################
-def register_trending_functions(connection):
-    connection.create_aggregate("zscore", 1, ZScore)
