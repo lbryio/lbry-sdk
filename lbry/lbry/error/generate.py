@@ -2,63 +2,113 @@ import re
 from textwrap import fill, indent
 
 
-CLASS = """
-class {name}Error({parent}Error):{doc}
-    log_level = {log_level}
-"""
-
-INIT = """\
-    def __init__({args}):
-        super().__init__({format}"{desc}")
-"""
-
 INDENT = ' ' * 4
 
+CLASS = """
 
-def main():
-    with open('README.md', 'r') as readme:
-        lines = readme.readlines()
-        for line in lines:
-            if line.startswith('## Error Table'):
-                break
-        print('from .base import BaseError\n')
-        stack = {}
-        started = False
-        for line in lines:
-            if not started:
-                started = line.startswith('---:|')
-                continue
-            if not line:
-                break
-            parent = 'Base'
-            h, log_level, code, desc = [c.strip() for c in line.split('|')]
-            comment = ""
-            if '--' in desc:
-                desc, comment = [s.strip() for s in desc.split('--')]
-            log_level += "0"
-            if h.startswith('**'):
-                if h.count('x') == 1:
-                    parent = stack[h[2:3]][0]
-                stack[h.replace('**', '').replace('x', '')] = (code, desc)
-                if h.count('x') == 2:
-                    stack[h.replace('**', '').replace('x', '')+'0'] = (code, desc)
-                comment = f'\n{INDENT}"""\n{indent(fill(comment or desc, 100), INDENT)}\n{INDENT}"""'
-                print(CLASS.format(name=code, parent=parent, doc=comment, log_level=log_level))
-                continue
-            parent = stack[h[:2]][0]
-            args = ['self']
-            for arg in re.findall('{([a-z0-1]+)}', desc):
-                args.append(arg)
-            fmt = ""
-            if len(args) > 1:
-                fmt = "f"
-            if comment:
-                comment = f'\n{INDENT}"""\n{indent(fill(comment, 100), INDENT)}\n{INDENT}"""'
-            print((CLASS+INIT).format(
-                name=code, parent=parent, args=', '.join(args), log_level=log_level,
-                desc=desc, doc=comment, format=fmt
+class {name}({parents}):{doc}
+"""
+
+INIT = """
+    def __init__({args}):
+        super().__init__({format}"{message}")
+"""
+
+
+class ErrorClass:
+
+    def __init__(self, hierarchy, name, message):
+        self.hierarchy = hierarchy.replace('**', '')
+        self.other_parents = []
+        if '(' in name:
+            assert ')' in name, f"Missing closing parenthesis in '{name}'."
+            self.other_parents = name[name.find('(')+1:name.find(')')].split(',')
+            name = name[:name.find('(')]
+        self.name = name
+        self.class_name = name+'Error'
+        self.message = message
+        self.comment = ""
+        if '--' in message:
+            self.message, self.comment = message.split('--')
+        self.message = self.message.strip()
+        self.comment = self.comment.strip()
+
+    @property
+    def is_leaf(self):
+        return 'x' not in self.hierarchy
+
+    @property
+    def code(self):
+        return self.hierarchy.replace('x', '')
+
+    @property
+    def parent_codes(self):
+        return self.hierarchy[0:2], self.hierarchy[0]
+
+    def get_arguments(self):
+        args = ['self']
+        for arg in re.findall('{([a-z0-1]+)}', self.message):
+            args.append(arg)
+        return args
+
+    def get_doc_string(self, doc):
+        if doc:
+            return f'\n{INDENT}"""\n{indent(fill(doc, 100), INDENT)}\n{INDENT}"""'
+        return ""
+
+    def render(self, out, parent):
+        if not parent:
+            parents = ['BaseError']
+        else:
+            parents = [parent.class_name]
+        parents += self.other_parents
+        args = self.get_arguments()
+        if self.is_leaf:
+            out.write((CLASS + INIT).format(
+                name=self.class_name, parents=', '.join(parents), args=', '.join(args),
+                message=self.message, doc=self.get_doc_string(self.comment), format='f' if len(args) > 1 else ''
+            ))
+        else:
+            out.write(CLASS.format(
+                name=self.class_name, parents=', '.join(parents),
+                doc=self.get_doc_string(self.comment or self.message)
             ))
 
 
+def error_rows(lines):
+    lines = iter(lines)
+    for line in lines:
+        if line.startswith('## Exceptions Table'):
+            break
+    for line in lines:
+        if line.startswith('---:|'):
+            break
+    for line in lines:
+        if not line:
+            break
+        yield line
+
+
+def find_parent(stack, child):
+    for parent_code in child.parent_codes:
+        parent = stack.get(parent_code)
+        if parent:
+            return parent
+
+
+def main(out):
+    with open('README.md', 'r') as readme:
+        lines = readme.readlines()
+        out.write('from .base import BaseError\n')
+        stack = {}
+        for row in error_rows(lines):
+            error = ErrorClass(*[c.strip() for c in row.split('|')])
+            error.render(out, find_parent(stack, error))
+            if not error.is_leaf:
+                assert error.code not in stack, f"Duplicate code: {error.code}"
+                stack[error.code] = error
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    main(sys.stdout)
