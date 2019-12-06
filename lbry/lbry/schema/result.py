@@ -43,8 +43,6 @@ class Outputs:
                 'support_amount': claim.support_amount,
                 'trending_group': claim.trending_group,
                 'trending_mixed': claim.trending_mixed,
-                'trending_local': claim.trending_local,
-                'trending_global': claim.trending_global,
             }
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
@@ -116,8 +114,6 @@ class Outputs:
         txo_message.claim.support_amount = txo['support_amount']
         txo_message.claim.trending_group = txo['trending_group']
         txo_message.claim.trending_mixed = txo['trending_mixed']
-        txo_message.claim.trending_local = txo['trending_local']
-        txo_message.claim.trending_global = txo['trending_global']
         cls.set_reference(txo_message, 'channel', txo['channel_hash'], extra_txo_rows)
         cls.set_reference(txo_message, 'repost', txo['reposted_claim_hash'], extra_txo_rows)
 
