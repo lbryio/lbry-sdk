@@ -13,7 +13,7 @@ from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import MainNetLedger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
-from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH
+from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
 from lbry.wallet.server.db.trending import (
     calculate_trending
 )
@@ -22,6 +22,7 @@ from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
+sqlite3.enable_callback_tracebacks(True)
 
 
 class SQLDB:
@@ -55,12 +56,16 @@ class SQLDB:
             description text,
 
             claim_type integer,
+            reposted integer default 0,
 
             -- streams
             stream_type text,
             media_type text,
             fee_amount integer default 0,
             fee_currency text,
+
+            -- reposts
+            reposted_claim_hash bytes,
 
             -- claims which are channels
             public_key_bytes bytes,
@@ -163,6 +168,7 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = MainNetLedger if self.main.coin.NET == 'mainnet' else RegTestLedger
+        self._fts_synced = False
 
     def open(self):
         self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False, uri=True)
@@ -266,6 +272,8 @@ class SQLDB:
                         claim_record['fee_currency'] = fee.currency.lower()
                     if isinstance(fee.amount, Decimal):
                         claim_record['fee_amount'] = int(fee.amount*1000)
+            elif claim.is_repost:
+                claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
@@ -289,12 +297,12 @@ class SQLDB:
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp,
-                    fee_currency, fee_amount, title, description, author, height,
+                    fee_currency, fee_amount, title, description, author, height, reposted_claim_hash,
                     creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
                     :claim_type, :media_type, :stream_type, :timestamp, :timestamp,
-                    :fee_currency, :fee_amount, :title, :description, :author, :height, :height,
+                    :fee_currency, :fee_amount, :title, :description, :author, :height, :reposted_claim_hash, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
                     CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
@@ -312,7 +320,7 @@ class SQLDB:
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
                     timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency,
-                    title=:title, description=:description, author=:author,
+                    title=:title, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
                 """, claims)
@@ -372,6 +380,25 @@ class SQLDB:
             self.execute(*self._delete_sql(
                 'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
             ))
+
+    def calculate_reposts(self, txos: List[Output]):
+        targets = set()
+        for txo in txos:
+            try:
+                claim = txo.claim
+            except:
+                continue
+            if claim.is_repost:
+                targets.add((claim.repost.reference.claim_hash,))
+        if targets:
+            self.db.executemany(
+                """
+                UPDATE claim SET reposted = (
+                    SELECT count(*) FROM claim AS repost WHERE repost.reposted_claim_hash = claim.claim_hash
+                )
+                WHERE claim_hash = ?
+                """, targets
+            )
 
     def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:
@@ -656,7 +683,7 @@ class SQLDB:
         body_timer = timer.add_timer('body')
         for position, (etx, txid) in enumerate(all_txs):
             tx = timer.run(
-                Transaction, etx.serialize(), height=height, position=position
+                Transaction, etx.raw, height=height, position=position
             )
             # Inputs
             spent_claims, spent_supports, spent_others = timer.run(
@@ -700,22 +727,26 @@ class SQLDB:
 
         r = timer.run
         r(update_full_text_search, 'before-delete',
-          delete_claim_hashes, self.db, height, daemon_height, self.main.first_sync)
+          delete_claim_hashes, self.db, self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
+        r(self.calculate_reposts, insert_claims)
         r(update_full_text_search, 'after-insert',
-          [txo.claim_hash for txo in insert_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in insert_claims], self.db, self.main.first_sync)
         r(update_full_text_search, 'before-update',
-          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
         r(self.update_claims, update_claims, header)
         r(update_full_text_search, 'after-update',
-          [txo.claim_hash for txo in update_claims], self.db, height, daemon_height, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         r(calculate_trending, self.db, height, daemon_height)
+        if not self._fts_synced and self.main.first_sync and height == daemon_height:
+            r(first_sync_finished, self.db)
+            self._fts_synced = True
 
 
 class LBRYDB(DB):
@@ -732,3 +763,4 @@ class LBRYDB(DB):
     async def _open_dbs(self, *args, **kwargs):
         await super()._open_dbs(*args, **kwargs)
         self.sql.open()
+
