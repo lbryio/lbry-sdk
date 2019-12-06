@@ -74,7 +74,7 @@ def calculate_trending(db, height, final_height):
 
     # I'm using the original column names
     # trending_mixed = my trending score
-    f.write("Calculating AR trending at block {h}.\n")
+    f.write("Calculating AR trending at block {h}.\n".format(h=height))
     f.flush()
     f.write("    Length of trending data = {l}.\n".format(l=len(trending_data.claims)))
     f.flush()
