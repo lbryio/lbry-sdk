@@ -49,7 +49,7 @@ class TrendingData:
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [0.0, 0.0, False]
+            old_data = [0, 0.0, False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
@@ -65,22 +65,24 @@ f.close()
 
 def calculate_trending(db, height, final_height):
 
+    f = open("trending.log", "a")
+    f.write("Calculating AR trending at block {h}.\n".format(h=height))
+    f.flush()
 
-    if height < final_height - 5:
+    if height < final_height - 5*half_life:
+        f.close()
         return
 
     start = time.time()
-    f = open("trending.log", "a")
+
 
     # I'm using the original column names
     # trending_mixed = my trending score
-    f.write("Calculating AR trending at block {h}.\n".format(h=height))
-    f.flush()
     f.write("    Length of trending data = {l}.\n".format(l=len(trending_data.claims)))
     f.flush()
 
     # Update all claims from db
-    f.write("    Reading all total_amounts from db and updating trending scores...")
+    f.write("    Reading all total_amounts from db and updating trending scores in RAM...")
     f.flush()
     time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
@@ -114,7 +116,11 @@ def calculate_trending(db, height, final_height):
         keys = trending_data.claims.keys()
         for key in keys:
             if trending_data.claims[key][2]:
-                the_list.append((int(trending_data.claims[key][1]*10000), key))
+                the_list.append((trending_data.claims[key][1], key))
+                trending_data.claims[key][2] = False
+        f.write("{n} scores to update...".format(n=len(the_list)))
+        f.flush()
+
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
         f.write("done.\n")
@@ -122,7 +128,7 @@ def calculate_trending(db, height, final_height):
 
     # Mark claims as not having changed
     if height % renorm_interval == 0:
-        f.write("    Marking claims as unchanged...")
+        f.write("    Marking all claims as unchanged...")
         f.flush()
 
         keys = trending_data.claims.keys()
