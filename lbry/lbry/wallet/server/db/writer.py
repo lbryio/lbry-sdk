@@ -1,8 +1,9 @@
 import os
-import sqlite3
+import apsw
 from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
+from collections import namedtuple
 
 from torba.server.db import DB
 from torba.server.util import class_logger
@@ -22,7 +23,6 @@ from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
-sqlite3.enable_callback_tracebacks(True)
 
 
 class SQLDB:
@@ -158,7 +158,6 @@ class SQLDB:
     )
 
     CREATE_TABLES_QUERY = (
-        PRAGMAS +
         CREATE_CLAIM_TABLE +
         CREATE_TREND_TABLE +
         CREATE_FULL_TEXT_SEARCH +
@@ -176,14 +175,26 @@ class SQLDB:
         self._fts_synced = False
 
     def open(self):
-        self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False, uri=True)
-        self.db.row_factory = sqlite3.Row
-        self.db.executescript(self.CREATE_TABLES_QUERY)
+        self.db = apsw.Connection(
+            self._db_path,
+            flags=(
+                apsw.SQLITE_OPEN_READWRITE |
+                apsw.SQLITE_OPEN_CREATE |
+                apsw.SQLITE_OPEN_URI
+            )
+        )
+        def exec_factory(cursor, statement, bindings):
+            tpl = namedtuple('row', (d[0] for d in cursor.getdescription()))
+            cursor.setrowtrace(lambda cursor, row: tpl(*row))
+            return True
+        self.db.setexectrace(exec_factory)
+        self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
         register_trending_functions(self.db)
 
     def close(self):
-        self.db.close()
+        if self.db is not None:
+            self.db.close()
 
     @staticmethod
     def _insert_sql(table: str, data: dict) -> Tuple[str, list]:
@@ -213,7 +224,10 @@ class SQLDB:
         return f"DELETE FROM {table} WHERE {where}", values
 
     def execute(self, *args):
-        return self.db.execute(*args)
+        return self.db.cursor().execute(*args)
+
+    def executemany(self, *args):
+        return self.db.cursor().executemany(*args)
 
     def begin(self):
         self.execute('begin;')
@@ -222,7 +236,7 @@ class SQLDB:
         self.execute('commit;')
 
     def _upsertable_claims(self, txos: List[Output], header, clear_first=False):
-        claim_hashes, claims, tags = [], [], {}
+        claim_hashes, claims, tags = set(), [], {}
         for txo in txos:
             tx = txo.tx_ref.tx
 
@@ -233,14 +247,14 @@ class SQLDB:
                 #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
                 continue
 
-            claim_hash = sqlite3.Binary(txo.claim_hash)
-            claim_hashes.append(claim_hash)
+            claim_hash = txo.claim_hash
+            claim_hashes.add(claim_hash)
             claim_record = {
                 'claim_hash': claim_hash,
                 'claim_id': txo.claim_id,
                 'claim_name': txo.claim_name,
                 'normalized': txo.normalized_name,
-                'txo_hash': sqlite3.Binary(txo.ref.hash),
+                'txo_hash': txo.ref.hash,
                 'tx_position': tx.position,
                 'amount': txo.amount,
                 'timestamp': header['timestamp'],
@@ -291,7 +305,7 @@ class SQLDB:
             self._clear_claim_metadata(claim_hashes)
 
         if tags:
-            self.db.executemany(
+            self.executemany(
                 "INSERT OR IGNORE INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags.values()
             )
 
@@ -300,7 +314,7 @@ class SQLDB:
     def insert_claims(self, txos: List[Output], header):
         claims = self._upsertable_claims(txos, header)
         if claims:
-            self.db.executemany("""
+            self.executemany("""
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp,
@@ -322,7 +336,7 @@ class SQLDB:
     def update_claims(self, txos: List[Output], header):
         claims = self._upsertable_claims(txos, header, clear_first=True)
         if claims:
-            self.db.executemany("""
+            self.executemany("""
                 UPDATE claim SET
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
@@ -335,35 +349,32 @@ class SQLDB:
     def delete_claims(self, claim_hashes: Set[bytes]):
         """ Deletes claim supports and from claimtrie in case of an abandon. """
         if claim_hashes:
-            binary_claim_hashes = [sqlite3.Binary(claim_hash) for claim_hash in claim_hashes]
             affected_channels = self.execute(*query(
-                "SELECT channel_hash FROM claim", channel_hash__is_not_null=1, claim_hash__in=binary_claim_hashes
+                "SELECT channel_hash FROM claim", channel_hash__is_not_null=1, claim_hash__in=claim_hashes
             )).fetchall()
             for table in ('claim', 'support', 'claimtrie'):
-                self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
-            self._clear_claim_metadata(binary_claim_hashes)
-            return {r['channel_hash'] for r in affected_channels}
+                self.execute(*self._delete_sql(table, {'claim_hash__in': claim_hashes}))
+            self._clear_claim_metadata(claim_hashes)
+            return {r.channel_hash for r in affected_channels}
         return set()
 
-    def _clear_claim_metadata(self, binary_claim_hashes: List[sqlite3.Binary]):
-        if binary_claim_hashes:
+    def _clear_claim_metadata(self, claim_hashes: Set[bytes]):
+        if claim_hashes:
             for table in ('tag',):  # 'language', 'location', etc
-                self.execute(*self._delete_sql(table, {'claim_hash__in': binary_claim_hashes}))
+                self.execute(*self._delete_sql(table, {'claim_hash__in': claim_hashes}))
 
     def split_inputs_into_claims_supports_and_other(self, txis):
         txo_hashes = {txi.txo_ref.hash for txi in txis}
         claims = self.execute(*query(
-            "SELECT txo_hash, claim_hash, normalized FROM claim",
-            txo_hash__in=[sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]
+            "SELECT txo_hash, claim_hash, normalized FROM claim", txo_hash__in=txo_hashes
         )).fetchall()
-        txo_hashes -= {r['txo_hash'] for r in claims}
+        txo_hashes -= {r.txo_hash for r in claims}
         supports = {}
         if txo_hashes:
             supports = self.execute(*query(
-                "SELECT txo_hash, claim_hash FROM support",
-                txo_hash__in=[sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]
+                "SELECT txo_hash, claim_hash FROM support", txo_hash__in=txo_hashes
             )).fetchall()
-            txo_hashes -= {r['txo_hash'] for r in supports}
+            txo_hashes -= {r.txo_hash for r in supports}
         return claims, supports, txo_hashes
 
     def insert_supports(self, txos: List[Output]):
@@ -371,11 +382,11 @@ class SQLDB:
         for txo in txos:
             tx = txo.tx_ref.tx
             supports.append((
-                sqlite3.Binary(txo.ref.hash), tx.position, tx.height,
-                sqlite3.Binary(txo.claim_hash), txo.amount
+                txo.ref.hash, tx.position, tx.height,
+                txo.claim_hash, txo.amount
             ))
         if supports:
-            self.db.executemany(
+            self.executemany(
                 "INSERT OR IGNORE INTO support ("
                 "   txo_hash, tx_position, height, claim_hash, amount"
                 ") "
@@ -384,9 +395,7 @@ class SQLDB:
 
     def delete_supports(self, txo_hashes: Set[bytes]):
         if txo_hashes:
-            self.execute(*self._delete_sql(
-                'support', {'txo_hash__in': [sqlite3.Binary(txo_hash) for txo_hash in txo_hashes]}
-            ))
+            self.execute(*self._delete_sql('support', {'txo_hash__in': txo_hashes}))
 
     def calculate_reposts(self, txos: List[Output]):
         targets = set()
@@ -398,7 +407,7 @@ class SQLDB:
             if claim.is_repost:
                 targets.add((claim.repost.reference.claim_hash,))
         if targets:
-            self.db.executemany(
+            self.executemany(
                 """
                 UPDATE claim SET reposted = (
                     SELECT count(*) FROM claim AS repost WHERE repost.reposted_claim_hash = claim.claim_hash
@@ -441,10 +450,7 @@ class SQLDB:
         if new_channel_keys or missing_channel_keys or affected_channels:
             all_channel_keys = dict(self.execute(*query(
                 "SELECT claim_hash, public_key_bytes FROM claim",
-                claim_hash__in=[
-                    sqlite3.Binary(channel_hash) for channel_hash in
-                    set(new_channel_keys) | missing_channel_keys | affected_channels
-                ]
+                claim_hash__in=set(new_channel_keys) | missing_channel_keys | affected_channels
             )))
         sub_timer.stop()
 
@@ -461,7 +467,7 @@ class SQLDB:
         for claim_hash, txo in signables.items():
             claim = txo.claim
             update = {
-                'claim_hash': sqlite3.Binary(claim_hash),
+                'claim_hash': claim_hash,
                 'channel_hash': None,
                 'signature': None,
                 'signature_digest': None,
@@ -469,9 +475,9 @@ class SQLDB:
             }
             if claim.is_signed:
                 update.update({
-                    'channel_hash': sqlite3.Binary(claim.signing_channel_hash),
-                    'signature': sqlite3.Binary(txo.get_encoded_signature()),
-                    'signature_digest': sqlite3.Binary(txo.get_signature_digest(self.ledger)),
+                    'channel_hash': claim.signing_channel_hash,
+                    'signature': txo.get_encoded_signature(),
+                    'signature_digest': txo.get_signature_digest(self.ledger),
                     'signature_valid': 0
                 })
             claim_updates.append(update)
@@ -485,13 +491,13 @@ class SQLDB:
                 channel_hash IN ({','.join('?' for _ in changed_channel_keys)}) AND
                 signature IS NOT NULL
             """
-            for affected_claim in self.execute(sql, [sqlite3.Binary(h) for h in changed_channel_keys]):
-                if affected_claim['claim_hash'] not in signables:
+            for affected_claim in self.execute(sql, changed_channel_keys):
+                if affected_claim.claim_hash not in signables:
                     claim_updates.append({
-                        'claim_hash': sqlite3.Binary(affected_claim['claim_hash']),
-                        'channel_hash': sqlite3.Binary(affected_claim['channel_hash']),
-                        'signature': sqlite3.Binary(affected_claim['signature']),
-                        'signature_digest': sqlite3.Binary(affected_claim['signature_digest']),
+                        'claim_hash': affected_claim.claim_hash,
+                        'channel_hash': affected_claim.channel_hash,
+                        'signature': affected_claim.signature,
+                        'signature_digest': affected_claim.signature_digest,
                         'signature_valid': 0
                     })
         sub_timer.stop()
@@ -509,7 +515,7 @@ class SQLDB:
         sub_timer = timer.add_timer('update claims')
         sub_timer.start()
         if claim_updates:
-            self.db.executemany(f"""
+            self.executemany(f"""
                 UPDATE claim SET 
                     channel_hash=:channel_hash, signature=:signature, signature_digest=:signature_digest,
                     signature_valid=:signature_valid,
@@ -542,24 +548,24 @@ class SQLDB:
                     signature_valid=CASE WHEN signature IS NOT NULL THEN 0 END,
                     channel_join=NULL, canonical_url=NULL
                 WHERE channel_hash IN ({','.join('?' for _ in spent_claims)})
-                """, [sqlite3.Binary(cid) for cid in spent_claims]
+                """, spent_claims
             )
         sub_timer.stop()
 
         sub_timer = timer.add_timer('update channels')
         sub_timer.start()
         if channels:
-            self.db.executemany(
+            self.executemany(
                 """
                 UPDATE claim SET
                     public_key_bytes=:public_key_bytes,
                     public_key_hash=:public_key_hash
                 WHERE claim_hash=:claim_hash""", [{
-                    'claim_hash': sqlite3.Binary(claim_hash),
-                    'public_key_bytes': sqlite3.Binary(txo.claim.channel.public_key_bytes),
-                    'public_key_hash': sqlite3.Binary(
-                        self.ledger.address_to_hash160(
-                            self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)))
+                    'claim_hash': claim_hash,
+                    'public_key_bytes': txo.claim.channel.public_key_bytes,
+                    'public_key_hash': self.ledger.address_to_hash160(
+                            self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)
+                    )
                 } for claim_hash, txo in channels.items()]
             )
         sub_timer.stop()
@@ -567,7 +573,7 @@ class SQLDB:
         sub_timer = timer.add_timer('update claims_in_channel counts')
         sub_timer.start()
         if all_channel_keys:
-            self.db.executemany(f"""
+            self.executemany(f"""
                 UPDATE claim SET
                     claims_in_channel=(
                         SELECT COUNT(*) FROM claim AS claim_in_channel
@@ -575,7 +581,7 @@ class SQLDB:
                               claim_in_channel.channel_hash=claim.claim_hash
                     )
                 WHERE claim_hash = ?
-            """, [(sqlite3.Binary(channel_hash),) for channel_hash in all_channel_keys.keys()])
+            """, [(channel_hash,) for channel_hash in all_channel_keys.keys()])
         sub_timer.stop()
 
     def _update_support_amount(self, claim_hashes):
@@ -623,7 +629,7 @@ class SQLDB:
         overtakes = self.execute(f"""
             SELECT winner.normalized, winner.claim_hash,
                    claimtrie.claim_hash AS current_winner,
-                   MAX(winner.effective_amount)
+                   MAX(winner.effective_amount) AS max_winner_effective_amount
             FROM (
                 SELECT normalized, claim_hash, effective_amount FROM claim
                 WHERE normalized IN (
@@ -635,22 +641,22 @@ class SQLDB:
             HAVING current_winner IS NULL OR current_winner <> winner.claim_hash
         """, changed_claim_hashes+deleted_names)
         for overtake in overtakes:
-            if overtake['current_winner']:
+            if overtake.current_winner:
                 self.execute(
                     f"UPDATE claimtrie SET claim_hash = ?, last_take_over_height = {height} "
                     f"WHERE normalized = ?",
-                    (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
+                    (overtake.claim_hash, overtake.normalized)
                 )
             else:
                 self.execute(
                     f"INSERT INTO claimtrie (claim_hash, normalized, last_take_over_height) "
                     f"VALUES (?, ?, {height})",
-                    (sqlite3.Binary(overtake['claim_hash']), overtake['normalized'])
+                    (overtake.claim_hash, overtake.normalized)
                 )
             self.execute(
                 f"UPDATE claim SET activation_height = {height} WHERE normalized = ? "
                 f"AND (activation_height IS NULL OR activation_height > {height})",
-                (overtake['normalized'],)
+                (overtake.normalized,)
             )
 
     def _copy(self, height):
@@ -660,15 +666,12 @@ class SQLDB:
 
     def update_claimtrie(self, height, changed_claim_hashes, deleted_names, timer):
         r = timer.run
-        binary_claim_hashes = [
-            sqlite3.Binary(claim_hash) for claim_hash in changed_claim_hashes
-        ]
 
         r(self._calculate_activation_height, height)
-        r(self._update_support_amount, binary_claim_hashes)
+        r(self._update_support_amount, changed_claim_hashes)
 
-        r(self._update_effective_amount, height, binary_claim_hashes)
-        r(self._perform_overtake, height, binary_claim_hashes, list(deleted_names))
+        r(self._update_effective_amount, height, changed_claim_hashes)
+        r(self._perform_overtake, height, changed_claim_hashes, list(deleted_names))
 
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])
@@ -697,10 +700,10 @@ class SQLDB:
                 self.split_inputs_into_claims_supports_and_other, tx.inputs
             )
             body_timer.start()
-            delete_claim_hashes.update({r['claim_hash'] for r in spent_claims})
-            deleted_claim_names.update({r['normalized'] for r in spent_claims})
-            delete_support_txo_hashes.update({r['txo_hash'] for r in spent_supports})
-            recalculate_claim_hashes.update({r['claim_hash'] for r in spent_supports})
+            delete_claim_hashes.update({r.claim_hash for r in spent_claims})
+            deleted_claim_names.update({r.normalized for r in spent_claims})
+            delete_support_txo_hashes.update({r.txo_hash for r in spent_supports})
+            recalculate_claim_hashes.update({r.claim_hash for r in spent_supports})
             delete_others.update(spent_others)
             # Outputs
             for output in tx.outputs:
@@ -728,31 +731,31 @@ class SQLDB:
         expire_timer = timer.add_timer('recording expired claims')
         expire_timer.start()
         for expired in self.get_expiring(height):
-            delete_claim_hashes.add(expired['claim_hash'])
-            deleted_claim_names.add(expired['normalized'])
+            delete_claim_hashes.add(expired.claim_hash)
+            deleted_claim_names.add(expired.normalized)
         expire_timer.stop()
 
         r = timer.run
         r(update_full_text_search, 'before-delete',
-          delete_claim_hashes, self.db, self.main.first_sync)
+          delete_claim_hashes, self.db.cursor(), self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.calculate_reposts, insert_claims)
         r(update_full_text_search, 'after-insert',
-          [txo.claim_hash for txo in insert_claims], self.db, self.main.first_sync)
+          [txo.claim_hash for txo in insert_claims], self.db.cursor(), self.main.first_sync)
         r(update_full_text_search, 'before-update',
-          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
         r(self.update_claims, update_claims, header)
         r(update_full_text_search, 'after-update',
-          [txo.claim_hash for txo in update_claims], self.db, self.main.first_sync)
+          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
-        r(calculate_trending, self.db, height, daemon_height)
+        r(calculate_trending, self.db.cursor(), height, daemon_height)
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
-            r(first_sync_finished, self.db)
+            r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
 
 

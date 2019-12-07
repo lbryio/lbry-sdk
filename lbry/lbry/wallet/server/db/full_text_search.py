@@ -1,4 +1,3 @@
-import sqlite3
 from torba.client.basedatabase import constraints_to_sql
 
 CREATE_FULL_TEXT_SEARCH = """
@@ -26,9 +25,7 @@ def fts_action_sql(claims=None, action='insert'):
 
     where, values = "", {}
     if claims:
-        where, values = constraints_to_sql({
-            'claim.claim_hash__in': [sqlite3.Binary(claim_hash) for claim_hash in claims]
-        })
+        where, values = constraints_to_sql({'claim.claim_hash__in': claims})
         where = 'WHERE '+where
 
     return f"""
