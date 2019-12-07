@@ -53,8 +53,8 @@ class TrendingData:
 
         change = total_amount - old_data[0]
         if change != 0.0:
-            old_data[1] += soften(1E-8*time_boost*change)
-            self.claims[claim_id] = [total_amount, old_data[1], True]
+            trending_score = old_data[1] + soften(1E-8*time_boost*change)
+            self.claims[claim_id] = [total_amount, trending_score, True]
 
 
 # One global instance
@@ -66,15 +66,18 @@ f.close()
 def calculate_trending(db, height, final_height):
 
     f = open("trending.log", "a")
-    f.write("Calculating AR trending at block {h}.\n".format(h=height))
-    f.flush()
 
     if height < final_height - 5*half_life:
+        if height % 100 == 0:
+            f.write("Skipping AR trending at block {h}.\n".format(h=height))
+            f.flush()
         f.close()
         return
 
     start = time.time()
 
+    f.write("Calculating AR trending at block {h}.\n".format(h=height))
+    f.flush()
 
     # I'm using the original column names
     # trending_mixed = my trending score
