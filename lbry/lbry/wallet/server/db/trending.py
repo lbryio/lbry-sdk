@@ -49,7 +49,7 @@ class TrendingData:
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [0, 0.0, False]
+            old_data = [total_amount, 0.0, False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
@@ -67,7 +67,7 @@ def calculate_trending(db, height, final_height):
 
     f = open("trending.log", "a")
 
-    if height < final_height - 2*half_life:
+    if height < final_height - 100:# 2*half_life:
         if height % 100 == 0:
             f.write("Skipping AR trending at block {h}.\n".format(h=height))
             f.flush()
