@@ -1,4 +1,7 @@
 import re
+import sys
+import argparse
+from pathlib import Path
 from textwrap import fill, indent
 
 
@@ -75,18 +78,19 @@ class ErrorClass:
             ))
 
 
-def error_rows(lines):
-    lines = iter(lines)
-    for line in lines:
-        if line.startswith('## Exceptions Table'):
-            break
-    for line in lines:
-        if line.startswith('---:|'):
-            break
-    for line in lines:
-        if not line:
-            break
-        yield line
+def get_errors():
+    with open('README.md', 'r') as readme:
+        lines = iter(readme.readlines())
+        for line in lines:
+            if line.startswith('## Exceptions Table'):
+                break
+        for line in lines:
+            if line.startswith('---:|'):
+                break
+        for line in lines:
+            if not line:
+                break
+            yield ErrorClass(*[c.strip() for c in line.split('|')])
 
 
 def find_parent(stack, child):
@@ -96,19 +100,50 @@ def find_parent(stack, child):
             return parent
 
 
-def main(out):
-    with open('README.md', 'r') as readme:
-        lines = readme.readlines()
-        out.write('from .base import BaseError\n')
-        stack = {}
-        for row in error_rows(lines):
-            error = ErrorClass(*[c.strip() for c in row.split('|')])
-            error.render(out, find_parent(stack, error))
-            if not error.is_leaf:
-                assert error.code not in stack, f"Duplicate code: {error.code}"
-                stack[error.code] = error
+def generate(out):
+    out.write('from .base import BaseError\n')
+    stack = {}
+    for error in get_errors():
+        error.render(out, find_parent(stack, error))
+        if not error.is_leaf:
+            assert error.code not in stack, f"Duplicate code: {error.code}"
+            stack[error.code] = error
+
+
+def analyze():
+    errors = {e.class_name: [] for e in get_errors() if e.is_leaf}
+    here = Path(__file__).absolute().parents[0]
+    module = here.parent
+    for file_path in module.glob('**/*.py'):
+        if here in file_path.parents:
+            continue
+        with open(file_path) as src_file:
+            src = src_file.read()
+            for error in errors.keys():
+                found = src.count(error)
+                if found > 0:
+                    errors[error].append((file_path, found))
+
+    print('Unused Errors:\n')
+    for error, used in errors.items():
+        if used:
+            print(f' - {error}')
+            for use in used:
+                print(f'   {use[0].relative_to(module.parent)} {use[1]}')
+            print('')
+
+    print('')
+    print('Unused Errors:')
+    for error, used in errors.items():
+        if not used:
+            print(f' - {error}')
 
 
 if __name__ == "__main__":
-    import sys
-    main(sys.stdout)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("action", choices=['generate', 'analyze'])
+    args = parser.parse_args()
+    if args.action == "analyze":
+        analyze()
+    elif args.action == "generate":
+        generate(sys.stdout)
