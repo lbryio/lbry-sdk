@@ -197,6 +197,12 @@ class KeyFeeAboveMaxAllowedError(WalletError):
         super().__init__(f"{message}")
 
 
+class InvalidPasswordError(WalletError):
+
+    def __init__(self):
+        super().__init__("Password is invalid.")
+
+
 class BlobError(BaseError):
     """
     **Blobs**

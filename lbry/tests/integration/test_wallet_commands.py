@@ -4,6 +4,7 @@ import json
 from torba.client.wallet import ENCRYPT_ON_DISK
 from lbry.testcase import CommandTestCase
 from lbry.wallet.dewies import dict_values_to_lbc
+from lbry.error import InvalidPasswordError
 
 
 class WalletCommands(CommandTestCase):
@@ -303,7 +304,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         # sync_apply doesn't save password if encrypt-on-disk is False
         self.assertEqual(wallet2.encryption_password, None)
         # need to use new password2 in sync_apply
-        with self.assertRaises(ValueError):  # wrong password
+        with self.assertRaises(InvalidPasswordError):
             await daemon.jsonrpc_sync_apply('password', data=data['data'], blocking=True)
         await daemon.jsonrpc_sync_apply('password2', data=data['data'], blocking=True)
         # sync_apply with new password2 also sets it as new local password

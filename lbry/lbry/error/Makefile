@@ -1,2 +1,5 @@
 generate:
-	python generate.py > __init__.py
+	python generate.py generate > __init__.py
+
+analyze:
+	python generate.py analyze
