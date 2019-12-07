@@ -491,7 +491,7 @@ class SQLDB:
                 channel_hash IN ({','.join('?' for _ in changed_channel_keys)}) AND
                 signature IS NOT NULL
             """
-            for affected_claim in self.execute(sql, changed_channel_keys):
+            for affected_claim in self.execute(sql, changed_channel_keys.keys()):
                 if affected_claim.claim_hash not in signables:
                     claim_updates.append({
                         'claim_hash': affected_claim.claim_hash,
@@ -639,7 +639,7 @@ class SQLDB:
             ) AS winner LEFT JOIN claimtrie USING (normalized)
             GROUP BY winner.normalized
             HAVING current_winner IS NULL OR current_winner <> winner.claim_hash
-        """, changed_claim_hashes+deleted_names)
+        """, list(changed_claim_hashes)+deleted_names)
         for overtake in overtakes:
             if overtake.current_winner:
                 self.execute(
