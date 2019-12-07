@@ -14,8 +14,13 @@ class FindShortestID:
                 break
 
     def finalize(self):
-        return '#'+self.short_id
+        if self.short_id:
+            return '#'+self.short_id
+
+    @classmethod
+    def factory(cls):
+        return cls(), cls.step, cls.finalize
 
 
 def register_canonical_functions(connection):
-    connection.create_aggregate("shortest_id", 2, FindShortestID)
+    connection.createaggregatefunction("shortest_id", FindShortestID.factory, 2)

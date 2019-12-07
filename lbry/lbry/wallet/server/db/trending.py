@@ -47,9 +47,13 @@ class ZScore:
             return self.last
         return (self.last - self.mean) / (self.standard_deviation or 1)
 
+    @classmethod
+    def factory(cls):
+        return cls(), cls.step, cls.finalize
+
 
 def register_trending_functions(connection):
-    connection.create_aggregate("zscore", 1, ZScore)
+    connection.createaggregatefunction("zscore", ZScore.factory, 1)
 
 
 def calculate_trending(db, height, final_height):
@@ -75,8 +79,8 @@ def calculate_trending(db, height, final_height):
     """)
 
     zscore = ZScore()
-    for (global_sum,) in db.execute("SELECT AVG(amount) FROM trend GROUP BY height"):
-        zscore.step(global_sum)
+    for global_sum in db.execute("SELECT AVG(amount) AS avg_amount FROM trend GROUP BY height"):
+        zscore.step(global_sum.avg_amount)
     global_mean, global_deviation = 0, 1
     if zscore.count > 0:
         global_mean = zscore.mean

@@ -1,6 +1,6 @@
 import time
 import struct
-import sqlite3
+import apsw
 import logging
 from operator import itemgetter
 from typing import Tuple, List, Dict, Union, Type, Optional
@@ -21,20 +21,19 @@ from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 from .full_text_search import FTS_ORDER_BY
 
 
-class SQLiteOperationalError(sqlite3.OperationalError):
+class SQLiteOperationalError(apsw.Error):
     def __init__(self, metrics):
         super().__init__('sqlite query errored')
         self.metrics = metrics
 
 
-class SQLiteInterruptedError(sqlite3.OperationalError):
+class SQLiteInterruptedError(apsw.InterruptError):
     def __init__(self, metrics):
         super().__init__('sqlite query interrupted')
         self.metrics = metrics
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
-sqlite3.enable_callback_tracebacks(True)
 
 INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
@@ -62,14 +61,9 @@ ORDER_FIELDS = {
 } | INTEGER_PARAMS
 
 
-PRAGMAS = """
-    pragma journal_mode=WAL;
-"""
-
-
 @dataclass
 class ReaderState:
-    db: sqlite3.Connection
+    db: apsw.Connection
     stack: List[List]
     metrics: Dict
     is_tracking_metrics: bool
@@ -92,15 +86,17 @@ class ReaderState:
                 self.db.interrupt()
             return
 
-        self.db.set_progress_handler(interruptor, 100)
+        self.db.setprogresshandler(interruptor, 100)
 
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
 def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
-    db = sqlite3.connect(_path, isolation_level=None, uri=True)
-    db.row_factory = sqlite3.Row
+    db = apsw.Connection(_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
+    def row_factory(cursor, row):
+        return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
+    db.setrowtrace(row_factory)
     ctx.set(
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
@@ -167,8 +163,8 @@ def execute_query(sql, values) -> List:
     context = ctx.get()
     context.set_query_timeout()
     try:
-        return context.db.execute(sql, values).fetchall()
-    except sqlite3.OperationalError as err:
+        return context.db.cursor().execute(sql, values).fetchall()
+    except apsw.Error as err:
         plain_sql = interpolate(sql, values)
         if context.is_tracking_metrics:
             context.metrics['execute_query'][-1]['sql'] = plain_sql
@@ -231,27 +227,27 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         constraints['claim.claim_id__in'] = constraints.pop('claim_ids')
 
     if 'reposted_claim_id' in constraints:
-        constraints['claim.reposted_claim_hash'] = sqlite3.Binary(unhexlify(constraints.pop('reposted_claim_id'))[::-1])
+        constraints['claim.reposted_claim_hash'] = unhexlify(constraints.pop('reposted_claim_id'))[::-1]
 
     if 'name' in constraints:
         constraints['claim.normalized'] = normalize_name(constraints.pop('name'))
 
     if 'public_key_id' in constraints:
-        constraints['claim.public_key_hash'] = sqlite3.Binary(
+        constraints['claim.public_key_hash'] = (
             ctx.get().ledger.address_to_hash160(constraints.pop('public_key_id')))
     if 'channel_hash' in constraints:
-        constraints['claim.channel_hash'] = sqlite3.Binary(constraints.pop('channel_hash'))
+        constraints['claim.channel_hash'] = constraints.pop('channel_hash')
     if 'channel_ids' in constraints:
         channel_ids = constraints.pop('channel_ids')
         if channel_ids:
             constraints['claim.channel_hash__in'] = [
-                sqlite3.Binary(unhexlify(cid)[::-1]) for cid in channel_ids
+                unhexlify(cid)[::-1] for cid in channel_ids
             ]
     if 'not_channel_ids' in constraints:
         not_channel_ids = constraints.pop('not_channel_ids')
         if not_channel_ids:
             not_channel_ids_binary = [
-                sqlite3.Binary(unhexlify(ncid)[::-1]) for ncid in not_channel_ids
+                unhexlify(ncid)[::-1] for ncid in not_channel_ids
             ]
             if constraints.get('has_channel_signature', False):
                 constraints['claim.channel_hash__not_in'] = not_channel_ids_binary
@@ -264,7 +260,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         blocklist_ids = constraints.pop('blocklist_channel_ids')
         if blocklist_ids:
             blocking_channels = [
-                sqlite3.Binary(unhexlify(channel_id)[::-1]) for channel_id in blocklist_ids
+                unhexlify(channel_id)[::-1] for channel_id in blocklist_ids
             ]
             constraints.update({
                 f'$blocking_channel{i}': a for i, a in enumerate(blocking_channels)
@@ -290,9 +286,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'txid' in constraints:
         tx_hash = unhexlify(constraints.pop('txid'))[::-1]
         nout = constraints.pop('nout', 0)
-        constraints['claim.txo_hash'] = sqlite3.Binary(
-            tx_hash + struct.pack('<I', nout)
-        )
+        constraints['claim.txo_hash'] = tx_hash + struct.pack('<I', nout)
 
     if 'claim_type' in constraints:
         constraints['claim.claim_type'] = CLAIM_TYPES[constraints.pop('claim_type')]
@@ -329,10 +323,10 @@ def get_claims(cols, for_count=False, **constraints) -> List:
     if 'channel' in constraints:
         channel_url = constraints.pop('channel')
         match = resolve_url(channel_url)
-        if isinstance(match, sqlite3.Row):
+        if isinstance(match, dict):
             constraints['channel_hash'] = match['claim_hash']
         else:
-            return [[0]] if cols == 'count(*)' else []
+            return [{'row_count': 0}] if cols == 'count(*) as row_count' else []
     sql, values = _get_claims(cols, for_count, **constraints)
     return execute_query(sql, values)
 
@@ -342,8 +336,8 @@ def get_claims_count(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count = get_claims('count(*)', for_count=True, **constraints)
-    return count[0][0]
+    count = get_claims('count(*) as row_count', for_count=True, **constraints)
+    return count[0]['row_count']
 
 
 def _search(**constraints):
@@ -365,22 +359,18 @@ def _search(**constraints):
     )
 
 
-def _get_referenced_rows(txo_rows: List[sqlite3.Row]):
+def _get_referenced_rows(txo_rows: List[dict]):
     repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
     channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
 
     reposted_txos = []
     if repost_hashes:
-        reposted_txos = _search(
-            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in repost_hashes]}
-        )
+        reposted_txos = _search(**{'claim.claim_hash__in': repost_hashes})
         channel_hashes |= set(filter(None, map(itemgetter('channel_hash'), reposted_txos)))
 
     channel_txos = []
     if channel_hashes:
-        channel_txos = _search(
-            **{'claim.claim_hash__in': [sqlite3.Binary(h) for h in channel_hashes]}
-        )
+        channel_txos = _search(**{'claim.claim_hash__in': channel_hashes})
 
     # channels must come first for client side inflation to work properly
     return channel_txos + reposted_txos
@@ -405,7 +395,7 @@ def search(constraints) -> Tuple[List, List, int, int]:
 @measure
 def resolve(urls) -> Tuple[List, List]:
     txo_rows = [resolve_url(raw_url) for raw_url in urls]
-    extra_txo_rows = _get_referenced_rows([r for r in txo_rows if isinstance(r, sqlite3.Row)])
+    extra_txo_rows = _get_referenced_rows([r for r in txo_rows if isinstance(r, dict)])
     return txo_rows, extra_txo_rows
 
 
