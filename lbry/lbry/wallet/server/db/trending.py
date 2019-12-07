@@ -50,6 +50,7 @@ class TrendingData:
             old_data = self.claims[claim_id]
         else:
             old_data = [total_amount, 0.0, False]
+            self.claims[claim_id] = [total_amount, 0.0, False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
