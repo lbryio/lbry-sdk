@@ -13,9 +13,6 @@ jobs:
 
     - stage: test
       name: "LBRY Unit Tests"
-      before_install:
-        - sudo add-apt-repository -y ppa:jonathonf/backports
-        - sudo apt-get update && sudo apt-get -y install sqlite3
       install:
         - make install
       script:
@@ -24,9 +21,6 @@ jobs:
         - coverage combine lbry/
 
     - name: "LBRY Integration Tests"
-      before_install:
-        - sudo add-apt-repository -y ppa:jonathonf/backports
-        - sudo apt-get update && sudo apt-get -y install sqlite3
       install:
         - pip install coverage tox-travis
         - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
@@ -48,9 +42,6 @@ jobs:
       env: TESTTYPE=integration
 
     - name: "Run Examples"
-      before_install:
-        - sudo add-apt-repository -y ppa:jonathonf/backports
-        - sudo apt-get update && sudo apt-get -y install sqlite3
       install:
         - make install
       script:
@@ -62,9 +53,6 @@ jobs:
       stage: build
       name: "Linux"
       env: OS=linux
-      before_install:
-        - sudo add-apt-repository -y ppa:jonathonf/backports
-        - sudo apt-get update && sudo apt-get -y install sqlite3
       install:
         - pip install pyinstaller awscli
         - python docker/set_build.py
