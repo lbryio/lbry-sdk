@@ -67,7 +67,7 @@ def calculate_trending(db, height, final_height):
 
     f = open("trending.log", "a")
 
-    if height < final_height - 5*half_life:
+    if height < final_height - 2*half_life:
         if height % 100 == 0:
             f.write("Skipping AR trending at block {h}.\n".format(h=height))
             f.flush()
@@ -121,7 +121,7 @@ def calculate_trending(db, height, final_height):
             if trending_data.claims[key][2]:
                 the_list.append((trending_data.claims[key][1], key))
                 trending_data.claims[key][2] = False
-        f.write("{n} scores to update...".format(n=len(the_list)))
+        f.write("{n} scores to write...".format(n=len(the_list)))
         f.flush()
 
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
