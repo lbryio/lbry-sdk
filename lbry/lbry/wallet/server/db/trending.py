@@ -90,7 +90,7 @@ def calculate_trending(db, height, final_height):
     f.flush()
     time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
-                          SELECT claim_id, amount + support_amount, trending_score
+                          SELECT claim_id, amount + support_amount, trending_mixed
                           FROM claim;
                           """):
         trending_data.update_claim(time_boost, row[0], row[1], row[2])
