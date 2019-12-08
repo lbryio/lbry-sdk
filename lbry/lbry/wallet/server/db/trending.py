@@ -41,7 +41,7 @@ class TrendingData:
         self.claims = {}
 
 
-    def update_claim(self, time_boost, claim_id, total_amount):
+    def update_claim(self, time_boost, claim_id, total_amount, trending_score):
         """
         Update trending data for a claim, given its new total amount.
         """
@@ -49,8 +49,8 @@ class TrendingData:
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [total_amount, 0.0, False]
-            self.claims[claim_id] = [total_amount, 0.0, False]
+            old_data = [total_amount, trending_score, False]
+            self.claims[claim_id] = [total_amount, trending_score, False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
@@ -90,10 +90,10 @@ def calculate_trending(db, height, final_height):
     f.flush()
     time_boost = decay**(-(height % renorm_interval))
     for row in db.execute("""
-                          SELECT claim_id, amount, support_amount
+                          SELECT claim_id, amount + support_amount, trending_score
                           FROM claim;
                           """):
-        trending_data.update_claim(time_boost, row[0], row[1] + row[2])
+        trending_data.update_claim(time_boost, row[0], row[1], row[2])
     f.write("done.\n")
     f.flush()
 
