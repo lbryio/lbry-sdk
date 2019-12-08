@@ -2,7 +2,7 @@ from math import sqrt
 import time
 
 # Half life in blocks
-half_life = 576
+half_life = 288
 
 # Decay coefficient per block
 decay = 0.5**(1.0/half_life)
