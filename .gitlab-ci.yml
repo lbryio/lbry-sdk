@@ -20,13 +20,13 @@ stages:
 test:lint:
   stage: test
   script:
-    - make install
+    - make install tools
     - make lint
 
 test:lbry-unit:
   stage: test
   script:
-    - make install
+    - make install tools
     - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
 
@@ -56,7 +56,7 @@ test:torba-integ:
 test:json-api:
   stage: test
   script:
-    - make install
+    - make install tools
     - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
 
 
