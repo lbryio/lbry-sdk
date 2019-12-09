@@ -152,3 +152,29 @@ class PurchaseCommandTests(CommandTestCase):
         files = await self.file_list()
         self.assertEqual(files[0]['claim_id'], files[0]['purchase_receipt']['claim_id'])
         self.assertEqual(files[1]['claim_id'], files[1]['purchase_receipt']['claim_id'])
+
+    async def test_seller_can_spend_received_purchase_funds(self):
+        self.merchant_address = await self.account.receiving.get_or_create_usable_address()
+        daemon2 = await self.add_daemon()
+        address2 = await daemon2.wallet_manager.default_account.receiving.get_or_create_usable_address()
+        sendtxid = await self.blockchain.send_to_address(address2, 2)
+        await self.confirm_tx(sendtxid, daemon2.ledger)
+
+        stream = await self.priced_stream('a', '1.0')
+        await self.assertBalance(self.account, '9.987893')
+        self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 1)
+
+        purchase = await daemon2.jsonrpc_purchase_create(stream.outputs[0].claim_id)
+        await self.ledger.wait(purchase)
+        await self.generate(1)
+        await self.ledger.wait(purchase)
+
+        await self.assertBalance(self.account, '10.987893')
+        self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 2)
+
+        spend = await self.daemon.jsonrpc_wallet_send('10.5', address2)
+        await self.ledger.wait(spend)
+        await self.generate(1)
+        await self.ledger.wait(spend)
+        await self.assertBalance(self.account, '0.487695')
+        self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 1)

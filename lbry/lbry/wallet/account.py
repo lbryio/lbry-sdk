@@ -5,7 +5,7 @@ from hashlib import sha256
 from string import hexdigits
 
 import ecdsa
-from lbry.wallet.constants import CLAIM_TYPES
+from lbry.wallet.constants import CLAIM_TYPES, TXO_TYPES
 
 from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
@@ -83,7 +83,7 @@ class Account(BaseAccount):
 
     def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
-            constraints.update({'txo_type': 0})
+            constraints.update({'txo_type__in': (0, TXO_TYPES['purchase'])})
         return super().get_balance(confirmations, **constraints)
 
     async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
