@@ -599,14 +599,6 @@ class Daemon(metaclass=JSONRPCServerType):
         except asyncio.CancelledError:
             log.info("cancelled API call for: %s", function_name)
             raise
-        except BaseError as e:
-            if log.isEnabledFor(e.log_level):
-                log.exception("SDK generated the following exception:")
-            return JSONRPCError(
-                f"Error calling {function_name} with args {args}\n" + str(e),
-                JSONRPCError.CODE_APPLICATION_ERROR,
-                format_exc()
-            )
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
             return JSONRPCError(

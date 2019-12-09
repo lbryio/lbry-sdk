@@ -2,9 +2,9 @@ import asyncio
 import json
 
 from torba.client.wallet import ENCRYPT_ON_DISK
+from torba.client.errors import InvalidPasswordError
 from lbry.testcase import CommandTestCase
 from lbry.wallet.dewies import dict_values_to_lbc
-from lbry.error import InvalidPasswordError
 
 
 class WalletCommands(CommandTestCase):
