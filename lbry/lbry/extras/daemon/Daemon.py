@@ -26,8 +26,7 @@ from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
-    BaseError, DownloadSDTimeoutError,
-    ComponentsNotStartedError, ComponentStartConditionNotMetError
+    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
