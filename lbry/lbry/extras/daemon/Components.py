@@ -127,9 +127,12 @@ class WalletComponent(Component):
 
         if self.wallet_manager.ledger.network.remote_height:
             local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
+            disk_height = len(self.wallet_manager.ledger.headers)
+            download_height = local_height - disk_height if disk_height != local_height else local_height
             remote_height = self.wallet_manager.ledger.network.remote_height
+            target_height = remote_height - disk_height if disk_height != local_height else remote_height
             best_hash = self.wallet_manager.get_best_blockhash()
-            progress = min(max(math.ceil(float(local_height) / float(remote_height) * 100), 0), 100)
+            progress = min(max(math.ceil(float(download_height) / float(target_height) * 100), 0), 100)
             result.update({
                 'headers_synchronization_progress': progress,
                 'blocks': max(local_height, 0),
