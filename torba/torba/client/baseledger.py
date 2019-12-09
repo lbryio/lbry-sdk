@@ -289,7 +289,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         asyncio.ensure_future(self.network.start())
         await first_connection
         async with self._header_processing_lock:
-            await self.initial_headers_sync()
+            await self._update_tasks.add(self.initial_headers_sync())
         await self.join_network()
         self.network.on_connected.listen(self.join_network)
 
