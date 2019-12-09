@@ -127,7 +127,7 @@ class WalletDatabase(BaseDatabase):
         if channel_ids:
             channels = {
                 txo.claim_id: txo for txo in
-                (await self.get_claims(
+                (await self.get_channels(
                     wallet=wallet,
                     claim_id__in=channel_ids
                 ))
