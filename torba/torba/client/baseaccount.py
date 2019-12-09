@@ -10,6 +10,7 @@ from torba.client.mnemonic import Mnemonic
 from torba.client.bip32 import PrivateKey, PubKey, from_extended_key_string
 from torba.client.hash import aes_encrypt, aes_decrypt, sha256
 from torba.client.constants import COIN
+from torba.client.errors import InvalidPasswordError
 
 if typing.TYPE_CHECKING:
     from torba.client import baseledger, wallet as basewallet
@@ -349,11 +350,11 @@ class BaseAccount:
         assert self.encrypted, "Key is not encrypted."
         try:
             seed = self._decrypt_seed(password)
-        except ValueError:
+        except (ValueError, InvalidPasswordError):
             return False
         try:
             private_key = self._decrypt_private_key_string(password)
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, InvalidPasswordError):
             return False
         self.seed = seed
         self.private_key = private_key

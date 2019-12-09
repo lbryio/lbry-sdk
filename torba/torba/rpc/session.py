@@ -111,6 +111,7 @@ class SessionBase(asyncio.Protocol):
         self.recv_count = 0
         self.recv_size = 0
         self.last_recv = self.start_time
+        self.last_packet_received = self.start_time
         # Bandwidth usage per hour before throttling starts
         self.bw_limit = 2000000
         self.bw_time = self.start_time
@@ -174,6 +175,7 @@ class SessionBase(asyncio.Protocol):
     # asyncio framework
     def data_received(self, framed_message):
         """Called by asyncio when a message comes in."""
+        self.last_packet_received = time.perf_counter()
         if self.verbosity >= 4:
             self.logger.debug(f'Received framed message {framed_message}')
         self.recv_size += len(framed_message)

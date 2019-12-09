@@ -57,12 +57,16 @@ class TrendingData:
             trending_score = old_data[1] + soften(1E-8*time_boost*change)
             self.claims[claim_id] = [total_amount, trending_score, True]
 
+    @classmethod
+    def factory(cls):
+        return cls(), cls.step, cls.finalize
+
+
 
 # One global instance
 trending_data = TrendingData()
 f = open("trending.log", "w")
 f.close()
-
 
 def calculate_trending(db, height, final_height):
 

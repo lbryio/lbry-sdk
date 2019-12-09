@@ -1,4 +1,4 @@
-dist: bionic
+dist: xenial
 language: python
 python: "3.7"
 
@@ -8,13 +8,13 @@ jobs:
     - stage: code quality
       name: "pylint & mypy"
       install:
-        - make install
+        - make install tools
       script: make lint
 
     - stage: test
       name: "LBRY Unit Tests"
       install:
-        - make install
+        - make install tools
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
       after_success:
@@ -43,7 +43,7 @@ jobs:
 
     - name: "Run Examples"
       install:
-        - make install
+        - make install tools
       script:
         - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
       after_success:

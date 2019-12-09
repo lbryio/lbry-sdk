@@ -22,6 +22,7 @@ from cryptography.hazmat.backends import default_backend
 
 from torba.client.util import bytes_to_int, int_to_bytes
 from torba.client.constants import NULL_HASH32
+from torba.client.errors import InvalidPasswordError
 
 
 class TXRef:
@@ -136,13 +137,18 @@ def aes_encrypt(secret: str, value: str, init_vector: bytes = None) -> str:
 
 
 def aes_decrypt(secret: str, value: str) -> typing.Tuple[str, bytes]:
-    data = base64.b64decode(value.encode())
-    key = double_sha256(secret.encode())
-    init_vector, data = data[:16], data[16:]
-    decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
-    unpadder = PKCS7(AES.block_size).unpadder()
-    result = unpadder.update(decryptor.update(data)) + unpadder.finalize()
-    return result.decode(), init_vector
+    try:
+        data = base64.b64decode(value.encode())
+        key = double_sha256(secret.encode())
+        init_vector, data = data[:16], data[16:]
+        decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
+        unpadder = PKCS7(AES.block_size).unpadder()
+        result = unpadder.update(decryptor.update(data)) + unpadder.finalize()
+        return result.decode(), init_vector
+    except ValueError as e:
+        if e.args[0] == 'Invalid padding bytes.':
+            raise InvalidPasswordError()
+        raise
 
 
 def better_aes_encrypt(secret: str, value: bytes) -> bytes:
@@ -156,13 +162,18 @@ def better_aes_encrypt(secret: str, value: bytes) -> bytes:
 
 
 def better_aes_decrypt(secret: str, value: bytes) -> bytes:
-    data = base64.b64decode(value)
-    _, scryp_n, scrypt_r, scrypt_p, data = data.split(b':', maxsplit=4)
-    init_vector, data = data[:16], data[16:]
-    key = scrypt(secret.encode(), init_vector, int(scryp_n), int(scrypt_r), int(scrypt_p))
-    decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
-    unpadder = PKCS7(AES.block_size).unpadder()
-    return unpadder.update(decryptor.update(data)) + unpadder.finalize()
+    try:
+        data = base64.b64decode(value)
+        _, scryp_n, scrypt_r, scrypt_p, data = data.split(b':', maxsplit=4)
+        init_vector, data = data[:16], data[16:]
+        key = scrypt(secret.encode(), init_vector, int(scryp_n), int(scrypt_r), int(scrypt_p))
+        decryptor = Cipher(AES(key), modes.CBC(init_vector), default_backend()).decryptor()
+        unpadder = PKCS7(AES.block_size).unpadder()
+        return unpadder.update(decryptor.update(data)) + unpadder.finalize()
+    except ValueError as e:
+        if e.args[0] == 'Invalid padding bytes.':
+            raise InvalidPasswordError()
+        raise
 
 
 def scrypt(passphrase, salt, scrypt_n=1<<13, scrypt_r=16, scrypt_p=1):

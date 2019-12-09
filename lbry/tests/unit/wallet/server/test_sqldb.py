@@ -38,10 +38,10 @@ class TestSQLDB(unittest.TestCase):
         db_url = 'file:test_sqldb?mode=memory&cache=shared'
         self.sql = writer.SQLDB(self, db_url)
         self.addCleanup(self.sql.close)
+        self.sql.open()
         reader.initializer(logging.getLogger(__name__), db_url, 'regtest', self.query_timeout)
         self.addCleanup(reader.cleanup)
         self.timer = Timer('BlockProcessor')
-        self.sql.open()
         self._current_height = 0
         self._txos = {}
 
@@ -113,8 +113,8 @@ class TestSQLDB(unittest.TestCase):
 
     def get_controlling(self):
         for claim in self.sql.execute("select claim.* from claimtrie natural join claim"):
-            txo = self._txos[claim['txo_hash']]
-            controlling = txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']
+            txo = self._txos[claim.txo_hash]
+            controlling = txo.claim.stream.title, claim.amount, claim.effective_amount, claim.activation_height
             return controlling
 
     def get_active(self):
@@ -122,18 +122,18 @@ class TestSQLDB(unittest.TestCase):
         active = []
         for claim in self.sql.execute(
                 f"select * from claim where activation_height <= {self._current_height}"):
-            txo = self._txos[claim['txo_hash']]
+            txo = self._txos[claim.txo_hash]
             if controlling and controlling[0] == txo.claim.stream.title:
                 continue
-            active.append((txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']))
+            active.append((txo.claim.stream.title, claim.amount, claim.effective_amount, claim.activation_height))
         return active
 
     def get_accepted(self):
         accepted = []
         for claim in self.sql.execute(
                 f"select * from claim where activation_height > {self._current_height}"):
-            txo = self._txos[claim['txo_hash']]
-            accepted.append((txo.claim.stream.title, claim['amount'], claim['effective_amount'], claim['activation_height']))
+            txo = self._txos[claim.txo_hash]
+            accepted.append((txo.claim.stream.title, claim.amount, claim.effective_amount, claim.activation_height))
         return accepted
 
     def advance(self, height, txs):

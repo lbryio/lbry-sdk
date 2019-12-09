@@ -1,44 +1,32 @@
-FROM debian:buster-slim
+FROM ubuntu:19.10
 
 ARG user=lbry
-
-# create an unprivileged user
-RUN groupadd -g 999 $user && useradd -r -u 999 -g $user $user
-RUN mkdir -p /home/$user/
-RUN chown -R $user:$user /home/$user/
-
-# install python, pip, git and clean up
-RUN apt-get update && \
-  apt-get -y --no-install-recommends install build-essential git tar wget python3.7 python3.7-dev python3-pip && \
-  rm -rf /var/lib/apt/lists/*
-
-# create and chown database dir
 ARG db_dir=/database
+ARG projects_dir=/home/$user
+
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+      build-essential \
+      python3 \
+      python3-dev \
+      python3-pip \
+      python3-wheel \
+      python3-setuptools && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 999 $user && useradd -m -u 999 -g $user $user
 RUN mkdir -p $db_dir
 RUN chown -R $user:$user $db_dir
 
-# change into our user
-USER $user
-WORKDIR /home/$user
-
-# RUN pip3 install -U pip (broken on pip 10 https://github.com/pypa/pip/issues/5240)
-RUN python3.7 -m pip install --upgrade pip setuptools
-
-# get uvloop
-RUN python3.7 -m pip install --user uvloop
-
-# copy lbrynet
-ARG projects_dir=/home/$user
 COPY . $projects_dir
-USER root
-RUN chown -R $user:$user .
-USER $user
+RUN chown -R $user:$user $projects_dir
 
-# install torba & lbry
-WORKDIR $projects_dir/torba
-RUN python3.7 -m pip install --user -e .
-WORKDIR $projects_dir/lbry
-RUN python3.7 -m pip install --user -e .
+USER $user
+WORKDIR $projects_dir
+
+RUN pip install uvloop
+RUN make install
 RUN rm ~/.cache -rf
 
 # entry point
