@@ -400,6 +400,9 @@ class BaseOutputScript(Script):
     PAY_SCRIPT_HASH = Template('pay_script_hash', (
         OP_HASH160, PUSH_SINGLE('script_hash'), OP_EQUAL
     ))
+    PAY_SEGWIT = Template('pay_script_hash+segwit', (
+        OP_0, PUSH_SINGLE('script_hash')
+    ))
     RETURN_DATA = Template('return_data', (
         OP_RETURN, PUSH_SINGLE('data')
     ))
@@ -408,6 +411,7 @@ class BaseOutputScript(Script):
         PAY_PUBKEY_FULL,
         PAY_PUBKEY_HASH,
         PAY_SCRIPT_HASH,
+        PAY_SEGWIT,
         RETURN_DATA
     ]
 
