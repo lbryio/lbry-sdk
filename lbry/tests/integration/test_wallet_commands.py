@@ -19,6 +19,19 @@ class WalletCommands(CommandTestCase):
         await self.daemon.jsonrpc_wallet_add(wallet.id)
         self.assertEqual(len(session.hashX_subs), 28)
 
+    async def test_wallet_restart(self):
+        await self.conductor.spv_node.stop(True)
+        self.conductor.spv_node.port = 54320
+        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        status = await self.daemon.jsonrpc_status()
+        self.assertEqual(len(status['wallet']['servers']), 1)
+        self.assertEqual(status['wallet']['servers'][0]['port'], 50002)
+        self.daemon.jsonrpc_settings_set('lbryum_servers', ['localhost:54320'])
+        await self.daemon.jsonrpc_wallet_restart()
+        status = await self.daemon.jsonrpc_status()
+        self.assertEqual(len(status['wallet']['servers']), 1)
+        self.assertEqual(status['wallet']['servers'][0]['port'], 54320)
+
     async def test_balance_caching(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)

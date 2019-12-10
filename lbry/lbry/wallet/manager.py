@@ -146,13 +146,7 @@ class LbryWalletManager(BaseWalletManager):
         return manager
 
     async def reset(self):
-        ledger_id = {
-            'lbrycrd_main':    'lbc_mainnet',
-            'lbrycrd_testnet': 'lbc_testnet',
-            'lbrycrd_regtest': 'lbc_regtest'
-        }[self.config.blockchain_name]
-        ledger = self.get_or_create_ledger(ledger_id)
-        ledger.config = {
+        self.ledger.config = {
             'auto_connect': True,
             'default_servers': self.config.lbryum_servers,
             'data_path': self.config.wallet_dir,
