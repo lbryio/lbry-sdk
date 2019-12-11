@@ -1096,12 +1096,12 @@ class Daemon(metaclass=JSONRPCServerType):
             return paginate_list([self.wallet_manager.get_wallet_or_error(wallet_id)], 1, 1)
         return paginate_list(self.wallet_manager.wallets, page, page_size)
 
-    def jsonrpc_wallet_restart(self):
+    def jsonrpc_wallet_reconnect(self):
         """
-        Restarts ledger, applying new configurations.
+        Reconnects ledger network client, applying new configurations.
 
         Usage:
-            wallet_restart
+            wallet_reconnect
 
         Options:
 
