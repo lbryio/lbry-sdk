@@ -4,6 +4,7 @@ import random
 import asyncio
 import argparse
 import traceback
+import signal
 from time import time
 from datetime import datetime
 
@@ -310,13 +311,24 @@ def get_args():
     return parser.parse_args()
 
 
+async def shutdown(signal, loop):
+    await boris_says(f"I got signal {signal.name}. Shutting down.")
+    tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+    [task.cancel() for task in tasks]
+    await asyncio.gather(*tasks, return_exceptions=True)
+    # loop.stop()
+
+
 if __name__ == "__main__":
     loop = asyncio.get_event_loop()
+    for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(shutdown(s, loop)))
+
     args = get_args()
     SLACKCLIENT = get_slack_client(args)
     try:
         loop.run_until_complete(main(get_dsn(args), get_servers(args)))
-    except KeyboardInterrupt as e:
+    except asyncio.CancelledError as e:
         pass
     except Exception as e:
         loop.run_until_complete(boris_says("<!channel> I crashed with the following exception:"))
