@@ -106,7 +106,10 @@ class BittrexFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
+        try:
+            json_response = json.loads(response)
+        except (ValueError, json.JSONDecodeError):
+            raise InvalidExchangeRateResponseError(self.name, "invalid rate response : %s" % response)
         if 'result' not in json_response:
             raise InvalidExchangeRateResponseError(self.name, 'result not found')
         trades = json_response['result']
@@ -131,7 +134,10 @@ class LBRYioFeed(MarketFeed):
         )
 
     def _handle_response(self, response):
-        json_response = json.loads(response)
+        try:
+            json_response = json.loads(response)
+        except (ValueError, json.JSONDecodeError):
+            raise InvalidExchangeRateResponseError(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return 1.0 / json_response['data']['lbc_btc']
@@ -150,7 +156,7 @@ class LBRYioBTCFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponseError(self.name, "invalid rate response : %s" % response)
         if 'data' not in json_response:
             raise InvalidExchangeRateResponseError(self.name, 'result not found')
@@ -170,7 +176,7 @@ class CryptonatorBTCFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponseError(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
@@ -191,7 +197,7 @@ class CryptonatorFeed(MarketFeed):
     def _handle_response(self, response):
         try:
             json_response = json.loads(response)
-        except ValueError:
+        except (ValueError, json.JSONDecodeError):
             raise InvalidExchangeRateResponseError(self.name, "invalid rate response")
         if 'ticker' not in json_response or len(json_response['ticker']) == 0 or \
                 'success' not in json_response or json_response['success'] is not True:
