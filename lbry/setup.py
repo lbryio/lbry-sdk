@@ -39,5 +39,6 @@ setup(
         'pyyaml==4.2b1',
         'docopt==0.6.2',
         'hachoir',
+        'multidict==4.6.1',
     ],
 )
