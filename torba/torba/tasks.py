@@ -23,3 +23,5 @@ class TaskGroup:
     def cancel(self):
         for task in self._tasks:
             task.cancel()
+        if len(self._tasks) < 1:
+            self.done.set()
