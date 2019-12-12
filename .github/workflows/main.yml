@@ -41,33 +41,10 @@ jobs:
 #      - working-directory: lbry
 #        run: tox
 #
-#  linux-build:
-#    needs: ["tests-unit", "tests-integration"]
-#    name: "build / linux"
-#    runs-on: ubuntu-16.04
-#    steps:
-#      - uses: actions/checkout@v1
-#      - uses: actions/setup-python@v1
-#        with:
-#          python-version: '3.7'
-#      - name: Install
-#        run: |
-#          pip install pyinstaller awscli
-#          #python docker/set_build.py
-#          pip install -e torba/.
-#          pip install -e lbry/.
-#      - name: Build
-#        run: |
-#          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
-#          chmod +x dist/lbrynet
-#          zip --junk-paths lbrynet-linux.zip dist/lbrynet
-#          shasum -a 256 -b lbrynet-linux.zip
-#      - run: dist/lbrynet --version
-
-  mac-build:
+  linux-build:
     #needs: ["tests-unit", "tests-integration"]
-    name: "build / mac"
-    runs-on: macos-latest
+    name: "build / linux"
+    runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
@@ -83,9 +60,39 @@ jobs:
         run: |
           pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
           chmod +x dist/lbrynet
-          zip --junk-paths lbrynet-mac.zip dist/lbrynet
-          shasum -a 256 -b lbrynet-mac.zip
+          zip --junk-paths lbrynet-linux.zip dist/lbrynet
+          shasum -a 256 -b lbrynet-linux.zip
       - run: dist/lbrynet --version
+			- name: upload to build.lbry.io
+				uses: aws-actions/configure-aws-credentials@v1
+				with:
+					aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+					aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+					aws-region: us-east-1
+				run: aws s3 cp lbrynet-linux.zip s3://build.lbry.io/daemon/build-github-actions-1/lbrynet-linux.zip
+
+#  mac-build:
+#    needs: ["tests-unit", "tests-integration"]
+#    name: "build / mac"
+#    runs-on: macos-latest
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: Install
+#        run: |
+#          pip install pyinstaller awscli
+#          #python docker/set_build.py
+#          pip install -e torba/.
+#          pip install -e lbry/.
+#      - name: Build
+#        run: |
+#          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
+#          chmod +x dist/lbrynet
+#          zip --junk-paths lbrynet-mac.zip dist/lbrynet
+#          shasum -a 256 -b lbrynet-mac.zip
+#      - run: dist/lbrynet --version
 
 #  windows-build:
 #    needs: ["tests-unit", "tests-integration"]
