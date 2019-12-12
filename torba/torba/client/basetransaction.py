@@ -34,7 +34,7 @@ class TXRefMutable(TXRef):
     @property
     def hash(self):
         if self._hash is None:
-            self._hash = sha256(sha256(self.tx.raw))
+            self._hash = sha256(sha256(self.tx.raw_sans_segwit))
         return self._hash
 
     @property
@@ -260,6 +260,9 @@ class BaseTransaction:
     def __init__(self, raw=None, version: int = 1, locktime: int = 0, is_verified: bool = False,
                  height: int = -2, position: int = -1) -> None:
         self._raw = raw
+        self._raw_sans_segwit = None
+        self.is_segwit_flag = 0
+        self.witnesses = []
         self.ref = TXRefMutable(self)
         self.version = version
         self.locktime = locktime
@@ -302,8 +305,17 @@ class BaseTransaction:
             self._raw = self._serialize()
         return self._raw
 
+    @property
+    def raw_sans_segwit(self):
+        if self.is_segwit_flag:
+            if self._raw_sans_segwit is None:
+                self._raw_sans_segwit = self._serialize(sans_segwit=True)
+            return self._raw_sans_segwit
+        return self.raw
+
     def _reset(self):
         self._raw = None
+        self._raw_sans_segwit = None
         self.ref.reset()
 
     @property
@@ -390,7 +402,7 @@ class BaseTransaction:
         """ Sum of output values *plus* the cost involved to spend them. """
         return sum(txo.amount + txo.get_fee(ledger) for txo in self._outputs)
 
-    def _serialize(self, with_inputs: bool = True) -> bytes:
+    def _serialize(self, with_inputs: bool = True, sans_segwit: bool = False) -> bytes:
         stream = BCDataStream()
         stream.write_uint32(self.version)
         if with_inputs:
@@ -425,9 +437,8 @@ class BaseTransaction:
             stream = BCDataStream(self._raw)
             self.version = stream.read_uint32()
             input_count = stream.read_compact_size()
-            flag = 0
             if input_count == 0:
-                flag = stream.read_uint8()
+                self.is_segwit_flag = stream.read_uint8()
                 input_count = stream.read_compact_size()
             self._add(self._inputs, [
                 self.input_class.deserialize_from(stream) for _ in range(input_count)
@@ -436,12 +447,13 @@ class BaseTransaction:
             self._add(self._outputs, [
                 self.output_class.deserialize_from(stream) for _ in range(output_count)
             ])
-            if flag == 1:
+            if self.is_segwit_flag:
                 # drain witness portion of transaction
                 # too many witnesses for no crime
+                self.witnesses = []
                 for _ in range(input_count):
                     for _ in range(stream.read_compact_size()):
-                        stream.read(stream.read_compact_size())
+                        self.witnesses.append(stream.read(stream.read_compact_size()))
             self.locktime = stream.read_uint32()
 
     @classmethod

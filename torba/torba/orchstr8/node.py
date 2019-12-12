@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import asyncio
 import zipfile
@@ -267,6 +268,9 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
 
 class BlockchainNode:
 
+    P2SH_SEGWIT_ADDRESS = "p2sh-segwit"
+    BECH32_ADDRESS = "bech32"
+
     def __init__(self, url, daemon, cli, segwit_enabled=False):
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
@@ -391,6 +395,9 @@ class BlockchainNode:
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')
 
+    def get_new_address(self, type):
+        return self._cli_cmnd('getnewaddress', "", type)
+
     async def get_balance(self):
         return float(await self._cli_cmnd('getbalance'))
 
@@ -399,6 +406,12 @@ class BlockchainNode:
 
     def send_raw_transaction(self, tx):
         return self._cli_cmnd('sendrawtransaction', tx.decode())
+
+    def create_raw_transaction(self, inputs, outputs):
+        return self._cli_cmnd('createrawtransaction', json.dumps(inputs), json.dumps(outputs))
+
+    async def sign_raw_transaction_with_wallet(self, tx):
+        return json.loads(await self._cli_cmnd('signrawtransactionwithwallet', tx))['hex'].encode()
 
     def decode_raw_transaction(self, tx):
         return self._cli_cmnd('decoderawtransaction', hexlify(tx.raw).decode())
