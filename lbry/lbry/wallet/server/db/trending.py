@@ -49,17 +49,16 @@ class TrendingData:
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [total_amount, trending_score, False]
-            self.claims[claim_id] = [total_amount, trending_score, False]
+            old_data = [total_amount, np.float32(trending_score), False]
+            self.claims[claim_id] = [total_amount,
+                                        np.float32(trending_score), False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
-            trending_score = old_data[1] + soften(1E-8*time_boost*change)
+            trending_score = old_data[1]\
+                                 + np.float32(soften(1E-8*time_boost*change))
             self.claims[claim_id] = [total_amount, trending_score, True]
 
-    @classmethod
-    def factory(cls):
-        return cls(), cls.step, cls.finalize
 
 
 
