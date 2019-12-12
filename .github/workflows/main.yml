@@ -64,10 +64,10 @@ jobs:
 #          shasum -a 256 -b lbrynet-linux.zip
 #      - run: dist/lbrynet --version
 
-  windows-build:
-    #needs: ["tests-unit", "tests-integration"]
-    name: "build / windows"
-    runs-on: windows-latest
+  mac-build:
+    needs: ["tests-unit", "tests-integration"]
+    name: "build / mac"
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
@@ -77,13 +77,36 @@ jobs:
         run: |
           pip install pyinstaller awscli
           #python docker/set_build.py
-          pip install pywin32
           pip install -e torba/.
           pip install -e lbry/.
       - name: Build
         run: |
-          pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
-          cd dist
-          7z a -tzip lbrynet-windows.zip lbrynet.exe
-          sha256sum -b lbrynet-windows.zip
-      - run: ./dist/lbrynet.exe --version
+          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
+          chmod +x dist/lbrynet
+          zip --junk-paths lbrynet-mac.zip dist/lbrynet
+          shasum -a 256 -b lbrynet-mac.zip
+      - run: dist/lbrynet --version
+
+#  windows-build:
+#    needs: ["tests-unit", "tests-integration"]
+#    name: "build / windows"
+#    runs-on: windows-latest
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: Install
+#        run: |
+#          pip install pyinstaller awscli
+#          #python docker/set_build.py
+#          pip install pywin32
+#          pip install -e torba/.
+#          pip install -e lbry/.
+#      - name: Build
+#        run: |
+#          pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
+#          cd dist
+#          7z a -tzip lbrynet-windows.zip lbrynet.exe
+#          sha256sum -b lbrynet-windows.zip
+#      - run: ./dist/lbrynet.exe --version
