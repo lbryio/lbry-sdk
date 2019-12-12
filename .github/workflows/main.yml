@@ -1,0 +1,87 @@
+name: ci
+#on: [push, pull_request]
+on: push
+jobs:
+
+#  lint:
+#    name: "pylint & mypy"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - run: make install tools
+#      - run: make lint
+#
+#  tests-unit:
+#    needs: lint
+#    name: "tests / unit"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - run: make install tools
+#      - working-directory: lbry
+#        env:
+#          HOME: /tmp
+#        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+#
+  tests-integration:
+    #needs: lint
+    name: "tests / integration"
+    runs-on: ubuntu-16.04
+    strategy:
+      matrix:
+        test:
+          - datanetwork
+          - blockchain
+          - other
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - if: matrix.test == 'blockchain'
+        run: sudo apt install -y --no-install-recommends ffmpeg
+      - run: pip install tox-travis
+      - run: tox -e ${{ matrix.test }}
+
+  build:
+    #needs: ["tests-unit", "tests-integration"]
+    needs: ["tests-integration"]
+    name: "build"
+    strategy:
+      matrix:
+        os:
+          - ubuntu-16.04
+          - macos-latest
+          - windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - name: Setup
+        run: |
+          pip install pyinstaller
+          pip install -e .
+      - if: startsWith(matrix.os, 'windows') == false
+        name: Build & Run (Unix)
+        run: |
+          pyinstaller --onefile --name lbrynet lbry/extras/cli.py
+          chmod +x dist/lbrynet
+          dist/lbrynet --version
+      - if: startsWith(matrix.os, 'windows')
+        name: Build & Run (Windows)
+        run: |
+          pip install pywin32
+          pyinstaller --additional-hooks-dir=scripts/. \
+                      --icon=icons/lbry256.ico \
+                      --onefile \
+                      --name lbrynet \
+                      lbry/extras/cli.py
+          dist/lbrynet.exe --version
