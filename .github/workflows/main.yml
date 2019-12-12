@@ -1,0 +1,65 @@
+name: Continuous Integration
+on: [push, pull_request]
+jobs:
+
+  lint:
+    name: "pylint & mypy"
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - run: make install tools
+      - run: make lint
+
+  unit-tests:
+    needs: lint
+    name: "Unit Tests"
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - run: make install tools
+      - working-directory: lbry
+        env:
+          HOME: /tmp
+        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+
+  integration-tests:
+    needs: lint
+    name: "Integration Tests"
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - run: pip install coverage tox-travis
+      - working-directory: lbry
+        run: tox
+
+  linux-build:
+    needs: ["unit-tests", "integration-tests"]
+    name: "Liux Build"
+    runs-on: ubuntu-16.04
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - name: Install
+        run: |
+          pip install pyinstaller awscli
+          python docker/set_build.py
+          pip install -e torba/.
+          pip install -e lbry/.
+      - name: Build
+        run: |
+          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
+          chmod +x dist/lbrynet
+          zip --junk-paths lbrynet-linux.zip dist/lbrynet
+          shasum -a 256 -b lbrynet-linux.zip
+          dist/lbrynet --version
