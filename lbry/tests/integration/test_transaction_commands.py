@@ -40,8 +40,6 @@ class TransactionCommandsTestCase(CommandTestCase):
 
 class TestSegwit(CommandTestCase):
 
-    VERBOSITY = 10
-
     async def test_segwit(self):
         p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
         p2sh_address2 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
@@ -89,6 +87,8 @@ class TestSegwit(CommandTestCase):
         )
         tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
         txid = await self.blockchain.send_raw_transaction(tx)
+        await self.on_transaction_id(txid)
+        await self.generate(1)
         await self.on_transaction_id(txid)
 
         await self.assertBalance(self.account, '13.5')
