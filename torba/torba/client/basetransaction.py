@@ -262,7 +262,7 @@ class BaseTransaction:
         self._raw = raw
         self._raw_sans_segwit = None
         self.is_segwit_flag = 0
-        self.witnesses = []
+        self.witnesses: List[bytes] = []
         self.ref = TXRefMutable(self)
         self.version = version
         self.locktime = locktime
