@@ -111,6 +111,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         self.network = self.config.get('network') or self.network_class(self)
         self.network.on_header.listen(self.receive_header)
         self.network.on_status.listen(self.process_status_update)
+        self.network.on_connected.listen(self.join_network)
 
         self.accounts = []
         self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
@@ -290,8 +291,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         await first_connection
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
-        await self.join_network()
-        self.network.on_connected.listen(self.join_network)
+        await self._on_ready_controller.stream.first
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")

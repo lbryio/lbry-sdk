@@ -6,6 +6,7 @@ ARG projects_dir=/home/$user
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
+      wget \
       build-essential \
       python3 \
       python3-dev \

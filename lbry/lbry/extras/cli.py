@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 import signal
 import pathlib
 import json
@@ -191,6 +192,10 @@ def get_argument_parser():
         help=('Enable debug output for lbry logger and event loop. Optionally specify loggers for which debug output '
               'should selectively be applied.')
     )
+    start.add_argument(
+        '--initial-headers', dest='initial_headers',
+        help='Specify path to initial blockchain headers, faster than downloading them on first run.'
+    )
     Config.contribute_to_argparse(start)
     start.set_defaults(command='start', start_parser=start, doc=start.format_help())
 
@@ -297,6 +302,16 @@ def main(argv=None):
         if args.help:
             args.start_parser.print_help()
         else:
+            if args.initial_headers:
+                ledger_path = os.path.join(conf.wallet_dir, 'lbc_mainnet')
+                ensure_directory_exists(ledger_path)
+                current_size = 0
+                headers_path = os.path.join(ledger_path, 'headers')
+                if os.path.exists(headers_path):
+                    current_size = os.stat(headers_path).st_size
+                if os.stat(args.initial_headers).st_size > current_size:
+                    log.info('Copying header from %s to %s', args.initial_headers, headers_path)
+                    shutil.copy(args.initial_headers, headers_path)
             run_daemon(args, conf)
     elif args.command is not None:
         doc = args.doc

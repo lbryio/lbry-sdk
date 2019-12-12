@@ -16,6 +16,7 @@ from lbry.wallet.network import Network
 from lbry.wallet.database import WalletDatabase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.header import Headers, UnvalidatedHeaders
+from lbry.wallet.constants import TXO_TYPES
 
 
 log = logging.getLogger(__name__)
@@ -112,7 +113,7 @@ class MainNetLedger(BaseLedger):
     async def _report_state(self):
         try:
             for account in self.accounts:
-                balance = dewies_to_lbc(await account.get_balance())
+                balance = dewies_to_lbc(await account.get_balance(include_claims=True))
                 channel_count = await account.get_channel_count()
                 claim_count = await account.get_claim_count()
                 if isinstance(account.receiving, SingleKey):
@@ -141,7 +142,7 @@ class MainNetLedger(BaseLedger):
 
     @staticmethod
     def constraint_spending_utxos(constraints):
-        constraints['txo_type'] = 0
+        constraints['txo_type__in'] = (0, TXO_TYPES['purchase'])
 
     def get_utxos(self, **constraints):
         self.constraint_spending_utxos(constraints)

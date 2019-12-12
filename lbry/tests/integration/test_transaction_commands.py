@@ -36,3 +36,59 @@ class TransactionCommandsTestCase(CommandTestCase):
         await self.assertBalance(self.account, '0.0')
         await self.daemon.jsonrpc_utxo_release()
         await self.assertBalance(self.account, '11.0')
+
+
+class TestSegwit(CommandTestCase):
+
+    async def test_segwit(self):
+        p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
+        p2sh_address2 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
+        p2sh_address3 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
+        bech32_address1 = await self.blockchain.get_new_address(self.blockchain.BECH32_ADDRESS)
+        bech32_address2 = await self.blockchain.get_new_address(self.blockchain.BECH32_ADDRESS)
+        bech32_address3 = await self.blockchain.get_new_address(self.blockchain.BECH32_ADDRESS)
+
+        # fund specific addresses for later use
+        p2sh_txid1 = await self.blockchain.send_to_address(p2sh_address1, '1.0')
+        p2sh_txid2 = await self.blockchain.send_to_address(p2sh_address2, '1.0')
+        bech32_txid1 = await self.blockchain.send_to_address(bech32_address1, '1.0')
+        bech32_txid2 = await self.blockchain.send_to_address(bech32_address2, '1.0')
+
+        await self.generate(1)
+
+        # P2SH & BECH32 can pay to P2SH address
+        tx = await self.blockchain.create_raw_transaction([
+                {"txid": p2sh_txid1, "vout": 0},
+                {"txid": bech32_txid1, "vout": 0},
+            ], [{p2sh_address3: '1.9'}]
+        )
+        tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
+        p2sh_txid3 = await self.blockchain.send_raw_transaction(tx)
+
+        await self.generate(1)
+
+        # P2SH & BECH32 can pay to BECH32 address
+        tx = await self.blockchain.create_raw_transaction([
+            {"txid": p2sh_txid2, "vout": 0},
+            {"txid": bech32_txid2, "vout": 0},
+        ], [{bech32_address3: '1.9'}]
+        )
+        tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
+        bech32_txid3 = await self.blockchain.send_raw_transaction(tx)
+
+        await self.generate(1)
+
+        # P2SH & BECH32 can pay lbry wallet P2PKH
+        address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
+        tx = await self.blockchain.create_raw_transaction([
+                {"txid": p2sh_txid3, "vout": 0},
+                {"txid": bech32_txid3, "vout": 0},
+            ], [{address: '3.5'}]
+        )
+        tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
+        txid = await self.blockchain.send_raw_transaction(tx)
+        await self.on_transaction_id(txid)
+        await self.generate(1)
+        await self.on_transaction_id(txid)
+
+        await self.assertBalance(self.account, '13.5')

@@ -1,4 +1,5 @@
 from torba.stream import StreamController
+from torba.tasks import TaskGroup
 from torba.testcase import AsyncioTestCase
 
 
@@ -18,3 +19,11 @@ class StreamControllerTestCase(AsyncioTestCase):
         controller.add("yo")
         controller.add("yo")
         self.assertListEqual(events, ["yo"])
+
+
+class TaskGroupTestCase(AsyncioTestCase):
+
+    async def test_cancel_sets_it_done(self):
+        group = TaskGroup()
+        group.cancel()
+        self.assertTrue(group.done.is_set())

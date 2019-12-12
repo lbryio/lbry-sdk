@@ -142,7 +142,7 @@ class BaseNetwork:
     PROTOCOL_VERSION = '1.2'
 
     def __init__(self, ledger):
-        self.config = ledger.config
+        self.ledger = ledger
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
         self._switch_task: Optional[asyncio.Task] = None
@@ -163,6 +163,10 @@ class BaseNetwork:
             'blockchain.headers.subscribe': self._on_header_controller,
             'blockchain.address.subscribe': self._on_status_controller,
         }
+
+    @property
+    def config(self):
+        return self.ledger.config
 
     async def switch_forever(self):
         while self.running:
