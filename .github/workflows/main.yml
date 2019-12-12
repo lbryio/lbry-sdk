@@ -1,4 +1,4 @@
-name: Continuous Integration
+name: ci
 on: [push, pull_request]
 jobs:
 
@@ -13,9 +13,9 @@ jobs:
       - run: make install tools
       - run: make lint
 
-  unit-tests:
+  tests-unit:
     needs: lint
-    name: "Unit Tests"
+    name: "tests / unit"
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v1
@@ -28,9 +28,9 @@ jobs:
           HOME: /tmp
         run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-  integration-tests:
+  tests-integration:
     needs: lint
-    name: "Integration Tests"
+    name: "tests / integration"
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v1
@@ -42,8 +42,8 @@ jobs:
         run: tox
 
   linux-build:
-    needs: ["unit-tests", "integration-tests"]
-    name: "Liux Build"
+    needs: ["tests-unit", "tests-integration"]
+    name: "build / linux"
     runs-on: ubuntu-16.04
     steps:
       - uses: actions/checkout@v1
@@ -53,7 +53,7 @@ jobs:
       - name: Install
         run: |
           pip install pyinstaller awscli
-          python docker/set_build.py
+          #python docker/set_build.py
           pip install -e torba/.
           pip install -e lbry/.
       - name: Build
@@ -62,4 +62,4 @@ jobs:
           chmod +x dist/lbrynet
           zip --junk-paths lbrynet-linux.zip dist/lbrynet
           shasum -a 256 -b lbrynet-linux.zip
-          dist/lbrynet --version
+      - run: dist/lbrynet --version
