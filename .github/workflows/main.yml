@@ -2,49 +2,72 @@ name: ci
 on: [push, pull_request]
 jobs:
 
-  lint:
-    name: "pylint & mypy"
-    runs-on: ubuntu-16.04
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - run: make install tools
-      - run: make lint
+#  lint:
+#    name: "pylint & mypy"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - run: make install tools
+#      - run: make lint
+#
+#  tests-unit:
+#    needs: lint
+#    name: "tests / unit"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - run: make install tools
+#      - working-directory: lbry
+#        env:
+#          HOME: /tmp
+#        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+#
+#  tests-integration:
+#    needs: lint
+#    name: "tests / integration"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - run: pip install coverage tox-travis
+#      - working-directory: lbry
+#        run: tox
+#
+#  linux-build:
+#    needs: ["tests-unit", "tests-integration"]
+#    name: "build / linux"
+#    runs-on: ubuntu-16.04
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: Install
+#        run: |
+#          pip install pyinstaller awscli
+#          #python docker/set_build.py
+#          pip install -e torba/.
+#          pip install -e lbry/.
+#      - name: Build
+#        run: |
+#          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
+#          chmod +x dist/lbrynet
+#          zip --junk-paths lbrynet-linux.zip dist/lbrynet
+#          shasum -a 256 -b lbrynet-linux.zip
+#      - run: dist/lbrynet --version
 
-  tests-unit:
-    needs: lint
-    name: "tests / unit"
-    runs-on: ubuntu-16.04
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - run: make install tools
-      - working-directory: lbry
-        env:
-          HOME: /tmp
-        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
-
-  tests-integration:
-    needs: lint
-    name: "tests / integration"
-    runs-on: ubuntu-16.04
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - run: pip install coverage tox-travis
-      - working-directory: lbry
-        run: tox
-
-  linux-build:
-    needs: ["tests-unit", "tests-integration"]
-    name: "build / linux"
-    runs-on: ubuntu-16.04
+  windows-build:
+    #needs: ["tests-unit", "tests-integration"]
+    name: "build / windows"
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
@@ -54,12 +77,13 @@ jobs:
         run: |
           pip install pyinstaller awscli
           #python docker/set_build.py
+          pip install pywin32
           pip install -e torba/.
           pip install -e lbry/.
       - name: Build
         run: |
-          pyinstaller -F -n lbrynet lbry/lbry/extras/cli.py
-          chmod +x dist/lbrynet
-          zip --junk-paths lbrynet-linux.zip dist/lbrynet
-          shasum -a 256 -b lbrynet-linux.zip
-      - run: dist/lbrynet --version
+          pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
+          cd dist
+          7z a -tzip lbrynet-windows.zip lbrynet.exe
+          sha256sum -b lbrynet-windows.zip
+      - run: ./dist/lbrynet.exe --version
