@@ -1,4 +1,5 @@
 import asyncio
+import unittest
 
 from torba.stream import StreamController
 from torba.tasks import TaskGroup
@@ -23,9 +24,8 @@ class StreamControllerTestCase(AsyncioTestCase):
         self.assertListEqual(events, ["yo"])
 
 
-class TaskGroupTestCase(AsyncioTestCase):
-    async def test_stop_empty_set(self):
+class TaskGroupTestCase(unittest.TestCase):
+    def test_cancel_sets_it_done(self):
         group = TaskGroup()
         group.cancel()
-        await asyncio.wait_for(group.done.wait(), timeout=0.5)
         self.assertTrue(group.done.is_set())
