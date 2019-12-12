@@ -65,7 +65,7 @@ jobs:
 #      - run: dist/lbrynet --version
 
   mac-build:
-    needs: ["tests-unit", "tests-integration"]
+    #needs: ["tests-unit", "tests-integration"]
     name: "build / mac"
     runs-on: macos-latest
     steps:
