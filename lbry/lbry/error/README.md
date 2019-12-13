@@ -33,6 +33,7 @@ Code | Name | Message
 105 | CommandPermanentlyUnavailable | Command '{command}' is permanently unavailable. -- such as when required component was intentionally configured not to start.
 **11x** | InputValue(ValueError) | Invalid argument value provided to command.
 111 | GenericInputValue | The value '{value}' for argument '{argument}' is not valid.
+112 | InputValueIsNone | None or null is not valid value for argument '{argument}'.
 **2xx** | Configuration | Configuration errors.
 201 | ConfigWrite | Cannot write configuration file '{path}'. -- When writing the default config fails on startup, such as due to permission issues.
 202 | ConfigRead | Cannot find provided configuration file '{path}'. -- Can't open the config file user provided via command line args.

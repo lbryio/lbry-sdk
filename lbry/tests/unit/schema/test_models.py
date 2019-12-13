@@ -1,8 +1,8 @@
 from unittest import TestCase
-from unittest.mock import patch
 from decimal import Decimal
 
-from lbry.schema.claim import Claim, Stream, Collection, BaseClaim
+from lbry.schema.claim import Claim, Stream, Collection
+from lbry.error import InputValueIsNoneError
 
 
 class TestClaimContainerAwareness(TestCase):
@@ -198,19 +198,22 @@ class TestLocations(TestCase):
         self.assertEqual(stream.locations[0].country, 'UA')
 
 
-class TestBaseClaimUpdates(TestCase):
+class TestStreamUpdating(TestCase):
 
-    @patch('lbry.schema.claim.Claim')
-    def test_claim_update_url_ok(self, MockClaim):
-        # test if an attribute is provided correctly
-        base_claim = BaseClaim(MockClaim)
-        base_claim.update(thumbnail_url="somescheme:some/path")
-        self.assertEqual(base_claim.thumbnail.url, "somescheme:some/path")
-
-    @patch('lbry.schema.claim.Claim')
-    def test_claim_update_url_error(self, MockClaim):
-        # test if an attribute is null
-        base_claim = BaseClaim(MockClaim)
-        with self.assertRaisesRegex(ValueError, "Error updating claim - Null value provided for attribute thumbnail"):
-            base_claim.update(thumbnail_url=None)
-
+    def test_stream_update(self):
+        stream = Stream()
+        # each of these values is set differently inside of .update()
+        stream.update(
+            title="foo",
+            thumbnail_url="somescheme:some/path",
+            file_name="file-name"
+        )
+        self.assertEqual(stream.title, "foo")
+        self.assertEqual(stream.thumbnail.url, "somescheme:some/path")
+        self.assertEqual(stream.source.name, "file-name")
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(title=None)
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(file_name=None)
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(thumbnail_url=None)
