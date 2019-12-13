@@ -134,8 +134,9 @@ build:windows:
     - dist/lbrynet.exe --version
 
 
-# upload could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
-.upload:
+# s3 = upload asset to s3 (build.lbry.io)
+# could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
+.s3:
   stage: release
   variables:
     GIT_STRATEGY: none
@@ -146,34 +147,44 @@ build:windows:
       aws s3 cp lbrynet-${OS}.zip s3://${ARTIFACTS_BUCKET}/${S3_PATH}/lbrynet-${OS}.zip
 
 s3:linux:
-  extends: .upload
-  variables:
-    OS: linux
-  dependencies:
-    - build:linux
+  extends: .s3
+  variables: {OS: linux}
+  dependencies: ["build:linux"]
 
 s3:mac:
-  extends: .upload
-  variables:
-    OS: mac
-  dependencies:
-    - build:mac
+  extends: .s3
+  variables: {OS: mac}
+  dependencies: ["build:mac"]
 
 s3:windows:
-  extends: .upload
-  variables:
-    OS: windows
-  dependencies:
-    - build:windows
+  extends: .s3
+  variables: {OS: windows}
+  dependencies: ["build:windows"]
 
-#release:linux:
-#  stage: release
-#  only: [tags]
-#  variables:
-#    OS: linux
-#    GIT_STRATEGY: none
-#  dependencies: [build:linux]
-#  script:
-#    - pip install githubrelease
-#    - githubrelease asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
+# release = upload assets to github when there's a tagged release
+.release:
+  stage: release
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9\.]+$/'
+      when: on_success
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - pip install githubrelease
+    - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
+
+release:linux:
+  extends: .release
+  variables: {OS: linux}
+  dependencies: ["build:linux"]
+
+release:mac:
+  extends: .release
+  variables: {OS: mac}
+  dependencies: ["build:mac"]
+
+release:windows:
+  extends: .release
+  variables: {OS: windows}
+  dependencies: ["build:windows"]
 
