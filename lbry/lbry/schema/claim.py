@@ -215,7 +215,6 @@ class Stream(BaseClaim):
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
-        self.none_check(kwargs)
 
         if kwargs.pop('clear_fee', False):
             self.message.ClearField('fee')
@@ -225,6 +224,8 @@ class Stream(BaseClaim):
                 kwargs.pop('fee_currency', None),
                 kwargs.pop('fee_amount', None)
             )
+
+        self.none_check(kwargs)
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
