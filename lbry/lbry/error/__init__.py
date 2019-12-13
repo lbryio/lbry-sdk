@@ -61,6 +61,12 @@ class GenericInputValueError(InputValueError):
         super().__init__(f"The value '{value}' for argument '{argument}' is not valid.")
 
 
+class InputValueIsNoneError(InputValueError):
+
+    def __init__(self, argument):
+        super().__init__(f"None or null is not valid value for argument '{argument}'.")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.

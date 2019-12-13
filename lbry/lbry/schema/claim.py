@@ -16,6 +16,7 @@ from lbry.schema.attrs import (
     LanguageList, LocationList, ClaimList, ClaimReference, TagList
 )
 from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
+from lbry.error import InputValueIsNoneError
 
 
 hachoir_log.use_print = False
@@ -119,17 +120,19 @@ class BaseClaim:
             claim['locations'] = [l.to_dict() for l in self.locations]
         return claim
 
+    def none_check(self, kwargs):
+        for key, value in kwargs.items():
+            if value is None:
+                raise InputValueIsNoneError(key)
+
     def update(self, **kwargs):
+        self.none_check(kwargs)
+
         for key in list(kwargs):
             for field in self.object_fields:
                 if key.startswith(f'{field}_'):
                     attr = getattr(self, field)
-
-                    attr_value = kwargs.pop(key)
-                    if attr_value is None:
-                        raise ValueError(f"Error updating claim - Null value provided for attribute {field}")
-                    
-                    setattr(attr, key[len(f'{field}_'):], attr_value)
+                    setattr(attr, key[len(f'{field}_'):], kwargs.pop(key))
                     continue
 
         for l in self.repeat_fields:
@@ -212,6 +215,8 @@ class Stream(BaseClaim):
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
+        self.none_check(kwargs)
+
         if kwargs.pop('clear_fee', False):
             self.message.ClearField('fee')
         else:
