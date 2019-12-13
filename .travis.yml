@@ -70,16 +70,16 @@ jobs:
         - aws configure set region us-east-1
         - export S3_PATH="daemon/build-${TRAVIS_BUILD_NUMBER}_commit-${TRAVIS_COMMIT:0:7}_branch-${TRAVIS_BRANCH}$([ ! -z ${TRAVIS_TAG} ] && echo _tag-${TRAVIS_TAG})"
         - aws s3 cp lbrynet-${OS}.zip s3://build.lbry.io/${S3_PATH}/lbrynet-${OS}.zip
-      deploy:
-        provider: releases
-        api_key:
-          secure: "unnR+aSJ1937Cl1PyBBZzGuZvV5W5TGcXELhXTgyOeeI6FgO/j80qmbNxJDA7qdFH/hvVicQFWoflhZu2dxN5rYP5BQJW3q3XoOLY3XAc1s1vicFkwqn3TIfdFiJTz+/D9eBUBBhHKeYFxm3M+thvklTLgjKl6fflh14NfGuNTevK9yQke8wewW3f9UmFTo1qNOPF1OsTZRbwua6oQYa59P+KukoPt4Dsu1VtILtTkj7hfEsUL79cjotwO3gkhYftxbl/xeDSZWOt+9Nhb8ZKmQG/uDx4JiTMm5lWRk4QB7pUujZ1CftxCYWz/lJx9nuJpdCOgP624tcHymErNlD+vGLwMTNslcXGYkAJH6xvGyxBJ+Obc8vRVnZbRM26BfH34TcPK1ueRxHSrDUbzMIIUsgcoZAxBuim8uDPp+K7bGqiygzSs2vQfr9U5Jhe9/F8sPdtNctfJZEfgmthNTeVFjyNsGIfIt754uGSfACqM7wDLh6fbKx7M+FHlNyOdvYCrbKUOAYXmTikYIpVDvlaaeMO+N+uW8Rhvm1j+JU7CVwhMavLySaPVc6Dt5OxiMMmxw9mVrjW9bBPjS5AkrS5MOA13T5wapoLzH6+gE92U4HzA6ilMcwRaQPSFnK2JU7tzyt2Wy1PH4MjHowXI2WyICG1x510dD3tX1P/1px8ro="
-        file: lbrynet-${OS}.zip
-        skip_cleanup: true
-        overwrite: true
-        draft: true
-        on:
-          tags: true
+#      deploy:
+#        provider: releases
+#        api_key:
+#          secure: "unnR+aSJ1937Cl1PyBBZzGuZvV5W5TGcXELhXTgyOeeI6FgO/j80qmbNxJDA7qdFH/hvVicQFWoflhZu2dxN5rYP5BQJW3q3XoOLY3XAc1s1vicFkwqn3TIfdFiJTz+/D9eBUBBhHKeYFxm3M+thvklTLgjKl6fflh14NfGuNTevK9yQke8wewW3f9UmFTo1qNOPF1OsTZRbwua6oQYa59P+KukoPt4Dsu1VtILtTkj7hfEsUL79cjotwO3gkhYftxbl/xeDSZWOt+9Nhb8ZKmQG/uDx4JiTMm5lWRk4QB7pUujZ1CftxCYWz/lJx9nuJpdCOgP624tcHymErNlD+vGLwMTNslcXGYkAJH6xvGyxBJ+Obc8vRVnZbRM26BfH34TcPK1ueRxHSrDUbzMIIUsgcoZAxBuim8uDPp+K7bGqiygzSs2vQfr9U5Jhe9/F8sPdtNctfJZEfgmthNTeVFjyNsGIfIt754uGSfACqM7wDLh6fbKx7M+FHlNyOdvYCrbKUOAYXmTikYIpVDvlaaeMO+N+uW8Rhvm1j+JU7CVwhMavLySaPVc6Dt5OxiMMmxw9mVrjW9bBPjS5AkrS5MOA13T5wapoLzH6+gE92U4HzA6ilMcwRaQPSFnK2JU7tzyt2Wy1PH4MjHowXI2WyICG1x510dD3tX1P/1px8ro="
+#        file: lbrynet-${OS}.zip
+#        skip_cleanup: true
+#        overwrite: true
+#        draft: true
+#        on:
+#          tags: true
 
     - <<: *build
       name: "Mac"
