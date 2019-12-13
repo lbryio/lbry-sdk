@@ -57,6 +57,12 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+def is_transactional_function(name):
+    for action in ('create', 'update', 'abandon', 'send', 'fund'):
+        if action in name:
+            return True
+
+
 def requires(*components, **conditions):
     if conditions and ["conditions"] != list(conditions.keys()):
         raise SyntaxError("invalid conditions argument")
@@ -390,13 +396,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 install_id_file.write(self._installation_id)
         return self._installation_id
 
-    @staticmethod
-    def log_function_params(fname, **params):
-        params_passed = [f'{k}: {repr(v)}' for k, v in params.items() if v is not None]
-        logstr = f'{fname}: {{{", ".join(params_passed)}}}'
-        log.info(logstr)
-
-
     def ensure_data_dir(self):
         if not os.path.isdir(self.conf.data_dir):
             os.makedirs(self.conf.data_dir)
@@ -560,7 +559,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         try:
             function_name = data['method']
-            self.log_function_params(function_name, **args)
         except KeyError:
             return JSONRPCError(
                 "Missing 'method' value in request.", JSONRPCError.CODE_METHOD_NOT_FOUND
@@ -587,6 +585,9 @@ class Daemon(metaclass=JSONRPCServerType):
             return JSONRPCError(
                 f"Invalid parameters format.", JSONRPCError.CODE_INVALID_PARAMS
             )
+
+        if is_transactional_function(function_name):
+            log.info("%s %s %s", function_name, _args, _kwargs)
 
         params_error, erroneous_params = self._check_params(fn, _args, _kwargs)
         if params_error is not None:
