@@ -108,7 +108,7 @@ class LBRYElectrumX(ElectrumX):
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYDB = self.bp.db
         # space separated list of channel URIs used for filtering bad content
-        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '1111')
+        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '')
         self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
 
     def set_request_handlers(self, ptuple):
