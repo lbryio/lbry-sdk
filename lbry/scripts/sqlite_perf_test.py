@@ -5,7 +5,7 @@ from lbry.wallet.server.metrics import calculate_avg_percentiles
 
 
 db_path = '../../../lbryconf/wallet-server/claims.db'
-default_query_timout  = 0.25
+default_query_timout = 0.25
 log = logging.getLogger(__name__)
 log.addHandler(logging.StreamHandler())
 
