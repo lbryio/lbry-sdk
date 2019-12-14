@@ -26,7 +26,8 @@ from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
-    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError
+    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
+    CommandError, CommandInvalidArgumentError, CommandDoesNotExistError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -169,10 +170,6 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
     }
 
 
-def sort_claim_results(claims):
-    claims.sort(key=lambda d: (d['height'], d['name'], d['claim_id'], d['txid'], d['nout']))
-
-
 DHT_HAS_CONTACTS = "dht_has_contacts"
 
 
@@ -215,10 +212,11 @@ class JSONRPCError:
         CODE_AUTHENTICATION_ERROR: 401,
     }
 
-    def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None):
+    def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None, name=None):
         assert isinstance(code, int), "'code' must be an int"
         assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
         self.code = code
+        self.name = name or 'Exception'
         if message is None:
             message = self.MESSAGES[code] if code in self.MESSAGES else "API Error"
         self.message = message
@@ -235,13 +233,23 @@ class JSONRPCError:
     def to_dict(self):
         return {
             'code': self.code,
+            'name': self.name,
             'message': self.message,
-            'data': self.traceback
+            'data': self.data,
+            'traceback': self.traceback
         }
 
     @classmethod
-    def create_from_exception(cls, message, code=CODE_APPLICATION_ERROR, traceback=None):
-        return cls(message, code=code, traceback=traceback)
+    def create_command_exception(cls, e, command, args, kwargs, traceback):
+        if 'password' in kwargs and isinstance(kwargs['password'], str):
+            kwargs['password'] = '*'*len(kwargs['password'])
+        return cls(str(e), traceback=traceback, name=e.__class__.__name__, data={
+            'command': command, 'args': args, 'kwargs': kwargs,
+        })
+
+    @classmethod
+    def create_rpc_exception(cls, e, code):
+        return cls(str(e), name=e.__class__.__name__, code=code)
 
 
 class UnknownAPIMethodError(Exception):
@@ -493,7 +501,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def handle_old_jsonrpc(self, request):
         data = await request.json()
-        include_protobuf = data.get('params', {}).pop('include_protobuf', False)
+        params = data.get('params', {})
+        include_protobuf = params.pop('include_protobuf', False) if isinstance(params, dict) else False
         result = await self._process_rpc_call(data)
         ledger = None
         if 'wallet' in self.component_manager.get_components_status():
@@ -560,30 +569,34 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             function_name = data['method']
         except KeyError:
-            return JSONRPCError(
-                "Missing 'method' value in request.", JSONRPCError.CODE_METHOD_NOT_FOUND
+            return JSONRPCError.create_rpc_exception(
+                CommandError("Missing 'method' value in request."),
+                JSONRPCError.CODE_METHOD_NOT_FOUND
             )
 
         try:
             fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError:
-            return JSONRPCError(
-                f"Invalid method requested: {function_name}.", JSONRPCError.CODE_METHOD_NOT_FOUND
+            return JSONRPCError.create_rpc_exception(
+                CommandDoesNotExistError(function_name),
+                JSONRPCError.CODE_METHOD_NOT_FOUND
             )
 
         if args in ([{}], []):
             _args, _kwargs = (), {}
         elif isinstance(args, dict):
             _args, _kwargs = (), args
-        elif len(args) == 1 and isinstance(args[0], dict):
+        elif isinstance(args, list) and len(args) == 1 and isinstance(args[0], dict):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
             _args, _kwargs = (), args[0]
-        elif len(args) == 2 and isinstance(args[0], list) and isinstance(args[1], dict):
+        elif isinstance(args, list) and len(args) == 2 and\
+                isinstance(args[0], list) and isinstance(args[1], dict):
             _args, _kwargs = args
         else:
-            return JSONRPCError(
-                f"Invalid parameters format.", JSONRPCError.CODE_INVALID_PARAMS
+            return JSONRPCError.create_rpc_exception(
+                CommandError(f"Invalid parameters format: {args}"),
+                JSONRPCError.CODE_INVALID_PARAMS
             )
 
         if is_transactional_function(function_name):
@@ -595,8 +608,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 params_error, function_name, ', '.join(erroneous_params)
             )
             log.warning(params_error_message)
-            return JSONRPCError(
-                params_error_message, JSONRPCError.CODE_INVALID_PARAMS
+            return JSONRPCError.create_rpc_exception(
+                CommandError(params_error_message),
+                JSONRPCError.CODE_INVALID_PARAMS
             )
 
         try:
@@ -609,10 +623,8 @@ class Daemon(metaclass=JSONRPCServerType):
             raise
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
-            return JSONRPCError(
-                f"Error calling {function_name} with args {args}\n" + str(e),
-                JSONRPCError.CODE_APPLICATION_ERROR,
-                format_exc()
+            return JSONRPCError.create_command_exception(
+                e, function_name, _args, _kwargs, format_exc()
             )
 
     def _verify_method_is_callable(self, function_path):
