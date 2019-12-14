@@ -315,6 +315,33 @@ class TestClaimtrie(TestSQLDB):
             accepted=[]
         )
 
+    def test_create_and_update_in_same_block(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        advance(10, [stream, self.get_stream_update(stream, 11*COIN)])
+        self.assertTrue(reader._search())
+
+    def test_create_and_abandon_in_same_block(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        advance(10, [stream, self.get_abandon(stream)])
+        self.assertFalse(reader._search())
+
+    def test_update_and_abandon_in_same_block(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        advance(10, [stream])
+        update = self.get_stream_update(stream, 11*COIN)
+        advance(20, [update, self.get_abandon(update)])
+        self.assertFalse(reader._search())
+
+    def test_create_update_and_delete_in_same_block(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        update = self.get_stream_update(stream, 11*COIN)
+        advance(10, [stream, update, self.get_abandon(update)])
+        self.assertFalse(reader._search())
+
     @staticmethod
     def _get_x_with_claim_id_prefix(getter, prefix, cached_iteration=None, **kwargs):
         iterations = cached_iteration+1 if cached_iteration else 100

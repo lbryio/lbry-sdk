@@ -684,6 +684,7 @@ class SQLDB:
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
         update_claims = []
+        update_claim_hashes = set()
         delete_claim_hashes = set()
         insert_supports = []
         delete_support_txo_hashes = set()
@@ -718,15 +719,25 @@ class SQLDB:
                     update_claims.append(output)
                     recalculate_claim_hashes.add(claim_hash)
                     delete_claim_hashes.discard(claim_hash)
-                    delete_others.discard(output.ref.hash)  # claim insertion and update occurring in the same block
+                    update_claim_hashes.add(claim_hash)
             body_timer.stop()
 
-        skip_claim_timer = timer.add_timer('skip insertion of abandoned claims')
-        skip_claim_timer.start()
+        skip_update_claim_timer = timer.add_timer('skip update of abandoned claims')
+        skip_update_claim_timer.start()
+        for updated_claim in list(update_claims):
+            if updated_claim.ref.hash in delete_others:
+                update_claims.remove(updated_claim)
+                delete_claim_hashes.add(updated_claim.claim_hash)
+                update_claim_hashes.discard(updated_claim.claim_hash)
+        skip_update_claim_timer.stop()
+
+        skip_insert_claim_timer = timer.add_timer('skip insertion of abandoned claims')
+        skip_insert_claim_timer.start()
         for new_claim in list(insert_claims):
             if new_claim.ref.hash in delete_others:
-                insert_claims.remove(new_claim)
-        skip_claim_timer.stop()
+                if new_claim.claim_hash not in update_claim_hashes:
+                    insert_claims.remove(new_claim)
+        skip_insert_claim_timer.stop()
 
         expire_timer = timer.add_timer('recording expired claims')
         expire_timer.start()
