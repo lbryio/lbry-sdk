@@ -739,6 +739,13 @@ class SQLDB:
                     insert_claims.remove(new_claim)
         skip_insert_claim_timer.stop()
 
+        skip_insert_support_timer = timer.add_timer('skip insertion of abandoned supports')
+        skip_insert_support_timer.start()
+        for new_support in list(insert_supports):
+            if new_support.ref.hash in delete_others:
+                insert_supports.remove(new_support)
+        skip_insert_support_timer.stop()
+
         expire_timer = timer.add_timer('recording expired claims')
         expire_timer.start()
         for expired in self.get_expiring(height):
