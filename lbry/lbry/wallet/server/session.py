@@ -184,7 +184,7 @@ class LBRYElectrumX(ElectrumX):
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
-            kwargs['blocklist_channel_ids'] = self.filtering_channels_ids
+            kwargs.setdefault('blocklist_channel_ids', []).extend(self.filtering_channels_ids)
             return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
 
     async def claimtrie_resolve(self, *urls):
