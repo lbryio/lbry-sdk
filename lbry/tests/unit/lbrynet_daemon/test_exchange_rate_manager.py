@@ -9,22 +9,8 @@ from lbry.extras.daemon.exchange_rate_manager import (
     BittrexFeed,
 )
 from torba.testcase import AsyncioTestCase
+from lbry.testcase import FakeExchangeRateManager, get_fake_exchange_rate_manager
 from lbry.error import InvalidExchangeRateResponseError
-
-
-class DummyExchangeRateManager(ExchangeRateManager):
-    def __init__(self, market_feeds, rates):
-        self.market_feeds = market_feeds
-        for feed in self.market_feeds:
-            feed.last_check = time()
-            feed.rate = ExchangeRate(feed.market, rates[feed.market], time())
-
-
-def get_dummy_exchange_rate_manager():
-    return DummyExchangeRateManager(
-        [LBRYFeed(), LBRYBTCFeed()],
-        {'BTCLBC': 3.0, 'USDBTC': 2.0}
-    )
 
 
 class ExchangeRateTests(AsyncioTestCase):
@@ -39,7 +25,7 @@ class ExchangeRateTests(AsyncioTestCase):
         fee = Claim().stream.fee
         fee.usd = Decimal(10.0)
         fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-        manager = get_dummy_exchange_rate_manager()
+        manager = get_fake_exchange_rate_manager()
         result = manager.convert_currency(fee.currency, "LBC", fee.amount)
         self.assertEqual(60.0, result)
 
@@ -47,7 +33,7 @@ class ExchangeRateTests(AsyncioTestCase):
         fee = Claim().stream.fee
         fee.usd = Decimal(1.0)
         fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-        manager = DummyExchangeRateManager([LBRYFeed()], {'BTCLBC': 1.0})
+        manager = FakeExchangeRateManager([LBRYFeed()], {'BTCLBC': 1.0})
         with self.assertRaises(CurrencyConversionError):
             manager.convert_currency(fee.currency, "LBC", fee.amount)
 
