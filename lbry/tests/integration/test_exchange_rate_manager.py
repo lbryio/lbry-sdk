@@ -1,8 +1,6 @@
 from decimal import Decimal
 from torba.testcase import AsyncioTestCase
-from lbry.extras.daemon.exchange_rate_manager import (
-    ExchangeRate, ExchangeRateManager
-)
+from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager
 
 
 class TestExchangeRateManager(AsyncioTestCase):

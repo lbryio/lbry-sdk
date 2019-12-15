@@ -4,7 +4,6 @@ import asyncio
 import logging
 from decimal import Decimal
 from typing import Optional, Iterable, Type
-from aiohttp.client_exceptions import ClientError
 from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
 from lbry.wallet.dewies import lbc_to_dewies
