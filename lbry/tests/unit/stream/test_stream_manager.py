@@ -7,7 +7,7 @@ import time
 import json
 from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
-from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
+from tests.unit.lbrynet_daemon.test_exchange_rate_manager import get_dummy_exchange_rate_manager
 from lbry.utils import generate_id
 from torba.client.errors import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
