@@ -310,5 +310,5 @@ class TestAioHttpManager(AsyncioTestCase):
         manager = exchange_rate_manager.AioHttpManager('some url', 'some params', 'json')
         with unittest.mock.patch.object(
                 exchange_rate_manager.AioHttpManager, '_make_request', make_request_mock
-        ), self.assertRaises(InvalidExchangeRateResponse):
+        ), self.assertRaises(InvalidExchangeRateResponseError):
             await manager.get_response_body()
