@@ -72,7 +72,7 @@ class AioHttpManager:
     async def get_response_body(self):
         response = await asyncio.wait_for(self._make_request(), self.REQUESTS_TIMEOUT)
         if self.content_type not in response.headers.get('Content-Type'):
-            raise InvalidExchangeRateResponse(self.url, f'Received response is not of type {self.content_type}')
+            raise InvalidExchangeRateResponseError(self.url, f'Received response is not of type {self.content_type}')
         return response.read().decode()
 
 
