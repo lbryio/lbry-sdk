@@ -140,7 +140,7 @@ class TestStreamManager(BlobExchangeTestBase):
                                             AnalyticsManager(self.client_config,
                                                              binascii.hexlify(generate_id()).decode(),
                                                              binascii.hexlify(generate_id()).decode()))
-        self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
+        self.exchange_rate_manager = get_dummy_exchange_rate_manager()
 
     async def _test_time_to_first_bytes(self, check_post, error=None, after_setup=None):
         await self.setup_stream_manager()
