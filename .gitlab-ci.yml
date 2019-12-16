@@ -29,29 +29,25 @@ test:lbry-unit:
     - make install tools
     - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-
 test:lbry-integ:
   stage: test
   script:
     - pip install coverage tox-travis
     - cd lbry && tox
 
-
-.torba-tests: &torba_tests
+test:torba-unit:
   stage: test
   script:
     - pip install coverage tox-travis
-    - cd torba && tox
-
-test:torba-unit:
-  before_script:
-    - export TESTTYPE=unit
-  <<: *torba_tests
+    - cd torba/tests
+    - tox -e py37-unit
 
 test:torba-integ:
-  before_script:
-    - export TESTTYPE=integration
-  <<: *torba_tests
+  stage: test
+  script:
+    - pip install coverage tox-travis
+    - cd torba/tests
+    - tox -e py37-integration-torba.coin.bitcoinsegwit
 
 test:json-api:
   stage: test
