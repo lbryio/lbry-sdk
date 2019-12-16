@@ -14,7 +14,15 @@ default:
 stages:
   - test
   - build
+  - assets
   - release
+
+
+.tagged:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9\.]+$/'
+      when: on_success
+
 
 
 test:lint:
@@ -130,10 +138,10 @@ build:windows:
     - dist/lbrynet.exe --version
 
 
+
 # s3 = upload asset to s3 (build.lbry.io)
-# could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
 .s3:
-  stage: release
+  stage: assets
   variables:
     GIT_STRATEGY: none
   script:
@@ -145,42 +153,54 @@ build:windows:
 s3:linux:
   extends: .s3
   variables: {OS: linux}
-  dependencies: ["build:linux"]
+  needs: ["build:linux"]
 
 s3:mac:
   extends: .s3
   variables: {OS: mac}
-  dependencies: ["build:mac"]
+  needs: ["build:mac"]
 
 s3:windows:
   extends: .s3
   variables: {OS: windows}
-  dependencies: ["build:windows"]
+  needs: ["build:windows"]
 
-# release = upload assets to github when there's a tagged release
-.release:
-  stage: release
-  rules:
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9\.]+$/'
-      when: on_success
+
+
+# github = upload assets to github when there's a tagged release
+.github:
+  extends: .tagged
+  stage: assets
   variables:
     GIT_STRATEGY: none
   script:
     - pip install githubrelease
     - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
 
-release:linux:
-  extends: .release
+github:linux:
+  extends: .github
   variables: {OS: linux}
-  dependencies: ["build:linux"]
+  needs: ["build:linux"]
 
-release:mac:
-  extends: .release
+github:mac:
+  extends: .github
   variables: {OS: mac}
-  dependencies: ["build:mac"]
+  needs: ["build:mac"]
 
-release:windows:
-  extends: .release
+github:windows:
+  extends: .github
   variables: {OS: windows}
-  dependencies: ["build:windows"]
+  needs: ["build:windows"]
 
+
+
+publish:
+  extends: .tagged
+  stage: release
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - pip install githubrelease
+    - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} release lbryio/lbry-sdk publish ${CI_COMMIT_TAG}
+    - >
+      curl -X POST -H 'Content-type: application/json' --data '{"text":"<!channel> There's a new SDK release: https://github.com/lbryio/lbry-sdk/releases/tag/'"${CI_COMMIT_TAG}"'\n'"$(curl -s "https://api.github.com/repos/lbryio/lbry-sdk/releases/tags/${CI_COMMIT_TAG}" | egrep '\w*\"body\":' | cut -d':' -f 2- | tail -c +3 | head -c -2)"'", "channel":"tech"}' "$(echo ${SLACK_WEBHOOK_URL_BASE64} | base64 -d)"
