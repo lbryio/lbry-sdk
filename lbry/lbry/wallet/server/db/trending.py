@@ -1,4 +1,4 @@
-from math import sqrt
+import numpy as np
 import time
 
 # Half life in blocks
