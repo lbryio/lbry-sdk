@@ -113,16 +113,18 @@ async def monitor(db, server):
 
                 async for msg in ws:
                     event = json.loads(msg.data)
-                    height = event['status']['height']
+                    height = event['status'].get('height')
                     height_change_time = int(time()-height_changed[1])
-                    if height_changed[0] != height:
+                    if height is None:
+                        pass
+                    elif height_changed[0] != height:
                         height_changed = (height, time())
                         if height_change_reported:
                             await boris_says(
                                 f"Server {server} received new block after {height_change_time / 60:.1f} minutes.",
                             )
                             height_change_reported = False
-                    elif height_change_time > 10*60:
+                    elif height_change_time > 30*60:
                         if not height_change_reported or height_change_time % (2*60) == 0:
                             await boris_says(
                                 f"It's been {height_change_time/60:.1f} minutes since {server} received a new block.",

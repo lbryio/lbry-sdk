@@ -321,11 +321,10 @@ class BaseLedger(metaclass=LedgerRegistry):
         async with self.headers.checkpointed_connector() as buffer:
             for chunk in chunks:
                 headers = await chunk
-                total += len(headers['base64'])
-                buffer.write(
+                total += buffer.write(
                     zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
                 )
-                self._download_height = current + buffer.tell() // self.headers.header_size
+                self._download_height = current + total // self.headers.header_size
                 log.info("Headers sync: %s / %s", self._download_height, target)
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):

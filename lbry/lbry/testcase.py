@@ -3,7 +3,9 @@ import json
 import shutil
 import tempfile
 import logging
+from time import time
 from binascii import unhexlify
+from functools import partial
 
 from torba.testcase import IntegrationTestCase, WalletNode
 
@@ -20,19 +22,22 @@ from lbry.extras.daemon.Components import (
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
 from lbry.extras.daemon.ComponentManager import ComponentManager
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager as BaseExchangeRateManager
+from lbry.extras.daemon.exchange_rate_manager import (
+    ExchangeRateManager, ExchangeRate, LBRYFeed, LBRYBTCFeed
+)
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
 from lbry.blob_exchange.server import BlobServer
 
 
-class FakeExchangeRateManager(BaseExchangeRateManager):
+class FakeExchangeRateManager(ExchangeRateManager):
 
-    def __init__(self):
-        super().__init__()
-        for i, feed in enumerate(self.market_feeds):
-            feed._save_price(i+1)
+    def __init__(self, market_feeds, rates):
+        self.market_feeds = market_feeds
+        for feed in self.market_feeds:
+            feed.last_check = time()
+            feed.rate = ExchangeRate(feed.market, rates[feed.market], time())
 
     def start(self):
         pass
@@ -41,15 +46,22 @@ class FakeExchangeRateManager(BaseExchangeRateManager):
         pass
 
 
+def get_fake_exchange_rate_manager(rates=None):
+    return FakeExchangeRateManager(
+        [LBRYFeed(), LBRYBTCFeed()],
+        rates or {'BTCLBC': 3.0, 'USDBTC': 2.0}
+    )
+
+
 class ExchangeRateManagerComponent(Component):
     component_name = EXCHANGE_RATE_MANAGER_COMPONENT
 
-    def __init__(self, component_manager):
+    def __init__(self, component_manager, rates=None):
         super().__init__(component_manager)
-        self.exchange_rate_manager = FakeExchangeRateManager()
+        self.exchange_rate_manager = get_fake_exchange_rate_manager(rates)
 
     @property
-    def component(self) -> BaseExchangeRateManager:
+    def component(self) -> ExchangeRateManager:
         return self.exchange_rate_manager
 
     async def start(self):
@@ -151,7 +163,9 @@ class CommandTestCase(IntegrationTestCase):
 
         daemon = Daemon(conf, ComponentManager(
             conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
-            exchange_rate_manager=ExchangeRateManagerComponent
+            exchange_rate_manager=partial(ExchangeRateManagerComponent, rates={
+                'BTCLBC': 1.0, 'USDBTC': 2.0
+            })
         ))
         await daemon.initialize()
         self.daemons.append(daemon)

@@ -1,5 +1,6 @@
 import os
 import json
+import typing
 import logging
 from binascii import unhexlify
 from typing import Optional, List
@@ -15,11 +16,14 @@ from lbry.wallet.account import Account
 from lbry.wallet.ledger import MainNetLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.database import WalletDatabase
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.conf import Config
 
 
 log = logging.getLogger(__name__)
+
+
+if typing.TYPE_CHECKING:
+    from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 
 class LbryWalletManager(BaseWalletManager):
@@ -195,7 +199,8 @@ class LbryWalletManager(BaseWalletManager):
         return tx
 
     async def create_purchase_transaction(
-            self, accounts: List[Account], txo: Output, exchange: ExchangeRateManager, override_max_key_fee=False):
+            self, accounts: List[Account], txo: Output, exchange: 'ExchangeRateManager',
+            override_max_key_fee=False):
         fee = txo.claim.stream.fee
         fee_amount = exchange.to_dewies(fee.currency, fee.amount)
         if not override_max_key_fee and self.config.max_key_fee:

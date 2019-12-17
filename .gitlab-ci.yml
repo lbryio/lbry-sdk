@@ -14,7 +14,15 @@ default:
 stages:
   - test
   - build
+  - assets
   - release
+
+
+.tagged:
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9\.]+$/'
+      when: on_success
+
 
 
 test:lint:
@@ -29,29 +37,25 @@ test:lbry-unit:
     - make install tools
     - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-
 test:lbry-integ:
   stage: test
   script:
     - pip install coverage tox-travis
     - cd lbry && tox
 
-
-.torba-tests: &torba_tests
+test:torba-unit:
   stage: test
   script:
     - pip install coverage tox-travis
-    - cd torba && tox
-
-test:torba-unit:
-  before_script:
-    - export TESTTYPE=unit
-  <<: *torba_tests
+    - cd torba/tests
+    - tox -e py37-unit
 
 test:torba-integ:
-  before_script:
-    - export TESTTYPE=integration
-  <<: *torba_tests
+  stage: test
+  script:
+    - pip install coverage tox-travis
+    - cd torba/tests
+    - tox -e py37-integration-torba.coin.bitcoinsegwit
 
 test:json-api:
   stage: test
@@ -134,9 +138,10 @@ build:windows:
     - dist/lbrynet.exe --version
 
 
-# upload could be done by making it a yaml alias and putting it right into the build step. that way if one OS fails, the others still get uploaded
-.upload:
-  stage: release
+
+# s3 = upload asset to s3 (build.lbry.io)
+.s3:
+  stage: assets
   variables:
     GIT_STRATEGY: none
   script:
@@ -146,34 +151,56 @@ build:windows:
       aws s3 cp lbrynet-${OS}.zip s3://${ARTIFACTS_BUCKET}/${S3_PATH}/lbrynet-${OS}.zip
 
 s3:linux:
-  extends: .upload
-  variables:
-    OS: linux
-  dependencies:
-    - build:linux
+  extends: .s3
+  variables: {OS: linux}
+  needs: ["build:linux"]
 
 s3:mac:
-  extends: .upload
-  variables:
-    OS: mac
-  dependencies:
-    - build:mac
+  extends: .s3
+  variables: {OS: mac}
+  needs: ["build:mac"]
 
 s3:windows:
-  extends: .upload
+  extends: .s3
+  variables: {OS: windows}
+  needs: ["build:windows"]
+
+
+
+# github = upload assets to github when there's a tagged release
+.github:
+  extends: .tagged
+  stage: assets
   variables:
-    OS: windows
-  dependencies:
-    - build:windows
+    GIT_STRATEGY: none
+  script:
+    - pip install githubrelease
+    - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
 
-#release:linux:
-#  stage: release
-#  only: [tags]
-#  variables:
-#    OS: linux
-#    GIT_STRATEGY: none
-#  dependencies: [build:linux]
-#  script:
-#    - pip install githubrelease
-#    - githubrelease asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
+github:linux:
+  extends: .github
+  variables: {OS: linux}
+  needs: ["build:linux"]
 
+github:mac:
+  extends: .github
+  variables: {OS: mac}
+  needs: ["build:mac"]
+
+github:windows:
+  extends: .github
+  variables: {OS: windows}
+  needs: ["build:windows"]
+
+
+
+publish:
+  extends: .tagged
+  stage: release
+  variables:
+    GIT_STRATEGY: none
+  script:
+    - pip install githubrelease
+    - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} release lbryio/lbry-sdk publish ${CI_COMMIT_TAG}
+    - >
+      curl -X POST -H 'Content-type: application/json' --data '{"text":"<!channel> There's a new SDK release: https://github.com/lbryio/lbry-sdk/releases/tag/'"${CI_COMMIT_TAG}"'\n'"$(curl -s "https://api.github.com/repos/lbryio/lbry-sdk/releases/tags/${CI_COMMIT_TAG}" | egrep '\w*\"body\":' | cut -d':' -f 2- | tail -c +3 | head -c -2)"'", "channel":"tech"}' "$(echo ${SLACK_WEBHOOK_URL_BASE64} | base64 -d)"

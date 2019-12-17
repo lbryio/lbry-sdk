@@ -2,6 +2,7 @@ from unittest import TestCase
 from decimal import Decimal
 
 from lbry.schema.claim import Claim, Stream, Collection
+from lbry.error import InputValueIsNoneError
 
 
 class TestClaimContainerAwareness(TestCase):
@@ -195,3 +196,24 @@ class TestLocations(TestCase):
         stream = Stream()
         stream.locations.append({"country": "UA"})
         self.assertEqual(stream.locations[0].country, 'UA')
+
+
+class TestStreamUpdating(TestCase):
+
+    def test_stream_update(self):
+        stream = Stream()
+        # each of these values is set differently inside of .update()
+        stream.update(
+            title="foo",
+            thumbnail_url="somescheme:some/path",
+            file_name="file-name"
+        )
+        self.assertEqual(stream.title, "foo")
+        self.assertEqual(stream.thumbnail.url, "somescheme:some/path")
+        self.assertEqual(stream.source.name, "file-name")
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(title=None)
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(file_name=None)
+        with self.assertRaises(InputValueIsNoneError):
+            stream.update(thumbnail_url=None)

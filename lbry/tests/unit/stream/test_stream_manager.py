@@ -3,11 +3,10 @@ import shutil
 import binascii
 from unittest import mock
 import asyncio
-import time
 import json
 from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
-from tests.unit.lbrynet_daemon.test_ExchangeRateManager import get_dummy_exchange_rate_manager
+from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
 from torba.client.errors import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
@@ -140,7 +139,7 @@ class TestStreamManager(BlobExchangeTestBase):
                                             AnalyticsManager(self.client_config,
                                                              binascii.hexlify(generate_id()).decode(),
                                                              binascii.hexlify(generate_id()).decode()))
-        self.exchange_rate_manager = get_dummy_exchange_rate_manager(time)
+        self.exchange_rate_manager = get_fake_exchange_rate_manager()
 
     async def _test_time_to_first_bytes(self, check_post, error=None, after_setup=None):
         await self.setup_stream_manager()

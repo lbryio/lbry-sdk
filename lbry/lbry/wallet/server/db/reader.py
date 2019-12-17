@@ -167,7 +167,7 @@ def execute_query(sql, values) -> List:
         plain_sql = interpolate(sql, values)
         if context.is_tracking_metrics:
             context.metrics['execute_query'][-1]['sql'] = plain_sql
-        if str(err) == "interrupted":
+        if isinstance(err, apsw.InterruptError):
             context.log.warning("interrupted slow sqlite query:\n%s", plain_sql)
             raise SQLiteInterruptedError(context.metrics)
         context.log.exception('failed running query', exc_info=err)

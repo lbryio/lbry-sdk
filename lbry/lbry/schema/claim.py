@@ -16,6 +16,7 @@ from lbry.schema.attrs import (
     LanguageList, LocationList, ClaimList, ClaimReference, TagList
 )
 from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
+from lbry.error import InputValueIsNoneError
 
 
 hachoir_log.use_print = False
@@ -119,7 +120,14 @@ class BaseClaim:
             claim['locations'] = [l.to_dict() for l in self.locations]
         return claim
 
+    def none_check(self, kwargs):
+        for key, value in kwargs.items():
+            if value is None:
+                raise InputValueIsNoneError(key)
+
     def update(self, **kwargs):
+        self.none_check(kwargs)
+
         for key in list(kwargs):
             for field in self.object_fields:
                 if key.startswith(f'{field}_'):
@@ -207,6 +215,7 @@ class Stream(BaseClaim):
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
+
         if kwargs.pop('clear_fee', False):
             self.message.ClearField('fee')
         else:
@@ -215,6 +224,8 @@ class Stream(BaseClaim):
                 kwargs.pop('fee_currency', None),
                 kwargs.pop('fee_amount', None)
             )
+
+        self.none_check(kwargs)
 
         if 'sd_hash' in kwargs:
             self.source.sd_hash = kwargs.pop('sd_hash')
