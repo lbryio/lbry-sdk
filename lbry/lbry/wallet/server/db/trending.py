@@ -1,4 +1,3 @@
-import numpy as np
 import time
 
 # Half life in blocks
@@ -49,14 +48,13 @@ class TrendingData:
         if claim_id in self.claims:
             old_data = self.claims[claim_id]
         else:
-            old_data = [total_amount, np.float32(trending_score), False]
+            old_data = [total_amount, trending_score, False]
             self.claims[claim_id] = [total_amount,
-                                        np.float32(trending_score), False]
+                                        trending_score, False]
 
         change = total_amount - old_data[0]
         if change != 0.0:
-            trending_score = old_data[1]\
-                                 + np.float32(soften(1E-8*time_boost*change))
+            trending_score = old_data[1] + soften(1E-8*time_boost*change)
             self.claims[claim_id] = [total_amount, trending_score, True]
 
 
@@ -71,7 +69,7 @@ def calculate_trending(db, height, final_height):
 
     f = open("trending.log", "a")
 
-    if height < final_height - 100:# 2*half_life:
+    if height < final_height - half_life:
         if height % 100 == 0:
             f.write("Skipping AR trending at block {h}.\n".format(h=height))
             f.flush()
@@ -123,7 +121,7 @@ def calculate_trending(db, height, final_height):
         keys = trending_data.claims.keys()
         for key in keys:
             if trending_data.claims[key][2]:
-                the_list.append((float(trending_data.claims[key][1]), key))
+                the_list.append((trending_data.claims[key][1], key))
                 trending_data.claims[key][2] = False
         f.write("{n} scores to write...".format(n=len(the_list)))
         f.flush()
