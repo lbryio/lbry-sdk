@@ -123,7 +123,7 @@ def calculate_trending(db, height, final_height):
         keys = trending_data.claims.keys()
         for key in keys:
             if trending_data.claims[key][2]:
-                the_list.append((trending_data.claims[key][1], key))
+                the_list.append((float(trending_data.claims[key][1]), key))
                 trending_data.claims[key][2] = False
         f.write("{n} scores to write...".format(n=len(the_list)))
         f.flush()
