@@ -133,7 +133,7 @@ build:windows:
     - python docker/set_build.py
     - pip install -e lbry/.
     - pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
-    - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip dist/lbrynet.exe
+    - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip ./dist/lbrynet.exe
     - checksum --type=sha256 --file=$env:CI_PROJECT_DIR/lbrynet-${OS}.zip
     - dist/lbrynet.exe --version
 
