@@ -718,8 +718,6 @@ class SQLDB:
                     claim_hash = output.claim_hash
                     update_claims.append(output)
                     recalculate_claim_hashes.add(claim_hash)
-                    delete_claim_hashes.discard(claim_hash)
-                    update_claim_hashes.add(claim_hash)
             body_timer.stop()
 
         skip_update_claim_timer = timer.add_timer('skip update of abandoned claims')
@@ -727,8 +725,10 @@ class SQLDB:
         for updated_claim in list(update_claims):
             if updated_claim.ref.hash in delete_others:
                 update_claims.remove(updated_claim)
-                delete_claim_hashes.add(updated_claim.claim_hash)
-                update_claim_hashes.discard(updated_claim.claim_hash)
+        for updated_claim in update_claims:
+            claim_hash = updated_claim.claim_hash
+            delete_claim_hashes.discard(claim_hash)
+            update_claim_hashes.add(claim_hash)
         skip_update_claim_timer.stop()
 
         skip_insert_claim_timer = timer.add_timer('skip insertion of abandoned claims')
