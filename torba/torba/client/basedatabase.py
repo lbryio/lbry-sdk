@@ -199,8 +199,8 @@ def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
 def interpolate(sql, values):
     for k in sorted(values.keys(), reverse=True):
         value = values[k]
-        if isinstance(value, memoryview):
-            value = f"X'{hexlify(bytes(value)).decode()}'"
+        if isinstance(value, bytes):
+            value = f"X'{hexlify(value).decode()}'"
         elif isinstance(value, str):
             value = f"'{value}'"
         else:
