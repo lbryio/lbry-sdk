@@ -180,7 +180,7 @@ class TestQueryBuilder(unittest.TestCase):
                 a__not='b', b__in='select * from blah where c=:$c',
                 d__any={'one__like': 'o', 'two': 2},
                 a0=3, a00=1, a00a=2, a00aa=4,  # <-- breaks without correct interpolation key order
-                ahash=memoryview(sha256(b'hello world')),
+                ahash=sha256(b'hello world'),
                 limit=10, order_by='b', **{'$c': 3})
             ),
             "select * from foo WHERE a != 'b' AND "
