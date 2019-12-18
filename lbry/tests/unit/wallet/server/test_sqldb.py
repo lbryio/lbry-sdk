@@ -321,6 +321,14 @@ class TestClaimtrie(TestSQLDB):
         advance(10, [stream, self.get_stream_update(stream, 11*COIN)])
         self.assertTrue(reader._search())
 
+    def test_double_updates_in_same_block(self):
+        advance, state = self.advance, self.state
+        stream = self.get_stream('Claim A', 10*COIN)
+        advance(10, [stream])
+        update = self.get_stream_update(stream, 11*COIN)
+        advance(20, [update, self.get_stream_update(update, 9*COIN)])
+        self.assertTrue(reader._search())
+
     def test_create_and_abandon_in_same_block(self):
         advance, state = self.advance, self.state
         stream = self.get_stream('Claim A', 10*COIN)
