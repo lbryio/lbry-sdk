@@ -213,6 +213,7 @@ class MemPool:
             synchronized_event.clear()
             await self.api.on_mempool(touched, height)
             try:
+                # we wait up to `refresh_secs` but go early if a broadcast happens (which triggers wakeup event)
                 await asyncio.wait_for(self.wakeup.wait(), timeout=self.refresh_secs)
             except asyncio.TimeoutError:
                 pass
