@@ -575,7 +575,10 @@ class BaseLedger(metaclass=LedgerRegistry):
         # broadcast can't be a retriable call yet
         return self.network.broadcast(hexlify(tx.raw).decode())
 
-    async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=None):
+    async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=1):
+        we_have = await self.get_transactions(txid=tx.id)
+        if we_have and we_have[0].height >= height:
+            return
         addresses = set()
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
