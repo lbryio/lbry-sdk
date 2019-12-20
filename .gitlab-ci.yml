@@ -145,6 +145,7 @@ build:windows:
   variables:
     GIT_STRATEGY: none
   script:
+    - "[ -f lbrynet-${OS}.zip ]" # check that asset exists before trying to upload
     - pip install awscli
     - S3_PATH="daemon/gitlab-build-${CI_PIPELINE_ID}_commit-${CI_COMMIT_SHA:0:7}$( if [ ! -z ${CI_COMMIT_TAG} ]; then echo _tag-${CI_COMMIT_TAG}; else echo _branch-${CI_COMMIT_REF_NAME}; fi )"
     - AWS_ACCESS_KEY_ID=${ARTIFACTS_KEY} AWS_SECRET_ACCESS_KEY=${ARTIFACTS_SECRET} AWS_REGION=${ARTIFACTS_REGION}
@@ -174,6 +175,7 @@ s3:windows:
   variables:
     GIT_STRATEGY: none
   script:
+    - "[ -f lbrynet-${OS}.zip ]" # check that asset exists before trying to upload. githubrelease won't error if its missing
     - pip install githubrelease
     - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
 
