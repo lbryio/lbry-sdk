@@ -212,44 +212,46 @@ class JSONRPCError:
         CODE_AUTHENTICATION_ERROR: 401,
     }
 
-    def __init__(self, message, code=CODE_APPLICATION_ERROR, traceback=None, data=None, name=None):
-        assert isinstance(code, int), "'code' must be an int"
-        assert (data is None or isinstance(data, dict)), "'data' must be None or a dict"
+    def __init__(self, code: int, message: str, data: dict=None):
+        assert code and isinstance(code, int), "'code' must be an int"
+        assert message and isinstance(message, str), "'message' must be a string"
+        assert data is None or isinstance(data, dict), "'data' must be None or a dict"
         self.code = code
-        self.name = name or 'Exception'
-        if message is None:
-            message = self.MESSAGES[code] if code in self.MESSAGES else "API Error"
         self.message = message
-        self.data = {} if data is None else data
-        self.traceback = []
-        if traceback is not None:
-            self.traceback = trace_lines = traceback.split("\n")
-            for i, t in enumerate(trace_lines):
-                if "--- <exception caught here> ---" in t:
-                    if len(trace_lines) > i + 1:
-                        self.traceback = [j for j in trace_lines[i + 1:] if j]
-                        break
+        self.data = data or {}
 
     def to_dict(self):
         return {
             'code': self.code,
-            'name': self.name,
             'message': self.message,
             'data': self.data,
-            'traceback': self.traceback
         }
 
-    @classmethod
-    def create_command_exception(cls, e, command, args, kwargs, traceback):
-        if 'password' in kwargs and isinstance(kwargs['password'], str):
-            kwargs['password'] = '*'*len(kwargs['password'])
-        return cls(str(e), traceback=traceback, name=e.__class__.__name__, data={
-            'command': command, 'args': args, 'kwargs': kwargs,
-        })
+    @staticmethod
+    def filter_traceback(traceback):
+        result = []
+        if traceback is not None:
+            result = trace_lines = traceback.split("\n")
+            for i, t in enumerate(trace_lines):
+                if "--- <exception caught here> ---" in t:
+                    if len(trace_lines) > i + 1:
+                        result = [j for j in trace_lines[i + 1:] if j]
+                        break
+        return result
 
     @classmethod
-    def create_rpc_exception(cls, e, code):
-        return cls(str(e), name=e.__class__.__name__, code=code)
+    def create_command_exception(cls, command, args, kwargs, exception, traceback):
+        if 'password' in kwargs and isinstance(kwargs['password'], str):
+            kwargs['password'] = '*'*len(kwargs['password'])
+        return cls(
+            cls.CODE_APPLICATION_ERROR, str(exception), {
+                'name': exception.__class__.__name__,
+                'traceback': cls.filter_traceback(traceback),
+                'command': command,
+                'args': args,
+                'kwargs': kwargs,
+            }
+        )
 
 
 class UnknownAPIMethodError(Exception):
@@ -514,8 +516,9 @@ class Daemon(metaclass=JSONRPCServerType):
         except:
             log.exception('Failed to encode JSON RPC result:')
             encoded_result = jsonrpc_dumps_pretty(JSONRPCError(
+                JSONRPCError.CODE_APPLICATION_ERROR,
                 'After successfully executing the command, failed to encode result for JSON RPC response.',
-                JSONRPCError.CODE_APPLICATION_ERROR, format_exc()
+                {'traceback': format_exc()}
             ), ledger=ledger)
         return web.Response(
             text=encoded_result,
@@ -569,17 +572,17 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             function_name = data['method']
         except KeyError:
-            return JSONRPCError.create_rpc_exception(
-                CommandError("Missing 'method' value in request."),
-                JSONRPCError.CODE_METHOD_NOT_FOUND
+            return JSONRPCError(
+                JSONRPCError.CODE_METHOD_NOT_FOUND,
+                "Missing 'method' value in request."
             )
 
         try:
             fn = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError:
-            return JSONRPCError.create_rpc_exception(
-                CommandDoesNotExistError(function_name),
-                JSONRPCError.CODE_METHOD_NOT_FOUND
+            return JSONRPCError(
+                JSONRPCError.CODE_METHOD_NOT_FOUND,
+                str(CommandDoesNotExistError(function_name))
             )
 
         if args in ([{}], []):
@@ -594,9 +597,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 isinstance(args[0], list) and isinstance(args[1], dict):
             _args, _kwargs = args
         else:
-            return JSONRPCError.create_rpc_exception(
-                CommandError(f"Invalid parameters format: {args}"),
-                JSONRPCError.CODE_INVALID_PARAMS
+            return JSONRPCError(
+                JSONRPCError.CODE_INVALID_PARAMS,
+                f"Invalid parameters format: {args}"
             )
 
         if is_transactional_function(function_name):
@@ -608,9 +611,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 params_error, function_name, ', '.join(erroneous_params)
             )
             log.warning(params_error_message)
-            return JSONRPCError.create_rpc_exception(
-                CommandError(params_error_message),
-                JSONRPCError.CODE_INVALID_PARAMS
+            return JSONRPCError(
+                JSONRPCError.CODE_INVALID_PARAMS,
+                params_error_message,
             )
 
         try:
@@ -624,7 +627,7 @@ class Daemon(metaclass=JSONRPCServerType):
         except Exception as e:  # pylint: disable=broad-except
             log.exception("error handling api request")
             return JSONRPCError.create_command_exception(
-                e, function_name, _args, _kwargs, format_exc()
+                command=function_name, args=_args, kwargs=_kwargs, exception=e, traceback=format_exc()
             )
 
     def _verify_method_is_callable(self, function_path):
