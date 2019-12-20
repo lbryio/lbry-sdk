@@ -27,7 +27,7 @@ from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
-    CommandError, CommandDoesNotExistError
+    CommandDoesNotExistError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -212,7 +212,7 @@ class JSONRPCError:
         CODE_AUTHENTICATION_ERROR: 401,
     }
 
-    def __init__(self, code: int, message: str, data: dict=None):
+    def __init__(self, code: int, message: str, data: dict = None):
         assert code and isinstance(code, int), "'code' must be an int"
         assert message and isinstance(message, str), "'message' must be a string"
         assert data is None or isinstance(data, dict), "'data' must be None or a dict"
