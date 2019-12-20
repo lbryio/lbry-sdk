@@ -77,8 +77,7 @@ class PurchaseCommandTests(CommandTestCase):
         claim_id = stream.outputs[0].claim_id
 
         # explicit purchase of claim
-        tx = lambda: self.daemon.jsonrpc_purchase_create(claim_id)
-        await self.assertStreamPurchased(stream, tx)
+        await self.assertStreamPurchased(stream, lambda: self.daemon.jsonrpc_purchase_create(claim_id))
 
         # check that `get` doesn't purchase it again
         balance = await self.account.get_balance()
@@ -110,13 +109,13 @@ class PurchaseCommandTests(CommandTestCase):
             await self.daemon.jsonrpc_purchase_create(claim_id)
 
         # force purchasing claim you already own
-        tx = lambda: self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
-        await self.assertStreamPurchased(stream, tx)
+        await self.assertStreamPurchased(
+            stream, lambda: self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
+        )
 
         # purchase by uri
         abc_stream = await self.priced_stream('abc')
-        tx = lambda: self.daemon.jsonrpc_purchase_create(url='lbry://abc')
-        await self.assertStreamPurchased(abc_stream, tx)
+        await self.assertStreamPurchased(abc_stream, lambda: self.daemon.jsonrpc_purchase_create(url='lbry://abc'))
 
     async def test_purchase_and_transaction_list(self):
         self.assertItemCount(await self.daemon.jsonrpc_purchase_list(), 0)
