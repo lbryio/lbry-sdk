@@ -36,16 +36,17 @@ class PurchaseCommandTests(CommandTestCase):
         await self.ledger.wait(purchase)
         return claim_id
 
-    async def assertStreamPurchased(self, stream: Transaction, purchase: Transaction):
-        stream_txo, purchase_txo = stream.outputs[0], purchase.outputs[0]
-        stream_fee = stream_txo.claim.stream.fee
-        self.assertEqual(stream_fee.dewies, purchase_txo.amount)
-        self.assertEqual(stream_fee.address, purchase_txo.get_address(self.ledger))
+    async def assertStreamPurchased(self, stream: Transaction, operation):
 
         await self.account.release_all_outputs()
         buyer_balance = await self.account.get_balance()
         merchant_balance = lbc_to_dewies(str(await self.blockchain.get_balance()))
         pre_purchase_count = (await self.daemon.jsonrpc_purchase_list())['total_items']
+        purchase = await operation()
+        stream_txo, purchase_txo = stream.outputs[0], purchase.outputs[0]
+        stream_fee = stream_txo.claim.stream.fee
+        self.assertEqual(stream_fee.dewies, purchase_txo.amount)
+        self.assertEqual(stream_fee.address, purchase_txo.get_address(self.ledger))
 
         await self.ledger.wait(purchase)
         await self.generate(1)
@@ -76,8 +77,7 @@ class PurchaseCommandTests(CommandTestCase):
         claim_id = stream.outputs[0].claim_id
 
         # explicit purchase of claim
-        tx = await self.daemon.jsonrpc_purchase_create(claim_id)
-        await self.assertStreamPurchased(stream, tx)
+        await self.assertStreamPurchased(stream, lambda: self.daemon.jsonrpc_purchase_create(claim_id))
 
         # check that `get` doesn't purchase it again
         balance = await self.account.get_balance()
@@ -88,8 +88,12 @@ class PurchaseCommandTests(CommandTestCase):
 
         # `get` does purchase a stream we don't have yet
         another_stream = await self.priced_stream('another')
-        response = await self.daemon.jsonrpc_get('lbry://another')
-        await self.assertStreamPurchased(another_stream, response.content_fee)
+
+        async def imagine_its_a_lambda():
+            response = await self.daemon.jsonrpc_get('lbry://another')
+            return response.content_fee
+
+        await self.assertStreamPurchased(another_stream, imagine_its_a_lambda)
 
         # purchase non-existent claim fails
         with self.assertRaisesRegex(Exception, "Could not find claim with claim_id"):
@@ -105,13 +109,13 @@ class PurchaseCommandTests(CommandTestCase):
             await self.daemon.jsonrpc_purchase_create(claim_id)
 
         # force purchasing claim you already own
-        tx = await self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
-        await self.assertStreamPurchased(stream, tx)
+        await self.assertStreamPurchased(
+            stream, lambda: self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
+        )
 
         # purchase by uri
         abc_stream = await self.priced_stream('abc')
-        tx = await self.daemon.jsonrpc_purchase_create(url='lbry://abc')
-        await self.assertStreamPurchased(abc_stream, tx)
+        await self.assertStreamPurchased(abc_stream, lambda: self.daemon.jsonrpc_purchase_create(url='lbry://abc'))
 
     async def test_purchase_and_transaction_list(self):
         self.assertItemCount(await self.daemon.jsonrpc_purchase_list(), 0)

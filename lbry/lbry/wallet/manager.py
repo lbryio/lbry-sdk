@@ -226,7 +226,7 @@ class LbryWalletManager(BaseWalletManager):
         try:
             await self.ledger.broadcast(tx)
             if blocking:
-                await self.ledger.wait(tx)
+                await self.ledger.wait(tx, timeout=None)
         except:
             await self.ledger.release_tx(tx)
             raise

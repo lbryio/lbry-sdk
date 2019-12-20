@@ -575,7 +575,7 @@ class BaseLedger(metaclass=LedgerRegistry):
         # broadcast can't be a retriable call yet
         return self.network.broadcast(hexlify(tx.raw).decode())
 
-    async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=None):
+    async def wait(self, tx: basetransaction.BaseTransaction, height=-1, timeout=1):
         addresses = set()
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
@@ -593,4 +593,12 @@ class BaseLedger(metaclass=LedgerRegistry):
             )) for address_record in records
         ], timeout=timeout)
         if pending:
-            raise asyncio.TimeoutError('Timed out waiting for transaction.')
+            for record in records:
+                found = False
+                _, local_history = await self.get_local_status_and_history(None, history=record['history'])
+                for txid, local_height in local_history:
+                    if txid == tx.id and local_height >= height:
+                        found = True
+                if not found:
+                    print(record['history'], addresses, tx.id)
+                    raise asyncio.TimeoutError('Timed out waiting for transaction.')
