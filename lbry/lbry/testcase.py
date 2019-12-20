@@ -223,7 +223,7 @@ class CommandTestCase(IntegrationTestCase):
         if confirm:
             await self.ledger.wait(tx)
             await self.generate(1)
-            await self.ledger.wait(tx, self.blockchain._block_expected)
+            await self.ledger.wait(tx, self.blockchain.block_expected)
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
