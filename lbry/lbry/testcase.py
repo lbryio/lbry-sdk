@@ -90,7 +90,6 @@ class CommandTestCase(IntegrationTestCase):
         self.daemons = []
         self.extra_wallet_nodes = []
         self.extra_wallet_node_port = 5280
-        self.__height = 0
         self.daemon = await self.add_daemon(self.wallet_node)
 
         await self.account.ensure_address_gap()
@@ -197,7 +196,6 @@ class CommandTestCase(IntegrationTestCase):
     async def generate(self, blocks):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
         await self.blockchain.generate(blocks)
-        self.__height += 1
         await self.ledger.on_header.where(self.blockchain.is_expected_block)
 
     async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
@@ -225,7 +223,7 @@ class CommandTestCase(IntegrationTestCase):
         if confirm:
             await self.ledger.wait(tx)
             await self.generate(1)
-            await self.ledger.wait(tx, self.__height)
+            await self.ledger.wait(tx, self.blockchain._block_expected)
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
