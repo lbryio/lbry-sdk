@@ -2,14 +2,22 @@
 
 # entrypoint for wallet server Docker image
 
+set -euo pipefail
+
 SNAPSHOT_URL="${SNAPSHOT_URL:-}" #off by default. latest snapshot at https://lbry.com/snapshot/wallet
 
 if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/claims.db ]]; then
+  files="$(ls)"
   echo "Downloading wallet snapshot from $SNAPSHOT_URL"
-  wget --no-verbose -O wallet_snapshot.tar.bz2 "$SNAPSHOT_URL"
+  wget --no-verbose --trust-server-names --content-disposition "$SNAPSHOT_URL"
   echo "Extracting snapshot..."
-  tar xvjf wallet_snapshot.tar.bz2 --directory /database
-  rm wallet_snapshot.tar.bz2
+  filename="$(grep -vf <(echo "$files") <(ls))" # finds the file that was not there before
+  case "$filename" in
+    *.tgz|*.tar.gz|*.tar.bz2 )  tar xvf "$filename" --directory /database ;;
+    *.zip ) unzip "$filename" -d /database ;;
+    * ) echo "Don't know how to extract ${filename}. SNAPSHOT COULD NOT BE LOADED" && exit 1 ;;
+  esac
+  rm "$filename"
 fi
 
 /home/lbry/.local/bin/torba-server "$@"
