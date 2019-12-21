@@ -188,6 +188,7 @@ class SQLDB:
             cursor.setrowtrace(lambda cursor, row: tpl(*row))
             return True
         self.db.setexectrace(exec_factory)
+        self.execute(self.PRAGMAS)
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
         register_trending_functions(self.db)
