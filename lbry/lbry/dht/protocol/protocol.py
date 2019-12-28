@@ -224,7 +224,7 @@ class PingQueue:
                         self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, RemoteException):
                 pass
 
         task = self._loop.create_task(ping_task())
