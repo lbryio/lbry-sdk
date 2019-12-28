@@ -286,7 +286,7 @@ class SessionManager:
     def _get_info(self):
         """A summary of server state."""
         group_map = self._group_map()
-        method_counts = collections.defaultdict(0)
+        method_counts = collections.defaultdict(int)
         error_count = 0
         logged = 0
         paused = 0
