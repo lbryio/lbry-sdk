@@ -689,8 +689,6 @@ class SessionBase(RPCSession):
         msg = ''
         if not self._can_send.is_set():
             msg += ' whilst paused'
-        if self._concurrency.max_concurrent != self.max_concurrent:
-            msg += ' whilst throttled'
         if self.send_size >= 1024*1024:
             msg += ('.  Sent {:,d} bytes in {:,d} messages'
                     .format(self.send_size, self.send_count))
@@ -702,7 +700,7 @@ class SessionBase(RPCSession):
         return len(self.connection.pending_requests())
 
     def semaphore(self):
-        return Semaphores([self._concurrency.semaphore, self.group.semaphore])
+        return Semaphores([self.group.semaphore])
 
     def sub_count(self):
         return 0
