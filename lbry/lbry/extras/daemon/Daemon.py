@@ -1028,6 +1028,8 @@ class Daemon(metaclass=JSONRPCServerType):
             (dict) Updated dictionary of daemon settings
         """
         with self.conf.update_config() as c:
+            if value and isinstance(value, str) and value[0] in ('[', '{'):
+                value = json.loads(value)
             attr: Setting = getattr(type(c), key)
             cleaned = attr.deserialize(value)
             setattr(c, key, cleaned)
