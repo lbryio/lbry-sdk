@@ -12,3 +12,5 @@ _trial_temp/
 
 /tests/integration/files
 /tests/.coverage.*
+
+/lbry/wallet/bin
