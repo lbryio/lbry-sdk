@@ -19,7 +19,6 @@ class ClientSession(BaseClientSession):
         self._on_disconnect_controller = StreamController()
         self.on_disconnected = self._on_disconnect_controller.stream
         self.framer.max_size = self.max_errors = 1 << 32
-        self.bw_limit = -1
         self.timeout = timeout
         self.max_seconds_idle = timeout * 2
         self.response_time: Optional[float] = None
