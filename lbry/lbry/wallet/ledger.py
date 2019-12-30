@@ -107,7 +107,10 @@ class MainNetLedger(BaseLedger):
         await super().start()
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
-        await self._report_state()
+        if len(self.accounts) > 10:
+            log.info("Loaded %i accounts", len(self.accounts))
+        else:
+            await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
 
     async def _report_state(self):
