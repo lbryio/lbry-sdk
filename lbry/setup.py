@@ -1,9 +1,15 @@
 import os
+import sys
 from lbry import __name__, __version__
 from setuptools import setup, find_packages
 
 BASE = os.path.dirname(__file__)
-README_PATH = os.path.join(BASE, 'README.md')
+with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
+    long_description = fh.read()
+
+PLYVEL = []
+if sys.platform.startswith('linux'):
+    PLYVEL.append('plyvel==1.0.5')
 
 setup(
     name=__name__,
@@ -12,7 +18,7 @@ setup(
     author_email="hello@lbry.com",
     url="https://lbry.com",
     description="A decentralized media library and marketplace",
-    long_description=open(README_PATH, encoding='utf-8').read(),
+    long_description=long_description,
     long_description_content_type="text/markdown",
     keywords="lbry protocol media",
     license='MIT',
@@ -20,10 +26,12 @@ setup(
     packages=find_packages(exclude=('tests',)),
     zip_safe=False,
     entry_points={
-        'console_scripts': 'lbrynet=lbry.extras.cli:main'
+        'console_scripts': [
+            'lbrynet=lbry.extras.cli:main',
+            'torba-server=torba.server.cli:main',
+        ],
     },
     install_requires=[
-        'torba',
         'aiohttp==3.5.4',
         'aioupnp==0.0.16',
         'appdirs==1.4.3',
@@ -40,5 +48,22 @@ setup(
         'docopt==0.6.2',
         'hachoir',
         'multidict==4.6.1',
+        'coincurve==11.0.0',
+        'pbkdf2==1.3',
+        'attrs==18.2.0',
+        'pylru==1.1.0'
+    ] + PLYVEL,
+    classifiers=[
+        'Framework :: AsyncIO',
+        'Intended Audience :: Developers',
+        'Intended Audience :: System Administrators',
+        'License :: OSI Approved :: MIT License',
+        'Programming Language :: Python :: 3',
+        'Operating System :: OS Independent',
+        'Topic :: Internet',
+        'Topic :: Software Development :: Testing',
+        'Topic :: Software Development :: Libraries :: Python Modules',
+        'Topic :: System :: Distributed Computing',
+        'Topic :: Utilities',
     ],
 )
