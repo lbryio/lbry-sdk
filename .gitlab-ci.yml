@@ -59,7 +59,6 @@ test:json-api:
       - lbrynet-${OS}.zip
   script:
     - pip install pyinstaller
-    - pip install -e torba/.
     - python3.7 docker/set_build.py
     - pip install -e lbry/.
     - pyinstaller --onefile --name lbrynet lbry/lbry/extras/cli.py
@@ -115,7 +114,6 @@ build:windows:
     - rmdir -Recurse venv
   script:
     - pip install pyinstaller
-    - pip install -e torba/.
     - python docker/set_build.py
     - pip install -e lbry/.
     - pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
