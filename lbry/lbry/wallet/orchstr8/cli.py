@@ -3,8 +3,10 @@ import argparse
 import asyncio
 import aiohttp
 
-from torba.orchstr8.node import Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
-from torba.orchstr8.service import ConductorService
+from lbry.wallet.orchstr8.node import (
+    Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
+)
+from lbry.wallet.orchstr8.service import ConductorService
 
 
 def get_argument_parser():
@@ -12,8 +14,6 @@ def get_argument_parser():
         prog="torba"
     )
     subparsers = parser.add_subparsers(dest='command', help='sub-command help')
-
-    subparsers.add_parser("gui", help="Start Qt GUI.")
 
     subparsers.add_parser("download", help="Download blockchain node binary.")
 
@@ -40,10 +40,6 @@ def main():
     parser = get_argument_parser()
     args = parser.parse_args()
     command = getattr(args, 'command', 'help')
-
-    if command == 'gui':
-        from torba.workbench import main as start_app  # pylint: disable=import-outside-toplevel
-        return start_app()
 
     loop = asyncio.get_event_loop()
     asyncio.set_event_loop(loop)

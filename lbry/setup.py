@@ -29,6 +29,7 @@ setup(
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
             'torba-server=lbry.wallet.server.cli:main',
+            'orchstr8=lbry.wallet.orchstr8.cli:main',
         ],
     },
     install_requires=[
