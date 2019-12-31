@@ -8,6 +8,7 @@ import time
 from docopt import docopt
 from binascii import unhexlify
 from textwrap import indent
+from lbry.testcase import CommandTestCase
 from lbry.extras.cli import set_kwargs, get_argument_parser
 from lbry.extras.daemon.Daemon import (
     Daemon, jsonrpc_dumps_pretty, encode_pagination_doc
@@ -16,7 +17,6 @@ from lbry.extras.daemon.json_response_encoder import (
     encode_tx_doc, encode_txo_doc, encode_account_doc, encode_file_doc,
     encode_wallet_doc
 )
-from lbry.testcase import CommandTestCase
 
 
 RETURN_DOCS = {
