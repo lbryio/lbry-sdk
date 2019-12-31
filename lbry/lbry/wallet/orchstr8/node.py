@@ -358,8 +358,11 @@ class BlockchainNode:
             *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
         )
         out, _ = await process.communicate()
-        self.log.info(out.decode().strip())
-        return out.decode().strip()
+        result = out.decode().strip()
+        self.log.info(result)
+        if result.startswith('error code'):
+            raise Exception(result)
+        return result
 
     def generate(self, blocks):
         self.block_expected += blocks
