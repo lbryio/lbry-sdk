@@ -80,7 +80,7 @@ def normalize_text(seed):
 def load_words(language_name):
     if language_name == 'english':
         return english.words
-    language_module = importlib.import_module('torba.words.'+language_name)
+    language_module = importlib.import_module('lbry.wallet.client.words.'+language_name)
     return list(map(
         lambda s: unicodedata.normalize('NFKD', s),
         language_module.words

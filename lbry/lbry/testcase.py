@@ -218,7 +218,6 @@ class IntegrationTestCase(AsyncioTestCase):
     LEDGER = lbry.wallet
     MANAGER = LbryWalletManager
     ENABLE_SEGWIT = False
-    VERBOSITY = logging.WARN
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -232,7 +231,7 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.conductor = Conductor(
-            ledger_module=self.LEDGER, manager_module=self.MANAGER, verbosity=self.VERBOSITY,
+            ledger_module=self.LEDGER, manager_module=self.MANAGER,
             enable_segwit=self.ENABLE_SEGWIT, seed=self.SEED
         )
         await self.conductor.start_blockchain()
