@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from contextlib import asynccontextmanager
 
 import docopt
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 from lbry.extras.cli import normalize_value, main, setup_logging
 from lbry.extras.system_info import get_platform
