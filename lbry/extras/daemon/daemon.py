@@ -4533,6 +4533,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                 "channel_id":   (str) The Channel Claim ID that this comment was posted under,
                 "signature":    (str) The signature of the comment,
+                "signing_ts":   (str) The timestamp used to sign the comment,
                 "channel_url":  (str) Channel's URI in the ClaimTrie,
                 "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
@@ -4557,6 +4558,60 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'signature' in response:
             response['is_claim_signature_valid'] = comment_client.is_comment_signed_by_channel(response, channel)
         return response
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_edit(self, comment, comment_id, wallet_id=None):
+        """
+        Edit a comment published as one of your channels.
+
+        Usage:
+            comment_edit (<comment> | --comment=<comment>)
+                         (<comment_id> | --comment_id=<comment_id>)
+                         [--wallet_id=<wallet_id>]
+
+        Options:
+            --comment=<comment>         : (str) New comment replacing the old one
+            --comment_id=<comment_id>   : (str) Hash identifying the comment to edit
+            --wallet_id=<wallet_id      : (str) restrict operation to specific wallet
+
+        Returns:
+            (dict) Comment object if edit was successful, (None) otherwise
+            {
+                "comment":      (str) The actual string as inputted by the user,
+                "comment_id":   (str) The Comment's unique identifier,
+                "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
+                "channel_id":   (str) The Channel Claim ID that this comment was posted under,
+                "signature":    (str) The signature of the comment,
+                "signing_ts":   (str) Timestamp used to sign the most recent signature,
+                "channel_url":  (str) Channel's URI in the ClaimTrie,
+                "parent_id":    (str) Comment this is replying to, (None) if this is the root,
+                "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
+            }
+        """
+        channel = await comment_client.jsonrpc_post(
+            self.conf.comment_server,
+            'get_channel_from_comment_id',
+            comment_id=comment_id
+        )
+        if 'error' in channel:
+            return
+
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        # channel = await self.get_channel_or_none(wallet, None, **channel)
+        channel_claim = await self.get_channel_or_none(wallet, [], **channel)
+        if channel_claim is None:
+            return
+
+        edited_comment = {
+            'comment_id': comment_id,
+            'comment': comment,
+            'channel_id': channel_claim.claim_id,
+            'channel_name': channel_claim.claim_name
+        }
+        comment_client.sign_comment(edited_comment, channel_claim)
+        return await comment_client.jsonrpc_post(
+            self.conf.comment_server, 'edit_comment', edited_comment
+        )
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_abandon(self, comment_id, wallet_id=None):
