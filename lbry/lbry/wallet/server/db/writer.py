@@ -5,9 +5,9 @@ from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
 
-from torba.server.db import DB
-from torba.server.util import class_logger
-from torba.client.basedatabase import query, constraints_to_sql
+from lbry.wallet.server.leveldb import DB
+from lbry.wallet.server.util import class_logger
+from lbry.wallet.client.basedatabase import query, constraints_to_sql
 
 from lbry.schema.tags import clean_tags
 from lbry.schema.mime_types import guess_stream_type

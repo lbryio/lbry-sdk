@@ -6,8 +6,8 @@ from json import JSONEncoder
 
 from google.protobuf.message import DecodeError
 
-from torba.client.wallet import Wallet
-from torba.client.bip32 import PubKey
+from lbry.wallet.client.wallet import Wallet
+from lbry.wallet.client.bip32 import PubKey
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import MainNetLedger, Account
 from lbry.wallet.transaction import Transaction, Output

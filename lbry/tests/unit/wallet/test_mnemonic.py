@@ -1,7 +1,7 @@
 import unittest
 from binascii import hexlify
 
-from torba.client.mnemonic import Mnemonic
+from lbry.wallet.client.mnemonic import Mnemonic
 
 
 class TestMnemonic(unittest.TestCase):

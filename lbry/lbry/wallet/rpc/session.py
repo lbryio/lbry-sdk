@@ -34,7 +34,7 @@ import logging
 import time
 from contextlib import suppress
 
-from torba.tasks import TaskGroup
+from lbry.wallet.tasks import TaskGroup
 
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError

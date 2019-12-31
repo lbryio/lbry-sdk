@@ -29,7 +29,7 @@
 from asyncio import Event
 from math import ceil, log
 
-from torba.server.hash import double_sha256
+from lbry.wallet.server.hash import double_sha256
 
 
 class Merkle:

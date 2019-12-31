@@ -6,8 +6,8 @@ from typing import Tuple, List
 from datetime import datetime
 
 import pylru
-from torba.client.baseledger import BaseLedger, TransactionEvent
-from torba.client.baseaccount import SingleKey
+from lbry.wallet.client.baseledger import BaseLedger, TransactionEvent
+from lbry.wallet.client.baseaccount import SingleKey
 from lbry.schema.result import Outputs
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc

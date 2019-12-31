@@ -3,8 +3,8 @@ import logging
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
-import torba
-from torba.server.mempool import MemPool, MemPoolAPI
+import lbry
+from lbry.wallet.server.mempool import MemPool, MemPoolAPI
 
 
 class Notifications:
@@ -91,7 +91,7 @@ class Server:
     async def start(self):
         env = self.env
         min_str, max_str = env.coin.SESSIONCLS.protocol_min_max_strings()
-        self.log.info(f'software version: {torba.__version__}')
+        self.log.info(f'software version: {lbry.__version__}')
         self.log.info(f'supported protocol versions: {min_str}-{max_str}')
         self.log.info(f'event loop policy: {env.loop_policy}')
         self.log.info(f'reorg limit is {env.reorg_limit:,d} blocks')

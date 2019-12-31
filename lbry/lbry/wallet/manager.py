@@ -6,9 +6,9 @@ from binascii import unhexlify
 from typing import Optional, List
 from decimal import Decimal
 
-from torba.client.basemanager import BaseWalletManager
-from torba.client.wallet import ENCRYPT_ON_DISK
-from torba.rpc.jsonrpc import CodeMessageError
+from lbry.wallet.client.basemanager import BaseWalletManager
+from lbry.wallet.client.wallet import ENCRYPT_ON_DISK
+from lbry.wallet.rpc.jsonrpc import CodeMessageError
 
 from lbry.error import KeyFeeAboveMaxAllowedError
 from lbry.wallet.dewies import dewies_to_lbc

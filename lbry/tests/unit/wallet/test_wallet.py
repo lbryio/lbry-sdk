@@ -2,12 +2,11 @@ import tempfile
 from binascii import hexlify
 
 from unittest import TestCase, mock
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.testcase import AsyncioTestCase
 
-from torba.coin.bitcoinsegwit import MainNetLedger as BTCLedger
-from torba.coin.bitcoincash import MainNetLedger as BCHLedger
-from torba.client.basemanager import BaseWalletManager
-from torba.client.wallet import Wallet, WalletStorage, TimestampedPreferences
+from lbry.wallet.ledger import MainNetLedger, RegTestLedger
+from lbry.wallet.client.basemanager import BaseWalletManager
+from lbry.wallet.client.wallet import Wallet, WalletStorage, TimestampedPreferences
 
 
 class TestWalletCreation(AsyncioTestCase):
@@ -15,17 +14,17 @@ class TestWalletCreation(AsyncioTestCase):
     async def asyncSetUp(self):
         self.manager = BaseWalletManager()
         config = {'data_path': '/tmp/wallet'}
-        self.btc_ledger = self.manager.get_or_create_ledger(BTCLedger.get_id(), config)
-        self.bch_ledger = self.manager.get_or_create_ledger(BCHLedger.get_id(), config)
+        self.main_ledger = self.manager.get_or_create_ledger(MainNetLedger.get_id(), config)
+        self.test_ledger = self.manager.get_or_create_ledger(RegTestLedger.get_id(), config)
 
     def test_create_wallet_and_accounts(self):
         wallet = Wallet()
         self.assertEqual(wallet.name, 'Wallet')
         self.assertListEqual(wallet.accounts, [])
 
-        account1 = wallet.generate_account(self.btc_ledger)
-        wallet.generate_account(self.btc_ledger)
-        wallet.generate_account(self.bch_ledger)
+        account1 = wallet.generate_account(self.main_ledger)
+        wallet.generate_account(self.main_ledger)
+        wallet.generate_account(self.test_ledger)
         self.assertEqual(wallet.default_account, account1)
         self.assertEqual(len(wallet.accounts), 3)
 
@@ -36,19 +35,20 @@ class TestWalletCreation(AsyncioTestCase):
             'preferences': {},
             'accounts': [
                 {
+                    'certificates': {},
                     'name': 'An Account',
-                    'ledger': 'btc_mainnet',
+                    'ledger': 'lbc_mainnet',
                     'modified_on': 123.456,
                     'seed':
                         "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                         "h absent",
                     'encrypted': False,
                     'private_key':
-                        'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3Z'
-                        'T4vYymkp5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+                        'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                        'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
                     'public_key':
-                        'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6'
-                        'mKUMJFc7UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
+                        'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMm'
+                        'Dgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
                     'address_generator': {
                         'name': 'deterministic-chain',
                         'receiving': {'gap': 17, 'maximum_uses_per_address': 3},
@@ -62,11 +62,11 @@ class TestWalletCreation(AsyncioTestCase):
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertEqual(wallet.name, 'Main Wallet')
         self.assertEqual(
-            hexlify(wallet.hash), b'1bd61fbe18875cb7828c466022af576104ed861c8a1fdb1dadf5e39417a68483'
+            hexlify(wallet.hash), b'a75913d2e7339c1a9ac0c89d621a4e10fd3a40dc3560dc01f4cf4ada0a0b05b8'
         )
         self.assertEqual(len(wallet.accounts), 1)
         account = wallet.default_account
-        self.assertIsInstance(account, BTCLedger.account_class)
+        self.assertIsInstance(account, MainNetLedger.account_class)
         self.maxDiff = None
         self.assertDictEqual(wallet_dict, wallet.to_dict())
 
@@ -77,7 +77,7 @@ class TestWalletCreation(AsyncioTestCase):
     def test_read_write(self):
         manager = BaseWalletManager()
         config = {'data_path': '/tmp/wallet'}
-        ledger = manager.get_or_create_ledger(BTCLedger.get_id(), config)
+        ledger = manager.get_or_create_ledger(MainNetLedger.get_id(), config)
 
         with tempfile.NamedTemporaryFile(suffix='.json') as wallet_file:
             wallet_file.write(b'{"version": 1}')
@@ -98,11 +98,11 @@ class TestWalletCreation(AsyncioTestCase):
         wallet1 = Wallet()
         wallet1.preferences['one'] = 1
         wallet1.preferences['conflict'] = 1
-        wallet1.generate_account(self.btc_ledger)
+        wallet1.generate_account(self.main_ledger)
         wallet2 = Wallet()
         wallet2.preferences['two'] = 2
         wallet2.preferences['conflict'] = 2  # will be more recent
-        wallet2.generate_account(self.btc_ledger)
+        wallet2.generate_account(self.main_ledger)
 
         self.assertEqual(len(wallet1.accounts), 1)
         self.assertEqual(wallet1.preferences, {'one': 1, 'conflict': 1})

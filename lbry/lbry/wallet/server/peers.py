@@ -16,13 +16,13 @@ import typing
 from asyncio import Event, sleep
 from collections import defaultdict, Counter
 
-from torba.tasks import TaskGroup
-from torba.rpc import (
+from lbry.wallet.tasks import TaskGroup
+from lbry.wallet.rpc import (
     Connector, RPCSession, SOCKSProxy, Notification, handler_invocation,
     SOCKSError, RPCError
 )
-from torba.server.peer import Peer
-from torba.server.util import class_logger, protocol_tuple
+from lbry.wallet.server.peer import Peer
+from lbry.wallet.server.util import class_logger, protocol_tuple
 
 PEER_GOOD, PEER_STALE, PEER_NEVER, PEER_BAD = range(4)
 STALE_SECS = 24 * 3600

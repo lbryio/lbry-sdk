@@ -31,31 +31,17 @@ test:lint:
     - make install tools
     - make lint
 
-test:lbry-unit:
+test:unit:
   stage: test
   script:
     - make install tools
     - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-test:lbry-integ:
+test:integration:
   stage: test
   script:
     - pip install coverage tox-travis
     - cd lbry && tox
-
-test:torba-unit:
-  stage: test
-  script:
-    - pip install coverage tox-travis
-    - cd torba/tests
-    - tox -e py37-unit
-
-test:torba-integ:
-  stage: test
-  script:
-    - pip install coverage tox-travis
-    - cd torba/tests
-    - tox -e py37-integration-torba.coin.bitcoinsegwit
 
 test:json-api:
   stage: test

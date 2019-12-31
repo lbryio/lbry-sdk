@@ -6,14 +6,15 @@ import random
 import typing
 from typing import Dict, Tuple, Type, Optional, Any, List
 
-from torba.client.mnemonic import Mnemonic
-from torba.client.bip32 import PrivateKey, PubKey, from_extended_key_string
-from torba.client.hash import aes_encrypt, aes_decrypt, sha256
-from torba.client.constants import COIN
-from torba.client.errors import InvalidPasswordError
+from lbry.crypto.hash import sha256
+from lbry.crypto.crypt import aes_encrypt, aes_decrypt
+from lbry.wallet.client.bip32 import PrivateKey, PubKey, from_extended_key_string
+from lbry.wallet.client.mnemonic import Mnemonic
+from lbry.wallet.client.constants import COIN
+from lbry.error import InvalidPasswordError
 
 if typing.TYPE_CHECKING:
-    from torba.client import baseledger, wallet as basewallet
+    from lbry.wallet.client import baseledger, wallet as basewallet
 
 
 class AddressManager:

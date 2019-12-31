@@ -1,6 +1,6 @@
 import time
 
-from torba.server import util
+from lbry.wallet.server import util
 
 
 def sessions_lines(data):

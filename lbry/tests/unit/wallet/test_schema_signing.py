@@ -1,9 +1,7 @@
 from binascii import unhexlify
 
-from cryptography.exceptions import InvalidSignature
-
-from torba.testcase import AsyncioTestCase
-from torba.client.constants import CENT, NULL_HASH32
+from lbry.wallet.testcase import AsyncioTestCase
+from lbry.wallet.client.constants import CENT, NULL_HASH32
 
 from lbry.wallet.ledger import MainNetLedger
 from lbry.wallet.transaction import Transaction, Input, Output

@@ -2,8 +2,8 @@ import asyncio
 import logging
 from typing import Type, MutableSequence, MutableMapping, Optional
 
-from torba.client.baseledger import BaseLedger, LedgerRegistry
-from torba.client.wallet import Wallet, WalletStorage
+from lbry.wallet.client.baseledger import BaseLedger, LedgerRegistry
+from lbry.wallet.client.wallet import Wallet, WalletStorage
 
 log = logging.getLogger(__name__)
 

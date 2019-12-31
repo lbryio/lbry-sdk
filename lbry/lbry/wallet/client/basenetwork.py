@@ -4,10 +4,9 @@ from operator import itemgetter
 from typing import Dict, Optional, Tuple
 from time import perf_counter
 
-from torba.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
-
-from torba import __version__
-from torba.stream import StreamController
+import lbry
+from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
+from lbry.wallet.stream import StreamController
 
 log = logging.getLogger(__name__)
 
@@ -115,7 +114,7 @@ class ClientSession(BaseClientSession):
     async def ensure_server_version(self, required=None, timeout=3):
         required = required or self.network.PROTOCOL_VERSION
         return await asyncio.wait_for(
-            self.send_request('server.version', [__version__, required]), timeout=timeout
+            self.send_request('server.version', [lbry.__version__, required]), timeout=timeout
         )
 
     async def create_connection(self, timeout=6):

@@ -1,6 +1,6 @@
 from typing import List
 
-from torba.client.basedatabase import BaseDatabase
+from lbry.wallet.client.basedatabase import BaseDatabase
 
 from lbry.wallet.transaction import Output
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES

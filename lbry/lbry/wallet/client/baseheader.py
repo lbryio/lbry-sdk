@@ -7,8 +7,8 @@ from io import BytesIO
 from typing import Optional, Iterator, Tuple
 from binascii import hexlify
 
-from torba.client.util import ArithUint256
-from torba.client.hash import double_sha256
+from lbry.wallet.client.util import ArithUint256
+from lbry.crypto.hash import double_sha256
 
 log = logging.getLogger(__name__)
 

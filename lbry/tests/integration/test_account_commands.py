@@ -1,9 +1,5 @@
-import asyncio
-import sqlite3
 from lbry.testcase import CommandTestCase
-from torba.client.basedatabase import SQLiteMixin
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet.account import Account
 
 
 def extract(d, keys):

@@ -8,8 +8,8 @@ from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
 from google.protobuf.json_format import MessageToDict
 
-from torba.client.hash import Base58
-from torba.client.constants import COIN
+from lbry.crypto.base58 import Base58
+from lbry.constants import COIN
 
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList

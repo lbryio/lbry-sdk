@@ -6,15 +6,15 @@ import tempfile
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from torba.client.wallet import Wallet
-from torba.client.constants import COIN
-from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-from torba.client.basedatabase import query, interpolate, constraints_to_sql, AIOSQLite
-from torba.client.hash import sha256
+from lbry.wallet import MainNetLedger
+from lbry.wallet.transaction import Transaction
+from lbry.wallet.client.wallet import Wallet
+from lbry.wallet.client.constants import COIN
+from lbry.wallet.client.basedatabase import query, interpolate, constraints_to_sql, AIOSQLite
+from lbry.wallet.client.hash import sha256
+from lbry.wallet.testcase import AsyncioTestCase
 
-from torba.testcase import AsyncioTestCase
-
-from client_tests.unit.test_transaction import get_output, NULL_HASH
+from tests.unit.wallet.test_transaction import get_output, NULL_HASH
 
 
 class TestAIOSQLite(AsyncioTestCase):
@@ -195,9 +195,9 @@ class TestQueryBuilder(unittest.TestCase):
 class TestQueries(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(':memory:'),
+            'headers': MainNetLedger.headers_class(':memory:')
         })
         self.wallet = Wallet()
         await self.ledger.db.open()
@@ -212,8 +212,8 @@ class TestQueries(AsyncioTestCase):
 
     async def create_tx_from_nothing(self, my_account, height):
         to_address = await my_account.receiving.get_or_create_usable_address()
-        to_hash = ledger_class.address_to_hash160(to_address)
-        tx = ledger_class.transaction_class(height=height, is_verified=True) \
+        to_hash = MainNetLedger.address_to_hash160(to_address)
+        tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(self.txo(1, sha256(str(height).encode())))]) \
             .add_outputs([self.txo(1, to_hash)])
         await self.ledger.db.insert_transaction(tx)
@@ -224,8 +224,8 @@ class TestQueries(AsyncioTestCase):
         from_hash = txo.script.values['pubkey_hash']
         from_address = self.ledger.hash160_to_address(from_hash)
         to_address = await to_account.receiving.get_or_create_usable_address()
-        to_hash = ledger_class.address_to_hash160(to_address)
-        tx = ledger_class.transaction_class(height=height, is_verified=True) \
+        to_hash = MainNetLedger.address_to_hash160(to_address)
+        tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \
             .add_outputs([self.txo(1, to_hash)])
         await self.ledger.db.insert_transaction(tx)
@@ -237,7 +237,7 @@ class TestQueries(AsyncioTestCase):
         from_hash = txo.script.values['pubkey_hash']
         from_address = self.ledger.hash160_to_address(from_hash)
         to_hash = NULL_HASH
-        tx = ledger_class.transaction_class(height=height, is_verified=True) \
+        tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \
             .add_outputs([self.txo(1, to_hash)])
         await self.ledger.db.insert_transaction(tx)
@@ -248,7 +248,7 @@ class TestQueries(AsyncioTestCase):
         return get_output(int(amount*COIN), address)
 
     def txi(self, txo):
-        return ledger_class.transaction_class.input_class.spend(txo)
+        return Transaction.input_class.spend(txo)
 
     async def test_large_tx_doesnt_hit_variable_limits(self):
         # SQLite is usually compiled with 999 variables limit: https://www.sqlite.org/limits.html
@@ -408,9 +408,9 @@ class TestUpgrade(AsyncioTestCase):
             return [col[0] for col in conn.execute(sql).fetchall()]
 
     async def test_reset_on_version_change(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(self.path),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(self.path),
+            'headers': MainNetLedger.headers_class(':memory:')
         })
 
         # initial open, pre-version enabled db

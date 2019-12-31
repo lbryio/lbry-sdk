@@ -15,9 +15,9 @@ import time
 from collections import defaultdict
 from functools import partial
 
-from torba.server import util
-from torba.server.util import pack_be_uint16, unpack_be_uint16_from
-from torba.server.hash import hash_to_hex_str, HASHX_LEN
+from lbry.wallet.server import util
+from lbry.wallet.server.util import pack_be_uint16, unpack_be_uint16_from
+from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 
 
 class History:

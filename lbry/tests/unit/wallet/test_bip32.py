@@ -1,10 +1,10 @@
 from binascii import unhexlify, hexlify
 
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.testcase import AsyncioTestCase
 
-from client_tests.unit.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
-from torba.client.bip32 import PubKey, PrivateKey, from_extended_key_string
-from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
+from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
+from lbry.wallet.client.bip32 import PubKey, PrivateKey, from_extended_key_string
+from lbry.wallet import MainNetLedger as ledger_class
 
 
 class BIP32Tests(AsyncioTestCase):
@@ -60,7 +60,7 @@ class BIP32Tests(AsyncioTestCase):
         self.assertEqual(
             ec_point[1], 86198965946979720220333266272536217633917099472454294641561154971209433250106
         )
-        self.assertEqual(private_key.address(), '1GVM5dEhThbiyCZ9gqBZBv6p9whga7MTXo' )
+        self.assertEqual('bUDcmraBp2zCV3QWmVVeQaEgepbs1b2gC9', private_key.address())
         with self.assertRaisesRegex(ValueError, 'invalid BIP32 private key child number'):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)

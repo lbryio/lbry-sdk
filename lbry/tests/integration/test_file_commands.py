@@ -3,7 +3,6 @@ import os
 from binascii import hexlify
 
 from lbry.testcase import CommandTestCase
-from lbry.blob_exchange.downloader import BlobDownloader
 
 
 class FileCommands(CommandTestCase):

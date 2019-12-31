@@ -12,12 +12,12 @@ from binascii import hexlify
 from typing import Type, Optional
 import urllib.request
 
-from torba.server.server import Server
-from torba.server.env import Env
-from torba.client.wallet import Wallet
-from torba.client.baseledger import BaseLedger, BlockHeightEvent
-from torba.client.basemanager import BaseWalletManager
-from torba.client.baseaccount import BaseAccount
+from lbry.wallet.server.server import Server
+from lbry.wallet.server.env import Env
+from lbry.wallet.client.wallet import Wallet
+from lbry.wallet.client.baseledger import BaseLedger, BlockHeightEvent
+from lbry.wallet.client.basemanager import BaseWalletManager
+from lbry.wallet.client.baseaccount import BaseAccount
 
 
 log = logging.getLogger(__name__)

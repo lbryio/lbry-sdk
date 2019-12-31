@@ -1,16 +1,14 @@
 import time
-
-from lbry.schema.claim import Claim
-from lbry.wallet.server.db.writer import SQLDB
-
 import asyncio
 from struct import pack, unpack
 
-import torba
-from torba.server.daemon import DaemonError
-from torba.server.hash import hash_to_hex_str, HASHX_LEN
-from torba.server.util import chunks, class_logger
-from torba.server.db import FlushData
+import lbry
+from lbry.schema.claim import Claim
+from lbry.wallet.server.db.writer import SQLDB
+from lbry.wallet.server.daemon import DaemonError
+from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
+from lbry.wallet.server.util import chunks, class_logger
+from lbry.wallet.server.leveldb import FlushData
 
 
 class Prefetcher:
@@ -612,7 +610,7 @@ class BlockProcessor:
         self.db.first_sync = False
         await self.flush(True)
         if first_sync:
-            self.logger.info(f'{torba.__version__} synced to '
+            self.logger.info(f'{lbry.__version__} synced to '
                              f'height {self.height:,d}')
         # Reopen for serving
         await self.db.open_for_serving()
@@ -665,46 +663,6 @@ class BlockProcessor:
             self.blocks_event.set()
             return True
         return False
-
-
-class DecredBlockProcessor(BlockProcessor):
-    async def calc_reorg_range(self, count):
-        start, count = await super().calc_reorg_range(count)
-        if start > 0:
-            # A reorg in Decred can invalidate the previous block
-            start -= 1
-            count += 1
-        return start, count
-
-
-class NamecoinBlockProcessor(BlockProcessor):
-    def advance_txs(self, txs):
-        result = super().advance_txs(txs)
-
-        tx_num = self.tx_count - len(txs)
-        script_name_hashX = self.coin.name_hashX_from_script
-        update_touched = self.touched.update
-        hashXs_by_tx = []
-        append_hashXs = hashXs_by_tx.append
-
-        for tx, tx_hash in txs:
-            hashXs = []
-            append_hashX = hashXs.append
-
-            # Add the new UTXOs and associate them with the name script
-            for idx, txout in enumerate(tx.outputs):
-                # Get the hashX of the name script.  Ignore non-name scripts.
-                hashX = script_name_hashX(txout.pk_script)
-                if hashX:
-                    append_hashX(hashX)
-
-            append_hashXs(hashXs)
-            update_touched(hashXs)
-            tx_num += 1
-
-        self.db.history.add_unflushed(hashXs_by_tx, self.tx_count - len(txs))
-
-        return result
 
 
 class Timer:

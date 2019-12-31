@@ -11,8 +11,9 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.exceptions import InvalidSignature
 
-from torba.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
-from torba.client.hash import hash160, sha256, Base58
+from lbry.crypto.base58 import Base58
+from lbry.crypto.hash import hash160, sha256
+from lbry.wallet.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
 from lbry.schema.claim import Claim
 from lbry.schema.purchase import Purchase
 from lbry.schema.url import normalize_name

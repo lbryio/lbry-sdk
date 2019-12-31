@@ -1,64 +1,54 @@
 import os
+import ssl
 import math
 import time
+import json
+import zlib
+import pylru
 import base64
+import codecs
+import typing
 import asyncio
 import logging
+import itertools
+import collections
+
+from asyncio import Event, sleep
+from collections import defaultdict
+from functools import partial
+
 from binascii import hexlify
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
-from torba.rpc.jsonrpc import RPCError, JSONRPC
-from torba.server.session import ElectrumX, SessionManager
-from torba.server import util
-
+import lbry
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
-from lbry import __version__ as sdk_version
 
-import base64
-import collections
-import asyncio
-import codecs
-import datetime
-import itertools
-import json
-import os
-import zlib
-
-import pylru
-import ssl
-import time
-import typing
-from asyncio import Event, sleep
-from collections import defaultdict
-from functools import partial
-
-import torba
-from torba.rpc import (
+from lbry.wallet.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
-    handler_invocation, RPCError, Request
+    handler_invocation, RPCError, Request, JSONRPC
 )
-from torba.server import text
-from torba.server import util
-from torba.server.hash import (sha256, hash_to_hex_str, hex_str_to_hash,
-                               HASHX_LEN, Base58Error)
-from torba.server.daemon import DaemonError
-from torba.server.peers import PeerManager
+from lbry.wallet.server import text
+from lbry.wallet.server import util
+from lbry.wallet.server.hash import sha256, hash_to_hex_str, hex_str_to_hash, HASHX_LEN, Base58Error
+from lbry.wallet.server.daemon import DaemonError
+from lbry.wallet.server.peers import PeerManager
 if typing.TYPE_CHECKING:
-    from torba.server.env import Env
-    from torba.server.db import DB
-    from torba.server.block_processor import BlockProcessor
-    from torba.server.mempool import MemPool
-    from torba.server.daemon import Daemon
+    from lbry.wallet.server.env import Env
+    from lbry.wallet.server.leveldb import DB
+    from lbry.wallet.server.block_processor import BlockProcessor
+    from lbry.wallet.server.mempool import MemPool
+    from lbry.wallet.server.daemon import Daemon
 
 BAD_REQUEST = 1
 DAEMON_ERROR = 2
 
 log = logging.getLogger(__name__)
+
 
 def scripthash_to_hashX(scripthash: str) -> bytes:
     try:
@@ -149,10 +139,6 @@ class SessionManager:
         self.notified_height: typing.Optional[int] = None
         # Cache some idea of room to avoid recounting on each subscription
         self.subs_room = 0
-        # Masternode stuff only for such coins
-        if issubclass(env.coin.SESSIONCLS, DashElectrumX):
-            self.mn_cache_height = 0
-            self.mn_cache = []  # type: ignore
 
         self.session_event = Event()
 
@@ -335,7 +321,7 @@ class SessionManager:
             'subs': self._sub_count(),
             'txs_sent': self.txs_sent,
             'uptime': util.formatted_time(time.time() - self.start_time),
-            'version': torba.__version__,
+            'version': lbry.__version__,
         }
 
     def _session_data(self, for_log):
@@ -733,11 +719,67 @@ class SessionBase(RPCSession):
         return await coro
 
 
-class ElectrumX(SessionBase):
+class LBRYSessionManager(SessionManager):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.query_executor = None
+        self.websocket = None
+        self.metrics = ServerLoadData()
+        self.metrics_loop = None
+        self.running = False
+        if self.env.websocket_host is not None and self.env.websocket_port is not None:
+            self.websocket = AdminWebSocket(self)
+        self.search_cache = self.bp.search_cache
+        self.search_cache['search'] = lrucache(10000)
+        self.search_cache['resolve'] = lrucache(10000)
+
+    async def process_metrics(self):
+        while self.running:
+            data = self.metrics.to_json_and_reset({
+                'sessions': self.session_count(),
+                'height': self.db.db_height,
+            })
+            if self.websocket is not None:
+                self.websocket.send_message(data)
+            await asyncio.sleep(1)
+
+    async def start_other(self):
+        self.running = True
+        path = os.path.join(self.env.db_dir, 'claims.db')
+        args = dict(
+            initializer=reader.initializer,
+            initargs=(self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
+                      self.env.track_metrics)
+        )
+        if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
+            self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
+        else:
+            self.query_executor = ProcessPoolExecutor(
+                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
+            )
+        if self.websocket is not None:
+            await self.websocket.start()
+        if self.env.track_metrics:
+            self.metrics_loop = asyncio.create_task(self.process_metrics())
+
+    async def stop_other(self):
+        self.running = False
+        if self.env.track_metrics:
+            self.metrics_loop.cancel()
+        if self.websocket is not None:
+            await self.websocket.stop()
+        self.query_executor.shutdown()
+
+
+class LBRYElectrumX(SessionBase):
     """A TCP server that handles incoming Electrum connections."""
 
-    PROTOCOL_MIN = (1, 1)
-    PROTOCOL_MAX = (1, 4)
+    PROTOCOL_MIN = lbry.version
+    PROTOCOL_MAX = (1, 0)
+    max_errors = math.inf  # don't disconnect people for errors! let them happen...
+    session_mgr: LBRYSessionManager
+    version = lbry.__version__
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -748,6 +790,13 @@ class ElectrumX(SessionBase):
         self.sv_seen = False
         self.mempool_statuses = {}
         self.set_request_handlers(self.PROTOCOL_MIN)
+        # fixme: this is a rebase hack, we need to go through ChainState instead later
+        self.daemon = self.session_mgr.daemon
+        self.bp: LBRYBlockProcessor = self.session_mgr.bp
+        self.db: LBRYDB = self.bp.db
+        # space separated list of channel URIs used for filtering bad content
+        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '')
+        self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
 
     @classmethod
     def protocol_min_max_strings(cls):
@@ -824,6 +873,169 @@ class ElectrumX(SessionBase):
             if changed:
                 es = '' if len(changed) == 1 else 'es'
                 self.logger.info(f'notified of {len(changed):,d} address{es}')
+
+    def get_metrics_or_placeholder_for_api(self, query_name):
+        """ Do not hold on to a reference to the metrics
+            returned by this method past an `await` or
+            you may be working with a stale metrics object.
+        """
+        if self.env.track_metrics:
+            return self.session_mgr.metrics.for_api(query_name)
+        else:
+            return APICallMetrics(query_name)
+
+    async def run_in_executor(self, query_name, func, kwargs):
+        start = time.perf_counter()
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                self.session_mgr.query_executor, func, kwargs
+            )
+        except asyncio.CancelledError:
+            raise
+        except reader.SQLiteInterruptedError as error:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
+            metrics.query_interrupt(start, error.metrics)
+            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
+        except reader.SQLiteOperationalError as error:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
+            metrics.query_error(start, error.metrics)
+            raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
+        except Exception:
+            log.exception("dear devs, please handle this exception better")
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
+            metrics.query_error(start, {})
+            raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
+
+        if self.env.track_metrics:
+            metrics = self.get_metrics_or_placeholder_for_api(query_name)
+            (result, metrics_data) = result
+            metrics.query_response(start, metrics_data)
+
+        return base64.b64encode(result).decode()
+
+    async def run_and_cache_query(self, query_name, function, kwargs):
+        metrics = self.get_metrics_or_placeholder_for_api(query_name)
+        metrics.start()
+        cache = self.session_mgr.search_cache[query_name]
+        cache_key = str(kwargs)
+        cache_item = cache.get(cache_key)
+        if cache_item is None:
+            cache_item = cache[cache_key] = ResultCacheItem()
+        elif cache_item.result is not None:
+            metrics.cache_response()
+            return cache_item.result
+        async with cache_item.lock:
+            if cache_item.result is None:
+                cache_item.result = await self.run_in_executor(
+                    query_name, function, kwargs
+                )
+            else:
+                metrics = self.get_metrics_or_placeholder_for_api(query_name)
+                metrics.cache_response()
+            return cache_item.result
+
+    async def claimtrie_search(self, **kwargs):
+        if kwargs:
+            kwargs.setdefault('blocklist_channel_ids', []).extend(self.filtering_channels_ids)
+            return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
+
+    async def claimtrie_resolve(self, *urls):
+        if urls:
+            return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+
+    async def get_server_height(self):
+        return self.bp.height
+
+    async def transaction_get_height(self, tx_hash):
+        self.assert_tx_hash(tx_hash)
+        transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
+        if transaction_info and 'hex' in transaction_info and 'confirmations' in transaction_info:
+            # an unconfirmed transaction from lbrycrdd will not have a 'confirmations' field
+            return (self.db.db_height - transaction_info['confirmations']) + 1
+        elif transaction_info and 'hex' in transaction_info:
+            return -1
+        return None
+
+    async def claimtrie_getclaimsbyids(self, *claim_ids):
+        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
+        return dict(zip(claim_ids, claims))
+
+    async def batched_formatted_claims_from_daemon(self, claim_ids):
+        claims = await self.daemon.getclaimsbyids(claim_ids)
+        result = []
+        for claim in claims:
+            if claim and claim.get('value'):
+                result.append(self.format_claim_from_daemon(claim))
+        return result
+
+    def format_claim_from_daemon(self, claim, name=None):
+        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
+
+        if not claim:
+            return {}
+
+        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
+        # it will be fixed after the lbrycrd upstream merge to v17 is done
+        # it originated as a fear of terminals not supporting unicode. alas, they all do
+
+        if 'name' in claim:
+            name = claim['name'].encode('ISO-8859-1').decode()
+        info = self.db.sql.get_claims(claim_id=claim['claimId'])
+        if not info:
+            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
+            return {}
+        address = info.address.decode()
+        # fixme: temporary
+        #supports = self.format_supports_from_daemon(claim.get('supports', []))
+        supports = []
+
+        amount = get_from_possible_keys(claim, 'amount', 'nAmount')
+        height = get_from_possible_keys(claim, 'height', 'nHeight')
+        effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
+        valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
+
+        result = {
+            "name": name,
+            "claim_id": claim['claimId'],
+            "txid": claim['txid'],
+            "nout": claim['n'],
+            "amount": amount,
+            "depth": self.db.db_height - height + 1,
+            "height": height,
+            "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
+            "address": address,  # from index
+            "supports": supports,
+            "effective_amount": effective_amount,
+            "valid_at_height": valid_at_height
+        }
+        if 'claim_sequence' in claim:
+            # TODO: ensure that lbrycrd #209 fills in this value
+            result['claim_sequence'] = claim['claim_sequence']
+        else:
+            result['claim_sequence'] = -1
+        if 'normalized_name' in claim:
+            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
+        return result
+
+    def assert_tx_hash(self, value):
+        '''Raise an RPCError if the value is not a valid transaction
+        hash.'''
+        try:
+            if len(util.hex_to_bytes(value)) == 32:
+                return
+        except Exception:
+            pass
+        raise RPCError(1, f'{value} should be a transaction hash')
+
+    def assert_claim_id(self, value):
+        '''Raise an RPCError if the value is not a valid claim id
+        hash.'''
+        try:
+            if len(util.hex_to_bytes(value)) == 20:
+                return
+        except Exception:
+            pass
+        raise RPCError(1, f'{value} should be a claim id hash')
 
     async def subscribe_headers_result(self):
         """The result of a header subscription or notification."""
@@ -1264,7 +1476,6 @@ class ElectrumX(SessionBase):
 
     def set_request_handlers(self, ptuple):
         self.protocol_tuple = ptuple
-
         handlers = {
             'blockchain.block.get_chunk': self.block_get_chunk,
             'blockchain.block.get_header': self.block_get_header,
@@ -1284,41 +1495,22 @@ class ElectrumX(SessionBase):
             'server.features': self.server_features_async,
             'server.peers.subscribe': self.peers_subscribe,
             'server.version': self.server_version,
+            'blockchain.transaction.get_height': self.transaction_get_height,
+            'blockchain.claimtrie.search': self.claimtrie_search,
+            'blockchain.claimtrie.resolve': self.claimtrie_resolve,
+            'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
+            'blockchain.block.get_server_height': self.get_server_height,
+            'mempool.get_fee_histogram': self.mempool.compact_fee_histogram,
+            'blockchain.block.headers': self.block_headers,
+            'server.ping': self.ping,
+            'blockchain.headers.subscribe': self.headers_subscribe_False,
+            'blockchain.address.get_balance': self.address_get_balance,
+            'blockchain.address.get_history': self.address_get_history,
+            'blockchain.address.get_mempool': self.address_get_mempool,
+            'blockchain.address.listunspent': self.address_listunspent,
+            'blockchain.address.subscribe': self.address_subscribe,
+            'blockchain.address.unsubscribe': self.address_unsubscribe,
         }
-
-        if ptuple >= (1, 2):
-            # New handler as of 1.2
-            handlers.update({
-                'mempool.get_fee_histogram':
-                    self.mempool.compact_fee_histogram,
-                'blockchain.block.headers': self.block_headers,
-                'server.ping': self.ping,
-            })
-
-        if ptuple >= (1, 4):
-            handlers.update({
-                'blockchain.block.header': self.block_header,
-                'blockchain.block.headers': self.block_headers,
-                'blockchain.headers.subscribe': self.headers_subscribe,
-                'blockchain.transaction.id_from_pos':
-                    self.transaction_id_from_pos,
-            })
-        elif ptuple >= (1, 3):
-            handlers.update({
-                'blockchain.block.header': self.block_header_13,
-                'blockchain.headers.subscribe': self.headers_subscribe_True,
-            })
-        else:
-            handlers.update({
-                'blockchain.headers.subscribe': self.headers_subscribe_False,
-                'blockchain.address.get_balance': self.address_get_balance,
-                'blockchain.address.get_history': self.address_get_history,
-                'blockchain.address.get_mempool': self.address_get_mempool,
-                'blockchain.address.listunspent': self.address_listunspent,
-                'blockchain.address.subscribe': self.address_subscribe,
-                'blockchain.address.unsubscribe': self.address_unsubscribe,
-            })
-
         self.request_handlers = handlers
 
 
@@ -1332,153 +1524,6 @@ class LocalRPC(SessionBase):
 
     def protocol_version_string(self):
         return 'RPC'
-
-
-class DashElectrumX(ElectrumX):
-    """A TCP server that handles incoming Electrum Dash connections."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mns = set()
-
-    def set_request_handlers(self, ptuple):
-        super().set_request_handlers(ptuple)
-        self.request_handlers.update({
-            'masternode.announce.broadcast':
-                self.masternode_announce_broadcast,
-            'masternode.subscribe': self.masternode_subscribe,
-            'masternode.list': self.masternode_list
-        })
-
-    async def notify(self, touched, height_changed):
-        """Notify the client about changes in masternode list."""
-        await super().notify(touched, height_changed)
-        for mn in self.mns:
-            status = await self.daemon_request('masternode_list',
-                                               ['status', mn])
-            await self.send_notification('masternode.subscribe',
-                                         [mn, status.get(mn)])
-
-    # Masternode command handlers
-    async def masternode_announce_broadcast(self, signmnb):
-        """Pass through the masternode announce message to be broadcast
-        by the daemon.
-
-        signmnb: signed masternode broadcast message."""
-        try:
-            return await self.daemon_request('masternode_broadcast',
-                                             ['relay', signmnb])
-        except DaemonError as e:
-            error, = e.args
-            message = error['message']
-            self.logger.info(f'masternode_broadcast: {message}')
-            raise RPCError(BAD_REQUEST, 'the masternode broadcast was '
-                                        f'rejected.\n\n{message}\n[{signmnb}]')
-
-    async def masternode_subscribe(self, collateral):
-        """Returns the status of masternode.
-
-        collateral: masternode collateral.
-        """
-        result = await self.daemon_request('masternode_list',
-                                           ['status', collateral])
-        if result is not None:
-            self.mns.add(collateral)
-            return result.get(collateral)
-        return None
-
-    async def masternode_list(self, payees):
-        """
-        Returns the list of masternodes.
-
-        payees: a list of masternode payee addresses.
-        """
-        if not isinstance(payees, list):
-            raise RPCError(BAD_REQUEST, 'expected a list of payees')
-
-        def get_masternode_payment_queue(mns):
-            """Returns the calculated position in the payment queue for all the
-            valid masterernodes in the given mns list.
-
-            mns: a list of masternodes information.
-            """
-            now = int(datetime.datetime.utcnow().strftime("%s"))
-            mn_queue = []
-
-            # Only ENABLED masternodes are considered for the list.
-            for line in mns:
-                mnstat = mns[line].split()
-                if mnstat[0] == 'ENABLED':
-                    # if last paid time == 0
-                    if int(mnstat[5]) == 0:
-                        # use active seconds
-                        mnstat.append(int(mnstat[4]))
-                    else:
-                        # now minus last paid
-                        delta = now - int(mnstat[5])
-                        # if > active seconds, use active seconds
-                        if delta >= int(mnstat[4]):
-                            mnstat.append(int(mnstat[4]))
-                        # use active seconds
-                        else:
-                            mnstat.append(delta)
-                    mn_queue.append(mnstat)
-            mn_queue = sorted(mn_queue, key=lambda x: x[8], reverse=True)
-            return mn_queue
-
-        def get_payment_position(payment_queue, address):
-            """
-            Returns the position of the payment list for the given address.
-
-            payment_queue: position in the payment queue for the masternode.
-            address: masternode payee address.
-            """
-            position = -1
-            for pos, mn in enumerate(payment_queue, start=1):
-                if mn[2] == address:
-                    position = pos
-                    break
-            return position
-
-        # Accordingly with the masternode payment queue, a custom list
-        # with the masternode information including the payment
-        # position is returned.
-        cache = self.session_mgr.mn_cache
-        if not cache or self.session_mgr.mn_cache_height != self.db.db_height:
-            full_mn_list = await self.daemon_request('masternode_list',
-                                                     ['full'])
-            mn_payment_queue = get_masternode_payment_queue(full_mn_list)
-            mn_payment_count = len(mn_payment_queue)
-            mn_list = []
-            for key, value in full_mn_list.items():
-                mn_data = value.split()
-                mn_info = {}
-                mn_info['vin'] = key
-                mn_info['status'] = mn_data[0]
-                mn_info['protocol'] = mn_data[1]
-                mn_info['payee'] = mn_data[2]
-                mn_info['lastseen'] = mn_data[3]
-                mn_info['activeseconds'] = mn_data[4]
-                mn_info['lastpaidtime'] = mn_data[5]
-                mn_info['lastpaidblock'] = mn_data[6]
-                mn_info['ip'] = mn_data[7]
-                mn_info['paymentposition'] = get_payment_position(
-                    mn_payment_queue, mn_info['payee'])
-                mn_info['inselection'] = (
-                        mn_info['paymentposition'] < mn_payment_count // 10)
-                balance = await self.address_get_balance(mn_info['payee'])
-                mn_info['balance'] = (sum(balance.values())
-                                      / self.coin.VALUE_PER_COIN)
-                mn_list.append(mn_info)
-            cache.clear()
-            cache.extend(mn_list)
-            self.session_mgr.mn_cache_height = self.db.db_height
-
-        # If payees is an empty list the whole masternode list is returned
-        if payees:
-            return [mn for mn in cache if mn['payee'] in payees]
-        else:
-            return cache
 
 
 class ResultCacheItem:
@@ -1498,251 +1543,6 @@ class ResultCacheItem:
         self._result = result
         if result is not None:
             self.has_result.set()
-
-
-class LBRYSessionManager(SessionManager):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.query_executor = None
-        self.websocket = None
-        self.metrics = ServerLoadData()
-        self.metrics_loop = None
-        self.running = False
-        if self.env.websocket_host is not None and self.env.websocket_port is not None:
-            self.websocket = AdminWebSocket(self)
-        self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = lrucache(10000)
-        self.search_cache['resolve'] = lrucache(10000)
-
-    async def process_metrics(self):
-        while self.running:
-            data = self.metrics.to_json_and_reset({
-                'sessions': self.session_count(),
-                'height': self.db.db_height,
-            })
-            if self.websocket is not None:
-                self.websocket.send_message(data)
-            await asyncio.sleep(1)
-
-    async def start_other(self):
-        self.running = True
-        path = os.path.join(self.env.db_dir, 'claims.db')
-        args = dict(
-            initializer=reader.initializer,
-            initargs=(self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
-                      self.env.track_metrics)
-        )
-        if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
-            self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
-        else:
-            self.query_executor = ProcessPoolExecutor(
-                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
-            )
-        if self.websocket is not None:
-            await self.websocket.start()
-        if self.env.track_metrics:
-            self.metrics_loop = asyncio.create_task(self.process_metrics())
-
-    async def stop_other(self):
-        self.running = False
-        if self.env.track_metrics:
-            self.metrics_loop.cancel()
-        if self.websocket is not None:
-            await self.websocket.stop()
-        self.query_executor.shutdown()
-
-
-class LBRYElectrumX(ElectrumX):
-    PROTOCOL_MIN = (2, 0)  # v0.48 is backwards incompatible, forking a new protocol
-    PROTOCOL_MAX = (2, 0)
-    max_errors = math.inf  # don't disconnect people for errors! let them happen...
-    session_mgr: LBRYSessionManager
-    version = sdk_version
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # fixme: this is a rebase hack, we need to go through ChainState instead later
-        self.daemon = self.session_mgr.daemon
-        self.bp: LBRYBlockProcessor = self.session_mgr.bp
-        self.db: LBRYDB = self.bp.db
-        # space separated list of channel URIs used for filtering bad content
-        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '')
-        self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
-
-    def set_request_handlers(self, ptuple):
-        super().set_request_handlers((1, 2) if ptuple == (2, 0) else ptuple)  # our "2.0" is electrumx 1.2
-        handlers = {
-            'blockchain.transaction.get_height': self.transaction_get_height,
-            'blockchain.claimtrie.search': self.claimtrie_search,
-            'blockchain.claimtrie.resolve': self.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
-            'blockchain.block.get_server_height': self.get_server_height,
-        }
-        self.request_handlers.update(handlers)
-
-    def get_metrics_or_placeholder_for_api(self, query_name):
-        """ Do not hold on to a reference to the metrics
-            returned by this method past an `await` or
-            you may be working with a stale metrics object.
-        """
-        if self.env.track_metrics:
-            return self.session_mgr.metrics.for_api(query_name)
-        else:
-            return APICallMetrics(query_name)
-
-    async def run_in_executor(self, query_name, func, kwargs):
-        start = time.perf_counter()
-        try:
-            result = await asyncio.get_running_loop().run_in_executor(
-                self.session_mgr.query_executor, func, kwargs
-            )
-        except asyncio.CancelledError:
-            raise
-        except reader.SQLiteInterruptedError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_interrupt(start, error.metrics)
-            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
-        except reader.SQLiteOperationalError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_error(start, error.metrics)
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
-        except Exception:
-            log.exception("dear devs, please handle this exception better")
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_error(start, {})
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
-
-        if self.env.track_metrics:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            (result, metrics_data) = result
-            metrics.query_response(start, metrics_data)
-
-        return base64.b64encode(result).decode()
-
-    async def run_and_cache_query(self, query_name, function, kwargs):
-        metrics = self.get_metrics_or_placeholder_for_api(query_name)
-        metrics.start()
-        cache = self.session_mgr.search_cache[query_name]
-        cache_key = str(kwargs)
-        cache_item = cache.get(cache_key)
-        if cache_item is None:
-            cache_item = cache[cache_key] = ResultCacheItem()
-        elif cache_item.result is not None:
-            metrics.cache_response()
-            return cache_item.result
-        async with cache_item.lock:
-            if cache_item.result is None:
-                cache_item.result = await self.run_in_executor(
-                    query_name, function, kwargs
-                )
-            else:
-                metrics = self.get_metrics_or_placeholder_for_api(query_name)
-                metrics.cache_response()
-            return cache_item.result
-
-    async def claimtrie_search(self, **kwargs):
-        if kwargs:
-            kwargs.setdefault('blocklist_channel_ids', []).extend(self.filtering_channels_ids)
-            return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
-
-    async def claimtrie_resolve(self, *urls):
-        if urls:
-            return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
-
-    async def get_server_height(self):
-        return self.bp.height
-
-    async def transaction_get_height(self, tx_hash):
-        self.assert_tx_hash(tx_hash)
-        transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
-        if transaction_info and 'hex' in transaction_info and 'confirmations' in transaction_info:
-            # an unconfirmed transaction from lbrycrdd will not have a 'confirmations' field
-            return (self.db.db_height - transaction_info['confirmations']) + 1
-        elif transaction_info and 'hex' in transaction_info:
-            return -1
-        return None
-
-    async def claimtrie_getclaimsbyids(self, *claim_ids):
-        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
-        return dict(zip(claim_ids, claims))
-
-    async def batched_formatted_claims_from_daemon(self, claim_ids):
-        claims = await self.daemon.getclaimsbyids(claim_ids)
-        result = []
-        for claim in claims:
-            if claim and claim.get('value'):
-                result.append(self.format_claim_from_daemon(claim))
-        return result
-
-    def format_claim_from_daemon(self, claim, name=None):
-        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
-
-        if not claim:
-            return {}
-
-        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
-        # it will be fixed after the lbrycrd upstream merge to v17 is done
-        # it originated as a fear of terminals not supporting unicode. alas, they all do
-
-        if 'name' in claim:
-            name = claim['name'].encode('ISO-8859-1').decode()
-        info = self.db.sql.get_claims(claim_id=claim['claimId'])
-        if not info:
-            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
-            return {}
-        address = info.address.decode()
-        # fixme: temporary
-        #supports = self.format_supports_from_daemon(claim.get('supports', []))
-        supports = []
-
-        amount = get_from_possible_keys(claim, 'amount', 'nAmount')
-        height = get_from_possible_keys(claim, 'height', 'nHeight')
-        effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
-        valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
-
-        result = {
-            "name": name,
-            "claim_id": claim['claimId'],
-            "txid": claim['txid'],
-            "nout": claim['n'],
-            "amount": amount,
-            "depth": self.db.db_height - height + 1,
-            "height": height,
-            "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
-            "address": address,  # from index
-            "supports": supports,
-            "effective_amount": effective_amount,
-            "valid_at_height": valid_at_height
-        }
-        if 'claim_sequence' in claim:
-            # TODO: ensure that lbrycrd #209 fills in this value
-            result['claim_sequence'] = claim['claim_sequence']
-        else:
-            result['claim_sequence'] = -1
-        if 'normalized_name' in claim:
-            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
-        return result
-
-    def assert_tx_hash(self, value):
-        '''Raise an RPCError if the value is not a valid transaction
-        hash.'''
-        try:
-            if len(util.hex_to_bytes(value)) == 32:
-                return
-        except Exception:
-            pass
-        raise RPCError(1, f'{value} should be a transaction hash')
-
-    def assert_claim_id(self, value):
-        '''Raise an RPCError if the value is not a valid claim id
-        hash.'''
-        try:
-            if len(util.hex_to_bytes(value)) == 20:
-                return
-        except Exception:
-            pass
-        raise RPCError(1, f'{value} should be a claim id hash')
 
 
 def get_from_possible_keys(dictionary, *keys):

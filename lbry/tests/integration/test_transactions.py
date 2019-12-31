@@ -2,15 +2,13 @@ import logging
 import asyncio
 import random
 from itertools import chain
-from random import shuffle
 
-from torba.testcase import IntegrationTestCase
-from torba.client.util import satoshis_to_coins, coins_to_satoshis
+from lbry.wallet.transaction import Transaction, Output, Input
+from lbry.wallet.testcase import IntegrationTestCase
+from lbry.wallet.client.util import satoshis_to_coins, coins_to_satoshis
 
 
 class BasicTransactionTests(IntegrationTestCase):
-
-    VERBOSITY = logging.WARN
 
     async def test_variety_of_transactions_and_longish_history(self):
         await self.blockchain.generate(300)
@@ -41,9 +39,9 @@ class BasicTransactionTests(IntegrationTestCase):
         # spend from each of the first 10 addresses to the subsequent 10 addresses
         txs = []
         for address in addresses[10:20]:
-            txs.append(await self.ledger.transaction_class.create(
+            txs.append(await Transaction.create(
                 [],
-                [self.ledger.transaction_class.output_class.pay_pubkey_hash(
+                [Output.pay_pubkey_hash(
                     coins_to_satoshis('1.0'), self.ledger.address_to_hash160(address)
                 )],
                 [self.account], self.account
@@ -66,9 +64,9 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(30, await self.account.get_utxo_count())
 
         # spend all 30 UTXOs into a a 199 coin UTXO and change
-        tx = await self.ledger.transaction_class.create(
+        tx = await Transaction.create(
             [],
-            [self.ledger.transaction_class.output_class.pay_pubkey_hash(
+            [Output.pay_pubkey_hash(
                 coins_to_satoshis('199.0'), self.ledger.address_to_hash160(addresses[-1])
             )],
             [self.account], self.account
@@ -99,9 +97,9 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(account2, '0.0')
 
         address2 = await account2.receiving.get_or_create_usable_address()
-        tx = await self.ledger.transaction_class.create(
+        tx = await Transaction.create(
             [],
-            [self.ledger.transaction_class.output_class.pay_pubkey_hash(
+            [Output.pay_pubkey_hash(
                 coins_to_satoshis('2.0'), self.ledger.address_to_hash160(address2)
             )],
             [account1], account1
@@ -115,8 +113,8 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(account2, '2.0')
 
         utxos = await self.account.get_utxos()
-        tx = await self.ledger.transaction_class.create(
-            [self.ledger.transaction_class.input_class.spend(utxos[0])],
+        tx = await Transaction.create(
+            [Input.spend(utxos[0])],
             [],
             [account1], account1
         )
@@ -159,8 +157,8 @@ class BasicTransactionTests(IntegrationTestCase):
         utxos = await self.account.get_utxos()
         txs = []
         for utxo in utxos:
-            tx = await self.ledger.transaction_class.create(
-                [self.ledger.transaction_class.input_class.spend(utxo)],
+            tx = await Transaction.create(
+                [Input.spend(utxo)],
                 [],
                 [self.account], self.account
             )

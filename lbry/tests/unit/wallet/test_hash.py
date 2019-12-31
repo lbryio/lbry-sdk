@@ -1,6 +1,6 @@
 from unittest import TestCase, mock
-from torba.client.hash import aes_decrypt, aes_encrypt, better_aes_decrypt, better_aes_encrypt
-from torba.client.errors import InvalidPasswordError
+from lbry.wallet.client.hash import aes_decrypt, aes_encrypt, better_aes_decrypt, better_aes_encrypt
+from lbry.wallet.client.errors import InvalidPasswordError
 
 
 class TestAESEncryptDecrypt(TestCase):

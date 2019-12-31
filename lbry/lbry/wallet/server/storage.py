@@ -10,7 +10,7 @@
 import os
 from functools import partial
 
-from torba.server import util
+from lbry.wallet.server import util
 
 
 def db_class(db_dir, name):

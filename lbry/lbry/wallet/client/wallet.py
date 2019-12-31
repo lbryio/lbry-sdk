@@ -9,10 +9,10 @@ from typing import List, Sequence, MutableSequence, Optional
 from collections import UserDict
 from hashlib import sha256
 from operator import attrgetter
-from torba.client.hash import better_aes_encrypt, better_aes_decrypt
+from lbry.crypto.crypt import better_aes_encrypt, better_aes_decrypt
 
 if typing.TYPE_CHECKING:
-    from torba.client import basemanager, baseaccount, baseledger
+    from lbry.wallet.client import basemanager, baseaccount, baseledger
 
 
 log = logging.getLogger(__name__)

@@ -1,6 +1,6 @@
 import asyncio
 
-from torba.testcase import IntegrationTestCase
+from lbry.wallet.testcase import IntegrationTestCase
 
 import lbry.wallet
 from lbry.schema.claim import Claim

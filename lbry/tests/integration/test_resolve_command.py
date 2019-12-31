@@ -1,12 +1,11 @@
 import asyncio
 import json
 import hashlib
-from unittest import skip
 from binascii import hexlify, unhexlify
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.schema.compat import OldClaimMessage
-from torba.client.hash import sha256, Base58
+from lbry.wallet.client.hash import sha256, Base58
 
 
 class BaseResolveTestCase(CommandTestCase):

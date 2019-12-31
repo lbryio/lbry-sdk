@@ -3,8 +3,8 @@ from binascii import hexlify
 from collections import namedtuple
 from typing import List
 
-from torba.client.bcd_data_stream import BCDataStream
-from torba.client.util import subclass_tuple
+from lbry.wallet.client.bcd_data_stream import BCDataStream
+from lbry.wallet.client.util import subclass_tuple
 
 # bitcoin opcodes
 OP_0 = 0x00

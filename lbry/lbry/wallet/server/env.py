@@ -12,9 +12,9 @@ from os import environ
 from collections import namedtuple
 from ipaddress import ip_address
 
-from torba.server.util import class_logger
-from torba.server.coins import Coin
-import torba.server.util as lib_util
+from lbry.wallet.server.util import class_logger
+from lbry.wallet.server.coin import Coin
+import lbry.wallet.server.util as lib_util
 
 
 NetIdentity = namedtuple('NetIdentity', 'host tcp_port ssl_port nick_suffix')

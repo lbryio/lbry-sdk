@@ -1,7 +1,7 @@
 from random import Random
 from typing import List
 
-from torba.client import basetransaction
+from lbry.wallet.client import basetransaction
 
 MAXIMUM_TRIES = 100000
 

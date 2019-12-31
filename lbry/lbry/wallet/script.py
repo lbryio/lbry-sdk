@@ -1,5 +1,5 @@
-from torba.client.basescript import BaseInputScript, BaseOutputScript, Template
-from torba.client.basescript import PUSH_SINGLE, PUSH_INTEGER, OP_DROP, OP_2DROP, PUSH_SUBSCRIPT, OP_VERIFY
+from lbry.wallet.client.basescript import BaseInputScript, BaseOutputScript, Template
+from lbry.wallet.client.basescript import PUSH_SINGLE, PUSH_INTEGER, OP_DROP, OP_2DROP, PUSH_SUBSCRIPT, OP_VERIFY
 
 
 class InputScript(BaseInputScript):

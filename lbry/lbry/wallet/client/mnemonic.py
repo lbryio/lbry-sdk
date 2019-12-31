@@ -12,8 +12,8 @@ from secrets import randbelow
 
 import pbkdf2
 
-from torba.client.hash import hmac_sha512
-from torba.client.words import english
+from lbry.crypto.hash import hmac_sha512
+from lbry.wallet.client.words import english
 
 # The hash of the mnemonic seed must begin with this
 SEED_PREFIX = b'01'       # Standard wallet

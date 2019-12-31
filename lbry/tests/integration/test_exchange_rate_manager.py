@@ -1,5 +1,5 @@
 from decimal import Decimal
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.testcase import AsyncioTestCase
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager
 
 

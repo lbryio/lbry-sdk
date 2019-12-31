@@ -29,7 +29,7 @@
 
 from collections import namedtuple
 
-from torba.server.util import unpack_le_uint16_from, unpack_le_uint32_from, \
+from lbry.wallet.server.util import unpack_le_uint16_from, unpack_le_uint32_from, \
     pack_le_uint16, pack_le_uint32
 
 
