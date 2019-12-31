@@ -1,6 +1,6 @@
 import contextlib
 from io import StringIO
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.testcase import AsyncioTestCase
 
 from lbry.conf import Config
 from lbry.extras import cli

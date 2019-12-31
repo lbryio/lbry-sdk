@@ -1,9 +1,9 @@
 import asyncio
 
+import lbry
 import lbry.wallet
-from lbry import __version__ as sdk_version
-from torba.client.basenetwork import ClientSession
-from torba.testcase import IntegrationTestCase
+from lbry.wallet.client.basenetwork import ClientSession
+from lbry.testcase import IntegrationTestCase
 
 
 class TestSessions(IntegrationTestCase):
@@ -33,7 +33,7 @@ class TestSessions(IntegrationTestCase):
 
     async def test_proper_version(self):
         info = await self.ledger.network.get_server_features()
-        self.assertEqual(sdk_version, info['server_version'])
+        self.assertEqual(lbry.__version__, info['server_version'])
 
     async def test_client_errors(self):
         # Goal is ensuring thsoe are raised and not trapped accidentally

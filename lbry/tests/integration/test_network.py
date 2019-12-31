@@ -1,12 +1,14 @@
 import logging
 import os
 import asyncio
+
+import lbry
 from unittest.mock import Mock
 
-from torba.client.basenetwork import BaseNetwork
-from torba.orchstr8.node import SPVNode
-from torba.rpc import RPCSession
-from torba.testcase import IntegrationTestCase, AsyncioTestCase
+from lbry.wallet.client.basenetwork import BaseNetwork
+from lbry.wallet.orchstr8.node import SPVNode
+from lbry.wallet.rpc import RPCSession
+from lbry.wallet.testcase import IntegrationTestCase, AsyncioTestCase
 
 
 class NetworkTests(IntegrationTestCase):
@@ -22,13 +24,13 @@ class NetworkTests(IntegrationTestCase):
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
-            'protocol_max': '1.4',
-            'protocol_min': '1.1',
+            'protocol_max': '1.0',
+            'protocol_min': lbry.__version__,
             'pruning': None,
             'description': '',
             'payment_address': '',
             'daily_fee': 0,
-            'server_version': '0.5.7'}, await self.ledger.network.get_server_features())
+            'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
         await self.conductor.spv_node.stop()
         address = (await self.account.get_addresses(limit=1))[0]
         os.environ.update({
@@ -41,13 +43,13 @@ class NetworkTests(IntegrationTestCase):
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
-            'protocol_max': '1.4',
-            'protocol_min': '1.1',
+            'protocol_max': '1.0',
+            'protocol_min': lbry.__version__,
             'pruning': None,
             'description': 'Fastest server in the west.',
             'payment_address': address,
             'daily_fee': 42,
-            'server_version': '0.5.7'}, await self.ledger.network.get_server_features())
+            'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
 
 
 class ReconnectTests(IntegrationTestCase):

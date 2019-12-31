@@ -23,12 +23,12 @@ from struct import pack, unpack
 
 import attr
 
-from torba.server import util
-from torba.server.hash import hash_to_hex_str, HASHX_LEN
-from torba.server.merkle import Merkle, MerkleCache
-from torba.server.util import formatted_time
-from torba.server.storage import db_class
-from torba.server.history import History
+from lbry.wallet.server import util
+from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
+from lbry.wallet.server.merkle import Merkle, MerkleCache
+from lbry.wallet.server.util import formatted_time
+from lbry.wallet.server.storage import db_class
+from lbry.wallet.server.history import History
 
 
 UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")

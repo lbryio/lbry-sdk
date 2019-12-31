@@ -7,8 +7,8 @@ from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict,
 
 import sqlite3
 
-from torba.client.basetransaction import BaseTransaction, TXRefImmutable
-from torba.client.bip32 import PubKey
+from lbry.wallet.client.basetransaction import BaseTransaction, TXRefImmutable
+from lbry.wallet.client.bip32 import PubKey
 
 log = logging.getLogger(__name__)
 sqlite3.enable_callback_tracebacks(True)

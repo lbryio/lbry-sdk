@@ -1,35 +1,21 @@
-import struct
-from hashlib import sha256
-
-from torba.server.script import ScriptPubKey, OpCodes
-from torba.server.util import cachedproperty
-from torba.server.hash import hash_to_hex_str, HASHX_LEN
-from torba.server.tx import DeserializerSegWit
-
-from lbry.wallet.script import OutputScript
-from .session import LBRYElectrumX, LBRYSessionManager
-from .block_processor import LBRYBlockProcessor
-from .daemon import LBCDaemon
-from .db.writer import LBRYDB
-from collections import namedtuple
-
 import re
 import struct
-from decimal import Decimal
+from typing import List
 from hashlib import sha256
-from functools import partial
-import base64
-from typing import Type, List
+from decimal import Decimal
+from collections import namedtuple
 
-import torba.server.util as util
-from torba.server.hash import Base58, hash160, double_sha256, hash_to_hex_str
-from torba.server.hash import HASHX_LEN, hex_str_to_hash
-from torba.server.script import ScriptPubKey, OpCodes
-import torba.server.tx as lib_tx
-import torba.server.block_processor as block_proc
-from torba.server.db import DB
-import torba.server.daemon as daemon
-from torba.server.session import ElectrumX, DashElectrumX, SessionManager
+import lbry.wallet.server.tx as lib_tx
+from lbry.wallet.script import OutputScript
+from lbry.wallet.server.tx import DeserializerSegWit
+from lbry.wallet.server.util import cachedproperty, subclasses
+from lbry.wallet.server.hash import Base58, hash160, double_sha256, hash_to_hex_str, HASHX_LEN
+from lbry.wallet.server.daemon import Daemon, LBCDaemon
+from lbry.wallet.server.script import ScriptPubKey, OpCodes
+from lbry.wallet.server.leveldb import DB
+from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
+from lbry.wallet.server.db.writer import LBRYDB
+from lbry.wallet.server.block_processor import LBRYBlockProcessor
 
 
 Block = namedtuple("Block", "raw header transactions")
@@ -50,11 +36,11 @@ class Coin:
     CHUNK_SIZE = 2016
     BASIC_HEADER_SIZE = 80
     STATIC_BLOCK_HEADERS = True
-    SESSIONCLS = ElectrumX
+    SESSIONCLS = LBRYElectrumX
     DESERIALIZER = lib_tx.Deserializer
-    DAEMON = daemon.Daemon
-    BLOCK_PROCESSOR = block_proc.BlockProcessor
-    SESSION_MANAGER = SessionManager
+    DAEMON = Daemon
+    BLOCK_PROCESSOR = LBRYBlockProcessor
+    SESSION_MANAGER = LBRYSessionManager
     DB = DB
     HEADER_VALUES = [
         'version', 'prev_block_hash', 'merkle_root', 'timestamp', 'bits', 'nonce'
@@ -75,7 +61,7 @@ class Coin:
 
         Raise an exception if unrecognised."""
         req_attrs = ['TX_COUNT', 'TX_COUNT_HEIGHT', 'TX_PER_BLOCK']
-        for coin in util.subclasses(Coin):
+        for coin in subclasses(Coin):
             if (coin.NAME.lower() == name.lower() and
                     coin.NET.lower() == net.lower()):
                 coin_req_attrs = req_attrs.copy()
@@ -125,7 +111,7 @@ class Coin:
     def lookup_xverbytes(verbytes):
         """Return a (is_xpub, coin_class) pair given xpub/xprv verbytes."""
         # Order means BTC testnet will override NMC testnet
-        for coin in util.subclasses(Coin):
+        for coin in subclasses(Coin):
             if verbytes == coin.XPUB_VERBYTES:
                 return True, coin
             if verbytes == coin.XPRV_VERBYTES:

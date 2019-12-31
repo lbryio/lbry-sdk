@@ -1,12 +1,12 @@
 from types import GeneratorType
 
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.testcase import AsyncioTestCase
 
-from torba.coin.bitcoinsegwit import MainNetLedger as ledger_class
-from torba.client.coinselection import CoinSelector, MAXIMUM_TRIES
-from torba.client.constants import CENT
+from lbry.wallet import MainNetLedger as ledger_class
+from lbry.wallet.client.coinselection import CoinSelector, MAXIMUM_TRIES
+from lbry.wallet.client.constants import CENT
 
-from client_tests.unit.test_transaction import get_output as utxo
+from tests.unit.wallet.test_transaction import get_output as utxo
 
 
 NULL_HASH = b'\x00'*32

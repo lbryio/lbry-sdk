@@ -3,9 +3,9 @@ import time
 import hashlib
 import binascii
 
-from lbry import utils
 import ecdsa
-from torba.client.hash import sha256
+from lbry import utils
+from lbry.crypto.hash import sha256
 from lbry.wallet.transaction import Output
 
 log = logging.getLogger(__name__)

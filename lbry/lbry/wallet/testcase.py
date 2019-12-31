@@ -6,13 +6,16 @@ from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
 from unittest.case import _Outcome
 from typing import Optional
-from torba.orchstr8 import Conductor
-from torba.orchstr8.node import BlockchainNode, WalletNode
-from torba.client.baseledger import BaseLedger
-from torba.client.baseaccount import BaseAccount
-from torba.client.basemanager import BaseWalletManager
-from torba.client.wallet import Wallet
-from torba.client.util import satoshis_to_coins
+
+import lbry.wallet
+from lbry.wallet.orchstr8 import Conductor
+from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
+from lbry.wallet.client.baseledger import BaseLedger
+from lbry.wallet.client.baseaccount import BaseAccount
+from lbry.wallet.client.basemanager import BaseWalletManager
+from lbry.wallet.client.wallet import Wallet
+from lbry.wallet.client.util import satoshis_to_coins
+from lbry.wallet import LbryWalletManager
 
 
 class ColorHandler(logging.StreamHandler):
@@ -187,8 +190,8 @@ class AdvanceTimeTestCase(AsyncioTestCase):
 class IntegrationTestCase(AsyncioTestCase):
 
     SEED = None
-    LEDGER = None
-    MANAGER = None
+    LEDGER = lbry.wallet
+    MANAGER = LbryWalletManager
     ENABLE_SEGWIT = False
     VERBOSITY = logging.WARN
 

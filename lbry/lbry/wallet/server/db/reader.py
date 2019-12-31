@@ -10,7 +10,7 @@ from contextvars import ContextVar
 from functools import wraps
 from dataclasses import dataclass
 
-from torba.client.basedatabase import query, interpolate
+from lbry.wallet.client.basedatabase import query, interpolate
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags

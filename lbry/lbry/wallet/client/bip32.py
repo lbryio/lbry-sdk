@@ -1,16 +1,8 @@
-# Copyright (c) 2017, Neil Booth
-# Copyright (c) 2018, LBRY Inc.
-#
-# All rights reserved.
-#
-# See the file "LICENCE" for information about the copyright
-# and warranty status of this software.
-
-""" Logic for BIP32 Hierarchical Key Derivation. """
 from coincurve import PublicKey, PrivateKey as _PrivateKey
 
-from torba.client.hash import Base58, hmac_sha512, hash160, double_sha256
-from torba.client.util import cachedproperty
+from lbry.crypto.hash import hmac_sha512, hash160, double_sha256
+from lbry.crypto.base58 import Base58
+from lbry.wallet.client.util import cachedproperty
 
 
 class DerivationError(Exception):

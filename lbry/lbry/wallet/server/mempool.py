@@ -15,9 +15,9 @@ from collections import defaultdict
 
 import attr
 
-from torba.server.hash import hash_to_hex_str, hex_str_to_hash
-from torba.server.util import class_logger, chunks
-from torba.server.db import UTXO
+from lbry.wallet.server.hash import hash_to_hex_str, hex_str_to_hash
+from lbry.wallet.server.util import class_logger, chunks
+from lbry.wallet.server.leveldb import UTXO
 
 
 @attr.s(slots=True)

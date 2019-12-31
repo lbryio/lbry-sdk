@@ -7,7 +7,7 @@ from string import hexdigits
 import ecdsa
 from lbry.wallet.constants import CLAIM_TYPES, TXO_TYPES
 
-from torba.client.baseaccount import BaseAccount, HierarchicalDeterministic
+from lbry.wallet.client.baseaccount import BaseAccount, HierarchicalDeterministic
 
 
 log = logging.getLogger(__name__)

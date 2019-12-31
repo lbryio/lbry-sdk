@@ -3,16 +3,17 @@ import typing
 from typing import List, Iterable, Optional, Tuple
 from binascii import hexlify
 
-from torba.client.basescript import BaseInputScript, BaseOutputScript
-from torba.client.baseaccount import BaseAccount
-from torba.client.constants import COIN, NULL_HASH32
-from torba.client.bcd_data_stream import BCDataStream
-from torba.client.hash import sha256, TXRef, TXRefImmutable
-from torba.client.util import ReadOnlyList
-from torba.client.errors import InsufficientFundsError
+from lbry.crypto.hash import sha256
+from lbry.wallet.client.basescript import BaseInputScript, BaseOutputScript
+from lbry.wallet.client.baseaccount import BaseAccount
+from lbry.wallet.client.constants import COIN, NULL_HASH32
+from lbry.wallet.client.bcd_data_stream import BCDataStream
+from lbry.wallet.client.hash import TXRef, TXRefImmutable
+from lbry.wallet.client.util import ReadOnlyList
+from lbry.wallet.client.errors import InsufficientFundsError
 
 if typing.TYPE_CHECKING:
-    from torba.client import baseledger, wallet as basewallet
+    from lbry.wallet.client import baseledger, wallet as basewallet
 
 log = logging.getLogger()
 

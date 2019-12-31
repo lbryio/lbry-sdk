@@ -1,9 +1,10 @@
-from torba.testcase import AsyncioTestCase
-from torba.client.wallet import Wallet
-
+from binascii import hexlify
+from lbry.wallet.testcase import AsyncioTestCase
+from lbry.wallet.client.wallet import Wallet
 from lbry.wallet.ledger import MainNetLedger, WalletDatabase
 from lbry.wallet.header import Headers
 from lbry.wallet.account import Account
+from lbry.wallet.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 
 class TestAccount(AsyncioTestCase):
@@ -41,13 +42,14 @@ class TestAccount(AsyncioTestCase):
         self.assertEqual(len(addresses), 6)
 
     async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
-        async with self.account.receiving.address_generator_lock:
-            await self.account.receiving._generate_keys(0, 200)
-        records = await self.account.receiving.get_address_records()
+        account = Account.generate(self.ledger, Wallet(), 'lbryum')
+        async with account.receiving.address_generator_lock:
+            await account.receiving._generate_keys(0, 200)
+        records = await account.receiving.get_address_records()
         self.assertEqual(len(records), 201)
 
     async def test_ensure_address_gap(self):
-        account = self.account
+        account = Account.generate(self.ledger, Wallet(), 'lbryum')
 
         self.assertIsInstance(account.receiving, HierarchicalDeterministic)
 
@@ -86,7 +88,7 @@ class TestAccount(AsyncioTestCase):
         self.assertEqual(len(new_keys), 20)
 
     async def test_get_or_create_usable_address(self):
-        account = self.account
+        account = Account.generate(self.ledger, Wallet(), 'lbryum')
 
         keys = await account.receiving.get_addresses()
         self.assertEqual(len(keys), 0)
@@ -158,9 +160,9 @@ class TestAccount(AsyncioTestCase):
         await account.ensure_address_gap()
 
         addresses = await account.receiving.get_addresses()
-        self.assertEqual(len(addresses), 5)
+        self.assertEqual(len(addresses), 17)
         addresses = await account.change.get_addresses()
-        self.assertEqual(len(addresses), 5)
+        self.assertEqual(len(addresses), 10)
 
         account_data['ledger'] = 'lbc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
@@ -202,7 +204,7 @@ class TestAccount(AsyncioTestCase):
                 'change': {'gap': 5, 'maximum_uses_per_address': 2}
             }
         }
-        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
+        account = Account.from_dict(self.ledger, Wallet(), account_data)
 
         self.assertEqual(account.name, 'My Account')
         self.assertEqual(account.modified_on, 123.456)
@@ -234,13 +236,12 @@ class TestAccount(AsyncioTestCase):
 class TestSingleKeyAccount(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = MainNetLedger({
+            'db': WalletDatabase(':memory:'),
+            'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
-        self.account = self.ledger.account_class.generate(
-            self.ledger, Wallet(), "torba", {'name': 'single-address'})
+        self.account = Account.generate(self.ledger, Wallet(), "torba", {'name': 'single-address'})
 
     async def asyncTearDown(self):
         await self.ledger.db.close()
@@ -336,13 +337,13 @@ class TestSingleKeyAccount(AsyncioTestCase):
         )
         self.assertEqual(
             account.private_key.extended_key_string(),
-            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
-            '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+            'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+            'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
         )
         self.assertEqual(
             account.public_key.extended_key_string(),
-            'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
-            'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
+            'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EM'
+            'mDgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
         )
         address = await account.receiving.ensure_address_gap()
         self.assertEqual(address[0], account.public_key.address)
@@ -352,8 +353,8 @@ class TestSingleKeyAccount(AsyncioTestCase):
         )
         self.assertEqual(
             private_key.extended_key_string(),
-            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
-            '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+            'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+            'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
         )
 
         invalid_key = await self.ledger.get_private_key_for_address(
@@ -363,7 +364,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
 
         self.assertEqual(
             hexlify(private_key.wif()),
-            b'1c92caa0ef99bfd5e2ceb73b66da8cd726a9370be8c368d448a322f3c5b23aaab901'
+            b'1cef6c80310b1bcbcfa3176ea809ac840f48cda634c475d402e6bd68d5bb3827d601'
         )
 
     async def test_load_and_save_account(self):
@@ -374,16 +375,15 @@ class TestSingleKeyAccount(AsyncioTestCase):
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
             'encrypted': False,
-            'private_key':
-                'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
-                '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
-            'public_key':
-                'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
-                'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
-            'address_generator': {'name': 'single-address'}
+            'private_key': 'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                           'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
+            'public_key': 'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EM'
+                          'mDgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+            'address_generator': {'name': 'single-address'},
+            'certificates': {}
         }
 
-        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
+        account = Account.from_dict(self.ledger, Wallet(), account_data)
 
         await account.ensure_address_gap()
 
@@ -393,7 +393,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
         self.assertEqual(len(addresses), 1)
 
         self.maxDiff = None
-        account_data['ledger'] = 'btc_mainnet'
+        account_data['ledger'] = 'lbc_mainnet'
         self.assertDictEqual(account_data, account.to_dict())
 
 
@@ -407,8 +407,8 @@ class AccountEncryptionTests(AsyncioTestCase):
             "h absent",
         'encrypted': False,
         'private_key':
-            'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
-            '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
+            'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7DRNLEo'
+            'B8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
         'public_key':
             'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
             'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
@@ -422,9 +422,9 @@ class AccountEncryptionTests(AsyncioTestCase):
             "bIkZ//trah9AIkmrc/ZvNkC0Q==",
         'encrypted': True,
         'private_key':
-            'MDAwMDAwMDAwMDAwMDAwMLkWikOLScA/ZxlFSGU7dl//7Q/1gS9h7vqQyrd8DX+'
-            'jwcp7SwlJ1mkMwuraUaWLq9/LxiaGmqJBUZ50p77YVZbDycaCN1unBr1/i1q6RP'
-            'Ob2MNCaG8nyjxZhQai+V/2JmJ+UnFMp3nHany7F8/Hr0g=',
+            'MDAwMDAwMDAwMDAwMDAwMLkWikOLScA/ZxlFSGU7dl8pqVjgdpu1S3MWQF3IJ5H'
+            'OXPAQcgnhHldVq98uP7Q8JqSWOv1p4gpxGSYnA4w5Gbuh0aUD4hmV70m7nVTj7T'
+            '15+Pu30DCspndru59pee/S+mShoK68q7t7r32leaVIfzw=',
         'public_key':
             'xpub661MyMwAqRbcFwwe67Bfjd53h5WXmKm6tqfBJZZH3pQLoy8Nb6mKUMJFc7'
             'UbpVNzmwFPN2evn3YHnig1pkKVYcvCV8owTd2yAcEkJfCX53g',
@@ -432,13 +432,13 @@ class AccountEncryptionTests(AsyncioTestCase):
     }
 
     async def asyncSetUp(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = MainNetLedger({
+            'db': WalletDatabase(':memory:'),
+            'headers': Headers(':memory:')
         })
 
     def test_encrypt_wallet(self):
-        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.unencrypted_account)
+        account = Account.from_dict(self.ledger, Wallet(), self.unencrypted_account)
         account.init_vectors = {
             'seed': self.init_vector,
             'private_key': self.init_vector
@@ -468,7 +468,7 @@ class AccountEncryptionTests(AsyncioTestCase):
         self.assertFalse(account.encrypted)
 
     def test_decrypt_wallet(self):
-        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), self.encrypted_account)
+        account = Account.from_dict(self.ledger, Wallet(), self.encrypted_account)
 
         self.assertTrue(account.encrypted)
         account.decrypt(self.password)

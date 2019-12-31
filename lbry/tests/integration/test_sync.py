@@ -1,7 +1,7 @@
 import asyncio
 import logging
-from torba.testcase import IntegrationTestCase, WalletNode
-from torba.client.constants import CENT
+from lbry.testcase import IntegrationTestCase, WalletNode
+from lbry.constants import CENT
 
 
 class SyncTests(IntegrationTestCase):

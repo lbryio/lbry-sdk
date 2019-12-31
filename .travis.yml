@@ -12,7 +12,7 @@ jobs:
       script: make lint
 
     - stage: test
-      name: "LBRY Unit Tests"
+      name: "Unit Tests"
       install:
         - make install tools
       script:
@@ -20,26 +20,13 @@ jobs:
       after_success:
         - coverage combine lbry/
 
-    - name: "LBRY Integration Tests"
+    - name: "Integration Tests"
       install:
         - pip install coverage tox-travis
         - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
       script: cd lbry && tox
       after_success:
         - coverage combine lbry
-
-    - &torba-tests
-      name: "Torba Unit Tests"
-      env: TESTTYPE=unit
-      install:
-        - pip install coverage tox-travis
-      script: cd torba && tox
-      after_success:
-        - coverage combine torba/tests
-
-    - <<: *torba-tests
-      name: "Torba Integration Tests"
-      env: TESTTYPE=integration
 
     - name: "Run Examples"
       install:

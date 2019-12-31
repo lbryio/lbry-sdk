@@ -1,5 +1,5 @@
 import logging
-from torba.testcase import IntegrationTestCase
+from lbry.wallet.testcase import IntegrationTestCase
 
 
 class BlockchainReorganizationTests(IntegrationTestCase):

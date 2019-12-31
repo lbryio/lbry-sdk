@@ -12,16 +12,17 @@ from operator import itemgetter
 from collections import namedtuple
 
 import pylru
-from torba.client.basetransaction import BaseTransaction
-from torba.tasks import TaskGroup
-from torba.client import baseaccount, basenetwork, basetransaction
-from torba.client.basedatabase import BaseDatabase
-from torba.client.baseheader import BaseHeaders
-from torba.client.coinselection import CoinSelector
-from torba.client.constants import COIN, NULL_HASH32
-from torba.stream import StreamController
-from torba.client.hash import hash160, double_sha256, sha256, Base58
-from torba.client.bip32 import PubKey, PrivateKey
+from lbry.wallet.client.basetransaction import BaseTransaction
+from lbry.wallet.tasks import TaskGroup
+from lbry.wallet.client import baseaccount, basenetwork, basetransaction
+from lbry.wallet.client.basedatabase import BaseDatabase
+from lbry.wallet.client.baseheader import BaseHeaders
+from lbry.wallet.client.coinselection import CoinSelector
+from lbry.wallet.client.constants import COIN, NULL_HASH32
+from lbry.wallet.stream import StreamController
+from lbry.crypto.hash import hash160, double_sha256, sha256
+from lbry.crypto.base58 import Base58
+from lbry.wallet.client.bip32 import PubKey, PrivateKey
 
 log = logging.getLogger(__name__)
 

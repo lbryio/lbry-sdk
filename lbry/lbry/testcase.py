@@ -7,13 +7,10 @@ from time import time
 from binascii import unhexlify
 from functools import partial
 
-from torba.testcase import IntegrationTestCase, WalletNode
-
-import lbry.wallet
+from lbry.wallet.testcase import IntegrationTestCase, WalletNode
 
 from lbry.conf import Config
 from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
-from lbry.wallet import LbryWalletManager
 from lbry.wallet.account import Account
 from lbry.wallet.transaction import Transaction
 from lbry.extras.daemon.Components import Component, WalletComponent
@@ -73,8 +70,6 @@ class ExchangeRateManagerComponent(Component):
 
 class CommandTestCase(IntegrationTestCase):
 
-    LEDGER = lbry.wallet
-    MANAGER = LbryWalletManager
     VERBOSITY = logging.WARN
     blob_lru_cache_size = 0
 

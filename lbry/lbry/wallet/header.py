@@ -2,9 +2,9 @@ import struct
 from typing import Optional
 from binascii import hexlify, unhexlify
 
-from torba.client.baseheader import BaseHeaders
-from torba.client.util import ArithUint256
-from torba.client.hash import sha512, double_sha256, ripemd160
+from lbry.crypto.hash import sha512, double_sha256, ripemd160
+from lbry.wallet.client.baseheader import BaseHeaders
+from lbry.wallet.client.util import ArithUint256
 
 
 class Headers(BaseHeaders):

@@ -27,8 +27,8 @@
 
 from ipaddress import ip_address
 
-from torba.server import util
-from torba.server.util import cachedproperty
+from lbry.wallet.server import util
+from lbry.wallet.server.util import cachedproperty
 
 from typing import Dict
 

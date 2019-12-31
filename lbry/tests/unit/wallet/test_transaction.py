@@ -1,26 +1,28 @@
 import unittest
 from binascii import hexlify, unhexlify
+from itertools import cycle
 
-from torba.testcase import AsyncioTestCase
-from torba.client.constants import CENT, COIN, NULL_HASH32
-from torba.client.wallet import Wallet
+from lbry.wallet.testcase import AsyncioTestCase
+from lbry.wallet.client.constants import CENT, COIN, NULL_HASH32
+from lbry.wallet.client.wallet import Wallet
 
 from lbry.wallet.ledger import MainNetLedger
 from lbry.wallet.transaction import Transaction, Output, Input
 
 
+NULL_HASH = b'\x00'*32
 FEE_PER_BYTE = 50
 FEE_PER_CHAR = 200000
 
 
-def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
-    return Transaction() \
+def get_output(amount=CENT, pubkey_hash=NULL_HASH32, height=-2):
+    return Transaction(height=height) \
         .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
         .outputs[0]
 
 
-def get_input():
-    return Input.spend(get_output())
+def get_input(amount=CENT, pubkey_hash=NULL_HASH):
+    return Input.spend(get_output(amount, pubkey_hash))
 
 
 def get_transaction(txo=None):
@@ -95,7 +97,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
         _ = tx.net_account_balance
 
     def test_paying_from_my_account_to_other_account(self):
-        tx = ledger_class.transaction_class() \
+        tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
@@ -105,7 +107,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
         self.assertEqual(tx.net_account_balance, -200*CENT)
 
     def test_paying_from_other_account_to_my_account(self):
-        tx = ledger_class.transaction_class() \
+        tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
@@ -115,7 +117,7 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
         self.assertEqual(tx.net_account_balance, 190*CENT)
 
     def test_paying_from_my_account_to_my_account(self):
-        tx = ledger_class.transaction_class() \
+        tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
@@ -303,9 +305,9 @@ class TestTransactionSigning(AsyncioTestCase):
 class TransactionIOBalancing(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = MainNetLedger({
+            'db': MainNetLedger.database_class(':memory:'),
+            'headers': MainNetLedger.headers_class(':memory:')
         })
         await self.ledger.db.open()
         self.account = self.ledger.account_class.from_dict(
@@ -326,15 +328,15 @@ class TransactionIOBalancing(AsyncioTestCase):
         return get_output(int(amount*COIN), address or next(self.hash_cycler))
 
     def txi(self, txo):
-        return ledger_class.transaction_class.input_class.spend(txo)
+        return Transaction.input_class.spend(txo)
 
     def tx(self, inputs, outputs):
-        return ledger_class.transaction_class.create(inputs, outputs, [self.account], self.account)
+        return Transaction.create(inputs, outputs, [self.account], self.account)
 
     async def create_utxos(self, amounts):
         utxos = [self.txo(amount) for amount in amounts]
 
-        self.funding_tx = ledger_class.transaction_class(is_verified=True) \
+        self.funding_tx = Transaction(is_verified=True) \
             .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
             .add_outputs(utxos)
 

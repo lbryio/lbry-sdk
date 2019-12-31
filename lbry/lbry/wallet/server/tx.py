@@ -29,9 +29,9 @@
 
 from collections import namedtuple
 
-from torba.server.hash import sha256, double_sha256, hash_to_hex_str
-from torba.server.script import OpCodes
-from torba.server.util import (
+from lbry.wallet.server.hash import sha256, double_sha256, hash_to_hex_str
+from lbry.wallet.server.script import OpCodes
+from lbry.wallet.server.util import (
     unpack_le_int32_from, unpack_le_int64_from, unpack_le_uint16_from,
     unpack_le_uint32_from, unpack_le_uint64_from, pack_le_int32, pack_varint,
     pack_le_uint32, pack_le_int64, pack_varbytes,

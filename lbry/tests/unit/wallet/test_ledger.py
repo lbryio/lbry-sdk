@@ -1,17 +1,14 @@
 import os
 from binascii import hexlify
 
-from torba.coin.bitcoinsegwit import MainNetLedger
-from torba.client.wallet import Wallet
-
-from client_tests.unit.test_transaction import get_transaction, get_output
-from client_tests.unit.test_headers import BitcoinHeadersTestCase, block_bytes
-from torba.testcase import AsyncioTestCase
-from torba.client.wallet import Wallet
-
+from lbry.wallet.testcase import AsyncioTestCase
+from lbry.wallet.client.wallet import Wallet
 from lbry.wallet.account import Account
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.ledger import MainNetLedger
+
+from tests.unit.wallet.test_transaction import get_transaction, get_output
+from tests.unit.wallet.test_headers import HEADERS, block_bytes
 
 
 class MockNetwork:
@@ -61,6 +58,7 @@ class LedgerTestCase(AsyncioTestCase):
             'nonce': 2083236893,
             'prev_block_hash': b'0000000000000000000000000000000000000000000000000000000000000000',
             'timestamp': 1231006505,
+            'claim_trie_root': b'4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b',
             'version': 1
         }
         header.update(kwargs)
@@ -144,37 +142,37 @@ class BlockchainReorganizationTests(LedgerTestCase):
 
     async def test_1_block_reorganization(self):
         self.ledger.network = MocHeaderNetwork({
-            20: {'height': 20, 'count': 5, 'hex': hexlify(
-                self.get_bytes(after=block_bytes(20), upto=block_bytes(5))
+            10: {'height': 10, 'count': 5, 'hex': hexlify(
+                HEADERS[block_bytes(10):block_bytes(15)]
             )},
-            25: {'height': 25, 'count': 0, 'hex': b''}
+            15: {'height': 15, 'count': 0, 'hex': b''}
         })
         headers = self.ledger.headers
-        await headers.connect(0, self.get_bytes(upto=block_bytes(20)))
+        await headers.connect(0, HEADERS[:block_bytes(10)])
         self.add_header(block_height=len(headers))
-        self.assertEqual(headers.height, 20)
+        self.assertEqual(10, headers.height)
         await self.ledger.receive_header([{
-            'height': 21, 'hex': hexlify(self.make_header(block_height=21))
+            'height': 11, 'hex': hexlify(self.make_header(block_height=11))
         }])
 
     async def test_3_block_reorganization(self):
         self.ledger.network = MocHeaderNetwork({
-            20: {'height': 20, 'count': 5, 'hex': hexlify(
-                self.get_bytes(after=block_bytes(20), upto=block_bytes(5))
+            10: {'height': 10, 'count': 5, 'hex': hexlify(
+                HEADERS[block_bytes(10):block_bytes(15)]
             )},
-            21: {'height': 21, 'count': 1, 'hex': hexlify(self.make_header(block_height=21))},
-            22: {'height': 22, 'count': 1, 'hex': hexlify(self.make_header(block_height=22))},
-            25: {'height': 25, 'count': 0, 'hex': b''}
+            11: {'height': 11, 'count': 1, 'hex': hexlify(self.make_header(block_height=11))},
+            12: {'height': 12, 'count': 1, 'hex': hexlify(self.make_header(block_height=12))},
+            15: {'height': 15, 'count': 0, 'hex': b''}
         })
         headers = self.ledger.headers
-        await headers.connect(0, self.get_bytes(upto=block_bytes(20)))
+        await headers.connect(0, HEADERS[:block_bytes(10)])
         self.add_header(block_height=len(headers))
         self.add_header(block_height=len(headers))
         self.add_header(block_height=len(headers))
-        self.assertEqual(headers.height, 22)
-        await self.ledger.receive_header(({
-                                              'height': 23, 'hex': hexlify(self.make_header(block_height=23))
-                                          },))
+        self.assertEqual(headers.height, 12)
+        await self.ledger.receive_header([{
+            'height': 13, 'hex': hexlify(self.make_header(block_height=13))
+        }])
 
 
 class BasicAccountingTests(LedgerTestCase):

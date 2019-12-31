@@ -1,22 +1,14 @@
-from functools import wraps
-
-from torba.rpc.jsonrpc import RPCError
-
 import asyncio
 import itertools
 import json
 import time
-from calendar import timegm
-from struct import pack
-from time import strptime
+from functools import wraps
 
 import aiohttp
 
-from torba.server.util import hex_to_bytes, class_logger, \
-    unpack_le_uint16_from, pack_varint
-from torba.server.hash import hex_str_to_hash, hash_to_hex_str
-from torba.server.tx import DeserializerDecred
-from torba.rpc import JSONRPC
+from lbry.wallet.rpc.jsonrpc import RPCError
+from lbry.wallet.server.util import hex_to_bytes, class_logger
+from lbry.wallet.rpc import JSONRPC
 
 
 class DaemonError(Exception):
@@ -278,187 +270,6 @@ class Daemon:
 
         If the daemon has not been queried yet this returns None."""
         return self._height
-
-
-class DashDaemon(Daemon):
-
-    async def masternode_broadcast(self, params):
-        """Broadcast a transaction to the network."""
-        return await self._send_single('masternodebroadcast', params)
-
-    async def masternode_list(self, params):
-        """Return the masternode status."""
-        return await self._send_single('masternodelist', params)
-
-
-class FakeEstimateFeeDaemon(Daemon):
-    """Daemon that simulates estimatefee and relayfee RPC calls. Coin that
-    wants to use this daemon must define ESTIMATE_FEE & RELAY_FEE"""
-
-    async def estimatefee(self, block_count):
-        """Return the fee estimate for the given parameters."""
-        return self.coin.ESTIMATE_FEE
-
-    async def relayfee(self):
-        """The minimum fee a low-priority tx must pay in order to be accepted
-        to the daemon's memory pool."""
-        return self.coin.RELAY_FEE
-
-
-class LegacyRPCDaemon(Daemon):
-    """Handles connections to a daemon at the given URL.
-
-    This class is useful for daemons that don't have the new 'getblock'
-    RPC call that returns the block in hex, the workaround is to manually
-    recreate the block bytes. The recreated block bytes may not be the exact
-    as in the underlying blockchain but it is good enough for our indexing
-    purposes."""
-
-    async def raw_blocks(self, hex_hashes):
-        """Return the raw binary blocks with the given hex hashes."""
-        params_iterable = ((h, ) for h in hex_hashes)
-        block_info = await self._send_vector('getblock', params_iterable)
-
-        blocks = []
-        for i in block_info:
-            raw_block = await self.make_raw_block(i)
-            blocks.append(raw_block)
-
-        # Convert hex string to bytes
-        return blocks
-
-    async def make_raw_header(self, b):
-        pbh = b.get('previousblockhash')
-        if pbh is None:
-            pbh = '0' * 64
-        return b''.join([
-            pack('<L', b.get('version')),
-            hex_str_to_hash(pbh),
-            hex_str_to_hash(b.get('merkleroot')),
-            pack('<L', self.timestamp_safe(b['time'])),
-            pack('<L', int(b.get('bits'), 16)),
-            pack('<L', int(b.get('nonce')))
-        ])
-
-    async def make_raw_block(self, b):
-        """Construct a raw block"""
-
-        header = await self.make_raw_header(b)
-
-        transactions = []
-        if b.get('height') > 0:
-            transactions = await self.getrawtransactions(b.get('tx'), False)
-
-        raw_block = header
-        num_txs = len(transactions)
-        if num_txs > 0:
-            raw_block += pack_varint(num_txs)
-            raw_block += b''.join(transactions)
-        else:
-            raw_block += b'\x00'
-
-        return raw_block
-
-    def timestamp_safe(self, t):
-        if isinstance(t, int):
-            return t
-        return timegm(strptime(t, "%Y-%m-%d %H:%M:%S %Z"))
-
-
-class DecredDaemon(Daemon):
-    async def raw_blocks(self, hex_hashes):
-        """Return the raw binary blocks with the given hex hashes."""
-
-        params_iterable = ((h, False) for h in hex_hashes)
-        blocks = await self._send_vector('getblock', params_iterable)
-
-        raw_blocks = []
-        valid_tx_tree = {}
-        for block in blocks:
-            # Convert to bytes from hex
-            raw_block = hex_to_bytes(block)
-            raw_blocks.append(raw_block)
-            # Check if previous block is valid
-            prev = self.prev_hex_hash(raw_block)
-            votebits = unpack_le_uint16_from(raw_block[100:102])[0]
-            valid_tx_tree[prev] = self.is_valid_tx_tree(votebits)
-
-        processed_raw_blocks = []
-        for hash, raw_block in zip(hex_hashes, raw_blocks):
-            if hash in valid_tx_tree:
-                is_valid = valid_tx_tree[hash]
-            else:
-                # Do something complicated to figure out if this block is valid
-                header = await self._send_single('getblockheader', (hash, ))
-                if 'nextblockhash' not in header:
-                    raise DaemonError(f'Could not find next block for {hash}')
-                next_hash = header['nextblockhash']
-                next_header = await self._send_single('getblockheader',
-                                                      (next_hash, ))
-                is_valid = self.is_valid_tx_tree(next_header['votebits'])
-
-            if is_valid:
-                processed_raw_blocks.append(raw_block)
-            else:
-                # If this block is invalid remove the normal transactions
-                self.logger.info(f'block {hash} is invalidated')
-                processed_raw_blocks.append(self.strip_tx_tree(raw_block))
-
-        return processed_raw_blocks
-
-    @staticmethod
-    def prev_hex_hash(raw_block):
-        return hash_to_hex_str(raw_block[4:36])
-
-    @staticmethod
-    def is_valid_tx_tree(votebits):
-        # Check if previous block was invalidated.
-        return bool(votebits & (1 << 0) != 0)
-
-    def strip_tx_tree(self, raw_block):
-        c = self.coin
-        assert issubclass(c.DESERIALIZER, DeserializerDecred)
-        d = c.DESERIALIZER(raw_block, start=c.BASIC_HEADER_SIZE)
-        d.read_tx_tree()  # Skip normal transactions
-        # Create a fake block without any normal transactions
-        return raw_block[:c.BASIC_HEADER_SIZE] + b'\x00' + raw_block[d.cursor:]
-
-    async def height(self):
-        height = await super().height()
-        if height > 0:
-            # Lie about the daemon height as the current tip can be invalidated
-            height -= 1
-            self._height = height
-        return height
-
-    async def mempool_hashes(self):
-        mempool = await super().mempool_hashes()
-        # Add current tip transactions to the 'fake' mempool.
-        real_height = await self._send_single('getblockcount')
-        tip_hash = await self._send_single('getblockhash', (real_height,))
-        tip = await self.deserialised_block(tip_hash)
-        # Add normal transactions except coinbase
-        mempool += tip['tx'][1:]
-        # Add stake transactions if applicable
-        mempool += tip.get('stx', [])
-        return mempool
-
-    def client_session(self):
-        # FIXME allow self signed certificates
-        connector = aiohttp.TCPConnector(verify_ssl=False)
-        return aiohttp.ClientSession(connector=connector)
-
-
-class PreLegacyRPCDaemon(LegacyRPCDaemon):
-    """Handles connections to a daemon at the given URL.
-
-    This class is useful for daemons that don't have the new 'getblock'
-    RPC call that returns the block in hex, and need the False parameter
-    for the getblock"""
-
-    async def deserialised_block(self, hex_hash):
-        """Return the deserialised block with the given hex hash."""
-        return await self._send_single('getblock', (hex_hash, False))
 
 
 def handles_errors(decorated_function):

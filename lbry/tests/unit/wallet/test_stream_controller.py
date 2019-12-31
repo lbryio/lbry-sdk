@@ -1,6 +1,6 @@
-from torba.stream import StreamController
-from torba.tasks import TaskGroup
-from torba.testcase import AsyncioTestCase
+from lbry.wallet.stream import StreamController
+from lbry.wallet.tasks import TaskGroup
+from lbry.wallet.testcase import AsyncioTestCase
 
 
 class StreamControllerTestCase(AsyncioTestCase):

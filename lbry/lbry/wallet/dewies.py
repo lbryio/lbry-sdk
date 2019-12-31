@@ -1,5 +1,5 @@
 import textwrap
-from torba.client.util import coins_to_satoshis, satoshis_to_coins
+from lbry.wallet.client.util import coins_to_satoshis, satoshis_to_coins
 
 
 def lbc_to_dewies(lbc: str) -> int:

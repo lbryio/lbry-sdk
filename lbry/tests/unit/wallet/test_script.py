@@ -1,14 +1,11 @@
-import unittest
-from binascii import hexlify, unhexlify
-
 from lbry.wallet.script import OutputScript
 import unittest
 from binascii import hexlify, unhexlify
 
-from torba.client.bcd_data_stream import BCDataStream
-from torba.client.basescript import Template, ParseError, tokenize, push_data
-from torba.client.basescript import PUSH_SINGLE, PUSH_INTEGER, PUSH_MANY, OP_HASH160, OP_EQUAL
-from torba.client.basescript import BaseInputScript, BaseOutputScript
+from lbry.wallet.client.bcd_data_stream import BCDataStream
+from lbry.wallet.client.basescript import Template, ParseError, tokenize, push_data
+from lbry.wallet.client.basescript import PUSH_SINGLE, PUSH_INTEGER, PUSH_MANY, OP_HASH160, OP_EQUAL
+from lbry.wallet.client.basescript import BaseInputScript, BaseOutputScript
 
 
 def parse(opcodes, source):

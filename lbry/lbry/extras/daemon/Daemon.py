@@ -17,8 +17,8 @@ from traceback import format_exc
 from aiohttp import web
 from functools import wraps, partial
 from google.protobuf.message import DecodeError
-from torba.client.wallet import Wallet, ENCRYPT_ON_DISK
-from torba.client.baseaccount import SingleKey, HierarchicalDeterministic
+from lbry.wallet.client.wallet import Wallet, ENCRYPT_ON_DISK
+from lbry.wallet.client.baseaccount import SingleKey, HierarchicalDeterministic
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
