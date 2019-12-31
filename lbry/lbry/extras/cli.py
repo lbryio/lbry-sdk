@@ -188,6 +188,10 @@ def get_argument_parser():
         help='Disable all console output.'
     )
     start.add_argument(
+        '--no-logging', dest='no_logging', action="store_true",
+        help='Disable all logging of any kind.'
+    )
+    start.add_argument(
         '--verbose', nargs="*",
         help=('Enable debug output for lbry logger and event loop. Optionally specify loggers for which debug output '
               'should selectively be applied.')
@@ -261,7 +265,8 @@ def run_daemon(args: argparse.Namespace, conf: Config):
     loop = asyncio.get_event_loop()
     if args.verbose is not None:
         loop.set_debug(True)
-    setup_logging(logging.getLogger(), args, conf)
+    if not args.no_logging:
+        setup_logging(logging.getLogger(), args, conf)
     daemon = Daemon(conf)
 
     def __exit():
