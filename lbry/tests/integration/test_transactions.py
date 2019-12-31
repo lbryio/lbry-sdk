@@ -131,6 +131,7 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertTrue(tx.outputs[1].is_change)
 
     async def test_history_edge_cases(self):
+        await self.blockchain.generate(300)
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
