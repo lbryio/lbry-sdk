@@ -31,10 +31,7 @@ def get_manager_from_environment(default_manager=BaseWalletManager):
 
 
 def get_ledger_from_environment():
-    if 'TORBA_LEDGER' not in os.environ:
-        raise ValueError('Environment variable TORBA_LEDGER must point to a torba based ledger module.')
-    module_name = os.environ['TORBA_LEDGER'].split('-')[-1]  # tox support
-    return importlib.import_module(module_name)
+    return importlib.import_module('lbry.wallet')
 
 
 def get_spvserver_from_ledger(ledger_module):
