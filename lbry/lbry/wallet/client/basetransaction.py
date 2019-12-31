@@ -10,7 +10,7 @@ from lbry.wallet.client.constants import COIN, NULL_HASH32
 from lbry.wallet.client.bcd_data_stream import BCDataStream
 from lbry.wallet.client.hash import TXRef, TXRefImmutable
 from lbry.wallet.client.util import ReadOnlyList
-from lbry.wallet.client.errors import InsufficientFundsError
+from lbry.error import InsufficientFundsError
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.client import baseledger, wallet as basewallet
@@ -514,7 +514,7 @@ class BaseTransaction:
                     deficit = cost - payment
                     spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
                     if not spendables:
-                        raise InsufficientFundsError('Not enough funds to cover this transaction.')
+                        raise InsufficientFundsError()
                     payment += sum(s.effective_amount for s in spendables)
                     tx.add_inputs(s.txi for s in spendables)
 

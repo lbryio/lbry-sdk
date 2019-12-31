@@ -1,7 +1,7 @@
 import unittest
 import asyncio
 from lbry import utils
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 
 class CompareVersionTest(unittest.TestCase):

@@ -2,7 +2,7 @@ import unittest
 from binascii import hexlify, unhexlify
 from itertools import cycle
 
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.constants import CENT, COIN, NULL_HASH32
 from lbry.wallet.client.wallet import Wallet
 

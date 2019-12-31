@@ -1,6 +1,6 @@
 import contextlib
 from io import StringIO
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 from lbry.conf import Config
 from lbry.extras import cli

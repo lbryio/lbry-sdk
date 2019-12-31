@@ -1,6 +1,6 @@
 from unittest import TestCase, mock
-from lbry.wallet.client.hash import aes_decrypt, aes_encrypt, better_aes_decrypt, better_aes_encrypt
-from lbry.wallet.client.errors import InvalidPasswordError
+from lbry.crypto.crypt import aes_decrypt, aes_encrypt, better_aes_decrypt, better_aes_encrypt
+from lbry.error import InvalidPasswordError
 
 
 class TestAESEncryptDecrypt(TestCase):

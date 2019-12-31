@@ -7,7 +7,7 @@ from lbry.dht import constants
 from lbry.dht.node import Node
 from lbry.dht import peer as dht_peer
 from lbry.dht.peer import PeerManager, make_kademlia_peer
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 
 class DHTIntegrationTest(AsyncioTestCase):

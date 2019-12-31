@@ -8,8 +8,7 @@ from lbry.extras.daemon.exchange_rate_manager import (
     CryptonatorFeed, CryptonatorBTCFeed,
     BittrexFeed,
 )
-from torba.testcase import AsyncioTestCase
-from lbry.testcase import FakeExchangeRateManager, get_fake_exchange_rate_manager
+from lbry.testcase import AsyncioTestCase, FakeExchangeRateManager, get_fake_exchange_rate_manager
 from lbry.error import InvalidExchangeRateResponseError
 
 

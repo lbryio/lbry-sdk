@@ -1,4 +1,4 @@
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 import hashlib
 from lbry.extras.daemon.comment_client import sign_comment
 from lbry.extras.daemon.comment_client import is_comment_signed_by_channel

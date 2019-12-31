@@ -2,6 +2,7 @@ import unittest
 from unittest import mock
 import json
 
+import lbry.wallet
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.extras.daemon.ComponentManager import ComponentManager
@@ -11,7 +12,7 @@ from lbry.extras.daemon.Components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbry.extras.daemon.Daemon import Daemon as LBRYDaemon
 from lbry.wallet import LbryWalletManager
-from torba.client.wallet import Wallet
+from lbry.wallet.client.wallet import Wallet
 
 from tests import test_utils
 # from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager

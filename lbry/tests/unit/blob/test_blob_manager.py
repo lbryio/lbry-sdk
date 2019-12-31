@@ -1,8 +1,7 @@
-import asyncio
 import tempfile
 import shutil
 import os
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager

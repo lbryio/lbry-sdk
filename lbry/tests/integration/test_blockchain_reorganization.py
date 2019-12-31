@@ -1,5 +1,5 @@
 import logging
-from lbry.wallet.testcase import IntegrationTestCase
+from lbry.testcase import IntegrationTestCase
 
 
 class BlockchainReorganizationTests(IntegrationTestCase):

@@ -4,7 +4,7 @@ from lbry.utils import generate_id
 from lbry.dht.protocol.routing_table import KBucket
 from lbry.dht.peer import PeerManager, make_kademlia_peer
 from lbry.dht import constants
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 
 def address_generator(address=(1, 2, 3, 4)):

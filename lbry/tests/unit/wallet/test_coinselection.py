@@ -1,6 +1,6 @@
 from types import GeneratorType
 
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 from lbry.wallet import MainNetLedger as ledger_class
 from lbry.wallet.client.coinselection import CoinSelector, MAXIMUM_TRIES

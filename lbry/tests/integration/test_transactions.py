@@ -1,10 +1,9 @@
-import logging
 import asyncio
 import random
 from itertools import chain
 
 from lbry.wallet.transaction import Transaction, Output, Input
-from lbry.wallet.testcase import IntegrationTestCase
+from lbry.testcase import IntegrationTestCase
 from lbry.wallet.client.util import satoshis_to_coins, coins_to_satoshis
 
 

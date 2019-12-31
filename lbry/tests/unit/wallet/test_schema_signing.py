@@ -1,6 +1,6 @@
 from binascii import unhexlify
 
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.constants import CENT, NULL_HASH32
 
 from lbry.wallet.ledger import MainNetLedger

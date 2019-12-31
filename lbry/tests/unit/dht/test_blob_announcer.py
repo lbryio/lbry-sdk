@@ -3,7 +3,7 @@ import typing
 import binascii
 import socket
 import asyncio
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbry.conf import Config
 from lbry.dht import constants
