@@ -4,6 +4,7 @@ import asyncio
 import logging
 from decimal import Decimal
 from typing import Optional, Iterable, Type
+from aiohttp.client_exceptions import ContentTypeError
 from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
 from lbry.wallet.dewies import lbc_to_dewies
@@ -58,7 +59,12 @@ class MarketFeed:
 
     async def get_response(self):
         async with aiohttp_request('get', self.url, params=self.params, timeout=self.request_timeout) as response:
-            self._last_response = await response.json()
+            try:
+                self._last_response = await response.json()
+            except ContentTypeError as e:
+                self._last_response = {}
+                log.warning("Could not parse exchange rate response from %s: %s", self.name, e.message)
+                log.debug(await response.text())
             return self._last_response
 
     async def get_rate(self):

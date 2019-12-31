@@ -4,7 +4,7 @@ from aiohttp.web import Application, WebSocketResponse, json_response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from lbry.wallet.client.util import satoshis_to_coins
-from .node import Conductor, set_logging
+from .node import Conductor
 
 
 PORT = 7954
@@ -58,9 +58,9 @@ class ConductorService:
         await self.app.cleanup()
 
     async def start_stack(self, _):
-        set_logging(
-            self.stack.ledger_module, logging.DEBUG, WebSocketLogHandler(self.send_message)
-        )
+        #set_logging(
+        #    self.stack.ledger_module, logging.DEBUG, WebSocketLogHandler(self.send_message)
+        #)
         self.stack.blockchain_started or await self.stack.start_blockchain()
         self.send_message({'type': 'service', 'name': 'blockchain', 'port': self.stack.blockchain_node.port})
         self.stack.spv_started or await self.stack.start_spv()

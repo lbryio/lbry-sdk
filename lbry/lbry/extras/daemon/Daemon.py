@@ -856,8 +856,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'platform': (str) platform string,
                 'os_release': (str) os release string,
                 'os_system': (str) os name,
-                'lbrynet_version': (str) lbrynet version,
-                'torba_version': (str) torba version,
+                'version': (str) lbrynet version,
                 'build': (str) "dev" | "qa" | "rc" | "release",
             }
         """

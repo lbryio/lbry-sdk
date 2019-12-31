@@ -48,25 +48,9 @@ def get_blockchain_node_from_ledger(ledger_module):
     )
 
 
-def set_logging(ledger_module, level, handler=None):
-    modules = [
-        'torba',
-        'torba.client',
-        'torba.server',
-        'blockchain',
-        ledger_module.__name__
-    ]
-    for module_name in modules:
-        module = logging.getLogger(module_name)
-        module.setLevel(level)
-        if handler is not None:
-            module.addHandler(handler)
-
-
 class Conductor:
 
-    def __init__(self, ledger_module=None, manager_module=None, verbosity=logging.WARNING,
-                 enable_segwit=False, seed=None):
+    def __init__(self, ledger_module=None, manager_module=None, enable_segwit=False, seed=None):
         self.ledger_module = ledger_module or get_ledger_from_environment()
         self.manager_module = manager_module or get_manager_from_environment()
         self.spv_module = get_spvserver_from_ledger(self.ledger_module)
@@ -77,8 +61,6 @@ class Conductor:
         self.wallet_node = WalletNode(
             self.manager_module, self.ledger_module.RegTestLedger, default_seed=seed
         )
-
-        set_logging(self.ledger_module, verbosity)
 
         self.blockchain_started = False
         self.spv_started = False

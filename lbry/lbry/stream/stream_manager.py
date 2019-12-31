@@ -24,7 +24,7 @@ if typing.TYPE_CHECKING:
     from lbry.wallet import LbryWalletManager
     from lbry.wallet.transaction import Transaction
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
-    from torba.client.wallet import Wallet
+    from lbry.wallet.client.wallet import Wallet
 
 log = logging.getLogger(__name__)
 

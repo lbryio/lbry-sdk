@@ -1,12 +1,13 @@
 from decimal import Decimal
 from lbry.testcase import AsyncioTestCase
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager
+from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager, FEEDS
 
 
 class TestExchangeRateManager(AsyncioTestCase):
 
     async def test_exchange_rate_manager(self):
-        manager = ExchangeRateManager()
+        # TODO: re-enable cryptonator.com
+        manager = ExchangeRateManager(FEEDS[:-2])
         manager.start()
         self.addCleanup(manager.stop)
         for feed in manager.market_feeds:

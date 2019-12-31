@@ -2,8 +2,8 @@ import logging
 import traceback
 import argparse
 import importlib
-from torba.server.env import Env
-from torba.server.server import Server
+from lbry.wallet.server.env import Env
+from lbry.wallet.server.server import Server
 
 
 def get_argument_parser():
@@ -26,15 +26,15 @@ def main():
     args = parser.parse_args()
     coin_class = get_coin_class(args.spvserver)
     logging.basicConfig(level=logging.INFO)
-    logging.info('torba.server starting')
+    logging.info('lbry.server starting')
     try:
         server = Server(Env(coin_class))
         server.run()
     except Exception:
         traceback.print_exc()
-        logging.critical('torba.server terminated abnormally')
+        logging.critical('lbry.server terminated abnormally')
     else:
-        logging.info('torba.server terminated normally')
+        logging.info('lbry.server terminated normally')
 
 
 if __name__ == "__main__":

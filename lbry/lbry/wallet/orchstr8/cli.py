@@ -11,7 +11,7 @@ from lbry.wallet.orchstr8.service import ConductorService
 
 def get_argument_parser():
     parser = argparse.ArgumentParser(
-        prog="torba"
+        prog="orchstr8"
     )
     subparsers = parser.add_subparsers(dest='command', help='sub-command help')
 

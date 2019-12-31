@@ -145,7 +145,7 @@ class WalletComponent(Component):
         return result
 
     async def start(self):
-        log.info("Starting torba wallet")
+        log.info("Starting wallet")
         self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf)
         await self.wallet_manager.start()
 

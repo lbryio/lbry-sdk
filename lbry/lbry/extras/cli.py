@@ -225,7 +225,7 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
-LOG_MODULES = ('lbry', 'torba', 'aioupnp')
+LOG_MODULES = 'lbry', 'aioupnp'
 
 
 def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config):
@@ -241,7 +241,6 @@ def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config
             logger.getChild(module_name).addHandler(handler)
 
     logger.getChild('lbry').setLevel(logging.INFO)
-    logger.getChild('torba').setLevel(logging.INFO)
     logger.getChild('aioupnp').setLevel(logging.WARNING)
     logger.getChild('aiohttp').setLevel(logging.CRITICAL)
 
