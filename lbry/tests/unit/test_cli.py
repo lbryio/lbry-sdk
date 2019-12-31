@@ -200,7 +200,7 @@ class CLITest(AsyncioTestCase):
             raise KeyboardInterrupt
 
         mock_daemon_start.side_effect = side_effect
-        self.shell(["start"])
+        self.shell(["start", "--no-logging"])
         mock_daemon_start.assert_called_once()
 
 
