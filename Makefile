@@ -13,7 +13,7 @@ tools:
 
 lint:
 	cd lbry && pylint --rcfile=setup.cfg lbry
-	cd lbry && mypy --ignore-missing-imports lbry
+	#cd lbry && mypy --ignore-missing-imports lbry
 
 test:
 	cd lbry && tox
