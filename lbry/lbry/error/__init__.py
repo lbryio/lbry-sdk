@@ -161,7 +161,7 @@ class InsufficientFundsError(WalletError):
     """
 
     def __init__(self):
-        super().__init__("Insufficient funds.")
+        super().__init__("Not enough funds to cover this transaction.")
 
 
 class ChannelKeyNotFoundError(WalletError):

@@ -28,7 +28,7 @@ setup(
     entry_points={
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
-            'torba-server=torba.server.cli:main',
+            'torba-server=lbry.wallet.server.cli:main',
         ],
     },
     install_requires=[

@@ -47,7 +47,7 @@ Code | Name | Message
 401 | TransactionRejected | Transaction rejected, unknown reason.
 402 | TransactionFeeTooLow | Fee too low.
 403 | TransactionInvalidSignature | Invalid signature.
-404 | InsufficientFunds |  Insufficient funds. -- determined by wallet prior to attempting to broadcast a tx; this is different for example from a TX being created and sent but then rejected by lbrycrd for unspendable utxos.
+404 | InsufficientFunds |  Not enough funds to cover this transaction. -- determined by wallet prior to attempting to broadcast a tx; this is different for example from a TX being created and sent but then rejected by lbrycrd for unspendable utxos.
 405 | ChannelKeyNotFound | Channel signing key not found.
 406 | ChannelKeyInvalid | Channel signing key is out of date. -- For example, channel was updated but you don't have the updated key.
 407 | DataDownload | Failed to download blob. *generic*

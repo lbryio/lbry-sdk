@@ -1,3 +1,4 @@
+import lbry.wallet
 from lbry.extras.daemon import analytics
 
 import unittest

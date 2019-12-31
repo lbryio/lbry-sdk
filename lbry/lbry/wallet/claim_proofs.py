@@ -1,6 +1,6 @@
 import struct
 import binascii
-from lbry.wallet.client.hash import double_sha256
+from lbry.crypto.hash import double_sha256
 
 
 class InvalidProofError(Exception):

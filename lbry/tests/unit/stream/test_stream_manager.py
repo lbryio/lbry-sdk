@@ -8,11 +8,11 @@ from decimal import Decimal
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
-from torba.client.errors import InsufficientFundsError
+from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
-from torba.client.wallet import Wallet
-from torba.client.constants import CENT, NULL_HASH32
-from torba.client.basenetwork import ClientSession
+from lbry.wallet.client.wallet import Wallet
+from lbry.wallet.client.constants import CENT, NULL_HASH32
+from lbry.wallet.client.basenetwork import ClientSession
 from lbry.conf import Config
 from lbry.wallet.ledger import MainNetLedger
 from lbry.wallet.transaction import Transaction, Input, Output

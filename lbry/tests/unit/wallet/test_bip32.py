@@ -1,6 +1,6 @@
 from binascii import unhexlify, hexlify
 
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
 from lbry.wallet.client.bip32 import PubKey, PrivateKey, from_extended_key_string

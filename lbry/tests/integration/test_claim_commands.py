@@ -5,7 +5,7 @@ from binascii import unhexlify
 from urllib.request import urlopen
 
 
-from lbry.wallet.client.errors import InsufficientFundsError
+from lbry.error import InsufficientFundsError
 
 from lbry.extras.daemon.Daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase

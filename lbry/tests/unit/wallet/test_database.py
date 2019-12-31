@@ -11,8 +11,8 @@ from lbry.wallet.transaction import Transaction
 from lbry.wallet.client.wallet import Wallet
 from lbry.wallet.client.constants import COIN
 from lbry.wallet.client.basedatabase import query, interpolate, constraints_to_sql, AIOSQLite
-from lbry.wallet.client.hash import sha256
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.crypto.hash import sha256
+from lbry.testcase import AsyncioTestCase
 
 from tests.unit.wallet.test_transaction import get_output, NULL_HASH
 

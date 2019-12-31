@@ -5,7 +5,8 @@ from binascii import hexlify, unhexlify
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.schema.compat import OldClaimMessage
-from lbry.wallet.client.hash import sha256, Base58
+from lbry.crypto.hash import sha256
+from lbry.crypto.base58 import Base58
 
 
 class BaseResolveTestCase(CommandTestCase):

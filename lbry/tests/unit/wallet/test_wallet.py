@@ -2,7 +2,7 @@ import tempfile
 from binascii import hexlify
 
 from unittest import TestCase, mock
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 from lbry.wallet.ledger import MainNetLedger, RegTestLedger
 from lbry.wallet.client.basemanager import BaseWalletManager

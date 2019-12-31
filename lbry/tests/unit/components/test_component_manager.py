@@ -1,5 +1,5 @@
 import asyncio
-from torba.testcase import AsyncioTestCase, AdvanceTimeTestCase
+from lbry.testcase import AsyncioTestCase, AdvanceTimeTestCase
 
 from lbry.conf import Config
 from lbry.extras.daemon.ComponentManager import ComponentManager

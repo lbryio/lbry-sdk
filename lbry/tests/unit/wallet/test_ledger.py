@@ -1,7 +1,7 @@
 import os
 from binascii import hexlify
 
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.wallet import Wallet
 from lbry.wallet.account import Account
 from lbry.wallet.transaction import Transaction, Output, Input

@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from lbry.utils import generate_id
 from lbry.dht.peer import PeerManager, make_kademlia_peer
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 
 
 class PeerTest(AsyncioTestCase):

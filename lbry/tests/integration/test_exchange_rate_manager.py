@@ -1,5 +1,5 @@
 from decimal import Decimal
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager
 
 

@@ -8,7 +8,7 @@ from unittest.mock import Mock
 from lbry.wallet.client.basenetwork import BaseNetwork
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
-from lbry.wallet.testcase import IntegrationTestCase, AsyncioTestCase
+from lbry.testcase import IntegrationTestCase, AsyncioTestCase
 
 
 class NetworkTests(IntegrationTestCase):

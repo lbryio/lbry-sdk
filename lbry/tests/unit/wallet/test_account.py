@@ -1,5 +1,5 @@
 from binascii import hexlify
-from lbry.wallet.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.wallet import Wallet
 from lbry.wallet.ledger import MainNetLedger, WalletDatabase
 from lbry.wallet.header import Headers

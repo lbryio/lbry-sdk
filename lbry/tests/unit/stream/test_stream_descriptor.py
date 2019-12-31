@@ -5,7 +5,7 @@ import shutil
 import json
 
 from lbry.blob.blob_file import BlobFile
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.conf import Config
 from lbry.error import InvalidStreamDescriptorError
 from lbry.extras.daemon.storage import SQLiteStorage

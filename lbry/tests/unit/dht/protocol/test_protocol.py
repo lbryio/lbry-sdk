@@ -1,6 +1,6 @@
 import asyncio
 import binascii
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from tests import dht_mocks
 from lbry.dht.serialization.bencoding import bencode, bdecode
 from lbry.dht import constants

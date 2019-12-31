@@ -6,7 +6,7 @@ import shutil
 import os
 
 from lbry.blob_exchange.serialization import BlobRequest
-from torba.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
