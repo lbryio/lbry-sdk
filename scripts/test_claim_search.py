@@ -1,11 +1,11 @@
 import asyncio
-from torba.client.basenetwork import ClientSession
-from torba.rpc.jsonrpc import RPCError
+from lbry.wallet.client.basenetwork import ClientSession
+from lbry.wallet.rpc.jsonrpc import RPCError
 import logging
 import json
 import sys
 
-logging.getLogger('torba').setLevel(logging.CRITICAL)
+logging.getLogger('lbry.wallet').setLevel(logging.CRITICAL)
 
 
 async def main():

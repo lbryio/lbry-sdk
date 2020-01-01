@@ -2,7 +2,7 @@ import time
 import asyncio
 import random
 from argparse import ArgumentParser
-from torba.client.basenetwork import ClientSession
+from lbry.wallet.client.basenetwork import ClientSession
 
 
 class AgentSmith(ClientSession):
