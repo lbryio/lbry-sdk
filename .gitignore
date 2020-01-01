@@ -1,2 +1,16 @@
 /.idea
 /.DS_Store
+/build
+/dist
+/.tox
+/.coverage
+/lbry-venv
+
+lbry.egg-info
+__pycache__
+_trial_temp/
+
+/tests/integration/files
+/tests/.coverage.*
+
+/lbry/wallet/bin
