@@ -1,15 +1,15 @@
-# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Gitlab CI Badge](https://ci.lbry.tech/lbry/lbry-sdk/badges/master/pipeline.svg)](https://ci.lbry.tech/lbry/lbry-sdk)
+# <img src="https://raw.githubusercontent.com/lbryio/lbry-sdk/master/lbry.png" alt="LBRY" width="48" height="36" /> LBRY SDK [![Gitlab CI Badge](https://ci.lbry.tech/lbry/lbry-sdk/badges/master/pipeline.svg)](https://ci.lbry.tech/lbry/lbry-sdk)
 
 LBRY is a decentralized peer-to-peer protocol for publishing and accessing digital content. It utilizes the [LBRY blockchain](https://github.com/lbryio/lbrycrd) as a global namespace and database of digital content. Blockchain entries contain searchable content metadata, identities, rights and access rules. LBRY also provides a data network that consists of peers (seeders) uploading and downloading data from other peers, possibly in exchange for payments, as well as a distributed hash table used by peers to discover other peers.
 
 LBRY SDK for Python is currently the most fully featured implementation of the LBRY Network protocols and includes many useful components and tools for building decentralized applications. Primary features and components include:
 
  * Built on Python 3.7+ and `asyncio`.
- * Kademlia DHT (Distributed Hash Table) implementation for finding peers to download from and announcing to peers what we have to host ([lbry.dht](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/dht)).
- * Blob exchange protocol for transferring encrypted blobs of content and negotiating payments ([lbry.blob_exchange](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/blob_exchange)).
- * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbry.schema](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/schema)).
- * Wallet implementation for the LBRY blockchain ([lbry.wallet](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/wallet)).
- * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbry.extras.daemon](https://github.com/lbryio/lbry-sdk/tree/master/lbry/lbry/extras/daemon)). 
+ * Kademlia DHT (Distributed Hash Table) implementation for finding peers to download from and announcing to peers what we have to host ([lbry.dht](https://github.com/lbryio/lbry-sdk/tree/master/lbry/dht)).
+ * Blob exchange protocol for transferring encrypted blobs of content and negotiating payments ([lbry.blob_exchange](https://github.com/lbryio/lbry-sdk/tree/master/lbry/blob_exchange)).
+ * Protobuf schema for encoding and decoding metadata stored on the blockchain ([lbry.schema](https://github.com/lbryio/lbry-sdk/tree/master/lbry/schema)).
+ * Wallet implementation for the LBRY blockchain ([lbry.wallet](https://github.com/lbryio/lbry-sdk/tree/master/lbry/wallet)).
+ * Daemon with a JSON-RPC API to ease building end user applications in any language and for automating various tasks ([lbry.extras.daemon](https://github.com/lbryio/lbry-sdk/tree/master/lbry/extras/daemon)). 
 
 ## Installation
 
@@ -53,4 +53,4 @@ The documentation for the API can be found [here](https://lbry.tech/api/sdk).
 
 Daemon defaults, ports, and other settings are documented [here](https://lbry.tech/resources/daemon-settings).
 
-Settings can be configured using a daemon-settings.yml file. An example can be found [here](https://github.com/lbryio/lbry-sdk/blob/master/lbry/example_daemon_settings.yml).
+Settings can be configured using a daemon-settings.yml file. An example can be found [here](https://github.com/lbryio/lbry-sdk/blob/master/example_daemon_settings.yml).
