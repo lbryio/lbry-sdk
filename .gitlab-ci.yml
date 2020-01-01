@@ -40,19 +40,19 @@ test:unit:
 test:datanetwork-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
+    - pip install tox-travis
     - tox -e datanetwork
 
 test:blockchain-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
+    - pip install tox-travis
     - tox -e blockchain
 
 test:other-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
+    - pip install tox-travis
     - tox -e other
 
 test:json-api:
