@@ -37,19 +37,19 @@ test:unit:
     - make install tools
     - HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-test:integration-datanetwork:
+test:datanetwork-integration:
   stage: test
   script:
     - pip install coverage tox-travis
     - tox -e datanetwork
 
-test:integration-blockchain:
+test:blockchain-integration:
   stage: test
   script:
     - pip install coverage tox-travis
     - tox -e blockchain
 
-test:integration-other:
+test:other-integration:
   stage: test
   script:
     - pip install coverage tox-travis
