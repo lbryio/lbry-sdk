@@ -286,7 +286,7 @@ class SessionManager:
     def _get_info(self):
         """A summary of server state."""
         group_map = self._group_map()
-        method_counts = collections.defaultdict(0)
+        method_counts = collections.defaultdict(int)
         error_count = 0
         logged = 0
         paused = 0
@@ -567,6 +567,7 @@ class SessionManager:
 
     async def broadcast_transaction(self, raw_tx):
         hex_hash = await self.daemon.broadcast_transaction(raw_tx)
+        self.mempool.wakeup.set()
         self.txs_sent += 1
         return hex_hash
 

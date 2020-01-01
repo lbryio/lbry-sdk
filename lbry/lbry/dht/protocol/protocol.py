@@ -224,7 +224,7 @@ class PingQueue:
                         self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, RemoteException):
                 pass
 
         task = self._loop.create_task(ping_task())
@@ -668,7 +668,7 @@ class KademliaProtocol(DatagramProtocol):
                 log.debug("peer %s:%i is running an incompatible version of lbrynet", peer.address, peer.udp_port)
                 return peer.node_id, False
             if 'Invalid token' not in str(err):
-                log.exception("Unexpected error while storing blob_hash")
+                log.warning("Unexpected error while storing blob_hash: %s", err)
                 return peer.node_id, False
         self.peer_manager.clear_token(peer.node_id)
         if not retry:

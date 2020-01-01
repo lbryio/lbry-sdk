@@ -285,14 +285,14 @@ def get_dsn(args):
 
 
 def get_servers(args):
-    if '..' in args.server_range:
-        start, end = args.server_range.split('..')
-    else:
-        start = end = args.server_range
-    return [
-        args.server_url.format(i)
-        for i in range(int(start), int(end)+1)
-    ]
+    servers = []
+    for s in args.server_range.split(","):
+        if '..' in s:
+            start, end = s.split('..')
+            servers.extend(range(int(start), int(end)+1))
+        else:
+            servers.append(int(s))
+    return [args.server_url.format(i) for i in servers]
 
 
 def get_slack_client(args):

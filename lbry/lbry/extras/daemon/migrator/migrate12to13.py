@@ -65,7 +65,7 @@ def do_migration(conf):
                 added_on
             from file;
 
-        insert into new_content_claim (stream_hash, bt_infohash, claim_outpoint)
+        insert or ignore into new_content_claim (stream_hash, bt_infohash, claim_outpoint)
             select stream_hash, NULL, claim_outpoint from content_claim;
 
         drop table file;

@@ -265,7 +265,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
 
     async def reorg(self, start):
         blocks = self.ledger.headers.height - start
-        self.blockchain._block_expected = start - 1
+        self.blockchain.block_expected = start - 1
         # go back to start
         await self.blockchain.invalidate_block(self.ledger.headers.hash(start).decode())
         # go to previous + 1

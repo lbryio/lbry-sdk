@@ -145,6 +145,7 @@ build:windows:
   variables:
     GIT_STRATEGY: none
   script:
+    - "[ -f lbrynet-${OS}.zip ]" # check that asset exists before trying to upload
     - pip install awscli
     - S3_PATH="daemon/gitlab-build-${CI_PIPELINE_ID}_commit-${CI_COMMIT_SHA:0:7}$( if [ ! -z ${CI_COMMIT_TAG} ]; then echo _tag-${CI_COMMIT_TAG}; else echo _branch-${CI_COMMIT_REF_NAME}; fi )"
     - AWS_ACCESS_KEY_ID=${ARTIFACTS_KEY} AWS_SECRET_ACCESS_KEY=${ARTIFACTS_SECRET} AWS_REGION=${ARTIFACTS_REGION}
@@ -174,6 +175,7 @@ s3:windows:
   variables:
     GIT_STRATEGY: none
   script:
+    - "[ -f lbrynet-${OS}.zip ]" # check that asset exists before trying to upload. githubrelease won't error if its missing
     - pip install githubrelease
     - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} asset lbryio/lbry-sdk upload ${CI_COMMIT_TAG} lbrynet-${OS}.zip
 
@@ -203,4 +205,4 @@ publish:
     - pip install githubrelease
     - githubrelease --no-progress --github-token ${GITHUB_CI_USER_ACCESS_TOKEN} release lbryio/lbry-sdk publish ${CI_COMMIT_TAG}
     - >
-      curl -X POST -H 'Content-type: application/json' --data '{"text":"<!channel> There's a new SDK release: https://github.com/lbryio/lbry-sdk/releases/tag/'"${CI_COMMIT_TAG}"'\n'"$(curl -s "https://api.github.com/repos/lbryio/lbry-sdk/releases/tags/${CI_COMMIT_TAG}" | egrep '\w*\"body\":' | cut -d':' -f 2- | tail -c +3 | head -c -2)"'", "channel":"tech"}' "$(echo ${SLACK_WEBHOOK_URL_BASE64} | base64 -d)"
+      curl -X POST -H 'Content-type: application/json' --data '{"text":"<!channel> There is a new SDK release: https://github.com/lbryio/lbry-sdk/releases/tag/'"${CI_COMMIT_TAG}"'\n'"$(curl -s "https://api.github.com/repos/lbryio/lbry-sdk/releases/tags/${CI_COMMIT_TAG}" | egrep '\w*\"body\":' | cut -d':' -f 2- | tail -c +3 | head -c -2)"'", "channel":"tech"}' "$(echo ${SLACK_WEBHOOK_URL_BASE64} | base64 -d)"

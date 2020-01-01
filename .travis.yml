@@ -114,25 +114,6 @@ jobs:
         - sha256sum -b lbrynet-windows.zip
         - ./lbrynet.exe --version
 
-    - if: tag IS present
-      stage: build
-      name: "Wallet Server Docker Image - Tagged Release"
-      script:
-          - set -e
-          - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:$TRAVIS_TAG -t lbry/wallet-server:latest-release -f docker/Dockerfile.wallet_server .
-          - docker push lbry/wallet-server:$TRAVIS_TAG
-          - docker push lbry/wallet-server:latest-release
-
-    - if: tag IS blank AND branch = master AND NOT type IN (pull_request)
-      stage: build
-      name: "Wallet Server Docker Image - Master"
-      script:
-          - set -e
-          - echo "$DOCKER_PASSWORD" | docker login --username "$DOCKER_USERNAME" --password-stdin
-          - travis_retry docker build -t lbry/wallet-server:master -f docker/Dockerfile.wallet_server .
-          - docker push lbry/wallet-server:master
-
 cache:
   directories:
     - $HOME/venv

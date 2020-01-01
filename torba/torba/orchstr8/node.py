@@ -281,7 +281,7 @@ class BlockchainNode:
         self.data_path = None
         self.protocol = None
         self.transport = None
-        self._block_expected = 0
+        self.block_expected = 0
         self.hostname = 'localhost'
         self.peerport = 9246 + 2  # avoid conflict with default peer port
         self.rpcport = 9245 + 2  # avoid conflict with default rpc port
@@ -294,7 +294,7 @@ class BlockchainNode:
         return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.rpcport}/'
 
     def is_expected_block(self, e: BlockHeightEvent):
-        return self._block_expected == e.height
+        return self.block_expected == e.height
 
     @property
     def exists(self):
@@ -383,7 +383,7 @@ class BlockchainNode:
         return out.decode().strip()
 
     def generate(self, blocks):
-        self._block_expected += blocks
+        self.block_expected += blocks
         return self._cli_cmnd('generate', str(blocks))
 
     def invalidate_block(self, blockhash):
