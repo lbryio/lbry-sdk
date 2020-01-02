@@ -54,7 +54,8 @@ class TrendingData:
 
         change = total_amount - old_data[0]
         if change != 0.0:
-            trending_score = old_data[1] + soften(1E-8*time_boost*change)
+            spike = soften(1E-8*total_amount) - soften(1E-8*old_data[0])
+            trending_score = old_data[1] + time_boost*spike
             self.claims[claim_id] = [total_amount, trending_score, True]
 
 
