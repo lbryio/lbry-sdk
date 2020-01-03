@@ -261,7 +261,7 @@ class IntegrationTestCase(AsyncioTestCase):
 
 class FakeExchangeRateManager(ExchangeRateManager):
 
-    def __init__(self, market_feeds, rates):
+    def __init__(self, market_feeds, rates):  # pylint: disable=super-init-not-called
         self.market_feeds = market_feeds
         for feed in self.market_feeds:
             feed.last_check = time()
@@ -304,6 +304,18 @@ class CommandTestCase(IntegrationTestCase):
     VERBOSITY = logging.WARN
     blob_lru_cache_size = 0
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.daemon = None
+        self.daemons = []
+        self.server_config = None
+        self.server_storage = None
+        self.extra_wallet_nodes = []
+        self.extra_wallet_node_port = 5280
+        self.server_blob_manager = None
+        self.server = None
+        self.reflector = None
+
     async def asyncSetUp(self):
         await super().asyncSetUp()
 
@@ -312,9 +324,6 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
 
-        self.daemons = []
-        self.extra_wallet_nodes = []
-        self.extra_wallet_node_port = 5280
         self.daemon = await self.add_daemon(self.wallet_node)
 
         await self.account.ensure_address_gap()
@@ -550,5 +559,5 @@ class CommandTestCase(IntegrationTestCase):
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']
 
-    def assertItemCount(self, result, count):
+    def assertItemCount(self, result, count):  # pylint: disable=invalid-name
         self.assertEqual(result['total_items'], count)
