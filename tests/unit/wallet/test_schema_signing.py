@@ -1,7 +1,7 @@
 from binascii import unhexlify
 
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.client.constants import CENT, NULL_HASH32
+from lbry.wallet.constants import CENT, NULL_HASH32
 
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from lbry.schema.claim import Claim

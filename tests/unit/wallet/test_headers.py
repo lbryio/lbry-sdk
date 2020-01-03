@@ -4,7 +4,7 @@ import tempfile
 from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha256
-from lbry.wallet.client.util import ArithUint256
+from lbry.wallet.util import ArithUint256
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.ledger import Headers
 
