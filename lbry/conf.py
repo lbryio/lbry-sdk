@@ -87,6 +87,10 @@ class String(Setting[str]):
         assert isinstance(value, str), \
             f"Setting '{self.name}' must be a string."
 
+    # TODO: removes this after pylint starts to understand generics
+    def __get__(self, obj: typing.Optional['BaseConfig'], owner) -> str:  # pylint: disable=useless-super-delegation
+        return super().__get__(obj, owner)
+
 
 class Integer(Setting[int]):
     def validate(self, value):
@@ -131,7 +135,7 @@ class Path(String):
     def __init__(self, doc: str, *args, default: str = '', **kwargs):
         super().__init__(doc, default, *args, **kwargs)
 
-    def __get__(self, obj, owner):
+    def __get__(self, obj, owner) -> str:
         value = super().__get__(obj, owner)
         if isinstance(value, str):
             return os.path.expanduser(os.path.expandvars(value))
