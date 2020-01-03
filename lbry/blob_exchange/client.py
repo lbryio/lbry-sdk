@@ -95,7 +95,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             if self._response_fut and not self._response_fut.done():
                 self._response_fut.set_exception(err)
 
-    async def _download_blob(self) -> typing.Tuple[int, Optional['BlobExchangeClientProtocol']]:
+    async def _download_blob(self) -> typing.Tuple[int, Optional['BlobExchangeClientProtocol']]:  # pylint: disable=too-many-return-statements
         """
         :return: download success (bool), connected protocol (BlobExchangeClientProtocol)
         """
@@ -213,11 +213,11 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.connection_manager.connection_made(f"{self.peer_address}:{self.peer_port}")
         log.debug("connection made to %s:%i", self.peer_address, self.peer_port)
 
-    def connection_lost(self, reason):
+    def connection_lost(self, exc):
         if self.connection_manager:
             self.connection_manager.outgoing_connection_lost(f"{self.peer_address}:{self.peer_port}")
-        log.debug("connection lost to %s:%i (reason: %s, %s)", self.peer_address, self.peer_port, str(reason),
-                  str(type(reason)))
+        log.debug("connection lost to %s:%i (reason: %s, %s)", self.peer_address, self.peer_port, str(exc),
+                  str(type(exc)))
         self.close()
 
 

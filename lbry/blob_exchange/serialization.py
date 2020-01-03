@@ -46,7 +46,7 @@ class BlobAvailabilityRequest(BlobMessage):
 
     def __init__(self, requested_blobs: typing.List[str], lbrycrd_address: typing.Optional[bool] = True,
                  **kwargs) -> None:
-        assert len(requested_blobs)
+        assert len(requested_blobs) > 0
         self.requested_blobs = requested_blobs
         self.lbrycrd_address = lbrycrd_address
 
@@ -134,9 +134,9 @@ class BlobErrorResponse(BlobMessage):
         }
 
 
-blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,
+blob_request_types = typing.Union[BlobPriceRequest, BlobAvailabilityRequest, BlobDownloadRequest,  # pylint: disable=invalid-name
                                   BlobPaymentAddressRequest]
-blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse,
+blob_response_types = typing.Union[BlobPriceResponse, BlobAvailabilityResponse, BlobDownloadResponse,  # pylint: disable=invalid-name
                                    BlobErrorResponse, BlobPaymentAddressResponse]
 
 
@@ -157,10 +157,10 @@ def _parse_blob_response(response_msg: bytes) -> typing.Tuple[typing.Optional[ty
         except ValueError:
             continue
         possible_response_keys = {
-                    BlobPaymentAddressResponse.key,
-                    BlobAvailabilityResponse.key,
-                    BlobPriceResponse.key,
-                    BlobDownloadResponse.key
+            BlobPaymentAddressResponse.key,
+            BlobAvailabilityResponse.key,
+            BlobPriceResponse.key,
+            BlobDownloadResponse.key
         }
         if isinstance(response, dict) and response.keys():
             if set(response.keys()).issubset(possible_response_keys):
@@ -179,7 +179,7 @@ class BlobRequest:
         return d
 
     def _get_request(self, request_type: blob_request_types):
-        request = tuple(filter(lambda r: type(r) == request_type, self.requests))
+        request = tuple(filter(lambda r: type(r) == request_type, self.requests))  # pylint: disable=unidiomatic-typecheck
         if request:
             return request[0]
 
@@ -235,7 +235,7 @@ class BlobResponse:
         return d
 
     def _get_response(self, response_type: blob_response_types):
-        response = tuple(filter(lambda r: type(r) == response_type, self.responses))
+        response = tuple(filter(lambda r: type(r) == response_type, self.responses))  # pylint: disable=unidiomatic-typecheck
         if response:
             return response[0]
 
@@ -280,4 +280,3 @@ class BlobResponse:
                 if response_type.key in response
             ])
         return cls(requests, extra)
-
