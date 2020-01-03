@@ -10,7 +10,7 @@ from binascii import unhexlify
 from textwrap import indent
 from lbry.testcase import CommandTestCase
 from lbry.extras.cli import set_kwargs, get_argument_parser
-from lbry.extras.daemon.Daemon import (
+from lbry.extras.daemon.daemon import (
     Daemon, jsonrpc_dumps_pretty, encode_pagination_doc
 )
 from lbry.extras.daemon.json_response_encoder import (

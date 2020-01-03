@@ -20,7 +20,7 @@ from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
 
-from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
+from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
 from lbry.extras.daemon.components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,

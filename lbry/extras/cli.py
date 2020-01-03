@@ -17,7 +17,7 @@ import lbry.wallet
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
 from lbry.conf import Config, CLIConfig
-from lbry.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.daemon import Daemon
 
 log = logging.getLogger('lbry')
 

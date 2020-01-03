@@ -14,7 +14,7 @@ from lbry.testcase import AsyncioTestCase
 
 from lbry.extras.cli import normalize_value, main, setup_logging
 from lbry.extras.system_info import get_platform
-from lbry.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.daemon import Daemon
 from lbry.extras.daemon.loggly_handler import HTTPSLogglyHandler
 from lbry.conf import Config
 from lbry.extras import cli

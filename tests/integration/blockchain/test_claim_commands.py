@@ -7,7 +7,7 @@ from urllib.request import urlopen
 
 from lbry.error import InsufficientFundsError
 
-from lbry.extras.daemon.Daemon import DEFAULT_PAGE_SIZE
+from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction
 
