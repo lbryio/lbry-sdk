@@ -13,11 +13,11 @@ import ipaddress
 import contextlib
 import functools
 import collections
+import hashlib
 import pkg_resources
 
 import certifi
 import aiohttp
-import hashlib
 from lbry.schema.claim import Claim
 
 log = logging.getLogger(__name__)
