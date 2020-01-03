@@ -5,7 +5,7 @@ import typing
 import asyncio
 import binascii
 import time
-from lbry.wallet.client.basedatabase import SQLiteMixin
+from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.wallet.transaction import Transaction

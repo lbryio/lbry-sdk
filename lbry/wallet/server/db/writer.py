@@ -7,11 +7,11 @@ from collections import namedtuple
 
 from lbry.wallet.server.leveldb import DB
 from lbry.wallet.server.util import class_logger
-from lbry.wallet.client.basedatabase import query, constraints_to_sql
+from lbry.wallet.database import query, constraints_to_sql
 
 from lbry.schema.tags import clean_tags
 from lbry.schema.mime_types import guess_stream_type
-from lbry.wallet.ledger import MainNetLedger, RegTestLedger
+from lbry.wallet import Ledger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
 from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
@@ -171,7 +171,7 @@ class SQLDB:
         self._db_path = path
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
-        self.ledger = MainNetLedger if self.main.coin.NET == 'mainnet' else RegTestLedger
+        self.ledger = Ledger if self.main.coin.NET == 'mainnet' else RegTestLedger
         self._fts_synced = False
 
     def open(self):

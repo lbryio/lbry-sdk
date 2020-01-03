@@ -1,17 +1,13 @@
 from binascii import hexlify
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.client.wallet import Wallet
-from lbry.wallet.ledger import MainNetLedger, WalletDatabase
-from lbry.wallet.header import Headers
-from lbry.wallet.account import Account
-from lbry.wallet.client.baseaccount import SingleKey, HierarchicalDeterministic
+from lbry.wallet import Wallet, Ledger, Database, Headers, Account, SingleKey, HierarchicalDeterministic
 
 
 class TestAccount(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': WalletDatabase(':memory:'),
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
@@ -236,8 +232,8 @@ class TestAccount(AsyncioTestCase):
 class TestSingleKeyAccount(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': WalletDatabase(':memory:'),
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
@@ -327,7 +323,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
         self.assertEqual(len(keys), 1)
 
     async def test_generate_account_from_seed(self):
-        account = self.ledger.account_class.from_dict(
+        account = Account.from_dict(
             self.ledger, Wallet(), {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
@@ -432,8 +428,8 @@ class AccountEncryptionTests(AsyncioTestCase):
     }
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': WalletDatabase(':memory:'),
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
             'headers': Headers(':memory:')
         })
 
@@ -489,7 +485,7 @@ class AccountEncryptionTests(AsyncioTestCase):
         account_data = self.unencrypted_account.copy()
         del account_data['seed']
         del account_data['private_key']
-        account = self.ledger.account_class.from_dict(self.ledger, Wallet(), account_data)
+        account = Account.from_dict(self.ledger, Wallet(), account_data)
         encrypted = account.to_dict('password')
         self.assertFalse(encrypted['seed'])
         self.assertFalse(encrypted['private_key'])

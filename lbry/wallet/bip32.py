@@ -2,7 +2,7 @@ from coincurve import PublicKey, PrivateKey as _PrivateKey
 
 from lbry.crypto.hash import hmac_sha512, hash160, double_sha256
 from lbry.crypto.base58 import Base58
-from lbry.wallet.client.util import cachedproperty
+from .util import cachedproperty
 
 
 class DerivationError(Exception):

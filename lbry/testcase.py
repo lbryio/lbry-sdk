@@ -14,18 +14,11 @@ from time import time
 from binascii import unhexlify
 from functools import partial
 
-import lbry.wallet
+from lbry.wallet import WalletManager, Wallet, Ledger, Account, Transaction
 from lbry.conf import Config
-from lbry.wallet import LbryWalletManager
-from lbry.wallet.account import Account
+from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.transaction import Transaction
-from lbry.wallet.client.wallet import Wallet
-from lbry.wallet.client.util import satoshis_to_coins
 from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
-from lbry.wallet.client.baseledger import BaseLedger
-from lbry.wallet.client.baseaccount import BaseAccount
-from lbry.wallet.client.basemanager import BaseWalletManager
 
 from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.Components import Component, WalletComponent
@@ -215,25 +208,19 @@ class AdvanceTimeTestCase(AsyncioTestCase):
 class IntegrationTestCase(AsyncioTestCase):
 
     SEED = None
-    LEDGER = lbry.wallet
-    MANAGER = LbryWalletManager
-    ENABLE_SEGWIT = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conductor: Optional[Conductor] = None
         self.blockchain: Optional[BlockchainNode] = None
         self.wallet_node: Optional[WalletNode] = None
-        self.manager: Optional[BaseWalletManager] = None
-        self.ledger: Optional[BaseLedger] = None
+        self.manager: Optional[WalletManager] = None
+        self.ledger: Optional[Ledger] = None
         self.wallet: Optional[Wallet] = None
-        self.account: Optional[BaseAccount] = None
+        self.account: Optional[Account] = None
 
     async def asyncSetUp(self):
-        self.conductor = Conductor(
-            ledger_module=self.LEDGER, manager_module=self.MANAGER,
-            enable_segwit=self.ENABLE_SEGWIT, seed=self.SEED
-        )
+        self.conductor = Conductor(seed=self.SEED)
         await self.conductor.start_blockchain()
         self.addCleanup(self.conductor.stop_blockchain)
         await self.conductor.start_spv()
@@ -317,14 +304,13 @@ class CommandTestCase(IntegrationTestCase):
     VERBOSITY = logging.WARN
     blob_lru_cache_size = 0
 
-    account: Account
-
     async def asyncSetUp(self):
         await super().asyncSetUp()
 
         logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
+        logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
 
         self.daemons = []
         self.extra_wallet_nodes = []
@@ -419,9 +405,7 @@ class CommandTestCase(IntegrationTestCase):
         return txid
 
     async def on_transaction_dict(self, tx):
-        await self.ledger.wait(
-            self.ledger.transaction_class(unhexlify(tx['hex']))
-        )
+        await self.ledger.wait(Transaction(unhexlify(tx['hex'])))
 
     @staticmethod
     def get_all_addresses(tx):

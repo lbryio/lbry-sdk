@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
-from lbry.wallet.client.coinselection import STRATEGIES
+from lbry.wallet.coinselection import STRATEGIES
 
 log = logging.getLogger(__name__)
 

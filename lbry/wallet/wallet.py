@@ -10,9 +10,11 @@ from collections import UserDict
 from hashlib import sha256
 from operator import attrgetter
 from lbry.crypto.crypt import better_aes_encrypt, better_aes_decrypt
+from .account import Account
 
 if typing.TYPE_CHECKING:
-    from lbry.wallet.client import basemanager, baseaccount, baseledger
+    from lbry.wallet.manager import WalletManager
+    from lbry.wallet.ledger import Ledger
 
 
 log = logging.getLogger(__name__)
@@ -65,7 +67,7 @@ class Wallet:
     preferences: TimestampedPreferences
     encryption_password: Optional[str]
 
-    def __init__(self, name: str = 'Wallet', accounts: MutableSequence['baseaccount.BaseAccount'] = None,
+    def __init__(self, name: str = 'Wallet', accounts: MutableSequence['Account'] = None,
                  storage: 'WalletStorage' = None, preferences: dict = None) -> None:
         self.name = name
         self.accounts = accounts or []
@@ -79,30 +81,30 @@ class Wallet:
             return os.path.basename(self.storage.path)
         return self.name
 
-    def add_account(self, account: 'baseaccount.BaseAccount'):
+    def add_account(self, account: 'Account'):
         self.accounts.append(account)
 
-    def generate_account(self, ledger: 'baseledger.BaseLedger') -> 'baseaccount.BaseAccount':
-        return ledger.account_class.generate(ledger, self)
+    def generate_account(self, ledger: 'Ledger') -> 'Account':
+        return Account.generate(ledger, self)
 
     @property
-    def default_account(self) -> Optional['baseaccount.BaseAccount']:
+    def default_account(self) -> Optional['Account']:
         for account in self.accounts:
             return account
         return None
 
-    def get_account_or_default(self, account_id: str) -> Optional['baseaccount.BaseAccount']:
+    def get_account_or_default(self, account_id: str) -> Optional['Account']:
         if account_id is None:
             return self.default_account
         return self.get_account_or_error(account_id)
 
-    def get_account_or_error(self, account_id: str) -> 'baseaccount.BaseAccount':
+    def get_account_or_error(self, account_id: str) -> 'Account':
         for account in self.accounts:
             if account.id == account_id:
                 return account
         raise ValueError(f"Couldn't find account: {account_id}.")
 
-    def get_accounts_or_all(self, account_ids: List[str]) -> Sequence['baseaccount.BaseAccount']:
+    def get_accounts_or_all(self, account_ids: List[str]) -> Sequence['Account']:
         return [
             self.get_account_or_error(account_id)
             for account_id in account_ids
@@ -117,7 +119,7 @@ class Wallet:
         return accounts
 
     @classmethod
-    def from_storage(cls, storage: 'WalletStorage', manager: 'basemanager.BaseWalletManager') -> 'Wallet':
+    def from_storage(cls, storage: 'WalletStorage', manager: 'WalletManager') -> 'Wallet':
         json_dict = storage.read()
         wallet = cls(
             name=json_dict.get('name', 'Wallet'),
@@ -127,7 +129,7 @@ class Wallet:
         account_dicts: Sequence[dict] = json_dict.get('accounts', [])
         for account_dict in account_dicts:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
-            ledger.account_class.from_dict(ledger, wallet, account_dict)
+            Account.from_dict(ledger, wallet, account_dict)
         return wallet
 
     def to_dict(self, encrypt_password: str = None):
@@ -173,15 +175,15 @@ class Wallet:
         decompressed = zlib.decompress(decrypted)
         return json.loads(decompressed)
 
-    def merge(self, manager: 'basemanager.BaseWalletManager',
-              password: str, data: str) -> List['baseaccount.BaseAccount']:
+    def merge(self, manager: 'WalletManager',
+              password: str, data: str) -> List['Account']:
         assert not self.is_locked, "Cannot sync apply on a locked wallet."
         added_accounts = []
         decrypted_data = self.unpack(password, data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
         for account_dict in decrypted_data['accounts']:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
-            _, _, pubkey = ledger.account_class.keys_from_dict(ledger, account_dict)
+            _, _, pubkey = Account.keys_from_dict(ledger, account_dict)
             account_id = pubkey.address
             local_match = None
             for local_account in self.accounts:
@@ -191,7 +193,7 @@ class Wallet:
             if local_match is not None:
                 local_match.merge(account_dict)
             else:
-                new_account = ledger.account_class.from_dict(ledger, self, account_dict)
+                new_account = Account.from_dict(ledger, self, account_dict)
                 added_accounts.append(new_account)
         return added_accounts
 

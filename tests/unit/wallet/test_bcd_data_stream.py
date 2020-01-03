@@ -1,6 +1,6 @@
 import unittest
 
-from lbry.wallet.client.bcd_data_stream import BCDataStream
+from lbry.wallet.bcd_data_stream import BCDataStream
 
 
 class TestBCDataStream(unittest.TestCase):

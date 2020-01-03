@@ -2,10 +2,7 @@ import os
 from binascii import hexlify
 
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.client.wallet import Wallet
-from lbry.wallet.account import Account
-from lbry.wallet.transaction import Transaction, Output, Input
-from lbry.wallet.ledger import MainNetLedger
+from lbry.wallet import Wallet, Account, Transaction, Output, Input, Ledger, Database, Headers
 
 from tests.unit.wallet.test_transaction import get_transaction, get_output
 from tests.unit.wallet.test_headers import HEADERS, block_bytes
@@ -40,9 +37,9 @@ class MockNetwork:
 class LedgerTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
         self.account = Account.generate(self.ledger, Wallet(), "lbryum")
         await self.ledger.db.open()
@@ -76,7 +73,7 @@ class LedgerTestCase(AsyncioTestCase):
 class TestSynchronization(LedgerTestCase):
 
     async def test_update_history(self):
-        account = self.ledger.account_class.generate(self.ledger, Wallet(), "torba")
+        account = Account.generate(self.ledger, Wallet(), "torba")
         address = await account.receiving.get_or_create_usable_address()
         address_details = await self.ledger.db.get_address(address=address)
         self.assertIsNone(address_details['history'])

@@ -1,4 +1,4 @@
-from lbry.wallet.client.basedatabase import constraints_to_sql
+from lbry.wallet.database import constraints_to_sql
 
 CREATE_FULL_TEXT_SEARCH = """
 create virtual table if not exists search using fts5(

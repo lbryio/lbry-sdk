@@ -10,13 +10,10 @@ from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
-from lbry.wallet.client.wallet import Wallet
+from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output, Database
 from lbry.wallet.client.constants import CENT, NULL_HASH32
 from lbry.wallet.client.basenetwork import ClientSession
 from lbry.conf import Config
-from lbry.wallet.ledger import MainNetLedger
-from lbry.wallet.transaction import Transaction, Input, Output
-from lbry.wallet.manager import LbryWalletManager
 from lbry.extras.daemon.analytics import AnalyticsManager
 from lbry.stream.stream_manager import StreamManager
 from lbry.stream.descriptor import StreamDescriptor
@@ -94,16 +91,16 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
             return {'timestamp': 1984}
 
     wallet = Wallet()
-    ledger = MainNetLedger({
-        'db': MainNetLedger.database_class(':memory:'),
+    ledger = Ledger({
+        'db': Database(':memory:'),
         'headers': FakeHeaders(514082)
     })
     await ledger.db.open()
     wallet.generate_account(ledger)
-    manager = LbryWalletManager()
+    manager = WalletManager()
     manager.config = Config()
     manager.wallets.append(wallet)
-    manager.ledgers[MainNetLedger] = ledger
+    manager.ledgers[Ledger] = ledger
     manager.ledger.network.client = ClientSession(
         network=manager.ledger.network, server=('fakespv.lbry.com', 50001)
     )

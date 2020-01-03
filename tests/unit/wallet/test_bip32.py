@@ -1,10 +1,10 @@
 from binascii import unhexlify, hexlify
 
 from lbry.testcase import AsyncioTestCase
+from lbry.wallet.client.bip32 import PubKey, PrivateKey, from_extended_key_string
+from lbry.wallet import Ledger, Database, Headers
 
 from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
-from lbry.wallet.client.bip32 import PubKey, PrivateKey, from_extended_key_string
-from lbry.wallet import MainNetLedger as ledger_class
 
 
 class BIP32Tests(AsyncioTestCase):
@@ -46,9 +46,9 @@ class BIP32Tests(AsyncioTestCase):
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
-            ledger_class({
-                'db': ledger_class.database_class(':memory:'),
-                'headers': ledger_class.headers_class(':memory:'),
+            Ledger({
+                'db': Database(':memory:'),
+                'headers': Headers(':memory:'),
             }),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
@@ -67,9 +67,9 @@ class BIP32Tests(AsyncioTestCase):
 
     async def test_private_key_derivation(self):
         private_key = PrivateKey(
-            ledger_class({
-                'db': ledger_class.database_class(':memory:'),
-                'headers': ledger_class.headers_class(':memory:'),
+            Ledger({
+                'db': Database(':memory:'),
+                'headers': Headers(':memory:'),
             }),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
@@ -84,9 +84,9 @@ class BIP32Tests(AsyncioTestCase):
             self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_hardened_privkeys[i - 1 - PrivateKey.HARDENED])
 
     async def test_from_extended_keys(self):
-        ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:'),
         })
         self.assertIsInstance(
             from_extended_key_string(

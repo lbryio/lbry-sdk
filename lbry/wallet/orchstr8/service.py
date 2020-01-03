@@ -3,7 +3,7 @@ import logging
 from aiohttp.web import Application, WebSocketResponse, json_response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
-from lbry.wallet.client.util import satoshis_to_coins
+from lbry.wallet.util import satoshis_to_coins
 from .node import Conductor
 
 

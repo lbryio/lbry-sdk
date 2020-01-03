@@ -1,6 +1,6 @@
 import re
 from typing import TypeVar, Sequence, Optional
-from lbry.wallet.client.constants import COIN
+from .constants import COIN
 
 
 def coins_to_satoshis(coins):

@@ -3,18 +3,18 @@ from binascii import hexlify
 
 from unittest import TestCase, mock
 from lbry.testcase import AsyncioTestCase
-
-from lbry.wallet.ledger import MainNetLedger, RegTestLedger
-from lbry.wallet.client.basemanager import BaseWalletManager
-from lbry.wallet.client.wallet import Wallet, WalletStorage, TimestampedPreferences
+from lbry.wallet import (
+    Ledger, RegTestLedger, WalletManager, Account,
+    Wallet, WalletStorage, TimestampedPreferences
+)
 
 
 class TestWalletCreation(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.manager = BaseWalletManager()
+        self.manager = WalletManager()
         config = {'data_path': '/tmp/wallet'}
-        self.main_ledger = self.manager.get_or_create_ledger(MainNetLedger.get_id(), config)
+        self.main_ledger = self.manager.get_or_create_ledger(Ledger.get_id(), config)
         self.test_ledger = self.manager.get_or_create_ledger(RegTestLedger.get_id(), config)
 
     def test_create_wallet_and_accounts(self):
@@ -66,7 +66,7 @@ class TestWalletCreation(AsyncioTestCase):
         )
         self.assertEqual(len(wallet.accounts), 1)
         account = wallet.default_account
-        self.assertIsInstance(account, MainNetLedger.account_class)
+        self.assertIsInstance(account, Account)
         self.maxDiff = None
         self.assertDictEqual(wallet_dict, wallet.to_dict())
 
@@ -75,9 +75,9 @@ class TestWalletCreation(AsyncioTestCase):
         self.assertEqual(decrypted['accounts'][0]['name'], 'An Account')
 
     def test_read_write(self):
-        manager = BaseWalletManager()
+        manager = WalletManager()
         config = {'data_path': '/tmp/wallet'}
-        ledger = manager.get_or_create_ledger(MainNetLedger.get_id(), config)
+        ledger = manager.get_or_create_ledger(Ledger.get_id(), config)
 
         with tempfile.NamedTemporaryFile(suffix='.json') as wallet_file:
             wallet_file.write(b'{"version": 1}')

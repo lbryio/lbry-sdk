@@ -10,7 +10,7 @@ lbry.egg-info
 __pycache__
 _trial_temp/
 
-/tests/integration/files
+/tests/integration/blockchain/files
 /tests/.coverage.*
 
 /lbry/wallet/bin

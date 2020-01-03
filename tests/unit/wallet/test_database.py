@@ -6,11 +6,11 @@ import tempfile
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
-from lbry.wallet import MainNetLedger
-from lbry.wallet.transaction import Transaction
-from lbry.wallet.client.wallet import Wallet
+from lbry.wallet import (
+    Wallet, Account, Ledger, Database, Headers, Transaction, Input
+)
 from lbry.wallet.client.constants import COIN
-from lbry.wallet.client.basedatabase import query, interpolate, constraints_to_sql, AIOSQLite
+from lbry.wallet.database import query, interpolate, constraints_to_sql, AIOSQLite
 from lbry.crypto.hash import sha256
 from lbry.testcase import AsyncioTestCase
 
@@ -195,9 +195,9 @@ class TestQueryBuilder(unittest.TestCase):
 class TestQueries(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
         self.wallet = Wallet()
         await self.ledger.db.open()
@@ -206,13 +206,13 @@ class TestQueries(AsyncioTestCase):
         await self.ledger.db.close()
 
     async def create_account(self, wallet=None):
-        account = self.ledger.account_class.generate(self.ledger, wallet or self.wallet)
+        account = Account.generate(self.ledger, wallet or self.wallet)
         await account.ensure_address_gap()
         return account
 
     async def create_tx_from_nothing(self, my_account, height):
         to_address = await my_account.receiving.get_or_create_usable_address()
-        to_hash = MainNetLedger.address_to_hash160(to_address)
+        to_hash = Ledger.address_to_hash160(to_address)
         tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(self.txo(1, sha256(str(height).encode())))]) \
             .add_outputs([self.txo(1, to_hash)])
@@ -224,7 +224,7 @@ class TestQueries(AsyncioTestCase):
         from_hash = txo.script.values['pubkey_hash']
         from_address = self.ledger.hash160_to_address(from_hash)
         to_address = await to_account.receiving.get_or_create_usable_address()
-        to_hash = MainNetLedger.address_to_hash160(to_address)
+        to_hash = Ledger.address_to_hash160(to_address)
         tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \
             .add_outputs([self.txo(1, to_hash)])
@@ -248,7 +248,7 @@ class TestQueries(AsyncioTestCase):
         return get_output(int(amount*COIN), address)
 
     def txi(self, txo):
-        return Transaction.input_class.spend(txo)
+        return Input.spend(txo)
 
     async def test_large_tx_doesnt_hit_variable_limits(self):
         # SQLite is usually compiled with 999 variables limit: https://www.sqlite.org/limits.html
@@ -408,9 +408,9 @@ class TestUpgrade(AsyncioTestCase):
             return [col[0] for col in conn.execute(sql).fetchall()]
 
     async def test_reset_on_version_change(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(self.path),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(self.path),
+            'headers': Headers(':memory:')
         })
 
         # initial open, pre-version enabled db
