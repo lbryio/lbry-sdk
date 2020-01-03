@@ -6,20 +6,21 @@ import json
 import time
 import inspect
 import typing
-import base58
 import random
-import ecdsa
 import hashlib
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
 from traceback import format_exc
-from aiohttp import web
 from functools import wraps, partial
+
+import ecdsa
+import base58
+from aiohttp import web
 from google.protobuf.message import DecodeError
 from lbry.wallet import (
-    Wallet, WalletManager, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
-    Ledger, Transaction, Output, Input, Account
+    Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
+    Transaction, Output, Input, Account
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 
@@ -52,6 +53,7 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
     from lbry.stream.stream_manager import StreamManager
+    from lbry.wallet import WalletManager, Ledger
 
 log = logging.getLogger(__name__)
 
@@ -67,8 +69,8 @@ def requires(*components, **conditions):
         raise SyntaxError("invalid conditions argument")
     condition_names = conditions.get("conditions", [])
 
-    def _wrap(fn):
-        @wraps(fn)
+    def _wrap(method):
+        @wraps(method)
         def _inner(*args, **kwargs):
             component_manager = args[0].component_manager
             for condition_name in condition_names:
@@ -79,7 +81,7 @@ def requires(*components, **conditions):
                 raise ComponentsNotStartedError(
                     f"the following required components have not yet started: {json.dumps(components)}"
                 )
-            return fn(*args, **kwargs)
+            return method(*args, **kwargs)
 
         return _inner
 
@@ -315,6 +317,9 @@ class Daemon(metaclass=JSONRPCServerType):
         streaming_app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
         self.streaming_runner = web.AppRunner(streaming_app)
 
+        self.callable_methods = {}
+        self.deprecated_methods = {}
+
     @property
     def dht_node(self) -> typing.Optional['Node']:
         return self.component_manager.get_component(DHT_COMPONENT)
@@ -511,7 +516,7 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             encoded_result = jsonrpc_dumps_pretty(
                 result, ledger=ledger, include_protobuf=include_protobuf)
-        except:
+        except Exception:
             log.exception('Failed to encode JSON RPC result:')
             encoded_result = jsonrpc_dumps_pretty(JSONRPCError(
                 JSONRPCError.CODE_APPLICATION_ERROR,
@@ -576,7 +581,7 @@ class Daemon(metaclass=JSONRPCServerType):
             )
 
         try:
-            fn = self._get_jsonrpc_method(function_name)
+            method = self._get_jsonrpc_method(function_name)
         except UnknownAPIMethodError:
             return JSONRPCError(
                 JSONRPCError.CODE_METHOD_NOT_FOUND,
@@ -603,7 +608,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if is_transactional_function(function_name):
             log.info("%s %s %s", function_name, _args, _kwargs)
 
-        params_error, erroneous_params = self._check_params(fn, _args, _kwargs)
+        params_error, erroneous_params = self._check_params(method, _args, _kwargs)
         if params_error is not None:
             params_error_message = '{} for {} command: {}'.format(
                 params_error, function_name, ', '.join(erroneous_params)
@@ -615,7 +620,7 @@ class Daemon(metaclass=JSONRPCServerType):
             )
 
         try:
-            result = fn(self, *_args, **_kwargs)
+            result = method(self, *_args, **_kwargs)
             if asyncio.iscoroutine(result):
                 result = await result
             return result
@@ -660,7 +665,7 @@ class Daemon(metaclass=JSONRPCServerType):
             for required_param in argspec.args[len(args_tup) + 1:-num_optional_params]
             if required_param not in args_dict
         ]
-        if len(missing_required_params):
+        if len(missing_required_params) > 0:
             return 'Missing required parameters', missing_required_params
 
         extraneous_params = [] if argspec.varkw is not None else [
@@ -668,7 +673,7 @@ class Daemon(metaclass=JSONRPCServerType):
             for extra_param in args_dict
             if extra_param not in argspec.args[1:]
         ]
-        if len(extraneous_params):
+        if len(extraneous_params) > 0:
             return 'Extraneous parameters', extraneous_params
 
         return None, None
@@ -710,7 +715,8 @@ class Daemon(metaclass=JSONRPCServerType):
     #                                                                          #
     ############################################################################
 
-    def jsonrpc_stop(self):
+    @staticmethod
+    def jsonrpc_stop():
         """
         Stop lbrynet API server.
 
@@ -836,7 +842,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 response[component.component_name] = status
         return response
 
-    def jsonrpc_version(self):
+    @staticmethod
+    def jsonrpc_version():
         """
         Get lbrynet API server version information
 
@@ -859,7 +866,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         platform_info = system_info.get_platform()
-        log.info("Get version info: " + json.dumps(platform_info))
+        log.info("Get version info: %s", json.dumps(platform_info))
         return platform_info
 
     @requires(WALLET_COMPONENT)
@@ -938,12 +945,12 @@ class Daemon(metaclass=JSONRPCServerType):
         results = {}
 
         valid_urls = set()
-        for u in urls:
+        for url in urls:
             try:
-                URL.parse(u)
-                valid_urls.add(u)
+                URL.parse(url)
+                valid_urls.add(url)
             except ValueError:
-                results[u] = {"error": f"{u} is not a valid url"}
+                results[url] = {"error": f"{url} is not a valid url"}
 
         resolved = await self.resolve(wallet.accounts, list(valid_urls))
 
@@ -2288,7 +2295,7 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, offset, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+        txos, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
         result = {"items": txos, "page": page_num, "page_size": page_size}
         if not kwargs.pop('no_totals', False):
             result['total_pages'] = int((total + (page_size - 1)) / page_size)
@@ -4754,7 +4761,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 pass
         return results
 
-    def _old_get_temp_claim_info(self, tx, txo, address, claim_dict, name, bid):
+    @staticmethod
+    def _old_get_temp_claim_info(tx, txo, address, claim_dict, name, bid):
         return {
             "claim_id": txo.claim_id,
             "name": name,
@@ -4768,9 +4776,9 @@ class Daemon(metaclass=JSONRPCServerType):
         }
 
 
-def loggly_time_string(dt):
-    formatted_dt = dt.strftime("%Y-%m-%dT%H:%M:%S")
-    milliseconds = str(round(dt.microsecond * (10.0 ** -5), 3))
+def loggly_time_string(date):
+    formatted_dt = date.strftime("%Y-%m-%dT%H:%M:%S")
+    milliseconds = str(round(date.microsecond * (10.0 ** -5), 3))
     return quote(formatted_dt + milliseconds + "Z")
 
 

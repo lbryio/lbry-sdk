@@ -146,7 +146,7 @@ class WalletComponent(Component):
 
     async def start(self):
         log.info("Starting wallet")
-        self.wallet_manager = await LbryWalletManager.from_lbrynet_config(self.conf)
+        self.wallet_manager = await WalletManager.from_lbrynet_config(self.conf)
         await self.wallet_manager.start()
 
     async def stop(self):
@@ -333,9 +333,8 @@ class PeerProtocolServerComponent(Component):
 
     async def start(self):
         log.info("start blob server")
-        upnp = self.component_manager.get_component(UPNP_COMPONENT)
         blob_manager: BlobManager = self.component_manager.get_component(BLOB_COMPONENT)
-        wallet: LbryWalletManager = self.component_manager.get_component(WALLET_COMPONENT)
+        wallet: WalletManager = self.component_manager.get_component(WALLET_COMPONENT)
         peer_port = self.conf.tcp_port
         address = await wallet.get_unused_address()
         self.blob_server = BlobServer(asyncio.get_event_loop(), blob_manager, address)
@@ -442,9 +441,9 @@ class UPnPComponent(Component):
                     log.info("refreshed upnp redirect for peer port: %i", tcp_port)
                 except (asyncio.TimeoutError, UPnPError, NotImplementedError):
                     del self.upnp_redirects['TCP']
-            if ('TCP' in self.upnp_redirects
-                and PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components) and (
-                    'UDP' in self.upnp_redirects and DHT_COMPONENT not in self.component_manager.skip_components):
+            if ('TCP' in self.upnp_redirects and
+                    PEER_PROTOCOL_SERVER_COMPONENT not in self.component_manager.skip_components) and \
+                    ('UDP' in self.upnp_redirects and DHT_COMPONENT not in self.component_manager.skip_components):
                 if self.upnp_redirects:
                     log.debug("upnp redirects are still active")
 
