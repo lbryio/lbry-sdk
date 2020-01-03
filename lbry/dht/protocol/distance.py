@@ -20,6 +20,6 @@ class Distance:
         val_key_two = int.from_bytes(key_two, 'big')
         return self.val_key_one ^ val_key_two
 
-    def is_closer(self, a: bytes, b: bytes) -> bool:
-        """Returns true is `a` is closer to `key` than `b` is"""
-        return self(a) < self(b)
+    def is_closer(self, key_a: bytes, key_b: bytes) -> bool:
+        """Returns true is `key_a` is closer to `key` than `key_b` is"""
+        return self(key_a) < self(key_b)
