@@ -4,7 +4,7 @@ from lbry.testcase import AsyncioTestCase
 
 from lbry.conf import Config
 from lbry.extras import cli
-from lbry.extras.daemon.Components import (
+from lbry.extras.daemon.components import (
     DATABASE_COMPONENT, BLOB_COMPONENT, WALLET_COMPONENT, DHT_COMPONENT,
     HASH_ANNOUNCER_COMPONENT, STREAM_MANAGER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT

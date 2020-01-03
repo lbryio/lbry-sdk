@@ -35,11 +35,11 @@ from lbry.error import (
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
-from lbry.extras.daemon.Components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbry.extras.daemon.Components import STREAM_MANAGER_COMPONENT
-from lbry.extras.daemon.Components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
-from lbry.extras.daemon.ComponentManager import RequiredCondition
-from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
+from lbry.extras.daemon.components import STREAM_MANAGER_COMPONENT
+from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
+from lbry.extras.daemon.componentmanager import RequiredCondition
+from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
@@ -49,7 +49,7 @@ from lbry.schema.url import URL
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
-    from lbry.extras.daemon.Components import UPnPComponent
+    from lbry.extras.daemon.components import UPnPComponent
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
     from lbry.stream.stream_manager import StreamManager
