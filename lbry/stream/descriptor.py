@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 
 RE_ILLEGAL_FILENAME_CHARS = re.compile(
     r'('
-    r'[<>:"/\\|?*]+|'               # Illegal characters
-    r'[\x00-\x1F]+|'                 # All characters in range 0-31
+    r'[<>:"/\\|?*]+|'                  # Illegal characters
+    r'[\x00-\x1F]+|'                   # All characters in range 0-31
     r'[ \t]*(\.)+[ \t]*$|'             # Dots at the end
     r'(^[ \t]+|[ \t]+$)|'              # Leading and trailing whitespace
     r'^CON$|^PRN$|^AUX$|'              # Illegal names
