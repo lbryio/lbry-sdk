@@ -54,7 +54,8 @@ class ErrorClass:
             args.append(arg)
         return args
 
-    def get_doc_string(self, doc):
+    @staticmethod
+    def get_doc_string(doc):
         if doc:
             return f'\n{INDENT}"""\n{indent(fill(doc, 100), INDENT)}\n{INDENT}"""'
         return ""
@@ -139,7 +140,7 @@ def analyze():
             print(f' - {error}')
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=['generate', 'analyze'])
     args = parser.parse_args()
@@ -147,3 +148,7 @@ if __name__ == "__main__":
         analyze()
     elif args.action == "generate":
         generate(sys.stdout)
+
+
+if __name__ == "__main__":
+    main()
