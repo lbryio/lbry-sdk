@@ -52,8 +52,7 @@ def _bdecode(data: bytes, start_index: int = 0) -> typing.Tuple[typing.Union[int
             raise DecodeError(err)
         start_index = split_pos + 1
         end_pos = start_index + length
-        b = data[start_index:end_pos]
-        return b, end_pos
+        return data[start_index:end_pos], end_pos
 
 
 def bencode(data: typing.Dict) -> bytes:

@@ -53,7 +53,7 @@ class DictDataStore:
         now = self.loop.time()
         if key in self._data_store:
             current = list(filter(lambda x: x[0] == contact, self._data_store[key]))
-            if len(current):
+            if len(current) > 0:
                 self._data_store[key][self._data_store[key].index(current[0])] = contact, now
             else:
                 self._data_store[key].append((contact, now))
@@ -65,6 +65,6 @@ class DictDataStore:
 
     def get_storing_contacts(self) -> typing.List['KademliaPeer']:
         peers = set()
-        for key, stored in self._data_store.items():
+        for _, stored in self._data_store.items():
             peers.update(set(map(lambda tup: tup[0], stored)))
         return list(peers)
