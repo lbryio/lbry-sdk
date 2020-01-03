@@ -3,7 +3,7 @@ import ecdsa
 import hashlib
 import logging
 from binascii import hexlify
-from lbry.wallet.client.constants import COIN, NULL_HASH32
+from lbry.wallet.constants import COIN, NULL_HASH32
 
 from lbry.schema.claim import Claim
 from lbry.wallet.server.db import reader, writer

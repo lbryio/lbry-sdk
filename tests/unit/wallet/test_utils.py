@@ -1,7 +1,7 @@
 import unittest
 
-from lbry.wallet.client.util import ArithUint256
-from lbry.wallet.client.util import coins_to_satoshis as c2s, satoshis_to_coins as s2c
+from lbry.wallet.util import ArithUint256
+from lbry.wallet.util import coins_to_satoshis as c2s, satoshis_to_coins as s2c
 
 
 class TestCoinValueParsing(unittest.TestCase):

@@ -3,7 +3,7 @@ from types import GeneratorType
 from lbry.testcase import AsyncioTestCase
 
 from lbry.wallet import Ledger, Database, Headers
-from lbry.wallet.client.coinselection import CoinSelector, MAXIMUM_TRIES
+from lbry.wallet.coinselection import CoinSelector, MAXIMUM_TRIES
 from lbry.constants import CENT
 
 from tests.unit.wallet.test_transaction import get_output as utxo

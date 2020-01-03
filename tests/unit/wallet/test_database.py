@@ -9,7 +9,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from lbry.wallet import (
     Wallet, Account, Ledger, Database, Headers, Transaction, Input
 )
-from lbry.wallet.client.constants import COIN
+from lbry.wallet.constants import COIN
 from lbry.wallet.database import query, interpolate, constraints_to_sql, AIOSQLite
 from lbry.crypto.hash import sha256
 from lbry.testcase import AsyncioTestCase
