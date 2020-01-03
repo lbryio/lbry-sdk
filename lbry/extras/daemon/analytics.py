@@ -1,8 +1,8 @@
 import asyncio
 import collections
 import logging
-import aiohttp
 import typing
+import aiohttp
 from lbry import utils
 from lbry.conf import Config
 from lbry.extras import system_info

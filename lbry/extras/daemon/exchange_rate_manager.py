@@ -54,7 +54,7 @@ class MarketFeed:
     def is_online(self):
         return self.last_check+self.update_interval+self.request_timeout > time.time()
 
-    def get_rate_from_response(self, response):
+    def get_rate_from_response(self, json_response):
         raise NotImplementedError()
 
     async def get_response(self):
