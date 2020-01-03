@@ -1,31 +1,31 @@
 import hashlib
 import os
 
-hash_class = hashlib.sha384
-hash_length = hash_class().digest_size
-hash_bits = hash_length * 8
-alpha = 5
-k = 8
-split_buckets_under_index = 1
-replacement_cache_size = 8
-rpc_timeout = 5.0
-rpc_attempts = 5
-rpc_attempts_pruning_window = 600
-iterative_lookup_delay = rpc_timeout / 2.0  # TODO: use config val / 2 if rpc timeout is provided
-refresh_interval = 3600  # 1 hour
-replicate_interval = refresh_interval
-data_expiration = 86400  # 24 hours
-token_secret_refresh_interval = 300  # 5 minutes
-maybe_ping_delay = 300  # 5 minutes
-check_refresh_interval = refresh_interval / 5
-rpc_id_length = 20
-protocol_version = 1
-bottom_out_limit = 3
-msg_size_limit = 1400
+HASH_CLASS = hashlib.sha384  # pylint: disable=invalid-name
+HASH_LENGTH = HASH_CLASS().digest_size
+HASH_BITS = HASH_LENGTH * 8
+ALPHA = 5
+K = 8
+SPLIT_BUCKETS_UNDER_INDEX = 1
+REPLACEMENT_CACHE_SIZE = 8
+RPC_TIMEOUT = 5.0
+RPC_ATTEMPTS = 5
+RPC_ATTEMPTS_PRUNING_WINDOW = 600
+ITERATIVE_LOOKUP_DELAY = RPC_TIMEOUT / 2.0  # TODO: use config val / 2 if rpc timeout is provided
+REFRESH_INTERVAL = 3600  # 1 hour
+REPLICATE_INTERVAL = REFRESH_INTERVAL
+DATA_EXPIRATION = 86400  # 24 hours
+TOKEN_SECRET_REFRESH_INTERVAL = 300  # 5 minutes
+MAYBE_PING_DELAY = 300  # 5 minutes
+CHECK_REFRESH_INTERVAL = REFRESH_INTERVAL / 5
+RPC_ID_LENGTH = 20
+PROTOCOL_VERSION = 1
+BOTTOM_OUT_LIMIT = 3
+MSG_SIZE_LIMIT = 1400
 
 
 def digest(data: bytes) -> bytes:
-    h = hash_class()
+    h = HASH_CLASS()
     h.update(data)
     return h.digest()
 
@@ -38,4 +38,4 @@ def generate_id(num=None) -> bytes:
 
 
 def generate_rpc_id(num=None) -> bytes:
-    return generate_id(num)[:rpc_id_length]
+    return generate_id(num)[:RPC_ID_LENGTH]

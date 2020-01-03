@@ -10,7 +10,7 @@ from lbry.conf import Config
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.wallet.transaction import Transaction
 from lbry.schema.claim import Claim
-from lbry.dht.constants import data_expiration
+from lbry.dht.constants import DATA_EXPIRATION
 from lbry.blob.blob_info import BlobInfo
 
 if typing.TYPE_CHECKING:
@@ -386,7 +386,7 @@ class SQLiteStorage(SQLiteMixin):
             return transaction.executemany(
                 "update blob set next_announce_time=?, last_announced_time=?, single_announce=0 "
                 "where blob_hash=?",
-                ((int(last_announced + (data_expiration / 2)), int(last_announced), blob_hash)
+                ((int(last_announced + (DATA_EXPIRATION / 2)), int(last_announced), blob_hash)
                  for blob_hash in blob_hashes)
             ).fetchall()
         return self.db.run(_update_last_announced_blobs)

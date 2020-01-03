@@ -22,7 +22,7 @@ class DictDataStore:
         for key in keys:
             to_remove = []
             for (peer, ts) in self._data_store[key]:
-                if ts + constants.data_expiration < now or self._peer_manager.peer_is_good(peer) is False:
+                if ts + constants.DATA_EXPIRATION < now or self._peer_manager.peer_is_good(peer) is False:
                     to_remove.append((peer, ts))
             for item in to_remove:
                 self._data_store[key].remove(item)
@@ -43,7 +43,7 @@ class DictDataStore:
         """
         now = self.loop.time()
         for (peer, ts) in self._data_store.get(key, []):
-            if ts + constants.data_expiration > now:
+            if ts + constants.DATA_EXPIRATION > now:
                 yield peer
 
     def has_peers_for_blob(self, key: bytes) -> bool:

@@ -26,7 +26,7 @@ class TestKBucket(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
         self.address_generator = address_generator()
         self.peer_manager = PeerManager(self.loop)
-        self.kbucket = KBucket(self.peer_manager, 0, 2**constants.hash_bits, generate_id())
+        self.kbucket = KBucket(self.peer_manager, 0, 2 ** constants.HASH_BITS, generate_id())
 
     def test_add_peer(self):
         peer = make_kademlia_peer(constants.generate_id(2), "1.2.3.4", udp_port=4444)
@@ -58,7 +58,7 @@ class TestKBucket(AsyncioTestCase):
 
         # Test if contacts can be added to empty list
         # Add k contacts to bucket
-        for i in range(constants.k):
+        for i in range(constants.K):
             peer = make_kademlia_peer(generate_id(), next(self.address_generator), 4444)
             self.assertTrue(self.kbucket.add_peer(peer))
             self.assertEqual(peer, self.kbucket.peers[i])
@@ -130,7 +130,7 @@ class TestKBucket(AsyncioTestCase):
 
         added = []
         # Add couple contacts
-        for i in range(constants.k-2):
+        for i in range(constants.K - 2):
             peer = make_kademlia_peer(generate_id(), next(self.address_generator), 4444)
             self.assertTrue(self.kbucket.add_peer(peer))
             added.append(peer)
