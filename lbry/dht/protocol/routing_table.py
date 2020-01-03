@@ -51,9 +51,9 @@ class KBucket:
             return True
         else:
             for i in range(len(self.peers)):
-                p = self.peers[i]
-                if p.node_id == peer.node_id:
-                    self.peers.remove(p)
+                local_peer = self.peers[i]
+                if local_peer.node_id == peer.node_id:
+                    self.peers.remove(local_peer)
                     self.peers.append(peer)
                     return True
         if len(self.peers) < constants.K:
@@ -283,7 +283,7 @@ class TreeRoutingTable:
     def join_buckets(self):
         if len(self.buckets) == 1:
             return
-        to_pop = [i for i, bucket in enumerate(self.buckets) if not len(bucket)]
+        to_pop = [i for i, bucket in enumerate(self.buckets) if len(bucket) == 0]
         if not to_pop:
             return
         log.info("join buckets %i", len(to_pop))
@@ -314,6 +314,6 @@ class TreeRoutingTable:
     def buckets_with_contacts(self) -> int:
         count = 0
         for bucket in self.buckets:
-            if len(bucket):
+            if len(bucket) > 0:
                 count += 1
         return count

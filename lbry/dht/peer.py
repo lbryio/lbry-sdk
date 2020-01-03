@@ -21,8 +21,8 @@ def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional
 
 
 # the ipaddress module does not show these subnets as reserved
-carrier_grade_NAT_subnet = ipaddress.ip_network('100.64.0.0/10')
-ip4_to_6_relay_subnet = ipaddress.ip_network('192.88.99.0/24')
+CARRIER_GRADE_NAT_SUBNET = ipaddress.ip_network('100.64.0.0/10')
+IPV4_TO_6_RELAY_SUBNET = ipaddress.ip_network('192.88.99.0/24')
 
 ALLOW_LOCALHOST = False
 
@@ -36,8 +36,8 @@ def is_valid_public_ipv4(address, allow_localhost: bool = False):
         return not any((parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local,
                         parsed_ip.is_loopback, parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private,
                         parsed_ip.is_reserved,
-                        carrier_grade_NAT_subnet.supernet_of(ipaddress.ip_network(f"{address}/32")),
-                        ip4_to_6_relay_subnet.supernet_of(ipaddress.ip_network(f"{address}/32"))))
+                        CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
+                        IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
     except ipaddress.AddressValueError:
         return False
 
@@ -113,13 +113,13 @@ class PeerManager:
         while to_pop:
             del self._rpc_failures[to_pop.pop()]
         to_pop = []
-        for node_id, (age, token) in self._node_tokens.items():
+        for node_id, (age, token) in self._node_tokens.items():  # pylint: disable=unused-variable
             if age < now - constants.TOKEN_SECRET_REFRESH_INTERVAL:
                 to_pop.append(node_id)
         while to_pop:
             del self._node_tokens[to_pop.pop()]
 
-    def contact_triple_is_good(self, node_id: bytes, address: str, udp_port: int):
+    def contact_triple_is_good(self, node_id: bytes, address: str, udp_port: int):  # pylint: disable=too-many-return-statements
         """
         :return: False if peer is bad, None if peer is unknown, or True if peer is good
         """
@@ -154,7 +154,7 @@ class PeerManager:
     def peer_is_good(self, peer: 'KademliaPeer'):
         return self.contact_triple_is_good(peer.node_id, peer.address, peer.udp_port)
 
-    def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':
+    def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':  # pylint: disable=no-self-use
         node_id, address, tcp_port = decode_compact_address(compact_address)
         return make_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
 

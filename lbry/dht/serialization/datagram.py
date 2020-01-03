@@ -46,9 +46,9 @@ class KademliaDatagramBase:
             i: getattr(self, k) for i, k in enumerate(self.required_fields)
         }
         for i, k in enumerate(OPTIONAL_FIELDS):
-            v = getattr(self, k, None)
-            if v is not None:
-                datagram[i + OPTIONAL_ARG_OFFSET] = v
+            value = getattr(self, k, None)
+            if value is not None:
+                datagram[i + OPTIONAL_ARG_OFFSET] = value
         return bencode(datagram)
 
 
@@ -162,7 +162,7 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
         for i, k in enumerate(datagram_class.required_fields)
         if i in primitive  # pylint: disable=unsupported-membership-test
     }
-    for i, k in enumerate(OPTIONAL_FIELDS):
+    for i, _ in enumerate(OPTIONAL_FIELDS):
         if i + OPTIONAL_ARG_OFFSET in primitive:
             decoded[i + OPTIONAL_ARG_OFFSET] = primitive[i + OPTIONAL_ARG_OFFSET]
     return datagram_class(**decoded)

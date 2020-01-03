@@ -38,7 +38,7 @@ class BlobAnnouncer:
                 continue
             self.announce_queue.extend(await self.storage.get_blobs_to_announce())
             log.debug("announcer task wake up, %d blobs to announce", len(self.announce_queue))
-            while len(self.announce_queue):
+            while len(self.announce_queue) > 0:
                 log.info("%i blobs to announce", len(self.announce_queue))
                 announced = await asyncio.gather(*[
                     self._submit_announcement(

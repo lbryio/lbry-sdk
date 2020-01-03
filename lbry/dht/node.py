@@ -94,8 +94,10 @@ class Node:
         )
         stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
         if stored_to:
-            log.debug("Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
-                     len(stored_to), len(peers))
+            log.debug(
+                "Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
+                len(stored_to), len(peers)
+            )
         else:
             log.debug("Failed announcing %s, stored to 0 peers", blob_hash[:8])
         return stored_to
@@ -252,7 +254,7 @@ class Node:
                 result_queue.put_nowait(to_put)
 
     def accumulate_peers(self, search_queue: asyncio.Queue,
-                         peer_queue: typing.Optional[asyncio.Queue] = None) -> typing.Tuple[
-                         asyncio.Queue, asyncio.Task]:
-        q = peer_queue or asyncio.Queue(loop=self.loop)
-        return q, self.loop.create_task(self._accumulate_peers_for_value(search_queue, q))
+                         peer_queue: typing.Optional[asyncio.Queue] = None
+                         ) -> typing.Tuple[asyncio.Queue, asyncio.Task]:
+        queue = peer_queue or asyncio.Queue(loop=self.loop)
+        return queue, self.loop.create_task(self._accumulate_peers_for_value(search_queue, queue))

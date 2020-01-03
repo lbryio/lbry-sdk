@@ -4,13 +4,13 @@ from itertools import chain
 from collections import defaultdict
 import typing
 import logging
+from typing import TYPE_CHECKING
 from lbry.dht import constants
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.distance import Distance
 from lbry.dht.peer import make_kademlia_peer
 from lbry.dht.serialization.datagram import PAGE_KEY
 
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from lbry.dht.protocol.routing_table import TreeRoutingTable
     from lbry.dht.protocol.protocol import KademliaProtocol
@@ -132,7 +132,7 @@ class IterativeFinder:
         """
         raise NotImplementedError()
 
-    def get_initial_result(self) -> typing.List['KademliaPeer']:
+    def get_initial_result(self) -> typing.List['KademliaPeer']:  #pylint: disable=no-self-use
         """
         Get an initial or cached result to be put into the Queue. Used for findValue requests where the blob
         has peers in the local data store of blobs announced to us
@@ -282,8 +282,8 @@ class IterativeNodeFinder(IterativeFinder):
         not_yet_yielded = [
             peer for peer in from_iter
             if peer not in self.yielded_peers
-               and peer.node_id != self.protocol.node_id
-               and self.peer_manager.peer_is_good(peer) is not False
+            and peer.node_id != self.protocol.node_id
+            and self.peer_manager.peer_is_good(peer) is not False
         ]
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
         to_yield = not_yet_yielded[:min(constants.K, len(not_yet_yielded))]
