@@ -4593,14 +4593,11 @@ class Daemon(metaclass=JSONRPCServerType):
             comment_id=comment_id
         )
         if 'error' in channel:
-            return
+            raise ValueError(channel['error'])
 
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         # channel = await self.get_channel_or_none(wallet, None, **channel)
-        channel_claim = await self.get_channel_or_none(wallet, [], **channel)
-        if channel_claim is None:
-            return
-
+        channel_claim = await self.get_channel_or_error(wallet, [], **channel)
         edited_comment = {
             'comment_id': comment_id,
             'comment': comment,
