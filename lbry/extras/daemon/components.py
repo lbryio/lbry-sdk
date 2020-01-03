@@ -17,7 +17,7 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob_exchange.server import BlobServer
 from lbry.stream.stream_manager import StreamManager
-from lbry.extras.daemon.Component import Component
+from lbry.extras.daemon.component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.wallet import WalletManager
