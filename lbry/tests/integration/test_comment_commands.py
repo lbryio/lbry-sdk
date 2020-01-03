@@ -1,4 +1,7 @@
+import re
+
 import time
+import typing
 from math import ceil
 
 from aiohttp import web
@@ -76,9 +79,66 @@ class MockedCommentServer:
                 }
             }
 
-    def hide_comment(self, comment_id, signing_ts, signature):
+    @staticmethod
+    def is_valid_body(comment) -> bool:
+        return 0 < len(comment) <= 2000
+
+    def is_valid_comment_id(self, comment_id: typing.Union[int, str]) -> bool:
+        if isinstance(comment_id, str) and comment_id.isalnum():
+            comment_id = int(comment_id)
+
+        if isinstance(comment_id, int):
+            return 0 <= comment_id < len(self.comments)
+        return False
+
+    @staticmethod
+    def claim_id_is_valid(claim_id: str) -> bool:
+        return re.fullmatch('([a-z0-9]{40}|[A-Z0-9]{40})', claim_id) is not None
+
+    @staticmethod
+    def channel_name_is_valid(channel_name: str) -> bool:
+        return re.fullmatch(
+            '@(?:(?![\x00-\x08\x0b\x0c\x0e-\x1f\x23-\x26'
+            '\x2f\x3a\x3d\x3f-\x40\uFFFE-\U0000FFFF]).){1,255}',
+            channel_name
+        ) is not None
+
+    @staticmethod
+    def is_valid_channel(channel_id: str, channel_name: str) -> bool:
+        return channel_id and MockedCommentServer.claim_id_is_valid(channel_id) and \
+               channel_name and MockedCommentServer.channel_name_is_valid(channel_name)
+
+    @staticmethod
+    def is_signable(signature: str, signing_ts: str) -> bool:
+        return signing_ts and signing_ts.isalnum() and \
+               signature and len(signature) == 128
+
+    @staticmethod
+    def credentials_are_valid(channel_id: str = None, channel_name: str = None,
+                              signature: str = None, signing_ts: str = None) -> bool:
+        if channel_id or channel_name or signature or signing_ts:
+            try:
+                assert channel_id and channel_name and signature and signing_ts
+                assert MockedCommentServer.is_valid_channel(channel_id, channel_name)
+                assert MockedCommentServer.is_signable(signature, signing_ts)
+
+            except Exception:
+                return False
+        return True
+
+    def is_valid_base_comment(self, comment: str, claim_id: str, parent_id: int = None, **kwargs) -> bool:
+        return comment is not None and self.is_valid_body(comment) and \
+               claim_id is not None and self.claim_id_is_valid(claim_id) and \
+               (parent_id is None or self.is_valid_comment_id(parent_id))
+
+    def edit_comment(self, comment_id: str, comment: str, channel_id: str,
+                       channel_name: str, signature: str, signing_ts: str) -> dict:
+        pass
+
+
+    def hide_comment(self, comment_id: typing.Union[int, str], signing_ts: str, signature: str):
         comment_id = int(comment_id) if not isinstance(comment_id, int) else comment_id
-        if 0 <= comment_id < len(self.comments) and len(signature) == 128 and signing_ts.isalnum():
+        if self.is_valid_comment_id(comment_id) and self.is_signable(signature, signing_ts):
             self.comments[comment_id]['is_hidden'] = True
             return True
         return False
