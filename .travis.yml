@@ -18,11 +18,23 @@ jobs:
       script:
         - HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-    - name: "Integration Tests"
+    - name: "Integration Tests - Data Network"
       install:
-        - pip install coverage tox-travis
+        - pip install tox-travis
         - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
-      script: tox
+      script: tox -e datanetwork
+
+    - name: "Integration Tests - Blockchain"
+      install:
+        - pip install tox-travis
+        - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
+      script: tox -e blockchain
+
+    - name: "Integration Tests - Other"
+      install:
+        - pip install tox-travis
+        - sudo mount -o mode=1777,nosuid,nodev -t tmpfs tmpfs /tmp
+      script: tox -e other
 
     - name: "Run Examples"
       install:
