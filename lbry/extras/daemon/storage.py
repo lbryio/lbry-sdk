@@ -5,6 +5,7 @@ import typing
 import asyncio
 import binascii
 import time
+from typing import Optional
 from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
@@ -18,8 +19,6 @@ if typing.TYPE_CHECKING:
     from lbry.stream.descriptor import StreamDescriptor
 
 log = logging.getLogger(__name__)
-opt_str = typing.Optional[str]
-opt_int = typing.Optional[int]
 
 
 def calculate_effective_amount(amount: str, supports: typing.Optional[typing.List[typing.Dict]] = None) -> str:
@@ -29,10 +28,10 @@ def calculate_effective_amount(amount: str, supports: typing.Optional[typing.Lis
 
 
 class StoredContentClaim:
-    def __init__(self, outpoint: opt_str = None, claim_id: opt_str = None, name: opt_str = None,
-                 amount: opt_int = None, height: opt_int = None, serialized: opt_str = None,
-                 channel_claim_id: opt_str = None, address: opt_str = None, claim_sequence: opt_int = None,
-                 channel_name: opt_str = None):
+    def __init__(self, outpoint: Optional[str] = None, claim_id: Optional[str] = None, name: Optional[str] = None,
+                 amount: Optional[int] = None, height: Optional[int] = None, serialized: Optional[str] = None,
+                 channel_claim_id: Optional[str] = None, address: Optional[str] = None,
+                 claim_sequence: Optional[int] = None, channel_name: Optional[str] = None):
         self.claim_id = claim_id
         self.outpoint = outpoint
         self.claim_name = name
@@ -141,14 +140,14 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     stream_hashes = tuple(
         stream_hash for stream_hash, _ in stream_hashes_and_bt_infohashes if stream_hash is not None
     )
-    for (rowid, stream_hash, bt_infohash, file_name, download_dir, data_rate, status, saved_file, raw_content_fee,
+    for (rowid, stream_hash, _, file_name, download_dir, data_rate, status, saved_file, raw_content_fee,
          added_on, _, sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in _batched_select(
-            transaction, "select file.rowid, file.*, stream.*, c.* "
-                         "from file inner join stream on file.stream_hash=stream.stream_hash "
-                         "inner join content_claim cc on file.stream_hash=cc.stream_hash "
-                         "inner join claim c on cc.claim_outpoint=c.claim_outpoint "
-                         "where file.stream_hash in {} "
-                         "order by c.rowid desc", stream_hashes):
+             transaction, "select file.rowid, file.*, stream.*, c.* "
+             "from file inner join stream on file.stream_hash=stream.stream_hash "
+             "inner join content_claim cc on file.stream_hash=cc.stream_hash "
+             "inner join claim c on cc.claim_outpoint=c.claim_outpoint "
+             "where file.stream_hash in {} "
+             "order by c.rowid desc", stream_hashes):
         claim = StoredContentClaim(*claim_args)
         if claim.channel_claim_id:
             if claim.channel_claim_id not in signed_claims:
