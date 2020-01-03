@@ -62,7 +62,7 @@ class StreamDownloader:
             for url, port in self.config.reflector_servers
         ]
         if 'dht' in self.config.components_to_skip or not self.node or not \
-                len(self.node.protocol.routing_table.get_peers()):
+                len(self.node.protocol.routing_table.get_peers()) > 0:
             self.fixed_peers_delay = 0.0
         else:
             self.fixed_peers_delay = self.config.fixed_peer_delay
