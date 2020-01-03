@@ -16,14 +16,14 @@ from lbry.error import InvalidStreamDescriptorError
 log = logging.getLogger(__name__)
 
 RE_ILLEGAL_FILENAME_CHARS = re.compile(
-    '('
-    '[<>:"/\\\|\?\*]+|'               # Illegal characters
-    '[\\x00-\\x1F]+|'                 # All characters in range 0-31
-    '[ \t]*(\.)+[ \t]*$|'             # Dots at the end
-    '(^[ \t]+|[ \t]+$)|'              # Leading and trailing whitespace
-    '^CON$|^PRN$|^AUX$|'              # Illegal names
-    '^NUL$|^COM[1-9]$|^LPT[1-9]$'     # ...
-    ')'
+    r'('
+    r'[<>:"/\\\|\?\*]+|'               # Illegal characters
+    r'[\\x00-\\x1F]+|'                 # All characters in range 0-31
+    r'[ \t]*(\.)+[ \t]*$|'             # Dots at the end
+    r'(^[ \t]+|[ \t]+$)|'              # Leading and trailing whitespace
+    r'^CON$|^PRN$|^AUX$|'              # Illegal names
+    r'^NUL$|^COM[1-9]$|^LPT[1-9]$'     # ...
+    r')'
 )
 
 
@@ -122,12 +122,12 @@ class StreamDescriptor:
 
     def old_sort_json(self) -> bytes:
         blobs = []
-        for b in self.blobs:
+        for blob in self.blobs:
             blobs.append(OrderedDict(
-                [('length', b.length), ('blob_num', b.blob_num), ('iv', b.iv)] if not b.blob_hash else
-                [('length', b.length), ('blob_num', b.blob_num), ('blob_hash', b.blob_hash), ('iv', b.iv)]
+                [('length', blob.length), ('blob_num', blob.blob_num), ('iv', blob.iv)] if not blob.blob_hash else
+                [('length', blob.length), ('blob_num', blob.blob_num), ('blob_hash', blob.blob_hash), ('iv', blob.iv)]
             ))
-            if not b.blob_hash:
+            if not blob.blob_hash:
                 break
         return json.dumps(
             OrderedDict([
@@ -204,14 +204,14 @@ class StreamDescriptor:
         return await loop.run_in_executor(None, cls._from_stream_descriptor_blob, loop, blob_dir, blob)
 
     @staticmethod
-    def get_blob_hashsum(b: typing.Dict):
-        length = b['length']
+    def get_blob_hashsum(blob_dict: typing.Dict):
+        length = blob_dict['length']
         if length != 0:
-            blob_hash = b['blob_hash']
+            blob_hash = blob_dict['blob_hash']
         else:
             blob_hash = None
-        blob_num = b['blob_num']
-        iv = b['iv']
+        blob_num = blob_dict['blob_num']
+        iv = blob_dict['iv']
         blob_hashsum = get_lbry_hash_obj()
         if length != 0:
             blob_hashsum.update(blob_hash.encode())
@@ -248,8 +248,8 @@ class StreamDescriptor:
         for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
-                    loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
-                )
+                loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
+            )
             blobs.append(blob_info)
         blobs.append(
             BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator

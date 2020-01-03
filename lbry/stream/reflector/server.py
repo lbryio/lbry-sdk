@@ -58,7 +58,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         response_bytes = json.dumps(response).encode()
         chunk_response(response_bytes)
 
-    async def handle_request(self, request: typing.Dict):
+    async def handle_request(self, request: typing.Dict):  # pylint: disable=too-many-return-statements
         if self.client_version is None:
             if 'version' not in request:
                 self.transport.close()

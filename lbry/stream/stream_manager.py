@@ -14,7 +14,7 @@ from lbry.stream.managed_stream import ManagedStream
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet import WalletManager, Wallet, Transaction, Output
+from lbry.wallet import Output
 
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
@@ -26,7 +26,7 @@ if typing.TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-filter_fields = [
+FILTER_FIELDS = [
     'rowid',
     'status',
     'file_name',
@@ -46,7 +46,7 @@ filter_fields = [
     'blobs_in_stream'
 ]
 
-comparison_operators = {
+COMPARISON_OPERATORS = {
     'eq': lambda a, b: a == b,
     'ne': lambda a, b: a != b,
     'g': lambda a, b: a > b,
@@ -56,10 +56,10 @@ comparison_operators = {
 }
 
 
-def path_or_none(p) -> Optional[str]:
-    if not p:
+def path_or_none(path) -> Optional[str]:
+    if not path:
         return
-    return binascii.unhexlify(p).decode()
+    return binascii.unhexlify(path).decode()
 
 
 class StreamManager:
@@ -256,21 +256,21 @@ class StreamManager:
         :param comparison: comparison operator used for filtering
         :param search_by: fields and values to filter by
         """
-        if sort_by and sort_by not in filter_fields:
+        if sort_by and sort_by not in FILTER_FIELDS:
             raise ValueError(f"'{sort_by}' is not a valid field to sort by")
-        if comparison and comparison not in comparison_operators:
+        if comparison and comparison not in COMPARISON_OPERATORS:
             raise ValueError(f"'{comparison}' is not a valid comparison")
         if 'full_status' in search_by:
             del search_by['full_status']
-        for search in search_by.keys():
-            if search not in filter_fields:
+        for search in search_by:
+            if search not in FILTER_FIELDS:
                 raise ValueError(f"'{search}' is not a valid search operation")
         if search_by:
             comparison = comparison or 'eq'
             streams = []
             for stream in self.streams.values():
                 for search, val in search_by.items():
-                    if comparison_operators[comparison](getattr(stream, search), val):
+                    if COMPARISON_OPERATORS[comparison](getattr(stream, search), val):
                         streams.append(stream)
                         break
         else:
@@ -281,8 +281,8 @@ class StreamManager:
                 streams.reverse()
         return streams
 
-    async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: Claim) -> typing.Tuple[
-                                                       Optional[ManagedStream], Optional[ManagedStream]]:
+    async def _check_update_or_replace(self, outpoint: str, claim_id: str, claim: Claim
+                                       ) -> typing.Tuple[Optional[ManagedStream], Optional[ManagedStream]]:
         existing = self.get_filtered_streams(outpoint=outpoint)
         if existing:
             return existing[0], None
