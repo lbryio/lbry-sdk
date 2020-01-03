@@ -290,6 +290,8 @@ class Daemon(metaclass=JSONRPCServerType):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
+    callable_methods: dict
+    deprecated_methods: dict
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
         self.conf = conf
@@ -316,9 +318,6 @@ class Daemon(metaclass=JSONRPCServerType):
         streaming_app.router.add_get('/get/{claim_name}/{claim_id}', self.handle_stream_get_request)
         streaming_app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
         self.streaming_runner = web.AppRunner(streaming_app)
-
-        self.callable_methods = {}
-        self.deprecated_methods = {}
 
     @property
     def dht_node(self) -> typing.Optional['Node']:
