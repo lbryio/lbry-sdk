@@ -1,4 +1,4 @@
-from lbry.cryptoutils import get_lbry_hash_obj
+from lbry.utils import get_lbry_hash_obj
 
 MAX_BLOB_SIZE = 2 * 2 ** 20
 

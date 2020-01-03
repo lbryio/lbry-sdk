@@ -9,8 +9,9 @@ from io import BytesIO
 from cryptography.hazmat.primitives.ciphers import Cipher, modes
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.padding import PKCS7
+from cryptography.hazmat.backends import default_backend
 
-from lbry.cryptoutils import backend, get_lbry_hash_obj
+from lbry.utils import get_lbry_hash_obj
 from lbry.error import DownloadCancelledError, InvalidBlobHashError, InvalidDataError
 
 from lbry.blob import MAX_BLOB_SIZE, blobhash_length
@@ -21,6 +22,7 @@ log = logging.getLogger(__name__)
 
 
 _hexmatch = re.compile("^[a-f,0-9]+$")
+backend = default_backend()
 
 
 def is_valid_blobhash(blobhash: str) -> bool:

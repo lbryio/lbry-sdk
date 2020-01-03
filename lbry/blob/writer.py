@@ -3,7 +3,7 @@ import logging
 import asyncio
 from io import BytesIO
 from lbry.error import InvalidBlobHashError, InvalidDataError
-from lbry.cryptoutils import get_lbry_hash_obj
+from lbry.utils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 
