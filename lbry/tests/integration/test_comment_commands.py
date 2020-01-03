@@ -483,3 +483,66 @@ class CommentCommands(CommandTestCase):
             self.assertIn(field, valid_list)
         self.assertTrue(visible['has_hidden_comments'])
         self.assertEqual(len(valid_list['items']), len(normal_list['items']) - 1)
+
+    async def test07_edit_comments(self):
+        luda = (await self.channel_create('@Ludacris'))['outputs'][0]
+        juicy = (await self.channel_create('@JuicyJ'))['outputs'][0]
+        stream = await self.stream_create('Chicken-n-beer', channel_id=luda['claim_id'])
+        claim_id = stream['outputs'][0]['claim_id']
+
+        # Editing a comment made by a channel you own
+        og_comment = await self.daemon.jsonrpc_comment_create(
+            comment='This is a masterp[iece',
+            claim_id=claim_id,
+            channel_id=juicy['claim_id']
+        )
+        original_cid = og_comment.get('comment_id')
+        original_sig = og_comment.get('signature')
+        self.assertIsNotNone(original_cid, 'comment wasnt properly made')
+        self.assertIsNotNone(original_sig, 'comment should have a signature')
+
+        edited = await self.daemon.jsonrpc_comment_edit(
+            comment='This is a masterpiece, need more like it!',
+            comment_id=original_cid
+        )
+        edited_cid = edited.get('comment_id')
+        edited_sig = edited.get('signature')
+        self.assertIsNotNone(edited_sig, 'comment wasnt properly edited!')
+        self.assertIsNotNone(edited_sig, 'edited comment should have a signature!')
+
+        self.assertEqual(original_cid, edited_cid, 'Comment ID should not change!')
+        self.assertNotEqual(original_sig, edited_sig, 'New signature should not be the same as the old!')
+
+        # editing a comment made by a channel you don't own
+        og_comment = await self.daemon.jsonrpc_comment_create(
+            comment='I wonder if you know, how they live in tokyo',
+            claim_id=claim_id,
+            channel_id=juicy['claim_id']
+        )
+        original_cid = og_comment.get('comment_id')
+        self.assertIsNotNone(original_cid, 'Comment should be able to be made')
+
+        # Now abandon the channel
+        await self.daemon.jsonrpc_channel_abandon(juicy['claim_id'])
+
+        # this should error out
+        with self.assertRaises(ValueError):
+            await self.daemon.jsonrpc_comment_edit(
+                comment='If you see it and you mean then you know you have to go',
+                comment_id=original_cid
+            )
+
+        # editing an anonymous comment
+        anon_comment = await self.daemon.jsonrpc_comment_create(
+            comment='fast and furiouuuuuus',
+            claim_id=claim_id
+        )
+
+        anon_cid = anon_comment.get('comment_id')
+        self.assertIsNotNone(anon_cid)
+
+        with self.assertRaises(ValueError):
+            await self.daemon.jsonrpc_comment_edit(
+                comment='drift drift drift',
+                comment_id=anon_cid
+            )
