@@ -15,8 +15,8 @@ from docopt import docopt
 
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
-from lbry.conf import Config, CLIConfig
 from lbry.extras.daemon.daemon import Daemon
+from lbry.conf import Config, CLIConfig
 
 log = logging.getLogger('lbry')
 
