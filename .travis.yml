@@ -5,11 +5,11 @@ python: "3.7"
 jobs:
   include:
 
-#    - stage: code quality
-#      name: "pylint & mypy"
-#      install:
-#        - make install tools
-#      script: make lint
+    - stage: code quality
+      name: "pylint & mypy"
+      install:
+        - make install tools
+      script: make lint
 
     - stage: test
       name: "Unit Tests"
