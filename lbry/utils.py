@@ -17,8 +17,8 @@ import pkg_resources
 
 import certifi
 import aiohttp
+import hashlib
 from lbry.schema.claim import Claim
-from lbry.cryptoutils import get_lbry_hash_obj
 
 log = logging.getLogger(__name__)
 
@@ -47,6 +47,10 @@ def timedelta(**kwargs):
 
 def datetime_obj(*args, **kwargs):
     return datetime.datetime(*args, **kwargs)
+
+
+def get_lbry_hash_obj():
+    return hashlib.sha384()
 
 
 def generate_id(num=None):

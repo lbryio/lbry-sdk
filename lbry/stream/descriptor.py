@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from lbry.blob import MAX_BLOB_SIZE
 from lbry.blob.blob_info import BlobInfo
 from lbry.blob.blob_file import AbstractBlob, BlobFile
-from lbry.cryptoutils import get_lbry_hash_obj
+from lbry.utils import get_lbry_hash_obj
 from lbry.error import InvalidStreamDescriptorError
 
 log = logging.getLogger(__name__)
