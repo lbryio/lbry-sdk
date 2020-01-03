@@ -166,8 +166,8 @@ FEEDS: Iterable[Type[MarketFeed]] = (
     LBRYFeed,
     LBRYBTCFeed,
     BittrexFeed,
-    CryptonatorFeed,
-    CryptonatorBTCFeed,
+    # CryptonatorFeed,
+    # CryptonatorBTCFeed,
 )
 
 
