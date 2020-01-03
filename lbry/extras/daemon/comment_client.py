@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def get_encoded_signature(signature):
-    signature = signature.encode() if type(signature) is str else signature
+    signature = signature.encode() if isinstance(signature, str) else signature
     r = int(signature[:int(len(signature) / 2)], 16)
     s = int(signature[int(len(signature) / 2):], 16)
     return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
@@ -23,7 +23,7 @@ def cid2hash(claim_id: str) -> bytes:
 
 
 def is_comment_signed_by_channel(comment: dict, channel: Output, abandon=False):
-    if type(channel) is Output:
+    if isinstance(channel, Output):
         try:
             signing_field = comment['comment_id'] if abandon else comment['comment']
             pieces = [

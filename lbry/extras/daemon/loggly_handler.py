@@ -1,8 +1,9 @@
 import asyncio
-from aiohttp.client_exceptions import ClientError
 import json
 import logging.handlers
 import traceback
+
+from aiohttp.client_exceptions import ClientError
 import aiohttp
 from lbry import utils, __version__
 
@@ -14,6 +15,7 @@ class JsonFormatter(logging.Formatter):
     """Format log records using json serialization"""
 
     def __init__(self, **kwargs):
+        super().__init__()
         self.attributes = kwargs
 
     def format(self, record):
@@ -46,7 +48,8 @@ class HTTPSLogglyHandler(logging.Handler):
         self._loop = asyncio.get_event_loop()
         self._session = aiohttp.ClientSession()
 
-    def get_full_message(self, record):
+    @staticmethod
+    def get_full_message(record):
         if record.exc_info:
             return '\n'.join(traceback.format_exception(*record.exc_info))
         else:
