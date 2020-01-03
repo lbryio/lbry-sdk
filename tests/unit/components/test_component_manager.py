@@ -2,11 +2,11 @@ import asyncio
 from lbry.testcase import AsyncioTestCase, AdvanceTimeTestCase
 
 from lbry.conf import Config
-from lbry.extras.daemon.ComponentManager import ComponentManager
-from lbry.extras.daemon.Components import DATABASE_COMPONENT, DHT_COMPONENT
-from lbry.extras.daemon.Components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
-from lbry.extras.daemon.Components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbry.extras.daemon import Components
+from lbry.extras.daemon.componentmanager import ComponentManager
+from lbry.extras.daemon.components import DATABASE_COMPONENT, DHT_COMPONENT
+from lbry.extras.daemon.components import HASH_ANNOUNCER_COMPONENT, UPNP_COMPONENT
+from lbry.extras.daemon.components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
+from lbry.extras.daemon import components
 
 
 class TestComponentManager(AsyncioTestCase):
@@ -14,19 +14,19 @@ class TestComponentManager(AsyncioTestCase):
     def setUp(self):
         self.default_components_sort = [
             [
-                Components.DatabaseComponent,
-                Components.ExchangeRateManagerComponent,
-                Components.UPnPComponent
+                components.DatabaseComponent,
+                components.ExchangeRateManagerComponent,
+                components.UPnPComponent
             ],
             [
-                Components.BlobComponent,
-                Components.DHTComponent,
-                Components.WalletComponent
+                components.BlobComponent,
+                components.DHTComponent,
+                components.WalletComponent
             ],
             [
-                Components.HashAnnouncerComponent,
-                Components.PeerProtocolServerComponent,
-                Components.StreamManagerComponent,
+                components.HashAnnouncerComponent,
+                components.PeerProtocolServerComponent,
+                components.StreamManagerComponent,
             ]
         ]
         self.component_manager = ComponentManager(Config())
@@ -63,9 +63,9 @@ class TestComponentManagerOverrides(AsyncioTestCase):
 
         new_component_manager = ComponentManager(Config(), wallet=FakeWallet)
         fake_wallet = new_component_manager.get_component("wallet")
-        # wallet should be an instance of FakeWallet and not WalletComponent from Components.py
+        # wallet should be an instance of FakeWallet and not WalletComponent from components.py
         self.assertIsInstance(fake_wallet, FakeWallet)
-        self.assertNotIsInstance(fake_wallet, Components.WalletComponent)
+        self.assertNotIsInstance(fake_wallet, components.WalletComponent)
 
     def test_init_with_wrong_overrides(self):
         class FakeRandomComponent:

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from lbry.conf import Config
-from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.componentmanager import ComponentManager
 
 log = logging.getLogger(__name__)
 

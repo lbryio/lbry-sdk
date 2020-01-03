@@ -21,12 +21,12 @@ from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
 
 from lbry.extras.daemon.Daemon import Daemon, jsonrpc_dumps_pretty
-from lbry.extras.daemon.Components import Component, WalletComponent
-from lbry.extras.daemon.Components import (
+from lbry.extras.daemon.components import Component, WalletComponent
+from lbry.extras.daemon.components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
-from lbry.extras.daemon.ComponentManager import ComponentManager
+from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.exchange_rate_manager import (
     ExchangeRateManager, ExchangeRate, LBRYFeed, LBRYBTCFeed
 )
