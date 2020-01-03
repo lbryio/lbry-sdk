@@ -11,8 +11,8 @@ from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
 from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output, Database
-from lbry.wallet.client.constants import CENT, NULL_HASH32
-from lbry.wallet.client.basenetwork import ClientSession
+from lbry.wallet.constants import CENT, NULL_HASH32
+from lbry.wallet.network import ClientSession
 from lbry.conf import Config
 from lbry.extras.daemon.analytics import AnalyticsManager
 from lbry.stream.stream_manager import StreamManager
