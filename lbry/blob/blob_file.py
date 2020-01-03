@@ -14,15 +14,15 @@ from cryptography.hazmat.backends import default_backend
 from lbry.utils import get_lbry_hash_obj
 from lbry.error import DownloadCancelledError, InvalidBlobHashError, InvalidDataError
 
-from lbry.blob import MAX_BLOB_SIZE, blobhash_length
+from lbry.blob import MAX_BLOB_SIZE, BLOBHASH_LENGTH
 from lbry.blob.blob_info import BlobInfo
 from lbry.blob.writer import HashBlobWriter
 
 log = logging.getLogger(__name__)
 
 
-_hexmatch = re.compile("^[a-f,0-9]+$")
-backend = default_backend()
+HEXMATCH = re.compile("^[a-f,0-9]+$")
+BACKEND = default_backend()
 
 
 def is_valid_blobhash(blobhash: str) -> bool:
@@ -33,11 +33,11 @@ def is_valid_blobhash(blobhash: str) -> bool:
 
     @return: True/False
     """
-    return len(blobhash) == blobhash_length and _hexmatch.match(blobhash)
+    return len(blobhash) == BLOBHASH_LENGTH and HEXMATCH.match(blobhash)
 
 
 def encrypt_blob_bytes(key: bytes, iv: bytes, unencrypted: bytes) -> typing.Tuple[bytes, str]:
-    cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
+    cipher = Cipher(AES(key), modes.CBC(iv), backend=BACKEND)
     padder = PKCS7(AES.block_size).padder()
     encryptor = cipher.encryptor()
     encrypted = encryptor.update(padder.update(unencrypted) + padder.finalize()) + encryptor.finalize()
@@ -49,7 +49,7 @@ def encrypt_blob_bytes(key: bytes, iv: bytes, unencrypted: bytes) -> typing.Tupl
 def decrypt_blob_bytes(data: bytes, length: int, key: bytes, iv: bytes) -> bytes:
     if len(data) != length:
         raise ValueError("unexpected length")
-    cipher = Cipher(AES(key), modes.CBC(iv), backend=backend)
+    cipher = Cipher(AES(key), modes.CBC(iv), backend=BACKEND)
     unpadder = PKCS7(AES.block_size).unpadder()
     decryptor = cipher.decryptor()
     return unpadder.update(decryptor.update(data) + decryptor.finalize()) + unpadder.finalize()
@@ -144,7 +144,7 @@ class AbstractBlob:
 
     def close(self):
         while self.writers:
-            peer, writer = self.writers.popitem()
+            _, writer = self.writers.popitem()
             if writer and writer.finished and not writer.finished.done() and not self.loop.is_closed():
                 writer.finished.cancel()
         while self.readers:
