@@ -10,12 +10,13 @@ import asyncio
 import ssl
 import logging
 import ipaddress
-import pkg_resources
 import contextlib
-import certifi
-import aiohttp
 import functools
 import collections
+import pkg_resources
+
+import certifi
+import aiohttp
 from lbry.schema.claim import Claim
 from lbry.cryptoutils import get_lbry_hash_obj
 
@@ -57,9 +58,9 @@ def generate_id(num=None):
     return h.digest()
 
 
-def version_is_greater_than(a, b):
+def version_is_greater_than(version_a, version_b):
     """Returns True if version a is more recent than version b"""
-    return pkg_resources.parse_version(a) > pkg_resources.parse_version(b)
+    return pkg_resources.parse_version(version_a) > pkg_resources.parse_version(version_b)
 
 
 def rot13(some_str):
@@ -81,7 +82,7 @@ def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
         server = socket.gethostbyname(server)
         socket.create_connection((server, port), timeout).close()
         return True
-    except (socket.gaierror, socket.herror) as ex:
+    except (socket.gaierror, socket.herror):
         log.debug("Failed to connect to %s:%s. Unable to resolve domain. Trying to bypass DNS",
                   server, port)
         try:
@@ -142,19 +143,19 @@ def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
 
 
 def async_timed_cache(duration: int):
-    def wrapper(fn):
+    def wrapper(func):
         cache: typing.Dict[typing.Tuple,
                            typing.Tuple[typing.Any, float]] = {}
 
-        @functools.wraps(fn)
+        @functools.wraps(func)
         async def _inner(*args, **kwargs) -> typing.Any:
             loop = asyncio.get_running_loop()
-            now = loop.time()
+            time_now = loop.time()
             key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
-            if key in cache and (now - cache[key][1] < duration):
+            if key in cache and (time_now - cache[key][1] < duration):
                 return cache[key][0]
-            to_cache = await fn(*args, **kwargs)
-            cache[key] = to_cache, now
+            to_cache = await func(*args, **kwargs)
+            cache[key] = to_cache, time_now
             return to_cache
         return _inner
     return wrapper
@@ -269,5 +270,5 @@ async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled
             response = await resp.json()
             if response['success']:
                 return response['data']['ip']
-    except Exception as e:
+    except Exception:
         return
