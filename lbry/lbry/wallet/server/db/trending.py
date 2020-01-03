@@ -49,8 +49,10 @@ class TrendingData:
 
         # Just putting data in the dictionary
         if not self.initialised:
-            self.claims[claim_id] = [total_amount, soften(total_amount),
-                                     trending_score, False]
+            self.claims[claim_id] = { "total_amount": total_amount,
+                                      "softened": soften(total_amount),
+                                      "trending_score": trending_score,
+                                      "changed": False }
             return
 
         # Extract existing total amount and trending score
@@ -58,21 +60,23 @@ class TrendingData:
         if claim_id in self.claims:
             old_state = copy.deepcopy(self.claims[claim_id])
         else:
-            old_state = [0.0, soften(0.0), 0.0, False]
+            old_state = { "total_amount": 0.0,
+                          "softened": soften(0.0),
+                          "trending_score": 0.0,
+                          "changed": False }
 
         # Calculate LBC change
-        change = total_amount - old_state[0]
+        change = total_amount - old_state["total_amount"]
 
         # Modify data if there was an LBC change
         if change != 0.0:
-            total_amount_softened = soften(total_amount)
-            spike = total_amount_softened - old_state[1]
-            trending_score = old_state[2] + time_boost*spike
-            self.claims[claim_id] = [total_amount, total_amount_softened,
-                                            trending_score, True]
-
-
-
+            softened = soften(total_amount)
+            spike = softened - old_state["softened"]
+            trending_score = old_state["trending_score"] + time_boost*spike
+            self.claims[claim_id] = { "total_amount": total_amount,
+                                      "softened": softened,
+                                      "trending_score": trending_score,
+                                      "changed": True }
 
 # One global instance
 trending_data = TrendingData()
@@ -120,8 +124,8 @@ def calculate_trending(db, height, final_height):
 
         keys = trending_data.claims.keys()
         for key in keys:
-            trending_data.claims[key][2] *= decay_per_renorm
-            trending_data.claims[key][3] = True
+            trending_data.claims[key]["trending_score"] *= decay_per_renorm
+            trending_data.claims[key]["changed"] = True
         f.write("done.\n")
         f.flush()
 
@@ -135,9 +139,9 @@ def calculate_trending(db, height, final_height):
         the_list = []
         keys = trending_data.claims.keys()
         for key in keys:
-            if trending_data.claims[key][3]:
-                the_list.append((trending_data.claims[key][2], key))
-                trending_data.claims[key][3] = False
+            if trending_data.claims[key]["changed"]:
+                the_list.append((trending_data.claims[key]["trending_score"], key))
+                trending_data.claims[key]["changed"] = False
         f.write("{n} scores to write...".format(n=len(the_list)))
         f.flush()
 
@@ -153,7 +157,7 @@ def calculate_trending(db, height, final_height):
 
         keys = trending_data.claims.keys()
         for key in keys:
-            trending_data.claims[key][3] = False
+            trending_data.claims[key]["changed"] = False
         f.write("done.\n")
         f.flush()
 
