@@ -5,7 +5,7 @@ import asyncio
 import lbry
 from unittest.mock import Mock
 
-from lbry.wallet.client.basenetwork import BaseNetwork
+from lbry.wallet.network import Network
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
@@ -174,7 +174,7 @@ class ServerPickingTestCase(AsyncioTestCase):
             'connect_timeout': 3
         })
 
-        network = BaseNetwork(ledger)
+        network = Network(ledger)
         self.addCleanup(network.stop)
         asyncio.ensure_future(network.start())
         await asyncio.wait_for(network.on_connected.first, timeout=1)

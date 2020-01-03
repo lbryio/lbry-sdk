@@ -2,7 +2,7 @@ import asyncio
 
 import lbry
 import lbry.wallet
-from lbry.wallet.client.basenetwork import ClientSession
+from lbry.wallet.network import ClientSession
 from lbry.testcase import IntegrationTestCase
 
 
