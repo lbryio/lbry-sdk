@@ -360,12 +360,12 @@ class Database(SQLiteMixin):
     """
 
     CREATE_TABLES_QUERY = (
-            PRAGMAS +
-            CREATE_ACCOUNT_TABLE +
-            CREATE_PUBKEY_ADDRESS_TABLE +
-            CREATE_TX_TABLE +
-            CREATE_TXO_TABLE +
-            CREATE_TXI_TABLE
+        PRAGMAS +
+        CREATE_ACCOUNT_TABLE +
+        CREATE_PUBKEY_ADDRESS_TABLE +
+        CREATE_TX_TABLE +
+        CREATE_TXO_TABLE +
+        CREATE_TXI_TABLE
     )
 
     @staticmethod

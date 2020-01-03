@@ -24,17 +24,17 @@ class InvalidHeader(Exception):
         self.height = height
 
 
-class BaseHeaders:
+class Headers:
 
-    header_size: int
-    chunk_size: int
+    header_size = 112
+    chunk_size = 10**16
 
-    max_target: int
-    genesis_hash: Optional[bytes]
-    target_timespan: int
+    max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+    genesis_hash = b'9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
+    target_timespan = 150
+    checkpoint = (600_000, b'100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2')
 
     validate_difficulty: bool = True
-    checkpoint = None
 
     def __init__(self, path) -> None:
         if path == ':memory:':
@@ -53,20 +53,48 @@ class BaseHeaders:
         self.io.close()
 
     @staticmethod
-    def serialize(header: dict) -> bytes:
-        raise NotImplementedError
+    def serialize(header):
+        return b''.join([
+            struct.pack('<I', header['version']),
+            unhexlify(header['prev_block_hash'])[::-1],
+            unhexlify(header['merkle_root'])[::-1],
+            unhexlify(header['claim_trie_root'])[::-1],
+            struct.pack('<III', header['timestamp'], header['bits'], header['nonce'])
+        ])
 
     @staticmethod
     def deserialize(height, header):
-        raise NotImplementedError
+        version, = struct.unpack('<I', header[:4])
+        timestamp, bits, nonce = struct.unpack('<III', header[100:112])
+        return {
+            'version': version,
+            'prev_block_hash': hexlify(header[4:36][::-1]),
+            'merkle_root': hexlify(header[36:68][::-1]),
+            'claim_trie_root': hexlify(header[68:100][::-1]),
+            'timestamp': timestamp,
+            'bits': bits,
+            'nonce': nonce,
+            'block_height': height,
+        }
 
     def get_next_chunk_target(self, chunk: int) -> ArithUint256:
         return ArithUint256(self.max_target)
 
-    @staticmethod
-    def get_next_block_target(chunk_target: ArithUint256, previous: Optional[dict],
+    def get_next_block_target(self, max_target: ArithUint256, previous: Optional[dict],
                               current: Optional[dict]) -> ArithUint256:
-        return chunk_target
+        # https://github.com/lbryio/lbrycrd/blob/master/src/lbry.cpp
+        if previous is None and current is None:
+            return max_target
+        if previous is None:
+            previous = current
+        actual_timespan = current['timestamp'] - previous['timestamp']
+        modulated_timespan = self.target_timespan + int((actual_timespan - self.target_timespan) / 8)
+        minimum_timespan = self.target_timespan - int(self.target_timespan / 8)  # 150 - 18 = 132
+        maximum_timespan = self.target_timespan + int(self.target_timespan / 2)  # 150 + 75 = 225
+        clamped_timespan = max(minimum_timespan, min(modulated_timespan, maximum_timespan))
+        target = ArithUint256.from_compact(current['bits'])
+        new_target = min(max_target, (target * clamped_timespan) / self.target_timespan)
+        return new_target
 
     def __len__(self) -> int:
         if self._size is None:
@@ -228,9 +256,9 @@ class BaseHeaders:
                     return
                 previous_header_hash = header_hash
 
-    @staticmethod
-    def get_proof_of_work(header_hash: bytes) -> ArithUint256:
-        return ArithUint256(int(b'0x' + header_hash, 16))
+    @classmethod
+    def get_proof_of_work(cls, header_hash: bytes):
+        return ArithUint256(int(b'0x' + cls.header_hash_to_pow_hash(header_hash), 16))
 
     def _iterate_chunks(self, height: int, headers: bytes) -> Iterator[Tuple[int, bytes]]:
         assert len(headers) % self.header_size == 0, f"{len(headers)} {len(headers)%self.header_size}"
@@ -248,67 +276,9 @@ class BaseHeaders:
             header = headers[start:end]
             yield self.hash_header(header), self.deserialize(height+idx, header)
 
-
-class Headers(BaseHeaders):
-
-    header_size = 112
-    chunk_size = 10**16
-
-    max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-    genesis_hash = b'9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
-    target_timespan = 150
-    checkpoint = (600_000, b'100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2')
-
     @property
     def claim_trie_root(self):
         return self[self.height]['claim_trie_root']
-
-    @staticmethod
-    def serialize(header):
-        return b''.join([
-            struct.pack('<I', header['version']),
-            unhexlify(header['prev_block_hash'])[::-1],
-            unhexlify(header['merkle_root'])[::-1],
-            unhexlify(header['claim_trie_root'])[::-1],
-            struct.pack('<III', header['timestamp'], header['bits'], header['nonce'])
-        ])
-
-    @staticmethod
-    def deserialize(height, header):
-        version, = struct.unpack('<I', header[:4])
-        timestamp, bits, nonce = struct.unpack('<III', header[100:112])
-        return {
-            'version': version,
-            'prev_block_hash': hexlify(header[4:36][::-1]),
-            'merkle_root': hexlify(header[36:68][::-1]),
-            'claim_trie_root': hexlify(header[68:100][::-1]),
-            'timestamp': timestamp,
-            'bits': bits,
-            'nonce': nonce,
-            'block_height': height,
-        }
-
-    def get_next_block_target(self, max_target: ArithUint256, previous: Optional[dict],
-                              current: Optional[dict]) -> ArithUint256:
-        # https://github.com/lbryio/lbrycrd/blob/master/src/lbry.cpp
-        if previous is None and current is None:
-            return max_target
-        if previous is None:
-            previous = current
-        actual_timespan = current['timestamp'] - previous['timestamp']
-        modulated_timespan = self.target_timespan + int((actual_timespan - self.target_timespan) / 8)
-        minimum_timespan = self.target_timespan - int(self.target_timespan / 8)  # 150 - 18 = 132
-        maximum_timespan = self.target_timespan + int(self.target_timespan / 2)  # 150 + 75 = 225
-        clamped_timespan = max(minimum_timespan, min(modulated_timespan, maximum_timespan))
-        target = ArithUint256.from_compact(current['bits'])
-        new_target = min(max_target, (target * clamped_timespan) / self.target_timespan)
-        return new_target
-
-    @classmethod
-    def get_proof_of_work(cls, header_hash: bytes):
-        return super().get_proof_of_work(
-            cls.header_hash_to_pow_hash(header_hash)
-        )
 
     @staticmethod
     def header_hash_to_pow_hash(header_hash: bytes):

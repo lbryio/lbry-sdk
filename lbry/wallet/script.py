@@ -421,10 +421,10 @@ class OutputScript(Script):
         OP_2DROP, OP_DROP
     )
     CLAIM_NAME_PUBKEY = Template('claim_name+pay_pubkey_hash', (
-            CLAIM_NAME_OPCODES + PAY_PUBKEY_HASH.opcodes
+        CLAIM_NAME_OPCODES + PAY_PUBKEY_HASH.opcodes
     ))
     CLAIM_NAME_SCRIPT = Template('claim_name+pay_script_hash', (
-            CLAIM_NAME_OPCODES + PAY_SCRIPT_HASH.opcodes
+        CLAIM_NAME_OPCODES + PAY_SCRIPT_HASH.opcodes
     ))
 
     SUPPORT_CLAIM_OPCODES = (
@@ -432,10 +432,10 @@ class OutputScript(Script):
         OP_2DROP, OP_DROP
     )
     SUPPORT_CLAIM_PUBKEY = Template('support_claim+pay_pubkey_hash', (
-            SUPPORT_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
+        SUPPORT_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
     ))
     SUPPORT_CLAIM_SCRIPT = Template('support_claim+pay_script_hash', (
-            SUPPORT_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
+        SUPPORT_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
     ))
 
     UPDATE_CLAIM_OPCODES = (
@@ -443,10 +443,10 @@ class OutputScript(Script):
         OP_2DROP, OP_2DROP
     )
     UPDATE_CLAIM_PUBKEY = Template('update_claim+pay_pubkey_hash', (
-            UPDATE_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
+        UPDATE_CLAIM_OPCODES + PAY_PUBKEY_HASH.opcodes
     ))
     UPDATE_CLAIM_SCRIPT = Template('update_claim+pay_script_hash', (
-            UPDATE_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
+        UPDATE_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
     ))
 
     SELL_SCRIPT = Template('sell_script', (

@@ -1,10 +1,8 @@
 import os
 import zlib
-import pylru
 import base64
 import asyncio
 import logging
-
 from io import StringIO
 from datetime import datetime
 from functools import partial
@@ -13,6 +11,7 @@ from collections import namedtuple
 from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional
 
+import pylru
 from lbry.schema.result import Outputs
 from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
@@ -407,7 +406,7 @@ class Ledger(metaclass=LedgerRegistry):
                     "Will not continue to attempt reorganizing. Please, delete the ledger "
                     "synchronization directory inside your wallet directory (folder: '{}') and "
                     "restart the program to synchronize from scratch."
-                        .format(rewound, self.get_id())
+                    .format(rewound, self.get_id())
                 )
 
             headers = None  # ready to download some more headers
@@ -686,7 +685,7 @@ class Ledger(metaclass=LedgerRegistry):
                              "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
                              account.id, balance, total_receiving, account.receiving.gap, total_change,
                              account.change.gap, channel_count, len(account.channel_keys), claim_count)
-        except:
+        except:  # pylint: disable=bare-except
             log.exception(
                 'Failed to display wallet state, please file issue '
                 'for this bug along with the traceback you see below:')
@@ -709,7 +708,7 @@ class Ledger(metaclass=LedgerRegistry):
             claim_ids = [p.purchased_claim_id for p in purchases]
             try:
                 resolved, _, _ = await self.claim_search([], claim_ids=claim_ids)
-            except:
+            except:  # pylint: disable=bare-except
                 log.exception("Resolve failed while looking up purchased claim ids:")
                 resolved = []
             lookup = {claim.claim_id: claim for claim in resolved}
@@ -742,7 +741,7 @@ class Ledger(metaclass=LedgerRegistry):
         claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
         try:
             resolve_results, _, _ = await self.claim_search([], claim_ids=claim_ids)
-        except:
+        except:  # pylint: disable=bare-except
             log.exception("Resolve failed while looking up collection claim ids:")
             return []
         claims = []
@@ -777,7 +776,7 @@ class Ledger(metaclass=LedgerRegistry):
         txs: List[Transaction] = await self.db.get_transactions(**constraints)
         headers = self.headers
         history = []
-        for tx in txs:
+        for tx in txs:  # pylint: disable=too-many-nested-blocks
             ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
             item = {
                 'txid': tx.id,

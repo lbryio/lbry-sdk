@@ -3,8 +3,9 @@ import argparse
 import asyncio
 import aiohttp
 
+from lbry import wallet
 from lbry.wallet.orchstr8.node import (
-    Conductor, get_ledger_from_environment, get_blockchain_node_from_ledger
+    Conductor, get_blockchain_node_from_ledger
 )
 from lbry.wallet.orchstr8.service import ConductorService
 
@@ -43,11 +44,10 @@ def main():
 
     loop = asyncio.get_event_loop()
     asyncio.set_event_loop(loop)
-    ledger = get_ledger_from_environment()
 
     if command == 'download':
         logging.getLogger('blockchain').setLevel(logging.INFO)
-        get_blockchain_node_from_ledger(ledger).ensure()
+        get_blockchain_node_from_ledger(wallet).ensure()
 
     elif command == 'generate':
         loop.run_until_complete(run_remote_command(

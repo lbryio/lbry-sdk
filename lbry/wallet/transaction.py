@@ -1,12 +1,11 @@
-import ecdsa
 import struct
 import hashlib
 import logging
 import typing
-
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
 
+import ecdsa
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.hazmat.primitives import hashes
@@ -329,7 +328,7 @@ class Output(InputOutput):
     def can_decode_claim(self):
         try:
             return self.claim
-        except:
+        except:  # pylint: disable=bare-except
             return False
 
     @property
@@ -434,8 +433,8 @@ class Output(InputOutput):
     @property
     def is_purchase_data(self) -> bool:
         return self.script.is_return_data and (
-                isinstance(self.script.values['data'], Purchase) or
-                Purchase.has_start_byte(self.script.values['data'])
+            isinstance(self.script.values['data'], Purchase) or
+            Purchase.has_start_byte(self.script.values['data'])
         )
 
     @property
@@ -450,7 +449,7 @@ class Output(InputOutput):
     def can_decode_purchase_data(self):
         try:
             return self.purchase_data
-        except:
+        except:  # pylint: disable=bare-except
             return False
 
     @property
@@ -569,9 +568,9 @@ class Transaction:
     def base_size(self) -> int:
         """ Size of transaction without inputs or outputs in bytes. """
         return (
-                self.size
-                - sum(txi.size for txi in self._inputs)
-                - sum(txo.size for txo in self._outputs)
+            self.size
+            - sum(txi.size for txi in self._inputs)
+            - sum(txo.size for txo in self._outputs)
         )
 
     @property
@@ -718,8 +717,8 @@ class Transaction:
 
         # value of the outputs plus associated fees
         cost = (
-                tx.get_base_fee(ledger) +
-                tx.get_total_output_sum(ledger)
+            tx.get_base_fee(ledger) +
+            tx.get_total_output_sum(ledger)
         )
         # value of the inputs less the cost to spend those inputs
         payment = tx.get_effective_input_sum(ledger)
@@ -737,8 +736,8 @@ class Transaction:
                     tx.add_inputs(s.txi for s in spendables)
 
                 cost_of_change = (
-                        tx.get_base_fee(ledger) +
-                        Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
+                    tx.get_base_fee(ledger) +
+                    Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
                 )
                 if payment > cost:
                     change = payment - cost
@@ -799,7 +798,7 @@ class Transaction:
 
     @classmethod
     def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
         return cls.create([], [output], funding_accounts, change_account)
 
@@ -807,7 +806,7 @@ class Transaction:
     def claim_create(
             cls, name: str, claim: Claim, amount: int, holding_address: str,
             funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, ledger.address_to_hash160(holding_address)
         )
@@ -819,7 +818,7 @@ class Transaction:
     def claim_update(
             cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
             funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
             claim, ledger.address_to_hash160(holding_address)
@@ -835,7 +834,7 @@ class Transaction:
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
                 funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         support_output = Output.pay_support_pubkey_hash(
             amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
         )
@@ -844,7 +843,7 @@ class Transaction:
     @classmethod
     def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
                  funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))
         return cls.create([], [payment, data], funding_accounts, change_account)
