@@ -67,7 +67,7 @@ def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
     :param shortlist: optional manually provided shortlist, this is done during bootstrapping when there are no
                       peers in the routing table. During bootstrap the shortlist is set to be the seed nodes.
     """
-    if len(key) != constants.hash_length:
+    if len(key) != constants.HASH_LENGTH:
         raise ValueError("invalid key length: %i" % len(key))
     return shortlist or routing_table.find_close_peers(key)
 
@@ -75,10 +75,10 @@ def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
 class IterativeFinder:
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
-        if len(key) != constants.hash_length:
+        if len(key) != constants.HASH_LENGTH:
             raise ValueError("invalid key length: %i" % len(key))
         self.loop = loop
         self.peer_manager = peer_manager
@@ -185,7 +185,7 @@ class IterativeFinder:
         to_probe = list(self.active - self.contacted)
         to_probe.sort(key=lambda peer: self.distance(self.key))
         for peer in to_probe:
-            if added >= constants.alpha:
+            if added >= constants.ALPHA:
                 break
             origin_address = (peer.address, peer.udp_port)
             if origin_address in self.exclude:
@@ -216,7 +216,7 @@ class IterativeFinder:
         t.add_done_callback(callback)
         self.running_probes.add(t)
 
-    async def _search_task(self, delay: typing.Optional[float] = constants.iterative_lookup_delay):
+    async def _search_task(self, delay: typing.Optional[float] = constants.ITERATIVE_LOOKUP_DELAY):
         try:
             if self.running:
                 await self._search_round()
@@ -263,7 +263,7 @@ class IterativeFinder:
 class IterativeNodeFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
         super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
@@ -286,7 +286,7 @@ class IterativeNodeFinder(IterativeFinder):
                and self.peer_manager.peer_is_good(peer) is not False
         ]
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
-        to_yield = not_yet_yielded[:min(constants.k, len(not_yet_yielded))]
+        to_yield = not_yet_yielded[:min(constants.K, len(not_yet_yielded))]
         if to_yield:
             self.yielded_peers.update(to_yield)
             self.iteration_queue.put_nowait(to_yield)
@@ -314,7 +314,7 @@ class IterativeNodeFinder(IterativeFinder):
 class IterativeValueFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.k,
+                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
         super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
@@ -348,7 +348,7 @@ class IterativeValueFinder(IterativeFinder):
         if len(self.discovered_peers[peer]) != already_known + len(parsed.found_compact_addresses):
             log.warning("misbehaving peer %s:%i returned duplicate peers for blob", peer.address, peer.udp_port)
             parsed.found_compact_addresses.clear()
-        elif len(parsed.found_compact_addresses) >= constants.k and self.peer_pages[peer] < parsed.pages:
+        elif len(parsed.found_compact_addresses) >= constants.K and self.peer_pages[peer] < parsed.pages:
             # the peer returned a full page and indicates it has more
             self.peer_pages[peer] += 1
             if peer in self.contacted:

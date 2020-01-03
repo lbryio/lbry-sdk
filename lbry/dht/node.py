@@ -19,8 +19,8 @@ log = logging.getLogger(__name__)
 
 class Node:
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
-                 internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.rpc_timeout,
-                 split_buckets_under_index: int = constants.split_buckets_under_index,
+                 internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX,
                  storage: typing.Optional['SQLiteStorage'] = None):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
@@ -62,7 +62,7 @@ class Node:
                 if force_once:
                     break
                 fut = asyncio.Future(loop=self.loop)
-                self.loop.call_later(constants.refresh_interval // 4, fut.set_result, None)
+                self.loop.call_later(constants.REFRESH_INTERVAL // 4, fut.set_result, None)
                 await fut
                 continue
 
@@ -76,12 +76,12 @@ class Node:
                 break
 
             fut = asyncio.Future(loop=self.loop)
-            self.loop.call_later(constants.refresh_interval, fut.set_result, None)
+            self.loop.call_later(constants.REFRESH_INTERVAL, fut.set_result, None)
             await fut
 
     async def announce_blob(self, blob_hash: str) -> typing.List[bytes]:
         hash_value = binascii.unhexlify(blob_hash.encode())
-        assert len(hash_value) == constants.hash_length
+        assert len(hash_value) == constants.HASH_LENGTH
         peers = await self.peer_search(hash_value)
 
         if not self.protocol.external_ip:
@@ -175,8 +175,8 @@ class Node:
         self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
-                                  bottom_out_limit: int = constants.bottom_out_limit,
-                                  max_results: int = constants.k) -> IterativeNodeFinder:
+                                  bottom_out_limit: int = constants.BOTTOM_OUT_LIMIT,
+                                  max_results: int = constants.K) -> IterativeNodeFinder:
 
         return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                    key, bottom_out_limit, max_results, None, shortlist)
@@ -188,7 +188,7 @@ class Node:
         return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
                                     key, bottom_out_limit, max_results, None, shortlist)
 
-    async def peer_search(self, node_id: bytes, count=constants.k, max_results=constants.k*2,
+    async def peer_search(self, node_id: bytes, count=constants.K, max_results=constants.K * 2,
                           bottom_out_limit=20, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
                           ) -> typing.List['KademliaPeer']:
         peers = []

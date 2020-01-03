@@ -147,13 +147,13 @@ class TestBlobAnnouncer(AsyncioTestCase):
                     self.assertNotIn(blob_hash, peers_for_blob)
                     self.assertEqual(peers_for_blob[b'p'], 0)
                 else:
-                    self.assertEqual(len(peers_for_blob[blob_hash]), min(i - 1, constants.k))
+                    self.assertEqual(len(peers_for_blob[blob_hash]), min(i - 1, constants.K))
                     self.assertEqual(len(announced_to.protocol.data_store.get_peers_for_blob(blob_hash)), i)
-                if i - 1 > constants.k:
-                    self.assertEqual(len(peers_for_blob[b'contacts']), constants.k)
-                    self.assertEqual(peers_for_blob[b'p'], ((i - 1) // (constants.k + 1)) + 1)
+                if i - 1 > constants.K:
+                    self.assertEqual(len(peers_for_blob[b'contacts']), constants.K)
+                    self.assertEqual(peers_for_blob[b'p'], ((i - 1) // (constants.K + 1)) + 1)
                     seen = set(peers_for_blob[blob_hash])
-                    self.assertEqual(len(seen), constants.k)
+                    self.assertEqual(len(seen), constants.K)
                     self.assertEqual(len(peers_for_blob[blob_hash]), len(seen))
 
                     for pg in range(1, peers_for_blob[b'p']):

@@ -48,13 +48,13 @@ class KademliaRPC:
         return b'pong'
 
     def store(self, rpc_contact: 'KademliaPeer', blob_hash: bytes, token: bytes, port: int) -> bytes:
-        if len(blob_hash) != constants.hash_bits // 8:
+        if len(blob_hash) != constants.HASH_BITS // 8:
             raise ValueError(f"invalid length of blob hash: {len(blob_hash)}")
         if not 0 < port < 65535:
             raise ValueError(f"invalid tcp port: {port}")
         rpc_contact.update_tcp_port(port)
         if not self.verify_token(token, rpc_contact.compact_ip()):
-            if self.loop.time() - self.protocol.started_listening_time < constants.token_secret_refresh_interval:
+            if self.loop.time() - self.protocol.started_listening_time < constants.TOKEN_SECRET_REFRESH_INTERVAL:
                 pass
             else:
                 raise ValueError("Invalid token")
@@ -64,19 +64,19 @@ class KademliaRPC:
         return b'OK'
 
     def find_node(self, rpc_contact: 'KademliaPeer', key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
-        if len(key) != constants.hash_length:
+        if len(key) != constants.HASH_LENGTH:
             raise ValueError("invalid contact node_id length: %i" % len(key))
 
         contacts = self.protocol.routing_table.find_close_peers(key, sender_node_id=rpc_contact.node_id)
         contact_triples = []
-        for contact in contacts[:constants.k * 2]:
+        for contact in contacts[:constants.K * 2]:
             contact_triples.append((contact.node_id, contact.address, contact.udp_port))
         return contact_triples
 
     def find_value(self, rpc_contact: 'KademliaPeer', key: bytes, page: int = 0):
         page = page if page > 0 else 0
 
-        if len(key) != constants.hash_length:
+        if len(key) != constants.HASH_LENGTH:
             raise ValueError("invalid blob_exchange hash length: %i" % len(key))
 
         response = {
@@ -84,7 +84,7 @@ class KademliaRPC:
         }
 
         if not page:
-            response[b'contacts'] = self.find_node(rpc_contact, key)[:constants.k]
+            response[b'contacts'] = self.find_node(rpc_contact, key)[:constants.K]
 
         if self.protocol.protocol_version:
             response[b'protocolVersion'] = self.protocol.protocol_version
@@ -96,16 +96,16 @@ class KademliaRPC:
             if not rpc_contact.tcp_port or peer.compact_address_tcp() != rpc_contact.compact_address_tcp()
         ]
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
-        if len(peers) < constants.k and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
+        if len(peers) < constants.K and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
             peers.append(self.compact_address())
         if not peers:
             response[PAGE_KEY] = 0
         else:
-            response[PAGE_KEY] = (len(peers) // (constants.k + 1)) + 1  # how many pages of peers we have for the blob
-        if len(peers) > constants.k:
+            response[PAGE_KEY] = (len(peers) // (constants.K + 1)) + 1  # how many pages of peers we have for the blob
+        if len(peers) > constants.K:
             random.Random(self.protocol.node_id).shuffle(peers)
-        if page * constants.k < len(peers):
-            response[key] = peers[page * constants.k:page * constants.k + constants.k]
+        if page * constants.K < len(peers):
+            response[key] = peers[page * constants.K:page * constants.K + constants.K]
         return response
 
     def refresh_token(self):  # TODO: this needs to be called periodically
@@ -154,7 +154,7 @@ class RemoteKademliaRPC:
         :param blob_hash: blob hash as bytes
         :return: b'OK'
         """
-        if len(blob_hash) != constants.hash_bits // 8:
+        if len(blob_hash) != constants.HASH_BITS // 8:
             raise ValueError(f"invalid length of blob hash: {len(blob_hash)}")
         if not self.protocol.peer_port or not 0 < self.protocol.peer_port < 65535:
             raise ValueError(f"invalid tcp port: {self.protocol.peer_port}")
@@ -171,7 +171,7 @@ class RemoteKademliaRPC:
         """
         :return: [(node_id, address, udp_port), ...]
         """
-        if len(key) != constants.hash_bits // 8:
+        if len(key) != constants.HASH_BITS // 8:
             raise ValueError(f"invalid length of find node key: {len(key)}")
         response = await self.protocol.send_request(
             self.peer, RequestDatagram.make_find_node(self.protocol.node_id, key)
@@ -186,7 +186,7 @@ class RemoteKademliaRPC:
             <key bytes>: [<blob_peer_compact_address, ...]
         }
         """
-        if len(key) != constants.hash_bits // 8:
+        if len(key) != constants.HASH_BITS // 8:
             raise ValueError(f"invalid length of find value key: {len(key)}")
         response = await self.protocol.send_request(
             self.peer, RequestDatagram.make_find_value(self.protocol.node_id, key, page=page)
@@ -203,7 +203,7 @@ class PingQueue:
         self._process_task: asyncio.Task = None
         self._running = False
         self._running_pings: typing.Set[asyncio.Task] = set()
-        self._default_delay = constants.maybe_ping_delay
+        self._default_delay = constants.MAYBE_PING_DELAY
 
     @property
     def running(self):
@@ -260,8 +260,8 @@ class PingQueue:
 
 class KademliaProtocol(DatagramProtocol):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
-                 udp_port: int, peer_port: int, rpc_timeout: float = constants.rpc_timeout,
-                 split_buckets_under_index: int = constants.split_buckets_under_index):
+                 udp_port: int, peer_port: int, rpc_timeout: float = constants.RPC_TIMEOUT,
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
         self.peer_manager = peer_manager
         self.loop = loop
         self.node_id = node_id
@@ -271,7 +271,7 @@ class KademliaProtocol(DatagramProtocol):
         self.is_seed_node = False
         self.partial_messages: typing.Dict[bytes, typing.Dict[bytes, bytes]] = {}
         self.sent_messages: typing.Dict[bytes, typing.Tuple['KademliaPeer', asyncio.Future, RequestDatagram]] = {}
-        self.protocol_version = constants.protocol_version
+        self.protocol_version = constants.PROTOCOL_VERSION
         self.started_listening_time = 0
         self.transport: DatagramTransport = None
         self.old_token_secret = constants.generate_id()
@@ -589,12 +589,12 @@ class KademliaProtocol(DatagramProtocol):
             raise TransportNotConnected()
 
         data = message.bencode()
-        if len(data) > constants.msg_size_limit:
+        if len(data) > constants.MSG_SIZE_LIMIT:
             log.warning("cannot send datagram larger than %i bytes (packet is %i bytes)",
-                        constants.msg_size_limit, len(data))
+                        constants.MSG_SIZE_LIMIT, len(data))
             log.debug("Packet is too large to send: %s", binascii.hexlify(data[:3500]).decode())
             raise ValueError(
-                f"cannot send datagram larger than {constants.msg_size_limit} bytes (packet is {len(data)} bytes)"
+                f"cannot send datagram larger than {constants.MSG_SIZE_LIMIT} bytes (packet is {len(data)} bytes)"
             )
         if isinstance(message, (RequestDatagram, ResponseDatagram)):
             assert message.node_id == self.node_id, message
@@ -637,10 +637,10 @@ class KademliaProtocol(DatagramProtocol):
         return constants.digest(self.token_secret + compact_ip)
 
     def verify_token(self, token, compact_ip):
-        h = constants.hash_class()
+        h = constants.HASH_CLASS()
         h.update(self.token_secret + compact_ip)
         if self.old_token_secret and not token == h.digest():  # TODO: why should we be accepting the previous token?
-            h = constants.hash_class()
+            h = constants.HASH_CLASS()
             h.update(self.old_token_secret + compact_ip)
             if not token == h.digest():
                 return False

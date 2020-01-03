@@ -56,7 +56,7 @@ class KBucket:
                     self.peers.remove(p)
                     self.peers.append(peer)
                     return True
-        if len(self.peers) < constants.k:
+        if len(self.peers) < constants.K:
             self.peers.append(peer)
             return True
         else:
@@ -101,8 +101,8 @@ class KBucket:
         current_len = len(peers)
 
         # If count greater than k - return only k contacts
-        if count > constants.k:
-            count = constants.k
+        if count > constants.K:
+            count = constants.K
 
         if not current_len:
             return peers
@@ -164,14 +164,14 @@ class TreeRoutingTable:
     """
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
-                 split_buckets_under_index: int = constants.split_buckets_under_index):
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
         self._loop = loop
         self._peer_manager = peer_manager
         self._parent_node_id = parent_node_id
         self._split_buckets_under_index = split_buckets_under_index
         self.buckets: typing.List[KBucket] = [
             KBucket(
-                self._peer_manager, range_min=0, range_max=2 ** constants.hash_bits, node_id=self._parent_node_id
+                self._peer_manager, range_min=0, range_max=2 ** constants.HASH_BITS, node_id=self._parent_node_id
             )
         ]
 
@@ -185,7 +185,7 @@ class TreeRoutingTable:
         contacts = self.get_peers()
         distance = Distance(self._parent_node_id)
         contacts.sort(key=lambda c: distance(c.node_id))
-        kth_contact = contacts[-1] if len(contacts) < constants.k else contacts[constants.k - 1]
+        kth_contact = contacts[-1] if len(contacts) < constants.K else contacts[constants.K - 1]
         return distance(to_add) < distance(kth_contact.node_id)
 
     def find_close_peers(self, key: bytes, count: typing.Optional[int] = None,
@@ -193,7 +193,7 @@ class TreeRoutingTable:
         exclude = [self._parent_node_id]
         if sender_node_id:
             exclude.append(sender_node_id)
-        count = count or constants.k
+        count = count or constants.K
         distance = Distance(key)
         contacts = self.get_peers()
         contacts = [c for c in contacts if c.node_id not in exclude]
@@ -214,7 +214,7 @@ class TreeRoutingTable:
         refresh_ids = []
         now = int(self._loop.time())
         for bucket in self.buckets[start_index:]:
-            if force or now - bucket.last_accessed >= constants.refresh_interval:
+            if force or now - bucket.last_accessed >= constants.REFRESH_INTERVAL:
                 to_search = self.midpoint_id_in_bucket_range(bucket_index)
                 refresh_ids.append(to_search)
             bucket_index += 1
@@ -248,13 +248,13 @@ class TreeRoutingTable:
         random_id = int(random.randrange(self.buckets[bucket_index].range_min, self.buckets[bucket_index].range_max))
         return Distance(
             self._parent_node_id
-        )(random_id.to_bytes(constants.hash_length, 'big')).to_bytes(constants.hash_length, 'big')
+        )(random_id.to_bytes(constants.HASH_LENGTH, 'big')).to_bytes(constants.HASH_LENGTH, 'big')
 
     def midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
         half = int((self.buckets[bucket_index].range_max - self.buckets[bucket_index].range_min) // 2)
         return Distance(self._parent_node_id)(
-            int(self.buckets[bucket_index].range_min + half).to_bytes(constants.hash_length, 'big')
-        ).to_bytes(constants.hash_length, 'big')
+            int(self.buckets[bucket_index].range_min + half).to_bytes(constants.HASH_LENGTH, 'big')
+        ).to_bytes(constants.HASH_LENGTH, 'big')
 
     def split_bucket(self, old_bucket_index: int) -> None:
         """ Splits the specified k-bucket into two new buckets which together

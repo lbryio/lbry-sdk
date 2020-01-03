@@ -511,7 +511,7 @@ class Config(CLIConfig):
     download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)
     blob_download_timeout = Float("Timeout to download a blob from a peer", 30.0)
     peer_connect_timeout = Float("Timeout to establish a TCP connection to a peer", 3.0)
-    node_rpc_timeout = Float("Timeout when making a DHT request", constants.rpc_timeout)
+    node_rpc_timeout = Float("Timeout when making a DHT request", constants.RPC_TIMEOUT)
 
     # blob announcement and download
     save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
