@@ -13,7 +13,6 @@ import aiohttp
 from aiohttp.web import GracefulExit
 from docopt import docopt
 
-import lbry.wallet
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.loggly_handler import get_loggly_handler
 from lbry.conf import Config, CLIConfig
@@ -169,16 +168,16 @@ def add_command_parser(parent, command):
 
 
 def get_argument_parser():
-    main = ArgumentParser(
+    root = ArgumentParser(
         'lbrynet', description='An interface to the LBRY Network.', allow_abbrev=False,
     )
-    main.add_argument(
+    root.add_argument(
         '-v', '--version', dest='cli_version', action="store_true",
         help='Show lbrynet CLI version and exit.'
     )
-    main.set_defaults(group=None, command=None)
-    CLIConfig.contribute_to_argparse(main)
-    sub = main.add_subparsers(metavar='COMMAND')
+    root.set_defaults(group=None, command=None)
+    CLIConfig.contribute_to_argparse(root)
+    sub = root.add_subparsers(metavar='COMMAND')
     start = sub.add_parser(
         'start',
         usage='lbrynet start [--config FILE] [--data-dir DIR] [--wallet-dir DIR] [--download-dir DIR] ...',
@@ -222,7 +221,7 @@ def get_argument_parser():
         else:
             add_command_parser(groups[command['group']], command)
 
-    return main
+    return root
 
 
 def ensure_directory_exists(path: str):

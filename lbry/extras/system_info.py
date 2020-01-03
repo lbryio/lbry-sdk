@@ -11,7 +11,7 @@ def get_platform() -> dict:
     os_system = platform.system()
     if os.environ and 'ANDROID_ARGUMENT' in os.environ:
         os_system = 'android'
-    p = {
+    d = {
         "processor": platform.processor(),
         "python_version": platform.python_version(),
         "platform": platform.platform(),
@@ -21,9 +21,9 @@ def get_platform() -> dict:
         "version": lbrynet_version,
         "build": build_type.BUILD,  # CI server sets this during build step
     }
-    if p["os_system"] == "Linux":
+    if d["os_system"] == "Linux":
         import distro  # pylint: disable=import-outside-toplevel
-        p["distro"] = distro.info()
-        p["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
+        d["distro"] = distro.info()
+        d["desktop"] = os.environ.get('XDG_CURRENT_DESKTOP', 'Unknown')
 
-    return p
+    return d
