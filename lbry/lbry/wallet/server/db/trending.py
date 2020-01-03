@@ -120,8 +120,8 @@ def calculate_trending(db, height, final_height):
 
         keys = trending_data.claims.keys()
         for key in keys:
-            trending_data.claims[key][1] *= decay_per_renorm
-            trending_data.claims[key][2] = True
+            trending_data.claims[key][2] *= decay_per_renorm
+            trending_data.claims[key][3] = True
         f.write("done.\n")
         f.flush()
 
