@@ -7,7 +7,7 @@ class TestExchangeRateManager(AsyncioTestCase):
 
     async def test_exchange_rate_manager(self):
         # TODO: re-enable cryptonator.com
-        manager = ExchangeRateManager(FEEDS[:-2])
+        manager = ExchangeRateManager(FEEDS)
         manager.start()
         self.addCleanup(manager.stop)
         for feed in manager.market_feeds:
