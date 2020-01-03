@@ -30,9 +30,9 @@ class ExchangeRate:
 
 
 class MarketFeed:
-    name: str
-    market: str
-    url: str
+    name: str = ""
+    market: str = ""
+    url: str = ""
     params = {}
     fee = 0
 
@@ -192,7 +192,7 @@ class ExchangeRateManager:
 
     def convert_currency(self, from_currency, to_currency, amount):
         rates = [market.rate for market in self.market_feeds]
-        log.debug("Converting %f %s to %s, rates: %s" % (amount, from_currency, to_currency, rates))
+        log.debug("Converting %f %s to %s, rates: %s", amount, from_currency, to_currency, rates)
         if from_currency == to_currency:
             return round(amount, 8)
 
