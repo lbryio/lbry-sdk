@@ -6,11 +6,9 @@ from json import JSONEncoder
 
 from google.protobuf.message import DecodeError
 
-from lbry.wallet.client.wallet import Wallet
-from lbry.wallet.client.bip32 import PubKey
 from lbry.schema.claim import Claim
-from lbry.wallet.ledger import MainNetLedger, Account
-from lbry.wallet.transaction import Transaction, Output
+from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
+from lbry.wallet.bip32 import PubKey
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 
@@ -114,7 +112,7 @@ def encode_file_doc():
 
 class JSONResponseEncoder(JSONEncoder):
 
-    def __init__(self, *args, ledger: MainNetLedger, include_protobuf=False, **kwargs):
+    def __init__(self, *args, ledger: Ledger, include_protobuf=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.ledger = ledger
         self.include_protobuf = include_protobuf

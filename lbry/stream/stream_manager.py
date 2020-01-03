@@ -14,17 +14,15 @@ from lbry.stream.managed_stream import ManagedStream
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet.transaction import Output
+from lbry.wallet import WalletManager, Wallet, Transaction, Output
+
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
-    from lbry.wallet import LbryWalletManager
-    from lbry.wallet.transaction import Transaction
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
-    from lbry.wallet.client.wallet import Wallet
 
 log = logging.getLogger(__name__)
 
@@ -66,7 +64,7 @@ def path_or_none(p) -> Optional[str]:
 
 class StreamManager:
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
-                 wallet_manager: 'LbryWalletManager', storage: 'SQLiteStorage', node: Optional['Node'],
+                 wallet_manager: 'WalletManager', storage: 'SQLiteStorage', node: Optional['Node'],
                  analytics_manager: Optional['AnalyticsManager'] = None):
         self.loop = loop
         self.config = config

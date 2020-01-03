@@ -20,7 +20,7 @@ from lbry.stream.stream_manager import StreamManager
 from lbry.extras.daemon.Component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
-from lbry.wallet import LbryWalletManager
+from lbry.wallet import WalletManager
 
 log = logging.getLogger(__name__)
 

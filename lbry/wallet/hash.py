@@ -1,5 +1,5 @@
 from binascii import hexlify, unhexlify
-from lbry.wallet.client.constants import NULL_HASH32
+from .constants import NULL_HASH32
 
 
 class TXRef:

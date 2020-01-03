@@ -4,10 +4,7 @@ from itertools import cycle
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.constants import CENT, COIN, NULL_HASH32
-from lbry.wallet.client.wallet import Wallet
-
-from lbry.wallet.ledger import MainNetLedger
-from lbry.wallet.transaction import Transaction, Output, Input
+from lbry.wallet import Wallet, Account, Ledger, Database, Headers, Transaction, Output, Input
 
 
 NULL_HASH = b'\x00'*32
@@ -40,9 +37,9 @@ def get_claim_transaction(claim_name, claim=b''):
 class TestSizeAndFeeEstimation(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
 
@@ -266,9 +263,9 @@ class TestTransactionSerialization(unittest.TestCase):
 class TestTransactionSigning(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
 
@@ -276,7 +273,7 @@ class TestTransactionSigning(AsyncioTestCase):
         await self.ledger.db.close()
 
     async def test_sign(self):
-        account = self.ledger.account_class.from_dict(
+        account = Account.from_dict(
             self.ledger, Wallet(), {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
@@ -305,12 +302,12 @@ class TestTransactionSigning(AsyncioTestCase):
 class TransactionIOBalancing(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
-        self.account = self.ledger.account_class.from_dict(
+        self.account = Account.from_dict(
             self.ledger, Wallet(), {
                 "seed": "carbon smart garage balance margin twelve chest sword "
                         "toast envelope bottom stomach absent"
@@ -328,7 +325,7 @@ class TransactionIOBalancing(AsyncioTestCase):
         return get_output(int(amount*COIN), address or next(self.hash_cycler))
 
     def txi(self, txo):
-        return Transaction.input_class.spend(txo)
+        return Input.spend(txo)
 
     def tx(self, inputs, outputs):
         return Transaction.create(inputs, outputs, [self.account], self.account)

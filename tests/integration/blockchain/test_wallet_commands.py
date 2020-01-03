@@ -1,7 +1,7 @@
 import asyncio
 import json
 
-from lbry.wallet.client.wallet import ENCRYPT_ON_DISK
+from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
 from lbry.testcase import CommandTestCase
 from lbry.wallet.dewies import dict_values_to_lbc

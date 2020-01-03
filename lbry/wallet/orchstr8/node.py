@@ -12,26 +12,13 @@ from binascii import hexlify
 from typing import Type, Optional
 import urllib.request
 
+import lbry
 from lbry.wallet.server.server import Server
 from lbry.wallet.server.env import Env
-from lbry.wallet.client.wallet import Wallet
-from lbry.wallet.client.baseledger import BaseLedger, BlockHeightEvent
-from lbry.wallet.client.basemanager import BaseWalletManager
-from lbry.wallet.client.baseaccount import BaseAccount
+from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 
 
 log = logging.getLogger(__name__)
-
-
-def get_manager_from_environment(default_manager=BaseWalletManager):
-    if 'TORBA_MANAGER' not in os.environ:
-        return default_manager
-    module_name = os.environ['TORBA_MANAGER'].split('-')[-1]  # tox support
-    return importlib.import_module(module_name)
-
-
-def get_ledger_from_environment():
-    return importlib.import_module('lbry.wallet')
 
 
 def get_spvserver_from_ledger(ledger_module):
@@ -50,16 +37,14 @@ def get_blockchain_node_from_ledger(ledger_module):
 
 class Conductor:
 
-    def __init__(self, ledger_module=None, manager_module=None, enable_segwit=False, seed=None):
-        self.ledger_module = ledger_module or get_ledger_from_environment()
-        self.manager_module = manager_module or get_manager_from_environment()
-        self.spv_module = get_spvserver_from_ledger(self.ledger_module)
+    def __init__(self, seed=None):
+        self.manager_module = WalletManager
+        self.spv_module = get_spvserver_from_ledger(lbry.wallet)
 
-        self.blockchain_node = get_blockchain_node_from_ledger(self.ledger_module)
-        self.blockchain_node.segwit_enabled = enable_segwit
+        self.blockchain_node = get_blockchain_node_from_ledger(lbry.wallet)
         self.spv_node = SPVNode(self.spv_module)
         self.wallet_node = WalletNode(
-            self.manager_module, self.ledger_module.RegTestLedger, default_seed=seed
+            self.manager_module, RegTestLedger, default_seed=seed
         )
 
         self.blockchain_started = False
@@ -119,15 +104,15 @@ class Conductor:
 
 class WalletNode:
 
-    def __init__(self, manager_class: Type[BaseWalletManager], ledger_class: Type[BaseLedger],
+    def __init__(self, manager_class: Type[WalletManager], ledger_class: Type[Ledger],
                  verbose: bool = False, port: int = 5280, default_seed: str = None) -> None:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
-        self.manager: Optional[BaseWalletManager] = None
-        self.ledger: Optional[BaseLedger] = None
+        self.manager: Optional[WalletManager] = None
+        self.ledger: Optional[Ledger] = None
         self.wallet: Optional[Wallet] = None
-        self.account: Optional[BaseAccount] = None
+        self.account: Optional[Account] = None
         self.data_path: Optional[str] = None
         self.port = port
         self.default_seed = default_seed
@@ -154,7 +139,7 @@ class WalletNode:
         if not self.wallet:
             raise ValueError('Wallet is required.')
         if seed or self.default_seed:
-            self.ledger.account_class.from_dict(
+            Account.from_dict(
                 self.ledger, self.wallet, {'seed': seed or self.default_seed}
             )
         else:
@@ -250,7 +235,7 @@ class BlockchainNode:
     P2SH_SEGWIT_ADDRESS = "p2sh-segwit"
     BECH32_ADDRESS = "bech32"
 
-    def __init__(self, url, daemon, cli, segwit_enabled=False):
+    def __init__(self, url, daemon, cli):
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
         self.bin_dir = os.path.join(self.project_dir, 'bin')
@@ -266,7 +251,6 @@ class BlockchainNode:
         self.rpcport = 9245 + 2  # avoid conflict with default rpc port
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
-        self.segwit_enabled = segwit_enabled
 
     @property
     def rpc_url(self):
@@ -326,8 +310,6 @@ class BlockchainNode:
             f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
             f'-port={self.peerport}'
         ]
-        if not self.segwit_enabled:
-            command.extend(['-addresstype=legacy', '-vbparams=segwit:0:999999999999'])
         self.log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(
             BlockchainProcess, *command

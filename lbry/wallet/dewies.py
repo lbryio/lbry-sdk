@@ -1,5 +1,5 @@
 import textwrap
-from lbry.wallet.client.util import coins_to_satoshis, satoshis_to_coins
+from .util import coins_to_satoshis, satoshis_to_coins
 
 
 def lbc_to_dewies(lbc: str) -> int:

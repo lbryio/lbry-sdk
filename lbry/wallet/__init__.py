@@ -6,6 +6,12 @@ __node_url__ = (
 )
 __spvserver__ = 'lbry.wallet.server.coin.LBCRegTest'
 
-from lbry.wallet.manager import LbryWalletManager
-from lbry.wallet.network import Network
-from lbry.wallet.ledger import MainNetLedger, RegTestLedger, TestNetLedger
+from .wallet import Wallet, WalletStorage, TimestampedPreferences, ENCRYPT_ON_DISK
+from .manager import WalletManager
+from .network import Network
+from .ledger import Ledger, RegTestLedger, TestNetLedger, BlockHeightEvent
+from .account import Account, AddressManager, SingleKey, HierarchicalDeterministic
+from .transaction import Transaction, Output, Input
+from .script import OutputScript, InputScript
+from .database import SQLiteMixin, Database
+from .header import Headers

@@ -1,9 +1,12 @@
+import ecdsa
 import struct
 import hashlib
-from binascii import hexlify, unhexlify
-from typing import List, Optional
+import logging
+import typing
 
-import ecdsa
+from binascii import hexlify, unhexlify
+from typing import List, Iterable, Optional, Tuple
+
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.hazmat.primitives import hashes
@@ -11,34 +14,216 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.exceptions import InvalidSignature
 
-from lbry.crypto.base58 import Base58
+from lbry.error import InsufficientFundsError
 from lbry.crypto.hash import hash160, sha256
-from lbry.wallet.client.basetransaction import BaseTransaction, BaseInput, BaseOutput, ReadOnlyList
+from lbry.crypto.base58 import Base58
+from lbry.schema.url import normalize_name
 from lbry.schema.claim import Claim
 from lbry.schema.purchase import Purchase
-from lbry.schema.url import normalize_name
-from lbry.wallet.account import Account
-from lbry.wallet.script import InputScript, OutputScript
+
+from .script import InputScript, OutputScript
+from .constants import COIN, NULL_HASH32
+from .bcd_data_stream import BCDataStream
+from .hash import TXRef, TXRefImmutable
+from .util import ReadOnlyList
+
+if typing.TYPE_CHECKING:
+    from lbry.wallet.account import Account
+    from lbry.wallet.ledger import Ledger
+    from lbry.wallet.wallet import Wallet
+
+log = logging.getLogger()
 
 
-class Input(BaseInput):
-    script: InputScript
-    script_class = InputScript
+class TXRefMutable(TXRef):
+
+    __slots__ = ('tx',)
+
+    def __init__(self, tx: 'Transaction') -> None:
+        super().__init__()
+        self.tx = tx
+
+    @property
+    def id(self):
+        if self._id is None:
+            self._id = hexlify(self.hash[::-1]).decode()
+        return self._id
+
+    @property
+    def hash(self):
+        if self._hash is None:
+            self._hash = sha256(sha256(self.tx.raw_sans_segwit))
+        return self._hash
+
+    @property
+    def height(self):
+        return self.tx.height
+
+    def reset(self):
+        self._id = None
+        self._hash = None
 
 
-class Output(BaseOutput):
-    script: OutputScript
-    script_class = OutputScript
+class TXORef:
+
+    __slots__ = 'tx_ref', 'position'
+
+    def __init__(self, tx_ref: TXRef, position: int) -> None:
+        self.tx_ref = tx_ref
+        self.position = position
+
+    @property
+    def id(self):
+        return f'{self.tx_ref.id}:{self.position}'
+
+    @property
+    def hash(self):
+        return self.tx_ref.hash + BCDataStream.uint32.pack(self.position)
+
+    @property
+    def is_null(self):
+        return self.tx_ref.is_null
+
+    @property
+    def txo(self) -> Optional['Output']:
+        return None
+
+
+class TXORefResolvable(TXORef):
+
+    __slots__ = ('_txo',)
+
+    def __init__(self, txo: 'Output') -> None:
+        assert txo.tx_ref is not None
+        assert txo.position is not None
+        super().__init__(txo.tx_ref, txo.position)
+        self._txo = txo
+
+    @property
+    def txo(self):
+        return self._txo
+
+
+class InputOutput:
+
+    __slots__ = 'tx_ref', 'position'
+
+    def __init__(self, tx_ref: TXRef = None, position: int = None) -> None:
+        self.tx_ref = tx_ref
+        self.position = position
+
+    @property
+    def size(self) -> int:
+        """ Size of this input / output in bytes. """
+        stream = BCDataStream()
+        self.serialize_to(stream)
+        return len(stream.get_bytes())
+
+    def get_fee(self, ledger):
+        return self.size * ledger.fee_per_byte
+
+    def serialize_to(self, stream, alternate_script=None):
+        raise NotImplementedError
+
+
+class Input(InputOutput):
+
+    NULL_SIGNATURE = b'\x00'*72
+    NULL_PUBLIC_KEY = b'\x00'*33
+
+    __slots__ = 'txo_ref', 'sequence', 'coinbase', 'script'
+
+    def __init__(self, txo_ref: TXORef, script: InputScript, sequence: int = 0xFFFFFFFF,
+                 tx_ref: TXRef = None, position: int = None) -> None:
+        super().__init__(tx_ref, position)
+        self.txo_ref = txo_ref
+        self.sequence = sequence
+        self.coinbase = script if txo_ref.is_null else None
+        self.script = script if not txo_ref.is_null else None
+
+    @property
+    def is_coinbase(self):
+        return self.coinbase is not None
+
+    @classmethod
+    def spend(cls, txo: 'Output') -> 'Input':
+        """ Create an input to spend the output."""
+        assert txo.script.is_pay_pubkey_hash, 'Attempting to spend unsupported output.'
+        script = InputScript.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
+        return cls(txo.ref, script)
+
+    @property
+    def amount(self) -> int:
+        """ Amount this input adds to the transaction. """
+        if self.txo_ref.txo is None:
+            raise ValueError('Cannot resolve output to get amount.')
+        return self.txo_ref.txo.amount
+
+    @property
+    def is_my_account(self) -> Optional[bool]:
+        """ True if the output this input spends is yours. """
+        if self.txo_ref.txo is None:
+            return False
+        return self.txo_ref.txo.is_my_account
+
+    @classmethod
+    def deserialize_from(cls, stream):
+        tx_ref = TXRefImmutable.from_hash(stream.read(32), -1)
+        position = stream.read_uint32()
+        script = stream.read_string()
+        sequence = stream.read_uint32()
+        return cls(
+            TXORef(tx_ref, position),
+            InputScript(script) if not tx_ref.is_null else script,
+            sequence
+        )
+
+    def serialize_to(self, stream, alternate_script=None):
+        stream.write(self.txo_ref.tx_ref.hash)
+        stream.write_uint32(self.txo_ref.position)
+        if alternate_script is not None:
+            stream.write_string(alternate_script)
+        else:
+            if self.is_coinbase:
+                stream.write_string(self.coinbase)
+            else:
+                stream.write_string(self.script.source)
+        stream.write_uint32(self.sequence)
+
+
+class OutputEffectiveAmountEstimator:
+
+    __slots__ = 'txo', 'txi', 'fee', 'effective_amount'
+
+    def __init__(self, ledger: 'Ledger', txo: 'Output') -> None:
+        self.txo = txo
+        self.txi = Input.spend(txo)
+        self.fee: int = self.txi.get_fee(ledger)
+        self.effective_amount: int = txo.amount - self.fee
+
+    def __lt__(self, other):
+        return self.effective_amount < other.effective_amount
+
+
+class Output(InputOutput):
 
     __slots__ = (
+        'amount', 'script', 'is_change', 'is_my_account',
         'channel', 'private_key', 'meta',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
     )
 
-    def __init__(self, *args, channel: Optional['Output'] = None,
-                 private_key: Optional[str] = None, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
+    def __init__(self, amount: int, script: OutputScript,
+                 tx_ref: TXRef = None, position: int = None,
+                 is_change: Optional[bool] = None, is_my_account: Optional[bool] = None,
+                 channel: Optional['Output'] = None, private_key: Optional[str] = None
+                 ) -> None:
+        super().__init__(tx_ref, position)
+        self.amount = amount
+        self.script = script
+        self.is_change = is_change
+        self.is_my_account = is_my_account
         self.channel = channel
         self.private_key = private_key
         self.purchase: 'Output' = None  # txo containing purchase metadata
@@ -49,9 +234,51 @@ class Output(BaseOutput):
         self.meta = {}
 
     def update_annotations(self, annotated):
-        super().update_annotations(annotated)
+        if annotated is None:
+            self.is_change = False
+            self.is_my_account = False
+        else:
+            self.is_change = annotated.is_change
+            self.is_my_account = annotated.is_my_account
         self.channel = annotated.channel if annotated else None
         self.private_key = annotated.private_key if annotated else None
+
+    @property
+    def ref(self):
+        return TXORefResolvable(self)
+
+    @property
+    def id(self):
+        return self.ref.id
+
+    @property
+    def pubkey_hash(self):
+        return self.script.values['pubkey_hash']
+
+    @property
+    def has_address(self):
+        return 'pubkey_hash' in self.script.values
+
+    def get_address(self, ledger):
+        return ledger.hash160_to_address(self.pubkey_hash)
+
+    def get_estimator(self, ledger):
+        return OutputEffectiveAmountEstimator(ledger, self)
+
+    @classmethod
+    def pay_pubkey_hash(cls, amount, pubkey_hash):
+        return cls(amount, OutputScript.pay_pubkey_hash(pubkey_hash))
+
+    @classmethod
+    def deserialize_from(cls, stream):
+        return cls(
+            amount=stream.read_uint64(),
+            script=OutputScript(stream.read_string())
+        )
+
+    def serialize_to(self, stream, alternate_script=None):
+        stream.write_uint64(self.amount)
+        stream.write_string(self.script.source)
 
     def get_fee(self, ledger):
         name_fee = 0
@@ -180,34 +407,35 @@ class Output(BaseOutput):
     @classmethod
     def pay_claim_name_pubkey_hash(
             cls, amount: int, claim_name: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_claim_name_pubkey_hash(
+        script = OutputScript.pay_claim_name_pubkey_hash(
             claim_name.encode(), claim, pubkey_hash)
-        txo = cls(amount, script)
-        return txo
+        return cls(amount, script)
 
     @classmethod
     def pay_update_claim_pubkey_hash(
             cls, amount: int, claim_name: str, claim_id: str, claim: Claim, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_update_claim_pubkey_hash(
-            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash)
-        txo = cls(amount, script)
-        return txo
+        script = OutputScript.pay_update_claim_pubkey_hash(
+            claim_name.encode(), unhexlify(claim_id)[::-1], claim, pubkey_hash
+        )
+        return cls(amount, script)
 
     @classmethod
     def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
-        script = cls.script_class.pay_support_pubkey_hash(claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash)
+        script = OutputScript.pay_support_pubkey_hash(
+            claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash
+        )
         return cls(amount, script)
 
     @classmethod
     def add_purchase_data(cls, purchase: Purchase) -> 'Output':
-        script = cls.script_class.return_data(purchase)
+        script = OutputScript.return_data(purchase)
         return cls(0, script)
 
     @property
     def is_purchase_data(self) -> bool:
         return self.script.is_return_data and (
-            isinstance(self.script.values['data'], Purchase) or
-            Purchase.has_start_byte(self.script.values['data'])
+                isinstance(self.script.values['data'], Purchase) or
+                Purchase.has_start_byte(self.script.values['data'])
         )
 
     @property
@@ -246,16 +474,331 @@ class Output(BaseOutput):
         return self.claim.stream.fee
 
 
-class Transaction(BaseTransaction):
+class Transaction:
 
-    input_class = Input
-    output_class = Output
+    def __init__(self, raw=None, version: int = 1, locktime: int = 0, is_verified: bool = False,
+                 height: int = -2, position: int = -1) -> None:
+        self._raw = raw
+        self._raw_sans_segwit = None
+        self.is_segwit_flag = 0
+        self.witnesses: List[bytes] = []
+        self.ref = TXRefMutable(self)
+        self.version = version
+        self.locktime = locktime
+        self._inputs: List[Input] = []
+        self._outputs: List[Output] = []
+        self.is_verified = is_verified
+        # Height Progression
+        #   -2: not broadcast
+        #   -1: in mempool but has unconfirmed inputs
+        #    0: in mempool and all inputs confirmed
+        # +num: confirmed in a specific block (height)
+        self.height = height
+        self.position = position
+        if raw is not None:
+            self._deserialize()
 
-    outputs: ReadOnlyList[Output]
-    inputs: ReadOnlyList[Input]
+    @property
+    def is_broadcast(self):
+        return self.height > -2
+
+    @property
+    def is_mempool(self):
+        return self.height in (-1, 0)
+
+    @property
+    def is_confirmed(self):
+        return self.height > 0
+
+    @property
+    def id(self):
+        return self.ref.id
+
+    @property
+    def hash(self):
+        return self.ref.hash
+
+    @property
+    def raw(self):
+        if self._raw is None:
+            self._raw = self._serialize()
+        return self._raw
+
+    @property
+    def raw_sans_segwit(self):
+        if self.is_segwit_flag:
+            if self._raw_sans_segwit is None:
+                self._raw_sans_segwit = self._serialize(sans_segwit=True)
+            return self._raw_sans_segwit
+        return self.raw
+
+    def _reset(self):
+        self._raw = None
+        self._raw_sans_segwit = None
+        self.ref.reset()
+
+    @property
+    def inputs(self) -> ReadOnlyList[Input]:
+        return ReadOnlyList(self._inputs)
+
+    @property
+    def outputs(self) -> ReadOnlyList[Output]:
+        return ReadOnlyList(self._outputs)
+
+    def _add(self, existing_ios: List, new_ios: Iterable[InputOutput], reset=False) -> 'Transaction':
+        for txio in new_ios:
+            txio.tx_ref = self.ref
+            txio.position = len(existing_ios)
+            existing_ios.append(txio)
+        if reset:
+            self._reset()
+        return self
+
+    def add_inputs(self, inputs: Iterable[Input]) -> 'Transaction':
+        return self._add(self._inputs, inputs, True)
+
+    def add_outputs(self, outputs: Iterable[Output]) -> 'Transaction':
+        return self._add(self._outputs, outputs, True)
+
+    @property
+    def size(self) -> int:
+        """ Size in bytes of the entire transaction. """
+        return len(self.raw)
+
+    @property
+    def base_size(self) -> int:
+        """ Size of transaction without inputs or outputs in bytes. """
+        return (
+                self.size
+                - sum(txi.size for txi in self._inputs)
+                - sum(txo.size for txo in self._outputs)
+        )
+
+    @property
+    def input_sum(self):
+        return sum(i.amount for i in self.inputs if i.txo_ref.txo is not None)
+
+    @property
+    def output_sum(self):
+        return sum(o.amount for o in self.outputs)
+
+    @property
+    def net_account_balance(self) -> int:
+        balance = 0
+        for txi in self.inputs:
+            if txi.txo_ref.txo is None:
+                continue
+            if txi.is_my_account is None:
+                raise ValueError(
+                    "Cannot access net_account_balance if inputs/outputs do not "
+                    "have is_my_account set properly."
+                )
+            if txi.is_my_account:
+                balance -= txi.amount
+        for txo in self.outputs:
+            if txo.is_my_account is None:
+                raise ValueError(
+                    "Cannot access net_account_balance if inputs/outputs do not "
+                    "have is_my_account set properly."
+                )
+            if txo.is_my_account:
+                balance += txo.amount
+        return balance
+
+    @property
+    def fee(self) -> int:
+        return self.input_sum - self.output_sum
+
+    def get_base_fee(self, ledger) -> int:
+        """ Fee for base tx excluding inputs and outputs. """
+        return self.base_size * ledger.fee_per_byte
+
+    def get_effective_input_sum(self, ledger) -> int:
+        """ Sum of input values *minus* the cost involved to spend them. """
+        return sum(txi.amount - txi.get_fee(ledger) for txi in self._inputs)
+
+    def get_total_output_sum(self, ledger) -> int:
+        """ Sum of output values *plus* the cost involved to spend them. """
+        return sum(txo.amount + txo.get_fee(ledger) for txo in self._outputs)
+
+    def _serialize(self, with_inputs: bool = True, sans_segwit: bool = False) -> bytes:
+        stream = BCDataStream()
+        stream.write_uint32(self.version)
+        if with_inputs:
+            stream.write_compact_size(len(self._inputs))
+            for txin in self._inputs:
+                txin.serialize_to(stream)
+        stream.write_compact_size(len(self._outputs))
+        for txout in self._outputs:
+            txout.serialize_to(stream)
+        stream.write_uint32(self.locktime)
+        return stream.get_bytes()
+
+    def _serialize_for_signature(self, signing_input: int) -> bytes:
+        stream = BCDataStream()
+        stream.write_uint32(self.version)
+        stream.write_compact_size(len(self._inputs))
+        for i, txin in enumerate(self._inputs):
+            if signing_input == i:
+                assert txin.txo_ref.txo is not None
+                txin.serialize_to(stream, txin.txo_ref.txo.script.source)
+            else:
+                txin.serialize_to(stream, b'')
+        stream.write_compact_size(len(self._outputs))
+        for txout in self._outputs:
+            txout.serialize_to(stream)
+        stream.write_uint32(self.locktime)
+        stream.write_uint32(self.signature_hash_type(1))  # signature hash type: SIGHASH_ALL
+        return stream.get_bytes()
+
+    def _deserialize(self):
+        if self._raw is not None:
+            stream = BCDataStream(self._raw)
+            self.version = stream.read_uint32()
+            input_count = stream.read_compact_size()
+            if input_count == 0:
+                self.is_segwit_flag = stream.read_uint8()
+                input_count = stream.read_compact_size()
+            self._add(self._inputs, [
+                Input.deserialize_from(stream) for _ in range(input_count)
+            ])
+            output_count = stream.read_compact_size()
+            self._add(self._outputs, [
+                Output.deserialize_from(stream) for _ in range(output_count)
+            ])
+            if self.is_segwit_flag:
+                # drain witness portion of transaction
+                # too many witnesses for no crime
+                self.witnesses = []
+                for _ in range(input_count):
+                    for _ in range(stream.read_compact_size()):
+                        self.witnesses.append(stream.read(stream.read_compact_size()))
+            self.locktime = stream.read_uint32()
 
     @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
+    def ensure_all_have_same_ledger_and_wallet(
+            cls, funding_accounts: Iterable['Account'],
+            change_account: 'Account' = None) -> Tuple['Ledger', 'Wallet']:
+        ledger = wallet = None
+        for account in funding_accounts:
+            if ledger is None:
+                ledger = account.ledger
+                wallet = account.wallet
+            if ledger != account.ledger:
+                raise ValueError(
+                    'All funding accounts used to create a transaction must be on the same ledger.'
+                )
+            if wallet != account.wallet:
+                raise ValueError(
+                    'All funding accounts used to create a transaction must be from the same wallet.'
+                )
+        if change_account is not None:
+            if change_account.ledger != ledger:
+                raise ValueError('Change account must use same ledger as funding accounts.')
+            if change_account.wallet != wallet:
+                raise ValueError('Change account must use same wallet as funding accounts.')
+        if ledger is None:
+            raise ValueError('No ledger found.')
+        if wallet is None:
+            raise ValueError('No wallet found.')
+        return ledger, wallet
+
+    @classmethod
+    async def create(cls, inputs: Iterable[Input], outputs: Iterable[Output],
+                     funding_accounts: Iterable['Account'], change_account: 'Account',
+                     sign: bool = True):
+        """ Find optimal set of inputs when only outputs are provided; add change
+            outputs if only inputs are provided or if inputs are greater than outputs. """
+
+        tx = cls() \
+            .add_inputs(inputs) \
+            .add_outputs(outputs)
+
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+
+        # value of the outputs plus associated fees
+        cost = (
+                tx.get_base_fee(ledger) +
+                tx.get_total_output_sum(ledger)
+        )
+        # value of the inputs less the cost to spend those inputs
+        payment = tx.get_effective_input_sum(ledger)
+
+        try:
+
+            for _ in range(5):
+
+                if payment < cost:
+                    deficit = cost - payment
+                    spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
+                    if not spendables:
+                        raise InsufficientFundsError()
+                    payment += sum(s.effective_amount for s in spendables)
+                    tx.add_inputs(s.txi for s in spendables)
+
+                cost_of_change = (
+                        tx.get_base_fee(ledger) +
+                        Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
+                )
+                if payment > cost:
+                    change = payment - cost
+                    if change > cost_of_change:
+                        change_address = await change_account.change.get_or_create_usable_address()
+                        change_hash160 = change_account.ledger.address_to_hash160(change_address)
+                        change_amount = change - cost_of_change
+                        change_output = Output.pay_pubkey_hash(change_amount, change_hash160)
+                        change_output.is_change = True
+                        tx.add_outputs([Output.pay_pubkey_hash(change_amount, change_hash160)])
+
+                if tx._outputs:
+                    break
+                # this condition and the outer range(5) loop cover an edge case
+                # whereby a single input is just enough to cover the fee and
+                # has some change left over, but the change left over is less
+                # than the cost_of_change: thus the input is completely
+                # consumed and no output is added, which is an invalid tx.
+                # to be able to spend this input we must increase the cost
+                # of the TX and run through the balance algorithm a second time
+                # adding an extra input and change output, making tx valid.
+                # we do this 5 times in case the other UTXOs added are also
+                # less than the fee, after 5 attempts we give up and go home
+                cost += cost_of_change + 1
+
+            if sign:
+                await tx.sign(funding_accounts)
+
+        except Exception as e:
+            log.exception('Failed to create transaction:')
+            await ledger.release_tx(tx)
+            raise e
+
+        return tx
+
+    @staticmethod
+    def signature_hash_type(hash_type):
+        return hash_type
+
+    async def sign(self, funding_accounts: Iterable['Account']):
+        ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
+        for i, txi in enumerate(self._inputs):
+            assert txi.script is not None
+            assert txi.txo_ref.txo is not None
+            txo_script = txi.txo_ref.txo.script
+            if txo_script.is_pay_pubkey_hash:
+                address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
+                private_key = await ledger.get_private_key_for_address(wallet, address)
+                assert private_key is not None, 'Cannot find private key for signing output.'
+                tx = self._serialize_for_signature(i)
+                txi.script.values['signature'] = \
+                    private_key.sign(tx) + bytes((self.signature_hash_type(1),))
+                txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
+                txi.script.generate()
+            else:
+                raise NotImplementedError("Don't know how to spend this output.")
+        self._reset()
+
+    @classmethod
+    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account'):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
         return cls.create([], [output], funding_accounts, change_account)
@@ -263,7 +806,7 @@ class Transaction(BaseTransaction):
     @classmethod
     def claim_create(
             cls, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, ledger.address_to_hash160(holding_address)
@@ -275,7 +818,7 @@ class Transaction(BaseTransaction):
     @classmethod
     def claim_update(
             cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
@@ -291,7 +834,7 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List[Account], change_account: Account):
+                funding_accounts: List['Account'], change_account: 'Account'):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         support_output = Output.pay_support_pubkey_hash(
             amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
@@ -300,7 +843,7 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
-                 funding_accounts: List[Account], change_account: Account):
+                 funding_accounts: List['Account'], change_account: 'Account'):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))

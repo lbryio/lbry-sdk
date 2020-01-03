@@ -3,9 +3,7 @@ from binascii import unhexlify
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.client.constants import CENT, NULL_HASH32
 
-from lbry.wallet.ledger import MainNetLedger
-from lbry.wallet.transaction import Transaction, Input, Output
-
+from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from lbry.schema.claim import Claim
 
 
@@ -110,9 +108,9 @@ class TestValidatingOldSignatures(AsyncioTestCase):
         ))
         channel = channel_tx.outputs[0]
 
-        ledger = MainNetLedger({
-            'db': MainNetLedger.database_class(':memory:'),
-            'headers': MainNetLedger.headers_class(':memory:')
+        ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:')
         })
 
         self.assertTrue(stream.is_signed_by(channel, ledger))

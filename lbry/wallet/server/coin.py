@@ -6,7 +6,7 @@ from decimal import Decimal
 from collections import namedtuple
 
 import lbry.wallet.server.tx as lib_tx
-from lbry.wallet.script import OutputScript
+from lbry.wallet.script import OutputScript, OP_CLAIM_NAME, OP_UPDATE_CLAIM, OP_SUPPORT_CLAIM
 from lbry.wallet.server.tx import DeserializerSegWit
 from lbry.wallet.server.util import cachedproperty, subclasses
 from lbry.wallet.server.hash import Base58, hash160, double_sha256, hash_to_hex_str, HASHX_LEN
@@ -327,9 +327,9 @@ class LBC(Coin):
         if script and script[0] == OpCodes.OP_RETURN or not script:
             return None
         if script[0] in [
-            OutputScript.OP_CLAIM_NAME,
-            OutputScript.OP_UPDATE_CLAIM,
-            OutputScript.OP_SUPPORT_CLAIM,
+            OP_CLAIM_NAME,
+            OP_UPDATE_CLAIM,
+            OP_SUPPORT_CLAIM,
         ]:
             return cls.address_to_hashX(cls.claim_address_handler(script))
         else:

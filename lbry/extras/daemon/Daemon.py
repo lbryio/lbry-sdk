@@ -17,8 +17,11 @@ from traceback import format_exc
 from aiohttp import web
 from functools import wraps, partial
 from google.protobuf.message import DecodeError
-from lbry.wallet.client.wallet import Wallet, ENCRYPT_ON_DISK
-from lbry.wallet.client.baseaccount import SingleKey, HierarchicalDeterministic
+from lbry.wallet import (
+    Wallet, WalletManager, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
+    Ledger, Transaction, Output, Input, Account
+)
+from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -39,9 +42,6 @@ from lbry.extras.daemon.ComponentManager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
-from lbry.wallet.transaction import Transaction, Output, Input
-from lbry.wallet.account import Account as LBCAccount
-from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 
@@ -51,8 +51,6 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.Components import UPnPComponent
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.wallet.manager import LbryWalletManager
-    from lbry.wallet.ledger import MainNetLedger
     from lbry.stream.stream_manager import StreamManager
 
 log = logging.getLogger(__name__)
@@ -322,7 +320,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.component_manager.get_component(DHT_COMPONENT)
 
     @property
-    def wallet_manager(self) -> typing.Optional['LbryWalletManager']:
+    def wallet_manager(self) -> typing.Optional['WalletManager']:
         return self.component_manager.get_component(WALLET_COMPONENT)
 
     @property
@@ -676,7 +674,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return None, None
 
     @property
-    def ledger(self) -> Optional['MainNetLedger']:
+    def ledger(self) -> Optional['Ledger']:
         try:
             return self.wallet_manager.default_account.ledger
         except AttributeError:
@@ -1161,7 +1159,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         wallet = self.wallet_manager.import_wallet(wallet_path)
         if not wallet.accounts and create_account:
-            account = LBCAccount.generate(
+            account = Account.generate(
                 self.ledger, wallet, address_generator={
                     'name': SingleKey.name if single_key else HierarchicalDeterministic.name
                 }
@@ -1464,7 +1462,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Account}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = LBCAccount.from_dict(
+        account = Account.from_dict(
             self.ledger, wallet, {
                 'name': account_name,
                 'seed': seed,
@@ -1498,7 +1496,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Account}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = LBCAccount.generate(
+        account = Account.generate(
             self.ledger, wallet, account_name, {
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             }
@@ -2134,7 +2132,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             claims = account.get_claims
             claim_count = account.get_claim_count
         else:
@@ -2657,7 +2655,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             channels = account.get_channels
             channel_count = account.get_channel_count
         else:
@@ -2732,7 +2730,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if channels and channels[0].get_address(self.ledger) != holding_address:
             holding_address = channels[0].get_address(self.ledger)
 
-        account: LBCAccount = await self.ledger.get_account_for_address(wallet, holding_address)
+        account = await self.ledger.get_account_for_address(wallet, holding_address)
         if account:
             # Case 1: channel holding address is in one of the accounts we already have
             #         simply add the certificate to existing account
@@ -2741,7 +2739,7 @@ class Daemon(metaclass=JSONRPCServerType):
             # Case 2: channel holding address hasn't changed and thus is in the bundled read-only account
             #         create a single-address holding account to manage the channel
             if holding_address == data['holding_address']:
-                account = LBCAccount.from_dict(self.ledger, wallet, {
+                account = Account.from_dict(self.ledger, wallet, {
                     'name': f"Holding Account For Channel {data['name']}",
                     'public_key': data['holding_public_key'],
                     'address_generator': {'name': 'single-address'}
@@ -3384,7 +3382,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             streams = account.get_streams
             stream_count = account.get_stream_count
         else:
@@ -3727,7 +3725,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             collections = account.get_collections
             collection_count = account.get_collection_count
         else:
@@ -3854,7 +3852,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             supports = account.get_supports
             support_count = account.get_support_count
         else:
@@ -4002,7 +4000,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
-            account: LBCAccount = wallet.get_account_or_error(account_id)
+            account = wallet.get_account_or_error(account_id)
             transactions = account.get_transaction_history
             transaction_count = account.get_transaction_history_count
         else:
@@ -4696,7 +4694,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'fee_currency' in kwargs or 'fee_amount' in kwargs:
             return claim_address
 
-    async def get_receiving_address(self, address: str, account: Optional[LBCAccount]) -> str:
+    async def get_receiving_address(self, address: str, account: Optional[Account]) -> str:
         if address is None and account is not None:
             return await account.receiving.get_or_create_usable_address()
         self.valid_address_or_error(address)

@@ -10,12 +10,12 @@ from contextvars import ContextVar
 from functools import wraps
 from dataclasses import dataclass
 
-from lbry.wallet.client.basedatabase import query, interpolate
+from lbry.wallet.database import query, interpolate
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs
-from lbry.wallet.ledger import BaseLedger, MainNetLedger, RegTestLedger
+from lbry.wallet import Ledger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 from .full_text_search import FTS_ORDER_BY
@@ -67,7 +67,7 @@ class ReaderState:
     stack: List[List]
     metrics: Dict
     is_tracking_metrics: bool
-    ledger: Type[BaseLedger]
+    ledger: Type[Ledger]
     query_timeout: float
     log: logging.Logger
 
@@ -100,7 +100,7 @@ def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
     ctx.set(
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
-            ledger=MainNetLedger if _ledger_name == 'mainnet' else RegTestLedger,
+            ledger=Ledger if _ledger_name == 'mainnet' else RegTestLedger,
             query_timeout=query_timeout, log=log
         )
     )

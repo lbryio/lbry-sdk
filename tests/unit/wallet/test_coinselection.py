@@ -2,9 +2,9 @@ from types import GeneratorType
 
 from lbry.testcase import AsyncioTestCase
 
-from lbry.wallet import MainNetLedger as ledger_class
+from lbry.wallet import Ledger, Database, Headers
 from lbry.wallet.client.coinselection import CoinSelector, MAXIMUM_TRIES
-from lbry.wallet.client.constants import CENT
+from lbry.constants import CENT
 
 from tests.unit.wallet.test_transaction import get_output as utxo
 
@@ -20,9 +20,9 @@ def search(*args, **kwargs):
 class BaseSelectionTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = ledger_class({
-            'db': ledger_class.database_class(':memory:'),
-            'headers': ledger_class.headers_class(':memory:'),
+        self.ledger = Ledger({
+            'db': Database(':memory:'),
+            'headers': Headers(':memory:'),
         })
         await self.ledger.db.open()
 
