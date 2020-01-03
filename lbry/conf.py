@@ -3,9 +3,10 @@ import re
 import sys
 import typing
 import logging
-import yaml
 from argparse import ArgumentParser
 from contextlib import contextmanager
+
+import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
@@ -14,7 +15,7 @@ from lbry.wallet.coinselection import STRATEGIES
 log = logging.getLogger(__name__)
 
 
-NOT_SET = type('NOT_SET', (object,), {})
+NOT_SET = type('NOT_SET', (object,), {})  # pylint: disable=invalid-name
 T = typing.TypeVar('T')
 
 CURRENCIES = {
@@ -35,7 +36,7 @@ class Setting(typing.Generic[T]):
         self.metavar = metavar
 
     def __set_name__(self, owner, name):
-        self.name = name
+        self.name = name  # pylint: disable=attribute-defined-outside-init
 
     @property
     def cli_name(self):
@@ -63,13 +64,13 @@ class Setting(typing.Generic[T]):
             for location in obj.modify_order:
                 location[self.name] = val
 
-    def validate(self, val):
+    def validate(self, value):
         raise NotImplementedError()
 
-    def deserialize(self, value):
+    def deserialize(self, value):  # pylint: disable=no-self-use
         return value
 
-    def serialize(self, value):
+    def serialize(self, value):  # pylint: disable=no-self-use
         return value
 
     def contribute_to_argparse(self, parser: ArgumentParser):
@@ -82,14 +83,14 @@ class Setting(typing.Generic[T]):
 
 
 class String(Setting[str]):
-    def validate(self, val):
-        assert isinstance(val, str), \
+    def validate(self, value):
+        assert isinstance(value, str), \
             f"Setting '{self.name}' must be a string."
 
 
 class Integer(Setting[int]):
-    def validate(self, val):
-        assert isinstance(val, int), \
+    def validate(self, value):
+        assert isinstance(value, int), \
             f"Setting '{self.name}' must be an integer."
 
     def deserialize(self, value):
@@ -97,8 +98,8 @@ class Integer(Setting[int]):
 
 
 class Float(Setting[float]):
-    def validate(self, val):
-        assert isinstance(val, float), \
+    def validate(self, value):
+        assert isinstance(value, float), \
             f"Setting '{self.name}' must be a decimal."
 
     def deserialize(self, value):
@@ -106,8 +107,8 @@ class Float(Setting[float]):
 
 
 class Toggle(Setting[bool]):
-    def validate(self, val):
-        assert isinstance(val, bool), \
+    def validate(self, value):
+        assert isinstance(value, bool), \
             f"Setting '{self.name}' must be a true/false value."
 
     def contribute_to_argparse(self, parser: ArgumentParser):
@@ -127,7 +128,7 @@ class Toggle(Setting[bool]):
 
 
 class Path(String):
-    def __init__(self, doc: str, default: str = '', *args, **kwargs):
+    def __init__(self, doc: str, *args, default: str = '', **kwargs):
         super().__init__(doc, default, *args, **kwargs)
 
     def __get__(self, obj, owner):
@@ -204,16 +205,16 @@ class StringChoice(String):
             raise ValueError(f"Default value must be one of: {', '.join(valid_values)}")
         self.valid_values = valid_values
 
-    def validate(self, val):
-        super().validate(val)
-        if val not in self.valid_values:
+    def validate(self, value):
+        super().validate(value)
+        if value not in self.valid_values:
             raise ValueError(f"Setting '{self.name}' value must be one of: {', '.join(self.valid_values)}")
 
 
 class ListSetting(Setting[list]):
 
-    def validate(self, val):
-        assert isinstance(val, (tuple, list)), \
+    def validate(self, value):
+        assert isinstance(value, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list."
 
     def contribute_to_argparse(self, parser: ArgumentParser):
@@ -226,10 +227,10 @@ class ListSetting(Setting[list]):
 
 class Servers(ListSetting):
 
-    def validate(self, val):
-        assert isinstance(val, (tuple, list)), \
+    def validate(self, value):
+        assert isinstance(value, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list of servers."
-        for idx, server in enumerate(val):
+        for idx, server in enumerate(value):
             assert isinstance(server, (tuple, list)) and len(server) == 2, \
                 f"Server defined '{server}' at index {idx} in setting " \
                 f"'{self.name}' must be a tuple or list of two items."
@@ -260,10 +261,10 @@ class Servers(ListSetting):
 
 class Strings(ListSetting):
 
-    def validate(self, val):
-        assert isinstance(val, (tuple, list)), \
+    def validate(self, value):
+        assert isinstance(value, (tuple, list)), \
             f"Setting '{self.name}' must be a tuple or list of strings."
-        for idx, string in enumerate(val):
+        for idx, string in enumerate(value):
             assert isinstance(string, str), \
                 f"Value of '{string}' at index {idx} in setting " \
                 f"'{self.name}' must be a string."
