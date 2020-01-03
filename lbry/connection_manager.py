@@ -72,13 +72,13 @@ class ConnectionManager:
             self._status['outgoing_bps'].clear()
             now = time.perf_counter()
             while self.outgoing:
-                k, v = self.outgoing.popitem()
-                self._status['total_sent'] += v
-                self._status['outgoing_bps'][k] = v / (now - last)
+                k, sent = self.outgoing.popitem()
+                self._status['total_sent'] += sent
+                self._status['outgoing_bps'][k] = sent / (now - last)
             while self.incoming:
-                k, v = self.incoming.popitem()
-                self._status['total_received'] += v
-                self._status['incoming_bps'][k] = v / (now - last)
+                k, received = self.incoming.popitem()
+                self._status['total_received'] += received
+                self._status['incoming_bps'][k] = received / (now - last)
             self._status['total_outgoing_mbs'] = int(sum(list(self._status['outgoing_bps'].values())
                                                          )) / 1000000.0
             self._status['total_incoming_mbs'] = int(sum(list(self._status['incoming_bps'].values())
