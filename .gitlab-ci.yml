@@ -29,7 +29,7 @@ test:lint:
   stage: test
   script:
     - make install tools
-    #- make lint
+    - make lint
 
 test:unit:
   stage: test

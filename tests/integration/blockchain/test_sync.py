@@ -2,6 +2,7 @@ import asyncio
 import logging
 from lbry.testcase import IntegrationTestCase, WalletNode
 from lbry.constants import CENT
+from lbry.wallet import WalletManager, RegTestLedger, Transaction, Output
 
 
 class SyncTests(IntegrationTestCase):
@@ -23,11 +24,7 @@ class SyncTests(IntegrationTestCase):
 
     async def make_wallet_node(self, seed=None):
         self.api_port += 1
-        wallet_node = WalletNode(
-            self.wallet_node.manager_class,
-            self.wallet_node.ledger_class,
-            port=self.api_port
-        )
+        wallet_node = WalletNode(WalletManager, RegTestLedger, port=self.api_port)
         await wallet_node.start(self.conductor.spv_node, seed)
         self.started_nodes.append(wallet_node)
         return wallet_node
@@ -71,9 +68,9 @@ class SyncTests(IntegrationTestCase):
         # pay 0.01 from main node to receiving node, would have increased change addresses
         address0 = (await account0.receiving.get_addresses())[0]
         hash0 = self.ledger.address_to_hash160(address0)
-        tx = await account1.ledger.transaction_class.create(
+        tx = await Transaction.create(
             [],
-            [self.ledger.transaction_class.output_class.pay_pubkey_hash(CENT, hash0)],
+            [Output.pay_pubkey_hash(CENT, hash0)],
             [account1], account1
         )
         await self.broadcast(tx)

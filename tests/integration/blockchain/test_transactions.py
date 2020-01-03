@@ -4,7 +4,7 @@ from itertools import chain
 
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.testcase import IntegrationTestCase
-from lbry.wallet.client.util import satoshis_to_coins, coins_to_satoshis
+from lbry.wallet.util import satoshis_to_coins, coins_to_satoshis
 
 
 class BasicTransactionTests(IntegrationTestCase):
