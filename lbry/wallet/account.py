@@ -1,17 +1,16 @@
 import os
 import time
 import json
-import ecdsa
 import logging
 import typing
 import asyncio
 import random
-
 from functools import partial
 from hashlib import sha256
 from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
 
+import ecdsa
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 

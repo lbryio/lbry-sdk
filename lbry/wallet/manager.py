@@ -1,5 +1,6 @@
 import os
 import json
+import typing
 import logging
 import asyncio
 from binascii import unhexlify
@@ -7,7 +8,6 @@ from decimal import Decimal
 from typing import List, Type, MutableSequence, MutableMapping, Optional
 
 from lbry.error import KeyFeeAboveMaxAllowedError
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.conf import Config
 
 from .dewies import dewies_to_lbc
@@ -17,6 +17,9 @@ from .transaction import Transaction, Output
 from .database import Database
 from .wallet import Wallet, WalletStorage, ENCRYPT_ON_DISK
 from .rpc.jsonrpc import CodeMessageError
+
+if typing.TYPE_CHECKING:
+    from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 
 log = logging.getLogger(__name__)
