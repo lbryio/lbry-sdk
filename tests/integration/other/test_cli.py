@@ -9,7 +9,7 @@ from lbry.extras.daemon.components import (
     HASH_ANNOUNCER_COMPONENT, STREAM_MANAGER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
     UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 )
-from lbry.extras.daemon.Daemon import Daemon
+from lbry.extras.daemon.daemon import Daemon
 
 
 class CLIIntegrationTest(AsyncioTestCase):

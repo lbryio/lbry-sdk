@@ -9,7 +9,7 @@ from lbry.extras.daemon.components import DATABASE_COMPONENT, DHT_COMPONENT, WAL
 from lbry.extras.daemon.components import HASH_ANNOUNCER_COMPONENT
 from lbry.extras.daemon.components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbry.extras.daemon.components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-from lbry.extras.daemon.Daemon import Daemon as LBRYDaemon
+from lbry.extras.daemon.daemon import Daemon as LBRYDaemon
 from lbry.wallet import WalletManager, Wallet
 
 from tests import test_utils
