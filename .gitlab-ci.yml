@@ -31,37 +31,35 @@ test:lint:
     - make install tools
     - make lint
 
-test:lbry-unit:
+test:unit:
   stage: test
   script:
     - make install tools
-    - cd lbry && HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
+    - HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
-test:lbry-integ:
+test:datanetwork-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
-    - cd lbry && tox
+    - pip install tox-travis
+    - tox -e datanetwork
 
-test:torba-unit:
+test:blockchain-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
-    - cd torba/tests
-    - tox -e py37-unit
+    - pip install tox-travis
+    - tox -e blockchain
 
-test:torba-integ:
+test:other-integration:
   stage: test
   script:
-    - pip install coverage tox-travis
-    - cd torba/tests
-    - tox -e py37-integration-torba.coin.bitcoinsegwit
+    - pip install tox-travis
+    - tox -e other
 
 test:json-api:
   stage: test
   script:
     - make install tools
-    - cd lbry && HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
+    - HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
 
 
 
@@ -73,10 +71,9 @@ test:json-api:
       - lbrynet-${OS}.zip
   script:
     - pip install pyinstaller
-    - pip install -e torba/.
     - python3.7 docker/set_build.py
-    - pip install -e lbry/.
-    - pyinstaller --onefile --name lbrynet lbry/lbry/extras/cli.py
+    - pip install -e .
+    - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
     - chmod +x dist/lbrynet
     - zip --junk-paths ${CI_PROJECT_DIR}/lbrynet-${OS}.zip dist/lbrynet  # gitlab expects artifacts to be in $CI_PROJECT_DIR
     - openssl dgst -sha256 ${CI_PROJECT_DIR}/lbrynet-${OS}.zip | egrep -o [0-9a-f]+$ # get sha256 of asset. works on mac and ubuntu
@@ -129,10 +126,9 @@ build:windows:
     - rmdir -Recurse venv
   script:
     - pip install pyinstaller
-    - pip install -e torba/.
     - python docker/set_build.py
-    - pip install -e lbry/.
-    - pyinstaller --additional-hooks-dir=lbry/scripts/. --icon=lbry/icons/lbry256.ico -F -n lbrynet lbry/lbry/extras/cli.py
+    - pip install -e .
+    - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
     - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip ./dist/lbrynet.exe
     - checksum --type=sha256 --file=$env:CI_PROJECT_DIR/lbrynet-${OS}.zip
     - dist/lbrynet.exe --version
