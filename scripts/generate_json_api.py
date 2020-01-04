@@ -336,8 +336,7 @@ class Examples(CommandTestCase):
             'You can r',
             'comment', 'create',
             '--comment="I have photographic evidence confirming Sasquatch exists"',
-            f'--channel_name=@channel', f'--claim_id={stream_id}',
-            f'--parent_id={comment["comment_id"]}'
+            f'--channel_name=@channel', f'--parent_id={comment["comment_id"]}'
         )
 
         await r(

@@ -47,15 +47,21 @@ class MockedCommentServer:
         schema.update(**kwargs)
         return schema
 
-    def create_comment(self, channel_name=None, channel_id=None, **kwargs):
+    def create_comment(self, claim_id=None, parent_id=None, channel_name=None, channel_id=None, **kwargs):
         comment_id = self.comment_id
         channel_url = 'lbry://' + channel_name + '#' + channel_id if channel_id else None
+
+        if parent_id:
+            claim_id = self.comments[self.get_comment_id(parent_id)]['claim_id']
+
         comment = self._create_comment(
             comment_id=str(comment_id),
             channel_name=channel_name,
             channel_id=channel_id,
             channel_url=channel_url,
             timestamp=str(int(time.time())),
+            claim_id=claim_id,
+            parent_id=parent_id,
             **kwargs
         )
         self.comments.append(comment)
