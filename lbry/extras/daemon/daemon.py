@@ -4505,15 +4505,14 @@ class Daemon(metaclass=JSONRPCServerType):
         return result
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_create(self, claim_id, comment, parent_id=None, channel_account_id=None,
+    async def jsonrpc_comment_create(self, comment, claim_id=None, parent_id=None, channel_account_id=None,
                                      channel_name=None, channel_id=None, wallet_id=None):
         """
         Create and associate a comment with a claim using your channel identity.
 
         Usage:
             comment_create  (<comment> | --comment=<comment>)
-                            (<claim_id> | --claim_id=<claim_id>)
-                            [--parent_id=<parent_id>]
+                            (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)
                             [--channel_id=<channel_id>] [--channel_name=<channel_name>]
                             [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
