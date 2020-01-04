@@ -108,12 +108,22 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
     f.write("    Reading total_amounts from db and updating trending scores in RAM...")
     f.flush()
     time_boost = decay**(-(height % renorm_interval))
-    for row in db.execute("""
-                          SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
-                          FROM claim
-                          claim_hash IN ({','.join('?' for _ in recalculate_claim_hashes)});
-                          """, recalculate_claim_hashes):
-        trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
+
+    if len(trending_data.claims) == 0:
+        # Fresh launch
+        for row in db.execute("""
+                              SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
+                              FROM claim;
+                              """):
+            trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
+    else:
+        for row in db.execute("""
+                              SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
+                              FROM claim
+                              WHERE claim_hash IN ({','.join('?' for _ in recalculate_claim_hashes)});
+                              """, recalculate_claim_hashes):
+            trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
+
     f.write("done.\n")
     f.flush()
     trending_data.initialised = True
