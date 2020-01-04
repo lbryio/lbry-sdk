@@ -4523,7 +4523,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_id=<channel_id>                   : (str) The ID of the channel you want to post under
             --channel_name=<channel_name>               : (str) The channel you want to post as, prepend with a '@'
             --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
-                                                          for channel certificates, defaults to all accounts.
+                                                          for channel certificates, defaults to all accounts
             --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
 
         Returns:
