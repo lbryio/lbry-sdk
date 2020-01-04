@@ -87,7 +87,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
     f = open("trending.log", "a")
 
-    if height < final_height - half_life:
+    if height < final_height - 5*half_life:
         if height % 100 == 0:
             f.write("Skipping AR trending at block {h}.\n".format(h=height))
             f.flush()
