@@ -83,7 +83,7 @@ trending_data = TrendingData()
 f = open("trending.log", "w")
 f.close()
 
-def calculate_trending(db, height, final_height):
+def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
     f = open("trending.log", "a")
 
@@ -105,13 +105,13 @@ def calculate_trending(db, height, final_height):
     f.flush()
 
     # Update all claims from db
-    f.write("    Reading all total_amounts from db and updating trending scores in RAM...")
+    f.write("    Reading total_amounts from db and updating trending scores in RAM...")
     f.flush()
     time_boost = decay**(-(height % renorm_interval))
-    for row in db.execute("""
+    for row in db.executemany("""
                           SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
-                          FROM claim;
-                          """):
+                          FROM claim WHERE claim_hash = ?;
+                          """, recalculate_claim_hashes):
         trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
     f.write("done.\n")
     f.flush()

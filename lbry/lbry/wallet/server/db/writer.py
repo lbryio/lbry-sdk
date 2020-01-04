@@ -766,7 +766,7 @@ class SQLDB:
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
-        r(calculate_trending, self.db.cursor(), height, daemon_height)
+        r(calculate_trending, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
