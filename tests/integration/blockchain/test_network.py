@@ -35,7 +35,7 @@ class NetworkTests(IntegrationTestCase):
         address = (await self.account.get_addresses(limit=1))[0]
         os.environ.update({
             'DESCRIPTION': 'Fastest server in the west.',
-            'DONATION_ADDRESS': address,
+            'PAYMENT_ADDRESS': address,
             'DAILY_FEE': '42'})
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
