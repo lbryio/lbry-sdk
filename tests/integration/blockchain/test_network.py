@@ -29,7 +29,7 @@ class NetworkTests(IntegrationTestCase):
             'pruning': None,
             'description': '',
             'payment_address': '',
-            'daily_fee': 0,
+            'daily_fee': '0',
             'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
         await self.conductor.spv_node.stop()
         address = (await self.account.get_addresses(limit=1))[0]
@@ -48,7 +48,7 @@ class NetworkTests(IntegrationTestCase):
             'pruning': None,
             'description': 'Fastest server in the west.',
             'payment_address': address,
-            'daily_fee': 42,
+            'daily_fee': '42',
             'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
 
 
