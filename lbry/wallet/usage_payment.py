@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 
 class WalletServerPayer:
+    PAYMENT_PERIOD = 24 * 60 * 60
 
     def __init__(self, ledger: Ledger, wallet: Wallet):
         self.ledger = ledger
@@ -19,9 +20,12 @@ class WalletServerPayer:
 
     async def pay(self):
         while self.running:
-            await asyncio.sleep(24 * 60 * 60)
+            await asyncio.sleep(self.PAYMENT_PERIOD)
             features = await self.ledger.network.get_server_features()
             address = features['payment_address']
+            amount = str(features['daily_fee'])
+            if not address or not amount:
+                continue
 
             if not self.ledger.is_valid_address(address):
                 raise Exception(f"Invalid address: {address}")
@@ -37,7 +41,7 @@ class WalletServerPayer:
                                           self.wallet.get_account_or_default(None))
 
             await self.ledger.broadcast(tx)
-            await self.analytics_manager.send_credits_sent()
+            # await self.analytics_manager.send_credits_sent()  fixme: handle that
 
     async def start(self):
         self.running = True
