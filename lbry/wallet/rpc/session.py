@@ -61,7 +61,6 @@ class Connector:
 
     async def __aenter__(self):
         transport, self.protocol = await self.create_connection()
-        # By default, do not limit outgoing connections
         return self.protocol
 
     async def __aexit__(self, exc_type, exc_value, traceback):
