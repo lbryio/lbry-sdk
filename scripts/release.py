@@ -117,7 +117,7 @@ class Version:
 def release(args):
     gh = get_github()
     repo = gh.repository('lbryio', 'lbry-sdk')
-    version_file = repo.file_contents('lbry/lbry/__init__.py')
+    version_file = repo.file_contents('lbry/__init__.py')
 
     if not args.confirm:
         print("\nDRY RUN ONLY. RUN WITH --confirm TO DO A REAL RELEASE.\n")

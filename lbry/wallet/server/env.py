@@ -77,7 +77,6 @@ class Env:
         self.max_subs = self.integer('MAX_SUBS', 250000)
         self.max_sessions = self.sane_max_sessions()
         self.max_session_subs = self.integer('MAX_SESSION_SUBS', 50000)
-        self.bandwidth_limit = self.integer('BANDWIDTH_LIMIT', 2000000)
         self.session_timeout = self.integer('SESSION_TIMEOUT', 600)
         self.drop_client = self.custom("DROP_CLIENT", None, re.compile)
         self.description = self.default('DESCRIPTION', '')
