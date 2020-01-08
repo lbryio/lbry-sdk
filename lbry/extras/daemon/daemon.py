@@ -714,8 +714,7 @@ class Daemon(metaclass=JSONRPCServerType):
     #                                                                          #
     ############################################################################
 
-    @staticmethod
-    def jsonrpc_stop():
+    def jsonrpc_stop(self):
         """
         Stop lbrynet API server.
 
@@ -841,8 +840,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 response[component.component_name] = status
         return response
 
-    @staticmethod
-    def jsonrpc_version():
+    def jsonrpc_version(self):
         """
         Get lbrynet API server version information
 
