@@ -77,10 +77,8 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.1")
 
-        await asyncio.sleep(1)  # fixme: wait on something better
-
+        await self.on_address_update(address)
         _, history = await self.ledger.get_local_status_and_history(address)
-        self.assertNotEqual(history, [])
         txid, nout = history[0]
         tx_details = await self.daemon.jsonrpc_transaction_show(txid)
         self.assertEqual(tx_details.outputs[nout].amount, 110000000)
