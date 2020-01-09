@@ -4559,12 +4559,12 @@ class Daemon(metaclass=JSONRPCServerType):
         return response
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_edit(self, comment, comment_id, wallet_id=None):
+    async def jsonrpc_comment_update(self, comment, comment_id, wallet_id=None):
         """
         Edit a comment published as one of your channels.
 
         Usage:
-            comment_edit (<comment> | --comment=<comment>)
+            comment_update (<comment> | --comment=<comment>)
                          (<comment_id> | --comment_id=<comment_id>)
                          [--wallet_id=<wallet_id>]
 
