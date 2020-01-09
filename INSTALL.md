@@ -88,9 +88,6 @@ To install on Windows:
  > lbry-venv\Scripts\activate
 
  Install packages:
- > cd torba
- > pip install -e .
- > cd ../lbry
  > pip install -e .
  ```
 
@@ -99,7 +96,7 @@ To install on Windows:
 To run the unit tests from the repo directory:
 
  ```
- python -m unittest discover -s lbry tests.unit
+ python -m unittest discover tests.unit
  ```
 
 ## Usage
