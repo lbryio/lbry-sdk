@@ -2,28 +2,31 @@ import copy
 import time
 
 # Half life in blocks
-half_life = 288
+HALF_LIFE = 288
 
 # Decay coefficient per block
-decay = 0.5**(1.0/half_life)
+DECAY = 0.5**(1.0/HALF_LIFE)
 
 # How frequently to write trending values to the db
-save_interval = 10
+SAVE_INTERVAL = 10
 
 # Renormalisation interval
-renorm_interval = 1000
+RENORM_INTERVAL = 1000
 
 # Decay coefficient per renormalisation interval
-decay_per_renorm = decay**renorm_interval
+DECAY_PER_RENORM = decay**renorm_interval
 
-assert renorm_interval % save_interval == 0
+# Softening power
+SOFTEN_POWER = 0.25
+
+assert RENORM_INTERVAL % SAVE_INTERVAL == 0
 
 
-def soften(x, power=0.3):
+def soften(x):
     """
     Softening function applied to LBC total amounts
     """
-    return x**power
+    return x**SOFTEN_POWER
 
 
 
@@ -107,7 +110,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
     # Update all claims from db
     f.write("    Reading total_amounts from db and updating trending scores in RAM...")
     f.flush()
-    time_boost = decay**(-(height % renorm_interval))
+    time_boost = DECAY**(-(height % RENORM_INTERVAL))
 
     if len(trending_data.claims) == 0:
         # Fresh launch
@@ -135,7 +138,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
         keys = trending_data.claims.keys()
         for key in keys:
-            trending_data.claims[key]["trending_score"] *= decay_per_renorm
+            trending_data.claims[key]["trending_score"] *= DECAY_PER_RENORM
             trending_data.claims[key]["changed"] = True
         f.write("done.\n")
         f.flush()
@@ -143,7 +146,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
 
     # Write trending scores to DB
-    if height % save_interval == 0:
+    if height % SAVE_INTERVAL == 0:
         f.write("    Writing trending scores to db...")
         f.flush()
 
@@ -162,7 +165,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
 
     # Mark claims as not having changed
-    if height % renorm_interval == 0:
+    if height % RENORM_INTERVAL == 0:
         f.write("    Marking all claims as unchanged...")
         f.flush()
 
