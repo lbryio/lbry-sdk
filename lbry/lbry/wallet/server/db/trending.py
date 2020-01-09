@@ -14,10 +14,13 @@ SAVE_INTERVAL = 10
 RENORM_INTERVAL = 1000
 
 # Decay coefficient per renormalisation interval
-DECAY_PER_RENORM = decay**renorm_interval
+DECAY_PER_RENORM = DECAY**RENORM_INTERVAL
 
 # Softening power
 SOFTEN_POWER = 0.25
+
+# Log trending calculations?
+TRENDING_LOG = False
 
 assert RENORM_INTERVAL % SAVE_INTERVAL == 0
 
@@ -52,10 +55,10 @@ class TrendingData:
 
         # Just putting data in the dictionary
         if not self.initialised:
-            self.claims[claim_id] = { "total_amount": total_amount,
+            self.claims[claim_id] = {"total_amount": total_amount,
                                       "softened": soften(total_amount),
                                       "trending_score": trending_score,
-                                      "changed": False }
+                                      "changed": False}
             return
 
         # Extract existing total amount and trending score
@@ -63,10 +66,10 @@ class TrendingData:
         if claim_id in self.claims:
             old_state = copy.deepcopy(self.claims[claim_id])
         else:
-            old_state = { "total_amount": 0.0,
-                          "softened": soften(0.0),
-                          "trending_score": 0.0,
-                          "changed": False }
+            old_state = {"total_amount": 0.0,
+                         "softened": soften(0.0),
+                         "trending_score": 0.0,
+                         "changed": False}
 
         # Calculate LBC change
         change = total_amount - old_state["total_amount"]
@@ -76,10 +79,10 @@ class TrendingData:
             softened = soften(total_amount)
             spike = softened - old_state["softened"]
             trending_score = old_state["trending_score"] + time_boost*spike
-            self.claims[claim_id] = { "total_amount": total_amount,
-                                      "softened": softened,
-                                      "trending_score": trending_score,
-                                      "changed": True }
+            self.claims[claim_id] = {"total_amount": total_amount,
+                                     "softened": softened,
+                                     "trending_score": trending_score,
+                                     "changed": True}
 
 # One global instance
 trending_data = TrendingData()
@@ -88,94 +91,125 @@ f.close()
 
 def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
-    f = open("trending.log", "a")
+    if TRENDING_LOG:
+        f = open("trending.log", "a")
 
-    if height < final_height - 5*half_life:
-        if height % 100 == 0:
-            f.write("Skipping AR trending at block {h}.\n".format(h=height))
-            f.flush()
-        f.close()
+    if height < final_height - 5*HALF_LIFE:
+        if TRENDING_LOG:
+            if height % 100 == 0:
+                f.write("Skipping AR trending at block {h}.\n".format(h=height))
+                f.flush()
+            f.close()
         return
 
     start = time.time()
 
-    f.write("Calculating AR trending at block {h}.\n".format(h=height))
-    f.flush()
+    if TRENDING_LOG:
+        f.write("Calculating AR trending at block {h}.\n".format(h=height))
+        f.flush()
 
-    # I'm using the original column names
-    # trending_mixed = my trending score
-    f.write("    Length of trending data = {l}.\n".format(l=len(trending_data.claims)))
-    f.flush()
+        # I'm using the original column names
+        # trending_mixed = my trending score
+        f.write("    Length of trending data = {l}.\n"\
+                        .format(l=len(trending_data.claims)))
+        f.flush()
 
-    # Update all claims from db
-    f.write("    Reading total_amounts from db and updating trending scores in RAM...")
-    f.flush()
+        f.write("    Reading total_amounts from db and updating"\
+                        + " trending scores in RAM...")
+        f.flush()
+
+
     time_boost = DECAY**(-(height % RENORM_INTERVAL))
 
+    # Update claims from db
     if len(trending_data.claims) == 0:
-        # Fresh launch
+        # On fresh launch
         for row in db.execute("""
-                              SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
+                              SELECT claim_id,
+                                     (amount + support_amount)
+                                         AS total_amount,
+                                     trending_mixed
                               FROM claim;
                               """):
             trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
+            trending_data.initialised = True
     else:
         for row in db.execute(f"""
-                              SELECT claim_id, (amount + support_amount) AS total_amount, trending_mixed
+                              SELECT claim_id,
+                                     (amount + support_amount)
+                                         AS total_amount,
+                                     trending_mixed
                               FROM claim
-                              WHERE claim_hash IN ({','.join('?' for _ in recalculate_claim_hashes)});
+                              WHERE claim_hash IN
+                            ({','.join('?' for _ in recalculate_claim_hashes)});
                               """, recalculate_claim_hashes):
             trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
 
-    f.write("done.\n")
-    f.flush()
-    trending_data.initialised = True
+    if TRENDING_LOG:
+        f.write("done.\n")
+        f.flush()
 
     # Renormalise trending scores and mark all as having changed
-    if height % renorm_interval == 0:
-        f.write("    Renormalising trending scores...")
-        f.flush()
+    if height % RENORM_INTERVAL == 0:
+
+        if TRENDING_LOG:
+            f.write("    Renormalising trending scores...")
+            f.flush()
 
         keys = trending_data.claims.keys()
         for key in keys:
             trending_data.claims[key]["trending_score"] *= DECAY_PER_RENORM
             trending_data.claims[key]["changed"] = True
-        f.write("done.\n")
-        f.flush()
 
+        if TRENDING_LOG:
+            f.write("done.\n")
+            f.flush()
 
 
     # Write trending scores to DB
     if height % SAVE_INTERVAL == 0:
-        f.write("    Writing trending scores to db...")
-        f.flush()
+
+        if TRENDING_LOG:
+            f.write("    Writing trending scores to db...")
+            f.flush()
 
         the_list = []
         keys = trending_data.claims.keys()
         for key in keys:
             if trending_data.claims[key]["changed"]:
-                the_list.append((trending_data.claims[key]["trending_score"], key))
+                the_list.append((trending_data.claims[key]["trending_score"],
+                                 key))
                 trending_data.claims[key]["changed"] = False
-        f.write("{n} scores to write...".format(n=len(the_list)))
-        f.flush()
+
+        if TRENDING_LOG:
+            f.write("{n} scores to write...".format(n=len(the_list)))
+            f.flush()
 
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
-        f.write("done.\n")
+
+        if TRENDING_LOG:
+            f.write("done.\n")
 
 
     # Mark claims as not having changed
     if height % RENORM_INTERVAL == 0:
-        f.write("    Marking all claims as unchanged...")
-        f.flush()
+        if TRENDING_LOG:
+            f.write("    Marking all claims as unchanged...")
+            f.flush()
 
         keys = trending_data.claims.keys()
         for key in keys:
             trending_data.claims[key]["changed"] = False
-        f.write("done.\n")
-        f.flush()
 
-    f.write("Trending operations took {time} seconds.\n\n".format(time=time.time() - start))
-    f.flush()
-    f.close()
+
+        if TRENDING_LOG:
+            f.write("done.\n")
+            f.flush()
+
+    if TRENDING_LOG:
+        f.write("Trending operations took {time} seconds.\n\n"\
+                            .format(time=time.time() - start))
+        f.flush()
+        f.close()
 
