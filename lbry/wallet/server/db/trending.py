@@ -132,7 +132,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
                               FROM claim;
                               """):
             trending_data.update_claim(row[0], 1E-8*row[1], row[2], time_boost)
-            trending_data.initialised = True
+        trending_data.initialised = True
     else:
         for row in db.execute(f"""
                               SELECT claim_id,
