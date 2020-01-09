@@ -2302,8 +2302,8 @@
                 ]
             },
             {
-                "name": "comment_edit",
-                "description": "Edit a comment published as one of your channels.",
+                "name": "comment_update",
+                "description": "Update a comment published as one of your channels.",
                 "arguments": [
                     {
                         "name": "comment",
@@ -2328,9 +2328,9 @@
                 "examples": [
                     {
                         "title": "Edit the contents of a comment",
-                        "curl": "curl -d'{\"method\": \"comment_edit\", \"params\": {\"comment\": \"Where there was once sasquatch, there is not\", \"comment_id\": \"0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb\"}}' http://localhost:5279/",
-                        "lbrynet": "lbrynet comment edit Where there was once sasquatch, there is not --comment_id=0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb",
-                        "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"comment_edit\", \"params\": {\"comment\": \"Where there was once sasquatch, there is not\", \"comment_id\": \"0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb\"}}).json()",
+                        "curl": "curl -d'{\"method\": \"comment_update\", \"params\": {\"comment\": \"Where there was once sasquatch, there is not\", \"comment_id\": \"0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb\"}}' http://localhost:5279/",
+                        "lbrynet": "lbrynet comment \"update Where there was once sasquatch, there is not\" --comment_id=0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb",
+                        "python": "requests.post(\"http://localhost:5279\", json={\"method\": \"comment_update\", \"params\": {\"comment\": \"Where there was once sasquatch, there is not\", \"comment_id\": \"0dec63ef27fd7d8c76237811b00db797479061caba39ac0f4f3b094aae59a5cb\"}}).json()",
                         "output": "{\n  \"jsonrpc\": \"2.0\",\n  \"result\": {\n    \"error\": {\n      \"code\": -32601,\n      \"message\": \"The method does not exist / is not available.\"\n    },\n    \"id\": null,\n    \"jsonrpc\": \"2.0\"\n  }\n}"
                     }
                 ]

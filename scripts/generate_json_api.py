@@ -352,7 +352,7 @@ class Examples(CommandTestCase):
 
         await r(
             'Edit the contents of a comment',
-            'comment', 'edit', 'Where there was once sasquatch, there is not',
+            'comment', 'update', 'Where there was once sasquatch, there is not',
             f'--comment_id={comment["comment_id"]}'
         )
 

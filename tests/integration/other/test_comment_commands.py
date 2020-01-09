@@ -507,7 +507,7 @@ class CommentCommands(CommandTestCase):
         self.assertIsNotNone(original_cid, 'comment wasnt properly made')
         self.assertIsNotNone(original_sig, 'comment should have a signature')
 
-        edited = await self.daemon.jsonrpc_comment_edit(
+        edited = await self.daemon.jsonrpc_comment_update(
             comment='This is a masterpiece, need more like it!',
             comment_id=original_cid
         )
@@ -533,7 +533,7 @@ class CommentCommands(CommandTestCase):
 
         # this should error out
         with self.assertRaises(ValueError):
-            await self.daemon.jsonrpc_comment_edit(
+            await self.daemon.jsonrpc_comment_update(
                 comment='If you see it and you mean then you know you have to go',
                 comment_id=original_cid
             )
@@ -548,7 +548,7 @@ class CommentCommands(CommandTestCase):
         self.assertIsNotNone(anon_cid)
 
         with self.assertRaises(ValueError):
-            await self.daemon.jsonrpc_comment_edit(
+            await self.daemon.jsonrpc_comment_update(
                 comment='drift drift drift',
                 comment_id=anon_cid
             )
