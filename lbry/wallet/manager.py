@@ -34,7 +34,7 @@ class WalletManager:
         self.ledgers = ledgers or {}
         self.running = False
         self.config: Optional[Config] = None
-        self.usage_payment_service: Optional[WalletManager] = None
+        self.usage_payment_service: Optional[WalletServerPayer] = None
 
     @classmethod
     def from_config(cls, config: dict) -> 'WalletManager':
