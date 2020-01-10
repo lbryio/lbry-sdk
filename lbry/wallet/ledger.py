@@ -448,29 +448,18 @@ class Ledger(metaclass=LedgerRegistry):
     async def subscribe_addresses(self, address_manager: AddressManager, addresses: List[str], batch_size: int = 1000):
         if self.network.is_connected and addresses:
             addresses_remaining = list(addresses)
-            retries = 0
             while addresses_remaining:
                 batch = addresses_remaining[:batch_size]
-                try:
-                    results = await self.network.rpc('blockchain.address.subscribe', batch, True)
-                    for address, remote_status in zip(batch, results):
-                        self._update_tasks.add(self.update_history(address, remote_status, address_manager))
-                    retries = 0
-                    addresses_remaining = addresses_remaining[batch_size:]
-                    log.info("subscribed to %i/%i addresses", len(addresses) - len(addresses_remaining), len(addresses))
-                except asyncio.TimeoutError:
-                    if retries >= 3:
-                        log.warning(
-                            "timed out subscribing to addresses from %s:%i",
-                            *self.network.client.server_address_and_port
-                        )
-                        # abort and cancel, we can't lose a subscription, it will happen again on reconnect
-                        if self.network.client:
-                            self.network.client.abort()
-                        raise asyncio.CancelledError()
-                    await asyncio.sleep(1)
-                    retries += 1
-            log.info("finished subscribing to %i addresses", len(addresses))
+                results = await self.network.subscribe_address(*batch)
+                for address, remote_status in zip(batch, results):
+                    self._update_tasks.add(self.update_history(address, remote_status, address_manager))
+                addresses_remaining = addresses_remaining[batch_size:]
+                log.info("subscribed to %i/%i addresses on %s:%i", len(addresses) - len(addresses_remaining),
+                         len(addresses), *self.network.client.server_address_and_port)
+            log.info(
+                "finished subscribing to %i addresses on %s:%i", len(addresses),
+                *self.network.client.server_address_and_port
+            )
 
     def process_status_update(self, update):
         address, remote_status = update

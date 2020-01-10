@@ -261,6 +261,10 @@ class Network:
         try:
             return await self.rpc('blockchain.address.subscribe', addresses, True)
         except asyncio.TimeoutError:
+            log.warning(
+                "timed out subscribing to addresses from %s:%i",
+                *self.client.server_address_and_port
+            )
             # abort and cancel, we can't lose a subscription, it will happen again on reconnect
             if self.client:
                 self.client.abort()
