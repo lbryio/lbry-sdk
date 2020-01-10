@@ -14,7 +14,7 @@ from lbry.wallet.database import query, interpolate
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
-from lbry.schema.result import Outputs
+from lbry.schema.result import Outputs, Censor
 from lbry.wallet import Ledger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
@@ -47,7 +47,7 @@ INTEGER_PARAMS = {
 SEARCH_PARAMS = {
     'name', 'text', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
     'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
-    'has_channel_signature', 'signature_valid', 'blocklist_channel_ids',
+    'has_channel_signature', 'signature_valid',
     'any_tags', 'all_tags', 'not_tags', 'reposted_claim_id',
     'any_locations', 'all_locations', 'not_locations',
     'any_languages', 'all_languages', 'not_languages',
@@ -70,6 +70,7 @@ class ReaderState:
     ledger: Type[Ledger]
     query_timeout: float
     log: logging.Logger
+    blocked_claims: Dict
 
     def close(self):
         self.db.close()
@@ -92,16 +93,22 @@ class ReaderState:
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
-def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
+def row_factory(cursor, row):
+    return {
+        k[0]: (set(row[i].split(',')) if k[0] == 'tags' else row[i])
+        for i, k in enumerate(cursor.getdescription())
+    }
+
+
+def initializer(log, _path, _ledger_name, query_timeout, _measure=False, blocked_claims=None):
     db = apsw.Connection(_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
-    def row_factory(cursor, row):
-        return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
     db.setrowtrace(row_factory)
     ctx.set(
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
             ledger=Ledger if _ledger_name == 'mainnet' else RegTestLedger,
-            query_timeout=query_timeout, log=log
+            query_timeout=query_timeout, log=log,
+            blocked_claims={} if blocked_claims is None else blocked_claims
         )
     )
 
@@ -159,11 +166,24 @@ def encode_result(result):
 
 
 @measure
-def execute_query(sql, values) -> List:
+def execute_query(sql, values, row_limit, censor) -> List:
     context = ctx.get()
     context.set_query_timeout()
     try:
-        return context.db.cursor().execute(sql, values).fetchall()
+        c = context.db.cursor()
+        def row_filter(cursor, row):
+            row = row_factory(cursor, row)
+            if len(row) > 1 and censor.censor(row):
+                return
+            return row
+        c.setrowtrace(row_filter)
+        i, rows = 0, []
+        for row in c.execute(sql, values):
+            i += 1
+            rows.append(row)
+            if i >= row_limit:
+                break
+        return rows
     except apsw.Error as err:
         plain_sql = interpolate(sql, values)
         if context.is_tracking_metrics:
@@ -243,34 +263,6 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
             constraints['claim.channel_hash__in'] = [
                 unhexlify(cid)[::-1] for cid in channel_ids
             ]
-    if 'not_channel_ids' in constraints:
-        not_channel_ids = constraints.pop('not_channel_ids')
-        if not_channel_ids:
-            not_channel_ids_binary = [
-                unhexlify(ncid)[::-1] for ncid in not_channel_ids
-            ]
-            if constraints.get('has_channel_signature', False):
-                constraints['claim.channel_hash__not_in'] = not_channel_ids_binary
-            else:
-                constraints['null_or_not_channel__or'] = {
-                    'claim.signature_valid__is_null': True,
-                    'claim.channel_hash__not_in': not_channel_ids_binary
-                }
-    if 'blocklist_channel_ids' in constraints:
-        blocklist_ids = constraints.pop('blocklist_channel_ids')
-        if blocklist_ids:
-            blocking_channels = [
-                unhexlify(channel_id)[::-1] for channel_id in blocklist_ids
-            ]
-            constraints.update({
-                f'$blocking_channel{i}': a for i, a in enumerate(blocking_channels)
-            })
-            blocklist = ', '.join([
-                f':$blocking_channel{i}' for i in range(len(blocking_channels))
-            ])
-            constraints['claim.claim_hash__not_in#blocklist_channel_ids'] = f"""
-                SELECT reposted_claim_hash FROM claim WHERE channel_hash IN ({blocklist})
-            """
     if 'signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
         if has_channel_signature:
@@ -319,16 +311,23 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     return query(select, **constraints)
 
 
-def get_claims(cols, for_count=False, **constraints) -> List:
+def get_claims(cols, for_count=False, **constraints) -> Tuple[List, Censor]:
     if 'channel' in constraints:
         channel_url = constraints.pop('channel')
         match = resolve_url(channel_url)
         if isinstance(match, dict):
             constraints['channel_hash'] = match['claim_hash']
         else:
-            return [{'row_count': 0}] if cols == 'count(*) as row_count' else []
+            return ([{'row_count': 0}] if cols == 'count(*) as row_count' else []), Censor()
+    censor = Censor(
+        ctx.get().blocked_claims,
+        {unhexlify(ncid)[::-1] for ncid in constraints.pop('not_channel_ids', [])},
+        set(constraints.pop('not_tags', {}))
+    )
+    row_limit = constraints.pop('limit', 20)
+    constraints['limit'] = 1000
     sql, values = _get_claims(cols, for_count, **constraints)
-    return execute_query(sql, values)
+    return execute_query(sql, values, row_limit, censor), censor
 
 
 @measure
@@ -336,11 +335,11 @@ def get_claims_count(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count = get_claims('count(*) as row_count', for_count=True, **constraints)
+    count, _ = get_claims('count(*) as row_count', for_count=True, **constraints)
     return count[0]['row_count']
 
 
-def _search(**constraints):
+def _search(**constraints) -> Tuple[List, Censor]:
     return get_claims(
         """
         claimtrie.claim_hash as is_controlling,
@@ -354,7 +353,11 @@ def _search(**constraints):
         claim.trending_local, claim.trending_global,
         claim.short_url, claim.canonical_url,
         claim.channel_hash, claim.reposted_claim_hash,
-        claim.signature_valid
+        claim.signature_valid,
+        COALESCE(
+            (SELECT group_concat(tag) FROM tag WHERE tag.claim_hash = claim.claim_hash),
+            ""
+        ) as tags 
         """, **constraints
     )
 
@@ -365,19 +368,19 @@ def _get_referenced_rows(txo_rows: List[dict]):
 
     reposted_txos = []
     if repost_hashes:
-        reposted_txos = _search(**{'claim.claim_hash__in': repost_hashes})
+        reposted_txos, _ = _search(**{'claim.claim_hash__in': repost_hashes})
         channel_hashes |= set(filter(None, map(itemgetter('channel_hash'), reposted_txos)))
 
     channel_txos = []
     if channel_hashes:
-        channel_txos = _search(**{'claim.claim_hash__in': channel_hashes})
+        channel_txos, _ = _search(**{'claim.claim_hash__in': channel_hashes})
 
     # channels must come first for client side inflation to work properly
     return channel_txos + reposted_txos
 
 
 @measure
-def search(constraints) -> Tuple[List, List, int, int]:
+def search(constraints) -> Tuple[List, List, int, int, Censor]:
     assert set(constraints).issubset(SEARCH_PARAMS), \
         f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
     total = None
@@ -387,9 +390,9 @@ def search(constraints) -> Tuple[List, List, int, int]:
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
     if 'order_by' not in constraints:
         constraints['order_by'] = ["claim_hash"]
-    txo_rows = _search(**constraints)
+    txo_rows, censor = _search(**constraints)
     extra_txo_rows = _get_referenced_rows(txo_rows)
-    return txo_rows, extra_txo_rows, constraints['offset'], total
+    return txo_rows, extra_txo_rows, constraints['offset'], total, censor
 
 
 @measure
@@ -415,7 +418,7 @@ def resolve_url(raw_url):
             query['is_controlling'] = True
         else:
             query['order_by'] = ['^creation_height']
-        matches = _search(**query, limit=1)
+        matches, _ = _search(**query, limit=1)
         if matches:
             channel = matches[0]
         else:
@@ -433,7 +436,7 @@ def resolve_url(raw_url):
             query['signature_valid'] = 1
         elif set(query) == {'name'}:
             query['is_controlling'] = 1
-        matches = _search(**query, limit=1)
+        matches, _ = _search(**query, limit=1)
         if matches:
             return matches[0]
         else:
@@ -445,10 +448,6 @@ def resolve_url(raw_url):
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
-    not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
-
-    all_items = {item for item in all_items if item not in not_items}
-    any_items = {item for item in any_items if item not in not_items}
 
     any_queries = {}
 
@@ -522,26 +521,6 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             constraints[f'#_all_{attr}'] = f"""
                 {len(all_items)}=(
                     SELECT count(*) FROM {attr} WHERE
-                        claim.claim_hash={attr}.claim_hash
-                    AND {attr} IN ({values})
-                )
-            """
-
-    if not_items:
-        constraints.update({
-            f'$not_{attr}{i}': item for i, item in enumerate(not_items)
-        })
-        values = ', '.join(
-            f':$not_{attr}{i}' for i in range(len(not_items))
-        )
-        if for_count:
-            constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
-                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-            """
-        else:
-            constraints[f'#_not_{attr}'] = f"""
-                NOT EXISTS(
-                    SELECT 1 FROM {attr} WHERE
                         claim.claim_hash={attr}.claim_hash
                     AND {attr} IN ({values})
                 )

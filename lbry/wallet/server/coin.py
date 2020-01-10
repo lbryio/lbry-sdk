@@ -12,9 +12,9 @@ from lbry.wallet.server.util import cachedproperty, subclasses
 from lbry.wallet.server.hash import Base58, hash160, double_sha256, hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
-from lbry.wallet.server.leveldb import DB
+from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-from lbry.wallet.server.db.writer import LBRYDB
+from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 
 
@@ -41,7 +41,7 @@ class Coin:
     DAEMON = Daemon
     BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
-    DB = DB
+    DB = LevelDB
     HEADER_VALUES = [
         'version', 'prev_block_hash', 'merkle_root', 'timestamp', 'bits', 'nonce'
     ]
@@ -240,7 +240,7 @@ class LBC(Coin):
     BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DESERIALIZER = DeserializerSegWit
-    DB = LBRYDB
+    DB = LBRYLevelDB
     NAME = "LBRY"
     SHORTNAME = "LBC"
     NET = "mainnet"

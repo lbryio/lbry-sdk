@@ -629,7 +629,7 @@ class Ledger(metaclass=LedgerRegistry):
                     print(record['history'], addresses, tx.id)
                     raise asyncio.TimeoutError('Timed out waiting for transaction.')
 
-    async def _inflate_outputs(self, query, accounts):
+    async def _inflate_outputs(self, query, accounts) -> Tuple[List[Output], dict, int, int]:
         outputs = Outputs.from_base64(await query)
         txs = []
         if len(outputs.txs) > 0:
@@ -652,7 +652,8 @@ class Ledger(metaclass=LedgerRegistry):
                     }
                     for txo in priced_claims:
                         txo.purchase_receipt = receipts.get(txo.claim_id)
-        return outputs.inflate(txs), outputs.offset, outputs.total
+        txos, blocked = outputs.inflate(txs)
+        return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls):
         resolve = partial(self.network.retriable_call, self.network.resolve)
@@ -669,7 +670,7 @@ class Ledger(metaclass=LedgerRegistry):
                 result[url] = {'error': f'{url} did not resolve to a claim'}
         return result
 
-    async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], int, int]:
+    async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], dict, int, int]:
         return await self._inflate_outputs(self.network.claim_search(**kwargs), accounts)
 
     async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:

@@ -47,7 +47,7 @@ class FlushData:
     tip = attr.ib()
 
 
-class DB:
+class LevelDB:
     """Simple wrapper of the backend database for querying.
 
     Performs no DB update, though the DB will be cleaned on opening if

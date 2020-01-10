@@ -766,7 +766,7 @@ class StreamCommands(ClaimTestCase):
         )
         await self.ledger.stop()
         await self.ledger.start()
-        filtered_claim_search = await self.claim_search(name='too_bad')
+        filtered_claim_search = await self.out(self.daemon.jsonrpc_claim_search(name='too_bad'))
         self.assertEqual(filtered_claim_search, [])
         filtered_claim_search = await self.claim_search(name='not_bad')
         self.assertEqual(len(filtered_claim_search), 1)

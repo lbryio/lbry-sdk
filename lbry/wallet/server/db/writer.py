@@ -4,8 +4,10 @@ from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
+from multiprocessing import Manager
+from binascii import unhexlify
 
-from lbry.wallet.server.leveldb import DB
+from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
 from lbry.wallet.database import query, constraints_to_sql
 
@@ -166,13 +168,18 @@ class SQLDB:
         CREATE_TAG_TABLE
     )
 
-    def __init__(self, main, path):
+    def __init__(self, main, path: str, filtering_channels: list):
         self.main = main
         self._db_path = path
         self.db = None
+        self.state_manager = None
+        self.blocked_claims = None
         self.logger = class_logger(__name__, self.__class__.__name__)
-        self.ledger = Ledger if self.main.coin.NET == 'mainnet' else RegTestLedger
+        self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
         self._fts_synced = False
+        self.filtering_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
+        }
 
     def open(self):
         self.db = apsw.Connection(
@@ -192,10 +199,27 @@ class SQLDB:
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
         register_trending_functions(self.db)
+        self.state_manager = Manager()
+        self.blocked_claims = self.state_manager.dict()
+        self.update_blocked_claims()
 
     def close(self):
         if self.db is not None:
             self.db.close()
+        if self.state_manager is not None:
+            self.state_manager.shutdown()
+
+    def update_blocked_claims(self):
+        sql = query(
+            "SELECT channel_hash, reposted_claim_hash FROM claim",
+            reposted_claim_hash__is_not_null=1,
+            channel_hash__in=self.filtering_channel_hashes
+        )
+        blocked_claims = {}
+        for blocked_claim in self.execute(*sql):
+            blocked_claims[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+        self.blocked_claims.clear()
+        self.blocked_claims.update(blocked_claims)
 
     @staticmethod
     def _insert_sql(table: str, data: dict) -> Tuple[str, list]:
@@ -585,6 +609,12 @@ class SQLDB:
             """, [(channel_hash,) for channel_hash in all_channel_keys.keys()])
         sub_timer.stop()
 
+        sub_timer = timer.add_timer('update blocked claims list')
+        sub_timer.start()
+        if self.filtering_channel_hashes.intersection(all_channel_keys):
+            self.update_blocked_claims()
+        sub_timer.stop()
+
     def _update_support_amount(self, claim_hashes):
         if claim_hashes:
             self.execute(f"""
@@ -778,12 +808,13 @@ class SQLDB:
             self._fts_synced = True
 
 
-class LBRYDB(DB):
+class LBRYLevelDB(LevelDB):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         path = os.path.join(self.env.db_dir, 'claims.db')
-        self.sql = SQLDB(self, path)
+        # space separated list of channel URIs used for filtering bad content
+        self.sql = SQLDB(self, path, self.env.default('FILTERING_CHANNELS_IDS', '').split(' '))
 
     def close(self):
         super().close()

@@ -23,7 +23,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import lbry
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
-from lbry.wallet.server.db.writer import LBRYDB
+from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
@@ -40,8 +40,6 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.peers import PeerManager
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.env import Env
-    from lbry.wallet.server.leveldb import DB
-    from lbry.wallet.server.block_processor import BlockProcessor
     from lbry.wallet.server.mempool import MemPool
     from lbry.wallet.server.daemon import Daemon
 
@@ -120,7 +118,7 @@ class SessionGroup:
 class SessionManager:
     """Holds global state about all sessions."""
 
-    def __init__(self, env: 'Env', db: 'DB', bp: 'BlockProcessor', daemon: 'Daemon', mempool: 'MemPool',
+    def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
                  shutdown_event: asyncio.Event):
         env.max_send = max(350000, env.max_send)
         self.env = env
@@ -750,7 +748,7 @@ class LBRYSessionManager(SessionManager):
         args = dict(
             initializer=reader.initializer,
             initargs=(self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
-                      self.env.track_metrics)
+                      self.env.track_metrics, self.db.sql.blocked_claims)
         )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
             self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
@@ -793,10 +791,7 @@ class LBRYElectrumX(SessionBase):
         # fixme: this is a rebase hack, we need to go through ChainState instead later
         self.daemon = self.session_mgr.daemon
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
-        self.db: LBRYDB = self.bp.db
-        # space separated list of channel URIs used for filtering bad content
-        filtering_channels = self.env.default('FILTERING_CHANNELS_IDS', '')
-        self.filtering_channels_ids = list(filter(None, filtering_channels.split(' ')))
+        self.db: LBRYLevelDB = self.bp.db
 
     @classmethod
     def protocol_min_max_strings(cls):
@@ -936,7 +931,6 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
-            kwargs.setdefault('blocklist_channel_ids', []).extend(self.filtering_channels_ids)
             return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
 
     async def claimtrie_resolve(self, *urls):
