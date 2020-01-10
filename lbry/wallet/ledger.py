@@ -7,9 +7,9 @@ from io import StringIO
 from datetime import datetime
 from functools import partial
 from operator import itemgetter
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from binascii import hexlify, unhexlify
-from typing import Dict, Tuple, Type, Iterable, List, Optional
+from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict
 
 import pylru
 from lbry.schema.result import Outputs
@@ -154,7 +154,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._update_tasks = TaskGroup()
         self._utxo_reservation_lock = asyncio.Lock()
         self._header_processing_lock = asyncio.Lock()
-        self._address_update_locks: Dict[str, asyncio.Lock] = {}
+        self._address_update_locks: DefaultDict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
         self.coin_selection_strategy = None
         self._known_addresses_out_of_sync = set()
@@ -458,10 +458,8 @@ class Ledger(metaclass=LedgerRegistry):
         address, remote_status = update
         self._update_tasks.add(self.update_history(address, remote_status))
 
-    async def update_history(self, address, remote_status,
-                             address_manager: AddressManager = None):
-
-        async with self._address_update_locks.setdefault(address, asyncio.Lock()):
+    async def update_history(self, address, remote_status, address_manager: AddressManager = None):
+        async with self._address_update_locks[address]:
             self._known_addresses_out_of_sync.discard(address)
 
             local_status, local_history = await self.get_local_status_and_history(address)
