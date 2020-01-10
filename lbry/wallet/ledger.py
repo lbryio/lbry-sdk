@@ -425,6 +425,7 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def subscribe_accounts(self):
         if self.network.is_connected and self.accounts:
+            log.info("Subscribe to %i accounts", len(self.accounts))
             await asyncio.wait([
                 self.subscribe_account(a) for a in self.accounts
             ])
@@ -444,15 +445,32 @@ class Ledger(metaclass=LedgerRegistry):
             AddressesGeneratedEvent(address_manager, addresses)
         )
 
-    async def subscribe_addresses(self, address_manager: AddressManager, addresses: List[str]):
+    async def subscribe_addresses(self, address_manager: AddressManager, addresses: List[str], batch_size: int = 1000):
         if self.network.is_connected and addresses:
-            await asyncio.wait([
-                self.subscribe_address(address_manager, address) for address in addresses
-            ])
-
-    async def subscribe_address(self, address_manager: AddressManager, address: str):
-        remote_status = await self.network.subscribe_address(address)
-        self._update_tasks.add(self.update_history(address, remote_status, address_manager))
+            addresses_remaining = list(addresses)
+            retries = 0
+            while addresses_remaining:
+                batch = addresses_remaining[:batch_size]
+                try:
+                    results = await self.network.rpc('blockchain.address.subscribe', batch, True)
+                    for address, remote_status in zip(batch, results):
+                        self._update_tasks.add(self.update_history(address, remote_status, address_manager))
+                    retries = 0
+                    addresses_remaining = addresses_remaining[batch_size:]
+                    log.info("subscribed to %i/%i addresses", len(addresses) - len(addresses_remaining), len(addresses))
+                except asyncio.TimeoutError:
+                    if retries >= 3:
+                        log.warning(
+                            "timed out subscribing to addresses from %s:%i",
+                            *self.network.client.server_address_and_port
+                        )
+                        # abort and cancel, we can't lose a subscription, it will happen again on reconnect
+                        if self.network.client:
+                            self.network.client.abort()
+                        raise asyncio.CancelledError()
+                    await asyncio.sleep(1)
+                    retries += 1
+            log.info("finished subscribing to %i addresses", len(addresses))
 
     def process_status_update(self, update):
         address, remote_status = update

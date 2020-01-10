@@ -1141,12 +1141,16 @@ class LBRYElectrumX(SessionBase):
         hashX = self.address_to_hashX(address)
         return await self.hashX_listunspent(hashX)
 
-    async def address_subscribe(self, address):
+    async def address_subscribe(self, *addresses):
         """Subscribe to an address.
 
         address: the address to subscribe to"""
-        hashX = self.address_to_hashX(address)
-        return await self.hashX_subscribe(hashX, address)
+        if len(addresses) > 1000:
+            raise RPCError(BAD_REQUEST, f'too many addresses in subscription request: {len(addresses)}')
+        hashXes = [
+            (self.address_to_hashX(address), address) for address in addresses
+        ]
+        return await asyncio.gather(*(self.hashX_subscribe(*args) for args in hashXes))
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
