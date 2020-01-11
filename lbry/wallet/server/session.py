@@ -1374,10 +1374,11 @@ class LBRYElectrumX(SessionBase):
         ptuple, client_min = util.protocol_version(
             protocol_version, self.PROTOCOL_MIN, self.PROTOCOL_MAX)
         if ptuple is None:
-            if client_min > self.PROTOCOL_MIN:
-                self.logger.info(f'client requested future protocol version '
-                                 f'{util.version_string(client_min)} '
-                                 f'- is your software out of date?')
+            # FIXME: this fills the logs
+            # if client_min > self.PROTOCOL_MIN:
+            #     self.logger.info(f'client requested future protocol version '
+            #                      f'{util.version_string(client_min)} '
+            #                      f'- is your software out of date?')
             self.close_after_send = True
             raise RPCError(BAD_REQUEST,
                            f'unsupported protocol version: {protocol_version}')
