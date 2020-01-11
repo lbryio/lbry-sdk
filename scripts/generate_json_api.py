@@ -320,8 +320,43 @@ class Examples(CommandTestCase):
             await self.on_transaction_dict(big_stream)
             await self.generate(1)
             await self.on_transaction_dict(big_stream)
+
             await self.daemon.jsonrpc_channel_abandon(self.get_claim_id(big_stream))
             await self.generate(1)
+
+        # comments
+
+        comment = await r(
+            'Posting a comment as your channel',
+            'comment', 'create', '--comment="Thank you Based God"',
+            '--channel_name=@channel', f'--claim_id={stream_id}'
+        )
+
+        reply = await r(
+            'You can r',
+            'comment', 'create',
+            '--comment="I have photographic evidence confirming Sasquatch exists"',
+            f'--channel_name=@channel', f'--parent_id={comment["comment_id"]}'
+        )
+
+        await r(
+            'List all comments on a claim',
+            'comment', 'list',  stream_id, '--include_replies'
+        )
+
+        await r(
+            'List a comment thread replying to a top level comment',
+            'comment', 'list', stream_id,
+            f'--parent_id={comment["comment_id"]}'
+        )
+
+        await r(
+            'Edit the contents of a comment',
+            'comment', 'update', 'Where there was once sasquatch, there is not',
+            f'--comment_id={comment["comment_id"]}'
+        )
+
+        await self.daemon.jsonrpc_comment_abandon(reply['comment_id'])
 
         # files
 
@@ -368,6 +403,11 @@ class Examples(CommandTestCase):
         )
 
         # abandon all the things
+
+        await r(
+            'Abandon a comment',
+            'comment', 'abandon', comment['comment_id']
+        )
 
         abandon_stream = await r(
             'Abandon a stream claim',

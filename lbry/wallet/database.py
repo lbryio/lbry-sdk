@@ -416,7 +416,7 @@ class Database(SQLiteMixin):
             'height': tx.height, 'position': tx.position, 'is_verified': tx.is_verified
         }, 'txid = ?', (tx.id,)))
 
-    def _transaction_io(self, conn: sqlite3.Connection, tx: Transaction, address, txhash, history):
+    def _transaction_io(self, conn: sqlite3.Connection, tx: Transaction, address, txhash):
         conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True))
 
         for txo in tx.outputs:
@@ -438,18 +438,20 @@ class Database(SQLiteMixin):
                         'address': address,
                     }, ignore_duplicate=True)).fetchall()
 
-        conn.execute(
-            "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
-            (history, history.count(':') // 2, address)
-        )
-
     def save_transaction_io(self, tx: Transaction, address, txhash, history):
-        return self.db.run(self._transaction_io, tx, address, txhash, history)
+        return self.save_transaction_io_batch([tx], address, txhash, history)
 
     def save_transaction_io_batch(self, txs: Iterable[Transaction], address, txhash, history):
+        history_count = history.count(':') // 2
+
         def __many(conn):
             for tx in txs:
-                self._transaction_io(conn, tx, address, txhash, history)
+                self._transaction_io(conn, tx, address, txhash)
+            conn.execute(
+                "UPDATE pubkey_address SET history = ?, used_times = ? WHERE address = ?",
+                (history, history_count, address)
+            ).fetchall()
+
         return self.db.run(__many)
 
     async def reserve_outputs(self, txos, is_reserved=True):

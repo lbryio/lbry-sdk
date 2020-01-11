@@ -371,7 +371,7 @@ class StreamManager:
             except asyncio.TimeoutError:
                 raise ResolveTimeoutError(uri)
             except Exception as err:
-                if isinstance(err, asyncio.CancelledError):
+                if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                     raise
                 log.exception("Unexpected error resolving stream:")
                 raise ResolveError(f"Unexpected error resolving stream: {str(err)}")

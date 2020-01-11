@@ -112,7 +112,13 @@ class WalletComponent(Component):
             return
         session_pool = self.wallet_manager.ledger.network.session_pool
         sessions = session_pool.sessions
+        connected = None
+        if self.wallet_manager.ledger.network.client:
+            addr_and_port = self.wallet_manager.ledger.network.client.server_address_and_port
+            if addr_and_port:
+                connected = f"{addr_and_port[0]}:{addr_and_port[1]}"
         result = {
+            'connected': connected,
             'servers': [
                 {
                     'host': session.server[0],
@@ -376,7 +382,7 @@ class UPnPComponent(Component):
                 self.upnp = await UPnP.discover(loop=self.component_manager.loop)
                 log.info("found upnp gateway: %s", self.upnp.gateway.manufacturer_string)
             except Exception as err:
-                if isinstance(err, asyncio.CancelledError):
+                if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                     raise
                 log.warning("upnp discovery failed: %s", err)
                 self.upnp = None

@@ -1,4 +1,7 @@
+import re
+
 import time
+import typing
 from math import ceil
 
 from aiohttp import web
@@ -44,19 +47,21 @@ class MockedCommentServer:
         schema.update(**kwargs)
         return schema
 
-    @staticmethod
-    def clean(d: dict):
-        return {k: v for k, v in d.items() if v or isinstance(v, bool)}
-
-    def create_comment(self, channel_name=None, channel_id=None, **kwargs):
+    def create_comment(self, claim_id=None, parent_id=None, channel_name=None, channel_id=None, **kwargs):
         comment_id = self.comment_id
         channel_url = 'lbry://' + channel_name + '#' + channel_id if channel_id else None
+
+        if parent_id:
+            claim_id = self.comments[self.get_comment_id(parent_id)]['claim_id']
+
         comment = self._create_comment(
             comment_id=str(comment_id),
             channel_name=channel_name,
             channel_id=channel_id,
             channel_url=channel_url,
             timestamp=str(int(time.time())),
+            claim_id=claim_id,
+            parent_id=parent_id,
             **kwargs
         )
         self.comments.append(comment)
@@ -65,8 +70,9 @@ class MockedCommentServer:
 
     def abandon_comment(self, comment_id: int, channel_id: str, **kwargs):
         deleted = False
+        comment_id = self.get_comment_id(comment_id)
         try:
-            if 0 <= comment_id < len(self.comments) and self.comments[comment_id]['channel_id'] == channel_id:
+            if self.comments[comment_id]['channel_id'] == channel_id:
                 self.comments.pop(comment_id)
                 deleted = True
         finally:
@@ -76,9 +82,25 @@ class MockedCommentServer:
                 }
             }
 
-    def hide_comment(self, comment_id, signing_ts, signature):
-        comment_id = int(comment_id) if not isinstance(comment_id, int) else comment_id
-        if 0 <= comment_id < len(self.comments) and len(signature) == 128 and signing_ts.isalnum():
+    def edit_comment(self, comment_id: typing.Union[str, int], comment: str, channel_id: str,
+                       channel_name: str, signature: str, signing_ts: str) -> dict:
+        edited = False
+        if self.credentials_are_valid(channel_id, channel_name, signature, signing_ts) \
+                and self.is_valid_body(comment):
+            comment_id = self.get_comment_id(comment_id)
+            if self.comments[comment_id]['channel_id'] == channel_id:
+                self.comments[comment_id].update({
+                    'comment': comment,
+                    'signature': signature,
+                    'signing_ts': signing_ts
+                })
+                edited = True
+
+        return self.comments[comment_id] if edited else None
+
+    def hide_comment(self, comment_id: typing.Union[int, str], signing_ts: str, signature: str):
+        comment_id = self.get_comment_id(comment_id)
+        if self.is_signable(signature, signing_ts):
             self.comments[comment_id]['is_hidden'] = True
             return True
         return False
@@ -114,16 +136,14 @@ class MockedCommentServer:
         }
 
     def get_comment_channel_by_id(self, comment_id: int, **kwargs):
-        comment = self.comments[comment_id]
+        comment = self.comments[self.get_comment_id(comment_id)]
         return {
             'channel_id': comment.get('channel_id'),
             'channel_name': comment.get('channel_name')
         }
 
     def get_comments_by_id(self, comment_ids: list):
-        comment_ids = [int(c) if not isinstance(c, int) else c for c in comment_ids]
-        comments = [self.comments[cmnt_id] for cmnt_id in comment_ids if 0 <= cmnt_id < len(self.comments)]
-        return comments
+        return [self.comments[self.get_comment_id(cid)] for cid in comment_ids]
 
     methods = {
         'get_claim_comments': get_claim_comments,
@@ -133,24 +153,32 @@ class MockedCommentServer:
         'get_channel_from_comment_id': get_comment_channel_by_id,
         'get_claim_hidden_comments': get_claim_hidden_comments,
         'hide_comments': hide_comments,
+        'edit_comment': edit_comment,
     }
 
     def process_json(self, body) -> dict:
         response = {'jsonrpc': '2.0', 'id': body['id']}
+        error = None
         try:
             if body['method'] in self.methods:
                 params: dict = body.get('params', {})
-                comment_id = params.get('comment_id')
-                if comment_id and not isinstance(comment_id, int):
-                    params['comment_id'] = int(comment_id)
-
                 result = self.methods[body['method']](self, **params)
                 response['result'] = result
             else:
                 response['error'] = self.ERRORS['INVALID_METHOD']
+
+        except (ValueError, TypeError) as err:
+            error = err
+            response['error'] = self.ERRORS['INVALID_PARAMS']
+
         except Exception as err:
+            error = err
             response['error'] = self.ERRORS['UNKNOWN']
-            response['error'].update({'exception': f'{type(err).__name__}: {err}'})
+
+        finally:
+            if 'error' in response:
+                response['error'].update({'exception': f'{type(error).__name__}: {error}'})
+
         return response
 
     async def start(self):
@@ -173,6 +201,68 @@ class MockedCommentServer:
             return web.json_response(response)
         else:
             raise TypeError('invalid type passed')
+
+    @staticmethod
+    def clean(d: dict):
+        return {k: v for k, v in d.items() if v or isinstance(v, bool)}
+
+    @staticmethod
+    def is_valid_body(comment) -> bool:
+        return 0 < len(comment) <= 2000
+
+    def is_valid_comment_id(self, comment_id: typing.Union[int, str]) -> bool:
+        if isinstance(comment_id, str) and comment_id.isalnum():
+            comment_id = int(comment_id)
+
+        if isinstance(comment_id, int):
+            return 0 <= comment_id < len(self.comments)
+        return False
+
+    def get_comment_id(self, cid: typing.Union[int, str, any]) -> int:
+        if not self.is_valid_comment_id(cid):
+            raise ValueError('Comment ID is Invalid')
+        return cid if isinstance(cid, int) else int(cid)
+
+    @staticmethod
+    def claim_id_is_valid(claim_id: str) -> bool:
+        return re.fullmatch('([a-z0-9]{40}|[A-Z0-9]{40})', claim_id) is not None
+
+    @staticmethod
+    def channel_name_is_valid(channel_name: str) -> bool:
+        return re.fullmatch(
+            '@(?:(?![\x00-\x08\x0b\x0c\x0e-\x1f\x23-\x26'
+            '\x2f\x3a\x3d\x3f-\x40\uFFFE-\U0000FFFF]).){1,255}',
+            channel_name
+        ) is not None
+
+    @staticmethod
+    def is_valid_channel(channel_id: str, channel_name: str) -> bool:
+        return channel_id and MockedCommentServer.claim_id_is_valid(channel_id) and \
+               channel_name and MockedCommentServer.channel_name_is_valid(channel_name)
+
+    @staticmethod
+    def is_signable(signature: str, signing_ts: str) -> bool:
+        return signing_ts and signing_ts.isalnum() and \
+               signature and len(signature) == 128
+
+    @staticmethod
+    def credentials_are_valid(channel_id: str = None, channel_name: str = None,
+                              signature: str = None, signing_ts: str = None) -> bool:
+        if channel_id or channel_name or signature or signing_ts:
+            try:
+                assert channel_id and channel_name and signature and signing_ts
+                assert MockedCommentServer.is_valid_channel(channel_id, channel_name)
+                assert MockedCommentServer.is_signable(signature, signing_ts)
+
+            except Exception:
+                return False
+        return True
+
+    def is_valid_base_comment(self, comment: str, claim_id: str, parent_id: int = None, **kwargs) -> bool:
+        return comment is not None and self.is_valid_body(comment) and \
+               claim_id is not None and self.claim_id_is_valid(claim_id) and \
+               (parent_id is None or self.is_valid_comment_id(parent_id))
+
 
 
 class CommentCommands(CommandTestCase):
@@ -399,3 +489,66 @@ class CommentCommands(CommandTestCase):
             self.assertIn(field, valid_list)
         self.assertTrue(visible['has_hidden_comments'])
         self.assertEqual(len(valid_list['items']), len(normal_list['items']) - 1)
+
+    async def test07_edit_comments(self):
+        luda = (await self.channel_create('@Ludacris'))['outputs'][0]
+        juicy = (await self.channel_create('@JuicyJ'))['outputs'][0]
+        stream = await self.stream_create('Chicken-n-beer', channel_id=luda['claim_id'])
+        claim_id = stream['outputs'][0]['claim_id']
+
+        # Editing a comment made by a channel you own
+        og_comment = await self.daemon.jsonrpc_comment_create(
+            comment='This is a masterp[iece',
+            claim_id=claim_id,
+            channel_id=juicy['claim_id']
+        )
+        original_cid = og_comment.get('comment_id')
+        original_sig = og_comment.get('signature')
+        self.assertIsNotNone(original_cid, 'comment wasnt properly made')
+        self.assertIsNotNone(original_sig, 'comment should have a signature')
+
+        edited = await self.daemon.jsonrpc_comment_update(
+            comment='This is a masterpiece, need more like it!',
+            comment_id=original_cid
+        )
+        edited_cid = edited.get('comment_id')
+        edited_sig = edited.get('signature')
+        self.assertIsNotNone(edited_sig, 'comment wasnt properly edited!')
+        self.assertIsNotNone(edited_sig, 'edited comment should have a signature!')
+
+        self.assertEqual(original_cid, edited_cid, 'Comment ID should not change!')
+        self.assertNotEqual(original_sig, edited_sig, 'New signature should not be the same as the old!')
+
+        # editing a comment made by a channel you don't own
+        og_comment = await self.daemon.jsonrpc_comment_create(
+            comment='I wonder if you know, how they live in tokyo',
+            claim_id=claim_id,
+            channel_id=juicy['claim_id']
+        )
+        original_cid = og_comment.get('comment_id')
+        self.assertIsNotNone(original_cid, 'Comment should be able to be made')
+
+        # Now abandon the channel
+        await self.daemon.jsonrpc_channel_abandon(juicy['claim_id'])
+
+        # this should error out
+        with self.assertRaises(ValueError):
+            await self.daemon.jsonrpc_comment_update(
+                comment='If you see it and you mean then you know you have to go',
+                comment_id=original_cid
+            )
+
+        # editing an anonymous comment
+        anon_comment = await self.daemon.jsonrpc_comment_create(
+            comment='fast and furiouuuuuus',
+            claim_id=claim_id
+        )
+
+        anon_cid = anon_comment.get('comment_id')
+        self.assertIsNotNone(anon_cid)
+
+        with self.assertRaises(ValueError):
+            await self.daemon.jsonrpc_comment_update(
+                comment='drift drift drift',
+                comment_id=anon_cid
+            )
