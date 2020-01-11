@@ -772,6 +772,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     'download_progress': (float) 0-100.0
                 },
                 'wallet': {
+                    'connected': (str) host and port of the connected spv server,
                     'blocks': (int) local blockchain height,
                     'blocks_behind': (int) remote_height - local_height,
                     'best_blockhash': (str) block hash of most recent block,
