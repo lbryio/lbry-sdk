@@ -1,4 +1,5 @@
 import copy
+import math
 import time
 
 # Half life in blocks
@@ -16,21 +17,31 @@ RENORM_INTERVAL = 1000
 # Decay coefficient per renormalisation interval
 DECAY_PER_RENORM = DECAY**RENORM_INTERVAL
 
-# Softening power
-SOFTEN_POWER = 0.25
-
 # Log trending calculations?
-TRENDING_LOG = False
+TRENDING_LOG = True
 
 assert RENORM_INTERVAL % SAVE_INTERVAL == 0
 
 
-def soften(x):
-    """
-    Softening function applied to LBC total amounts
-    """
-    return x**SOFTEN_POWER
+def spike_height(trending_score, x, x_old, time_boost=1.0):
 
+    # Delta and sign
+    sign = 0.0
+    if x > x_old:
+        sign = 1.0;
+    elif x < x_old:
+        sign = -1.0
+
+    change_in_softened_amount = abs(x**0.25 - x_old**0.25)
+    spike_height = time_boost*sign*change_in_softened_amount
+
+    # Minnow boost
+    boost = 0.0
+    if spike_height > 0.0:
+        boost = time_boost*math.exp(-(trending_score + spike_height)/time_boost)
+    spike_height += boost
+
+    return spike_height
 
 
 class TrendingData:
@@ -39,15 +50,13 @@ class TrendingData:
     """
     def __init__(self):
 
-        # Dict from claim_id to [total_amount, total_amount_softened,
-        #                           trending_score, changed_flag]
         self.claims = {}
 
         # Have all claims been read from db yet?
         self.initialised = False
 
 
-    def update_claim(self, claim_id, total_amount, trending_score,
+    def update_claim(self, claim_id, total_amount, trending_score=0.0,
                         time_boost=1.0):
         """
         Update trending data for a claim, given its new total amount.
@@ -55,10 +64,9 @@ class TrendingData:
 
         # Just putting data in the dictionary
         if not self.initialised:
-            self.claims[claim_id] = {"total_amount": total_amount,
-                                      "softened": soften(total_amount),
-                                      "trending_score": trending_score,
-                                      "changed": False}
+            self.claims[claim_id] = {"trending_score": trending_score,
+                                     "total_amount": total_amount,
+                                     "changed": False}
             return
 
         # Extract existing total amount and trending score
@@ -66,9 +74,8 @@ class TrendingData:
         if claim_id in self.claims:
             old_state = copy.deepcopy(self.claims[claim_id])
         else:
-            old_state = {"total_amount": 0.0,
-                         "softened": soften(0.0),
-                         "trending_score": 0.0,
+            old_state = {"trending_score": 0.0,
+                         "total_amount": 0.0,
                          "changed": False}
 
         # Calculate LBC change
@@ -76,11 +83,12 @@ class TrendingData:
 
         # Modify data if there was an LBC change
         if change != 0.0:
-            softened = soften(total_amount)
-            spike = softened - old_state["softened"]
-            trending_score = old_state["trending_score"] + time_boost*spike
+            spike = spike_height(old_state["trending_score"],
+                                 total_amount,
+                                 old_state["total_amount"],
+                                 time_boost)
+            trending_score = old_state["trending_score"] + spike
             self.claims[claim_id] = {"total_amount": total_amount,
-                                     "softened": softened,
                                      "trending_score": trending_score,
                                      "changed": True}
 
