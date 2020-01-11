@@ -18,7 +18,7 @@ RENORM_INTERVAL = 1000
 DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 
 # Log trending calculations?
-TRENDING_LOG = True
+TRENDING_LOG = False
 
 
 def spike_height(trending_score, x, x_old, time_boost=1.0):
@@ -72,7 +72,8 @@ class TrendingData:
         Update trending data for a claim, given its new total amount.
         """
 
-        assert (trending_score is None or not self.initialised)
+        # If it's not initialised, trending score must be none
+        assert (trending_score is None or ~self.initialised)
 
         # Just putting data in the dictionary
         if not self.initialised:
