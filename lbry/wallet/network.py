@@ -77,7 +77,7 @@ class ClientSession(BaseClientSession):
             self.synchronous_close()
             raise
         except asyncio.CancelledError:
-            log.info("cancelled sending %s to %s:%i", method, *self.server)
+            log.warning("cancelled sending %s to %s:%i", method, *self.server)
             self.synchronous_close()
             raise
         finally:
@@ -102,7 +102,7 @@ class ClientSession(BaseClientSession):
             except (asyncio.TimeoutError, OSError):
                 await self.close()
                 retry_delay = min(60, retry_delay * 2)
-                log.debug("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
+                log.warning("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
             try:
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:
@@ -127,7 +127,7 @@ class ClientSession(BaseClientSession):
         controller.add(request.args)
 
     def connection_lost(self, exc):
-        log.debug("Connection lost: %s:%d", *self.server)
+        log.warning("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
         self.connection_latency = None
@@ -223,7 +223,8 @@ class Network:
                 except asyncio.TimeoutError:
                     log.warning("Wallet server call timed out, retrying.")
                 except ConnectionError:
-                    pass
+                    log.warning("Ignoring connection error")
+        log.warning("Raising cancelled error")
         raise asyncio.CancelledError()  # if we got here, we are shutting down
 
     def _update_remote_height(self, header_args):

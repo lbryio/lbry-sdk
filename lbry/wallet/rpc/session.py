@@ -131,6 +131,7 @@ class SessionBase(asyncio.Protocol):
             self.transport.write(framed_message)
 
     def _bump_errors(self):
+        self.logger.warning("bump errors %i", self.errors)
         self.errors += 1
         if self.errors >= self.max_errors:
             # Don't await self.close() because that is self-cancelling
@@ -181,6 +182,7 @@ class SessionBase(asyncio.Protocol):
         """Called by asyncio when the connection closes.
 
         Tear down things done in connection_made."""
+        self.logger.error("connection lost to %s - %s", self.peer_address_str(), exc)
         self._address = None
         self.transport = None
         self._task_group.cancel()
@@ -220,12 +222,14 @@ class SessionBase(asyncio.Protocol):
 
     def abort(self):
         """Forcefully close the connection."""
+        self.logger.warning("abort connection")
         if self.transport:
             self.transport.abort()
 
     # TODO: replace with synchronous_close
     async def close(self, *, force_after=30):
         """Close the connection and return when closed."""
+        self.logger.warning("close connection")
         self._close()
         if self._pm_task:
             with suppress(CancelledError):
@@ -234,6 +238,7 @@ class SessionBase(asyncio.Protocol):
                 await self._pm_task
 
     def synchronous_close(self):
+        self.logger.warning("synchronous close")
         self._close()
         if self._pm_task and not self._pm_task.done():
             self._pm_task.cancel()
@@ -394,7 +399,7 @@ class RPCSession(SessionBase):
             try:
                 requests = self.connection.receive_message(message)
             except ProtocolError as e:
-                self.logger.debug(f'{e}')
+                self.logger.warning(f'protocol error {e}')
                 if e.error_message:
                     await self._send_message(e.error_message)
                 if e.code == JSONRPC.PARSE_ERROR:
