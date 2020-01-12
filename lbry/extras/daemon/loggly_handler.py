@@ -68,7 +68,11 @@ class HTTPSLogglyHandler(logging.Handler):
                 return await self._emit(record, retry=False)
 
     def emit(self, record):
-        asyncio.ensure_future(self._emit(record))
+        try:
+            asyncio.ensure_future(self._emit(record), loop=self._loop)
+        except RuntimeError:  # TODO: use a second loop
+            print(f"\nfailed to send traceback to loggly, please file an issue with the following traceback:\n"
+                  f"{self.format(record)}")
 
     def close(self):
         super().close()
