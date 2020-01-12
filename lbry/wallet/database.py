@@ -417,7 +417,7 @@ class Database(SQLiteMixin):
         }, 'txid = ?', (tx.id,)))
 
     def _transaction_io(self, conn: sqlite3.Connection, tx: Transaction, address, txhash):
-        conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True))
+        conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True)).fetchall()
 
         for txo in tx.outputs:
             if txo.script.is_pay_pubkey_hash and txo.pubkey_hash == txhash:
