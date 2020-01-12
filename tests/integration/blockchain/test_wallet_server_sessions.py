@@ -69,6 +69,7 @@ class TestUsagePayment(CommandTestCase):
 
         node = SPVNode(self.conductor.spv_module, node_number=2)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
+        self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
 
