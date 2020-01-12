@@ -39,6 +39,10 @@ class TestAESEncryptDecrypt(TestCase):
         with self.assertRaises(InvalidPasswordError):
             aes_decrypt('notbubblegum', aes_encrypt('bubblegum', self.message))
 
+    def test_edge_case_invalid_password_valid_padding_invalid_unicode(self):
+        with self.assertRaises(InvalidPasswordError):
+            aes_decrypt('notbubblegum', 'gy3/mNq3FWB/xAXirOQnlAqQLuvhLGXZaeGBUIg1w6yY4PDLDT7BU83XOfBsJoluWU5zEU4+upOFH35HDqyV8EMQhcKSufN9WkT1izEbFtweBUTK8nTSkV7NBppE1Jaz')
+
     def test_better_encrypt_decrypt(self):
         self.assertEqual(
             b'valuable value',

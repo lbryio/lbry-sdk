@@ -33,6 +33,8 @@ def aes_decrypt(secret: str, value: str) -> typing.Tuple[str, bytes]:
         unpadder = PKCS7(AES.block_size).unpadder()
         result = unpadder.update(decryptor.update(data)) + unpadder.finalize()
         return result.decode(), init_vector
+    except UnicodeDecodeError:
+        raise InvalidPasswordError()
     except ValueError as e:
         if e.args[0] == 'Invalid padding bytes.':
             raise InvalidPasswordError()
