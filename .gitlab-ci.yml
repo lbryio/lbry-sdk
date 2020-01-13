@@ -70,7 +70,8 @@ test:json-api:
     paths:
       - lbrynet-${OS}.zip
   script:
-    - pip install pyinstaller==3.5
+    - pip install --upgrade 'setuptools<45.0.0'
+    - pip install pyinstaller
     - python3.7 docker/set_build.py
     - pip install -e .
     - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
@@ -125,7 +126,8 @@ build:windows:
   after_script:
     - rmdir -Recurse venv
   script:
-    - pip install pyinstaller==3.5
+    - pip install --upgrade 'setuptools<45.0.0'
+    - pip install pyinstaller
     - python docker/set_build.py
     - pip install -e .
     - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
