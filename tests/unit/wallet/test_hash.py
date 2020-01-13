@@ -51,8 +51,15 @@ class TestAESEncryptDecrypt(TestCase):
                 better_aes_encrypt('super secret', b'valuable value')))
 
     def test_better_decrypt_error(self):
-        with self.assertRaises(InvalidPasswordError):
-            better_aes_decrypt(
+        try:
+            value = better_aes_encrypt('super secret', b'valuable value')
+            decrypted = better_aes_decrypt(
                 'super secret but wrong',
-                better_aes_encrypt('super secret', b'valuable value')
+                value
             )
+            print(f'{value} accepted as valid decryption.')
+            # FIXME: example that hit here: czo4MTkyOjE2OjE6VrwsN8FSJlegxHVEQePoyjWT1k8yAXBCUbbGCFKcsNY=
+            self.assertNotEqual(decrypted, b'valuable value')
+        except InvalidPasswordError:
+            # success
+            pass
