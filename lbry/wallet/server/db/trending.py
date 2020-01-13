@@ -174,7 +174,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
     if len(trending_data.claims) == 0:
         # On fresh launch
         for row in db.execute("""
-                              SELECT claim_id, trending_mixed
+                              SELECT claim_id, trending_mixed,
                                      (amount + support_amount)
                                          AS total_amount
                               FROM claim;
@@ -183,14 +183,14 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
         trending_data.initialised = True
     else:
         for row in db.execute(f"""
-                              SELECT claim_id, trending_mixed,
+                              SELECT claim_id,
                                      (amount + support_amount)
                                          AS total_amount
                               FROM claim
                               WHERE claim_hash IN
                             ({','.join('?' for _ in recalculate_claim_hashes)});
                               """, recalculate_claim_hashes):
-            trending_data.update_claim(row[0], row[1], 1E-8*row[2], time_boost)
+            trending_data.update_claim(row[0], 1E-8*row[1], time_boost)
 
     trending_log("done.\n")
 
