@@ -41,7 +41,11 @@ class TestAESEncryptDecrypt(TestCase):
 
     def test_edge_case_invalid_password_valid_padding_invalid_unicode(self):
         with self.assertRaises(InvalidPasswordError):
-            aes_decrypt('notbubblegum', 'gy3/mNq3FWB/xAXirOQnlAqQLuvhLGXZaeGBUIg1w6yY4PDLDT7BU83XOfBsJoluWU5zEU4+upOFH35HDqyV8EMQhcKSufN9WkT1izEbFtweBUTK8nTSkV7NBppE1Jaz')
+            aes_decrypt(
+                'notbubblegum',
+                'gy3/mNq3FWB/xAXirOQnlAqQLuvhLGXZaeGBUIg1w6yY4PDLDT7BU83XOfBsJol'
+                'uWU5zEU4+upOFH35HDqyV8EMQhcKSufN9WkT1izEbFtweBUTK8nTSkV7NBppE1Jaz'
+            )
 
     def test_better_encrypt_decrypt(self):
         self.assertEqual(
@@ -50,16 +54,15 @@ class TestAESEncryptDecrypt(TestCase):
                 'super secret',
                 better_aes_encrypt('super secret', b'valuable value')))
 
-    def test_better_decrypt_error(self):
-        try:
-            value = better_aes_encrypt('super secret', b'valuable value')
-            decrypted = better_aes_decrypt(
+    @mock.patch('os.urandom', side_effect=lambda i: b'd'*i)
+    def test_better_decrypt_error(self, _):
+        with self.assertRaises(InvalidPasswordError):
+            better_aes_decrypt(
                 'super secret but wrong',
-                value
+                better_aes_encrypt('super secret', b'valuable value')
             )
-            print(f'{value} accepted as valid decryption.')
-            # FIXME: example that hit here: czo4MTkyOjE2OjE6VrwsN8FSJlegxHVEQePoyjWT1k8yAXBCUbbGCFKcsNY=
-            self.assertNotEqual(decrypted, b'valuable value')
-        except InvalidPasswordError:
-            # success
-            pass
+
+    def test_edge_case_invalid_password_valid_everything(self):
+        value = b'czo4MTkyOjE2OjE6VrwsN8FSJlegxHVEQePoyjWT1k8yAXBCUbbGCFKcsNY='
+        self.assertEqual(b'valuable value', better_aes_decrypt('super secret', value))
+        self.assertNotEqual(b'valuable value', better_aes_decrypt('super secret but wrong', value))
