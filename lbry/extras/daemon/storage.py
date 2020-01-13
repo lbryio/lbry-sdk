@@ -136,18 +136,13 @@ def _get_lbry_file_stream_dict(rowid, added_on, stream_hash, file_name, download
 def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Dict]:
     files = []
     signed_claims = {}
-    stream_hashes_and_bt_infohashes = transaction.execute("select stream_hash, bt_infohash from file").fetchall()
-    stream_hashes = tuple(
-        stream_hash for stream_hash, _ in stream_hashes_and_bt_infohashes if stream_hash is not None
-    )
     for (rowid, stream_hash, _, file_name, download_dir, data_rate, status, saved_file, raw_content_fee,
-         added_on, _, sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in _batched_select(
-             transaction, "select file.rowid, file.*, stream.*, c.* "
+         added_on, _, sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in transaction.execute(
+             "select file.rowid, file.*, stream.*, c.* "
              "from file inner join stream on file.stream_hash=stream.stream_hash "
              "inner join content_claim cc on file.stream_hash=cc.stream_hash "
              "inner join claim c on cc.claim_outpoint=c.claim_outpoint "
-             "where file.stream_hash in {} "
-             "order by c.rowid desc", stream_hashes):
+             "order by c.rowid desc").fetchall():
         claim = StoredContentClaim(*claim_args)
         if claim.channel_claim_id:
             if claim.channel_claim_id not in signed_claims:
