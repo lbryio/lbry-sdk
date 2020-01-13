@@ -90,6 +90,7 @@ class ClientSession(BaseClientSession):
         while True:
             try:
                 if self.is_closing():
+                    log.warning("is closing, reconnect")
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
                     self._on_connect_cb()
@@ -99,10 +100,14 @@ class ClientSession(BaseClientSession):
             except RPCError as e:
                 log.warning("Server error, ignoring for 1h: %s:%d -- %s", *self.server, e.message)
                 retry_delay = 60 * 60
-            except (asyncio.TimeoutError, OSError):
+            except asyncio.TimeoutError:
+                log.error("closing due to timeout")
                 await self.close()
                 retry_delay = min(60, retry_delay * 2)
                 log.warning("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
+            except Exception:
+                log.exception("unexpected error")
+                raise
             try:
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
             except asyncio.TimeoutError:

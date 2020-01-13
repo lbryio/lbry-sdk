@@ -115,6 +115,7 @@ class SessionBase(asyncio.Protocol):
         try:
             await asyncio.wait_for(self._can_send.wait(), secs)
         except asyncio.TimeoutError:
+            self.logger.warning("abort connection after limited wait (%s)", secs)
             self.abort()
             raise asyncio.TimeoutError(f'task timed out after {secs}s')
 
