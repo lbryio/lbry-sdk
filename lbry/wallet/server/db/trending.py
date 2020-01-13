@@ -28,14 +28,6 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
     """
     Compute the size of a trending spike.
     """
-
-    # Delta and sign
-    sign = 0.0
-    if x > x_old:
-        sign = 1.0;
-    elif x < x_old:
-        sign = -1.0
-
     change_in_softened_amount = x**0.25 - x_old**0.25
     spike_height = time_boost*change_in_softened_amount
 
