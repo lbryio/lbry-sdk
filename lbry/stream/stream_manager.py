@@ -144,6 +144,7 @@ class StreamManager:
                 to_recover.append(file_info)
             to_start.append(file_info)
         if to_recover:
+            log.info("Recover %i files", len(to_recover))
             await self.recover_streams(to_recover)
 
         log.info("Initializing %i files", len(to_start))
