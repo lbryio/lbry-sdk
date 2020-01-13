@@ -21,7 +21,7 @@ assert (RENORM_INTERVAL % SAVE_INTERVAL == 0)
 DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 
 # Log trending calculations?
-TRENDING_LOG = False
+TRENDING_LOG = True
 
 
 def spike_height(trending_score, x, x_old, time_boost=1.0):
@@ -36,8 +36,8 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
     elif x < x_old:
         sign = -1.0
 
-    change_in_softened_amount = abs(x**0.25 - x_old**0.25)
-    spike_height = time_boost*sign*change_in_softened_amount
+    change_in_softened_amount = x**0.25 - x_old**0.25
+    spike_height = time_boost*change_in_softened_amount
 
     # Minnow boost
     boost = 0.0
@@ -76,6 +76,7 @@ class TrendingData:
         self.initialised = False
 
     def insert_claim_from_load(self, claim_id, trending_score, total_amount):
+        assert not self.initialised
         self.claims[claim_id] = {"trending_score": trending_score,
                                  "total_amount": total_amount,
                                  "changed": False}
@@ -85,7 +86,6 @@ class TrendingData:
         """
         Update trending data for a claim, given its new total amount.
         """
-
         assert self.initialised
 
         # Extract existing total amount and trending score
