@@ -188,6 +188,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
 
     if height % RENORM_INTERVAL == 0:
+
         # Mark all claims as having changed
         trending_data.claims[key]["changed"] = True
 
@@ -209,18 +210,6 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
                         the_list)
-
-        trending_log("done.\n")
-
-
-    # Mark claims as not having changed
-    if height % RENORM_INTERVAL == 0:
-        trending_log("    Marking all claims as unchanged...")
-
-        keys = trending_data.claims.keys()
-        for key in keys:
-            trending_data.claims[key]["changed"] = False
-
 
         trending_log("done.\n")
 
