@@ -127,7 +127,7 @@ def release(args):
     new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
 
-    previous_release = repo.release_from_tag(current_version.tag)
+    previous_release = repo.release_from_tag(args.start_tag or current_version.tag)
 
     print(f' Changelog From: {previous_release.tag_name} ({previous_release.created_at})')
     print()
