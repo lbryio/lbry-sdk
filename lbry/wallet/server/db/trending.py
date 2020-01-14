@@ -151,6 +151,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
         keys = trending_data.claims.keys()
         for key in keys:
             trending_data.claims[key]["trending_score"] *= DECAY_PER_RENORM
+            trending_data.claims[key]["changed"] = True
 
         trending_log("done.\n")
 
@@ -185,12 +186,6 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
             trending_data.update_claim(row[0], 1E-8*row[1], time_boost)
 
     trending_log("done.\n")
-
-
-    if height % RENORM_INTERVAL == 0:
-
-        # Mark all claims as having changed
-        trending_data.claims[key]["changed"] = True
 
 
     # Write trending scores to DB
