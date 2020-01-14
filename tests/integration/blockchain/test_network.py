@@ -54,8 +54,6 @@ class NetworkTests(IntegrationTestCase):
 
 class ReconnectTests(IntegrationTestCase):
 
-    VERBOSITY = logging.WARN
-
     async def test_multiple_servers(self):
         # we have a secondary node that connects later, so
         node2 = SPVNode(self.conductor.spv_module, node_number=2)
@@ -80,7 +78,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.stop()
         initial_height = self.ledger.local_height_including_downloaded_height
         await self.blockchain.generate(100)
-        while self.conductor.spv_node.server.bp.height < initial_height + 99:  # off by 1
+        while self.conductor.spv_node.server.session_mgr.notified_height < initial_height + 99:  # off by 1
             await asyncio.sleep(0.1)
         self.assertEqual(initial_height, self.ledger.local_height_including_downloaded_height)
         # locks header processing so we make sure we are the only ones modifying it
