@@ -98,6 +98,7 @@ class ClientSession(BaseClientSession):
                     await self.ensure_server_version()
                 retry_delay = default_delay
             except RPCError as e:
+                await self.close()
                 log.debug("Server error, ignoring for 1h: %s:%d -- %s", *self.server, e.message)
                 retry_delay = 60 * 60
             except IncompatibleWalletServerError:
