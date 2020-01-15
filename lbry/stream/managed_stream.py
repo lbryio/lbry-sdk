@@ -4,6 +4,7 @@ import time
 import typing
 import logging
 import binascii
+from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbry.utils import generate_id
 from lbry.error import DownloadSDTimeoutError
@@ -13,12 +14,14 @@ from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 from lbry.stream.reflector.client import StreamReflectorClient
 from lbry.extras.daemon.storage import StoredContentClaim
 from lbry.blob import MAX_BLOB_SIZE
+from lbry.file.source import ManagedDownloadSource
 
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.schema.claim import Claim
     from lbry.blob.blob_manager import BlobManager
     from lbry.blob.blob_info import BlobInfo
+    from lbry.extras.daemon.storage import SQLiteStorage
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.wallet.transaction import Transaction
@@ -40,65 +43,20 @@ async def get_next_available_file_name(loop: asyncio.AbstractEventLoop, download
     return await loop.run_in_executor(None, _get_next_available_file_name, download_directory, file_name)
 
 
-class ManagedStream:
-    STATUS_RUNNING = "running"
-    STATUS_STOPPED = "stopped"
-    STATUS_FINISHED = "finished"
-
-    SAVING_ID = 1
-    STREAMING_ID = 2
-
-    __slots__ = [
-        'loop',
-        'config',
-        'blob_manager',
-        'sd_hash',
-        'download_directory',
-        '_file_name',
-        '_added_on',
-        '_status',
-        'stream_claim_info',
-        'download_id',
-        'rowid',
-        'content_fee',
-        'purchase_receipt',
-        'downloader',
-        'analytics_manager',
-        'fully_reflected',
-        'reflector_progress',
-        'file_output_task',
-        'delayed_stop_task',
-        'streaming_responses',
-        'streaming',
-        '_running',
-        'saving',
-        'finished_writing',
-        'started_writing',
-        'finished_write_attempt',
-        'uploading_to_reflector'
-    ]
-
+class ManagedStream(ManagedDownloadSource):
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
-                 sd_hash: str, download_directory: typing.Optional[str] = None, file_name: typing.Optional[str] = None,
-                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredContentClaim] = None,
-                 download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
-                 descriptor: typing.Optional[StreamDescriptor] = None,
-                 content_fee: typing.Optional['Transaction'] = None,
-                 analytics_manager: typing.Optional['AnalyticsManager'] = None,
-                 added_on: typing.Optional[int] = None):
-        self.loop = loop
-        self.config = config
+                 sd_hash: str, download_directory: Optional[str] = None, file_name: Optional[str] = None,
+                 status: Optional[str] = ManagedDownloadSource.STATUS_STOPPED,
+                 claim: Optional[StoredContentClaim] = None,
+                 download_id: Optional[str] = None, rowid: Optional[int] = None,
+                 descriptor: Optional[StreamDescriptor] = None,
+                 content_fee: Optional['Transaction'] = None,
+                 analytics_manager: Optional['AnalyticsManager'] = None,
+                 added_on: Optional[int] = None):
+        super().__init__(loop, config, blob_manager.storage, sd_hash, file_name, download_directory, status, claim,
+                         download_id, rowid, content_fee, analytics_manager, added_on)
         self.blob_manager = blob_manager
-        self.sd_hash = sd_hash
-        self.download_directory = download_directory
-        self._file_name = file_name
-        self._status = status
-        self.stream_claim_info = claim
-        self.download_id = download_id or binascii.hexlify(generate_id()).decode()
-        self.rowid = rowid
-        self.content_fee = content_fee
         self.purchase_receipt = None
-        self._added_on = added_on
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
 
@@ -108,12 +66,13 @@ class ManagedStream:
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
         self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
+        self.fully_reflected = asyncio.Event(loop=self.loop)
         self.streaming = asyncio.Event(loop=self.loop)
         self._running = asyncio.Event(loop=self.loop)
-        self.saving = asyncio.Event(loop=self.loop)
-        self.finished_writing = asyncio.Event(loop=self.loop)
-        self.started_writing = asyncio.Event(loop=self.loop)
-        self.finished_write_attempt = asyncio.Event(loop=self.loop)
+
+    @property
+    def sd_hash(self) -> str:
+        return self.identifier
 
     @property
     def is_fully_reflected(self) -> bool:
@@ -128,16 +87,8 @@ class ManagedStream:
         return self.descriptor.stream_hash
 
     @property
-    def file_name(self) -> typing.Optional[str]:
+    def file_name(self) -> Optional[str]:
         return self._file_name or (self.descriptor.suggested_file_name if self.descriptor else None)
-
-    @property
-    def added_on(self) -> typing.Optional[int]:
-        return self._added_on
-
-    @property
-    def status(self) -> str:
-        return self._status
 
     @property
     def written_bytes(self) -> int:
@@ -157,55 +108,6 @@ class ManagedStream:
         await self.blob_manager.storage.change_file_status(self.stream_hash, status)
 
     @property
-    def finished(self) -> bool:
-        return self.status == self.STATUS_FINISHED
-
-    @property
-    def running(self) -> bool:
-        return self.status == self.STATUS_RUNNING
-
-    @property
-    def claim_id(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.claim_id
-
-    @property
-    def txid(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.txid
-
-    @property
-    def nout(self) -> typing.Optional[int]:
-        return None if not self.stream_claim_info else self.stream_claim_info.nout
-
-    @property
-    def outpoint(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.outpoint
-
-    @property
-    def claim_height(self) -> typing.Optional[int]:
-        return None if not self.stream_claim_info else self.stream_claim_info.height
-
-    @property
-    def channel_claim_id(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.channel_claim_id
-
-    @property
-    def channel_name(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.channel_name
-
-    @property
-    def claim_name(self) -> typing.Optional[str]:
-        return None if not self.stream_claim_info else self.stream_claim_info.claim_name
-
-    @property
-    def metadata(self) -> typing.Optional[typing.Dict]:
-        return None if not self.stream_claim_info else self.stream_claim_info.claim.stream.to_dict()
-
-    @property
-    def metadata_protobuf(self) -> bytes:
-        if self.stream_claim_info:
-            return binascii.hexlify(self.stream_claim_info.claim.to_bytes())
-
-    @property
     def blobs_completed(self) -> int:
         return sum([1 if b.blob_hash in self.blob_manager.completed_blob_hashes else 0
                     for b in self.descriptor.blobs[:-1]])
@@ -219,38 +121,29 @@ class ManagedStream:
         return self.blobs_in_stream - self.blobs_completed
 
     @property
-    def full_path(self) -> typing.Optional[str]:
-        return os.path.join(self.download_directory, os.path.basename(self.file_name)) \
-            if self.file_name and self.download_directory else None
-
-    @property
-    def output_file_exists(self):
-        return os.path.isfile(self.full_path) if self.full_path else False
-
-    @property
     def mime_type(self):
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
-    @classmethod
-    async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
-                     file_path: str, key: typing.Optional[bytes] = None,
-                     iv_generator: typing.Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedStream':
-        """
-        Generate a stream from a file and save it to the db
-        """
-        descriptor = await StreamDescriptor.create_stream(
-            loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
-            blob_completed_callback=blob_manager.blob_completed
-        )
-        await blob_manager.storage.store_stream(
-            blob_manager.get_blob(descriptor.sd_hash), descriptor
-        )
-        row_id = await blob_manager.storage.save_published_file(descriptor.stream_hash, os.path.basename(file_path),
-                                                                os.path.dirname(file_path), 0)
-        return cls(loop, config, blob_manager, descriptor.sd_hash, os.path.dirname(file_path),
-                   os.path.basename(file_path), status=cls.STATUS_FINISHED, rowid=row_id, descriptor=descriptor)
+    # @classmethod
+    # async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config',
+    #                  file_path: str, key: Optional[bytes] = None,
+    #                  iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedDownloadSource':
+    #     """
+    #     Generate a stream from a file and save it to the db
+    #     """
+    #     descriptor = await StreamDescriptor.create_stream(
+    #         loop, blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
+    #         blob_completed_callback=blob_manager.blob_completed
+    #     )
+    #     await blob_manager.storage.store_stream(
+    #         blob_manager.get_blob(descriptor.sd_hash), descriptor
+    #     )
+    #     row_id = await blob_manager.storage.save_published_file(descriptor.stream_hash, os.path.basename(file_path),
+    #                                                             os.path.dirname(file_path), 0)
+    #     return cls(loop, config, blob_manager, descriptor.sd_hash, os.path.dirname(file_path),
+    #                os.path.basename(file_path), status=cls.STATUS_FINISHED, rowid=row_id, descriptor=descriptor)
 
-    async def start(self, node: typing.Optional['Node'] = None, timeout: typing.Optional[float] = None,
+    async def start(self, node: Optional['Node'] = None, timeout: Optional[float] = None,
                     save_now: bool = False):
         timeout = timeout or self.config.download_timeout
         if self._running.is_set():
@@ -287,7 +180,7 @@ class ManagedStream:
         if (finished and self.status != self.STATUS_FINISHED) or self.status == self.STATUS_RUNNING:
             await self.update_status(self.STATUS_FINISHED if finished else self.STATUS_STOPPED)
 
-    async def _aiter_read_stream(self, start_blob_num: typing.Optional[int] = 0, connection_id: int = 0)\
+    async def _aiter_read_stream(self, start_blob_num: Optional[int] = 0, connection_id: int = 0)\
             -> typing.AsyncIterator[typing.Tuple['BlobInfo', bytes]]:
         if start_blob_num >= len(self.descriptor.blobs[:-1]):
             raise IndexError(start_blob_num)
@@ -299,7 +192,7 @@ class ManagedStream:
                 decrypted = await self.downloader.read_blob(blob_info, connection_id)
             yield (blob_info, decrypted)
 
-    async def stream_file(self, request: Request, node: typing.Optional['Node'] = None) -> StreamResponse:
+    async def stream_file(self, request: Request, node: Optional['Node'] = None) -> StreamResponse:
         log.info("stream file to browser for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id,
                  self.sd_hash[:6])
         headers, size, skip_blobs, first_blob_start_offset = self._prepare_range_response_headers(
@@ -391,8 +284,8 @@ class ManagedStream:
             self.saving.clear()
             self.finished_write_attempt.set()
 
-    async def save_file(self, file_name: typing.Optional[str] = None, download_directory: typing.Optional[str] = None,
-                        node: typing.Optional['Node'] = None):
+    async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None,
+                        node: Optional['Node'] = None):
         await self.start(node)
         if self.file_output_task and not self.file_output_task.done():  # cancel an already running save task
             self.file_output_task.cancel()
@@ -476,7 +369,7 @@ class ManagedStream:
             claim_info['claim_sequence'], claim_info.get('channel_name')
         )
 
-    async def update_content_claim(self, claim_info: typing.Optional[typing.Dict] = None):
+    async def update_content_claim(self, claim_info: Optional[typing.Dict] = None):
         if not claim_info:
             claim_info = await self.blob_manager.storage.get_content_claim(self.stream_hash)
         self.set_claim(claim_info, claim_info['value'])
