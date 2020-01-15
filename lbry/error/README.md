@@ -55,6 +55,7 @@ Code | Name | Message
 409 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
 410 | KeyFeeAboveMaxAllowed | {message}
 411 | InvalidPassword | Password is invalid.
+412 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
 **5xx** | Blob | **Blobs**
 500 | BlobNotFound | Blob not found.
 501 | BlobPermissionDenied | Permission denied to read blob.
