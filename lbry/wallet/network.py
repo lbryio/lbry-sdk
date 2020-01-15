@@ -5,6 +5,7 @@ from operator import itemgetter
 from typing import Dict, Optional, Tuple
 
 from lbry import __version__
+from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
 
@@ -97,8 +98,12 @@ class ClientSession(BaseClientSession):
                     await self.ensure_server_version()
                 retry_delay = default_delay
             except RPCError as e:
-                log.warning("Server error, ignoring for 1h: %s:%d -- %s", *self.server, e.message)
+                log.debug("Server error, ignoring for 1h: %s:%d -- %s", *self.server, e.message)
                 retry_delay = 60 * 60
+            except IncompatibleWalletServerError:
+                await self.close()
+                retry_delay = 60 * 60
+                log.debug("Wallet server has an incompatible version, retrying in 1h: %s:%d", *self.server)
             except (asyncio.TimeoutError, OSError):
                 await self.close()
                 retry_delay = min(60, retry_delay * 2)
@@ -112,9 +117,12 @@ class ClientSession(BaseClientSession):
 
     async def ensure_server_version(self, required=None, timeout=3):
         required = required or self.network.PROTOCOL_VERSION
-        return await asyncio.wait_for(
+        response = await asyncio.wait_for(
             self.send_request('server.version', [__version__, required]), timeout=timeout
         )
+        if tuple(int(piece) for piece in response[0].split(".")) < self.network.MINIMUM_REQUIRED:
+            raise IncompatibleWalletServerError(*self.server)
+        return response
 
     async def create_connection(self, timeout=6):
         connector = Connector(lambda: self, *self.server)
@@ -139,6 +147,7 @@ class ClientSession(BaseClientSession):
 class Network:
 
     PROTOCOL_VERSION = __version__
+    MINIMUM_REQUIRED = (0, 53, 2)
 
     def __init__(self, ledger):
         self.ledger = ledger

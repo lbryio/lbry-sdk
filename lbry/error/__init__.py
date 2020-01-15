@@ -209,6 +209,12 @@ class InvalidPasswordError(WalletError):
         super().__init__("Password is invalid.")
 
 
+class IncompatibleWalletServerError(WalletError):
+
+    def __init__(self, server, port):
+        super().__init__(f"'{server}:{port}' has an incompatibly old version.")
+
+
 class BlobError(BaseError):
     """
     **Blobs**

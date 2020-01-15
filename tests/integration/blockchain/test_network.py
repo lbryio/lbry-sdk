@@ -145,7 +145,9 @@ class ServerPickingTestCase(AsyncioTestCase):
         class FakeSession(RPCSession):
             async def handle_request(self, request):
                 await asyncio.sleep(latency)
-                return {"height": 1}
+                if request.method == 'server.version':
+                    return tuple(request.args)
+                return {'height': 1}
         server = await self.loop.create_server(lambda: FakeSession(), host='127.0.0.1', port=port)
         self.addCleanup(server.close)
         return '127.0.0.1', port
