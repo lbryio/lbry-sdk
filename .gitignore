@@ -5,6 +5,7 @@
 /.tox
 /.coverage*
 /lbry-venv
+/venv
 
 lbry.egg-info
 __pycache__
@@ -14,4 +15,3 @@ _trial_temp/
 /tests/.coverage.*
 
 /lbry/wallet/bin
-/venv

@@ -46,6 +46,8 @@ test:datanetwork-integration:
 test:blockchain-integration:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y --no-install-recommends ffmpeg
     - pip install tox-travis
     - tox -e blockchain
 

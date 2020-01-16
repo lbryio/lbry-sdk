@@ -26,17 +26,25 @@ class VideoFileAnalyzer:
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode() + stderr.decode(), process.returncode
 
+    async def _verify_executable(self, name):
+        try:
+            version, code = await self._execute(name, "-version")
+        except Exception as e:
+            log.warning("Unable to run %s, but it was requested. Message: %s", name, str(e))
+            code = -1
+            version = ""
+        if code != 0 or not version.startswith(name):
+            raise Exception(f"Unable to locate or run {name}. Please install FFmpeg "
+                            f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
+        return version
+
     async def _verify_ffmpeg_installed(self):
         if self._ffmpeg_installed:
             return
-        version, code = await self._execute("ffprobe", "-version")
-        if code != 0 or not version.startswith("ffprobe"):
-            raise Exception("Unable to locate ffprobe. Please install FFmpeg and ensure that it is callable via PATH.")
-        version, code = await self._execute("ffmpeg", "-version")
-        if code != 0 or not version.startswith("ffmpeg"):
-            raise Exception("Unable to locate ffmpeg. Please install FFmpeg and ensure that it is callable via PATH.")
+        await self._verify_executable("ffprobe")
+        version = await self._verify_executable("ffmpeg")
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0],
-                  shutil.which(self._conf.ffmpeg_folder + "ffmpeg"))
+                  shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg"))
         self._ffmpeg_installed = True
 
     def __init__(self, conf: TranscodeConfig):
@@ -48,8 +56,8 @@ class VideoFileAnalyzer:
         container = scan_data["format"]["format_name"]
         log.debug("   Detected container %s", container)
         if not self._matches(container.split(","), ["webm", "mp4", "3gp", "ogg"]):
-            return "Container format is not in the approved list of WebM, MP4. Actual: " \
-                   + container + " [" + scan_data["format"]["format_long_name"] + "]"
+            return "Container format is not in the approved list of WebM, MP4. " \
+                   f"Actual: {container} [{scan_data['format']['format_long_name']}]"
         return ""
 
     def _verify_video_encoding(self, scan_data: json):
@@ -59,12 +67,12 @@ class VideoFileAnalyzer:
             codec = stream["codec_name"]
             log.debug("   Detected video codec %s encoding %s", codec, stream["pix_fmt"])
             if not self._matches(codec.split(","), ["h264", "vp8", "vp9", "av1", "theora"]):
-                return "Video codec is not in the approved list of H264, VP8, VP9, AV1, Theora. Actual: " \
-                       + codec + " [" + stream["codec_long_name"] + "]"
+                return "Video codec is not in the approved list of H264, VP8, VP9, AV1, Theora. " \
+                       f"Actual: {codec} [{stream['codec_long_name']}]"
 
             if self._matches(codec.split(","), ["h264"]) and stream["pix_fmt"] != "yuv420p":
-                return "Video codec is H264, but its pixel format does not match the approved yuv420p. Actual: " \
-                       + stream["pix_fmt"]
+                return "Video codec is H264, but its pixel format does not match the approved yuv420p. " \
+                       f"Actual: {stream['pix_fmt']}"
 
         return ""
 
@@ -84,17 +92,17 @@ class VideoFileAnalyzer:
                 pixels = max(pixels, float(stream["height"]) * float(stream["width"]) * frame_rate)
 
         if pixels > 0.0 and pixels / bit_rate < 3.0:
-            return "Bits per second is excessive for this data; this may impact web streaming performance. Actual: " \
-                   + str(bit_rate / 1000000.0) + "Mbps"
+            return "Bits per second is excessive for this data; this may impact web streaming performance. " \
+                   f"Actual: {str(bit_rate / 1000000.0)} Mbps"
 
         return ""
 
-    async def _verify_faststart(self, scan_data: json, video_file):
+    async def _verify_fast_start(self, scan_data: json, video_file):
         container = scan_data["format"]["format_name"]
         if self._matches(container.split(","), ["webm", "ogg"]):
             return ""
 
-        result, _ = await self._execute("ffprobe", "-v debug \"" + video_file + "\"")
+        result, _ = await self._execute("ffprobe", f'-v debug "{video_file}"')
         iterator = re.finditer(r"\s+seeks:(\d+)\s+", result)
         for match in iterator:
             if int(match.group(1)) != 0:
@@ -108,12 +116,12 @@ class VideoFileAnalyzer:
             codec = stream["codec_name"]
             log.debug("   Detected audio codec %s", codec)
             if not self._matches(codec.split(","), ["aac", "mp3", "flac", "vorbis", "opus"]):
-                return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. Actual: " \
-                       + codec + " [" + stream["codec_long_name"] + "]"
+                return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
+                       f"Actual: {codec} [{stream['codec_long_name']}]"
 
         return ""
 
-    async def _verify_audio_volume(self, scan_data: json, seconds, video_file):
+    async def _verify_audio_volume(self, seconds, video_file):
         try:
             validate_volume = int(seconds) > 0
         except ValueError:
@@ -122,8 +130,8 @@ class VideoFileAnalyzer:
         if not validate_volume:
             return ""
 
-        result, _ = await self._execute("ffmpeg", f"-i \"{video_file}\" -t {seconds}"
-                                        + f" -af volumedetect -vn -sn -dn -f null \"{os.devnull}\"")
+        result, _ = await self._execute("ffmpeg", f'-i "{video_file}" -t {seconds} '
+                                        f'-af volumedetect -vn -sn -dn -f null "{os.devnull}"')
         try:
             mean_volume = float(re.search(r"mean_volume:\s+([-+]?\d*\.\d+|\d+)", result).group(1))
             max_volume = float(re.search(r"max_volume:\s+([-+]?\d*\.\d+|\d+)", result).group(1))
@@ -132,8 +140,8 @@ class VideoFileAnalyzer:
             return ""
 
         if max_volume < -5.0 and mean_volume < -22.0:
-            return "Audio is at least five dB lower than prime. Actual max: " + str(max_volume) \
-                   + ", mean: " + str(mean_volume)
+            return "Audio is at least five dB lower than prime. " \
+                   f"Actual max: {max_volume}, mean: {mean_volume}"
 
         log.debug("   Detected audio volume mean, max as %f dB, %f dB", mean_volume, max_volume)
 
@@ -158,13 +166,13 @@ class VideoFileAnalyzer:
             self._available_encoders, _ = await self._execute("ffmpeg", "-encoders -v quiet")
 
         encoder = self._conf.video_encoder.split(" ", 1)[0]
-        if re.search(r"^\s*V..... " + encoder + r" ", self._available_encoders, re.MULTILINE):
+        if re.search(fr"^\s*V..... {encoder} ", self._available_encoders, re.MULTILINE):
             return self._conf.video_encoder
 
         if re.search(r"^\s*V..... libx264 ", self._available_encoders, re.MULTILINE):
             if encoder:
                 log.warning("   Using libx264 since the requested encoder was unavailable. Requested: %s", encoder)
-            return "libx264 -crf 19 -vf \"format=yuv420p\""
+            return 'libx264 -crf 19 -vf "format=yuv420p"'
 
         if not encoder:
             encoder = "libx264"
@@ -172,48 +180,47 @@ class VideoFileAnalyzer:
         if re.search(r"^\s*V..... libvpx-vp9 ", self._available_encoders, re.MULTILINE):
             log.warning("   Using libvpx-vp9 since the requested encoder was unavailable. Requested: %s", encoder)
             crf = self._compute_crf(scan_data)
-            return "libvpx-vp9 -crf " + str(crf) + " b:v 0"
+            return f"libvpx-vp9 -crf {crf} -b:v 0"
 
         if re.search(r"^\s*V..... libtheora", self._available_encoders, re.MULTILINE):
             log.warning("   Using libtheora since the requested encoder was unavailable. Requested: %s", encoder)
             return "libtheora -q:v 7"
 
-        raise Exception("The video encoder is not available. Requested: " + encoder)
+        raise Exception(f"The video encoder is not available. Requested: {encoder}")
 
-    async def _get_audio_encoder(self, scan_data, video_encoder):
-        # if the video encoding is theora or av1/vp8/vp9 use vorbis
-        # or we don't have a video encoding but we have an ogg or webm container use vorbis
-        # if we need to use vorbis see if the conf file has one else use our own params
+    async def _get_audio_encoder(self, extension):
+        # if the video encoding is theora or av1/vp8/vp9 use opus (or fallback to vorbis)
+        # or we don't have a video encoding but we have an ogg or webm container use opus
+        # if we need to use opus/vorbis see if the conf file has it else use our own params
         # else use the user-set value if it exists
         # else use aac
 
-        if video_encoder:
-            wants_opus = any(encoder in video_encoder for encoder in ["av1", "vp8", "vp9", "theora"])
-        else:  # we're not re-encoding video
-            container = scan_data["format"]["format_name"]
-            wants_opus = self._matches(container.split(","), ["webm"])
-
+        wants_opus = extension != "mp4"
         if not self._available_encoders:
             self._available_encoders, _ = await self._execute("ffmpeg", "-encoders -v quiet")
+
+        encoder = self._conf.audio_encoder.split(" ", 1)[0]
+        if wants_opus and 'opus' in encoder:
+            return self._conf.audio_encoder
 
         if wants_opus and re.search(r"^\s*A..... libopus ", self._available_encoders, re.MULTILINE):
             return "libopus -b:a 160k"
 
+        if wants_opus and 'vorbis' in encoder:
+            return self._conf.audio_encoder
+
         if wants_opus and re.search(r"^\s*A..... libvorbis ", self._available_encoders, re.MULTILINE):
             return "libvorbis -q:a 6"
 
-        encoder = self._conf.audio_encoder.split(" ", 1)[0]
-        if re.search(r"^\s*A..... " + encoder + r" ", self._available_encoders, re.MULTILINE):
+        if re.search(fr"^\s*A..... {encoder} ", self._available_encoders, re.MULTILINE):
             return self._conf.audio_encoder
 
         if re.search(r"^\s*A..... aac ", self._available_encoders, re.MULTILINE):
             return "aac -b:a 192k"
 
-        if not encoder:
-            encoder = "aac"
-        raise Exception("The audio encoder is not available. Requested: " + encoder)
+        raise Exception(f"The audio encoder is not available. Requested: {encoder or 'aac'}")
 
-    async def _get_volume_filter(self, scan_data):
+    async def _get_volume_filter(self):
         return self._conf.volume_filter if self._conf.volume_filter else "-af loudnorm"
 
     def _get_best_container_extension(self, scan_data, video_encoder):
@@ -234,42 +241,46 @@ class VideoFileAnalyzer:
 
         if "theora" in video_encoder:
             return "ogg"
-        elif re.search("vp[89x]|av1", video_encoder.split(" ", 1)[0]):
+        elif re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
             return "webm"
         return "mp4"
+
+    async def _get_scan_data(self, validate, file_path):
+        result, _ = await self._execute("ffprobe",
+                                        f'-v quiet -print_format json -show_format -show_streams "{file_path}"')
+        try:
+            scan_data = json.loads(result)
+        except Exception as e:
+            log.debug("Failure in JSON parsing ffprobe results. Message: %s", str(e))
+            if validate:
+                raise Exception(f'Invalid video file: {file_path}')
+            log.info("Unable to optimize %s . FFmpeg output was unreadable.", file_path)
+            return
+
+        if "format" not in scan_data:
+            if validate:
+                raise Exception(f'Unexpected video file contents in: {file_path}')
+            log.info("Unable to optimize %s . FFmpeg output is missing the format section.", file_path)
+            return
+
+        return scan_data
 
     async def verify_or_repair(self, validate, repair, file_path):
         if not validate and not repair:
             return file_path
 
         await self._verify_ffmpeg_installed()
+        scan_data = await self._get_scan_data(validate, file_path)
 
-        result, _ = await self._execute("ffprobe",
-                                        f"-v quiet -print_format json -show_format -show_streams \"{file_path}\"")
-        try:
-            scan_data = json.loads(result)
-        except Exception as e:
-            log.debug("Failure in JSON parsing ffprobe results. Message: %s", str(e))
-            if validate:
-                raise Exception('Invalid video file: ' + file_path)
-            log.info("Unable to optimize %s . FFmpeg output was unreadable.", file_path)
-            return
-
-        if "format" not in scan_data:
-            if validate:
-                raise Exception('Unexpected video file contents: ' + file_path)
-            log.info("Unable to optimize %s . FFmpeg output is missing the format section.", file_path)
-            return
-
-        faststart_msg = await self._verify_faststart(scan_data, file_path)
+        fast_start_msg = await self._verify_fast_start(scan_data, file_path)
         log.debug("Analyzing %s:", file_path)
-        log.debug("   Detected faststart is %s", "false" if faststart_msg else "true")
+        log.debug("   Detected faststart is %s", "false" if fast_start_msg else "true")
         container_msg = self._verify_container(scan_data)
         bitrate_msg = self._verify_bitrate(scan_data)
         video_msg = self._verify_video_encoding(scan_data)
         audio_msg = self._verify_audio_encoding(scan_data)
-        volume_msg = await self._verify_audio_volume(scan_data, self._conf.volume_analysis_time, file_path)
-        messages = [container_msg, bitrate_msg, faststart_msg, video_msg, audio_msg, volume_msg]
+        volume_msg = await self._verify_audio_volume(self._conf.volume_analysis_time, file_path)
+        messages = [container_msg, bitrate_msg, fast_start_msg, video_msg, audio_msg, volume_msg]
 
         if not any(messages):
             return file_path
@@ -278,7 +289,7 @@ class VideoFileAnalyzer:
             errors = "Streamability verification failed:\n"
             for message in messages:
                 if message:
-                    errors += "   " + message + "\n"
+                    errors += f"   {message}\n"
 
             raise Exception(errors)
 
@@ -288,37 +299,36 @@ class VideoFileAnalyzer:
         # we also re-encode if our bitrate is too high
 
         try:
-            transcode_command = f"-i \"{file_path}\" -y -c:s copy -c:d copy -c:v "
+            transcode_command = f'-i "{file_path}" -y -c:s copy -c:d copy -c:v '
 
             video_encoder = ""
             if video_msg or bitrate_msg:
                 video_encoder = await self._get_video_encoder(scan_data)
-                transcode_command += video_encoder + " "
+                transcode_command += f"{video_encoder} "
             else:
                 transcode_command += "copy "
 
             transcode_command += "-movflags +faststart -c:a "
-
-            if audio_msg or volume_msg:
-                audio_encoder = await self._get_audio_encoder(scan_data, video_encoder)
-                transcode_command += audio_encoder + " "
-                if volume_msg:
-                    volume_filter = await self._get_volume_filter(scan_data)
-                    transcode_command += volume_filter + " "
-            else:
-                transcode_command += "copy "
-
             path = pathlib.Path(file_path)
             extension = self._get_best_container_extension(scan_data, video_encoder)
 
+            if audio_msg or volume_msg:
+                audio_encoder = await self._get_audio_encoder(extension)
+                transcode_command += f"{audio_encoder} "
+                if volume_msg:
+                    volume_filter = await self._get_volume_filter()
+                    transcode_command += f"{volume_filter} "
+            else:
+                transcode_command += "copy "
+
             # TODO: put it in a temp folder and delete it after we upload?
-            output = path.parent / (path.stem + "_fixed." + extension)
-            transcode_command += '"' + str(output) + '"'
+            output = path.parent / f"{path.stem}_fixed.{extension}"
+            transcode_command += f'"{output}"'
 
             log.info("Proceeding on transcode via: ffmpeg %s", transcode_command)
             result, code = await self._execute("ffmpeg", transcode_command)
             if code != 0:
-                raise Exception("Failure to complete the transcode command. Output: " + result)
+                raise Exception(f"Failure to complete the transcode command. Output: {result}")
         except Exception as e:
             if validate:
                 raise
