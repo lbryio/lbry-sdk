@@ -127,7 +127,7 @@ build:windows:
     - rmdir -Recurse venv
   script:
     - pip install --upgrade 'setuptools<45.0.0'
-    - pip install pyinstaller
+    - pip install pyinstaller==3.5
     - python docker/set_build.py
     - pip install -e .
     - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
