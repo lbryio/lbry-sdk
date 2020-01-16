@@ -475,8 +475,10 @@ class UPnPComponent(Component):
             if self.external_ip:
                 log.info("detected external ip using lbry.com fallback")
         if self.component_manager.analytics_manager:
-            await self.component_manager.analytics_manager.send_upnp_setup_success_fail(
-                success, await self.get_status()
+            self.component_manager.loop.create_task(
+                self.component_manager.analytics_manager.send_upnp_setup_success_fail(
+                    success, await self.get_status()
+                )
             )
         self._maintain_redirects_task = self.component_manager.loop.create_task(
             self._repeatedly_maintain_redirects(now=False)
