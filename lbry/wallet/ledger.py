@@ -271,7 +271,7 @@ class Ledger(metaclass=LedgerRegistry):
     async def get_local_status_and_history(self, address, history=None):
         if not history:
             address_details = await self.db.get_address(address=address)
-            history = address_details['history'] or ''
+            history = (address_details['history'] if address_details else '') or ''
         parts = history.split(':')[:-1]
         return (
             hexlify(sha256(history.encode())).decode() if history else None,
@@ -616,9 +616,12 @@ class Ledger(metaclass=LedgerRegistry):
             )) for address_record in records
         ], timeout=timeout)
         if pending:
+            records = await self.db.get_addresses(address__in=addresses)
             for record in records:
                 found = False
-                _, local_history = await self.get_local_status_and_history(None, history=record['history'])
+                local_history = (await self.get_local_status_and_history(
+                    record['address'], history=record['history']
+                ))[1] if record['history'] else []
                 for txid, local_height in local_history:
                     if txid == tx.id and local_height >= height:
                         found = True

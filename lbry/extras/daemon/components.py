@@ -135,11 +135,11 @@ class WalletComponent(Component):
             local_height = self.wallet_manager.ledger.local_height_including_downloaded_height
             disk_height = len(self.wallet_manager.ledger.headers)
             remote_height = self.wallet_manager.ledger.network.remote_height
-            if disk_height != local_height != remote_height:
-                download_height, target_height = local_height - disk_height, remote_height - disk_height
+            download_height, target_height = local_height - disk_height, remote_height - disk_height
+            if target_height > 0:
+                progress = min(max(math.ceil(float(download_height) / float(target_height) * 100), 0), 100)
             else:
-                download_height, target_height = local_height, remote_height
-            progress = min(max(math.ceil(float(download_height) / float(target_height) * 100), 0), 100)
+                progress = 100
             best_hash = self.wallet_manager.get_best_blockhash()
             result.update({
                 'headers_synchronization_progress': progress,
@@ -475,8 +475,10 @@ class UPnPComponent(Component):
             if self.external_ip:
                 log.info("detected external ip using lbry.com fallback")
         if self.component_manager.analytics_manager:
-            await self.component_manager.analytics_manager.send_upnp_setup_success_fail(
-                success, await self.get_status()
+            self.component_manager.loop.create_task(
+                self.component_manager.analytics_manager.send_upnp_setup_success_fail(
+                    success, await self.get_status()
+                )
             )
         self._maintain_redirects_task = self.component_manager.loop.create_task(
             self._repeatedly_maintain_redirects(now=False)

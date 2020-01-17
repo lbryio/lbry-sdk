@@ -375,6 +375,9 @@ class TestQueries(AsyncioTestCase):
         self.assertListEqual([0, 3, 2, 1], [tx.height for tx in txs])
         self.assertListEqual([tx4.id, tx3.id, tx2.id, tx1.id], [tx.id for tx in txs])
 
+    async def test_empty_history(self):
+        self.assertEqual((None, []), await self.ledger.get_local_status_and_history(''))
+
 
 class TestUpgrade(AsyncioTestCase):
 
