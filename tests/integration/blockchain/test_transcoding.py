@@ -5,7 +5,7 @@ import time
 import lbry.wallet  # just to make the following line work:
 from lbry.conf import TranscodeConfig
 from lbry.file_analysis import VideoFileAnalyzer
-from tests.integration.blockchain.test_claim_commands import ClaimTestCase
+from .test_claim_commands import ClaimTestCase
 
 log = logging.getLogger(__name__)
 
@@ -146,4 +146,3 @@ class TranscodeValidation(ClaimTestCase):
                 await self.analyzer.verify_or_repair(True, False, self.video_file_name)
         finally:
             self.conf.ffmpeg_folder = ""
-

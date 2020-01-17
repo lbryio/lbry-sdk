@@ -286,12 +286,9 @@ class VideoFileAnalyzer:
             return file_path
 
         if not repair:
-            errors = "Streamability verification failed:\n"
-            for message in messages:
-                if message:
-                    errors += f"   {message}\n"
-
-            raise Exception(errors)
+            errors = ["Streamability verification failed:"]
+            errors.extend(filter(None, messages))
+            raise Exception("\n   ".join(errors))
 
         # the plan for transcoding:
         # we have to re-encode the video if it is in a nonstandard format
@@ -299,34 +296,35 @@ class VideoFileAnalyzer:
         # we also re-encode if our bitrate is too high
 
         try:
-            transcode_command = f'-i "{file_path}" -y -c:s copy -c:d copy -c:v '
+            transcode_command = [f'-i "{file_path}" -y -c:s copy -c:d copy -c:v']
 
             video_encoder = ""
             if video_msg or bitrate_msg:
                 video_encoder = await self._get_video_encoder(scan_data)
-                transcode_command += f"{video_encoder} "
+                transcode_command.append(video_encoder)
             else:
-                transcode_command += "copy "
+                transcode_command.append("copy")
 
-            transcode_command += "-movflags +faststart -c:a "
+            transcode_command.append("-movflags +faststart -c:a")
             path = pathlib.Path(file_path)
             extension = self._get_best_container_extension(scan_data, video_encoder)
 
             if audio_msg or volume_msg:
                 audio_encoder = await self._get_audio_encoder(extension)
-                transcode_command += f"{audio_encoder} "
+                transcode_command.append(audio_encoder)
                 if volume_msg:
                     volume_filter = await self._get_volume_filter()
-                    transcode_command += f"{volume_filter} "
+                    transcode_command.append(volume_filter)
             else:
-                transcode_command += "copy "
+                transcode_command.append("copy")
 
             # TODO: put it in a temp folder and delete it after we upload?
             output = path.parent / f"{path.stem}_fixed.{extension}"
-            transcode_command += f'"{output}"'
+            transcode_command.append(f'"{output}"')
 
-            log.info("Proceeding on transcode via: ffmpeg %s", transcode_command)
-            result, code = await self._execute("ffmpeg", transcode_command)
+            ffmpeg_command = " ".join(transcode_command)
+            log.info("Proceeding on transcode via: ffmpeg %s", ffmpeg_command)
+            result, code = await self._execute("ffmpeg", ffmpeg_command)
             if code != 0:
                 raise Exception(f"Failure to complete the transcode command. Output: {result}")
         except Exception as e:
