@@ -3,7 +3,7 @@ import math
 import time
 
 # Half life in blocks
-HALF_LIFE = 288
+HALF_LIFE = 144
 
 # Decay coefficient per block
 DECAY = 0.5**(1.0/HALF_LIFE)
@@ -34,7 +34,7 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
     # Minnow boost
     boost = 0.0
     if spike_height > 0.0 and (trending_score + spike_height) > 0.0:
-        boost = math.exp(-0.5*(trending_score + spike_height)/time_boost)
+        boost = math.exp(-(trending_score + spike_height)/time_boost)*(x - x_old)**0.25
     spike_height += time_boost*boost
 
     return spike_height
