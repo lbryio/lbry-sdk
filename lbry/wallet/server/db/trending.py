@@ -15,7 +15,7 @@ SAVE_INTERVAL = 10
 RENORM_INTERVAL = 1000
 
 # Assertion
-assert (RENORM_INTERVAL % SAVE_INTERVAL == 0)
+assert RENORM_INTERVAL % SAVE_INTERVAL == 0
 
 # Decay coefficient per renormalisation interval
 DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
