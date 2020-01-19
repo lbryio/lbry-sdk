@@ -594,3 +594,33 @@ class TestContentBlocking(TestSQLDB):
         self.assertEqual({channel.claim_hash: 1}, censor.blocked_claims)
         self.assertEqual({a_channel.claim_hash: 1}, censor.blocked_channels)
         self.assertEqual({}, censor.blocked_tags)
+
+    def test_pagination(self):
+        one, two, three, four, five, six, seven = (
+            self.advance(1, [self.get_stream('One', COIN, tags=["mature"])])[0],
+            self.advance(2, [self.get_stream('Two', COIN, tags=["mature"])])[0],
+            self.advance(3, [self.get_stream('Three', COIN)])[0],
+            self.advance(4, [self.get_stream('Four', COIN)])[0],
+            self.advance(5, [self.get_stream('Five', COIN)])[0],
+            self.advance(6, [self.get_stream('Six', COIN)])[0],
+            self.advance(7, [self.get_stream('Seven', COIN)])[0],
+        )
+
+        # nothing blocked
+        results, censor = reader._search(order_by='^height', offset=1, limit=3)
+        self.assertEqual(3, len(results))
+        self.assertEqual(
+            [two.claim_hash, three.claim_hash, four.claim_hash],
+            [r['claim_hash'] for r in results]
+        )
+        self.assertEqual(0, censor.total)
+
+        # tags blocked
+        results, censor = reader._search(order_by='^height', not_tags=('mature',), offset=1, limit=3)
+        self.assertEqual(3, len(results))
+        self.assertEqual(
+            [four.claim_hash, five.claim_hash, six.claim_hash],
+            [r['claim_hash'] for r in results]
+        )
+        self.assertEqual(2, censor.total)
+        self.assertEqual({"mature": 2}, censor.blocked_tags)

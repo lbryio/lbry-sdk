@@ -753,7 +753,7 @@ class Ledger(metaclass=LedgerRegistry):
     async def resolve_collection(self, collection, offset=0, page_size=1):
         claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
         try:
-            resolve_results, _, _ = await self.claim_search([], claim_ids=claim_ids)
+            resolve_results, _, _, _ = await self.claim_search([], claim_ids=claim_ids)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                 raise

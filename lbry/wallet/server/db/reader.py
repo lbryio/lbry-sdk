@@ -166,14 +166,18 @@ def encode_result(result):
 
 
 @measure
-def execute_query(sql, values, row_limit, censor) -> List:
+def execute_query(sql, values, row_offset: int, row_limit: int, censor: Censor) -> List:
     context = ctx.get()
     context.set_query_timeout()
     try:
         c = context.db.cursor()
         def row_filter(cursor, row):
+            nonlocal row_offset
             row = row_factory(cursor, row)
             if len(row) > 1 and censor.censor(row):
+                return
+            if row_offset:
+                row_offset -= 1
                 return
             return row
         c.setrowtrace(row_filter)
@@ -197,8 +201,11 @@ def execute_query(sql, values, row_limit, censor) -> List:
 
 def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'order_by' in constraints:
+        order_by_parts = constraints['order_by']
+        if isinstance(order_by_parts, str):
+            order_by_parts = [order_by_parts]
         sql_order_by = []
-        for order_by in constraints['order_by']:
+        for order_by in order_by_parts:
             is_asc = order_by.startswith('^')
             column = order_by[1:] if is_asc else order_by
             if column not in ORDER_FIELDS:
@@ -322,12 +329,12 @@ def get_claims(cols, for_count=False, **constraints) -> Tuple[List, Censor]:
     censor = Censor(
         ctx.get().blocked_claims,
         {unhexlify(ncid)[::-1] for ncid in constraints.pop('not_channel_ids', [])},
-        set(constraints.pop('not_tags', {}))
+        set(clean_tags(constraints.pop('not_tags', {})))
     )
+    row_offset = constraints.pop('offset', 0)
     row_limit = constraints.pop('limit', 20)
-    constraints['limit'] = 1000
     sql, values = _get_claims(cols, for_count, **constraints)
-    return execute_query(sql, values, row_limit, censor), censor
+    return execute_query(sql, values, row_offset, row_limit, censor), censor
 
 
 @measure
@@ -354,10 +361,7 @@ def _search(**constraints) -> Tuple[List, Censor]:
         claim.short_url, claim.canonical_url,
         claim.channel_hash, claim.reposted_claim_hash,
         claim.signature_valid,
-        COALESCE(
-            (SELECT group_concat(tag) FROM tag WHERE tag.claim_hash = claim.claim_hash),
-            ""
-        ) as tags 
+        COALESCE((SELECT group_concat(tag) FROM tag WHERE tag.claim_hash = claim.claim_hash), "") as tags 
         """, **constraints
     )
 

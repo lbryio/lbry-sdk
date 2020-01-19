@@ -2321,7 +2321,12 @@ class Daemon(metaclass=JSONRPCServerType):
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
-        result = {"items": txos, "page": page_num, "page_size": page_size}
+        result = {
+            "items": txos,
+            "blocked": blocked,
+            "page": page_num,
+            "page_size": page_size
+        }
         if not kwargs.pop('no_totals', False):
             result['total_pages'] = int((total + (page_size - 1)) / page_size)
             result['total_items'] = total
@@ -2756,7 +2761,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
-        channels, _, _ = await self.ledger.claim_search(
+        channels, _, _, _ = await self.ledger.claim_search(
             wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:
