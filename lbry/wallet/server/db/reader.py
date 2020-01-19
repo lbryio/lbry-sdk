@@ -452,6 +452,10 @@ def resolve_url(raw_url):
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+
+    all_items = {item for item in all_items if item not in not_items}
+    any_items = {item for item in any_items if item not in not_items}
 
     any_queries = {}
 
@@ -525,6 +529,26 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             constraints[f'#_all_{attr}'] = f"""
                 {len(all_items)}=(
                     SELECT count(*) FROM {attr} WHERE
+                        claim.claim_hash={attr}.claim_hash
+                    AND {attr} IN ({values})
+                )
+            """
+
+    if not_items:
+        constraints.update({
+            f'$not_{attr}{i}': item for i, item in enumerate(not_items)
+        })
+        values = ', '.join(
+            f':$not_{attr}{i}' for i in range(len(not_items))
+        )
+        if for_count:
+            constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            """
+        else:
+            constraints[f'#_not_{attr}'] = f"""
+                NOT EXISTS(
+                    SELECT 1 FROM {attr} WHERE
                         claim.claim_hash={attr}.claim_hash
                     AND {attr} IN ({values})
                 )
