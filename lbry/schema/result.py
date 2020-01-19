@@ -44,15 +44,15 @@ class Censor:
         for channel_hash, count in self.blocked_claims.items():
             block = outputs.blocked.add()
             block.count = count
-            block.ban_channel = channel_hash
+            block.reposted_in_channel = channel_hash
         for channel_hash, count in self.blocked_channels.items():
             block = outputs.blocked.add()
             block.count = count
-            block.not_channel = channel_hash
+            block.in_channel = channel_hash
         for tag, count in self.blocked_tags.items():
             block = outputs.blocked.add()
             block.count = count
-            block.not_tag = tag
+            block.has_tag = tag
 
 
 class Outputs:
@@ -74,44 +74,20 @@ class Outputs:
         for txo_message in self.extra_txos:
             self.message_to_txo(txo_message, tx_map)
         txos = [self.message_to_txo(txo_message, tx_map) for txo_message in self.txos]
-        return txos, self.inflate_blocked(txs)
+        return txos, self.inflate_blocked()
+
+    def inflate_blocked(self):
+        result = {"total": self.blocked_total}
+        for blocked_message in self.blocked:
+            reason = blocked_message.WhichOneof('reason')
+            if reason == "has_tag":
+                key = blocked_message.has_tag
+            else:
+                key = hexlify(getattr(blocked_message, reason)[::-1]).decode()
+            result.setdefault(reason, {})[key] = blocked_message.count
+        return result
 
     def message_to_txo(self, txo_message, tx_map):
-        if txo_message.WhichOneof('meta') == 'error':
-            return None
-        txo = tx_map[txo_message.tx_hash].outputs[txo_message.nout]
-        if txo_message.WhichOneof('meta') == 'claim':
-            claim = txo_message.claim
-            txo.meta = {
-                'short_url': f'lbry://{claim.short_url}',
-                'canonical_url': f'lbry://{claim.canonical_url or claim.short_url}',
-                'reposted': claim.reposted,
-                'is_controlling': claim.is_controlling,
-                'take_over_height': claim.take_over_height,
-                'creation_height': claim.creation_height,
-                'activation_height': claim.activation_height,
-                'expiration_height': claim.expiration_height,
-                'effective_amount': claim.effective_amount,
-                'support_amount': claim.support_amount,
-                'trending_group': claim.trending_group,
-                'trending_mixed': claim.trending_mixed,
-                'trending_local': claim.trending_local,
-                'trending_global': claim.trending_global,
-            }
-            if claim.HasField('channel'):
-                txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
-            if claim.HasField('repost'):
-                txo.reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
-            try:
-                if txo.claim.is_channel:
-                    txo.meta['claims_in_channel'] = claim.claims_in_channel
-            except:
-                pass
-        return txo
-
-    def inflate_blocked(self, txs):
-        blocked = {}
-        return
         if txo_message.WhichOneof('meta') == 'error':
             return None
         txo = tx_map[txo_message.tx_hash].outputs[txo_message.nout]
