@@ -475,9 +475,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if self.conf.prometheus_port:
             try:
-                metrics_site = web.TCPSite(self.metrics_runner, "0.0.0.0", self.conf.prometheus_port, shutdown_timeout=.5)
-                await metrics_site.start()
-                log.info('metrics server listening on TCP %s:%i', *metrics_site._server.sockets[0].getsockname()[:2])
+                metrics = web.TCPSite(self.metrics_runner, "0.0.0.0", self.conf.prometheus_port, shutdown_timeout=.5)
+                await metrics.start()
+                log.info('metrics server listening on TCP %s:%i', *metrics._server.sockets[0].getsockname()[:2])
             except OSError as e:
                 log.error('metrics server failed to bind TCP :%i', self.conf.prometheus_port)
                 await self.analytics_manager.send_server_startup_error(str(e))
