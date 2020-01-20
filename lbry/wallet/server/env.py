@@ -59,6 +59,7 @@ class Env:
             self.ssl_certfile = self.required('SSL_CERTFILE')
             self.ssl_keyfile = self.required('SSL_KEYFILE')
         self.rpc_port = self.integer('RPC_PORT', 8000)
+        self.prometheus_port = self.integer('PROMETHEUS_PORT', 0)
         self.max_subscriptions = self.integer('MAX_SUBSCRIPTIONS', 10000)
         self.banner_file = self.default('BANNER_FILE', None)
         self.tor_banner_file = self.default('TOR_BANNER_FILE', self.banner_file)

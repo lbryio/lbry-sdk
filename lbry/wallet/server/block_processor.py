@@ -749,7 +749,7 @@ class LBRYBlockProcessor(BlockProcessor):
         timer = self.timer.sub_timers['advance_blocks']
         undo = timer.run(super().advance_txs, height, txs, header, timer_name='super().advance_txs')
         timer.run(self.sql.advance_txs, height, txs, header, self.daemon.cached_height(), forward_timer=True)
-        if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(20):
+        if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(10):
             self.timer.show(height=height)
         return undo
 
