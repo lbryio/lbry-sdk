@@ -17,7 +17,7 @@ from functools import wraps, partial
 import ecdsa
 import base58
 from aiohttp import web
-from prometheus_client import generate_latest as prom_generate_latest, CONTENT_TYPE_LATEST as PROM_CONTENT_TYPE_LATEST
+from prometheus_client import generate_latest as prom_generate_latest
 from google.protobuf.message import DecodeError
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
