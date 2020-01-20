@@ -2186,7 +2186,6 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--claim_id=<claim_id> | --claim_ids=<claim_ids>...]
                          [--channel=<channel> |
                              [[--channel_ids=<channel_ids>...] [--not_channel_ids=<not_channel_ids>...]]]
-                         [--blocklist_channel_ids=<blocklist_channel_ids>...]
                          [--has_channel_signature] [--valid_channel_signature | --invalid_channel_signature]
                          [--is_controlling] [--release_time=<release_time>] [--public_key_id=<public_key_id>]
                          [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
@@ -2227,9 +2226,6 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     use in conjunction with --valid_channel_signature
             --not_channel_ids=<not_channel_ids>: (list) exclude claims signed by any of these channels
                                                     (arguments must be claim ids of the channels)
-            --blocklist_channel_ids=<blocklist_channel_ids>: (list) channel_ids of channels containing
-                                                     reposts of claims you want to be blocked from
-                                                     search results
             --has_channel_signature         : (bool) claims with a channel signature (valid or invalid)
             --valid_channel_signature       : (bool) claims with a valid channel signature or no signature,
                                                      use in conjunction with --has_channel_signature to
@@ -2320,8 +2316,13 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
-        result = {"items": txos, "page": page_num, "page_size": page_size}
+        txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+        result = {
+            "items": txos,
+            "blocked": blocked,
+            "page": page_num,
+            "page_size": page_size
+        }
         if not kwargs.pop('no_totals', False):
             result['total_pages'] = int((total + (page_size - 1)) / page_size)
             result['total_items'] = total
@@ -2756,7 +2757,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
-        channels, _, _ = await self.ledger.claim_search(
+        channels, _, _, _ = await self.ledger.claim_search(
             wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:

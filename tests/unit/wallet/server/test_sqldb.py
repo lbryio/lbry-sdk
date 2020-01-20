@@ -3,8 +3,8 @@ import ecdsa
 import hashlib
 import logging
 from binascii import hexlify
-from lbry.wallet.constants import COIN, NULL_HASH32
 
+from lbry.wallet.constants import COIN, NULL_HASH32
 from lbry.schema.claim import Claim
 from lbry.wallet.server.db import reader, writer
 from lbry.wallet.server.coin import LBCRegTest
@@ -36,10 +36,13 @@ class TestSQLDB(unittest.TestCase):
         self.daemon_height = 1
         self.coin = LBCRegTest()
         db_url = 'file:test_sqldb?mode=memory&cache=shared'
-        self.sql = writer.SQLDB(self, db_url)
+        self.sql = writer.SQLDB(self, db_url, [])
         self.addCleanup(self.sql.close)
         self.sql.open()
-        reader.initializer(logging.getLogger(__name__), db_url, 'regtest', self.query_timeout)
+        reader.initializer(
+            logging.getLogger(__name__), db_url, 'regtest',
+            self.query_timeout, blocked_claims=self.sql.blocked_claims
+        )
         self.addCleanup(reader.cleanup)
         self.timer = Timer('BlockProcessor')
         self._current_height = 0
@@ -74,9 +77,9 @@ class TestSQLDB(unittest.TestCase):
             Input.spend(channel)
         )
 
-    def get_stream(self, title, amount, name='foo', channel=None):
+    def get_stream(self, title, amount, name='foo', channel=None, **kwargs):
         claim = Claim()
-        claim.stream.title = title
+        claim.stream.update(title=title, **kwargs)
         result = self._make_tx(Output.pay_claim_name_pubkey_hash(amount, name, claim, b'abc'))
         if channel:
             result[0].outputs[0].sign(channel)
@@ -94,6 +97,14 @@ class TestSQLDB(unittest.TestCase):
         if channel:
             result[0].outputs[0].sign(channel)
             result[0]._reset()
+        return result
+
+    def get_repost(self, claim_id, amount, channel):
+        claim = Claim()
+        claim.repost.reference.claim_id = claim_id
+        result = self._make_tx(Output.pay_claim_name_pubkey_hash(amount, 'repost', claim, b'abc'))
+        result[0].outputs[0].sign(channel)
+        result[0]._reset()
         return result
 
     def get_abandon(self, tx):
@@ -319,7 +330,7 @@ class TestClaimtrie(TestSQLDB):
         advance, state = self.advance, self.state
         stream = self.get_stream('Claim A', 10*COIN)
         advance(10, [stream, self.get_stream_update(stream, 11*COIN)])
-        self.assertTrue(reader._search())
+        self.assertTrue(reader._search()[0])
 
     def test_double_updates_in_same_block(self):
         advance, state = self.advance, self.state
@@ -327,13 +338,13 @@ class TestClaimtrie(TestSQLDB):
         advance(10, [stream])
         update = self.get_stream_update(stream, 11*COIN)
         advance(20, [update, self.get_stream_update(update, 9*COIN)])
-        self.assertTrue(reader._search())
+        self.assertTrue(reader._search()[0])
 
     def test_create_and_abandon_in_same_block(self):
         advance, state = self.advance, self.state
         stream = self.get_stream('Claim A', 10*COIN)
         advance(10, [stream, self.get_abandon(stream)])
-        self.assertFalse(reader._search())
+        self.assertFalse(reader._search()[0])
 
     def test_update_and_abandon_in_same_block(self):
         advance, state = self.advance, self.state
@@ -341,14 +352,14 @@ class TestClaimtrie(TestSQLDB):
         advance(10, [stream])
         update = self.get_stream_update(stream, 11*COIN)
         advance(20, [update, self.get_abandon(update)])
-        self.assertFalse(reader._search())
+        self.assertFalse(reader._search()[0])
 
     def test_create_update_and_delete_in_same_block(self):
         advance, state = self.advance, self.state
         stream = self.get_stream('Claim A', 10*COIN)
         update = self.get_stream_update(stream, 11*COIN)
         advance(10, [stream, update, self.get_abandon(update)])
-        self.assertFalse(reader._search())
+        self.assertFalse(reader._search()[0])
 
     def test_support_added_and_removed_in_same_block(self):
         advance, state = self.advance, self.state
@@ -356,7 +367,7 @@ class TestClaimtrie(TestSQLDB):
         advance(10, [stream])
         support = self.get_support(stream, COIN)
         advance(20, [support, self.get_abandon(support)])
-        self.assertEqual(reader._search()[0]['support_amount'], 0)
+        self.assertEqual(reader._search()[0][0]['support_amount'], 0)
 
     @staticmethod
     def _get_x_with_claim_id_prefix(getter, prefix, cached_iteration=None, **kwargs):
@@ -385,7 +396,7 @@ class TestClaimtrie(TestSQLDB):
         txo_chan_ab = tx_chan_ab[0].outputs[0]
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
-        r_ab, r_a = reader._search(order_by=['creation_height'], limit=2)
+        (r_ab, r_a), _ = reader._search(order_by=['creation_height'], limit=2)
         self.assertEqual("@foo#a", r_a['short_url'])
         self.assertEqual("@foo#ab", r_ab['short_url'])
         self.assertIsNone(r_a['canonical_url'])
@@ -398,7 +409,7 @@ class TestClaimtrie(TestSQLDB):
         tx_abc = self.get_stream_with_claim_id_prefix('abc', 65)
         advance(3, [tx_a])
         advance(4, [tx_ab, tx_abc])
-        r_abc, r_ab, r_a = reader._search(order_by=['creation_height', 'tx_position'], limit=3)
+        (r_abc, r_ab, r_a), _ = reader._search(order_by=['creation_height', 'tx_position'], limit=3)
         self.assertEqual("foo#a", r_a['short_url'])
         self.assertEqual("foo#ab", r_ab['short_url'])
         self.assertEqual("foo#abc", r_abc['short_url'])
@@ -412,51 +423,51 @@ class TestClaimtrie(TestSQLDB):
         ab2_claim = tx_ab2[0].outputs[0]
         advance(6, [tx_a2])
         advance(7, [tx_ab2])
-        r_ab2, r_a2 = reader._search(order_by=['creation_height'], limit=2)
+        (r_ab2, r_a2), _ = reader._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
         self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
         self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
-        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0][0]['claims_in_channel'])
 
         # change channel public key, invaliding stream claim signatures
         advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
-        r_ab2, r_a2 = reader._search(order_by=['creation_height'], limit=2)
+        (r_ab2, r_a2), _ = reader._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
         self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
         self.assertIsNone(r_a2['canonical_url'])
         self.assertIsNone(r_ab2['canonical_url'])
-        self.assertEqual(0, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+        self.assertEqual(0, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0][0]['claims_in_channel'])
 
         # reinstate previous channel public key (previous stream claim signatures become valid again)
         channel_update = self.get_channel_update(txo_chan_a, COIN, key=b'c')
         advance(9, [channel_update])
-        r_ab2, r_a2 = reader._search(order_by=['creation_height'], limit=2)
+        (r_ab2, r_a2), _ = reader._search(order_by=['creation_height'], limit=2)
         self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
         self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
         self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
         self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
-        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-        self.assertEqual(0, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
+        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0][0]['claims_in_channel'])
+        self.assertEqual(0, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0][0]['claims_in_channel'])
 
         # change channel of stream
-        self.assertEqual("@foo#a/foo#ab", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
+        self.assertEqual("@foo#a/foo#ab", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0][0]['canonical_url'])
         tx_ab2 = self.get_stream_update(tx_ab2, COIN, txo_chan_ab)
         advance(10, [tx_ab2])
-        self.assertEqual("@foo#ab/foo#a", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
+        self.assertEqual("@foo#ab/foo#a", reader._search(claim_id=ab2_claim.claim_id, limit=1)[0][0]['canonical_url'])
         # TODO: currently there is a bug where stream leaving a channel does not update that channels claims count
-        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
+        self.assertEqual(2, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0][0]['claims_in_channel'])
         # TODO: after bug is fixed remove test above and add test below
-        #self.assertEqual(1, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-        self.assertEqual(1, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
+        #self.assertEqual(1, reader._search(claim_id=txo_chan_a.claim_id, limit=1)[0][0]['claims_in_channel'])
+        self.assertEqual(1, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0][0]['claims_in_channel'])
 
         # claim abandon updates claims_in_channel
         advance(11, [self.get_abandon(tx_ab2)])
-        self.assertEqual(0, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
+        self.assertEqual(0, reader._search(claim_id=txo_chan_ab.claim_id, limit=1)[0][0]['claims_in_channel'])
 
         # delete channel, invaliding stream claim signatures
         advance(12, [self.get_abandon(channel_update)])
-        r_a2, = reader._search(order_by=['creation_height'], limit=1)
+        (r_a2,), _ = reader._search(order_by=['creation_height'], limit=1)
         self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
         self.assertIsNone(r_a2['canonical_url'])
 
@@ -514,7 +525,7 @@ class TestTrending(TestSQLDB):
                 self.get_support(up_medium, (20+(window*(2 if window == 7 else 1)))*COIN),
                 self.get_support(up_biggly, (20+(window*(3 if window == 7 else 1)))*COIN),
             ])
-        results = reader._search(order_by=['trending_local'])
+        results, _ = reader._search(order_by=['trending_local'])
         self.assertEqual([c.claim_id for c in claims], [hexlify(c['claim_hash'][::-1]).decode() for c in results])
         self.assertEqual([10, 6, 2, 0, -2], [int(c['trending_local']) for c in results])
         self.assertEqual([53, 38, -32, 0, -6], [int(c['trending_global']) for c in results])
@@ -526,3 +537,90 @@ class TestTrending(TestSQLDB):
         self.advance(1, [problematic])
         self.advance(TRENDING_WINDOW, [self.get_support(problematic, 53000000000)])
         self.advance(TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
+
+
+class TestContentBlocking(TestSQLDB):
+
+    def test_blocking(self):
+        tx0 = self.get_channel('A Channel', COIN)
+        a_channel = tx0[0].outputs[0]
+        tx1 = self.get_stream('Claim One', COIN)
+        tx2 = self.get_stream('Claim Two', COIN, tags=["mature"], channel=a_channel)
+        self.advance(1, [tx0, tx1, tx2])
+        claim1, claim2 = tx1[0].outputs[0], tx2[0].outputs[0]
+
+        # nothing blocked
+        results, censor = reader._search(text='Claim')
+        self.assertEqual(2, len(results))
+        self.assertEqual(0, censor.total)
+        self.assertEqual({}, dict(self.sql.blocked_claims))
+
+        # block claim reposted to blocking channel
+        tx = self.get_channel('Blocking Channel', COIN)
+        channel = tx[0].outputs[0]
+        self.sql.filtering_channel_hashes.add(channel.claim_hash)
+        self.advance(2, [tx])
+        self.assertEqual({}, dict(self.sql.blocked_claims))
+
+        tx = self.get_repost(claim1.claim_id, COIN, channel)
+        reposting_claim = tx[0].outputs[0]
+        self.advance(3, [tx])
+        self.assertEqual(
+            {reposting_claim.claim.repost.reference.claim_hash: channel.claim_hash},
+            dict(self.sql.blocked_claims)
+        )
+
+        # claim is blocked from results by repost
+        results, censor = reader._search(text='Claim')
+        self.assertEqual(1, len(results))
+        self.assertEqual(claim2.claim_hash, results[0]['claim_hash'])
+        self.assertEqual(1, censor.total)
+        self.assertEqual({channel.claim_hash: 1}, censor.blocked_claims)
+        self.assertEqual({}, censor.blocked_channels)
+        self.assertEqual({}, censor.blocked_tags)
+
+        # claim is blocked from results by repost and tags
+        results, censor = reader._search(text='Claim', not_tags=["mature"])
+        self.assertEqual(0, len(results))
+        self.assertEqual(2, censor.total)
+        self.assertEqual({channel.claim_hash: 1}, censor.blocked_claims)
+        self.assertEqual({}, censor.blocked_channels)
+        self.assertEqual({"mature": 1}, censor.blocked_tags)
+
+        # claim is blocked from results by repost and channel
+        results, censor = reader._search(text='Claim', not_channel_ids=[a_channel.claim_id])
+        self.assertEqual(0, len(results))
+        self.assertEqual(2, censor.total)
+        self.assertEqual({channel.claim_hash: 1}, censor.blocked_claims)
+        self.assertEqual({a_channel.claim_hash: 1}, censor.blocked_channels)
+        self.assertEqual({}, censor.blocked_tags)
+
+    def test_pagination(self):
+        one, two, three, four, five, six, seven = (
+            self.advance(1, [self.get_stream('One', COIN, tags=["mature"])])[0],
+            self.advance(2, [self.get_stream('Two', COIN, tags=["mature"])])[0],
+            self.advance(3, [self.get_stream('Three', COIN)])[0],
+            self.advance(4, [self.get_stream('Four', COIN)])[0],
+            self.advance(5, [self.get_stream('Five', COIN)])[0],
+            self.advance(6, [self.get_stream('Six', COIN)])[0],
+            self.advance(7, [self.get_stream('Seven', COIN)])[0],
+        )
+
+        # nothing blocked
+        results, censor = reader._search(order_by='^height', offset=1, limit=3)
+        self.assertEqual(3, len(results))
+        self.assertEqual(
+            [two.claim_hash, three.claim_hash, four.claim_hash],
+            [r['claim_hash'] for r in results]
+        )
+        self.assertEqual(0, censor.total)
+
+        # tags blocked
+        results, censor = reader._search(order_by='^height', not_tags=('mature',), offset=1, limit=3)
+        self.assertEqual(3, len(results))
+        self.assertEqual(
+            [four.claim_hash, five.claim_hash, six.claim_hash],
+            [r['claim_hash'] for r in results]
+        )
+        self.assertEqual(2, censor.total)
+        self.assertEqual({"mature": 2}, censor.blocked_tags)
