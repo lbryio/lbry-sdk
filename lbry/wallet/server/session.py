@@ -773,7 +773,7 @@ class LBRYSessionManager(SessionManager):
 class LBRYElectrumX(SessionBase):
     """A TCP server that handles incoming Electrum connections."""
 
-    PROTOCOL_MIN = (0, 52, 0)
+    PROTOCOL_MIN = (0, 54, 0)
     PROTOCOL_MAX = (0, 99, 0)
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
     session_mgr: LBRYSessionManager
