@@ -118,11 +118,12 @@ build:windows:
   before_script:
     - ./docker/install_choco.ps1
     - choco install -y --x86 python3 7zip checksum
-#    - python --version | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
-#    - pip --version | findstr /E '\(python 3\.7\)'
+    - python --version # | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
+    - pip --version # | findstr /E '\(python 3\.7\)'
     - pip install virtualenv pywin32
     - virtualenv venv
     - venv/Scripts/activate.ps1
+    - pip install pip==19.3.1; $true # $true ignores errors. need this to get the correct coincurve wheel. see commit notes for details.
   after_script:
     - rmdir -Recurse venv
   script:
