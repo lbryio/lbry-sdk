@@ -502,7 +502,6 @@ class Config(CLIConfig):
     )
     udp_port = Integer("UDP port for communicating on the LBRY DHT", 4444, previous_names=['dht_node_port'])
     tcp_port = Integer("TCP port to listen for incoming blob requests", 3333, previous_names=['peer_port'])
-    prometheus_port = Integer("Port to expose prometheus metrics (off by default)", 0)
     network_interface = String("Interface to use for the DHT and blob exchange", '0.0.0.0')
 
     # routing table

@@ -17,7 +17,6 @@ from functools import wraps, partial
 import ecdsa
 import base58
 from aiohttp import web
-from prometheus_client import generate_latest as prom_generate_latest
 from google.protobuf.message import DecodeError
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
@@ -320,10 +319,6 @@ class Daemon(metaclass=JSONRPCServerType):
         streaming_app.router.add_get('/stream/{sd_hash}', self.handle_stream_range_request)
         self.streaming_runner = web.AppRunner(streaming_app)
 
-        prom_app = web.Application()
-        prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
-        self.metrics_runner = web.AppRunner(prom_app)
-
     @property
     def dht_node(self) -> typing.Optional['Node']:
         return self.component_manager.get_component(DHT_COMPONENT)
@@ -451,7 +446,6 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.analytics_manager.send_server_startup()
         await self.rpc_runner.setup()
         await self.streaming_runner.setup()
-        await self.metrics_runner.setup()
 
         try:
             rpc_site = web.TCPSite(self.rpc_runner, self.conf.api_host, self.conf.api_port, shutdown_timeout=.5)
@@ -472,16 +466,6 @@ class Daemon(metaclass=JSONRPCServerType):
             log.error('media server failed to bind TCP %s:%i', self.conf.streaming_host, self.conf.streaming_port)
             await self.analytics_manager.send_server_startup_error(str(e))
             raise SystemExit()
-
-        if self.conf.prometheus_port:
-            try:
-                metrics = web.TCPSite(self.metrics_runner, "0.0.0.0", self.conf.prometheus_port, shutdown_timeout=.5)
-                await metrics.start()
-                log.info('metrics server listening on TCP %s:%i', *metrics._server.sockets[0].getsockname()[:2])
-            except OSError as e:
-                log.error('metrics server failed to bind TCP :%i', self.conf.prometheus_port)
-                await self.analytics_manager.send_server_startup_error(str(e))
-                raise SystemExit()
 
         try:
             await self.initialize()
@@ -514,7 +498,6 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("stopped api components")
         await self.rpc_runner.cleanup()
         await self.streaming_runner.cleanup()
-        await self.metrics_runner.cleanup()
         log.info("stopped api server")
         if self.analytics_manager.is_started:
             self.analytics_manager.stop()
@@ -543,16 +526,6 @@ class Daemon(metaclass=JSONRPCServerType):
             text=encoded_result,
             content_type='application/json'
         )
-
-    async def handle_metrics_get_request(self, request: web.Request):
-        try:
-            return web.Response(
-                text=prom_generate_latest().decode(),
-                content_type='text/plain; version=0.0.4'
-            )
-        except Exception:
-            log.exception('could not generate prometheus data')
-            raise
 
     async def handle_stream_get_request(self, request: web.Request):
         if not self.conf.streaming_get:
@@ -622,7 +595,7 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: this is for backwards compatibility. Remove this once API and UI are updated
             # TODO: also delete EMPTY_PARAMS then
             _args, _kwargs = (), args[0]
-        elif isinstance(args, list) and len(args) == 2 and \
+        elif isinstance(args, list) and len(args) == 2 and\
                 isinstance(args[0], list) and isinstance(args[1], dict):
             _args, _kwargs = args
         else:

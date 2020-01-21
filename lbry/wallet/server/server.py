@@ -2,11 +2,9 @@ import signal
 import logging
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
-import typing
 
 import lbry
 from lbry.wallet.server.mempool import MemPool, MemPoolAPI
-from lbry.wallet.server.prometheus import PrometheusServer
 
 
 class Notifications:
@@ -76,7 +74,6 @@ class Server:
         self.daemon = daemon = env.coin.DAEMON(env.coin, env.daemon_url)
         self.db = db = env.coin.DB(env)
         self.bp = bp = env.coin.BLOCK_PROCESSOR(env, db, daemon, notifications)
-        self.prometheus_server: typing.Optional[PrometheusServer] = None
 
         # Set notifications up to implement the MemPoolAPI
         notifications.height = daemon.height
@@ -110,15 +107,11 @@ class Server:
         await self.db.populate_header_merkle_cache()
         await _start_cancellable(self.mempool.keep_synchronized)
         await _start_cancellable(self.session_mgr.serve, self.notifications)
-        await _start_cancellable(self.start_prometheus)
 
     async def stop(self):
         for task in reversed(self.cancellable_tasks):
             task.cancel()
         await asyncio.wait(self.cancellable_tasks)
-        if self.prometheus_server:
-            await self.prometheus_server.stop()
-            self.prometheus_server = None
         self.shutdown_event.set()
         await self.daemon.close()
 
@@ -139,8 +132,3 @@ class Server:
         finally:
             loop.run_until_complete(self.stop())
             executor.shutdown(True)
-
-    async def start_prometheus(self, event):
-        if not self.prometheus_server and self.env.prometheus_port:
-            self.prometheus_server = PrometheusServer()
-            await self.prometheus_server.start(self.env.prometheus_port)
