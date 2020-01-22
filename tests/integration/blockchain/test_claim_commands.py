@@ -767,21 +767,17 @@ class StreamCommands(ClaimTestCase):
         # search for blocked content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
         self.assertEqual([], result['items'])
-        self.assertEqual({"reposted_in_channel": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
+        self.assertEqual({"channels": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
 
         # search channel containing blocked content
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel'))
         self.assertEqual(1, len(result['items']))
-        self.assertEqual({"reposted_in_channel": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
+        self.assertEqual({"channels": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
 
-        # search channel containing blocked content, also block tag
+        # content was filtered by not_tag before censoring
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', not_tags=["good", "bad"]))
         self.assertEqual(0, len(result['items']))
-        self.assertEqual({
-            "reposted_in_channel": {blocking_channel_id: 1},
-            "has_tag": {"good": 1, "bad": 1},
-            "total": 2
-        }, result['blocked'])
+        self.assertEqual({"channels": {}, "total": 0}, result['blocked'])
 
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')
