@@ -847,8 +847,8 @@ class LBRYLevelDB(LevelDB):
         # space separated list of channel URIs used for filtering bad content
         self.sql = SQLDB(
             self, path,
-            self.env.default('BLOCKING_CHANNELS_IDS', '').split(' '),
-            self.env.default('FILTERING_CHANNELS_IDS', '').split(' '),
+            self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
+            self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
         )
 
     def close(self):
