@@ -1,6 +1,6 @@
 import base64
 import struct
-from typing import List, Optional, Tuple
+from typing import List
 from binascii import hexlify
 from itertools import chain
 
@@ -9,50 +9,36 @@ from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
 
 class Censor:
 
-    def __init__(self, claim_ids: dict = None, channel_ids: set = None, tags: set = None):
-        self.claim_ids = claim_ids or {}
-        self.channel_ids = channel_ids or set()
-        self.tags = tags or set()
-        self.blocked_claims = {}
-        self.blocked_channels = {}
-        self.blocked_tags = {}
+    __slots__ = 'streams', 'channels', 'censored', 'total'
+
+    def __init__(self, streams: dict = None, channels: dict = None):
+        self.streams = streams or {}
+        self.channels = channels or {}
+        self.censored = {}
         self.total = 0
 
     def censor(self, row) -> bool:
-        censored = False
-        if row['claim_hash'] in self.claim_ids:
-            censored = True
-            channel_id = self.claim_ids[row['claim_hash']]
-            self.blocked_claims.setdefault(channel_id, 0)
-            self.blocked_claims[channel_id] += 1
-        if row['channel_hash'] in self.channel_ids:
-            censored = True
-            self.blocked_channels.setdefault(row['channel_hash'], 0)
-            self.blocked_channels[row['channel_hash']] += 1
-        if self.tags.intersection(row['tags']):
-            censored = True
-            for tag in self.tags:
-                if tag in row['tags']:
-                    self.blocked_tags.setdefault(tag, 0)
-                    self.blocked_tags[tag] += 1
-        if censored:
+        was_censored = False
+        for claim_hash, lookup in (
+                (row['claim_hash'], self.streams),
+                (row['claim_hash'], self.channels),
+                (row['channel_hash'], self.channels)):
+            censoring_channel_hash = lookup.get(claim_hash)
+            if censoring_channel_hash:
+                was_censored = True
+                self.censored.setdefault(censoring_channel_hash, 0)
+                self.censored[censoring_channel_hash] += 1
+                break
+        if was_censored:
             self.total += 1
-        return censored
+        return was_censored
 
     def to_message(self, outputs: OutputsMessage):
         outputs.blocked_total = self.total
-        for channel_hash, count in self.blocked_claims.items():
+        for censoring_channel_hash, count in self.censored.items():
             block = outputs.blocked.add()
             block.count = count
-            block.reposted_in_channel = channel_hash
-        for channel_hash, count in self.blocked_channels.items():
-            block = outputs.blocked.add()
-            block.count = count
-            block.in_channel = channel_hash
-        for tag, count in self.blocked_tags.items():
-            block = outputs.blocked.add()
-            block.count = count
-            block.has_tag = tag
+            block.channel_hash = censoring_channel_hash
 
 
 class Outputs:
@@ -77,15 +63,13 @@ class Outputs:
         return txos, self.inflate_blocked()
 
     def inflate_blocked(self):
-        result = {"total": self.blocked_total}
-        for blocked_message in self.blocked:
-            reason = blocked_message.WhichOneof('reason')
-            if reason == "has_tag":
-                key = blocked_message.has_tag
-            else:
-                key = hexlify(getattr(blocked_message, reason)[::-1]).decode()
-            result.setdefault(reason, {})[key] = blocked_message.count
-        return result
+        return {
+            "total": self.blocked_total,
+            "channels": {
+                hexlify(message.channel_hash[::-1]).decode(): message.count
+                for message in self.blocked
+            }
+        }
 
     def message_to_txo(self, txo_message, tx_map):
         if txo_message.WhichOneof('meta') == 'error':

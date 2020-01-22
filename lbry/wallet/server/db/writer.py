@@ -141,6 +141,8 @@ class SQLDB:
         create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
         create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
 
+        create unique index if not exists channel_hash_release_time_idx on claim (channel_hash, release_time, claim_hash);
+
         -- TODO: verify that all indexes below are used
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
 
@@ -170,15 +172,21 @@ class SQLDB:
         CREATE_TAG_TABLE
     )
 
-    def __init__(self, main, path: str, filtering_channels: list):
+    def __init__(self, main, path: str, blocking_channels: list, filtering_channels: list):
         self.main = main
         self._db_path = path
         self.db = None
-        self.state_manager = None
-        self.blocked_claims = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
         self._fts_synced = False
+        self.state_manager = None
+        self.blocked_streams = None
+        self.blocked_channels = None
+        self.blocking_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in blocking_channels if channel_id
+        }
+        self.filtered_streams = None
+        self.filtered_channels = None
         self.filtering_channel_hashes = {
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
@@ -202,8 +210,11 @@ class SQLDB:
         register_canonical_functions(self.db)
         register_trending_functions(self.db)
         self.state_manager = Manager()
-        self.blocked_claims = self.state_manager.dict()
-        self.update_blocked_claims()
+        self.blocked_streams = self.state_manager.dict()
+        self.blocked_channels = self.state_manager.dict()
+        self.filtered_streams = self.state_manager.dict()
+        self.filtered_channels = self.state_manager.dict()
+        self.update_blocked_and_filtered_claims()
 
     def close(self):
         if self.db is not None:
@@ -211,17 +222,34 @@ class SQLDB:
         if self.state_manager is not None:
             self.state_manager.shutdown()
 
-    def update_blocked_claims(self):
-        sql = query(
-            "SELECT channel_hash, reposted_claim_hash FROM claim",
-            reposted_claim_hash__is_not_null=1,
-            channel_hash__in=self.filtering_channel_hashes
+    def update_blocked_and_filtered_claims(self):
+        self.update_claims_from_channel_hashes(
+            self.blocked_streams, self.blocked_channels, self.blocking_channel_hashes
         )
-        blocked_claims = {}
+        self.update_claims_from_channel_hashes(
+            self.filtered_streams, self.filtered_channels, self.filtering_channel_hashes
+        )
+        self.filtered_streams.update(self.blocked_streams)
+        self.filtered_channels.update(self.blocked_channels)
+
+    def update_claims_from_channel_hashes(self, shared_streams, shared_channels, channel_hashes):
+        sql = query(
+            "SELECT claim.channel_hash, claim.reposted_claim_hash, reposted.claim_type "
+            "FROM claim JOIN claim AS reposted ON (reposted.claim_hash=claim.reposted_claim_hash)", **{
+                'claim.reposted_claim_hash__is_not_null': 1,
+                'claim.channel_hash__in': channel_hashes
+            }
+        )
+        streams, channels = {}, {}
         for blocked_claim in self.execute(*sql):
-            blocked_claims[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
-        self.blocked_claims.clear()
-        self.blocked_claims.update(blocked_claims)
+            if blocked_claim.claim_type == CLAIM_TYPES['stream']:
+                streams[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+            elif blocked_claim.claim_type == CLAIM_TYPES['channel']:
+                channels[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+        shared_streams.clear()
+        shared_streams.update(streams)
+        shared_channels.clear()
+        shared_channels.update(channels)
 
     @staticmethod
     def _insert_sql(table: str, data: dict) -> Tuple[str, list]:
@@ -613,8 +641,9 @@ class SQLDB:
 
         sub_timer = timer.add_timer('update blocked claims list')
         sub_timer.start()
-        if self.filtering_channel_hashes.intersection(all_channel_keys):
-            self.update_blocked_claims()
+        if (self.blocking_channel_hashes.intersection(all_channel_keys) or
+                self.filtering_channel_hashes.intersection(all_channel_keys)):
+            self.update_blocked_and_filtered_claims()
         sub_timer.stop()
 
     def _update_support_amount(self, claim_hashes):
@@ -816,7 +845,11 @@ class LBRYLevelDB(LevelDB):
         super().__init__(*args, **kwargs)
         path = os.path.join(self.env.db_dir, 'claims.db')
         # space separated list of channel URIs used for filtering bad content
-        self.sql = SQLDB(self, path, self.env.default('FILTERING_CHANNELS_IDS', '').split(' '))
+        self.sql = SQLDB(
+            self, path,
+            self.env.default('BLOCKING_CHANNELS_IDS', '').split(' '),
+            self.env.default('FILTERING_CHANNELS_IDS', '').split(' '),
+        )
 
     def close(self):
         super().close()
