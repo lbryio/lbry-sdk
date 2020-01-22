@@ -27,6 +27,7 @@ from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
+from lbry.wallet.server.prometheus import REQUESTS_COUNT
 
 from lbry.wallet.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
@@ -707,6 +708,7 @@ class SessionBase(RPCSession):
         """Handle an incoming request.  ElectrumX doesn't receive
         notifications from client sessions.
         """
+        REQUESTS_COUNT.inc()
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
         else:
