@@ -72,8 +72,8 @@ test:json-api:
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller
-    - python3.7 docker/set_build.py
     - pip install -e .
+    - python3.7 docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
     - chmod +x dist/lbrynet
     - zip --junk-paths ${CI_PROJECT_DIR}/lbrynet-${OS}.zip dist/lbrynet  # gitlab expects artifacts to be in $CI_PROJECT_DIR
@@ -129,8 +129,8 @@ build:windows:
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller==3.5
-    - python docker/set_build.py
     - pip install -e .
+    - python docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
     - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip ./dist/lbrynet.exe
     - checksum --type=sha256 --file=$env:CI_PROJECT_DIR/lbrynet-${OS}.zip
