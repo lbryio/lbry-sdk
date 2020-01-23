@@ -87,7 +87,7 @@ class ClientSession(BaseClientSession):
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
         # TODO: change to 'ping' on newer protocol (above 1.2)
-        retry_delay = default_delay = 1.0
+        retry_delay = default_delay = 300.0
         while True:
             try:
                 if self.is_closing():
@@ -107,7 +107,6 @@ class ClientSession(BaseClientSession):
                 log.debug("Wallet server has an incompatible version, retrying in 1h: %s:%d", *self.server)
             except (asyncio.TimeoutError, OSError):
                 await self.close()
-                retry_delay = min(60, retry_delay * 2)
                 log.debug("Wallet server timeout (retry in %s seconds): %s:%d", retry_delay, *self.server)
             try:
                 await asyncio.wait_for(self.trigger_urgent_reconnect.wait(), timeout=retry_delay)
