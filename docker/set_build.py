@@ -32,7 +32,7 @@ def main():
     build_type = get_build_type(os.getenv('CI_COMMIT_TAG', os.getenv('TRAVIS_TAG')))
     log.debug("setting build type=%s, build commit=%s", build_type, commit_hash)
     with open(build_type_path, 'w') as f:
-        f.write(f"BUILD = \"{build_type}\"\nBUILD_COMMIT = \"{commit_hash}\"\n")
+        f.write(f"BUILD = \"{build_type}\"\nCOMMIT_HASH = \"{commit_hash}\"\n")
 
 
 if __name__ == '__main__':

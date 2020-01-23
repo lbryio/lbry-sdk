@@ -1,9 +1,13 @@
 from aiohttp import web
-from prometheus_client import Counter, generate_latest as prom_generate_latest
+from prometheus_client import Counter, Info, generate_latest as prom_generate_latest
 from lbry.wallet.server import util
+from lbry import __version__ as version
+from lbry.build_type import BUILD, COMMIT_HASH
 
 NAMESPACE = "wallet_server"
 
+VERSION_INFO = Info('build_info', 'Wallet server build info (e.g. version, commit hash)', namespace=NAMESPACE)
+VERSION_INFO.info({'version': version, 'build': BUILD, "commit": COMMIT_HASH})
 REQUESTS_COUNT = Counter("requests_count", "Number of requests received", namespace=NAMESPACE)
 
 
