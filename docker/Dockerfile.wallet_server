@@ -4,6 +4,10 @@ ARG user=lbry
 ARG db_dir=/database
 ARG projects_dir=/home/$user
 
+ARG DOCKER_TAG
+ARG DOCKER_COMMIT=docker
+ENV DOCKER_TAG=$DOCKER_TAG DOCKER_COMMIT=$DOCKER_COMMIT
+
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       wget \
@@ -29,6 +33,7 @@ WORKDIR $projects_dir
 
 RUN pip install uvloop
 RUN make install
+RUN python3 docker/set_build.py
 RUN rm ~/.cache -rf
 
 # entry point
