@@ -1,0 +1,7 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+cd "$DIR/../.." ## make sure we're in the right place. Docker Hub screws this up sometimes
+echo "docker build dir: $(pwd)"
+
+docker build --build-arg DOCKER_TAG=$DOCKER_TAG --build-arg DOCKER_COMMIT=$SOURCE_COMMIT -f $DOCKERFILE_PATH -t $IMAGE_NAME .
