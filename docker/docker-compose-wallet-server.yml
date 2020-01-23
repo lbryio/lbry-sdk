@@ -26,6 +26,7 @@ services:
     ports:
       - "50001:50001" # rpc port
       - "50005:50005" # websocket port
+      - "2112:2112"   # prometheus
     volumes:
       - "wallet_server:/database"
     environment:
