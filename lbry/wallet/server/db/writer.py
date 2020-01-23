@@ -233,19 +233,20 @@ class SQLDB:
         self.filtered_channels.update(self.blocked_channels)
 
     def update_claims_from_channel_hashes(self, shared_streams, shared_channels, channel_hashes):
-        sql = query(
-            "SELECT claim.channel_hash, claim.reposted_claim_hash, reposted.claim_type "
-            "FROM claim JOIN claim AS reposted ON (reposted.claim_hash=claim.reposted_claim_hash)", **{
-                'claim.reposted_claim_hash__is_not_null': 1,
-                'claim.channel_hash__in': channel_hashes
-            }
-        )
         streams, channels = {}, {}
-        for blocked_claim in self.execute(*sql):
-            if blocked_claim.claim_type == CLAIM_TYPES['stream']:
-                streams[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
-            elif blocked_claim.claim_type == CLAIM_TYPES['channel']:
-                channels[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+        if channel_hashes:
+            sql = query(
+                "SELECT claim.channel_hash, claim.reposted_claim_hash, reposted.claim_type "
+                "FROM claim JOIN claim AS reposted ON (reposted.claim_hash=claim.reposted_claim_hash)", **{
+                    'claim.reposted_claim_hash__is_not_null': 1,
+                    'claim.channel_hash__in': channel_hashes
+                }
+            )
+            for blocked_claim in self.execute(*sql):
+                if blocked_claim.claim_type == CLAIM_TYPES['stream']:
+                    streams[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+                elif blocked_claim.claim_type == CLAIM_TYPES['channel']:
+                    channels[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
         shared_streams.clear()
         shared_streams.update(streams)
         shared_channels.clear()
