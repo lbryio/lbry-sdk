@@ -28,16 +28,22 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
     """
     Compute the size of a trending spike.
     """
+
+    # Change in softened amount
     change_in_softened_amount = x**0.25 - x_old**0.25
-    spike_height = time_boost*change_in_softened_amount
 
-    # Minnow boost
-    boost = 0.0
-    if spike_height > 0.0 and (trending_score + spike_height) > 0.0:
-        boost = math.exp(-(trending_score + spike_height)/time_boost)*(x - x_old)**0.25
-    spike_height += time_boost*boost
+    # Softened change in amount
+    delta = x - x_old
+    softened_change_in_amount = abs(delta)**0.25
 
-    return spike_height
+    # Softened change in amount counts more for minnows
+    if delta > 0.0:
+        multiplier = 1.0/math.sqrt(x + 1.0)
+        softened_change_in_amount *= multiplier
+    else:
+        softened_change_in_amount *= -1.0
+
+    return time_boost*(softened_change_in_amount + change_in_softened_amount)
 
 
 def get_time_boost(height):
