@@ -22,6 +22,11 @@ from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
+try:
+    import libtorrent
+    from lbry.torrent.session import TorrentSession
+except ImportError:
+    libtorrent = None
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +42,7 @@ STREAM_MANAGER_COMPONENT = "stream_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
+LIBTORRENT_COMPONENT = "libtorrent_component"
 
 
 class DatabaseComponent(Component):
@@ -335,7 +341,7 @@ class StreamManagerComponent(Component):
         if not self.stream_manager:
             return
         return {
-            'managed_files': len(self.stream_manager.streams),
+            'managed_files': len(self.stream_manager._sources),
         }
 
     async def start(self):
@@ -354,6 +360,34 @@ class StreamManagerComponent(Component):
 
     async def stop(self):
         self.stream_manager.stop()
+
+
+class TorrentComponent(Component):
+    component_name = LIBTORRENT_COMPONENT
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.torrent_session = None
+
+    @property
+    def component(self) -> typing.Optional[StreamManager]:
+        return self.torrent_session
+
+    async def get_status(self):
+        if not self.torrent_session:
+            return
+        return {
+            'running': True,  # TODO: what to return here?
+        }
+
+    async def start(self):
+        if libtorrent:
+            self.torrent_session = TorrentSession(asyncio.get_event_loop(), None)
+            await self.torrent_session.bind()  # TODO: specify host/port
+
+    async def stop(self):
+        if self.torrent_session:
+            await self.torrent_session.pause()
 
 
 class PeerProtocolServerComponent(Component):
