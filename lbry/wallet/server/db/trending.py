@@ -58,10 +58,10 @@ def trending_log(s):
     Log a string.
     """
     if TRENDING_LOG:
-        f = open("trending.log", "a")
-        f.write(s)
-        f.flush()
-        f.close()
+        fout = open("trending.log", "a")
+        fout.write(s)
+        fout.flush()
+        fout.close()
 
 class TrendingData:
     """
@@ -126,7 +126,7 @@ def test_trending():
 
         time_boost = get_time_boost(height)
         data.update_claim("abc", data.claims["abc"]["total_amount"] + 10.0,
-                                    time_boost=time_boost)
+                          time_boost=time_boost)
 
 
         print(str(height) + " " + str(time_boost) + " " \
@@ -135,6 +135,7 @@ def test_trending():
 
 
 # One global instance
+# pylint: disable=C0103
 trending_data = TrendingData()
 f = open("trending.log", "w")
 f.close()
@@ -210,7 +211,7 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
         trending_log("{n} scores to write...".format(n=len(the_list)))
 
         db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
-                        the_list)
+                       the_list)
 
         trending_log("done.\n")
 
@@ -220,4 +221,3 @@ def calculate_trending(db, height, final_height, recalculate_claim_hashes):
 
 if __name__ == "__main__":
     test_trending()
-
