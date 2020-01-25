@@ -3,7 +3,7 @@
 /build
 /dist
 /.tox
-/.coverage
+/.coverage*
 /lbry-venv
 
 lbry.egg-info

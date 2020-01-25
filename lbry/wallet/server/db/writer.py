@@ -4,8 +4,10 @@ from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
+from multiprocessing import Manager
+from binascii import unhexlify
 
-from lbry.wallet.server.leveldb import DB
+from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
 from lbry.wallet.database import query, constraints_to_sql
 
@@ -130,8 +132,14 @@ class SQLDB:
         -- common ORDER BY
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
         create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
-        create unique index if not exists claim_trending_group_mixed_idx on claim (trending_group, trending_mixed, claim_hash);
+        create unique index if not exists claim_trending_mixed_idx on claim (trending_mixed, claim_hash);
         create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
+
+        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_mixed, claim_hash);
+        create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
+        create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
+
+        create unique index if not exists channel_hash_release_time_idx on claim (channel_hash, release_time, claim_hash);
 
         -- TODO: verify that all indexes below are used
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
@@ -161,13 +169,24 @@ class SQLDB:
         CREATE_TAG_TABLE
     )
 
-    def __init__(self, main, path):
+    def __init__(self, main, path: str, blocking_channels: list, filtering_channels: list):
         self.main = main
         self._db_path = path
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
-        self.ledger = Ledger if self.main.coin.NET == 'mainnet' else RegTestLedger
+        self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
         self._fts_synced = False
+        self.state_manager = None
+        self.blocked_streams = None
+        self.blocked_channels = None
+        self.blocking_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in blocking_channels if channel_id
+        }
+        self.filtered_streams = None
+        self.filtered_channels = None
+        self.filtering_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
+        }
 
     def open(self):
         self.db = apsw.Connection(
@@ -186,10 +205,48 @@ class SQLDB:
         self.execute(self.PRAGMAS)
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
+        self.state_manager = Manager()
+        self.blocked_streams = self.state_manager.dict()
+        self.blocked_channels = self.state_manager.dict()
+        self.filtered_streams = self.state_manager.dict()
+        self.filtered_channels = self.state_manager.dict()
+        self.update_blocked_and_filtered_claims()
 
     def close(self):
         if self.db is not None:
             self.db.close()
+        if self.state_manager is not None:
+            self.state_manager.shutdown()
+
+    def update_blocked_and_filtered_claims(self):
+        self.update_claims_from_channel_hashes(
+            self.blocked_streams, self.blocked_channels, self.blocking_channel_hashes
+        )
+        self.update_claims_from_channel_hashes(
+            self.filtered_streams, self.filtered_channels, self.filtering_channel_hashes
+        )
+        self.filtered_streams.update(self.blocked_streams)
+        self.filtered_channels.update(self.blocked_channels)
+
+    def update_claims_from_channel_hashes(self, shared_streams, shared_channels, channel_hashes):
+        streams, channels = {}, {}
+        if channel_hashes:
+            sql = query(
+                "SELECT claim.channel_hash, claim.reposted_claim_hash, reposted.claim_type "
+                "FROM claim JOIN claim AS reposted ON (reposted.claim_hash=claim.reposted_claim_hash)", **{
+                    'claim.reposted_claim_hash__is_not_null': 1,
+                    'claim.channel_hash__in': channel_hashes
+                }
+            )
+            for blocked_claim in self.execute(*sql):
+                if blocked_claim.claim_type == CLAIM_TYPES['stream']:
+                    streams[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+                elif blocked_claim.claim_type == CLAIM_TYPES['channel']:
+                    channels[blocked_claim.reposted_claim_hash] = blocked_claim.channel_hash
+        shared_streams.clear()
+        shared_streams.update(streams)
+        shared_channels.clear()
+        shared_channels.update(channels)
 
     @staticmethod
     def _insert_sql(table: str, data: dict) -> Tuple[str, list]:
@@ -579,6 +636,13 @@ class SQLDB:
             """, [(channel_hash,) for channel_hash in all_channel_keys.keys()])
         sub_timer.stop()
 
+        sub_timer = timer.add_timer('update blocked claims list')
+        sub_timer.start()
+        if (self.blocking_channel_hashes.intersection(all_channel_keys) or
+                self.filtering_channel_hashes.intersection(all_channel_keys)):
+            self.update_blocked_and_filtered_claims()
+        sub_timer.stop()
+
     def _update_support_amount(self, claim_hashes):
         if claim_hashes:
             self.execute(f"""
@@ -772,12 +836,17 @@ class SQLDB:
             self._fts_synced = True
 
 
-class LBRYDB(DB):
+class LBRYLevelDB(LevelDB):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         path = os.path.join(self.env.db_dir, 'claims.db')
-        self.sql = SQLDB(self, path)
+        # space separated list of channel URIs used for filtering bad content
+        self.sql = SQLDB(
+            self, path,
+            self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
+            self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
+        )
 
     def close(self):
         super().close()
@@ -786,4 +855,3 @@ class LBRYDB(DB):
     async def _open_dbs(self, *args, **kwargs):
         await super()._open_dbs(*args, **kwargs)
         self.sql.open()
-

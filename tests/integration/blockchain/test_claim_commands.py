@@ -751,27 +751,33 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(resolved['newstuff-again']['reposted_claim']['name'], 'newstuff')
 
     async def test_filtering_channels_for_removing_content(self):
-        await self.channel_create('@badstuff', '1.0')
-        await self.stream_create('not_bad', '1.1', channel_name='@badstuff')
-        tx = await self.stream_create('too_bad', '1.1', channel_name='@badstuff')
-        claim_id = self.get_claim_id(tx)
-        await self.channel_create('@reposts', '1.0')
-        await self.stream_repost(claim_id, 'normal_repost', '1.2', channel_name='@reposts')
-        filtering1 = await self.channel_create('@filtering1', '1.0')
-        filtering1 = self.get_claim_id(filtering1)
-        await self.stream_repost(claim_id, 'filter1', '1.1', channel_name='@filtering1')
-        await self.conductor.spv_node.stop()
-        await self.conductor.spv_node.start(
-            self.conductor.blockchain_node, extraconf={'FILTERING_CHANNELS_IDS': filtering1}
+        await self.channel_create('@some_channel', '1.0')
+        await self.stream_create('good_content', '1.1', channel_name='@some_channel', tags=['good'])
+        bad_content_id = self.get_claim_id(
+            await self.stream_create('bad_content', '1.1', channel_name='@some_channel', tags=['bad'])
         )
-        await self.ledger.stop()
-        await self.ledger.start()
-        filtered_claim_search = await self.claim_search(name='too_bad')
-        self.assertEqual(filtered_claim_search, [])
-        filtered_claim_search = await self.claim_search(name='not_bad')
-        self.assertEqual(len(filtered_claim_search), 1)
-        filtered_claim_search = await self.claim_search(name='normal_repost')
-        self.assertEqual(len(filtered_claim_search), 1)
+        blocking_channel_id = self.get_claim_id(
+            await self.channel_create('@filtering', '1.0')
+        )
+        self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
+            unhexlify(blocking_channel_id)[::-1]
+        )
+        await self.stream_repost(bad_content_id, 'filter1', '1.1', channel_name='@filtering')
+
+        # search for blocked content directly
+        result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
+        self.assertEqual([], result['items'])
+        self.assertEqual({"channels": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
+
+        # search channel containing blocked content
+        result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel'))
+        self.assertEqual(1, len(result['items']))
+        self.assertEqual({"channels": {blocking_channel_id: 1}, "total": 1}, result['blocked'])
+
+        # content was filtered by not_tag before censoring
+        result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', not_tags=["good", "bad"]))
+        self.assertEqual(0, len(result['items']))
+        self.assertEqual({"channels": {}, "total": 0}, result['blocked'])
 
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')

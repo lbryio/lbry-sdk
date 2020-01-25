@@ -14,7 +14,7 @@ from lbry.wallet.database import query, interpolate
 
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
-from lbry.schema.result import Outputs
+from lbry.schema.result import Outputs, Censor
 from lbry.wallet import Ledger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
@@ -46,7 +46,7 @@ INTEGER_PARAMS = {
 SEARCH_PARAMS = {
     'name', 'text', 'claim_id', 'claim_ids', 'txid', 'nout', 'channel', 'channel_ids', 'not_channel_ids',
     'public_key_id', 'claim_type', 'stream_types', 'media_types', 'fee_currency',
-    'has_channel_signature', 'signature_valid', 'blocklist_channel_ids',
+    'has_channel_signature', 'signature_valid',
     'any_tags', 'all_tags', 'not_tags', 'reposted_claim_id',
     'any_locations', 'all_locations', 'not_locations',
     'any_languages', 'all_languages', 'not_languages',
@@ -69,6 +69,10 @@ class ReaderState:
     ledger: Type[Ledger]
     query_timeout: float
     log: logging.Logger
+    blocked_streams: Dict
+    blocked_channels: Dict
+    filtered_streams: Dict
+    filtered_channels: Dict
 
     def close(self):
         self.db.close()
@@ -87,20 +91,37 @@ class ReaderState:
 
         self.db.setprogresshandler(interruptor, 100)
 
+    def get_resolve_censor(self) -> Censor:
+        return Censor(self.blocked_streams, self.blocked_channels)
+
+    def get_search_censor(self) -> Censor:
+        return Censor(self.filtered_streams, self.filtered_channels)
+
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
 
 
-def initializer(log, _path, _ledger_name, query_timeout, _measure=False):
+def row_factory(cursor, row):
+    return {
+        k[0]: (set(row[i].split(',')) if k[0] == 'tags' else row[i])
+        for i, k in enumerate(cursor.getdescription())
+    }
+
+
+def initializer(log, _path, _ledger_name, query_timeout, _measure=False, block_and_filter=None):
     db = apsw.Connection(_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
-    def row_factory(cursor, row):
-        return {k[0]: row[i] for i, k in enumerate(cursor.getdescription())}
     db.setrowtrace(row_factory)
+    if block_and_filter:
+        blocked_streams, blocked_channels, filtered_streams, filtered_channels = block_and_filter
+    else:
+        blocked_streams = blocked_channels = filtered_streams = filtered_channels = {}
     ctx.set(
         ReaderState(
             db=db, stack=[], metrics={}, is_tracking_metrics=_measure,
             ledger=Ledger if _ledger_name == 'mainnet' else RegTestLedger,
-            query_timeout=query_timeout, log=log
+            query_timeout=query_timeout, log=log,
+            blocked_streams=blocked_streams, blocked_channels=blocked_channels,
+            filtered_streams=filtered_streams, filtered_channels=filtered_channels,
         )
     )
 
@@ -158,11 +179,28 @@ def encode_result(result):
 
 
 @measure
-def execute_query(sql, values) -> List:
+def execute_query(sql, values, row_offset: int, row_limit: int, censor: Censor) -> List:
     context = ctx.get()
     context.set_query_timeout()
     try:
-        return context.db.cursor().execute(sql, values).fetchall()
+        c = context.db.cursor()
+        def row_filter(cursor, row):
+            nonlocal row_offset
+            row = row_factory(cursor, row)
+            if len(row) > 1 and censor.censor(row):
+                return
+            if row_offset:
+                row_offset -= 1
+                return
+            return row
+        c.setrowtrace(row_filter)
+        i, rows = 0, []
+        for row in c.execute(sql, values):
+            i += 1
+            rows.append(row)
+            if i >= row_limit:
+                break
+        return rows
     except apsw.Error as err:
         plain_sql = interpolate(sql, values)
         if context.is_tracking_metrics:
@@ -174,10 +212,13 @@ def execute_query(sql, values) -> List:
         raise SQLiteOperationalError(context.metrics)
 
 
-def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
+def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'order_by' in constraints:
+        order_by_parts = constraints['order_by']
+        if isinstance(order_by_parts, str):
+            order_by_parts = [order_by_parts]
         sql_order_by = []
-        for order_by in constraints['order_by']:
+        for order_by in order_by_parts:
             is_asc = order_by.startswith('^')
             column = order_by[1:] if is_asc else order_by
             if column not in ORDER_FIELDS:
@@ -255,21 +296,6 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
                     'claim.signature_valid__is_null': True,
                     'claim.channel_hash__not_in': not_channel_ids_binary
                 }
-    if 'blocklist_channel_ids' in constraints:
-        blocklist_ids = constraints.pop('blocklist_channel_ids')
-        if blocklist_ids:
-            blocking_channels = [
-                unhexlify(channel_id)[::-1] for channel_id in blocklist_ids
-            ]
-            constraints.update({
-                f'$blocking_channel{i}': a for i, a in enumerate(blocking_channels)
-            })
-            blocklist = ', '.join([
-                f':$blocking_channel{i}' for i in range(len(blocking_channels))
-            ])
-            constraints['claim.claim_hash__not_in#blocklist_channel_ids'] = f"""
-                SELECT reposted_claim_hash FROM claim WHERE channel_hash IN ({blocklist})
-            """
     if 'signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
         if has_channel_signature:
@@ -318,7 +344,7 @@ def _get_claims(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     return query(select, **constraints)
 
 
-def get_claims(cols, for_count=False, **constraints) -> List:
+def select_claims(censor: Censor, cols: str, for_count=False, **constraints) -> List:
     if 'channel' in constraints:
         channel_url = constraints.pop('channel')
         match = resolve_url(channel_url)
@@ -326,21 +352,24 @@ def get_claims(cols, for_count=False, **constraints) -> List:
             constraints['channel_hash'] = match['claim_hash']
         else:
             return [{'row_count': 0}] if cols == 'count(*) as row_count' else []
-    sql, values = _get_claims(cols, for_count, **constraints)
-    return execute_query(sql, values)
+    row_offset = constraints.pop('offset', 0)
+    row_limit = constraints.pop('limit', 20)
+    sql, values = claims_query(cols, for_count, **constraints)
+    return execute_query(sql, values, row_offset, row_limit, censor)
 
 
 @measure
-def get_claims_count(**constraints) -> int:
+def count_claims(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count = get_claims('count(*) as row_count', for_count=True, **constraints)
+    count = select_claims(Censor(), 'count(*) as row_count', for_count=True, **constraints)
     return count[0]['row_count']
 
 
-def _search(**constraints):
-    return get_claims(
+def search_claims(censor: Censor, **constraints) -> List:
+    return select_claims(
+        censor,
         """
         claimtrie.claim_hash as is_controlling,
         claimtrie.last_take_over_height,
@@ -357,48 +386,53 @@ def _search(**constraints):
     )
 
 
-def _get_referenced_rows(txo_rows: List[dict]):
+def _get_referenced_rows(censor: Censor, txo_rows: List[dict]):
     repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
     channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
 
     reposted_txos = []
     if repost_hashes:
-        reposted_txos = _search(**{'claim.claim_hash__in': repost_hashes})
+        reposted_txos = search_claims(censor, **{'claim.claim_hash__in': repost_hashes})
         channel_hashes |= set(filter(None, map(itemgetter('channel_hash'), reposted_txos)))
 
     channel_txos = []
     if channel_hashes:
-        channel_txos = _search(**{'claim.claim_hash__in': channel_hashes})
+        channel_txos = search_claims(censor, **{'claim.claim_hash__in': channel_hashes})
 
     # channels must come first for client side inflation to work properly
     return channel_txos + reposted_txos
 
 
 @measure
-def search(constraints) -> Tuple[List, List, int, int]:
+def search(constraints) -> Tuple[List, List, int, int, Censor]:
     assert set(constraints).issubset(SEARCH_PARAMS), \
         f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
     total = None
     if not constraints.pop('no_totals', False):
-        total = get_claims_count(**constraints)
+        total = count_claims(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
     if 'order_by' not in constraints:
         constraints['order_by'] = ["claim_hash"]
-    txo_rows = _search(**constraints)
-    extra_txo_rows = _get_referenced_rows(txo_rows)
-    return txo_rows, extra_txo_rows, constraints['offset'], total
+    context = ctx.get()
+    search_censor = context.get_search_censor()
+    txo_rows = search_claims(search_censor, **constraints)
+    extra_txo_rows = _get_referenced_rows(context.get_resolve_censor(), txo_rows)
+    return txo_rows, extra_txo_rows, constraints['offset'], total, search_censor
 
 
 @measure
 def resolve(urls) -> Tuple[List, List]:
     txo_rows = [resolve_url(raw_url) for raw_url in urls]
-    extra_txo_rows = _get_referenced_rows([r for r in txo_rows if isinstance(r, dict)])
+    extra_txo_rows = _get_referenced_rows(
+        ctx.get().get_resolve_censor(), [r for r in txo_rows if isinstance(r, dict)]
+    )
     return txo_rows, extra_txo_rows
 
 
 @measure
 def resolve_url(raw_url):
+    censor = ctx.get().get_resolve_censor()
 
     try:
         url = URL.parse(raw_url)
@@ -413,7 +447,7 @@ def resolve_url(raw_url):
             query['is_controlling'] = True
         else:
             query['order_by'] = ['^creation_height']
-        matches = _search(**query, limit=1)
+        matches = search_claims(censor, **query, limit=1)
         if matches:
             channel = matches[0]
         else:
@@ -431,7 +465,7 @@ def resolve_url(raw_url):
             query['signature_valid'] = 1
         elif set(query) == {'name'}:
             query['is_controlling'] = 1
-        matches = _search(**query, limit=1)
+        matches = search_claims(censor, **query, limit=1)
         if matches:
             return matches[0]
         else:

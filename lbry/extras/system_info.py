@@ -2,7 +2,7 @@ import platform
 import os
 import logging.handlers
 
-from lbry import build_type, __version__ as lbrynet_version
+from lbry import build_info, __version__ as lbrynet_version
 
 log = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ def get_platform() -> dict:
         "os_system": os_system,
         "lbrynet_version": lbrynet_version,
         "version": lbrynet_version,
-        "build": build_type.BUILD,  # CI server sets this during build step
+        "build": build_info.BUILD,  # CI server sets this during build step
     }
     if d["os_system"] == "Linux":
         import distro  # pylint: disable=import-outside-toplevel

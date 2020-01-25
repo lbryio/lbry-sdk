@@ -72,8 +72,8 @@ test:json-api:
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller
-    - python3.7 docker/set_build.py
     - pip install -e .
+    - python3.7 docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
     - chmod +x dist/lbrynet
     - zip --junk-paths ${CI_PROJECT_DIR}/lbrynet-${OS}.zip dist/lbrynet  # gitlab expects artifacts to be in $CI_PROJECT_DIR
@@ -118,18 +118,19 @@ build:windows:
   before_script:
     - ./docker/install_choco.ps1
     - choco install -y --x86 python3 7zip checksum
-#    - python --version | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
-#    - pip --version | findstr /E '\(python 3\.7\)'
+    - python --version # | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
+    - pip --version # | findstr /E '\(python 3\.7\)'
     - pip install virtualenv pywin32
     - virtualenv venv
     - venv/Scripts/activate.ps1
+    - pip install pip==19.3.1; $true # $true ignores errors. need this to get the correct coincurve wheel. see commit notes for details.
   after_script:
     - rmdir -Recurse venv
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller==3.5
-    - python docker/set_build.py
     - pip install -e .
+    - python docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
     - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip ./dist/lbrynet.exe
     - checksum --type=sha256 --file=$env:CI_PROJECT_DIR/lbrynet-${OS}.zip

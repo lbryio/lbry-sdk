@@ -44,6 +44,7 @@ setup(
         'cryptography==2.5',
         'protobuf==3.6.1',
         'msgpack==0.6.1',
+        'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
         'pyyaml==4.2b1',
         'docopt==0.6.2',

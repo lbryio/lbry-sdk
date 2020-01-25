@@ -1,28 +1,75 @@
 import base64
 import struct
-from typing import List, Optional, Tuple
+from typing import List
 from binascii import hexlify
 from itertools import chain
 
 from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
 
 
+class Censor:
+
+    __slots__ = 'streams', 'channels', 'censored', 'total'
+
+    def __init__(self, streams: dict = None, channels: dict = None):
+        self.streams = streams or {}
+        self.channels = channels or {}
+        self.censored = {}
+        self.total = 0
+
+    def censor(self, row) -> bool:
+        was_censored = False
+        for claim_hash, lookup in (
+                (row['claim_hash'], self.streams),
+                (row['claim_hash'], self.channels),
+                (row['channel_hash'], self.channels)):
+            censoring_channel_hash = lookup.get(claim_hash)
+            if censoring_channel_hash:
+                was_censored = True
+                self.censored.setdefault(censoring_channel_hash, 0)
+                self.censored[censoring_channel_hash] += 1
+                break
+        if was_censored:
+            self.total += 1
+        return was_censored
+
+    def to_message(self, outputs: OutputsMessage):
+        outputs.blocked_total = self.total
+        for censoring_channel_hash, count in self.censored.items():
+            block = outputs.blocked.add()
+            block.count = count
+            block.channel_hash = censoring_channel_hash
+
+
 class Outputs:
 
-    __slots__ = 'txos', 'extra_txos', 'txs', 'offset', 'total'
+    __slots__ = 'txos', 'extra_txos', 'txs', 'offset', 'total', 'blocked', 'blocked_total'
 
-    def __init__(self, txos: List, extra_txos: List, txs: set, offset: int, total: int):
+    def __init__(self, txos: List, extra_txos: List, txs: set,
+                 offset: int, total: int, blocked: List, blocked_total: int):
         self.txos = txos
         self.txs = txs
         self.extra_txos = extra_txos
         self.offset = offset
         self.total = total
+        self.blocked = blocked
+        self.blocked_total = blocked_total
 
     def inflate(self, txs):
         tx_map = {tx.hash: tx for tx in txs}
         for txo_message in self.extra_txos:
             self.message_to_txo(txo_message, tx_map)
-        return [self.message_to_txo(txo_message, tx_map) for txo_message in self.txos]
+        txos = [self.message_to_txo(txo_message, tx_map) for txo_message in self.txos]
+        return txos, self.inflate_blocked()
+
+    def inflate_blocked(self):
+        return {
+            "total": self.blocked_total,
+            "channels": {
+                hexlify(message.channel_hash[::-1]).decode(): message.count
+                for message in self.blocked
+            }
+        }
 
     def message_to_txo(self, txo_message, tx_map):
         if txo_message.WhichOneof('meta') == 'error':
@@ -68,18 +115,24 @@ class Outputs:
             if txo_message.WhichOneof('meta') == 'error':
                 continue
             txs.add((hexlify(txo_message.tx_hash[::-1]).decode(), txo_message.height))
-        return cls(outputs.txos, outputs.extra_txos, txs, outputs.offset, outputs.total)
+        return cls(
+            outputs.txos, outputs.extra_txos, txs,
+            outputs.offset, outputs.total,
+            outputs.blocked, outputs.blocked_total
+        )
 
     @classmethod
-    def to_base64(cls, txo_rows, extra_txo_rows, offset=0, total=None) -> str:
-        return base64.b64encode(cls.to_bytes(txo_rows, extra_txo_rows, offset, total)).decode()
+    def to_base64(cls, txo_rows, extra_txo_rows, offset=0, total=None, blocked=None) -> str:
+        return base64.b64encode(cls.to_bytes(txo_rows, extra_txo_rows, offset, total, blocked)).decode()
 
     @classmethod
-    def to_bytes(cls, txo_rows, extra_txo_rows, offset=0, total=None) -> bytes:
+    def to_bytes(cls, txo_rows, extra_txo_rows, offset=0, total=None, blocked: Censor = None) -> bytes:
         page = OutputsMessage()
         page.offset = offset
         if total is not None:
             page.total = total
+        if blocked is not None:
+            blocked.to_message(page)
         for row in txo_rows:
             cls.row_to_message(row, page.txos.add(), extra_txo_rows)
         for row in extra_txo_rows:
@@ -116,6 +169,10 @@ class Outputs:
         txo_message.claim.trending_mixed = txo['trending_mixed']
         cls.set_reference(txo_message, 'channel', txo['channel_hash'], extra_txo_rows)
         cls.set_reference(txo_message, 'repost', txo['reposted_claim_hash'], extra_txo_rows)
+
+    @staticmethod
+    def set_blocked(message, blocked):
+        message.blocked_total = blocked.total
 
     @staticmethod
     def set_reference(message, attr, claim_hash, rows):
