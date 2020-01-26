@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
+from lbry.wallet.rpc import RPCError
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
 
 
@@ -140,12 +141,16 @@ class ReconnectTests(IntegrationTestCase):
 
 class ServerPickingTestCase(AsyncioTestCase):
 
-    async def _make_fake_server(self, latency=1.0, port=1):
+    async def _make_fake_server(self, latency=1.0, port=1, raise_version_rpc_error=False, return_versions=None):
         # local fake server with artificial latency
         class FakeSession(RPCSession):
             async def handle_request(self, request):
                 await asyncio.sleep(latency)
                 if request.method == 'server.version':
+                    if raise_version_rpc_error:
+                        raise RPCError(1, 'derp')
+                    if return_versions:
+                        return return_versions
                     return tuple(request.args)
                 return {'height': 1}
         server = await self.loop.create_server(lambda: FakeSession(), host='127.0.0.1', port=port)
@@ -155,7 +160,10 @@ class ServerPickingTestCase(AsyncioTestCase):
     async def _make_bad_server(self, port=42420):
         async def echo(reader, writer):
             while True:
-                writer.write(await reader.read())
+                try:
+                    writer.write(await asyncio.wait_for(reader.read(), 1))
+                except asyncio.TimeoutError:
+                    pass
         server = await asyncio.start_server(echo, host='127.0.0.1', port=port)
         self.addCleanup(server.close)
         return '127.0.0.1', port
@@ -169,6 +177,9 @@ class ServerPickingTestCase(AsyncioTestCase):
                 ('example.that.doesnt.resolve', 9000),
                 await self._make_fake_server(latency=1.0, port=1340),
                 await self._make_fake_server(latency=0.1, port=1337),
+                await self._make_fake_server(latency=0, port=1338, raise_version_rpc_error=True),
+                await self._make_fake_server(latency=0, port=1341, return_versions=('0.0.1', '2.0')),
+                await self._make_fake_server(latency=0, port=1342, return_versions=('0.1', '2.0')),
                 await self._make_fake_server(latency=0.4, port=1339),
             ],
             'connect_timeout': 3
