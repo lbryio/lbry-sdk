@@ -94,7 +94,7 @@ class ClientSession(BaseClientSession):
                     await self.create_connection(self.timeout)
                     await self.ensure_server_version()
                     self._on_connect_cb()
-                if (perf_counter() - self.last_send) > self.max_seconds_idle or self.response_time is None:
+                elif (perf_counter() - self.last_send) > self.max_seconds_idle or self.response_time is None:
                     await self.ensure_server_version()
                 retry_delay = default_delay
             except RPCError as e:
