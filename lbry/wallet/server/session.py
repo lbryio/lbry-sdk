@@ -919,12 +919,9 @@ class LBRYElectrumX(SessionBase):
         metrics.start()
         cache = self.session_mgr.search_cache[query_name]
         cache_key = str(kwargs)
-        cache_item = cache.get(cache_key)
-        if cache_item is None:
-            cache_item = cache[cache_key] = ResultCacheItem()
-        elif cache_item.result is not None:
-            metrics.cache_response()
-            return cache_item.result
+        if cache_key not in cache:
+            cache[cache_key] = ResultCacheItem()
+        cache_item = cache[cache_key]
         async with cache_item.lock:
             if cache_item.result is None:
                 cache_item.result = await self.run_in_executor(
