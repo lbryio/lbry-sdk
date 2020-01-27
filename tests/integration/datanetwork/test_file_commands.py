@@ -228,11 +228,11 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_get('lbry://foo')
         with open(original_path, 'wb') as handle:
             handle.write(b'some other stuff was there instead')
-        self.daemon.stream_manager.stop()
-        await self.daemon.stream_manager.start()
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
-        stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
+        stream = self.daemon.file_manager.get_stream_by_stream_hash(file_info['stream_hash'])
         file_info = (await self.file_list())[0]
         self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
@@ -255,7 +255,7 @@ class FileCommands(CommandTestCase):
         resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(path))
-        self.daemon.stream_manager.stop()
+        self.daemon.file_manager.stop()
         await asyncio.sleep(0.01, loop=self.loop)  # FIXME: this sleep should not be needed
         self.assertFalse(os.path.isfile(path))
 
@@ -348,8 +348,8 @@ class FileCommands(CommandTestCase):
 
         # restart the daemon and make sure the fee is still there
 
-        self.daemon.stream_manager.stop()
-        await self.daemon.stream_manager.start()
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].content_fee.raw, raw_content_fee)
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')

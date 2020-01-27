@@ -28,6 +28,7 @@ try:
     from lbry.torrent.session import TorrentSession
 except ImportError:
     libtorrent = None
+    TorrentSession = None
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ WALLET_COMPONENT = "wallet"
 WALLET_SERVER_PAYMENTS_COMPONENT = "wallet_server_payments"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
-STREAM_MANAGER_COMPONENT = "stream_manager"
+FILE_MANAGER_COMPONENT = "file_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
@@ -326,8 +327,8 @@ class HashAnnouncerComponent(Component):
         }
 
 
-class StreamManagerComponent(Component):
-    component_name = STREAM_MANAGER_COMPONENT
+class FileManagerComponent(Component):
+    component_name = FILE_MANAGER_COMPONENT
     depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
