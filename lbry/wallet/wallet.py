@@ -74,12 +74,10 @@ class Wallet:
         self.storage = storage or WalletStorage()
         self.preferences = TimestampedPreferences(preferences or {})
         self.encryption_password = None
+        self.id = self.get_id()
 
-    @property
-    def id(self):
-        if self.storage.path:
-            return os.path.basename(self.storage.path)
-        return self.name
+    def get_id(self):
+        return os.path.basename(self.storage.path) if self.storage.path else self.name
 
     def add_account(self, account: 'Account'):
         self.accounts.append(account)
