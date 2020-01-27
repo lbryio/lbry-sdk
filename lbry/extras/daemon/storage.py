@@ -9,7 +9,7 @@ from typing import Optional
 from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
-from lbry.wallet.transaction import Transaction
+from lbry.wallet.transaction import Transaction, Output
 from lbry.schema.claim import Claim
 from lbry.dht.constants import DATA_EXPIRATION
 from lbry.blob.blob_info import BlobInfo
@@ -726,6 +726,19 @@ class SQLiteStorage(SQLiteMixin):
             await asyncio.wait(update_file_callbacks)
         if claim_id_to_supports:
             await self.save_supports(claim_id_to_supports)
+
+    def save_claim_from_output(self, ledger, output: Output):
+        return self.save_claims([{
+            "claim_id": output.claim_id,
+            "name": output.claim_name,
+            "amount": dewies_to_lbc(output.amount),
+            "address": output.get_address(ledger),
+            "txid": output.tx_ref.id,
+            "nout": output.position,
+            "value": output.claim,
+            "height": -1,
+            "claim_sequence": -1,
+        }])
 
     def save_claims_for_resolve(self, claim_infos):
         to_save = {}

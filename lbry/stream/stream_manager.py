@@ -6,16 +6,10 @@ import random
 import typing
 from typing import Optional
 from aiohttp.web import Request
-from lbry.error import ResolveError, InvalidStreamDescriptorError, DownloadSDTimeoutError, InsufficientFundsError
-from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
-from lbry.utils import cache_concurrent
+from lbry.error import InvalidStreamDescriptorError
+from lbry.file.source_manager import SourceManager
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.stream.managed_stream import ManagedStream
-from lbry.schema.claim import Claim
-from lbry.schema.url import URL
-from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet import Output
-from lbry.source_manager import SourceManager
 from lbry.file.source import ManagedDownloadSource
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
@@ -25,10 +19,6 @@ if typing.TYPE_CHECKING:
     from lbry.wallet.transaction import Transaction
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
-    from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
-    from lbry.wallet.transaction import Transaction
-    from lbry.wallet.manager import WalletManager
-    from lbry.wallet.wallet import Wallet
 
 log = logging.getLogger(__name__)
 
