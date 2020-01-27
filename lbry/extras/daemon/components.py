@@ -17,6 +17,7 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob_exchange.server import BlobServer
 from lbry.stream.stream_manager import StreamManager
+from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
@@ -331,17 +332,17 @@ class StreamManagerComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.stream_manager: typing.Optional[StreamManager] = None
+        self.file_manager: typing.Optional[FileManager] = None
 
     @property
-    def component(self) -> typing.Optional[StreamManager]:
-        return self.stream_manager
+    def component(self) -> typing.Optional[FileManager]:
+        return self.file_manager
 
     async def get_status(self):
-        if not self.stream_manager:
+        if not self.file_manager:
             return
         return {
-            'managed_files': len(self.stream_manager._sources),
+            'managed_files': len(self.file_manager._sources),
         }
 
     async def start(self):
@@ -352,14 +353,17 @@ class StreamManagerComponent(Component):
             if self.component_manager.has_component(DHT_COMPONENT) else None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
-        self.stream_manager = StreamManager(
+        self.file_manager = FileManager(
+            loop, self.conf, wallet, storage, self.component_manager.analytics_manager
+        )
+        self.file_manager.source_managers['stream'] = StreamManager(
             loop, self.conf, blob_manager, wallet, storage, node, self.component_manager.analytics_manager
         )
-        await self.stream_manager.start()
+        await self.file_manager.start()
         log.info('Done setting up file manager')
 
     async def stop(self):
-        self.stream_manager.stop()
+        self.file_manager.stop()
 
 
 class TorrentComponent(Component):
@@ -370,7 +374,7 @@ class TorrentComponent(Component):
         self.torrent_session = None
 
     @property
-    def component(self) -> typing.Optional[StreamManager]:
+    def component(self) -> typing.Optional[TorrentSession]:
         return self.torrent_session
 
     async def get_status(self):

@@ -1036,7 +1036,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if download_directory and not os.path.isdir(download_directory):
             return {"error": f"specified download directory \"{download_directory}\" does not exist"}
         try:
-            stream = await self.stream_manager.download_stream_from_uri(
+            stream = await self.stream_manager.download_from_uri(
                 uri, self.exchange_rate_manager, timeout, file_name, download_directory,
                 save_file=save_file, wallet=wallet
             )
