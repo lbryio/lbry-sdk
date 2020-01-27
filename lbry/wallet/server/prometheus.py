@@ -1,7 +1,7 @@
 from aiohttp import web
 from prometheus_client import Counter, Info, generate_latest as prom_generate_latest
 from lbry import __version__ as version
-from lbry.build_info import BUILD, COMMIT_HASH
+from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server import util
 import lbry.wallet.server.version as wallet_server_version
 
@@ -11,6 +11,7 @@ VERSION_INFO = Info('build', 'Wallet server build info (e.g. version, commit has
 VERSION_INFO.info({
     'build': BUILD,
     "commit": COMMIT_HASH,
+    "docker_tag": DOCKER_TAG,
     'version': version,
     "min_version": util.version_string(wallet_server_version.PROTOCOL_MIN),
 })
