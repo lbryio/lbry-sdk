@@ -25,7 +25,7 @@ TRENDING_LOG = True
 
 
 # Stubs
-def register_trending_functions(connection):
+def install(connection):
     check_trending_values(connection)
 
 CREATE_TREND_TABLE = ""
@@ -173,7 +173,7 @@ trending_data = TrendingData()
 f = open("trending_ar.log", "w")
 f.close()
 
-def calculate_trending(db, height, final_height, recalculate_claim_hashes):
+def run(db, height, final_height, recalculate_claim_hashes):
 
     if height < final_height - 5*HALF_LIFE:
         trending_log("Skipping AR trending at block {h}.\n".format(h=height))
