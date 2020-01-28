@@ -144,13 +144,6 @@ class SessionManager:
 
         self.session_event = Event()
 
-        # Set up the RPC request handlers
-        cmds = ('add_peer daemon_url disconnect getinfo groups log peers '
-                'query reorg sessions stop'.split())
-        LocalRPC.request_handlers.update(
-            {cmd: getattr(self, 'rpc_' + cmd) for cmd in cmds}
-        )
-
     async def _start_server(self, kind, *args, **kw_args):
         loop = asyncio.get_event_loop()
         if kind == 'RPC':
@@ -716,6 +709,7 @@ class SessionBase(RPCSession):
         REQUESTS_COUNT.labels(method=request.method).inc()
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
+            handler = partial(handler, self)
         else:
             handler = None
         coro = handler_invocation(handler, request)()
@@ -789,16 +783,56 @@ class LBRYElectrumX(SessionBase):
     session_mgr: LBRYSessionManager
     version = lbry.__version__
 
+    @classmethod
+    def initialize_request_handlers(cls):
+        cls.request_handlers.update({
+            'blockchain.block.get_chunk': cls.block_get_chunk,
+            'blockchain.block.get_header': cls.block_get_header,
+            'blockchain.estimatefee': cls.estimatefee,
+            'blockchain.relayfee': cls.relayfee,
+            'blockchain.scripthash.get_balance': cls.scripthash_get_balance,
+            'blockchain.scripthash.get_history': cls.scripthash_get_history,
+            'blockchain.scripthash.get_mempool': cls.scripthash_get_mempool,
+            'blockchain.scripthash.listunspent': cls.scripthash_listunspent,
+            'blockchain.scripthash.subscribe': cls.scripthash_subscribe,
+            'blockchain.transaction.broadcast': cls.transaction_broadcast,
+            'blockchain.transaction.get': cls.transaction_get,
+            'blockchain.transaction.get_merkle': cls.transaction_merkle,
+            'server.add_peer': cls.add_peer,
+            'server.banner': cls.banner,
+            'server.donation_address': cls.donation_address,
+            'server.features': cls.server_features_async,
+            'server.peers.subscribe': cls.peers_subscribe,
+            'server.version': cls.server_version,
+            'blockchain.transaction.get_height': cls.transaction_get_height,
+            'blockchain.claimtrie.search': cls.claimtrie_search,
+            'blockchain.claimtrie.resolve': cls.claimtrie_resolve,
+            'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
+            'blockchain.block.get_server_height': cls.get_server_height,
+            'mempool.get_fee_histogram': cls.mempool_compact_histogram,
+            'blockchain.block.headers': cls.block_headers,
+            'server.ping': cls.ping,
+            'blockchain.headers.subscribe': cls.headers_subscribe_False,
+            'blockchain.address.get_balance': cls.address_get_balance,
+            'blockchain.address.get_history': cls.address_get_history,
+            'blockchain.address.get_mempool': cls.address_get_mempool,
+            'blockchain.address.listunspent': cls.address_listunspent,
+            'blockchain.address.subscribe': cls.address_subscribe,
+            'blockchain.address.unsubscribe': cls.address_unsubscribe,
+        })
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        if not LBRYElectrumX.request_handlers:
+            LBRYElectrumX.initialize_request_handlers()
         self.subscribe_headers = False
         self.subscribe_headers_raw = False
         self.connection.max_response_size = self.env.max_send
         self.hashX_subs = {}
         self.sv_seen = False
         self.mempool_statuses = {}
-        self.set_request_handlers(self.PROTOCOL_MIN)
-        # fixme: this is a rebase hack, we need to go through ChainState instead later
+        self.protocol_tuple = self.PROTOCOL_MIN
+
         self.daemon = self.session_mgr.daemon
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYLevelDB = self.bp.db
@@ -944,6 +978,9 @@ class LBRYElectrumX(SessionBase):
                 metrics = self.get_metrics_or_placeholder_for_api(query_name)
                 metrics.cache_response()
             return cache_item.result
+
+    async def mempool_compact_histogram(self):
+        return self.mempool.compact_fee_histogram()
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
@@ -1395,8 +1432,7 @@ class LBRYElectrumX(SessionBase):
             self.close_after_send = True
             raise RPCError(BAD_REQUEST,
                            f'unsupported protocol version: {protocol_version}')
-        self.set_request_handlers(ptuple)
-
+        self.protocol_tuple = ptuple
         return self.version, self.protocol_version_string()
 
     async def transaction_broadcast(self, raw_tx):
@@ -1489,45 +1525,6 @@ class LBRYElectrumX(SessionBase):
             return {"tx_hash": tx_hash, "merkle": branch}
         else:
             return tx_hash
-
-    def set_request_handlers(self, ptuple):
-        self.protocol_tuple = ptuple
-        handlers = {
-            'blockchain.block.get_chunk': self.block_get_chunk,
-            'blockchain.block.get_header': self.block_get_header,
-            'blockchain.estimatefee': self.estimatefee,
-            'blockchain.relayfee': self.relayfee,
-            'blockchain.scripthash.get_balance': self.scripthash_get_balance,
-            'blockchain.scripthash.get_history': self.scripthash_get_history,
-            'blockchain.scripthash.get_mempool': self.scripthash_get_mempool,
-            'blockchain.scripthash.listunspent': self.scripthash_listunspent,
-            'blockchain.scripthash.subscribe': self.scripthash_subscribe,
-            'blockchain.transaction.broadcast': self.transaction_broadcast,
-            'blockchain.transaction.get': self.transaction_get,
-            'blockchain.transaction.get_merkle': self.transaction_merkle,
-            'server.add_peer': self.add_peer,
-            'server.banner': self.banner,
-            'server.donation_address': self.donation_address,
-            'server.features': self.server_features_async,
-            'server.peers.subscribe': self.peers_subscribe,
-            'server.version': self.server_version,
-            'blockchain.transaction.get_height': self.transaction_get_height,
-            'blockchain.claimtrie.search': self.claimtrie_search,
-            'blockchain.claimtrie.resolve': self.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimsbyids': self.claimtrie_getclaimsbyids,
-            'blockchain.block.get_server_height': self.get_server_height,
-            'mempool.get_fee_histogram': self.mempool.compact_fee_histogram,
-            'blockchain.block.headers': self.block_headers,
-            'server.ping': self.ping,
-            'blockchain.headers.subscribe': self.headers_subscribe_False,
-            'blockchain.address.get_balance': self.address_get_balance,
-            'blockchain.address.get_history': self.address_get_history,
-            'blockchain.address.get_mempool': self.address_get_mempool,
-            'blockchain.address.listunspent': self.address_listunspent,
-            'blockchain.address.subscribe': self.address_subscribe,
-            'blockchain.address.unsubscribe': self.address_unsubscribe,
-        }
-        self.request_handlers = handlers
 
 
 class LocalRPC(SessionBase):
