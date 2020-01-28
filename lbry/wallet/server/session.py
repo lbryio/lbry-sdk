@@ -27,7 +27,9 @@ from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
-from lbry.wallet.server.prometheus import REQUESTS_COUNT
+from lbry.wallet.server.prometheus import REQUESTS_COUNT, SQLITE_INTERRUPT_COUNT, SQLITE_INTERNAL_ERROR_COUNT
+from lbry.wallet.server.prometheus import SQLITE_OPERATIONAL_ERROR_COUNT, SQLITE_EXECUTOR_TIMES, SESSIONS_COUNT
+from lbry.wallet.server.prometheus import SQLITE_PENDING_COUNT, CLIENT_VERSIONS
 import lbry.wallet.server.version as VERSION
 
 from lbry.wallet.rpc import (
@@ -679,6 +681,7 @@ class SessionBase(RPCSession):
         context = {'conn_id': f'{self.session_id}'}
         self.logger = util.ConnectionLogger(self.logger, context)
         self.group = self.session_mgr.add_session(self)
+        SESSIONS_COUNT.inc()
         self.logger.info(f'{self.kind} {self.peer_address_str()}, '
                          f'{self.session_mgr.session_count():,d} total')
 
@@ -686,6 +689,7 @@ class SessionBase(RPCSession):
         """Handle client disconnection."""
         super().connection_lost(exc)
         self.session_mgr.remove_session(self)
+        SESSIONS_COUNT.dec()
         msg = ''
         if not self._can_send.is_set():
             msg += ' whilst paused'
@@ -888,6 +892,7 @@ class LBRYElectrumX(SessionBase):
     async def run_in_executor(self, query_name, func, kwargs):
         start = time.perf_counter()
         try:
+            SQLITE_PENDING_COUNT.inc()
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
@@ -896,23 +901,28 @@ class LBRYElectrumX(SessionBase):
         except reader.SQLiteInterruptedError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_interrupt(start, error.metrics)
+            SQLITE_INTERRUPT_COUNT.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
         except reader.SQLiteOperationalError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, error.metrics)
+            SQLITE_OPERATIONAL_ERROR_COUNT.inc()
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except Exception:
             log.exception("dear devs, please handle this exception better")
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, {})
+            SQLITE_INTERNAL_ERROR_COUNT.inc()
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
-
-        if self.env.track_metrics:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            (result, metrics_data) = result
-            metrics.query_response(start, metrics_data)
-
-        return base64.b64encode(result).decode()
+        else:
+            if self.env.track_metrics:
+                metrics = self.get_metrics_or_placeholder_for_api(query_name)
+                (result, metrics_data) = result
+                metrics.query_response(start, metrics_data)
+            return base64.b64encode(result).decode()
+        finally:
+            SQLITE_PENDING_COUNT.dec()
+            SQLITE_EXECUTOR_TIMES.observe(time.perf_counter() - start)
 
     async def run_and_cache_query(self, query_name, function, kwargs):
         metrics = self.get_metrics_or_placeholder_for_api(query_name)
@@ -1370,6 +1380,7 @@ class LBRYElectrumX(SessionBase):
                 raise RPCError(BAD_REQUEST,
                                f'unsupported client: {client_name}')
             self.client = client_name[:17]
+        CLIENT_VERSIONS.labels(version=str(client_name)).inc()
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.

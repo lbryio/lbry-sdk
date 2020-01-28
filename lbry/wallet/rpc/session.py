@@ -40,6 +40,7 @@ from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Noti
 from .jsonrpc import RPCError, ProtocolError
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
 from .util import Concurrency
+from lbry.wallet.server.prometheus import NOTIFICATION_COUNT, RESPONSE_TIMES, REQUEST_ERRORS_COUNT
 
 
 class Connector:
@@ -405,6 +406,7 @@ class RPCSession(SessionBase):
                     await self._task_group.add(self._handle_request(request))
 
     async def _handle_request(self, request):
+        start = time.perf_counter()
         try:
             result = await self.handle_request(request)
         except (ProtocolError, RPCError) as e:
@@ -417,10 +419,12 @@ class RPCSession(SessionBase):
                               'internal server error')
         if isinstance(request, Request):
             message = request.send_result(result)
+            RESPONSE_TIMES.labels(method=request.method).observe(time.perf_counter() - start)
             if message:
                 await self._send_message(message)
         if isinstance(result, Exception):
             self._bump_errors()
+            REQUEST_ERRORS_COUNT.labels(method=request.method).inc()
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
@@ -455,6 +459,7 @@ class RPCSession(SessionBase):
         """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
         await self._send_message(message)
+        NOTIFICATION_COUNT.labels(method=method).inc()
 
     def send_batch(self, raise_errors=False):
         """Return a BatchRequest.  Intended to be used like so:
