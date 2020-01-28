@@ -52,11 +52,12 @@ class ZScore:
         return cls(), cls.step, cls.finalize
 
 
-def register_trending_functions(connection):
+def install(connection):
     connection.createaggregatefunction("zscore", ZScore.factory, 1)
+    connection.cursor().execute(CREATE_TREND_TABLE)
 
 
-def calculate_trending(db, height, final_height):
+def run(db, height, final_height, affected_claims):
     # don't start tracking until we're at the end of initial sync
     if height < (final_height - (TRENDING_WINDOW * TRENDING_DATA_POINTS)):
         return
