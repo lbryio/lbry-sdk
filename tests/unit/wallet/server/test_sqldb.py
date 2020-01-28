@@ -10,7 +10,7 @@ from lbry.schema.claim import Claim
 from lbry.schema.result import Censor
 from lbry.wallet.server.db import reader, writer
 from lbry.wallet.server.coin import LBCRegTest
-from lbry.wallet.server.db.trending import zscore
+from lbry.wallet.server.db.trending import TRENDING_WINDOW
 from lbry.wallet.server.db.canonical import FindShortestID
 from lbry.wallet.server.block_processor import Timer
 from lbry.wallet.transaction import Transaction, Input, Output
@@ -47,7 +47,7 @@ class TestSQLDB(unittest.TestCase):
         self.daemon_height = 1
         self.coin = LBCRegTest()
         db_url = 'file:test_sqldb?mode=memory&cache=shared'
-        self.sql = writer.SQLDB(self, db_url, [], [], [zscore])
+        self.sql = writer.SQLDB(self, db_url, [], [])
         self.addCleanup(self.sql.close)
         self.sql.open()
         reader.initializer(
@@ -533,7 +533,7 @@ class TestTrending(TestSQLDB):
         up_biggly = self.get_stream('Claim E', COIN)
         claims = advance(1, [up_biggly, up_medium, up_small, no_trend, downwards])
         for window in range(1, 8):
-            advance(zscore.TRENDING_WINDOW * window, [
+            advance(TRENDING_WINDOW * window, [
                 self.get_support(downwards, (20-window)*COIN),
                 self.get_support(up_small, int(20+(window/10)*COIN)),
                 self.get_support(up_medium, (20+(window*(2 if window == 7 else 1)))*COIN),
@@ -549,8 +549,8 @@ class TestTrending(TestSQLDB):
     def test_edge(self):
         problematic = self.get_stream('Problem', COIN)
         self.advance(1, [problematic])
-        self.advance(zscore.TRENDING_WINDOW, [self.get_support(problematic, 53000000000)])
-        self.advance(zscore.TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
+        self.advance(TRENDING_WINDOW, [self.get_support(problematic, 53000000000)])
+        self.advance(TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
 
 
 class TestContentBlocking(TestSQLDB):

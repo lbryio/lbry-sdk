@@ -17,7 +17,9 @@ from lbry.wallet import Ledger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
 from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
-from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
+from lbry.wallet.server.db.trending import (
+    CREATE_TREND_TABLE, calculate_trending, register_trending_functions
+)
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 
@@ -163,14 +165,14 @@ class SQLDB:
 
     CREATE_TABLES_QUERY = (
         CREATE_CLAIM_TABLE +
+        CREATE_TREND_TABLE +
         CREATE_FULL_TEXT_SEARCH +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
         CREATE_TAG_TABLE
     )
 
-    def __init__(
-            self, main, path: str, blocking_channels: list, filtering_channels: list, trending: list):
+    def __init__(self, main, path: str, blocking_channels: list, filtering_channels: list):
         self.main = main
         self._db_path = path
         self.db = None
@@ -188,7 +190,6 @@ class SQLDB:
         self.filtering_channel_hashes = {
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
-        self.trending = trending
 
     def open(self):
         self.db = apsw.Connection(
@@ -207,14 +208,13 @@ class SQLDB:
         self.execute(self.PRAGMAS)
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
+        register_trending_functions(self.db)
         self.state_manager = Manager()
         self.blocked_streams = self.state_manager.dict()
         self.blocked_channels = self.state_manager.dict()
         self.filtered_streams = self.state_manager.dict()
         self.filtered_channels = self.state_manager.dict()
         self.update_blocked_and_filtered_claims()
-        for algorithm in self.trending:
-            algorithm.install(self.db)
 
     def close(self):
         if self.db is not None:
@@ -834,8 +834,7 @@ class SQLDB:
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
-        for algorithm in self.trending:
-            r(algorithm.run, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
+        r(calculate_trending, self.db.cursor(), height, daemon_height)
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
@@ -846,15 +845,11 @@ class LBRYLevelDB(LevelDB):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         path = os.path.join(self.env.db_dir, 'claims.db')
-        trending = []
-        for algorithm_name in set(self.env.default('TRENDING_ALGORITHMS', 'zscore').split(' ')):
-            if algorithm_name in TRENDING_ALGORITHMS:
-                trending.append(TRENDING_ALGORITHMS[algorithm_name])
+        # space separated list of channel URIs used for filtering bad content
         self.sql = SQLDB(
             self, path,
             self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
             self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
-            trending
         )
 
     def close(self):
