@@ -9,7 +9,7 @@ import aiohttp
 from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.util import hex_to_bytes, class_logger
 from lbry.wallet.rpc import JSONRPC
-
+from lbry.wallet.server.prometheus import LBRYCRD_REQUEST_TIMES, LBRYCRD_PENDING_COUNT
 
 class DaemonError(Exception):
     """Raised when the daemon returns an error in its results."""
@@ -106,6 +106,7 @@ class Daemon:
         Handles temporary connection issues.  Daemon response errors
         are raise through DaemonError.
         """
+
         def log_error(error):
             nonlocal last_error_log, retry
             now = time.time()
@@ -119,8 +120,13 @@ class Daemon:
         last_error_log = 0
         data = json.dumps(payload)
         retry = self.init_retry
+        methods = tuple(
+            [payload['method']] if isinstance(payload, dict) else [request['method'] for request in payload]
+        )
         while True:
             try:
+                for method in methods:
+                    LBRYCRD_PENDING_COUNT.labels(method=method).inc()
                 result = await self._send_data(data)
                 result = processor(result)
                 if on_good_message:
@@ -143,12 +149,17 @@ class Daemon:
             except WorkQueueFullError:
                 log_error('work queue full.')
                 on_good_message = 'running normally'
-
+            finally:
+                for method in methods:
+                    LBRYCRD_PENDING_COUNT.labels(method=method).dec()
             await asyncio.sleep(retry)
             retry = max(min(self.max_retry, retry * 2), self.init_retry)
 
     async def _send_single(self, method, params=None):
         """Send a single request to the daemon."""
+
+        start = time.perf_counter()
+
         def processor(result):
             err = result['error']
             if not err:
@@ -160,7 +171,9 @@ class Daemon:
         payload = {'method': method, 'id': next(self.id_counter)}
         if params:
             payload['params'] = params
-        return await self._send(payload, processor)
+        result = await self._send(payload, processor)
+        LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter() - start)
+        return result
 
     async def _send_vector(self, method, params_iterable, replace_errs=False):
         """Send several requests of the same method.
@@ -168,6 +181,9 @@ class Daemon:
         The result will be an array of the same length as params_iterable.
         If replace_errs is true, any item with an error is returned as None,
         otherwise an exception is raised."""
+
+        start = time.perf_counter()
+
         def processor(result):
             errs = [item['error'] for item in result if item['error']]
             if any(err.get('code') == self.WARMING_UP for err in errs):
@@ -178,9 +194,11 @@ class Daemon:
 
         payload = [{'method': method, 'params': p, 'id': next(self.id_counter)}
                    for p in params_iterable]
+        result = []
         if payload:
-            return await self._send(payload, processor)
-        return []
+            result = await self._send(payload, processor)
+        LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter()-start)
+        return result
 
     async def _is_rpc_available(self, method):
         """Return whether given RPC method is available in the daemon.

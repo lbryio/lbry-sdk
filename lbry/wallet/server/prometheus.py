@@ -1,5 +1,5 @@
 from aiohttp import web
-from prometheus_client import Counter, Info, generate_latest as prom_generate_latest
+from prometheus_client import Counter, Info, generate_latest as prom_generate_latest, Histogram, Gauge
 from lbry import __version__ as version
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server import util
@@ -15,7 +15,36 @@ VERSION_INFO.info({
     'version': version,
     "min_version": util.version_string(wallet_server_version.PROTOCOL_MIN),
 })
-REQUESTS_COUNT = Counter("requests_count", "Number of requests received", namespace=NAMESPACE, labelnames=("method",))
+SESSIONS_COUNT = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE)
+
+REQUESTS_COUNT = Counter("requests_count", "Number of requests received", namespace=NAMESPACE,
+                         labelnames=("method",))
+RESPONSE_TIMES = Histogram("response_time", "Response times", namespace=NAMESPACE, labelnames=("method",))
+NOTIFICATION_COUNT = Counter("notification", "Number of notifications sent (for subscriptions)",
+                             namespace=NAMESPACE, labelnames=("method",))
+REQUEST_ERRORS_COUNT = Counter("request_error", "Number of requests that returned errors", namespace=NAMESPACE,
+                               labelnames=("method",))
+SQLITE_INTERRUPT_COUNT = Counter("interrupt", "Number of interrupted queries", namespace=NAMESPACE)
+SQLITE_OPERATIONAL_ERROR_COUNT = Counter(
+    "operational_error", "Number of queries that raised operational errors", namespace=NAMESPACE
+)
+SQLITE_INTERNAL_ERROR_COUNT = Counter(
+    "internal_error", "Number of queries raising unexpected errors", namespace=NAMESPACE
+)
+SQLITE_EXECUTOR_TIMES = Histogram("executor_time", "SQLite executor times", namespace=NAMESPACE)
+SQLITE_PENDING_COUNT = Gauge(
+    "pending_queries_count", "Number of pending and running sqlite queries", namespace=NAMESPACE
+)
+LBRYCRD_REQUEST_TIMES = Histogram(
+    "lbrycrd_request", "lbrycrd requests count", namespace=NAMESPACE, labelnames=("method",)
+)
+LBRYCRD_PENDING_COUNT = Gauge(
+    "lbrycrd_pending_count", "Number of lbrycrd rpcs that are in flight", namespace=NAMESPACE, labelnames=("method",)
+)
+CLIENT_VERSIONS = Counter(
+    "clients", "Number of connections received per client version",
+    namespace=NAMESPACE, labelnames=("version",)
+)
 
 
 class PrometheusServer:
