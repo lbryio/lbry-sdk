@@ -727,7 +727,7 @@ class SQLiteStorage(SQLiteMixin):
         if claim_id_to_supports:
             await self.save_supports(claim_id_to_supports)
 
-    def save_claim_from_output(self, ledger, output: Output):
+    def save_claim_from_output(self, ledger, *outputs: Output):
         return self.save_claims([{
             "claim_id": output.claim_id,
             "name": output.claim_name,
@@ -736,9 +736,9 @@ class SQLiteStorage(SQLiteMixin):
             "txid": output.tx_ref.id,
             "nout": output.position,
             "value": output.claim,
-            "height": -1,
+            "height": output.tx_ref.height,
             "claim_sequence": -1,
-        }])
+        } for output in outputs])
 
     def save_claims_for_resolve(self, claim_infos):
         to_save = {}
