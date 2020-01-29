@@ -37,7 +37,7 @@ ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 
 INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
-    'timestamp', 'creation_timestamp', 'release_time', 'fee_amount',
+    'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
     'tx_position', 'channel_join', 'reposted',
     'amount', 'effective_amount', 'support_amount',
     'trending_group', 'trending_mixed',
@@ -403,7 +403,6 @@ def _get_referenced_rows(censor: Censor, txo_rows: List[dict]):
 
     # channels must come first for client side inflation to work properly
     return channel_txos + reposted_txos
-
 
 @measure
 def search(constraints) -> Tuple[List, List, int, int, Censor]:
