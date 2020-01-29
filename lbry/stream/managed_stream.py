@@ -143,7 +143,7 @@ class ManagedStream(ManagedDownloadSource):
     #     return cls(loop, config, blob_manager, descriptor.sd_hash, os.path.dirname(file_path),
     #                os.path.basename(file_path), status=cls.STATUS_FINISHED, rowid=row_id, descriptor=descriptor)
 
-    async def start(self, node: Optional['Node'] = None, timeout: Optional[float] = None,
+    async def start(self, timeout: Optional[float] = None,
                     save_now: bool = False):
         timeout = timeout or self.config.download_timeout
         if self._running.is_set():
@@ -151,7 +151,7 @@ class ManagedStream(ManagedDownloadSource):
         log.info("start downloader for stream (sd hash: %s)", self.sd_hash)
         self._running.set()
         try:
-            await asyncio.wait_for(self.downloader.start(node), timeout, loop=self.loop)
+            await asyncio.wait_for(self.downloader.start(), timeout, loop=self.loop)
         except asyncio.TimeoutError:
             self._running.clear()
             raise DownloadSDTimeoutError(self.sd_hash)
@@ -161,6 +161,11 @@ class ManagedStream(ManagedDownloadSource):
         self.delayed_stop_task = self.loop.create_task(self._delayed_stop())
         if not await self.blob_manager.storage.file_exists(self.sd_hash):
             if save_now:
+                if not self._file_name:
+                    self._file_name = await get_next_available_file_name(
+                        self.loop, self.download_directory,
+                        self._file_name or sanitize_file_name(self.descriptor.suggested_file_name)
+                    )
                 file_name, download_dir = self._file_name, self.download_directory
             else:
                 file_name, download_dir = None, None
@@ -286,7 +291,7 @@ class ManagedStream(ManagedDownloadSource):
 
     async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None,
                         node: Optional['Node'] = None):
-        await self.start(node)
+        await self.start()
         if self.file_output_task and not self.file_output_task.done():  # cancel an already running save task
             self.file_output_task.cancel()
         self.download_directory = download_directory or self.download_directory or self.config.download_dir

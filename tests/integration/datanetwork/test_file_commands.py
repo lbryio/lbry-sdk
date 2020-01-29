@@ -232,7 +232,7 @@ class FileCommands(CommandTestCase):
         await self.daemon.file_manager.start()
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
-        stream = self.daemon.file_manager.get_stream_by_stream_hash(file_info['stream_hash'])
+        stream = self.daemon.file_manager.get_filtered(stream_hash=file_info['stream_hash'])[0]
         file_info = (await self.file_list())[0]
         self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.

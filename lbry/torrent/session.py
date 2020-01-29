@@ -93,7 +93,8 @@ class TorrentSession:
             self._executor, libtorrent.session, settings
         )
         await self._loop.run_in_executor(
-            self._executor, self._session.add_dht_router, "router.utorrent.com", 6881
+            self._executor,
+            lambda: self._session.add_dht_router("router.utorrent.com", 6881)
         )
         self._loop.create_task(self.process_alerts())
 
@@ -110,11 +111,11 @@ class TorrentSession:
 
     async def pause(self):
         state = await self._loop.run_in_executor(
-            self._executor, self._session.save_state
+            self._executor, lambda: self._session.save_state()
         )
         # print(f"state:\n{state}")
         await self._loop.run_in_executor(
-            self._executor, self._session.pause
+            self._executor, lambda: self._session.pause()
         )
 
     async def resume(self):

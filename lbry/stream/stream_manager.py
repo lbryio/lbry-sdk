@@ -160,8 +160,8 @@ class StreamManager(SourceManager):
             log.info("no DHT node given, resuming downloads trusting that we can contact reflector")
         if to_resume_saving:
             log.info("Resuming saving %i files", len(to_resume_saving))
-            self.resume_saving_task = self.loop.create_task(asyncio.gather(
-                *(self._sources[sd_hash].save_file(file_name, download_directory, node=self.node)
+            self.resume_saving_task = asyncio.ensure_future(asyncio.gather(
+                *(self._sources[sd_hash].save_file(file_name, download_directory)
                   for (file_name, download_directory, sd_hash) in to_resume_saving),
                 loop=self.loop
             ))
