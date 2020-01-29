@@ -16,6 +16,7 @@ class TestComponentManager(AsyncioTestCase):
             [
                 components.DatabaseComponent,
                 components.ExchangeRateManagerComponent,
+                components.TorrentComponent,
                 components.UPnPComponent
             ],
             [
@@ -24,9 +25,9 @@ class TestComponentManager(AsyncioTestCase):
                 components.WalletComponent
             ],
             [
+                components.FileManagerComponent,
                 components.HashAnnouncerComponent,
                 components.PeerProtocolServerComponent,
-                components.FileManagerComponent,
                 components.WalletServerPaymentsComponent
             ]
         ]
@@ -135,8 +136,8 @@ class FakeDelayedBlobManager(FakeComponent):
         await asyncio.sleep(1)
 
 
-class FakeDelayedStreamManager(FakeComponent):
-    component_name = "stream_manager"
+class FakeDelayedFileManager(FakeComponent):
+    component_name = "file_manager"
     depends_on = [FakeDelayedBlobManager.component_name]
 
     async def start(self):
@@ -153,7 +154,7 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
                 PEER_PROTOCOL_SERVER_COMPONENT, UPNP_COMPONENT,
                 EXCHANGE_RATE_MANAGER_COMPONENT],
             wallet=FakeDelayedWallet,
-            stream_manager=FakeDelayedStreamManager,
+            file_manager=FakeDelayedFileManager,
             blob_manager=FakeDelayedBlobManager
         )
 
@@ -163,17 +164,17 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
         await self.advance(0)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
-        self.assertFalse(self.component_manager.get_component('stream_manager').running)
+        self.assertFalse(self.component_manager.get_component('file_manager').running)
 
         await self.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
-        self.assertFalse(self.component_manager.get_component('stream_manager').running)
+        self.assertFalse(self.component_manager.get_component('file_manager').running)
 
         await self.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
-        self.assertTrue(self.component_manager.get_component('stream_manager').running)
+        self.assertTrue(self.component_manager.get_component('file_manager').running)
 
     async def test_proper_stopping_of_components(self):
         asyncio.create_task(self.component_manager.start())
@@ -182,18 +183,18 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
         await self.advance(1)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
-        self.assertTrue(self.component_manager.get_component('stream_manager').running)
+        self.assertTrue(self.component_manager.get_component('file_manager').running)
 
         asyncio.create_task(self.component_manager.stop())
         await self.advance(0)
-        self.assertFalse(self.component_manager.get_component('stream_manager').running)
+        self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         await self.advance(1)
-        self.assertFalse(self.component_manager.get_component('stream_manager').running)
+        self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('wallet').running)
         await self.advance(1)
-        self.assertFalse(self.component_manager.get_component('stream_manager').running)
+        self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertFalse(self.component_manager.get_component('blob_manager').running)
         self.assertFalse(self.component_manager.get_component('wallet').running)
