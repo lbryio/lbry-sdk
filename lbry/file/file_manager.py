@@ -1,38 +1,28 @@
-import time
 import asyncio
-import binascii
 import logging
 import typing
 from typing import Optional
 from aiohttp.web import Request
-from lbry.error import ResolveError, InvalidStreamDescriptorError, DownloadSDTimeoutError, InsufficientFundsError
+from lbry.error import ResolveError, DownloadSDTimeoutError, InsufficientFundsError
 from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
 from lbry.stream.managed_stream import ManagedStream
 from lbry.utils import cache_concurrent
-from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet.transaction import Output
 from lbry.file.source_manager import SourceManager
 from lbry.file.source import ManagedDownloadSource
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.wallet import LbryWalletManager
+    from lbry.wallet import WalletManager
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)
 
 
-def path_or_none(p) -> Optional[str]:
-    if not p:
-        return
-    return binascii.unhexlify(p).decode()
-
-
 class FileManager:
-    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', wallet_manager: 'LbryWalletManager',
+    def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', wallet_manager: 'WalletManager',
                  storage: 'SQLiteStorage', analytics_manager: Optional['AnalyticsManager'] = None):
         self.loop = loop
         self.config = config
@@ -141,8 +131,9 @@ class FileManager:
                     log.info("claim contains an update to a stream we have, downloading it")
                     if save_file and existing_for_claim_id[0].output_file_exists:
                         save_file = False
-                    await existing_for_claim_id[0].start(node=self.node, timeout=timeout, save_now=save_file)
-                    if not existing_for_claim_id[0].output_file_exists and (save_file or file_name or download_directory):
+                    await existing_for_claim_id[0].start(timeout=timeout, save_now=save_file)
+                    if not existing_for_claim_id[0].output_file_exists and (
+                            save_file or file_name or download_directory):
                         await existing_for_claim_id[0].save_file(
                             file_name=file_name, download_directory=download_directory
                         )
@@ -176,8 +167,8 @@ class FileManager:
 
             if not claim.stream.source.bt_infohash:
                 stream = ManagedStream(
-                    self.loop, self.config, source_manager.blob_manager, claim.stream.source.sd_hash, download_directory,
-                    file_name, ManagedStream.STATUS_RUNNING, content_fee=payment,
+                    self.loop, self.config, source_manager.blob_manager, claim.stream.source.sd_hash,
+                    download_directory, file_name, ManagedStream.STATUS_RUNNING, content_fee=payment,
                     analytics_manager=self.analytics_manager
                 )
             else:
@@ -261,29 +252,6 @@ class FileManager:
         :param search_by: fields and values to filter by
         """
         return sum((manager.get_filtered(*args, **kwargs) for manager in self.source_managers.values()), [])
-
-    async def _check_update_or_replace(
-            self, outpoint: str, claim_id: str, claim: Claim
-    ) -> typing.Tuple[Optional[ManagedDownloadSource], Optional[ManagedDownloadSource]]:
-        existing = self.get_filtered(outpoint=outpoint)
-        if existing:
-            return existing[0], None
-        existing = self.get_filtered(sd_hash=claim.stream.source.sd_hash)
-        if existing and existing[0].claim_id != claim_id:
-            raise ResolveError(f"stream for {existing[0].claim_id} collides with existing download {claim_id}")
-        if existing:
-            log.info("claim contains a metadata only update to a stream we have")
-            await self.storage.save_content_claim(
-                existing[0].stream_hash, outpoint
-            )
-            await self._update_content_claim(existing[0])
-            return existing[0], None
-        else:
-            existing_for_claim_id = self.get_filtered(claim_id=claim_id)
-            if existing_for_claim_id:
-                log.info("claim contains an update to a stream we have, downloading it")
-                return None, existing_for_claim_id[0]
-        return None, None
 
     async def delete(self, source: ManagedDownloadSource, delete_file=False):
         for manager in self.source_managers.values():

@@ -1,6 +1,5 @@
 import os
 import asyncio
-import binascii
 import logging
 import typing
 from typing import Optional
@@ -12,7 +11,7 @@ if typing.TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
-comparison_operators = {
+COMPARISON_OPERATORS = {
     'eq': lambda a, b: a == b,
     'ne': lambda a, b: a != b,
     'g': lambda a, b: a > b,
@@ -20,12 +19,6 @@ comparison_operators = {
     'ge': lambda a, b: a >= b,
     'le': lambda a, b: a <= b,
 }
-
-
-def path_or_none(p) -> Optional[str]:
-    if not p:
-        return
-    return binascii.unhexlify(p).decode()
 
 
 class SourceManager:
@@ -77,10 +70,11 @@ class SourceManager:
             source.stop_tasks()
         self.started.clear()
 
-    async def create(self, file_path: str, key: Optional[bytes] = None, **kw) -> ManagedDownloadSource:
+    async def create(self, file_path: str, key: Optional[bytes] = None,
+                     iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedDownloadSource:
         raise NotImplementedError()
 
-    async def _delete(self, source: ManagedDownloadSource):
+    async def _delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
         raise NotImplementedError()
 
     async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
@@ -101,11 +95,11 @@ class SourceManager:
         """
         if sort_by and sort_by not in self.filter_fields:
             raise ValueError(f"'{sort_by}' is not a valid field to sort by")
-        if comparison and comparison not in comparison_operators:
+        if comparison and comparison not in COMPARISON_OPERATORS:
             raise ValueError(f"'{comparison}' is not a valid comparison")
         if 'full_status' in search_by:
             del search_by['full_status']
-        for search in search_by.keys():
+        for search in search_by:
             if search not in self.filter_fields:
                 raise ValueError(f"'{search}' is not a valid search operation")
         if search_by:
@@ -113,7 +107,7 @@ class SourceManager:
             sources = []
             for stream in self._sources.values():
                 for search, val in search_by.items():
-                    if comparison_operators[comparison](getattr(stream, search), val):
+                    if COMPARISON_OPERATORS[comparison](getattr(stream, search), val):
                         sources.append(stream)
                         break
         else:

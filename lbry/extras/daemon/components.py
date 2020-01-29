@@ -24,10 +24,8 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
 try:
-    import libtorrent
     from lbry.torrent.session import TorrentSession
 except ImportError:
-    libtorrent = None
     TorrentSession = None
 
 log = logging.getLogger(__name__)
@@ -343,7 +341,7 @@ class FileManagerComponent(Component):
         if not self.file_manager:
             return
         return {
-            'managed_files': len(self.file_manager._sources),
+            'managed_files': len(self.file_manager.get_filtered()),
         }
 
     async def start(self):
@@ -386,7 +384,7 @@ class TorrentComponent(Component):
         }
 
     async def start(self):
-        if libtorrent:
+        if TorrentSession:
             self.torrent_session = TorrentSession(asyncio.get_event_loop(), None)
             await self.torrent_session.bind()  # TODO: specify host/port
 
