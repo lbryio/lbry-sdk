@@ -5,6 +5,8 @@ from unittest import mock
 import asyncio
 import json
 from decimal import Decimal
+
+from lbry.file.file_manager import FileManager
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
@@ -110,10 +112,7 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
     async def mock_resolve(*args, **kwargs):
         result = {txo.meta['permanent_url']: txo}
-        claims = [
-            StreamManager._convert_to_old_resolve_output(manager, result)[txo.meta['permanent_url']]
-        ]
-        await storage.save_claims(claims)
+        await storage.save_claim_from_output(ledger, txo)
         return result
     manager.ledger.resolve = mock_resolve
 
@@ -138,11 +137,20 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
-        self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
-                                            self.client_storage, get_mock_node(self.server_from_client),
-                                            AnalyticsManager(self.client_config,
-                                                             binascii.hexlify(generate_id()).decode(),
-                                                             binascii.hexlify(generate_id()).decode()))
+        analytics_manager = AnalyticsManager(
+            self.client_config,
+            binascii.hexlify(generate_id()).decode(),
+            binascii.hexlify(generate_id()).decode()
+        )
+        self.stream_manager = StreamManager(
+            self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
+            self.client_storage, get_mock_node(self.server_from_client),
+            analytics_manager
+        )
+        self.file_manager = FileManager(
+            self.loop, self.client_config, self.mock_wallet, self.client_storage, analytics_manager
+        )
+        self.file_manager.source_managers['stream'] = self.stream_manager
         self.exchange_rate_manager = get_fake_exchange_rate_manager()
 
     async def _test_time_to_first_bytes(self, check_post, error=None, after_setup=None):
@@ -159,9 +167,9 @@ class TestStreamManager(BlobExchangeTestBase):
         self.stream_manager.analytics_manager._post = _check_post
         if error:
             with self.assertRaises(error):
-                await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+                await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         else:
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+            await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(checked_analytics_event)
 
@@ -281,7 +289,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.stream_manager.analytics_manager._post = check_post
 
         self.assertDictEqual(self.stream_manager.streams, {})
-        stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        stream = await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         stream_hash = stream.stream_hash
         self.assertDictEqual(self.stream_manager.streams, {stream.sd_hash: stream})
         self.assertTrue(stream.running)
@@ -302,7 +310,7 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.assertEqual(stored_status, "stopped")
 
-        stream.node = self.stream_manager.node
+        stream.downloader.node = self.stream_manager.node
         await stream.save_file()
         await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
@@ -314,7 +322,7 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.assertEqual(stored_status, "finished")
 
-        await self.stream_manager.delete_stream(stream, True)
+        await self.stream_manager.delete(stream, True)
         self.assertDictEqual(self.stream_manager.streams, {})
         self.assertFalse(os.path.isfile(os.path.join(self.client_dir, "test_file")))
         stored_status = await self.client_storage.run_and_return_one_or_none(
@@ -326,7 +334,7 @@ class TestStreamManager(BlobExchangeTestBase):
     async def _test_download_error_on_start(self, expected_error, timeout=None):
         error = None
         try:
-            await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager, timeout)
+            await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager, timeout)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                 raise
@@ -402,7 +410,7 @@ class TestStreamManager(BlobExchangeTestBase):
             last_blob_hash = json.loads(sdf.read())['blobs'][-2]['blob_hash']
         self.server_blob_manager.delete_blob(last_blob_hash)
         self.client_config.blob_download_timeout = 0.1
-        stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        stream = await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         await stream.started_writing.wait()
         self.assertEqual('running', stream.status)
         self.assertIsNotNone(stream.full_path)
@@ -434,7 +442,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.stream_manager.analytics_manager._post = check_post
 
         self.assertDictEqual(self.stream_manager.streams, {})
-        stream = await self.stream_manager.download_stream_from_uri(self.uri, self.exchange_rate_manager)
+        stream = await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
         self.stream_manager.stop()

@@ -93,10 +93,10 @@ class FileManager:
                     raise
                 log.exception("Unexpected error resolving stream:")
                 raise ResolveError(f"Unexpected error resolving stream: {str(err)}")
-            if not resolved_result:
-                raise ResolveError(f"Failed to resolve stream at '{uri}'")
             if 'error' in resolved_result:
                 raise ResolveError(f"Unexpected error resolving uri for download: {resolved_result['error']}")
+            if not resolved_result or uri not in resolved_result:
+                raise ResolveError(f"Failed to resolve stream at '{uri}'")
 
             txo = resolved_result[uri]
             claim = txo.claim
@@ -166,11 +166,13 @@ class FileManager:
             ####################
 
             if not claim.stream.source.bt_infohash:
+                # fixme: this shouldnt be here
                 stream = ManagedStream(
                     self.loop, self.config, source_manager.blob_manager, claim.stream.source.sd_hash,
                     download_directory, file_name, ManagedStream.STATUS_RUNNING, content_fee=payment,
                     analytics_manager=self.analytics_manager
                 )
+                stream.downloader.node = source_manager.node
             else:
                 stream = None
             log.info("starting download for %s", uri)
