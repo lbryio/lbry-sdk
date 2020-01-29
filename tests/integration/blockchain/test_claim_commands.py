@@ -73,6 +73,12 @@ class ClaimSearchCommand(ClaimTestCase):
                 (result['txid'], result['claim_id'])
             )
 
+    async def assertFindsNoClaims(self, **kwargs):
+        kwargs.setdefault('order_by', ['height', '^name'])
+        results = await self.claim_search(**kwargs)
+        print(results)
+        self.assertEqual(0, len(results))
+
     async def test_basic_claim_search(self):
         await self.create_channel()
         channel_txo = self.channel['outputs'][0]
@@ -327,6 +333,13 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([video], media_types=['video/mp4'])
         await self.assertFindsClaims([image], media_types=['image/png'])
         await self.assertFindsClaims([image, video], media_types=['video/mp4', 'image/png'])
+
+        # duration
+        await self.assertFindsClaim(video, duration=f'>{14}')
+        await self.assertFindsClaim(video, duration=f'<{16}')
+        await self.assertFindsClaim(video, duration=15)
+        await self.assertFindsNoClaims(duration=f'>{100}')
+        await self.assertFindsNoClaims(duration=f'<{14}')
 
     async def test_search_by_text(self):
         chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))

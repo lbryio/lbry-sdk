@@ -2198,6 +2198,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--reposted_claim_id=<reposted_claim_id>] [--reposted=<reposted>]
                          [--claim_type=<claim_type>] [--stream_types=<stream_types>...] [--media_types=<media_types>...]
                          [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
+                         [--duration=<duration>]
                          [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
                          [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
                          [--not_languages=<not_languages>...]
@@ -2284,6 +2285,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --media_types=<media_types>     : (list) filter by 'video/mp4', 'image/png', etc
             --fee_currency=<fee_currency>   : (string) specify fee currency: LBC, BTC, USD
             --fee_amount=<fee_amount>       : (decimal) content download fee (supports equality constraints)
+            --duration=<duration>           : (int) duration of video or audio in seconds
+                                                     (supports equality constraints)
             --any_tags=<any_tags>           : (list) find claims containing any of the tags
             --all_tags=<all_tags>           : (list) find claims containing every tag
             --not_tags=<not_tags>           : (list) find claims not containing any of these tags

@@ -14,3 +14,4 @@ _trial_temp/
 /tests/.coverage.*
 
 /lbry/wallet/bin
+/venv
