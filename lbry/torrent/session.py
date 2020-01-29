@@ -4,29 +4,29 @@ import libtorrent
 
 
 NOTIFICATION_MASKS = [
-  "error",
-  "peer",
-  "port_mapping",
-  "storage",
-  "tracker",
-  "debug",
-  "status",
-  "progress",
-  "ip_block",
-  "dht",
-  "stats",
-  "session_log",
-  "torrent_log",
-  "peer_log",
-  "incoming_request",
-  "dht_log",
-  "dht_operation",
-  "port_mapping_log",
-  "picker_log",
-  "file_progress",
-  "piece_progress",
-  "upload",
-  "block_progress"
+    "error",
+    "peer",
+    "port_mapping",
+    "storage",
+    "tracker",
+    "debug",
+    "status",
+    "progress",
+    "ip_block",
+    "dht",
+    "stats",
+    "session_log",
+    "torrent_log",
+    "peer_log",
+    "incoming_request",
+    "dht_log",
+    "dht_operation",
+    "port_mapping_log",
+    "picker_log",
+    "file_progress",
+    "piece_progress",
+    "upload",
+    "block_progress"
 ]
 
 
@@ -90,11 +90,12 @@ class TorrentSession:
             'enable_incoming_tcp': True
         }
         self._session = await self._loop.run_in_executor(
-            self._executor, libtorrent.session, settings
+            self._executor, libtorrent.session, settings  # pylint: disable=c-extension-no-member
         )
         await self._loop.run_in_executor(
             self._executor,
-            lambda: self._session.add_dht_router("router.utorrent.com", 6881)
+            # lambda necessary due boost functions raising errors when asyncio inspects them. try removing later
+            lambda: self._session.add_dht_router("router.utorrent.com", 6881)  # pylint: disable=unnecessary-lambda
         )
         self._loop.create_task(self.process_alerts())
 
@@ -110,12 +111,11 @@ class TorrentSession:
             await asyncio.sleep(1, loop=self._loop)
 
     async def pause(self):
-        state = await self._loop.run_in_executor(
-            self._executor, lambda: self._session.save_state()
-        )
-        # print(f"state:\n{state}")
         await self._loop.run_in_executor(
-            self._executor, lambda: self._session.pause()
+            self._executor, lambda: self._session.save_state()  # pylint: disable=unnecessary-lambda
+        )
+        await self._loop.run_in_executor(
+            self._executor, lambda: self._session.pause()  # pylint: disable=unnecessary-lambda
         )
 
     async def resume(self):

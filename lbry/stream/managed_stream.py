@@ -6,7 +6,6 @@ import logging
 import binascii
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
-from lbry.utils import generate_id
 from lbry.error import DownloadSDTimeoutError
 from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
@@ -21,7 +20,6 @@ if typing.TYPE_CHECKING:
     from lbry.schema.claim import Claim
     from lbry.blob.blob_manager import BlobManager
     from lbry.blob.blob_info import BlobInfo
-    from lbry.extras.daemon.storage import SQLiteStorage
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.wallet.transaction import Transaction
@@ -289,8 +287,7 @@ class ManagedStream(ManagedDownloadSource):
             self.saving.clear()
             self.finished_write_attempt.set()
 
-    async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None,
-                        node: Optional['Node'] = None):
+    async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None):
         await self.start()
         if self.file_output_task and not self.file_output_task.done():  # cancel an already running save task
             self.file_output_task.cancel()

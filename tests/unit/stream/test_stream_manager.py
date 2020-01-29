@@ -302,7 +302,8 @@ class TestStreamManager(BlobExchangeTestBase):
         )
         self.assertEqual(stored_status, "stopped")
 
-        await stream.save_file(node=self.stream_manager.node)
+        stream.node = self.stream_manager.node
+        await stream.save_file()
         await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
         self.assertTrue(stream.finished)

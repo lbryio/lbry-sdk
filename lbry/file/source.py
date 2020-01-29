@@ -16,20 +16,6 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-# def _get_next_available_file_name(download_directory: str, file_name: str) -> str:
-#     base_name, ext = os.path.splitext(os.path.basename(file_name))
-#     i = 0
-#     while os.path.isfile(os.path.join(download_directory, file_name)):
-#         i += 1
-#         file_name = "%s_%i%s" % (base_name, i, ext)
-#
-#     return file_name
-#
-#
-# async def get_next_available_file_name(loop: asyncio.AbstractEventLoop, download_directory: str, file_name: str) -> str:
-#     return await loop.run_in_executor(None, _get_next_available_file_name, download_directory, file_name)
-
-
 class ManagedDownloadSource:
     STATUS_RUNNING = "running"
     STATUS_STOPPED = "stopped"
@@ -71,7 +57,7 @@ class ManagedDownloadSource:
     #                  iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> 'ManagedDownloadSource':
     #     raise NotImplementedError()
 
-    async def start(self, timeout: Optional[float] = None):
+    async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
         raise NotImplementedError()
 
     async def stop(self, finished: bool = False):

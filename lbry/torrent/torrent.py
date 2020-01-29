@@ -18,17 +18,17 @@ class TorrentInfo:
         self.total_size = total_size
 
     @classmethod
-    def from_libtorrent_info(cls, ti):
+    def from_libtorrent_info(cls, torrent_info):
         return cls(
-            ti.nodes(), tuple(
+            torrent_info.nodes(), tuple(
                 {
                     'url': web_seed['url'],
                     'type': web_seed['type'],
                     'auth': web_seed['auth']
-                } for web_seed in ti.web_seeds()
+                } for web_seed in torrent_info.web_seeds()
             ), tuple(
-                (tracker.url, tracker.tier) for tracker in ti.trackers()
-            ), ti.total_size()
+                (tracker.url, tracker.tier) for tracker in torrent_info.trackers()
+            ), torrent_info.total_size()
         )
 
 
@@ -41,9 +41,11 @@ class Torrent:
     def _threaded_update_status(self):
         status = self._handle.status()
         if not status.is_seeding:
-            log.info('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d) %s' % (
+            log.info(
+                '%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d) %s',
                 status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
-                status.num_peers, status.state))
+                status.num_peers, status.state
+            )
         elif not self.finished.is_set():
             self.finished.set()
 
