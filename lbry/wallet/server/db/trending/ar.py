@@ -209,7 +209,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
     time_boost = get_time_boost(height)
 
     # Update claims from db
-    if len(trending_data.claims) == 0:
+    if not trending_data.initialised:
         # On fresh launch
         for row in db.execute("""
                               SELECT claim_id, trending_mixed,
