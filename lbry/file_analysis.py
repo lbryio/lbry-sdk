@@ -21,7 +21,8 @@ class VideoFileAnalyzer:
         return False
 
     async def _execute(self, command, arguments):
-        process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *shlex.split(arguments),
+        args = shlex.split(arguments)
+        process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *args,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode() + stderr.decode(), process.returncode
@@ -34,8 +35,8 @@ class VideoFileAnalyzer:
             code = -1
             version = ""
         if code != 0 or not version.startswith(name):
-            raise Exception(f"Unable to locate or run {name}. Please install FFmpeg "
-                            f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
+            raise FileNotFoundError(f"Unable to locate or run {name}. Please install FFmpeg "
+                                    f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
         return version
 
     async def _verify_ffmpeg_installed(self):
@@ -54,7 +55,7 @@ class VideoFileAnalyzer:
 
     def _verify_container(self, scan_data: json):
         container = scan_data["format"]["format_name"]
-        log.debug("   Detected container %s", container)
+        log.debug("   Detected container is %s", container)
         if not self._matches(container.split(","), ["webm", "mp4", "3gp", "ogg"]):
             return "Container format is not in the approved list of WebM, MP4. " \
                    f"Actual: {container} [{scan_data['format']['format_long_name']}]"
@@ -65,7 +66,7 @@ class VideoFileAnalyzer:
             if stream["codec_type"] != "video":
                 continue
             codec = stream["codec_name"]
-            log.debug("   Detected video codec %s encoding %s", codec, stream["pix_fmt"])
+            log.debug("   Detected video codec is %s, format is %s", codec, stream["pix_fmt"])
             if not self._matches(codec.split(","), ["h264", "vp8", "vp9", "av1", "theora"]):
                 return "Video codec is not in the approved list of H264, VP8, VP9, AV1, Theora. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
@@ -82,7 +83,7 @@ class VideoFileAnalyzer:
             return ""
 
         bit_rate = float(scan_data["format"]["bit_rate"])
-        log.debug("   Detected bitrate %s Mbps", str(bit_rate / 1000000.0))
+        log.debug("   Detected bitrate is %s Mbps", str(bit_rate / 1000000.0))
         pixels = -1.0
         for stream in scan_data["streams"]:
             if stream["codec_type"] == "video":
@@ -114,7 +115,7 @@ class VideoFileAnalyzer:
             if stream["codec_type"] != "audio":
                 continue
             codec = stream["codec_name"]
-            log.debug("   Detected audio codec %s", codec)
+            log.debug("   Detected audio codec is %s", codec)
             if not self._matches(codec.split(","), ["aac", "mp3", "flac", "vorbis", "opus"]):
                 return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
@@ -143,7 +144,7 @@ class VideoFileAnalyzer:
             return "Audio is at least five dB lower than prime. " \
                    f"Actual max: {max_volume}, mean: {mean_volume}"
 
-        log.debug("   Detected audio volume mean, max as %f dB, %f dB", mean_volume, max_volume)
+        log.debug("   Detected audio volume has mean, max of %f, %f dB", mean_volume, max_volume)
 
         return ""
 

@@ -1,5 +1,6 @@
 import os
 import re
+import platform
 import sys
 import typing
 import logging
@@ -460,6 +461,13 @@ class BaseConfig:
         self.persisted = ConfigFileAccess(self, config_file_path)
         if self.persisted.upgrade():
             self.persisted.save()
+
+    @property
+    def needs_proactor(self):
+        major, minor, _ = platform.python_version_tuple()
+        if int(major) > 3 or (int(major) == 3 and int(minor) > 7):
+            return False
+        return platform.system() == "Windows"
 
 
 class TranscodeConfig(BaseConfig):

@@ -262,6 +262,8 @@ def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config
 
 
 def run_daemon(args: argparse.Namespace, conf: Config):
+    if conf.needs_proactor:
+        asyncio.set_event_loop(asyncio.ProactorEventLoop())
     loop = asyncio.get_event_loop()
     if args.verbose is not None:
         loop.set_debug(True)
