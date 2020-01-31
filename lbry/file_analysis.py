@@ -335,4 +335,4 @@ class VideoFileAnalyzer:
             # TODO: delete partial output file here if it exists?
             return file_path
 
-        return output
+        return str(output)
