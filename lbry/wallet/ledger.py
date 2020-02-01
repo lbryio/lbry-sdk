@@ -732,20 +732,42 @@ class Ledger(metaclass=LedgerRegistry):
     def get_purchase_count(self, resolve=False, **constraints):
         return self.db.get_purchase_count(**constraints)
 
-    def get_claims(self, **constraints):
-        return self.db.get_claims(**constraints)
+    async def _resolve_for_local_results(self, accounts, txos):
+        results = []
+        response = await self.resolve(accounts, [txo.permanent_url for txo in txos])
+        for txo in txos:
+            resolved = response[txo.permanent_url]
+            if isinstance(resolved, Output):
+                results.append(resolved)
+            else:
+                if isinstance(resolved, dict) and 'error' in resolved:
+                    txo.meta['error'] = resolved['error']
+                results.append(txo)
+        return results
+
+    async def get_claims(self, resolve=False, **constraints):
+        claims = await self.db.get_claims(**constraints)
+        if resolve:
+            return await self._resolve_for_local_results(constraints.get('accounts', []), claims)
+        return claims
 
     def get_claim_count(self, **constraints):
         return self.db.get_claim_count(**constraints)
 
-    def get_streams(self, **constraints):
-        return self.db.get_streams(**constraints)
+    async def get_streams(self, resolve=False, **constraints):
+        streams = await self.db.get_streams(**constraints)
+        if resolve:
+            return await self._resolve_for_local_results(constraints.get('accounts', []), streams)
+        return streams
 
     def get_stream_count(self, **constraints):
         return self.db.get_stream_count(**constraints)
 
-    def get_channels(self, **constraints):
-        return self.db.get_channels(**constraints)
+    async def get_channels(self, resolve=False, **constraints):
+        channels = await self.db.get_channels(**constraints)
+        if resolve:
+            return await self._resolve_for_local_results(constraints.get('accounts', []), channels)
+        return channels
 
     def get_channel_count(self, **constraints):
         return self.db.get_channel_count(**constraints)

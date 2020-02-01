@@ -631,6 +631,7 @@ class Database(SQLiteMixin):
         return txos
 
     async def get_txo_count(self, **constraints):
+        constraints.pop('resolve', None)
         constraints.pop('wallet', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
