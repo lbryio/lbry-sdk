@@ -4,14 +4,14 @@ import apsw
 import logging
 from operator import itemgetter
 from typing import Tuple, List, Dict, Union, Type, Optional
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from decimal import Decimal
 from contextvars import ContextVar
 from functools import wraps
 from dataclasses import dataclass
 
 from lbry.wallet.database import query, interpolate
-
+from lbry.error import ResolveCensoredError
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs, Censor
@@ -451,6 +451,8 @@ def resolve_url(raw_url):
         matches = search_claims(censor, **query, limit=1)
         if matches:
             channel = matches[0]
+        elif censor.censored:
+            return ResolveCensoredError(raw_url, hexlify(next(iter(censor.censored))[::-1]).decode())
         else:
             return LookupError(f'Could not find channel in "{raw_url}".')
 
@@ -469,8 +471,10 @@ def resolve_url(raw_url):
         matches = search_claims(censor, **query, limit=1)
         if matches:
             return matches[0]
+        elif censor.censored:
+            return ResolveCensoredError(raw_url, hexlify(next(iter(censor.censored))[::-1]).decode())
         else:
-            return LookupError(f'Could not find stream in "{raw_url}".')
+            return LookupError(f'Could not find claim at "{raw_url}".')
 
     return channel
 

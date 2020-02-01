@@ -4,7 +4,13 @@ from typing import List
 from binascii import hexlify
 from itertools import chain
 
+from lbry.error import ResolveCensoredError
 from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
+from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
+
+INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
+NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
+BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 
 
 class Censor:
@@ -73,7 +79,12 @@ class Outputs:
 
     def message_to_txo(self, txo_message, tx_map):
         if txo_message.WhichOneof('meta') == 'error':
-            return None
+            return {
+                'error': {
+                    'name': txo_message.error.Code.Name(txo_message.error.code).lower(),
+                    'text': txo_message.error.text,
+                }
+            }
         txo = tx_map[txo_message.tx_hash].outputs[txo_message.nout]
         if txo_message.WhichOneof('meta') == 'claim':
             claim = txo_message.claim
@@ -146,9 +157,11 @@ class Outputs:
         if isinstance(txo, Exception):
             txo_message.error.text = txo.args[0]
             if isinstance(txo, ValueError):
-                txo_message.error.code = txo_message.error.INVALID
+                txo_message.error.code = ErrorMessage.INVALID
             elif isinstance(txo, LookupError):
-                txo_message.error.code = txo_message.error.NOT_FOUND
+                txo_message.error.code = ErrorMessage.NOT_FOUND
+            elif isinstance(txo, ResolveCensoredError):
+                txo_message.error.code = ErrorMessage.BLOCKED
             return
         txo_message.tx_hash = txo['txo_hash'][:32]
         txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])

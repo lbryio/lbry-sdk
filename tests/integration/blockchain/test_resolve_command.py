@@ -15,6 +15,7 @@ class BaseResolveTestCase(CommandTestCase):
         other = (await self.resolve(name))[name]
         if claim_id is None:
             self.assertIn('error', other)
+            self.assertEqual(other['error']['name'], 'not_found')
         else:
             self.assertEqual(claim_id, other['claim_id'])
 
@@ -183,7 +184,12 @@ class ResolveCommand(BaseResolveTestCase):
         # only possible outside a channel
         response = await self.resolve('lbry://@abc/on-channel-claim')
         self.assertEqual(response, {
-            'lbry://@abc/on-channel-claim': {'error': 'lbry://@abc/on-channel-claim did not resolve to a claim'}
+            'lbry://@abc/on-channel-claim': {
+                'error': {
+                    'name': 'not_found',
+                    'text': 'Could not find claim at "lbry://@abc/on-channel-claim".',
+                }
+            }
         })
         response = (await self.resolve('lbry://on-channel-claim'))['lbry://on-channel-claim']
         self.assertFalse(response['is_channel_signature_valid'])
@@ -257,7 +263,12 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertFalse(response['bad_example']['is_channel_signature_valid'])
         response = await self.resolve('@olds/bad_example')
         self.assertEqual(response, {
-            '@olds/bad_example': {'error': '@olds/bad_example did not resolve to a claim'}
+            '@olds/bad_example': {
+                'error': {
+                    'name': 'not_found',
+                    'text': 'Could not find claim at "@olds/bad_example".',
+                }
+            }
         })
 
 

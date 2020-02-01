@@ -617,7 +617,10 @@ class TestContentBlocking(TestSQLDB):
         self.assertEqual(1, censor.total)
         self.assertEqual({blocking_channel.claim_hash: 1}, censor.censored)
         results, _ = reader.resolve([claim1.claim_name])
-        self.assertEqual('Could not find stream in "claim1".', results[0].args[0])
+        self.assertEqual(
+            f"Resolve of 'claim1' was censored by channel with claim id '{blocking_channel.claim_id}'.",
+            results[0].args[0]
+        )
         results, _ = reader.resolve([
             claim2.claim_name, regular_channel.claim_name  # claim2 and channel still resolved
         ])
@@ -654,8 +657,14 @@ class TestContentBlocking(TestSQLDB):
         results, _ = reader.resolve([
             claim2.claim_name, regular_channel.claim_name  # claim2 and channel don't resolve
         ])
-        self.assertEqual('Could not find stream in "claim2".', results[0].args[0])
-        self.assertEqual('Could not find channel in "@channel1".', results[1].args[0])
+        self.assertEqual(
+            f"Resolve of 'claim2' was censored by channel with claim id '{blocking_channel.claim_id}'.",
+            results[0].args[0]
+        )
+        self.assertEqual(
+            f"Resolve of '@channel1' was censored by channel with claim id '{blocking_channel.claim_id}'.",
+            results[1].args[0]
+        )
         results, _ = reader.resolve([claim3.claim_name])  # claim3 still resolved
         self.assertEqual(claim3.claim_hash, results[0]['claim_hash'])
 

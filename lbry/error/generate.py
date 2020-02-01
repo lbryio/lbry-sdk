@@ -50,7 +50,7 @@ class ErrorClass:
 
     def get_arguments(self):
         args = ['self']
-        for arg in re.findall('{([a-z0-1]+)}', self.message):
+        for arg in re.findall('{([a-z0-1_]+)}', self.message):
             args.append(arg)
         return args
 
