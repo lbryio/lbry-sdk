@@ -197,6 +197,12 @@ class ResolveTimeoutError(WalletError):
         super().__init__(f"Failed to resolve '{url}' within the timeout.")
 
 
+class ResolveCensoredError(WalletError):
+
+    def __init__(self, url, censor_id):
+        super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{censor_id}'.")
+
+
 class KeyFeeAboveMaxAllowedError(WalletError):
 
     def __init__(self, message):

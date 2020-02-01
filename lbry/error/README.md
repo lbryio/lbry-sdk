@@ -51,11 +51,12 @@ Code | Name | Message
 405 | ChannelKeyNotFound | Channel signing key not found.
 406 | ChannelKeyInvalid | Channel signing key is out of date. -- For example, channel was updated but you don't have the updated key.
 407 | DataDownload | Failed to download blob. *generic*
-408 | Resolve | Failed to resolve '{url}'.
-409 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
-410 | KeyFeeAboveMaxAllowed | {message}
-411 | InvalidPassword | Password is invalid.
-412 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
+410 | Resolve | Failed to resolve '{url}'.
+411 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
+411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{censor_id}'.
+420 | KeyFeeAboveMaxAllowed | {message}
+421 | InvalidPassword | Password is invalid.
+422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
 **5xx** | Blob | **Blobs**
 500 | BlobNotFound | Blob not found.
 501 | BlobPermissionDenied | Permission denied to read blob.
