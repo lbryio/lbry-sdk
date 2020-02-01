@@ -2144,7 +2144,8 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list(self, claim_type=None, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_claim_list(
+            self, claim_type=None, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my stream and channel claims.
 
@@ -2152,6 +2153,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_list [--claim_type=<claim_type>]
                        [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
+                       [--resolve]
 
         Options:
             --claim_type=<claim_type>  : (str) claim type: channel, stream, repost, collection
@@ -2159,6 +2161,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+            --resolve                  : (bool) resolves each claim to provide additional metadata
 
         Returns: {Paginated[Output]}
         """
@@ -2170,7 +2173,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_claims, wallet=wallet, accounts=wallet.accounts)
             claim_count = partial(self.ledger.get_claim_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(claims, claim_count, page, page_size, claim_type=claim_type)
+        return paginate_rows(claims, claim_count, page, page_size, claim_type=claim_type, resolve=resolve)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(self, **kwargs):
@@ -2673,19 +2676,20 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_channel_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my channel claims.
 
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--page=<page>] [--page_size=<page_size>]
+                         [--page=<page>] [--page_size=<page_size>] [--resolve]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to use
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+            --resolve                  : (bool) resolves each channel to provide additional metadata
 
         Returns: {Paginated[Output]}
         """
@@ -2697,7 +2701,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             channels = partial(self.ledger.get_channels, wallet=wallet, accounts=wallet.accounts)
             channel_count = partial(self.ledger.get_channel_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(channels, channel_count, page, page_size)
+        return paginate_rows(channels, channel_count, page, page_size, resolve=resolve)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None, wallet_id=None):
@@ -3400,19 +3404,20 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_stream_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_stream_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my stream claims.
 
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                       [--page=<page>] [--page_size=<page_size>]
+                       [--page=<page>] [--page_size=<page_size>] [--resolve]
 
         Options:
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+            --resolve                  : (bool) resolves each stream to provide additional metadata
 
         Returns: {Paginated[Output]}
         """
@@ -3424,7 +3429,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             streams = partial(self.ledger.get_streams, wallet=wallet, accounts=wallet.accounts)
             stream_count = partial(self.ledger.get_stream_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(streams, stream_count, page, page_size)
+        return paginate_rows(streams, stream_count, page, page_size, resolve=resolve)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT)

@@ -382,6 +382,78 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], text='cloud')
 
 
+class ClaimCommands(ClaimTestCase):
+
+    async def test_claim_stream_channel_list_with_resolve(self):
+        await self.channel_create()
+        await self.stream_create()
+
+        r = await self.claim_list()
+        self.assertNotIn('short_url', r[0])
+        self.assertNotIn('short_url', r[1])
+        self.assertNotIn('short_url', (await self.stream_list())[0])
+        self.assertNotIn('short_url', (await self.channel_list())[0])
+
+        r = await self.claim_list(resolve=True)
+        self.assertIn('short_url', r[0])
+        self.assertIn('short_url', r[1])
+        self.assertIn('short_url', (await self.stream_list(resolve=True))[0])
+        self.assertIn('short_url', (await self.channel_list(resolve=True))[0])
+
+        # unconfirmed channel won't resolve
+        channel_tx = await self.daemon.jsonrpc_channel_create('@foo', '1.0')
+        await self.ledger.wait(channel_tx)
+
+        r = await self.claim_list(resolve=True)
+        self.assertEqual('not_found', r[0]['meta']['error']['name'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+        r = await self.channel_list(resolve=True)
+        self.assertEqual('not_found', r[0]['meta']['error']['name'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+
+        # confirm it
+        await self.generate(1)
+        await self.ledger.wait(channel_tx, self.blockchain.block_expected)
+
+        # all channel claims resolve
+        r = await self.claim_list(resolve=True)
+        self.assertTrue(r[0]['meta']['is_controlling'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+        r = await self.channel_list(resolve=True)
+        self.assertTrue(r[0]['meta']['is_controlling'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+
+        # unconfirmed stream won't resolve
+        stream_tx = await self.daemon.jsonrpc_stream_create(
+            'foo', '1.0', file_path=self.create_upload_file(data=b'hi')
+        )
+        await self.ledger.wait(stream_tx)
+
+        r = await self.claim_list(resolve=True)
+        self.assertEqual('not_found', r[0]['meta']['error']['name'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+        r = await self.stream_list(resolve=True)
+        self.assertEqual('not_found', r[0]['meta']['error']['name'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+
+        # confirm it
+        await self.generate(1)
+        await self.ledger.wait(stream_tx, self.blockchain.block_expected)
+
+        # all claims resolve
+        r = await self.claim_list(resolve=True)
+        self.assertTrue(r[0]['meta']['is_controlling'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+        self.assertTrue(r[2]['meta']['is_controlling'])
+        self.assertTrue(r[3]['meta']['is_controlling'])
+        r = await self.stream_list(resolve=True)
+        self.assertTrue(r[0]['meta']['is_controlling'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+        r = await self.channel_list(resolve=True)
+        self.assertTrue(r[0]['meta']['is_controlling'])
+        self.assertTrue(r[1]['meta']['is_controlling'])
+
+
 class ChannelCommands(CommandTestCase):
 
     async def test_create_channel_names(self):
