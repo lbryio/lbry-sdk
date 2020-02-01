@@ -72,6 +72,7 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertIn('error', response['lbry://@bar/foo'])
 
         # checks for expected format in inexistent URIs
-        response = await self.ledger.resolve([], ['lbry://404', 'lbry://@404'])
-        self.assertEqual('lbry://404 did not resolve to a claim', response['lbry://404']['error'])
-        self.assertEqual('lbry://@404 did not resolve to a claim', response['lbry://@404']['error'])
+        response = await self.ledger.resolve([], ['lbry://404', 'lbry://@404', 'lbry://@404/404'])
+        self.assertEqual('Could not find claim at "lbry://404".', response['lbry://404']['error']['text'])
+        self.assertEqual('Could not find channel in "lbry://@404".', response['lbry://@404']['error']['text'])
+        self.assertEqual('Could not find channel in "lbry://@404/404".', response['lbry://@404/404']['error']['text'])

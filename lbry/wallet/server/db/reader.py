@@ -474,7 +474,7 @@ def resolve_url(raw_url):
         elif censor.censored:
             return ResolveCensoredError(raw_url, hexlify(next(iter(censor.censored))[::-1]).decode())
         else:
-            return LookupError(f'Could not find stream in "{raw_url}".')
+            return LookupError(f'Could not find claim at "{raw_url}".')
 
     return channel
 

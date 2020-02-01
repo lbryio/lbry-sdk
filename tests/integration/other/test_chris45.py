@@ -87,7 +87,10 @@ class EpicAdventuresOfChris45(CommandTestCase):
         response = await self.resolve('lbry://@spam/hovercraft')
         self.assertEqual(
             response['lbry://@spam/hovercraft'],
-            {'error': 'lbry://@spam/hovercraft did not resolve to a claim'}
+            {'error': {
+                'name': 'not_found',
+                'text': 'Could not find claim at "lbry://@spam/hovercraft".'
+            }}
         )
 
         # After abandoning he just waits for his LBCs to be returned to his account
@@ -186,4 +189,10 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # He them checks that the claim doesn't resolve anymore.
         response = await self.resolve(uri)
-        self.assertEqual(response[uri], {'error': f'{uri} did not resolve to a claim'})
+        self.assertEqual(
+            response[uri],
+            {'error': {
+                'name': 'not_found',
+                'text': f'Could not find claim at "{uri}".'
+            }}
+        )
