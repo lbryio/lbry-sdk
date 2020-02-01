@@ -12,7 +12,7 @@ from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict
 
 import pylru
-from lbry.schema.result import Outputs
+from lbry.schema.result import Outputs, INVALID, NOT_FOUND
 from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
@@ -661,13 +661,13 @@ class Ledger(metaclass=LedgerRegistry):
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
-            if txo and URL.parse(url).has_stream_in_channel:
-                if not txo.channel or not txo.is_signed_by(txo.channel, self):
-                    txo = None
             if txo:
-                result[url] = txo
+                if isinstance(txo, Output) and URL.parse(url).has_stream_in_channel:
+                    if not txo.channel or not txo.is_signed_by(txo.channel, self):
+                        txo = {'error': {'name': INVALID, 'text': f'{url} has invalid channel signature'}}
             else:
-                result[url] = {'error': f'{url} did not resolve to a claim'}
+                txo = {'error': {'name': NOT_FOUND, 'text': f'{url} did not resolve to a claim'}}
+            result[url] = txo
         return result
 
     async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], dict, int, int]:

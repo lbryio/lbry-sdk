@@ -15,6 +15,7 @@ class BaseResolveTestCase(CommandTestCase):
         other = (await self.resolve(name))[name]
         if claim_id is None:
             self.assertIn('error', other)
+            self.assertEqual(other['error']['name'], 'not_found')
         else:
             self.assertEqual(claim_id, other['claim_id'])
 
