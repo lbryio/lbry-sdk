@@ -853,6 +853,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         connection_code = await self.get_connection_status()
+        ffmpeg_status = await self._video_file_analyzer.status()
 
         response = {
             'installation_id': self.installation_id,
@@ -863,6 +864,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'code': connection_code,
                 'message': CONNECTION_MESSAGES[connection_code],
             },
+            'ffmpeg_status': ffmpeg_status
         }
         for component in self.component_manager.components:
             status = await component.get_status()

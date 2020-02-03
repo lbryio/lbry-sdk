@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import platform
 import sys
 
 # noinspection PyUnresolvedReferences
@@ -48,9 +49,11 @@ def main():
     video_file = sys.argv[1]
     conf = TranscodeConfig()
     analyzer = VideoFileAnalyzer(conf)
-    loop = asyncio.ProactorEventLoop() if conf.needs_proactor else asyncio.get_event_loop()
+    if sys.version_info < (3, 8) and platform.system() == "Windows":
+        # TODO: remove after we move to requiring Python 3.8
+        asyncio.set_event_loop(asyncio.ProactorEventLoop())
     try:
-        loop.run_until_complete(process_video(analyzer, video_file))
+        asyncio.run(process_video(analyzer, video_file))
     except KeyboardInterrupt:
         pass
 

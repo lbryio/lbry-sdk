@@ -34,6 +34,7 @@ class TranscodeValidation(ClaimTestCase):
         self.conf.volume_analysis_time = 0  # disable it as the test file isn't very good here
         self.analyzer = VideoFileAnalyzer(self.conf)
         file_ogg = self.make_name("ogg", ".ogg")
+        self.video_file_ogg = str(file_ogg)
         if not file_ogg.exists():
             command = f'-i "{self.video_file_name}" -c:v libtheora -q:v 4 -c:a libvorbis -q:a 4 ' \
                       f'-c:s copy -c:d copy "{file_ogg}"'
@@ -42,6 +43,7 @@ class TranscodeValidation(ClaimTestCase):
                 self.assertEqual(code, 0, output)
 
         file_webm = self.make_name("webm", ".webm")
+        self.video_file_webm = str(file_webm)
         if not file_webm.exists():
             command = f'-i "{self.video_file_name}" -c:v libvpx-vp9 -crf 36 -b:v 0 -cpu-used 2 ' \
                       f'-c:a libopus -b:a 128k -c:s copy -c:d copy "{file_webm}"'
@@ -49,12 +51,13 @@ class TranscodeValidation(ClaimTestCase):
                 output, code = await self.analyzer._execute("ffmpeg", command)
                 self.assertEqual(code, 0, output)
 
-        self.should_work = [self.video_file_name, str(file_ogg), str(file_webm)]
-
     async def test_should_work(self):
-        for should_work_file_name in self.should_work:
-            new_file_name = await self.analyzer.verify_or_repair(True, False, should_work_file_name)
-            self.assertEqual(should_work_file_name, new_file_name)
+        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_name)
+        self.assertEqual(self.video_file_name, new_file_name)
+        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_ogg)
+        self.assertEqual(self.video_file_ogg, new_file_name)
+        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_webm)
+        self.assertEqual(self.video_file_webm, new_file_name)
 
     async def test_volume(self):
         try:
@@ -125,10 +128,17 @@ class TranscodeValidation(ClaimTestCase):
 
     async def test_extension_choice(self):
 
-        for file_name in self.should_work:
-            scan_data = await self.analyzer._get_scan_data(True, file_name)
-            extension = self.analyzer._get_best_container_extension(scan_data, "")
-            self.assertEqual(extension, pathlib.Path(file_name).suffix[1:])
+        scan_data = await self.analyzer._get_scan_data(True, self.video_file_name)
+        extension = self.analyzer._get_best_container_extension(scan_data, "")
+        self.assertEqual(extension, pathlib.Path(self.video_file_name).suffix[1:])
+
+        scan_data = await self.analyzer._get_scan_data(True, self.video_file_ogg)
+        extension = self.analyzer._get_best_container_extension(scan_data, "")
+        self.assertEqual(extension, "ogg")
+
+        scan_data = await self.analyzer._get_scan_data(True, self.video_file_webm)
+        extension = self.analyzer._get_best_container_extension(scan_data, "")
+        self.assertEqual(extension, "webm")
 
         extension = self.analyzer._get_best_container_extension("", "libx264 -crf 23")
         self.assertEqual("mp4", extension)

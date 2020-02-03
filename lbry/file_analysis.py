@@ -13,12 +13,6 @@ log = logging.getLogger(__name__)
 
 
 class VideoFileAnalyzer:
-    @staticmethod
-    def _matches(needles: list, haystack: list):
-        for needle in needles:
-            if needle in haystack:
-                return True
-        return False
 
     async def _execute(self, command, arguments):
         args = shlex.split(arguments)
@@ -44,34 +38,55 @@ class VideoFileAnalyzer:
             return
         await self._verify_executable("ffprobe")
         version = await self._verify_executable("ffmpeg")
-        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0],
-                  shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg"))
+        self._which = shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg")
         self._ffmpeg_installed = True
+        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
     def __init__(self, conf: TranscodeConfig):
         self._conf = conf
         self._available_encoders = ""
         self._ffmpeg_installed = False
+        self._which = None
 
-    def _verify_container(self, scan_data: json):
+    async def status(self, reset=False):
+        if reset:
+            self._available_encoders = ""
+            self._ffmpeg_installed = False
+            self._which = None
+
+        installed = True
+        try:
+            await self._verify_ffmpeg_installed()
+        except FileNotFoundError:
+            installed = False
+
+        return {
+            "available": installed,
+            "which": self._which,
+            "analyze_audio_volume": int(self._conf.volume_analysis_time) > 0
+        }
+
+    @staticmethod
+    def _verify_container(scan_data: json):
         container = scan_data["format"]["format_name"]
         log.debug("   Detected container is %s", container)
-        if not self._matches(container.split(","), ["webm", "mp4", "3gp", "ogg"]):
+        if not {"webm", "mp4", "3gp", "ogg"}.intersection(container.split(",")):
             return "Container format is not in the approved list of WebM, MP4. " \
                    f"Actual: {container} [{scan_data['format']['format_long_name']}]"
         return ""
 
-    def _verify_video_encoding(self, scan_data: json):
+    @staticmethod
+    def _verify_video_encoding(scan_data: json):
         for stream in scan_data["streams"]:
             if stream["codec_type"] != "video":
                 continue
             codec = stream["codec_name"]
             log.debug("   Detected video codec is %s, format is %s", codec, stream["pix_fmt"])
-            if not self._matches(codec.split(","), ["h264", "vp8", "vp9", "av1", "theora"]):
+            if not {"h264", "vp8", "vp9", "av1", "theora"}.intersection(codec.split(",")):
                 return "Video codec is not in the approved list of H264, VP8, VP9, AV1, Theora. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
 
-            if self._matches(codec.split(","), ["h264"]) and stream["pix_fmt"] != "yuv420p":
+            if "h264" in codec.split(",") and stream["pix_fmt"] != "yuv420p":
                 return "Video codec is H264, but its pixel format does not match the approved yuv420p. " \
                        f"Actual: {stream['pix_fmt']}"
 
@@ -100,7 +115,7 @@ class VideoFileAnalyzer:
 
     async def _verify_fast_start(self, scan_data: json, video_file):
         container = scan_data["format"]["format_name"]
-        if self._matches(container.split(","), ["webm", "ogg"]):
+        if {"webm", "ogg"}.intersection(container.split(",")):
             return ""
 
         result, _ = await self._execute("ffprobe", f'-v debug "{video_file}"')
@@ -110,13 +125,14 @@ class VideoFileAnalyzer:
                 return "Video stream descriptors are not at the start of the file (the faststart flag was not used)."
         return ""
 
-    def _verify_audio_encoding(self, scan_data: json):
+    @staticmethod
+    def _verify_audio_encoding(scan_data: json):
         for stream in scan_data["streams"]:
             if stream["codec_type"] != "audio":
                 continue
             codec = stream["codec_name"]
             log.debug("   Detected audio codec is %s", codec)
-            if not self._matches(codec.split(","), ["aac", "mp3", "flac", "vorbis", "opus"]):
+            if not {"aac", "mp3", "flac", "vorbis", "opus"}.intersection(codec.split(",")):
                 return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
 
@@ -126,7 +142,7 @@ class VideoFileAnalyzer:
         try:
             validate_volume = int(seconds) > 0
         except ValueError:
-            validate_volume = 0
+            validate_volume = False
 
         if not validate_volume:
             return ""
@@ -224,7 +240,8 @@ class VideoFileAnalyzer:
     async def _get_volume_filter(self):
         return self._conf.volume_filter if self._conf.volume_filter else "-af loudnorm"
 
-    def _get_best_container_extension(self, scan_data, video_encoder):
+    @staticmethod
+    def _get_best_container_extension(scan_data, video_encoder):
         # the container is chosen by the video format
         # if we are theora-encoded, we want ogg
         # if we are vp8/vp9/av1 we want webm
@@ -235,9 +252,9 @@ class VideoFileAnalyzer:
                 if stream["codec_type"] != "video":
                     continue
                 codec = stream["codec_name"].split(",")
-                if self._matches(codec, ["theora"]):
+                if "theora" in codec:
                     return "ogg"
-                if self._matches(codec, ["vp8", "vp9", "av1"]):
+                if {"vp8", "vp9", "av1"}.intersection(codec):
                     return "webm"
 
         if "theora" in video_encoder:
@@ -260,7 +277,7 @@ class VideoFileAnalyzer:
 
         if "format" not in scan_data:
             if validate:
-                raise Exception(f'Unexpected video file contents in: {file_path}')
+                raise FileNotFoundError(f'Unexpected or absent video file contents at: {file_path}')
             log.info("Unable to optimize %s . FFmpeg output is missing the format section.", file_path)
             return
 
