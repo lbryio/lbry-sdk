@@ -141,6 +141,9 @@ class SQLDB:
         create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
 
         create unique index if not exists channel_hash_release_time_idx on claim (channel_hash, release_time, claim_hash);
+        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_global, trending_mixed, claim_hash);
+        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, effective_amount, claim_hash);
+
         create unique index if not exists filter_stream_duration_idx on claim (duration, trending_global, trending_mixed, claim_hash);
 
         -- TODO: verify that all indexes below are used
