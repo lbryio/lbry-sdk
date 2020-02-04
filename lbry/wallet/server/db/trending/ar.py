@@ -40,7 +40,7 @@ CREATE_TREND_TABLE = ""
 
 def check_trending_values(connection):
     """
-    If the trending values appear to be based on the standard algorithm,
+    If the trending values appear to be based on the zscore algorithm,
     reset them. This will allow resyncing from a standard snapshot.
     """
     c = connection.cursor()
@@ -180,6 +180,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
 
     if height < final_height - 5*HALF_LIFE:
         trending_log("Skipping AR trending at block {h}.\n".format(h=height))
+        return
 
     start = time.time()
 
