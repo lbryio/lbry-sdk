@@ -44,6 +44,7 @@ from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
+from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
 
@@ -296,6 +297,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
         self.conf = conf
+        self._video_file_analyzer = VideoFileAnalyzer(conf)
         self._node_id = None
         self._installation_id = None
         self.session_id = base58.b58encode(utils.generate_id()).decode()
@@ -851,6 +853,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         connection_code = await self.get_connection_status()
+        ffmpeg_status = await self._video_file_analyzer.status()
 
         response = {
             'installation_id': self.installation_id,
@@ -861,6 +864,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'code': connection_code,
                 'message': CONNECTION_MESSAGES[connection_code],
             },
+            'ffmpeg_status': ffmpeg_status
         }
         for component in self.component_manager.components:
             status = await component.get_status()
@@ -2808,6 +2812,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
+                    [--validate_file] [--optimize_file]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
@@ -2823,6 +2828,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --validate_file                : (bool) validate that the video container and encodings match
+                                             common web browser support or that optimization succeeds if specified.
+                                             FFmpeg is required
+            --optimize_file                : (bool) transcode the video & audio if necessary to ensure
+                                             common web browser support. FFmpeg is required
             --fee_currency=<fee_currency>  : (string) specify fee currency
             --fee_amount=<fee_amount>      : (decimal) content download fee
             --fee_address=<fee_address>    : (str) address where to send fee payments, will use
@@ -2994,12 +3004,13 @@ class Daemon(metaclass=JSONRPCServerType):
             self, name, bid, file_path, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, **kwargs):
+            preview=False, blocking=False, validate_file=False, optimize_file=False, **kwargs):
         """
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
             stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
+                    [--validate_file] [--optimize_file]
                     [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
@@ -3016,6 +3027,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --validate_file                : (bool) validate that the video container and encodings match
+                                             common web browser support or that optimization succeeds if specified.
+                                             FFmpeg is required
+            --optimize_file                : (bool) transcode the video & audio if necessary to ensure
+                                             common web browser support. FFmpeg is required
         --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
                                               given name. default: false.
             --fee_currency=<fee_currency>  : (string) specify fee currency
@@ -3106,6 +3122,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"You already have a stream claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
                 )
+
+        file_path = await self._video_file_analyzer.verify_or_repair(validate_file, optimize_file, file_path)
 
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)

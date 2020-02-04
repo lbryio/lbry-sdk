@@ -462,7 +462,20 @@ class BaseConfig:
             self.persisted.save()
 
 
-class CLIConfig(BaseConfig):
+class TranscodeConfig(BaseConfig):
+
+    ffmpeg_folder = String('The path to ffmpeg and ffprobe', '')
+    video_encoder = String('FFmpeg codec and parameters for the video encoding. '
+                           'Example: libaom-av1 -crf 25 -b:v 0 -strict experimental',
+                           'libx264 -crf 18 -vf "format=yuv420p"')
+    audio_encoder = String('FFmpeg codec and parameters for the audio encoding. '
+                           'Example: libopus -b:a 128k',
+                           'aac -b:a 192k')
+    volume_filter = String('FFmpeg filter for audio normalization.', '-af loudnorm')
+    volume_analysis_time = Integer('Maximum seconds into the file that we examine audio volume (0 to disable).', '240')
+
+
+class CLIConfig(TranscodeConfig):
 
     api = String('Host name and port for lbrynet daemon API.', 'localhost:5279', metavar='HOST:PORT')
 

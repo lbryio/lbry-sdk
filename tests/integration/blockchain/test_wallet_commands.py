@@ -199,8 +199,9 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         await self.confirm_tx(sendtxid, self.daemon2.ledger)
 
     def assertWalletEncrypted(self, wallet_path, encrypted):
-        wallet = json.load(open(wallet_path))
-        self.assertEqual(wallet['accounts'][0]['private_key'][1:4] != 'prv', encrypted)
+        with open(wallet_path) as opened:
+            wallet = json.load(opened)
+            self.assertEqual(wallet['accounts'][0]['private_key'][1:4] != 'prv', encrypted)
 
     async def test_sync(self):
         daemon, daemon2 = self.daemon, self.daemon2
