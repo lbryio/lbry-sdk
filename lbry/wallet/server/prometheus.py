@@ -1,3 +1,4 @@
+import os
 from aiohttp import web
 from prometheus_client import Counter, Info, generate_latest as prom_generate_latest, Histogram, Gauge
 from lbry import __version__ as version
@@ -14,6 +15,7 @@ VERSION_INFO.info({
     "docker_tag": DOCKER_TAG,
     'version': version,
     "min_version": util.version_string(wallet_server_version.PROTOCOL_MIN),
+    "cpu_count": os.cpu_count()
 })
 SESSIONS_COUNT = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE)
 
