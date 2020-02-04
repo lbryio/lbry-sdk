@@ -107,12 +107,14 @@ class BlobServerProtocol(asyncio.Protocol):
                     else:
                         self.close()
                         log.debug("stopped sending %s to %s:%i", blob_hash, peer_address, peer_port)
+                        return
                 except (OSError, ValueError, asyncio.TimeoutError) as err:
                     if isinstance(err, asyncio.TimeoutError):
                         log.debug("timed out sending blob %s to %s", blob_hash, peer_address)
                     else:
                         log.warning("could not read blob %s to send %s:%i", blob_hash, peer_address, peer_port)
                     self.close()
+                    return
                 finally:
                     self.transfer_finished.set()
             else:

@@ -219,6 +219,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         server_protocol = BlobServerProtocol(self.loop, self.server_blob_manager, self.server.lbrycrd_address)
         transport = asyncio.Transport(extra={'peername': ('ip', 90)})
         received_data = BytesIO()
+        transport.is_closing = lambda: received_data.closed
         transport.write = received_data.write
         server_protocol.connection_made(transport)
         blob_request = BlobRequest.make_request_for_blob_hash(blob_hash).serialize()
