@@ -114,8 +114,8 @@ class TrendingData:
     def insert_claim_from_load(self, claim_hash, trending_score, total_amount):
         assert not self.initialised
         self.claims[claim_hash] = {"trending_score": trending_score,
-                                 "total_amount": total_amount,
-                                 "changed": False}
+                                   "total_amount": total_amount,
+                                   "changed": False}
 
 
     def update_claim(self, claim_hash, total_amount, time_boost=1.0):
