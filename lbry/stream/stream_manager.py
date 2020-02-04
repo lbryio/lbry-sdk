@@ -77,7 +77,7 @@ class StreamManager:
         self.resume_saving_task: Optional[asyncio.Task] = None
         self.re_reflect_task: Optional[asyncio.Task] = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
-        self.running_reflector_uploads: typing.List[asyncio.Task] = []
+        self.running_reflector_uploads: typing.Dict[str, asyncio.Task] = {}
         self.started = asyncio.Event(loop=self.loop)
 
     async def _update_content_claim(self, stream: ManagedStream):
@@ -185,10 +185,10 @@ class StreamManager:
                 batch = []
                 while sd_hashes:
                     stream = self.streams[sd_hashes.pop()]
-                    if self.blob_manager.is_blob_verified(stream.sd_hash) and stream.blobs_completed:
-                        if not stream.fully_reflected.is_set():
-                            host, port = random.choice(self.config.reflector_servers)
-                            batch.append(stream.upload_to_reflector(host, port))
+                    if self.blob_manager.is_blob_verified(stream.sd_hash) and stream.blobs_completed and \
+                            stream.sd_hash not in self.running_reflector_uploads and not \
+                            stream.fully_reflected.is_set():
+                        batch.append(self.reflect_stream(stream))
                     if len(batch) >= self.config.concurrent_reflector_uploads:
                         await asyncio.gather(*batch, loop=self.loop)
                         batch = []
@@ -212,9 +212,24 @@ class StreamManager:
         while self.update_stream_finished_futs:
             self.update_stream_finished_futs.pop().cancel()
         while self.running_reflector_uploads:
-            self.running_reflector_uploads.pop().cancel()
+            _, t = self.running_reflector_uploads.popitem()
+            t.cancel()
         self.started.clear()
         log.info("finished stopping the stream manager")
+
+    def reflect_stream(self, stream: ManagedStream, server: Optional[str] = None,
+                       port: Optional[int] = None) -> asyncio.Task:
+        if not server or not port:
+            server, port = random.choice(self.config.reflector_servers)
+        if stream.sd_hash in self.running_reflector_uploads:
+            return self.running_reflector_uploads[stream.sd_hash]
+        task = self.loop.create_task(stream.upload_to_reflector(server, port))
+        self.running_reflector_uploads[stream.sd_hash] = task
+        task.add_done_callback(
+            lambda _: None if stream.sd_hash not in self.running_reflector_uploads else
+            self.running_reflector_uploads.pop(stream.sd_hash)
+        )
+        return task
 
     async def create_stream(self, file_path: str, key: Optional[bytes] = None,
                             iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
@@ -222,16 +237,12 @@ class StreamManager:
         self.streams[stream.sd_hash] = stream
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
         if self.config.reflect_streams and self.config.reflector_servers:
-            host, port = random.choice(self.config.reflector_servers)
-            task = self.loop.create_task(stream.upload_to_reflector(host, port))
-            self.running_reflector_uploads.append(task)
-            task.add_done_callback(
-                lambda _: None
-                if task not in self.running_reflector_uploads else self.running_reflector_uploads.remove(task)
-            )
+            self.reflect_stream(stream)
         return stream
 
     async def delete_stream(self, stream: ManagedStream, delete_file: Optional[bool] = False):
+        if stream.sd_hash in self.running_reflector_uploads:
+            self.running_reflector_uploads[stream.sd_hash].cancel()
         stream.stop_tasks()
         if stream.sd_hash in self.streams:
             del self.streams[stream.sd_hash]

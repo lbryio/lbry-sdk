@@ -167,7 +167,7 @@ class AbstractBlob:
         with self.reader_context() as handle:
             try:
                 return await self.loop.sendfile(writer.transport, handle, count=self.get_length())
-            except (ConnectionResetError, BrokenPipeError, RuntimeError, OSError, AttributeError):
+            except (ConnectionError, BrokenPipeError, RuntimeError, OSError, AttributeError):
                 return -1
 
     def decrypt(self, key: bytes, iv: bytes) -> bytes:
