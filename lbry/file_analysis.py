@@ -14,6 +14,12 @@ log = logging.getLogger(__name__)
 
 class VideoFileAnalyzer:
 
+    def __init__(self, conf: TranscodeConfig):
+        self._conf = conf
+        self._available_encoders = ""
+        self._ffmpeg_installed = False
+        self._which = None
+
     async def _execute(self, command, arguments):
         args = shlex.split(arguments)
         process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *args,
@@ -41,12 +47,6 @@ class VideoFileAnalyzer:
         self._which = shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg")
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
-
-    def __init__(self, conf: TranscodeConfig):
-        self._conf = conf
-        self._available_encoders = ""
-        self._ffmpeg_installed = False
-        self._which = None
 
     async def status(self, reset=False):
         if reset:
