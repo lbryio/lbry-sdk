@@ -18,14 +18,13 @@ VERSION_INFO.info({
     "cpu_count": os.cpu_count()
 })
 SESSIONS_COUNT = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE)
-
 REQUESTS_COUNT = Counter("requests_count", "Number of requests received", namespace=NAMESPACE,
-                         labelnames=("method",))
-RESPONSE_TIMES = Histogram("response_time", "Response times", namespace=NAMESPACE, labelnames=("method",))
+                         labelnames=("method", "version"))
+RESPONSE_TIMES = Histogram("response_time", "Response times", namespace=NAMESPACE, labelnames=("method", "version"))
 NOTIFICATION_COUNT = Counter("notification", "Number of notifications sent (for subscriptions)",
-                             namespace=NAMESPACE, labelnames=("method",))
+                             namespace=NAMESPACE, labelnames=("method", "version"))
 REQUEST_ERRORS_COUNT = Counter("request_error", "Number of requests that returned errors", namespace=NAMESPACE,
-                               labelnames=("method",))
+                               labelnames=("method", "version"))
 SQLITE_INTERRUPT_COUNT = Counter("interrupt", "Number of interrupted queries", namespace=NAMESPACE)
 SQLITE_OPERATIONAL_ERROR_COUNT = Counter(
     "operational_error", "Number of queries that raised operational errors", namespace=NAMESPACE

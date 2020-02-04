@@ -326,7 +326,7 @@ class SessionManager:
         return [(session.session_id,
                  session.flags(),
                  session.peer_address_str(for_log=for_log),
-                 session.client,
+                 session.client_version,
                  session.protocol_version_string(),
                  session.count_pending_items(),
                  session.txs_sent,
@@ -630,7 +630,6 @@ class SessionBase(RPCSession):
         self.kind = kind  # 'RPC', 'TCP' etc.
         self.env = session_mgr.env
         self.coin = self.env.coin
-        self.client = 'unknown'
         self.anon_logs = self.env.anon_logs
         self.txs_sent = 0
         self.log_me = False
@@ -675,7 +674,8 @@ class SessionBase(RPCSession):
         self.logger = util.ConnectionLogger(self.logger, context)
         self.group = self.session_mgr.add_session(self)
         SESSIONS_COUNT.inc()
-        self.logger.info(f'{self.kind} {self.peer_address_str()}, '
+        peer_addr_str = self.peer_address_str()
+        self.logger.info(f'{self.kind} {peer_addr_str}, '
                          f'{self.session_mgr.session_count():,d} total')
 
     def connection_lost(self, exc):
@@ -706,7 +706,7 @@ class SessionBase(RPCSession):
         """Handle an incoming request.  ElectrumX doesn't receive
         notifications from client sessions.
         """
-        REQUESTS_COUNT.labels(method=request.method).inc()
+        REQUESTS_COUNT.labels(method=request.method, version=self.client_version).inc()
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
             handler = partial(handler, self)
@@ -1416,6 +1416,7 @@ class LBRYElectrumX(SessionBase):
         client_name: a string identifying the client
         protocol_version: the protocol version spoken by the client
         """
+
         if self.sv_seen and self.protocol_tuple >= (1, 4):
             raise RPCError(BAD_REQUEST, f'server.version already sent')
         self.sv_seen = True
@@ -1427,8 +1428,8 @@ class LBRYElectrumX(SessionBase):
                 self.close_after_send = True
                 raise RPCError(BAD_REQUEST,
                                f'unsupported client: {client_name}')
-            self.client = client_name[:17]
-        CLIENT_VERSIONS.labels(version=str(client_name)).inc()
+            self.client_version = client_name[:17]
+        CLIENT_VERSIONS.labels(version=self.client_version).inc()
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.
