@@ -673,7 +673,7 @@ class SessionBase(RPCSession):
         context = {'conn_id': f'{self.session_id}'}
         self.logger = util.ConnectionLogger(self.logger, context)
         self.group = self.session_mgr.add_session(self)
-        SESSIONS_COUNT.inc()
+        SESSIONS_COUNT.labels(version=self.client_version).inc()
         peer_addr_str = self.peer_address_str()
         self.logger.info(f'{self.kind} {peer_addr_str}, '
                          f'{self.session_mgr.session_count():,d} total')
@@ -682,7 +682,7 @@ class SessionBase(RPCSession):
         """Handle client disconnection."""
         super().connection_lost(exc)
         self.session_mgr.remove_session(self)
-        SESSIONS_COUNT.dec()
+        SESSIONS_COUNT.labels(version=self.client_version).dec()
         msg = ''
         if not self._can_send.is_set():
             msg += ' whilst paused'
@@ -1428,7 +1428,10 @@ class LBRYElectrumX(SessionBase):
                 self.close_after_send = True
                 raise RPCError(BAD_REQUEST,
                                f'unsupported client: {client_name}')
-            self.client_version = client_name[:17]
+            if self.client_version != client_name[:17]:
+                SESSIONS_COUNT.labels(version=self.client_version).dec()
+                self.client_version = client_name[:17]
+                SESSIONS_COUNT.labels(version=self.client_version).inc()
         CLIENT_VERSIONS.labels(version=self.client_version).inc()
 
         # Find the highest common protocol version.  Disconnect if
