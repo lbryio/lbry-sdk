@@ -27,8 +27,10 @@ TRENDING_LOG = True
 # Stubs
 def install(connection):
     check_trending_values(connection)
-    f = open("trending_ar.log", "w")
-    f.close()
+
+    if TRENDING_LOG:
+        f = open("trending_ar.log", "w")
+        f.close()
 
 
 CREATE_TREND_TABLE = ""
