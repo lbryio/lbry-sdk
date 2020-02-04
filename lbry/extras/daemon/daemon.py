@@ -1402,7 +1402,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.ledger.broadcast(tx)
-            await self.analytics_manager.send_credits_sent()
+            self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())
         else:
             await self.ledger.release_tx(tx)
 
@@ -2458,7 +2458,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
-            await self.analytics_manager.send_new_channel()
+            self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
             await account.ledger.release_tx(tx)
 
@@ -2614,7 +2614,7 @@ class Daemon(metaclass=JSONRPCServerType):
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
             )])
-            await self.analytics_manager.send_new_channel()
+            self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
             await account.ledger.release_tx(tx)
 
@@ -2673,7 +2673,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('abandon')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -2993,7 +2993,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('publish')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -3148,7 +3148,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
             await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
-            await self.analytics_manager.send_claim_action('publish')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -3355,7 +3355,7 @@ class Daemon(metaclass=JSONRPCServerType):
             )])
             if stream_hash:
                 await self.storage.save_content_claim(stream_hash, new_txo.id)
-            await self.analytics_manager.send_claim_action('publish')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -3414,7 +3414,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('abandon')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
         else:
             await self.ledger.release_tx(tx)
 
@@ -3579,7 +3579,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('publish')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -3733,7 +3733,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('publish')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
 
@@ -3885,7 +3885,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'claim_id': claim_id,
                 'amount': dewies_to_lbc(amount)
             }]})
-            await self.analytics_manager.send_claim_action('new_support')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('new_support'))
         else:
             await self.ledger.release_tx(tx)
 
@@ -3985,7 +3985,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.analytics_manager.send_claim_action('abandon')
+            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
         else:
             await self.ledger.release_tx(tx)
 
