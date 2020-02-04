@@ -33,7 +33,6 @@ setup(
         ],
     },
     install_requires=[
-        'wheel',
         'aiohttp==3.5.4',
         'aioupnp==0.0.17',
         'appdirs==1.4.3',
