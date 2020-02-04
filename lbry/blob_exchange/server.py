@@ -105,8 +105,9 @@ class BlobServerProtocol(asyncio.Protocol):
                         self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, sent)
                         log.info("sent %s (%i bytes) to %s:%i", blob_hash, sent, peer_address, peer_port)
                     else:
+                        self.close()
                         log.debug("stopped sending %s to %s:%i", blob_hash, peer_address, peer_port)
-                except (OSError, asyncio.TimeoutError) as err:
+                except (OSError, ValueError, asyncio.TimeoutError) as err:
                     if isinstance(err, asyncio.TimeoutError):
                         log.debug("timed out sending blob %s to %s", blob_hash, peer_address)
                     else:
@@ -116,7 +117,7 @@ class BlobServerProtocol(asyncio.Protocol):
                     self.transfer_finished.set()
             else:
                 log.info("don't have %s to send %s:%i", blob.blob_hash[:8], peer_address, peer_port)
-        if responses:
+        if responses and not self.transport.is_closing():
             self.send_response(responses)
 
     def data_received(self, data):
