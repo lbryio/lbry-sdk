@@ -24,21 +24,23 @@ DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 TRENDING_LOG = True
 
 
-# Stubs
 def install(connection):
+    """
+    Install the AR trending algorithm.
+    """
     check_trending_values(connection)
 
     if TRENDING_LOG:
         f = open("trending_ar.log", "w")
         f.close()
 
-
+# Stub
 CREATE_TREND_TABLE = ""
 
 
 def check_trending_values(connection):
     """
-    If the trending values appear to be based on the standard algorithm,
+    If the trending values appear to be based on the zscore algorithm,
     reset them. This will allow resyncing from a standard snapshot.
     """
     c = connection.cursor()
@@ -109,14 +111,14 @@ class TrendingData:
         # Have all claims been read from db yet?
         self.initialised = False
 
-    def insert_claim_from_load(self, claim_id, trending_score, total_amount):
+    def insert_claim_from_load(self, claim_hash, trending_score, total_amount):
         assert not self.initialised
-        self.claims[claim_id] = {"trending_score": trending_score,
+        self.claims[claim_hash] = {"trending_score": trending_score,
                                  "total_amount": total_amount,
                                  "changed": False}
 
 
-    def update_claim(self, claim_id, total_amount, time_boost=1.0):
+    def update_claim(self, claim_hash, total_amount, time_boost=1.0):
         """
         Update trending data for a claim, given its new total amount.
         """
@@ -124,8 +126,8 @@ class TrendingData:
 
         # Extract existing total amount and trending score
         # or use starting values if the claim is new
-        if claim_id in self.claims:
-            old_state = copy.deepcopy(self.claims[claim_id])
+        if claim_hash in self.claims:
+            old_state = copy.deepcopy(self.claims[claim_hash])
         else:
             old_state = {"trending_score": 0.0,
                          "total_amount": 0.0,
@@ -141,9 +143,9 @@ class TrendingData:
                                  old_state["total_amount"],
                                  time_boost)
             trending_score = old_state["trending_score"] + spike
-            self.claims[claim_id] = {"total_amount": total_amount,
-                                     "trending_score": trending_score,
-                                     "changed": True}
+            self.claims[claim_hash] = {"total_amount": total_amount,
+                                       "trending_score": trending_score,
+                                       "changed": True}
 
 
 
@@ -178,6 +180,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
 
     if height < final_height - 5*HALF_LIFE:
         trending_log("Skipping AR trending at block {h}.\n".format(h=height))
+        return
 
     start = time.time()
 
@@ -213,7 +216,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
     if not trending_data.initialised:
         # On fresh launch
         for row in db.execute("""
-                              SELECT claim_id, trending_mixed,
+                              SELECT claim_hash, trending_mixed,
                                      (amount + support_amount)
                                          AS total_amount
                               FROM claim;
@@ -222,7 +225,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
         trending_data.initialised = True
     else:
         for row in db.execute(f"""
-                              SELECT claim_id,
+                              SELECT claim_hash,
                                      (amount + support_amount)
                                          AS total_amount
                               FROM claim
@@ -249,7 +252,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
 
         trending_log("{n} scores to write...".format(n=len(the_list)))
 
-        db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_id=?;",
+        db.executemany("UPDATE claim SET trending_mixed=? WHERE claim_hash=?;",
                        the_list)
 
         trending_log("done.\n")
