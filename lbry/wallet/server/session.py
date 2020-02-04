@@ -12,6 +12,7 @@ import asyncio
 import logging
 import itertools
 import collections
+from functools import lru_cache
 
 from asyncio import Event, sleep
 from collections import defaultdict
@@ -837,6 +838,12 @@ class LBRYElectrumX(SessionBase):
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYLevelDB = self.bp.db
 
+        @lru_cache(1000)
+        async def _cached_block_headers(_start_height, _count, _b64, _max_size, _cp_height):
+            return await self._block_headers(_start_height, _count, _b64, _max_size, _cp_height)
+
+        self._cached_block_headers = _cached_block_headers
+
     @classmethod
     def protocol_min_max_strings(cls):
         return [util.version_string(ver)
@@ -1299,6 +1306,20 @@ class LBRYElectrumX(SessionBase):
         height: the header's height"""
         return await self.block_header(height)
 
+    async def _block_headers(self, start_height, count, b64, max_size, cp_height):
+        headers, count = await self.db.read_headers(start_height, count)
+        compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+        headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode() if b64 else headers.hex()
+        result = {
+            'base64' if b64 else 'hex': headers,
+            'count': count,
+            'max': max_size
+        }
+        if count and cp_height:
+            last_height = start_height + count - 1
+            result.update(await self._merkle_proof(cp_height, last_height))
+        return result
+
     async def block_headers(self, start_height, count, cp_height=0, b64=False):
         """Return count concatenated block headers as hex for the main chain;
         starting at start_height.
@@ -1312,18 +1333,10 @@ class LBRYElectrumX(SessionBase):
 
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
-        headers, count = await self.db.read_headers(start_height, count)
-        compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-        headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode() if b64 else headers.hex()
-        result = {
-            'base64' if b64 else 'hex': headers,
-            'count': count,
-            'max': max_size
-        }
-        if count and cp_height:
-            last_height = start_height + count - 1
-            result.update(await self._merkle_proof(cp_height, last_height))
-        return result
+
+        if count + start_height < self.db.db_height:
+            return await self._cached_block_headers(start_height, count, b64, max_size, cp_height)
+        return await self._block_headers(start_height, count, b64, max_size, cp_height)
 
     async def block_get_chunk(self, index):
         """Return a chunk of block headers as a hexadecimal string.
