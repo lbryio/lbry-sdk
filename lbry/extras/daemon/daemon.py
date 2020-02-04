@@ -3333,17 +3333,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
         stream_hash = None
         if not preview:
-            old_stream_hash = await self.storage.get_stream_hash_for_sd_hash(old_txo.claim.stream.source.sd_hash)
+            old_stream = self.stream_manager.streams.get(old_txo.claim.stream.source.sd_hash, None)
             if file_path is not None:
-                if old_stream_hash:
-                    stream_to_delete = self.stream_manager.get_stream_by_stream_hash(old_stream_hash)
-                    await self.stream_manager.delete_stream(stream_to_delete, delete_file=False)
+                if old_stream:
+                    await self.stream_manager.delete_stream(old_stream, delete_file=False)
                 file_stream = await self.stream_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
                 stream_hash = file_stream.stream_hash
-            else:
-                stream_hash = old_stream_hash
+            elif old_stream:
+                stream_hash = old_stream.stream_hash
 
         if channel:
             new_txo.sign(channel)
@@ -4390,7 +4389,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
-            stream.upload_to_reflector(server, port)
+            self.stream_manager.reflect_stream(stream, server, port)
             for stream in self.stream_manager.get_filtered_streams(**kwargs)
         ])
         total = []
