@@ -2,10 +2,9 @@ import logging
 import pathlib
 import time
 
-import lbry.wallet  # just to make the following line work:
+from .test_claim_commands import ClaimTestCase
 from lbry.conf import TranscodeConfig
 from lbry.file_analysis import VideoFileAnalyzer
-from .test_claim_commands import ClaimTestCase
 
 log = logging.getLogger(__name__)
 
@@ -60,12 +59,9 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual(self.video_file_webm, new_file_name)
 
     async def test_volume(self):
-        try:
-            self.conf.volume_analysis_time = 200
-            with self.assertRaisesRegex(Exception, "lower than prime"):
-                await self.analyzer.verify_or_repair(True, False, self.video_file_name)
-        finally:
-            self.conf.volume_analysis_time = 0
+        self.conf.volume_analysis_time = 200
+        with self.assertRaisesRegex(Exception, "lower than prime"):
+            await self.analyzer.verify_or_repair(True, False, self.video_file_name)
 
     async def test_container(self):
         file_name = self.make_name("bad_container", ".avi")
@@ -150,9 +146,6 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual("ogg", extension)
 
     async def test_no_ffmpeg(self):
-        try:
-            self.conf.ffmpeg_folder = "I don't really exist/"
-            with self.assertRaisesRegex(Exception, "Unable to locate"):
-                await self.analyzer.verify_or_repair(True, False, self.video_file_name)
-        finally:
-            self.conf.ffmpeg_folder = ""
+        self.conf.ffmpeg_folder = "I don't really exist/"
+        with self.assertRaisesRegex(Exception, "Unable to locate"):
+            await self.analyzer.verify_or_repair(True, False, self.video_file_name)
