@@ -380,6 +380,7 @@ class RPCSession(SessionBase):
     def __init__(self, *, framer=None, loop=None, connection=None):
         super().__init__(framer=framer, loop=loop)
         self.connection = connection or self.default_connection()
+        self.client_version = 'unknown'
 
     async def _receive_messages(self):
         while not self.is_closing():
@@ -419,12 +420,18 @@ class RPCSession(SessionBase):
                               'internal server error')
         if isinstance(request, Request):
             message = request.send_result(result)
-            RESPONSE_TIMES.labels(method=request.method).observe(time.perf_counter() - start)
+            RESPONSE_TIMES.labels(
+                method=request.method,
+                version=self.client_version
+            ).observe(time.perf_counter() - start)
             if message:
                 await self._send_message(message)
         if isinstance(result, Exception):
             self._bump_errors()
-            REQUEST_ERRORS_COUNT.labels(method=request.method).inc()
+            REQUEST_ERRORS_COUNT.labels(
+                method=request.method,
+                version=self.client_version
+            ).inc()
 
     def connection_lost(self, exc):
         # Cancel pending requests and message processing
@@ -458,8 +465,8 @@ class RPCSession(SessionBase):
     async def send_notification(self, method, args=()):
         """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
+        NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
         await self._send_message(message)
-        NOTIFICATION_COUNT.labels(method=method).inc()
 
     def send_batch(self, raise_errors=False):
         """Return a BatchRequest.  Intended to be used like so:

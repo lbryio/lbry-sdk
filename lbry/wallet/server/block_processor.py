@@ -9,6 +9,7 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
+from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES
 
 
 class Prefetcher:
@@ -188,14 +189,15 @@ class BlockProcessor:
         chain = [self.tip] + [self.coin.header_hash(h) for h in headers[:-1]]
 
         if hprevs == chain:
-            start = time.time()
+            start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             await self._maybe_flush()
+            processed_time = time.perf_counter() - start
+            BLOCK_COUNT.set(self.height)
+            BLOCK_UPDATE_TIMES.observe(processed_time)
             if not self.db.first_sync:
                 s = '' if len(blocks) == 1 else 's'
-                self.logger.info('processed {:,d} block{} in {:.1f}s'
-                                 .format(len(blocks), s,
-                                         time.time() - start))
+                self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
                 await self.notifications.on_block(self.touched, self.height)
             self.touched = set()
