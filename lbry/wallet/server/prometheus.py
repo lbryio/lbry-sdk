@@ -47,6 +47,10 @@ CLIENT_VERSIONS = Counter(
     "clients", "Number of connections received per client version",
     namespace=NAMESPACE, labelnames=("version",)
 )
+BLOCK_COUNT = Gauge(
+    "block_count", "Number of processed blocks", namespace=NAMESPACE
+)
+BLOCK_UPDATE_TIMES = Histogram("block_time", "Block update times", namespace=NAMESPACE)
 
 
 class PrometheusServer:
