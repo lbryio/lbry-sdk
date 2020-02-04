@@ -28,6 +28,11 @@ TRENDING_LOG = True
 def install(connection):
     check_trending_values(connection)
 
+    if TRENDING_LOG:
+        f = open("trending_ar.log", "w")
+        f.close()
+
+
 CREATE_TREND_TABLE = ""
 
 
@@ -53,8 +58,6 @@ def check_trending_values(connection):
                       COMMIT;""")
         print("done.")
 
-    # Create the index
-    c.execute("create index if not exists claim_id_only_idx on claim (claim_id);")
 
 
 def spike_height(trending_score, x, x_old, time_boost=1.0):
@@ -170,8 +173,6 @@ def test_trending():
 # One global instance
 # pylint: disable=C0103
 trending_data = TrendingData()
-f = open("trending_ar.log", "w")
-f.close()
 
 def run(db, height, final_height, recalculate_claim_hashes):
 
