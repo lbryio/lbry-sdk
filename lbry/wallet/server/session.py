@@ -879,7 +879,12 @@ class LBRYElectrumX(SessionBase):
         """
         if height_changed and self.subscribe_headers:
             args = (await self.subscribe_headers_result(), )
-            await self.send_notification('blockchain.headers.subscribe', args)
+            try:
+                await self.send_notification('blockchain.headers.subscribe', args)
+            except asyncio.TimeoutError:
+                self.logger.info("timeout sending headers notification to %s", self.peer_address_str(for_log=True))
+                self.abort()
+                return
 
         touched = touched.intersection(self.hashX_subs)
         if touched or (height_changed and self.mempool_statuses):
@@ -907,7 +912,13 @@ class LBRYElectrumX(SessionBase):
                     method = 'blockchain.scripthash.subscribe'
                 else:
                     method = 'blockchain.address.subscribe'
-                await self.send_notification(method, (alias, status))
+
+                try:
+                    await self.send_notification(method, (alias, status))
+                except asyncio.TimeoutError:
+                    self.logger.info("timeout sending address notification to %s", self.peer_address_str(for_log=True))
+                    self.abort()
+                    return
 
             if changed:
                 es = '' if len(changed) == 1 else 'es'
