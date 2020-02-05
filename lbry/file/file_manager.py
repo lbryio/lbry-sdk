@@ -6,6 +6,7 @@ from aiohttp.web import Request
 from lbry.error import ResolveError, DownloadSDTimeoutError, InsufficientFundsError
 from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
 from lbry.stream.managed_stream import ManagedStream
+from lbry.torrent.torrent_manager import TorrentSource
 from lbry.utils import cache_concurrent
 from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
@@ -110,11 +111,12 @@ class FileManager:
 
             if claim.stream.source.bt_infohash:
                 source_manager = self.source_managers['torrent']
+                existing = source_manager.get_filtered(bt_infohash=claim.stream.source.bt_infohash)
             else:
                 source_manager = self.source_managers['stream']
+                existing = source_manager.get_filtered(sd_hash=claim.stream.source.sd_hash)
 
             # resume or update an existing stream, if the stream changed: download it and delete the old one after
-            existing = self.get_filtered(sd_hash=claim.stream.source.sd_hash)
             to_replace, updated_stream = None, None
             if existing and existing[0].claim_id != txo.claim_id:
                 raise ResolveError(f"stream for {existing[0].claim_id} collides with existing download {txo.claim_id}")
@@ -151,7 +153,6 @@ class FileManager:
                     )
                 return updated_stream
 
-
             ####################
             # pay fee
             ####################
@@ -174,7 +175,13 @@ class FileManager:
                 )
                 stream.downloader.node = source_manager.node
             else:
-                stream = None
+                stream = TorrentSource(
+                    self.loop, self.config, self.storage, identifier=claim.stream.source.bt_infohash,
+                    file_name=file_name, download_directory=download_directory or self.config.download_dir,
+                    status=ManagedStream.STATUS_RUNNING,
+                    claim=claim, analytics_manager=self.analytics_manager,
+                    torrent_session=source_manager.torrent_session
+                )
             log.info("starting download for %s", uri)
 
             before_download = self.loop.time()

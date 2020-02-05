@@ -1,5 +1,7 @@
 import asyncio
 import binascii
+from typing import Optional
+
 import libtorrent
 
 
@@ -28,6 +30,15 @@ NOTIFICATION_MASKS = [
     "upload",
     "block_progress"
 ]
+
+
+DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
+        libtorrent.add_torrent_params_flags_t.flag_paused
+        | libtorrent.add_torrent_params_flags_t.flag_auto_managed
+        | libtorrent.add_torrent_params_flags_t.flag_duplicate_is_error
+        | libtorrent.add_torrent_params_flags_t.flag_upload_mode
+        | libtorrent.add_torrent_params_flags_t.flag_update_subscribe
+)
 
 
 def get_notification_type(notification) -> str:
@@ -123,10 +134,11 @@ class TorrentSession:
             self._executor, self._session.resume
         )
 
-    def _add_torrent(self, btih: str, download_directory: str):
-        self._handles[btih] = TorrentHandle(self._loop, self._executor, self._session.add_torrent(
-            {'info_hash': binascii.unhexlify(btih.encode()), 'save_path': download_directory}
-        ))
+    def _add_torrent(self, btih: str, download_directory: Optional[str]):
+        params = {'info_hash': binascii.unhexlify(btih.encode()), 'flags': DEFAULT_FLAGS}
+        if download_directory:
+            params['save_path'] = download_directory
+        self._handles[btih] = TorrentHandle(self._loop, self._executor, self._session.add_torrent(params))
 
     async def add_torrent(self, btih, download_path):
         await self._loop.run_in_executor(
@@ -134,6 +146,12 @@ class TorrentSession:
         )
         self._loop.create_task(self._handles[btih].status_loop())
         await self._handles[btih].finished.wait()
+
+    async def remove_torrent(self, btih, remove_files=False):
+        if btih in self._handles:
+            handle = self._handles[btih]
+            self._session.remove_torrent(handle, 1 if remove_files else 0)
+            self._handles.pop(btih)
 
 
 def get_magnet_uri(btih):
