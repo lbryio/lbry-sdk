@@ -31,7 +31,7 @@ def install(connection):
     check_trending_values(connection)
 
     if TRENDING_LOG:
-        f = open("trending_ar.log", "w")
+        f = open("trending_ar.log", "a")
         f.close()
 
 # Stub
