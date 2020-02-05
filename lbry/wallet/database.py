@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import sqlite3
+import sys
 
 from binascii import hexlify
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -48,6 +49,11 @@ class AIOSQLite:
 
     def executescript(self, script: str) -> Awaitable:
         return self.run(lambda conn: conn.executescript(script))
+
+    def create_function(self, name, num_params, func, deterministic=True) -> Awaitable:
+        if sys.version_info < (3, 8):
+            return self.run(lambda conn: conn.create_function(name, num_params, func))
+        return self.run(lambda conn: conn.create_function(name, num_params, func, deterministic=deterministic))
 
     def execute_fetchall(self, sql: str, parameters: Iterable = None) -> Awaitable[Iterable[sqlite3.Row]]:
         parameters = parameters if parameters is not None else []
