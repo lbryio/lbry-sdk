@@ -21,6 +21,7 @@ from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
 try:
@@ -327,7 +328,7 @@ class HashAnnouncerComponent(Component):
 
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, LIBTORRENT_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -350,14 +351,19 @@ class FileManagerComponent(Component):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
+        torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.file_manager = FileManager(
             loop, self.conf, wallet, storage, self.component_manager.analytics_manager
         )
         self.file_manager.source_managers['stream'] = StreamManager(
-            loop, self.conf, blob_manager, wallet, storage, node, self.component_manager.analytics_manager
+            loop, self.conf, blob_manager, wallet, storage, node,
         )
+        if TorrentSession:
+            self.file_manager.source_managers['torrent'] = TorrentManager(
+                loop, self.conf, torrent, storage, self.component_manager.analytics_manager
+            )
         await self.file_manager.start()
         log.info('Done setting up file manager')
 
