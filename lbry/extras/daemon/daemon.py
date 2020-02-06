@@ -4853,7 +4853,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def resolve(self, accounts, urls):
         results = await self.ledger.resolve(accounts, urls)
-        if results:
+        if self.conf.save_resolved_claims and results:
             try:
                 claims = self.stream_manager._convert_to_old_resolve_output(self.wallet_manager, results)
                 await self.storage.save_claims_for_resolve([
