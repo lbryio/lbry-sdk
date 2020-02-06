@@ -616,6 +616,11 @@ class Config(CLIConfig):
         "Strategy to use when selecting UTXOs for a transaction",
         STRATEGIES, "standard")
 
+    save_resolved_claims = Toggle(
+        "Save content claims to the database when they are resolved to keep file_list up to date, "
+        "only disable this if file_x commands are not needed", True
+    )
+
     @property
     def streaming_host(self):
         return self.streaming_server.split(':')[0]
