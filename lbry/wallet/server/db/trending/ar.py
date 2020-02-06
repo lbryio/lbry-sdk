@@ -3,7 +3,7 @@ import math
 import time
 
 # Half life in blocks
-HALF_LIFE = 134
+HALF_LIFE = 100
 
 # Decay coefficient per block
 DECAY = 0.5**(1.0/HALF_LIFE)
@@ -61,7 +61,6 @@ def check_trending_values(connection):
         print("done.")
 
 
-
 def spike_height(trending_score, x, x_old, time_boost=1.0):
     """
     Compute the size of a trending spike.
@@ -76,8 +75,9 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
 
     # Softened change in amount counts more for minnows
     if delta > 0.0:
-        multiplier = 1.0/math.sqrt(x + 1.0)
-        softened_change_in_amount *= multiplier
+        if trending_score >= 0.0:
+            multiplier = 1.0/(trending_score/time_boost + 1.0)
+            softened_change_in_amount *= multiplier
     else:
         softened_change_in_amount *= -1.0
 
