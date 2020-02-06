@@ -40,7 +40,7 @@ setup(
         'colorama==0.3.7',
         'distro==1.4.0',
         'base58==1.0.0',
-        'cffi==1.12.1',
+        'cffi==1.13.2',
         'cryptography==2.5',
         'protobuf==3.6.1',
         'msgpack==0.6.1',
