@@ -365,7 +365,7 @@ class CommentCommands(CommandTestCase):
 
     async def test04_comment_abandons(self):
         rswanson = (await self.channel_create('@RonSwanson'))['outputs'][0]
-        stream = (await self.stream_create('Pawnee Town Hall of Fame by Leslie Knope'))['outputs'][0]
+        stream = (await self.stream_create('Pawnee_Tow_Hall_of_Fame_by_Leslie_Knope'))['outputs'][0]
         comment = await self.daemon.jsonrpc_comment_create(
             comment='KNOPE! WHAT DID I TELL YOU ABOUT PUTTING MY INFORMATION UP LIKE THAT',
             claim_id=stream['claim_id'],
@@ -383,7 +383,7 @@ class CommentCommands(CommandTestCase):
         moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
         bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
         moth_id = moth['claim_id']
-        stream = await self.stream_create('Cool Lamps to Sit On', channel_id=moth_id)
+        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth_id)
         claim_id = stream['outputs'][0]['claim_id']
 
         comment1 = await self.daemon.jsonrpc_comment_create(
@@ -440,7 +440,7 @@ class CommentCommands(CommandTestCase):
         moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
         bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
         moth_id = moth['claim_id']
-        stream = await self.stream_create('Cool Lamps to Sit On', channel_id=moth_id)
+        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth_id)
         claim_id = stream['outputs'][0]['claim_id']
         hidden_comment = await self.daemon.jsonrpc_comment_create(
             comment='Who on earth would want to sit around on a lamp all day',
