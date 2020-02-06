@@ -3,7 +3,7 @@ import math
 import time
 
 # Half life in blocks
-HALF_LIFE = 100
+HALF_LIFE = 134
 
 # Decay coefficient per block
 DECAY = 0.5**(1.0/HALF_LIFE)
