@@ -858,7 +858,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     'exchange_rate_manager': (bool),
                     'hash_announcer': (bool),
                     'peer_protocol_server': (bool),
-                    'stream_manager': (bool),
+                    'file_manager': (bool),
+                    'libtorrent_component': (bool),
                     'upnp': (bool),
                     'wallet': (bool),
                 },
@@ -885,6 +886,9 @@ class Daemon(metaclass=JSONRPCServerType):
                         }
                     ],
                 },
+                'libtorrent_component': {
+                    'running': (bool) libtorrent was detected and started successfully,
+                },
                 'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,
                     'peers_in_routing_table': (int) the number of peers in the routing table,
@@ -906,7 +910,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'hash_announcer': {
                     'announce_queue_size': (int) number of blobs currently queued to be announced
                 },
-                'stream_manager': {
+                'file_manager': {
                     'managed_files': (int) count of files in the stream manager,
                 },
                 'upnp': {
@@ -4787,8 +4791,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
-            self.stream_manager.reflect_stream(stream, server, port)
-            for stream in self.stream_manager.get_filtered_streams(**kwargs)
+            self.file_manager['stream'].reflect_stream(stream, server, port)
+            for stream in self.file_manager.get_filtered_streams(**kwargs)
         ])
         total = []
         for reflected_for_stream in reflected:
