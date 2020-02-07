@@ -76,7 +76,7 @@ def spike_height(trending_score, x, x_old, time_boost=1.0):
     # Softened change in amount counts more for minnows
     if delta > 0.0:
         if trending_score >= 0.0:
-            multiplier = 1.0/(trending_score/time_boost + 1.0)
+            multiplier = 0.1/((trending_score/time_boost + softened_change_in_amount) + 1.0)
             softened_change_in_amount *= multiplier
     else:
         softened_change_in_amount *= -1.0
