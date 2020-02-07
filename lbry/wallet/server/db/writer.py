@@ -241,10 +241,10 @@ class SQLDB:
         streams, channels = {}, {}
         if channel_hashes:
             sql = query(
-                "SELECT claim.channel_hash, claim.reposted_claim_hash, reposted.claim_type "
-                "FROM claim JOIN claim AS reposted ON (reposted.claim_hash=claim.reposted_claim_hash)", **{
-                    'claim.reposted_claim_hash__is_not_null': 1,
-                    'claim.channel_hash__in': channel_hashes
+                "SELECT repost.channel_hash, repost.reposted_claim_hash, target.claim_type "
+                "FROM claim as repost JOIN claim AS target ON (target.claim_hash=repost.reposted_claim_hash)", **{
+                    'repost.reposted_claim_hash__is_not_null': 1,
+                    'repost.channel_hash__in': channel_hashes
                 }
             )
             for blocked_claim in self.execute(*sql):

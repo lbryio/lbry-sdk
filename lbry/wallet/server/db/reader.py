@@ -4,10 +4,11 @@ import apsw
 import logging
 from operator import itemgetter
 from typing import Tuple, List, Dict, Union, Type, Optional
-from binascii import unhexlify, hexlify
+from binascii import unhexlify
 from decimal import Decimal
 from contextvars import ContextVar
 from functools import wraps
+from itertools import chain
 from dataclasses import dataclass
 
 from lbry.wallet.database import query, interpolate
@@ -388,9 +389,13 @@ def search_claims(censor: Censor, **constraints) -> List:
     )
 
 
-def _get_referenced_rows(censor: Censor, txo_rows: List[dict]):
+def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
+    censor = ctx.get().get_resolve_censor()
     repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
-    channel_hashes = set(filter(None, map(itemgetter('channel_hash'), txo_rows)))
+    channel_hashes = set(chain(
+        filter(None, map(itemgetter('channel_hash'), txo_rows)),
+        censor_channels
+    ))
 
     reposted_txos = []
     if repost_hashes:
@@ -418,7 +423,7 @@ def search(constraints) -> Tuple[List, List, int, int, Censor]:
     context = ctx.get()
     search_censor = context.get_search_censor()
     txo_rows = search_claims(search_censor, **constraints)
-    extra_txo_rows = _get_referenced_rows(context.get_resolve_censor(), txo_rows)
+    extra_txo_rows = _get_referenced_rows(txo_rows, search_censor.censored.keys())
     return txo_rows, extra_txo_rows, constraints['offset'], total, search_censor
 
 
@@ -426,7 +431,8 @@ def search(constraints) -> Tuple[List, List, int, int, Censor]:
 def resolve(urls) -> Tuple[List, List]:
     txo_rows = [resolve_url(raw_url) for raw_url in urls]
     extra_txo_rows = _get_referenced_rows(
-        ctx.get().get_resolve_censor(), [r for r in txo_rows if isinstance(r, dict)]
+        [txo for txo in txo_rows if isinstance(txo, dict)],
+        [txo.censor_hash for txo in txo_rows if isinstance(txo, ResolveCensoredError)]
     )
     return txo_rows, extra_txo_rows
 
@@ -452,7 +458,7 @@ def resolve_url(raw_url):
         if matches:
             channel = matches[0]
         elif censor.censored:
-            return ResolveCensoredError(raw_url, hexlify(next(iter(censor.censored))[::-1]).decode())
+            return ResolveCensoredError(raw_url, next(iter(censor.censored)))
         else:
             return LookupError(f'Could not find channel in "{raw_url}".')
 
@@ -472,7 +478,7 @@ def resolve_url(raw_url):
         if matches:
             return matches[0]
         elif censor.censored:
-            return ResolveCensoredError(raw_url, hexlify(next(iter(censor.censored))[::-1]).decode())
+            return ResolveCensoredError(raw_url, next(iter(censor.censored)))
         else:
             return LookupError(f'Could not find claim at "{raw_url}".')
 

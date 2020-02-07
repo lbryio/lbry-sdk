@@ -13,6 +13,16 @@ NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
 BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 
 
+def set_reference(reference, claim_hash, rows):
+    if claim_hash:
+        for txo in rows:
+            if claim_hash == txo['claim_hash']:
+                reference.tx_hash = txo['txo_hash'][:32]
+                reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
+                reference.height = txo['height']
+                return
+
+
 class Censor:
 
     __slots__ = 'streams', 'channels', 'censored', 'total'
@@ -39,12 +49,12 @@ class Censor:
             self.total += 1
         return was_censored
 
-    def to_message(self, outputs: OutputsMessage):
+    def to_message(self, outputs: OutputsMessage, extra_txo_rows):
         outputs.blocked_total = self.total
         for censoring_channel_hash, count in self.censored.items():
-            block = outputs.blocked.add()
-            block.count = count
-            block.channel_hash = censoring_channel_hash
+            blocked = outputs.blocked.add()
+            blocked.count = count
+            set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
 
 
 class Outputs:
@@ -66,26 +76,35 @@ class Outputs:
         for txo_message in self.extra_txos:
             self.message_to_txo(txo_message, tx_map)
         txos = [self.message_to_txo(txo_message, tx_map) for txo_message in self.txos]
-        return txos, self.inflate_blocked()
+        return txos, self.inflate_blocked(tx_map)
 
-    def inflate_blocked(self):
+    def inflate_blocked(self, tx_map):
         return {
             "total": self.blocked_total,
-            "channels": {
-                hexlify(message.channel_hash[::-1]).decode(): message.count
-                for message in self.blocked
-            }
+            "channels": [{
+                'channel': self.message_to_txo(blocked.channel, tx_map),
+                'blocked': blocked.count
+            } for blocked in self.blocked]
         }
 
     def message_to_txo(self, txo_message, tx_map):
         if txo_message.WhichOneof('meta') == 'error':
-            return {
+            error = {
                 'error': {
-                    'name': txo_message.error.Code.Name(txo_message.error.code).lower(),
+                    'name': txo_message.error.Code.Name(txo_message.error.code),
                     'text': txo_message.error.text,
                 }
             }
-        txo = tx_map[txo_message.tx_hash].outputs[txo_message.nout]
+            if error['error']['name'] == BLOCKED:
+                error['error']['censor'] = self.message_to_txo(
+                    txo_message.error.blocked.channel, tx_map
+                )
+            return error
+
+        tx = tx_map.get(txo_message.tx_hash)
+        if not tx:
+            return
+        txo = tx.outputs[txo_message.nout]
         if txo_message.WhichOneof('meta') == 'claim':
             claim = txo_message.claim
             txo.meta = {
@@ -145,7 +164,7 @@ class Outputs:
         if total is not None:
             page.total = total
         if blocked is not None:
-            blocked.to_message(page)
+            blocked.to_message(page, extra_txo_rows)
         for row in txo_rows:
             cls.row_to_message(row, page.txos.add(), extra_txo_rows)
         for row in extra_txo_rows:
@@ -162,6 +181,7 @@ class Outputs:
                 txo_message.error.code = ErrorMessage.NOT_FOUND
             elif isinstance(txo, ResolveCensoredError):
                 txo_message.error.code = ErrorMessage.BLOCKED
+                set_reference(txo_message.error.blocked.channel, txo.censor_hash, extra_txo_rows)
             return
         txo_message.tx_hash = txo['txo_hash'][:32]
         txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
@@ -184,20 +204,5 @@ class Outputs:
         txo_message.claim.trending_mixed = txo['trending_mixed']
         txo_message.claim.trending_local = txo['trending_local']
         txo_message.claim.trending_global = txo['trending_global']
-        cls.set_reference(txo_message, 'channel', txo['channel_hash'], extra_txo_rows)
-        cls.set_reference(txo_message, 'repost', txo['reposted_claim_hash'], extra_txo_rows)
-
-    @staticmethod
-    def set_blocked(message, blocked):
-        message.blocked_total = blocked.total
-
-    @staticmethod
-    def set_reference(message, attr, claim_hash, rows):
-        if claim_hash:
-            for txo in rows:
-                if claim_hash == txo['claim_hash']:
-                    reference = getattr(message.claim, attr)
-                    reference.tx_hash = txo['txo_hash'][:32]
-                    reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
-                    reference.height = txo['height']
-                    break
+        set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
+        set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)
