@@ -112,7 +112,7 @@ def _batched_select(transaction, query, parameters, batch_size=900):
 
 def _get_lbry_file_stream_dict(rowid, added_on, stream_hash, file_name, download_dir, data_rate, status,
                                sd_hash, stream_key, stream_name, suggested_file_name, claim, saved_file,
-                               raw_content_fee):
+                               raw_content_fee, fully_reflected):
     return {
         "rowid": rowid,
         "added_on": added_on,
@@ -129,7 +129,8 @@ def _get_lbry_file_stream_dict(rowid, added_on, stream_hash, file_name, download
         "saved_file": bool(saved_file),
         "content_fee": None if not raw_content_fee else Transaction(
             binascii.unhexlify(raw_content_fee)
-        )
+        ),
+        "fully_reflected": fully_reflected
     }
 
 
@@ -138,11 +139,14 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
     signed_claims = {}
     for (rowid, stream_hash, _, file_name, download_dir, data_rate, status, saved_file, raw_content_fee,
          added_on, _, sd_hash, stream_key, stream_name, suggested_file_name, *claim_args) in transaction.execute(
-             "select file.rowid, file.*, stream.*, c.* "
+             "select file.rowid, file.*, stream.*, c.*, "
+             "  case when (SELECT 1 FROM reflected_stream r WHERE r.sd_hash=stream.sd_hash) "
+             "      is null then 0 else 1 end as fully_reflected "
              "from file inner join stream on file.stream_hash=stream.stream_hash "
              "inner join content_claim cc on file.stream_hash=cc.stream_hash "
              "inner join claim c on cc.claim_outpoint=c.claim_outpoint "
              "order by c.rowid desc").fetchall():
+        claim_args, fully_reflected = tuple(claim_args[:-1]), claim_args[-1]
         claim = StoredContentClaim(*claim_args)
         if claim.channel_claim_id:
             if claim.channel_claim_id not in signed_claims:
@@ -152,7 +156,7 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
             _get_lbry_file_stream_dict(
                 rowid, added_on, stream_hash, file_name, download_dir, data_rate, status,
                 sd_hash, stream_key, stream_name, suggested_file_name, claim, saved_file,
-                raw_content_fee
+                raw_content_fee, fully_reflected
             )
         )
     for claim_name, claim_id in _batched_select(

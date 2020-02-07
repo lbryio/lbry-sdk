@@ -112,6 +112,10 @@ class ManagedStream:
         self.finished_write_attempt = asyncio.Event(loop=self.loop)
 
     @property
+    def is_fully_reflected(self) -> bool:
+        return self.fully_reflected.is_set()
+
+    @property
     def descriptor(self) -> StreamDescriptor:
         return self.downloader.descriptor
 
@@ -429,9 +433,9 @@ class ManagedStream:
             await self.loop.create_connection(lambda: protocol, host, port)
             await protocol.send_handshake()
             sent_sd, needed = await protocol.send_descriptor()
-            if sent_sd:
+            if sent_sd:  # reflector needed the sd blob
                 sent.append(self.sd_hash)
-            if not sent_sd and not needed:
+            if not sent_sd and not needed:  # reflector already has the stream
                 if not self.fully_reflected.is_set():
                     self.fully_reflected.set()
                     await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
