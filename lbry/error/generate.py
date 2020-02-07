@@ -13,9 +13,11 @@ class {name}({parents}):{doc}
 """
 
 INIT = """
-    def __init__({args}):
+    def __init__({args}):{fields}
         super().__init__({format}"{message}")
 """
+
+FUNCTIONS = ['claim_id']
 
 
 class ErrorClass:
@@ -50,9 +52,18 @@ class ErrorClass:
 
     def get_arguments(self):
         args = ['self']
-        for arg in re.findall('{([a-z0-1_]+)}', self.message):
+        for arg in re.findall('{([a-z0-1_\(\)]+)}', self.message):
+            for func in FUNCTIONS:
+                if arg.startswith(f'{func}('):
+                    arg = arg[len(f'{func}('):-1]
+                    break
             args.append(arg)
         return args
+
+    def get_fields(self, args):
+        if len(args) > 1:
+            return f''.join(f'\n{INDENT*2}self.{field} = {field}' for field in args[1:])
+        return ''
 
     @staticmethod
     def get_doc_string(doc):
@@ -69,7 +80,8 @@ class ErrorClass:
         args = self.get_arguments()
         if self.is_leaf:
             out.write((CLASS + INIT).format(
-                name=self.class_name, parents=', '.join(parents), args=', '.join(args),
+                name=self.class_name, parents=', '.join(parents),
+                args=', '.join(args), fields=self.get_fields(args),
                 message=self.message, doc=self.get_doc_string(self.comment), format='f' if len(args) > 1 else ''
             ))
         else:
@@ -102,7 +114,7 @@ def find_parent(stack, child):
 
 
 def generate(out):
-    out.write('from .base import BaseError\n')
+    out.write(f"from .base import BaseError, {', '.join(FUNCTIONS)}\n")
     stack = {}
     for error in get_errors():
         error.render(out, find_parent(stack, error))

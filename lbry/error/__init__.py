@@ -1,4 +1,4 @@
-from .base import BaseError
+from .base import BaseError, claim_id
 
 
 class UserInputError(BaseError):
@@ -16,18 +16,22 @@ class CommandError(UserInputError):
 class CommandDoesNotExistError(CommandError):
 
     def __init__(self, command):
+        self.command = command
         super().__init__(f"Command '{command}' does not exist.")
 
 
 class CommandDeprecatedError(CommandError):
 
     def __init__(self, command):
+        self.command = command
         super().__init__(f"Command '{command}' is deprecated.")
 
 
 class CommandInvalidArgumentError(CommandError):
 
     def __init__(self, argument, command):
+        self.argument = argument
+        self.command = command
         super().__init__(f"Invalid argument '{argument}' to command '{command}'.")
 
 
@@ -37,6 +41,7 @@ class CommandTemporarilyUnavailableError(CommandError):
     """
 
     def __init__(self, command):
+        self.command = command
         super().__init__(f"Command '{command}' is temporarily unavailable.")
 
 
@@ -46,6 +51,7 @@ class CommandPermanentlyUnavailableError(CommandError):
     """
 
     def __init__(self, command):
+        self.command = command
         super().__init__(f"Command '{command}' is permanently unavailable.")
 
 
@@ -58,12 +64,15 @@ class InputValueError(UserInputError, ValueError):
 class GenericInputValueError(InputValueError):
 
     def __init__(self, value, argument):
+        self.value = value
+        self.argument = argument
         super().__init__(f"The value '{value}' for argument '{argument}' is not valid.")
 
 
 class InputValueIsNoneError(InputValueError):
 
     def __init__(self, argument):
+        self.argument = argument
         super().__init__(f"None or null is not valid value for argument '{argument}'.")
 
 
@@ -79,6 +88,7 @@ class ConfigWriteError(ConfigurationError):
     """
 
     def __init__(self, path):
+        self.path = path
         super().__init__(f"Cannot write configuration file '{path}'.")
 
 
@@ -88,6 +98,7 @@ class ConfigReadError(ConfigurationError):
     """
 
     def __init__(self, path):
+        self.path = path
         super().__init__(f"Cannot find provided configuration file '{path}'.")
 
 
@@ -97,18 +108,21 @@ class ConfigParseError(ConfigurationError):
     """
 
     def __init__(self, path):
+        self.path = path
         super().__init__(f"Failed to parse the configuration file '{path}'.")
 
 
 class ConfigMissingError(ConfigurationError):
 
     def __init__(self, path):
+        self.path = path
         super().__init__(f"Configuration file '{path}' is missing setting that has no default / fallback.")
 
 
 class ConfigInvalidError(ConfigurationError):
 
     def __init__(self, path):
+        self.path = path
         super().__init__(f"Configuration file '{path}' has setting with invalid value.")
 
 
@@ -188,24 +202,29 @@ class DataDownloadError(WalletError):
 class ResolveError(WalletError):
 
     def __init__(self, url):
+        self.url = url
         super().__init__(f"Failed to resolve '{url}'.")
 
 
 class ResolveTimeoutError(WalletError):
 
     def __init__(self, url):
+        self.url = url
         super().__init__(f"Failed to resolve '{url}' within the timeout.")
 
 
 class ResolveCensoredError(WalletError):
 
-    def __init__(self, url, censor_id):
-        super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{censor_id}'.")
+    def __init__(self, url, censor_hash):
+        self.url = url
+        self.censor_hash = censor_hash
+        super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{claim_id(censor_hash)}'.")
 
 
 class KeyFeeAboveMaxAllowedError(WalletError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
@@ -218,6 +237,8 @@ class InvalidPasswordError(WalletError):
 class IncompatibleWalletServerError(WalletError):
 
     def __init__(self, server, port):
+        self.server = server
+        self.port = port
         super().__init__(f"'{server}:{port}' has an incompatibly old version.")
 
 
@@ -278,30 +299,35 @@ class DownloadCancelledError(BlobError):
 class DownloadSDTimeoutError(BlobError):
 
     def __init__(self, download):
+        self.download = download
         super().__init__(f"Failed to download sd blob {download} within timeout.")
 
 
 class DownloadDataTimeoutError(BlobError):
 
     def __init__(self, download):
+        self.download = download
         super().__init__(f"Failed to download data blobs for sd hash {download} within timeout.")
 
 
 class InvalidStreamDescriptorError(BlobError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
 class InvalidDataError(BlobError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
 class InvalidBlobHashError(BlobError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
@@ -314,12 +340,14 @@ class ComponentError(BaseError):
 class ComponentStartConditionNotMetError(ComponentError):
 
     def __init__(self, components):
+        self.components = components
         super().__init__(f"Unresolved dependencies for: {components}")
 
 
 class ComponentsNotStartedError(ComponentError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
@@ -332,16 +360,20 @@ class CurrencyExchangeError(BaseError):
 class InvalidExchangeRateResponseError(CurrencyExchangeError):
 
     def __init__(self, source, reason):
+        self.source = source
+        self.reason = reason
         super().__init__(f"Failed to get exchange rate from {source}: {reason}")
 
 
 class CurrencyConversionError(CurrencyExchangeError):
 
     def __init__(self, message):
+        self.message = message
         super().__init__(f"{message}")
 
 
 class InvalidCurrencyError(CurrencyExchangeError):
 
     def __init__(self, currency):
+        self.currency = currency
         super().__init__(f"Invalid currency: {currency} is not a supported currency.")
