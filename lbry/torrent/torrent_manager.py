@@ -26,6 +26,10 @@ def path_or_none(encoded_path) -> Optional[str]:
 
 class TorrentSource(ManagedDownloadSource):
     STATUS_STOPPED = "stopped"
+    filter_fields = SourceManager.filter_fields
+    filter_fields.update({
+        'bt_infohash'
+    })
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', storage: 'SQLiteStorage', identifier: str,
                  file_name: Optional[str] = None, download_directory: Optional[str] = None,

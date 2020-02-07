@@ -32,7 +32,7 @@ def path_or_none(encoded_path) -> Optional[str]:
 class StreamManager(SourceManager):
     _sources: typing.Dict[str, ManagedStream]
 
-    filter_fields = set(SourceManager.filter_fields)
+    filter_fields = SourceManager.filter_fields
     filter_fields.update({
         'sd_hash',
         'stream_hash',
@@ -180,6 +180,7 @@ class StreamManager(SourceManager):
         self.re_reflect_task = self.loop.create_task(self.reflect_streams())
 
     def stop(self):
+        super().stop()
         if self.resume_saving_task and not self.resume_saving_task.done():
             self.resume_saving_task.cancel()
         if self.re_reflect_task and not self.re_reflect_task.done():
@@ -206,16 +207,30 @@ class StreamManager(SourceManager):
         )
         return task
 
-    async def create_stream(self, file_path: str, key: Optional[bytes] = None,
-                            iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
-        stream = await ManagedStream.create(self.loop, self.config, self.blob_manager, file_path, key, iv_generator)
+    async def create(self, file_path: str, key: Optional[bytes] = None,
+                     iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
+        descriptor = await StreamDescriptor.create_stream(
+            self.loop, self.blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
+            blob_completed_callback=self.blob_manager.blob_completed
+        )
+        await self.storage.store_stream(
+            self.blob_manager.get_blob(descriptor.sd_hash), descriptor
+        )
+        row_id = await self.storage.save_published_file(
+            descriptor.stream_hash, os.path.basename(file_path), os.path.dirname(file_path), 0
+        )
+        stream = ManagedStream(
+            self.loop, self.config, self.blob_manager, descriptor.sd_hash, os.path.dirname(file_path),
+            os.path.basename(file_path), status=ManagedDownloadSource.STATUS_FINISHED,
+            rowid=row_id, descriptor=descriptor
+        )
         self.streams[stream.sd_hash] = stream
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
         if self.config.reflect_streams and self.config.reflector_servers:
             self.reflect_stream(stream)
         return stream
 
-    async def delete_stream(self, stream: ManagedStream, delete_file: Optional[bool] = False):
+    async def delete(self, stream: ManagedStream, delete_file: Optional[bool] = False):
         if stream.sd_hash in self.running_reflector_uploads:
             self.running_reflector_uploads[stream.sd_hash].cancel()
         stream.stop_tasks()
@@ -223,12 +238,9 @@ class StreamManager(SourceManager):
             del self.streams[stream.sd_hash]
         blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete(stream.descriptor)
-
-    async def _delete(self, source: ManagedStream, delete_file: Optional[bool] = False):
-        blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
-        await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete_stream(source.descriptor)
+        await self.storage.delete_stream(stream.descriptor)
+        if delete_file and stream.output_file_exists:
+            os.remove(stream.full_path)
 
     async def stream_partial_content(self, request: Request, sd_hash: str):
         return await self._sources[sd_hash].stream_file(request, self.node)
