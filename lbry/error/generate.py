@@ -52,7 +52,7 @@ class ErrorClass:
 
     def get_arguments(self):
         args = ['self']
-        for arg in re.findall('{([a-z0-1_\(\)]+)}', self.message):
+        for arg in re.findall('{([a-z0-1_()]+)}', self.message):
             for func in FUNCTIONS:
                 if arg.startswith(f'{func}('):
                     arg = arg[len(f'{func}('):-1]
@@ -60,7 +60,8 @@ class ErrorClass:
             args.append(arg)
         return args
 
-    def get_fields(self, args):
+    @staticmethod
+    def get_fields(args):
         if len(args) > 1:
             return f''.join(f'\n{INDENT*2}self.{field} = {field}' for field in args[1:])
         return ''
