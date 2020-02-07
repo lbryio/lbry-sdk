@@ -55,8 +55,8 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.components import UPnPComponent
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.stream.stream_manager import StreamManager
     from lbry.wallet import WalletManager, Ledger
+    from lbry.file.file_manager import FileManager
 
 log = logging.getLogger(__name__)
 
@@ -341,7 +341,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.component_manager.get_component(DATABASE_COMPONENT)
 
     @property
-    def file_manager(self) -> typing.Optional['StreamManager']:
+    def file_manager(self) -> typing.Optional['FileManager']:
         return self.component_manager.get_component(FILE_MANAGER_COMPONENT)
 
     @property
@@ -3346,11 +3346,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
         stream_hash = None
         if not preview:
-            old_stream = self.stream_manager.streams.get(old_txo.claim.stream.source.sd_hash, None)
+            old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)[0]
             if file_path is not None:
                 if old_stream:
-                    await self.stream_manager.delete_stream(old_stream, delete_file=False)
-                file_stream = await self.stream_manager.create_stream(file_path)
+                    await self.file_manager.delete(old_stream, delete_file=False)
+                file_stream = await self.file_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
                 stream_hash = file_stream.stream_hash

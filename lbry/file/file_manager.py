@@ -98,8 +98,9 @@ class FileManager:
                 raise ResolveError(f"Unexpected error resolving uri for download: {resolved_result['error']}")
             if not resolved_result or uri not in resolved_result:
                 raise ResolveError(f"Failed to resolve stream at '{uri}'")
-
             txo = resolved_result[uri]
+            if isinstance(txo, dict):
+                raise ResolveError(f"Failed to resolve stream at '{uri}': {txo}")
             claim = txo.claim
             outpoint = f"{txo.tx_ref.id}:{txo.position}"
             resolved_time = self.loop.time() - start_time
@@ -179,7 +180,7 @@ class FileManager:
                     self.loop, self.config, self.storage, identifier=claim.stream.source.bt_infohash,
                     file_name=file_name, download_directory=download_directory or self.config.download_dir,
                     status=ManagedStream.STATUS_RUNNING,
-                    claim=claim, analytics_manager=self.analytics_manager,
+                    analytics_manager=self.analytics_manager,
                     torrent_session=source_manager.torrent_session
                 )
             log.info("starting download for %s", uri)
