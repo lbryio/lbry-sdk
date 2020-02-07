@@ -228,6 +228,7 @@ class BlockchainProcess(asyncio.SubprocessProtocol):
 
     def process_exited(self):
         self.stopped.set()
+        self.ready.set()
 
 
 class BlockchainNode:
@@ -315,6 +316,7 @@ class BlockchainNode:
             BlockchainProcess, *command
         )
         await self.protocol.ready.wait()
+        assert not self.protocol.stopped.is_set()
 
     async def stop(self, cleanup=True):
         try:
