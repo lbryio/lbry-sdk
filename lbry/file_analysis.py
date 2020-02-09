@@ -25,7 +25,7 @@ class VideoFileAnalyzer:
         process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *args,
                                                        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
         stdout, stderr = await process.communicate()  # returns when the streams are closed
-        return stdout.decode() + stderr.decode(), process.returncode
+        return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
 
     async def _verify_executable(self, name):
         try:
@@ -119,10 +119,9 @@ class VideoFileAnalyzer:
             return ""
 
         result, _ = await self._execute("ffprobe", f'-v debug "{video_file}"')
-        iterator = re.finditer(r"\s+seeks:(\d+)\s+", result)
-        for match in iterator:
-            if int(match.group(1)) != 0:
-                return "Video stream descriptors are not at the start of the file (the faststart flag was not used)."
+        match = re.search(r"Before avformat_find_stream_info.+?\s+seeks:(\d+)\s+", result)
+        if match and int(match.group(1)) != 0:
+            return "Video stream descriptors are not at the start of the file (the faststart flag was not used)."
         return ""
 
     @staticmethod
