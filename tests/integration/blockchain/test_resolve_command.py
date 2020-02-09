@@ -15,7 +15,7 @@ class BaseResolveTestCase(CommandTestCase):
         other = (await self.resolve(name))[name]
         if claim_id is None:
             self.assertIn('error', other)
-            self.assertEqual(other['error']['name'], 'not_found')
+            self.assertEqual(other['error']['name'], 'NOT_FOUND')
         else:
             self.assertEqual(claim_id, other['claim_id'])
 
@@ -186,7 +186,7 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual(response, {
             'lbry://@abc/on-channel-claim': {
                 'error': {
-                    'name': 'not_found',
+                    'name': 'NOT_FOUND',
                     'text': 'Could not find claim at "lbry://@abc/on-channel-claim".',
                 }
             }
@@ -265,7 +265,7 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual(response, {
             '@olds/bad_example': {
                 'error': {
-                    'name': 'not_found',
+                    'name': 'NOT_FOUND',
                     'text': 'Could not find claim at "@olds/bad_example".',
                 }
             }

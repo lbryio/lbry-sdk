@@ -53,7 +53,7 @@ Code | Name | Message
 407 | DataDownload | Failed to download blob. *generic*
 410 | Resolve | Failed to resolve '{url}'.
 411 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
-411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{censor_id}'.
+411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{claim_id(censor_hash)}'.
 420 | KeyFeeAboveMaxAllowed | {message}
 421 | InvalidPassword | Password is invalid.
 422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
