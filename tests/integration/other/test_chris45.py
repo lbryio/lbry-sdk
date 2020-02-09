@@ -88,7 +88,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertEqual(
             response['lbry://@spam/hovercraft'],
             {'error': {
-                'name': 'not_found',
+                'name': 'NOT_FOUND',
                 'text': 'Could not find claim at "lbry://@spam/hovercraft".'
             }}
         )
@@ -192,7 +192,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         self.assertEqual(
             response[uri],
             {'error': {
-                'name': 'not_found',
+                'name': 'NOT_FOUND',
                 'text': f'Could not find claim at "{uri}".'
             }}
         )

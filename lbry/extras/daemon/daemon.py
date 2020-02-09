@@ -2154,7 +2154,7 @@ class Daemon(metaclass=JSONRPCServerType):
         List my stream and channel claims.
 
         Usage:
-            claim_list [--claim_type=<claim_type>]
+            claim_list [--claim_type=<claim_type>...]
                        [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
                        [--resolve]
