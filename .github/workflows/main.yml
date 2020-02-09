@@ -14,7 +14,6 @@ jobs:
       - run: make lint
 
   tests-unit:
-    needs: lint
     name: "tests / unit"
     runs-on: ubuntu-latest
     steps:
@@ -29,7 +28,6 @@ jobs:
         run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
   tests-integration:
-    needs: lint
     name: "tests / integration"
     runs-on: ubuntu-latest
     strategy:
@@ -49,7 +47,7 @@ jobs:
       - run: tox -e ${{ matrix.test }}
 
   build:
-    needs: ["tests-unit", "tests-integration"]
+    needs: ["lint", "tests-unit", "tests-integration"]
     name: "build"
     strategy:
       matrix:
