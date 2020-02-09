@@ -739,9 +739,11 @@ class Database(SQLiteMixin):
 
     @staticmethod
     def constrain_claims(constraints):
-        claim_type = constraints.pop('claim_type', None)
-        if claim_type is not None:
-            constraints['txo_type'] = TXO_TYPES[claim_type]
+        claim_types = constraints.pop('claim_type', None)
+        if isinstance(claim_types, str) and claim_types:
+            claim_types = [claim_types]
+        if isinstance(claim_types, list) and claim_types:
+            constraints['txo_type__in'] = [TXO_TYPES[ct] for ct in claim_types]
         else:
             constraints['txo_type__in'] = CLAIM_TYPES
 

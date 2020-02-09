@@ -384,6 +384,22 @@ class ClaimSearchCommand(ClaimTestCase):
 
 class ClaimCommands(ClaimTestCase):
 
+    async def test_claim_list_type_filtering(self):
+        await self.channel_create()
+        await self.stream_create()
+
+        r = await self.claim_list(claim_type='channel')
+        self.assertEqual(1, len(r))
+        self.assertEqual('channel', r[0]['value_type'])
+
+        r = await self.claim_list(claim_type='stream')
+        self.assertEqual(1, len(r))
+        self.assertEqual('stream', r[0]['value_type'])
+
+        r = await self.claim_list(claim_type=['stream', 'channel'])
+        self.assertEqual(2, len(r))
+        self.assertEqual({'stream', 'channel'}, {c['value_type'] for c in r})
+
     async def test_claim_stream_channel_list_with_resolve(self):
         await self.channel_create()
         await self.stream_create()
