@@ -12,7 +12,7 @@ async def main():
     try:
         hostname = sys.argv[1]
     except IndexError:
-        hostname = 'spv1.lbry.com'
+        hostname = 'spv11.lbry.com'
 
     loop = asyncio.get_event_loop()
     client = ClientSession(network=None, server=(hostname, 50001))
