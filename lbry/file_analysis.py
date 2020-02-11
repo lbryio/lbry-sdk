@@ -257,12 +257,12 @@ class VideoFileAnalyzer:
                     continue
                 codec = stream["codec_name"].split(",")
                 if "theora" in codec:
-                    return "ogg"
+                    return "ogv"
                 if {"vp8", "vp9", "av1"}.intersection(codec):
                     return "webm"
 
         if "theora" in video_encoder:
-            return "ogg"
+            return "ogv"
         elif re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
             return "webm"
         return "mp4"
@@ -274,16 +274,15 @@ class VideoFileAnalyzer:
             scan_data = json.loads(result)
         except Exception as e:
             log.debug("Failure in JSON parsing ffprobe results. Message: %s", str(e))
-            if validate:
-                raise Exception(f'Invalid video file: {file_path}')
-            log.info("Unable to optimize %s . FFmpeg output was unreadable.", file_path)
-            return
+            raise ValueError(f'Absent or unreadable video file: {file_path}')
 
-        if "format" not in scan_data:
-            if validate:
-                raise FileNotFoundError(f'Unexpected or absent video file contents at: {file_path}')
-            log.info("Unable to optimize %s . FFmpeg output is missing the format section.", file_path)
-            return
+        if "format" not in scan_data or "duration" not in scan_data["format"]:
+            log.debug("Format data is missing from ffprobe results for: %s", file_path)
+            raise ValueError(f'Media file does not appear to contain video content at: {file_path}')
+
+        if float(scan_data["format"]["duration"]) < 0.1:
+            log.debug("Media file appears to be an image: %s", file_path)
+            raise ValueError(f'Assuming image file at: {file_path}')
 
         return scan_data
 

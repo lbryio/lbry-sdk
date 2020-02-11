@@ -26,8 +26,8 @@ async def process_video(analyzer, video_file):
     try:
         await analyzer.verify_or_repair(True, False, video_file)
         print("No concerns. Ship it!")
-    except FileNotFoundError as e:
-        print(str(e))
+    except (FileNotFoundError, ValueError) as e:
+        print("Analysis failed.", str(e))
     except Exception as e:
         print(str(e))
         transcode = input("Would you like to make a repaired clone now? [y/N] ")

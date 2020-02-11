@@ -148,6 +148,7 @@ types_map = {
     '.mobi': ('application/x-mobipocket-ebook', 'document'),
     '.oga': ('audio/ogg', 'audio'),
     '.ogv': ('video/ogg', 'video'),
+    '.ogg': ('video/ogg', 'video'),
     '.pct': ('image/pict', 'image'),
     '.pic': ('image/pict', 'image'),
     '.pict': ('image/pict', 'image'),
@@ -162,6 +163,7 @@ types_map = {
 
 
 def guess_media_type(path):
+    # should we be using "file --mime-type -b $filename" on linux?
     _, ext = os.path.splitext(path)
     extension = ext.strip().lower()
     if extension[1:]:
