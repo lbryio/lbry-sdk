@@ -7,6 +7,7 @@ from json import JSONEncoder
 from google.protobuf.message import DecodeError
 
 from lbry.schema.claim import Claim
+from lbry.torrent.torrent_manager import TorrentSource
 from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
 from lbry.wallet.bip32 import PubKey
 from lbry.wallet.dewies import dewies_to_lbc
@@ -127,6 +128,8 @@ class JSONResponseEncoder(JSONEncoder):
         if isinstance(obj, Wallet):
             return self.encode_wallet(obj)
         if isinstance(obj, ManagedStream):
+            return self.encode_file(obj)
+        if isinstance(obj, TorrentSource):
             return self.encode_file(obj)
         if isinstance(obj, Transaction):
             return self.encode_transaction(obj)
@@ -273,26 +276,27 @@ class JSONResponseEncoder(JSONEncoder):
         output_exists = managed_stream.output_file_exists
         tx_height = managed_stream.stream_claim_info.height
         best_height = self.ledger.headers.height
+        is_stream = hasattr(managed_stream, 'stream_hash')
         return {
-            'streaming_url': managed_stream.stream_url,
+            'streaming_url': managed_stream.stream_url if is_stream else None,
             'completed': managed_stream.completed,
             'file_name': managed_stream.file_name if output_exists else None,
             'download_directory': managed_stream.download_directory if output_exists else None,
             'download_path': managed_stream.full_path if output_exists else None,
             'points_paid': 0.0,
             'stopped': not managed_stream.running,
-            'stream_hash': managed_stream.stream_hash,
-            'stream_name': managed_stream.descriptor.stream_name,
-            'suggested_file_name': managed_stream.descriptor.suggested_file_name,
-            'sd_hash': managed_stream.descriptor.sd_hash,
-            'mime_type': managed_stream.mime_type,
-            'key': managed_stream.descriptor.key,
-            'total_bytes_lower_bound': managed_stream.descriptor.lower_bound_decrypted_length(),
-            'total_bytes': managed_stream.descriptor.upper_bound_decrypted_length(),
-            'written_bytes': managed_stream.written_bytes,
-            'blobs_completed': managed_stream.blobs_completed,
-            'blobs_in_stream': managed_stream.blobs_in_stream,
-            'blobs_remaining': managed_stream.blobs_remaining,
+            'stream_hash': managed_stream.stream_hash if is_stream else None,
+            'stream_name': managed_stream.descriptor.stream_name if is_stream else None,
+            'suggested_file_name': managed_stream.descriptor.suggested_file_name if is_stream else None,
+            'sd_hash': managed_stream.descriptor.sd_hash if is_stream else None,
+            'mime_type': managed_stream.mime_type if is_stream else None,
+            'key': managed_stream.descriptor.key if is_stream else None,
+            'total_bytes_lower_bound': managed_stream.descriptor.lower_bound_decrypted_length() if is_stream else None,
+            'total_bytes': managed_stream.descriptor.upper_bound_decrypted_length() if is_stream else None,
+            'written_bytes': managed_stream.written_bytes if is_stream else None,
+            'blobs_completed': managed_stream.blobs_completed if is_stream else None,
+            'blobs_in_stream': managed_stream.blobs_in_stream if is_stream else None,
+            'blobs_remaining': managed_stream.blobs_remaining if is_stream else None,
             'status': managed_stream.status,
             'claim_id': managed_stream.claim_id,
             'txid': managed_stream.txid,
