@@ -66,6 +66,7 @@ class FileManager:
         start_time = self.loop.time()
         resolved_time = None
         stream = None
+        claim = None
         error = None
         outpoint = None
         if save_file is None:
@@ -203,7 +204,8 @@ class FileManager:
 
             source_manager.add(stream)
 
-            await self.storage.save_content_claim(stream.stream_hash, outpoint)
+            if not claim.stream.source.bt_infohash:
+                await self.storage.save_content_claim(stream.stream_hash, outpoint)
             if save_file:
                 await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download),
                                        loop=self.loop)
@@ -226,7 +228,10 @@ class FileManager:
             if payment is not None:
                 # payment is set to None after broadcasting, if we're here an exception probably happened
                 await self.wallet_manager.ledger.release_tx(payment)
-            if self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
+            if self.analytics_manager and claim and claim.stream.source.bt_infohash:
+                # TODO: analytics for torrents
+                pass
+            elif self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
                                                                  stream.downloader.time_to_first_bytes))):
                 server = self.wallet_manager.ledger.network.client.server
                 self.loop.create_task(

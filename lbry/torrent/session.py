@@ -37,6 +37,7 @@ NOTIFICATION_MASKS = [
 
 DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
         libtorrent.add_torrent_params_flags_t.flag_auto_managed
+        | libtorrent.add_torrent_params_flags_t.flag_paused
         | libtorrent.add_torrent_params_flags_t.flag_duplicate_is_error
         | libtorrent.add_torrent_params_flags_t.flag_update_subscribe
 )
@@ -76,9 +77,7 @@ class TorrentHandle:
 
     async def status_loop(self):
         while True:
-            await self._loop.run_in_executor(
-                self._executor, self._show_status
-            )
+            self._show_status()
             if self.finished.is_set():
                 break
             await asyncio.sleep(0.1, loop=self._loop)
@@ -100,6 +99,7 @@ class TorrentSession:
         self._executor = executor
         self._session: Optional[libtorrent.session] = None
         self._handles = {}
+        self.tasks = []
 
     async def add_fake_torrent(self):
         dir = mkdtemp()
@@ -136,7 +136,18 @@ class TorrentSession:
         self._session = await self._loop.run_in_executor(
             self._executor, libtorrent.session, settings  # pylint: disable=c-extension-no-member
         )
-        self._loop.create_task(self.process_alerts())
+        self.tasks.append(self._loop.create_task(self.process_alerts()))
+
+    def stop(self):
+        while self.tasks:
+            self.tasks.pop().cancel()
+        self._session.save_state()
+        self._session.pause()
+        self._session.stop_dht()
+        self._session.stop_lsd()
+        self._session.stop_natpmp()
+        self._session.stop_upnp()
+        self._session = None
 
     def _pop_alerts(self):
         for alert in self._session.pop_alerts():
@@ -167,7 +178,7 @@ class TorrentSession:
         flags = DEFAULT_FLAGS
         print(bin(flags))
         flags ^= libtorrent.add_torrent_params_flags_t.flag_paused
-        # flags ^= libtorrent.add_torrent_params_flags_t.flag_auto_managed
+        flags ^= libtorrent.add_torrent_params_flags_t.flag_auto_managed
         # flags ^= libtorrent.add_torrent_params_flags_t.flag_stop_when_ready
         print(bin(flags))
         # params['flags'] = flags
@@ -188,6 +199,11 @@ class TorrentSession:
             handle = self._handles[btih]
             self._session.remove_torrent(handle, 1 if remove_files else 0)
             self._handles.pop(btih)
+
+    async def save_file(self, btih, download_directory):
+        return
+        handle = self._handles[btih]
+        handle._handle.move_storage(download_directory)
 
 
 def get_magnet_uri(btih):

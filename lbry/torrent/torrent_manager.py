@@ -49,14 +49,15 @@ class TorrentSource(ManagedDownloadSource):
         await self.torrent_session.remove_torrent(self.identifier)
 
     async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None):
-        raise NotImplementedError()
+        await self.torrent_session.save_file(self.identifier, download_directory)
 
     def stop_tasks(self):
-        raise NotImplementedError()
+        pass
 
     @property
     def completed(self):
         raise NotImplementedError()
+
 
 class TorrentManager(SourceManager):
     _sources: typing.Dict[str, ManagedDownloadSource]
