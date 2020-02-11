@@ -69,14 +69,14 @@ class ManagedDownloadSource:
     def stop_tasks(self):
         raise NotImplementedError()
 
-    # def set_claim(self, claim_info: typing.Dict, claim: 'Claim'):
-    #     self.stream_claim_info = StoredContentClaim(
-    #         f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
-    #         claim_info['name'], claim_info['amount'], claim_info['height'],
-    #         binascii.hexlify(claim.to_bytes()).decode(), claim.signing_channel_id, claim_info['address'],
-    #         claim_info['claim_sequence'], claim_info.get('channel_name')
-    #     )
-    #
+    def set_claim(self, claim_info: typing.Dict, claim: 'Claim'):
+        self.stream_claim_info = StoredContentClaim(
+            f"{claim_info['txid']}:{claim_info['nout']}", claim_info['claim_id'],
+            claim_info['name'], claim_info['amount'], claim_info['height'],
+            binascii.hexlify(claim.to_bytes()).decode(), claim.signing_channel_id, claim_info['address'],
+            claim_info['claim_sequence'], claim_info.get('channel_name')
+        )
+
     # async def update_content_claim(self, claim_info: Optional[typing.Dict] = None):
     #     if not claim_info:
     #         claim_info = await self.blob_manager.storage.get_content_claim(self.stream_hash)

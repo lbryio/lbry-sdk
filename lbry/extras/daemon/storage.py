@@ -753,7 +753,8 @@ class SQLiteStorage(SQLiteMixin):
         return self.save_claims(to_save.values())
 
     @staticmethod
-    def _save_content_claim(transaction, claim_outpoint, stream_hash):
+    def _save_content_claim(transaction, claim_outpoint, stream_hash=None, bt_infohash=None):
+        assert stream_hash or bt_infohash
         # get the claim id and serialized metadata
         claim_info = transaction.execute(
             "select claim_id, serialized_metadata from claim where claim_outpoint=?", (claim_outpoint,)
@@ -801,6 +802,19 @@ class SQLiteStorage(SQLiteMixin):
         if stream_hash in self.content_claim_callbacks:
             await self.content_claim_callbacks[stream_hash]()
 
+    async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
+        def _save_torrent(transaction):
+            transaction.execute(
+                "insert into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
+            ).fetchall()
+            transaction.execute(
+                "insert into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
+            ).fetchall()
+        await self.db.run(_save_torrent)
+        # update corresponding ManagedEncryptedFileDownloader object
+        if bt_infohash in self.content_claim_callbacks:
+            await self.content_claim_callbacks[bt_infohash]()
+
     async def get_content_claim(self, stream_hash: str, include_supports: typing.Optional[bool] = True) -> typing.Dict:
         claims = await self.db.run(get_claims_from_stream_hashes, [stream_hash])
         claim = None
@@ -811,6 +825,10 @@ class SQLiteStorage(SQLiteMixin):
                 claim['supports'] = supports
                 claim['effective_amount'] = calculate_effective_amount(claim['amount'], supports)
         return claim
+
+    async def get_content_claim_for_torrent(self, bt_infohash):
+        claims = await self.db.run(get_claims_from_torrent_info_hashes, [bt_infohash])
+        return claims[bt_infohash].as_dict() if claims else None
 
     # # # # # # # # # reflector functions # # # # # # # # #
 

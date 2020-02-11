@@ -57,12 +57,19 @@ class TorrentHandle:
         self._handle: libtorrent.torrent_handle = handle
         self.finished = asyncio.Event(loop=loop)
         self.metadata_completed = asyncio.Event(loop=loop)
+        self.size = 0
+        self.total_wanted_done = 0
+        self.name = ''
 
     def _show_status(self):
         # fixme: cleanup
         status = self._handle.status()
         if status.has_metadata:
             self.metadata_completed.set()
+            self._handle.pause()
+            self.size = status.total_wanted
+            self.total_wanted_done = status.total_wanted_done
+            self.name = status.name
             # metadata: libtorrent.torrent_info = self._handle.get_torrent_info()
             # print(metadata)
             # print(metadata.files())
@@ -204,6 +211,15 @@ class TorrentSession:
         return
         handle = self._handles[btih]
         handle._handle.move_storage(download_directory)
+
+    def get_size(self, btih):
+        return self._handles[btih].size
+
+    def get_name(self, btih):
+        return self._handles[btih].name
+
+    def get_downloaded(self, btih):
+        return self._handles[btih].total_wanted_done
 
 
 def get_magnet_uri(btih):

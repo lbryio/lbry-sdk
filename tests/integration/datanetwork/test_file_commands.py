@@ -34,6 +34,7 @@ class FileCommands(CommandTestCase):
     async def test_download_torrent(self):
         await self.initialize_torrent()
         await self.out(self.daemon.jsonrpc_get('torrent'))
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []

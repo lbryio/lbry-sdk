@@ -51,12 +51,20 @@ class TorrentSource(ManagedDownloadSource):
     async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None):
         await self.torrent_session.save_file(self.identifier, download_directory)
 
+    @property
+    def torrent_length(self):
+        return self.torrent_session.get_size(self.identifier)
+
+    @property
+    def torrent_name(self):
+        return self.torrent_session.get_name(self.identifier)
+
     def stop_tasks(self):
         pass
 
     @property
     def completed(self):
-        raise NotImplementedError()
+        return self.torrent_session.get_downloaded(self.identifier) == self.torrent_length
 
 
 class TorrentManager(SourceManager):

@@ -16,7 +16,7 @@ if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.wallet import WalletManager
+    from lbry.wallet import WalletManager, Output
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)
@@ -206,6 +206,12 @@ class FileManager:
 
             if not claim.stream.source.bt_infohash:
                 await self.storage.save_content_claim(stream.stream_hash, outpoint)
+            else:
+                await self.storage.save_torrent_content_claim(
+                    stream.identifier, outpoint, stream.torrent_length, stream.torrent_name
+                )
+                claim_info = await self.storage.get_content_claim_for_torrent(stream.identifier)
+                stream.set_claim(claim_info, claim)
             if save_file:
                 await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download),
                                        loop=self.loop)
