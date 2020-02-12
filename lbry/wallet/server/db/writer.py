@@ -360,6 +360,7 @@ class SQLDB:
                     if isinstance(fee.amount, Decimal):
                         claim_record['fee_amount'] = int(fee.amount*1000)
             elif claim.is_repost:
+                claim_record['claim_type'] = CLAIM_TYPES['repost']
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
