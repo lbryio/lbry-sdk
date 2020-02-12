@@ -99,6 +99,12 @@ class TestQueryBuilder(unittest.TestCase):
             })
         )
         self.assertTupleEqual(
+            constraints_to_sql({'txo.name__in': ('abc123',)}),
+            ('txo.name = :txo_name__in0', {
+                'txo_name__in0': 'abc123',
+            })
+        )
+        self.assertTupleEqual(
             constraints_to_sql({'txo.age__in': 'SELECT age from ages_table'}),
             ('txo.age IN (SELECT age from ages_table)', {})
         )
@@ -116,6 +122,12 @@ class TestQueryBuilder(unittest.TestCase):
             ('txo.name NOT IN (:txo_name__not_in0_0, :txo_name__not_in0_1)', {
                 'txo_name__not_in0_0': 'abc123',
                 'txo_name__not_in0_1': 'def456'
+            })
+        )
+        self.assertTupleEqual(
+            constraints_to_sql({'txo.name__not_in': ('abc123',)}),
+            ('txo.name != :txo_name__not_in0', {
+                'txo_name__not_in0': 'abc123',
             })
         )
         self.assertTupleEqual(
