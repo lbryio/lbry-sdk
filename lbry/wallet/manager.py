@@ -34,7 +34,7 @@ class WalletManager:
         self.ledgers = ledgers or {}
         self.running = False
         self.config: Optional[Config] = None
-        self.usage_payment_service: Optional[WalletServerPayer] = None
+        self.usage_payment_service = WalletServerPayer()
 
     @classmethod
     def from_config(cls, config: dict) -> 'WalletManager':
@@ -81,8 +81,7 @@ class WalletManager:
         await asyncio.gather(*(
             l.start() for l in self.ledgers.values()
         ))
-        self.usage_payment_service = WalletServerPayer(self.ledger, self.default_wallet)
-        await self.usage_payment_service.start()
+        await self.usage_payment_service.start(self.ledger, self.default_wallet)
 
     async def stop(self):
         await asyncio.gather(*(

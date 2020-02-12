@@ -154,6 +154,7 @@ class WalletComponent(Component):
         log.info("Starting wallet")
         self.wallet_manager = await WalletManager.from_lbrynet_config(self.conf)
         await self.wallet_manager.start()
+        self.wallet_manager.usage_payment_service.analytics_manager = self.component_manager.analytics_manager
 
     async def stop(self):
         await self.wallet_manager.stop()

@@ -800,7 +800,7 @@ class LBRYElectrumX(SessionBase):
             'blockchain.transaction.get_merkle': cls.transaction_merkle,
             'server.add_peer': cls.add_peer,
             'server.banner': cls.banner,
-            'server.donation_address': cls.donation_address,
+            'server.payment_address': cls.payment_address,
             'server.features': cls.server_features_async,
             'server.peers.subscribe': cls.peers_subscribe,
             'server.version': cls.server_version,

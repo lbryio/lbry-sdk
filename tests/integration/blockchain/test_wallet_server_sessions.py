@@ -54,15 +54,11 @@ class TestSegwitServer(IntegrationTestCase):
 
 
 class TestUsagePayment(CommandTestCase):
-    LEDGER = lbry.wallet
-
-    def setUp(self) -> None:
-        WalletServerPayer.PAYMENT_PERIOD = 1
-
-    def tearDown(self) -> None:
-        WalletServerPayer.PAYMENT_PERIOD = 24 * 60 * 60
-
     async def test_single_server_payment(self):
+        self.manager.usage_payment_service.payment_period = 1
+        await self.manager.usage_payment_service.stop()
+        await self.manager.usage_payment_service.start(self.ledger, self.wallet)
+
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
         _, history = await self.ledger.get_local_status_and_history(address)
         self.assertEqual(history, [])
@@ -78,7 +74,7 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["daily_fee"], "1.1")
 
         if len(history) == 0:
-            await self.on_address_update(address)
+            await asyncio.wait_for(self.on_address_update(address), timeout=1)
             _, history = await self.ledger.get_local_status_and_history(address)
         txid, nout = history[0]
         tx_details = await self.daemon.jsonrpc_transaction_show(txid)
