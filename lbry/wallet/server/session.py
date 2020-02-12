@@ -801,6 +801,7 @@ class LBRYElectrumX(SessionBase):
             'server.add_peer': cls.add_peer,
             'server.banner': cls.banner,
             'server.payment_address': cls.payment_address,
+            'server.donation_address': cls.donation_address,
             'server.features': cls.server_features_async,
             'server.peers.subscribe': cls.peers_subscribe,
             'server.version': cls.server_version,
@@ -855,6 +856,7 @@ class LBRYElectrumX(SessionBase):
             'genesis_hash': env.coin.GENESIS_HASH,
             'description': env.description,
             'payment_address': env.payment_address,
+            'donation_address': env.donation_address,
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
         }
@@ -1363,6 +1365,7 @@ class LBRYElectrumX(SessionBase):
             ('$DAEMON_VERSION', daemon_version),
             ('$DAEMON_SUBVERSION', network_info['subversion']),
             ('$PAYMENT_ADDRESS', self.env.payment_address),
+            ('$DONATION_ADDRESS', self.env.donation_address),
         ]:
             banner = banner.replace(*pair)
         return banner
@@ -1370,6 +1373,10 @@ class LBRYElectrumX(SessionBase):
     async def payment_address(self):
         """Return the payment address as a string, empty if there is none."""
         return self.env.payment_address
+
+    async def donation_address(self):
+        """Return the donation address as a string, empty if there is none."""
+        return self.env.donation_address
 
     async def banner(self):
         """Return the server banner text."""
