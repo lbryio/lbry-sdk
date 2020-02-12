@@ -140,7 +140,7 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             if constraint:
                 if isinstance(constraint, (list, set, tuple)):
                     if len(constraint) == 1:
-                        values[f'{key}{tag}'] = constraint[0]
+                        values[f'{key}{tag}'] = next(iter(constraint))
                         sql.append(f'{col} {one_val_op} :{key}{tag}')
                     else:
                         keys = []

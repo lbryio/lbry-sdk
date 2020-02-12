@@ -99,7 +99,7 @@ class TestQueryBuilder(unittest.TestCase):
             })
         )
         self.assertTupleEqual(
-            constraints_to_sql({'txo.name__in': ('abc123',)}),
+            constraints_to_sql({'txo.name__in': {'abc123'}}),
             ('txo.name = :txo_name__in0', {
                 'txo_name__in0': 'abc123',
             })
