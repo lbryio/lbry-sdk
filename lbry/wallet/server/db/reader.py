@@ -266,7 +266,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         else:
             constraints['claim.claim_id__like'] = f'{claim_id[:40]}%'
     elif 'claim_ids' in constraints:
-        constraints['claim.claim_id__in'] = constraints.pop('claim_ids')
+        constraints['claim.claim_id__in'] = set(constraints.pop('claim_ids'))
 
     if 'reposted_claim_id' in constraints:
         constraints['claim.reposted_claim_hash'] = unhexlify(constraints.pop('reposted_claim_id'))[::-1]
@@ -282,15 +282,15 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'channel_ids' in constraints:
         channel_ids = constraints.pop('channel_ids')
         if channel_ids:
-            constraints['claim.channel_hash__in'] = [
+            constraints['claim.channel_hash__in'] = {
                 unhexlify(cid)[::-1] for cid in channel_ids
-            ]
+            }
     if 'not_channel_ids' in constraints:
         not_channel_ids = constraints.pop('not_channel_ids')
         if not_channel_ids:
-            not_channel_ids_binary = [
+            not_channel_ids_binary = {
                 unhexlify(ncid)[::-1] for ncid in not_channel_ids
-            ]
+            }
             if constraints.get('has_channel_signature', False):
                 constraints['claim.channel_hash__not_in'] = not_channel_ids_binary
             else:
@@ -320,13 +320,13 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     if 'stream_types' in constraints:
         stream_types = constraints.pop('stream_types')
         if stream_types:
-            constraints['claim.stream_type__in'] = [
+            constraints['claim.stream_type__in'] = {
                 STREAM_TYPES[stream_type] for stream_type in stream_types
-            ]
+            }
     if 'media_types' in constraints:
         media_types = constraints.pop('media_types')
         if media_types:
-            constraints['claim.media_type__in'] = media_types
+            constraints['claim.media_type__in'] = set(media_types)
 
     if 'fee_currency' in constraints:
         constraints['claim.fee_currency'] = constraints.pop('fee_currency').lower()
