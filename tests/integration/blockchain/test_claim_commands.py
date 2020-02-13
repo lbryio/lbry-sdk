@@ -403,6 +403,8 @@ class ClaimCommands(ClaimTestCase):
         self.assertEqual({'stream', 'channel'}, {c['value_type'] for c in r})
 
     async def test_claim_stream_channel_list_with_resolve(self):
+        self.assertListEqual([], await self.claim_list(resolve=True))
+
         await self.channel_create()
         await self.stream_create()
 
