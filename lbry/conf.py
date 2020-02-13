@@ -601,7 +601,7 @@ class Config(CLIConfig):
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
-        "Whether to share usage stats and diagnostic info with LBRY.", True,
+        "Whether to share usage stats and diagnostic info with LBRY.", False,
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
     track_bandwidth = Toggle("Track bandwidth usage", True)
