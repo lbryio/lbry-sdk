@@ -2179,7 +2179,12 @@ class Daemon(metaclass=JSONRPCServerType):
         return paginate_rows(claims, claim_count, page, page_size, claim_type=claim_type, resolve=resolve)
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_claim_search(self, **kwargs):
+    async def jsonrpc_claim_search(self, claim_ids=None, channel_ids=None, not_channel_ids=None,
+                                   has_channel_signature=False, valid_channel_signature=False,
+                                   invalid_channel_signature=False, is_controlling=False, stream_types=None,
+                                   media_types=None, any_tags=None, all_tags=None, not_tags=None, any_languages=None,
+                                   all_languages=None, not_languages=None, any_locations=None, all_locations=None,
+                                   not_locations=None, order_by=None, **kwargs):
         """
         Search for stream and channel claims on the blockchain.
 
@@ -2316,23 +2321,50 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
-        if {'claim_id', 'claim_ids'}.issubset(kwargs):
+
+        _kwargs = {}
+        _kwargs.update(kwargs)
+        _kwargs.update(
+            {
+                'claim_ids': claim_ids or [],
+                'channel_ids': channel_ids or [],
+                'not_channel_ids': not_channel_ids or [],
+                'has_channel_signature': has_channel_signature,
+                'valid_channel_signature': valid_channel_signature,
+                'invalid_channel_signature': invalid_channel_signature,
+                'is_controlling': is_controlling,
+                'stream_types': stream_types or [],
+                'media_types': media_types or [],
+                'any_tags': any_tags or [],
+                'all_tags': all_tags or [],
+                'not_tags': not_tags or [],
+                'any_languages': any_languages or [],
+                'all_languages': all_languages or [],
+                'not_languages': not_languages or [],
+                'any_locations': any_locations or [],
+                'all_locations': all_locations or [],
+                'not_locations': not_locations or [],
+                'order_by': order_by or []
+            }
+        )
+        wallet = self.wallet_manager.get_wallet_or_default(_kwargs.pop('wallet_id', None))
+        if {'claim_id', 'claim_ids'}.issubset(_kwargs):
             raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
-        if kwargs.pop('valid_channel_signature', False):
-            kwargs['signature_valid'] = 1
-        if kwargs.pop('invalid_channel_signature', False):
-            kwargs['signature_valid'] = 0
-        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
-        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+        if _kwargs.pop('valid_channel_signature', False):
+            _kwargs['signature_valid'] = 1
+        if _kwargs.pop('invalid_channel_signature', False):
+            _kwargs['signature_valid'] = 0
+
+        page_num, page_size = abs(_kwargs.pop('page', 1)), min(abs(_kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        _kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **_kwargs)
         result = {
             "items": txos,
             "blocked": blocked,
             "page": page_num,
             "page_size": page_size
         }
-        if not kwargs.pop('no_totals', False):
+        if not _kwargs.pop('no_totals', False):
             result['total_pages'] = int((total + (page_size - 1)) / page_size)
             result['total_items'] = total
         return result
