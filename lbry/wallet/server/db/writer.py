@@ -94,6 +94,7 @@ class SQLDB:
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_activation_height_idx on claim (activation_height, claim_hash);
         create index if not exists claim_expiration_height_idx on claim (expiration_height);
+        create index if not exists claim_reposted_claim_hash_idx on claim (reposted_claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
