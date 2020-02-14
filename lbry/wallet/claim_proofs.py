@@ -15,8 +15,18 @@ def get_hash_for_outpoint(txhash, nout, height_of_last_takeover):
     )
 
 
+def is_proof_valid(claim, proof, root_hash) -> bool:
+    proof_hash = get_hash_for_outpoint(binascii.unhexlify(claim["txId"])[::-1], claim["n"], claim["lastTakeoverHeight"])
+    for p in proof["pairs"]:
+        if p["odd"]:  # odd = 1 = the missing hash is coming from the right side of the binary merkle trie
+            proof_hash = double_sha256(binascii.unhexlify(p["hash"])[::-1] + proof_hash)
+        else:  # even = 0 = left side
+            proof_hash = double_sha256(proof_hash + binascii.unhexlify(p["hash"])[::-1])
+    return root_hash == binascii.hexlify(proof_hash[::-1]).decode("ascii")
+
+
 # noinspection PyPep8
-def verify_proof(proof, root_hash, name):
+def verify_proof_old(proof, root_hash, name):
     previous_computed_hash = None
     reverse_computed_name = ''
     verified_value = False
