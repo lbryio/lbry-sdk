@@ -4,8 +4,8 @@ from io import BytesIO
 
 class BCDataStream:
 
-    def __init__(self, data=None):
-        self.data = BytesIO(data)
+    def __init__(self, data=None, fp=None):
+        self.data = fp or BytesIO(data)
 
     def reset(self):
         self.data.seek(0)
