@@ -230,42 +230,17 @@ class StreamManager(SourceManager):
             self.reflect_stream(stream)
         return stream
 
-    async def delete(self, stream: ManagedStream, delete_file: Optional[bool] = False):
-        if stream.sd_hash in self.running_reflector_uploads:
-            self.running_reflector_uploads[stream.sd_hash].cancel()
-        stream.stop_tasks()
-        if stream.sd_hash in self.streams:
-            del self.streams[stream.sd_hash]
-        blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
+    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
+        if source.sd_hash in self.running_reflector_uploads:
+            self.running_reflector_uploads[source.sd_hash].cancel()
+        source.stop_tasks()
+        if source.sd_hash in self.streams:
+            del self.streams[source.sd_hash]
+        blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete_stream(stream.descriptor)
-        if delete_file and stream.output_file_exists:
-            os.remove(stream.full_path)
-
-# =======
-#             self.running_reflector_uploads.pop().cancel()
-#         super().stop()
-#         log.info("finished stopping the stream manager")
-# 
-#     def _upload_stream_to_reflector(self, stream: ManagedStream):
-#         if self.config.reflector_servers:
-#             host, port = random.choice(self.config.reflector_servers)
-#             task = self.loop.create_task(stream.upload_to_reflector(host, port))
-#             self.running_reflector_uploads.append(task)
-#             task.add_done_callback(
-#                 lambda _: None
-#                 if task not in self.running_reflector_uploads else self.running_reflector_uploads.remove(task)
-#             )
-# 
-#     async def create(self, file_path: str, key: Optional[bytes] = None,
-#                      iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
-#         self.add(source)
-#         if self.config.reflect_streams:
-#             self._upload_stream_to_reflector(source)
-#         return source
-# 
-#     async def _delete(self, stream: ManagedStream, delete_file: Optional[bool] = False):
-# >>>>>>> ManagedDownloadSource and SourceManager refactor
+        await self.storage.delete_stream(source.descriptor)
+        if delete_file and source.output_file_exists:
+            os.remove(source.full_path)
 
     async def stream_partial_content(self, request: Request, sd_hash: str):
         return await self._sources[sd_hash].stream_file(request, self.node)

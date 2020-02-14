@@ -3,7 +3,6 @@ import asyncio
 import time
 import typing
 import logging
-import binascii
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbry.error import DownloadSDTimeoutError
