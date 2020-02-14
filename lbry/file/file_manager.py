@@ -238,7 +238,7 @@ class FileManager:
                 # TODO: analytics for torrents
                 pass
             elif self.analytics_manager and (error or (stream and (stream.downloader.time_to_descriptor or
-                                                                 stream.downloader.time_to_first_bytes))):
+                                                                   stream.downloader.time_to_first_bytes))):
                 server = self.wallet_manager.ledger.network.client.server
                 self.loop.create_task(
                     self.analytics_manager.send_time_to_first_bytes(

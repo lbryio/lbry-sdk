@@ -82,9 +82,6 @@ class TorrentManager(SourceManager):
         super().__init__(loop, config, storage, analytics_manager)
         self.torrent_session: 'TorrentSession' = torrent_session
 
-    def add(self, source: ManagedDownloadSource):
-        super().add(source)
-
     async def recover_streams(self, file_infos: typing.List[typing.Dict]):
         raise NotImplementedError
 

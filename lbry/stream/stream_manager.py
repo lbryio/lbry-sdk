@@ -230,17 +230,17 @@ class StreamManager(SourceManager):
             self.reflect_stream(stream)
         return stream
 
-    async def delete(self, stream: ManagedStream, delete_file: Optional[bool] = False):
-        if stream.sd_hash in self.running_reflector_uploads:
-            self.running_reflector_uploads[stream.sd_hash].cancel()
-        stream.stop_tasks()
-        if stream.sd_hash in self.streams:
-            del self.streams[stream.sd_hash]
-        blob_hashes = [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]
+    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
+        if source.sd_hash in self.running_reflector_uploads:
+            self.running_reflector_uploads[source.sd_hash].cancel()
+        source.stop_tasks()
+        if source.sd_hash in self.streams:
+            del self.streams[source.sd_hash]
+        blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete_stream(stream.descriptor)
-        if delete_file and stream.output_file_exists:
-            os.remove(stream.full_path)
+        await self.storage.delete_stream(source.descriptor)
+        if delete_file and source.output_file_exists:
+            os.remove(source.full_path)
 
     async def stream_partial_content(self, request: Request, sd_hash: str):
         return await self._sources[sd_hash].stream_file(request, self.node)
