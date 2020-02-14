@@ -674,9 +674,9 @@ class Transaction:
         stream.write_uint32(self.signature_hash_type(1))  # signature hash type: SIGHASH_ALL
         return stream.get_bytes()
 
-    def _deserialize(self):
-        if self._raw is not None:
-            stream = BCDataStream(self._raw)
+    def _deserialize(self, stream=None):
+        if self._raw is not None or stream is not None:
+            stream = stream or BCDataStream(self._raw)
             self.version = stream.read_uint32()
             input_count = stream.read_compact_size()
             if input_count == 0:
@@ -697,6 +697,7 @@ class Transaction:
                     for _ in range(stream.read_compact_size()):
                         self.witnesses.append(stream.read(stream.read_compact_size()))
             self.locktime = stream.read_uint32()
+        return self
 
     @classmethod
     def ensure_all_have_same_ledger_and_wallet(
