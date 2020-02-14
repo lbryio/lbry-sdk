@@ -7,18 +7,17 @@ async def main():
     print(f'Generating: {chain.data_path}')
     await chain.ensure()
     await chain.start()
-    chain.subscribe()
     await chain.generate(200)
-    await chain.on_block.where(lambda e: e['msg'] == 199)
-    await chain.claim_name(f'foo', 'beef' * 4000, '0.001')
-    await chain.generate(1)
-    await chain.stop(False)
-
-    await asyncio.sleep(3)  # give lbrycrd time to stop
-
-    await chain.start('-reindex')
-    await chain.generate(1)
-    await chain.stop(False)
+    step = 10
+    for block in range(200):
+        for i in range(0, 200, step):
+            print(f'claim-{block}-{i}-{i + step}')
+            await asyncio.gather(*(
+                chain.claim_name(f'claim-{block}-{i + tx}', 'beef' * 4000, '0.001')
+                for tx in range(1, step + 1)
+            ))
+        await chain.generate(5)
+    print('done!')
 
 
 asyncio.run(main())
