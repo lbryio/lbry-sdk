@@ -1,15 +1,10 @@
 import os
-import sys
 from lbry import __name__, __version__
 from setuptools import setup, find_packages
 
 BASE = os.path.dirname(__file__)
 with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
-
-PLYVEL = []
-if sys.platform.startswith('linux'):
-    PLYVEL.append('plyvel==1.0.5')
 
 setup(
     name=__name__,
@@ -53,8 +48,9 @@ setup(
         'coincurve==11.0.0',
         'pbkdf2==1.3',
         'attrs==18.2.0',
-        'pylru==1.1.0'
-    ] + PLYVEL,
+        'pylru==1.1.0',
+        'pyzmq==18.1.1',
+    ],
     classifiers=[
         'Framework :: AsyncIO',
         'Intended Audience :: Developers',
