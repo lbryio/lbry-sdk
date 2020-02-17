@@ -122,6 +122,10 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
 
 class TestStreamManager(BlobExchangeTestBase):
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.client_config.share_usage_data = True
+
     async def setup_stream_manager(self, balance=10.0, fee=None, old_sort=False):
         file_path = os.path.join(self.server_dir, "test_file")
         with open(file_path, 'wb') as f:
