@@ -134,7 +134,6 @@ class SQLDB:
         create unique index if not exists claim_release_idx on claim (release_time, claim_hash);
         create unique index if not exists claim_trending_idx on claim (trending_group, trending_mixed, claim_hash);
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash);
-        create unique index if not exists claim_stream_duration_idx on claim (duration, claim_hash);
 
         -- claim_type filter + order by
         create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
@@ -151,6 +150,11 @@ class SQLDB:
         create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_group, trending_mixed, claim_hash);
         create unique index if not exists channel_hash_effective_amount_idx on claim (channel_hash, effective_amount, claim_hash);
 
+        -- duration filter + order by
+        create unique index if not exists duration_release_idx on claim (duration, release_time, claim_hash);
+        create unique index if not exists duration_trending_idx on claim (duration, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists duration_effective_amount_idx on claim (duration, effective_amount, claim_hash);
+
         -- TODO: verify that all indexes below are used
         create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
@@ -158,7 +162,6 @@ class SQLDB:
         create index if not exists claim_id_idx on claim (claim_id, claim_hash);
         create index if not exists claim_timestamp_idx on claim (timestamp);
         create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
-        create index if not exists claim_media_type_idx on claim (media_type);
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
     """
 
