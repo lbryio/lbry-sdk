@@ -133,19 +133,18 @@ class SQLDB:
         -- common ORDER BY
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
         create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
-        create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
         create unique index if not exists claim_trending_group_mixed_idx on claim (trending_group, trending_mixed, claim_hash);
         create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
 
-        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_global, trending_mixed, claim_hash);
+        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_group, trending_mixed, claim_hash);
         create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
         create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
 
         create unique index if not exists channel_hash_release_time_idx on claim (channel_hash, release_time, claim_hash);
-        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_global, trending_mixed, claim_hash);
-        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, effective_amount, claim_hash);
+        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists channel_hash_effective_amount_idx on claim (channel_hash, effective_amount, claim_hash);
 
-        create unique index if not exists filter_stream_duration_idx on claim (duration, trending_global, trending_mixed, claim_hash);
+        create unique index if not exists filter_stream_duration_idx on claim (duration, trending_group, trending_mixed, claim_hash);
 
         -- TODO: verify that all indexes below are used
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
