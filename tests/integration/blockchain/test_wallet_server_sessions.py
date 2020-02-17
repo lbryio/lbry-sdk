@@ -65,18 +65,35 @@ class TestUsagePayment(CommandTestCase):
 
         node = SPVNode(self.conductor.spv_module, node_number=2)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
+        self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
+        with self.assertLogs(level='WARNING') as cm:
+            await self.daemon.jsonrpc_wallet_reconnect()
+
+            features = await self.ledger.network.get_server_features()
+            self.assertEqual(features["payment_address"], address)
+            self.assertEqual(features["daily_fee"], "1.1")
+            elapsed = 0
+            while not cm.output:
+                await asyncio.sleep(0.1)
+                elapsed += 1
+                if elapsed > 30:
+                    raise TimeoutError('Nothing logged for 3 seconds.')
+            self.assertEqual(
+                cm.output,
+                ['WARNING:lbry.wallet.usage_payment:Server asked 1.1 LBC as daily fee, but '
+                 'maximum allowed is 1.0 LBC. Skipping payment round.']
+            )
+        await node.stop(False)
+        await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})
         self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
-
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
-        self.assertEqual(features["daily_fee"], "1.1")
-
-        if len(history) == 0:
-            await asyncio.wait_for(self.on_address_update(address), timeout=1)
-            _, history = await self.ledger.get_local_status_and_history(address)
+        self.assertEqual(features["daily_fee"], "1.0")
+        await asyncio.wait_for(self.on_address_update(address), timeout=1)
+        _, history = await self.ledger.get_local_status_and_history(address)
         txid, nout = history[0]
         tx_details = await self.daemon.jsonrpc_transaction_show(txid)
-        self.assertEqual(tx_details.outputs[nout].amount, 110000000)
+        self.assertEqual(tx_details.outputs[nout].amount, 100000000)
         self.assertEqual(tx_details.outputs[nout].get_address(self.ledger), address)

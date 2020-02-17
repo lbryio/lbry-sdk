@@ -81,7 +81,9 @@ class WalletManager:
         await asyncio.gather(*(
             l.start() for l in self.ledgers.values()
         ))
-        await self.usage_payment_service.start(self.ledger, self.default_wallet)
+        await self.usage_payment_service.start(
+            self.ledger, self.default_wallet, self.config.max_wallet_server_fee if self.config else None
+        )
 
     async def stop(self):
         await asyncio.gather(*(

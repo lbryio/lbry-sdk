@@ -8,13 +8,14 @@ log = logging.getLogger(__name__)
 
 
 class WalletServerPayer:
-    def __init__(self, payment_period=24 * 60 * 60):
+    def __init__(self, payment_period=24 * 60 * 60, max_fee='1.0'):
         self.ledger = None
         self.wallet = None
         self.running = False
         self.task = None
         self.payment_period = payment_period
         self.analytics_manager = None
+        self.max_fee = max_fee
 
     async def pay(self):
         while self.running:
@@ -33,7 +34,13 @@ class WalletServerPayer:
                 continue
 
             amount = lbc_to_dewies(features['daily_fee'])  # check that this is in lbc and not dewies
-            # todo: check that amount is less than our max
+            limit = lbc_to_dewies(self.max_fee)
+            if amount > limit:
+                log.warning(
+                    "Server asked %s LBC as daily fee, but maximum allowed is %s LBC. Skipping payment round.",
+                    features['daily_fee'], self.max_fee
+                )
+                continue
 
             tx = await Transaction.create(
                 [],
@@ -46,7 +53,8 @@ class WalletServerPayer:
             if self.analytics_manager:
                 await self.analytics_manager.send_credits_sent()
 
-    async def start(self, ledger, default_wallet):
+    async def start(self, ledger, default_wallet, max_fee=None):
+        self.max_fee = max_fee or self.max_fee
         self.ledger = ledger
         self.wallet = default_wallet
         self.running = True
