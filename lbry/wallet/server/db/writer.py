@@ -155,8 +155,12 @@ class SQLDB:
         create unique index if not exists duration_trending_idx on claim (duration, trending_group, trending_mixed, claim_hash);
         create unique index if not exists duration_effective_amount_idx on claim (duration, effective_amount, claim_hash);
 
+        -- fee_amount + order by
+        create unique index if not exists fee_amount_release_idx on claim (fee_amount, release_time, claim_hash);
+        create unique index if not exists fee_amount_trending_idx on claim (fee_amount, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists fee_amount_effective_amount_idx on claim (fee_amount, effective_amount, claim_hash);
+
         -- TODO: verify that all indexes below are used
-        create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
         create index if not exists claim_resolve_idx on claim (normalized, claim_id);
         create index if not exists claim_id_idx on claim (claim_id, claim_hash);
