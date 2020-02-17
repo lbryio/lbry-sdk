@@ -418,8 +418,6 @@ def search(constraints) -> Tuple[List, List, int, int, Censor]:
         total = count_claims(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    if 'order_by' not in constraints:
-        constraints['order_by'] = ["claim_hash"]
     context = ctx.get()
     search_censor = context.get_search_censor()
     txo_rows = search_claims(search_censor, **constraints)
