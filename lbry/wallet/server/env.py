@@ -72,6 +72,7 @@ class Env:
         self.tor_proxy_host = self.default('TOR_PROXY_HOST', 'localhost')
         self.tor_proxy_port = self.integer('TOR_PROXY_PORT', None)
         # The electrum client takes the empty string as unspecified
+        self.payment_address = self.default('PAYMENT_ADDRESS', '')
         self.donation_address = self.default('DONATION_ADDRESS', '')
         # Server limits to help prevent DoS
         self.max_send = self.integer('MAX_SEND', 1000000)
@@ -81,7 +82,7 @@ class Env:
         self.session_timeout = self.integer('SESSION_TIMEOUT', 600)
         self.drop_client = self.custom("DROP_CLIENT", None, re.compile)
         self.description = self.default('DESCRIPTION', '')
-        self.daily_fee = self.integer('DAILY_FEE', 0)
+        self.daily_fee = self.string_amount('DAILY_FEE', '0')
 
         # Identities
         clearnet_identity = self.clearnet_identity()
@@ -105,6 +106,14 @@ class Env:
         value = environ.get(envvar)
         if value is None:
             raise cls.Error(f'required envvar {envvar} not set')
+        return value
+
+    @classmethod
+    def string_amount(cls, envvar, default):
+        value = environ.get(envvar, default)
+        amount_pattern = re.compile("[0-9]{0,10}(\.[0-9]{1,8})?")
+        if len(value) > 0 and not amount_pattern.fullmatch(value):
+            raise cls.Error(f'{value} is not a valid amount for {envvar}')
         return value
 
     @classmethod

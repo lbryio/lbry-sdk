@@ -558,6 +558,7 @@ class Config(CLIConfig):
         "Don't download streams with fees exceeding this amount. When set to "
         "null, the amount is unbounded.", {'currency': 'USD', 'amount': 50.0}
     )
+    max_wallet_server_fee = String("Maximum daily LBC amount allowed as payment for wallet servers.", "1.0")
 
     # reflector settings
     reflect_streams = Toggle(

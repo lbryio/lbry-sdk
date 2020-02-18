@@ -1,5 +1,4 @@
 import logging
-import os
 import asyncio
 
 import lbry
@@ -29,15 +28,20 @@ class NetworkTests(IntegrationTestCase):
             'pruning': None,
             'description': '',
             'payment_address': '',
-            'daily_fee': 0,
+            'donation_address': '',
+            'daily_fee': '0',
             'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
         await self.conductor.spv_node.stop()
-        address = (await self.account.get_addresses(limit=1))[0]
-        os.environ.update({
-            'DESCRIPTION': 'Fastest server in the west.',
-            'DONATION_ADDRESS': address,
-            'DAILY_FEE': '42'})
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        payment_address, donation_address = await self.account.get_addresses(limit=2)
+        await self.conductor.spv_node.start(
+            self.conductor.blockchain_node,
+            extraconf={
+                'DESCRIPTION': 'Fastest server in the west.',
+                'PAYMENT_ADDRESS': payment_address,
+                'DONATION_ADDRESS': donation_address,
+                'DAILY_FEE': '42'
+            }
+        )
         await self.ledger.network.on_connected.first
         self.assertDictEqual({
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
@@ -47,8 +51,9 @@ class NetworkTests(IntegrationTestCase):
             'protocol_min': '0.54.0',
             'pruning': None,
             'description': 'Fastest server in the west.',
-            'payment_address': address,
-            'daily_fee': 42,
+            'payment_address': payment_address,
+            'donation_address': donation_address,
+            'daily_fee': '42',
             'server_version': lbry.__version__}, await self.ledger.network.get_server_features())
 
 
