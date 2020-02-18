@@ -64,8 +64,9 @@ class CLILoggingTest(AsyncioTestCase):
             self.assertTrue(log.isEnabledFor(logging.INFO))
             self.assertFalse(log.isEnabledFor(logging.DEBUG))
             self.assertFalse(log.isEnabledFor(logging.DEBUG))
-            self.assertEqual(len(log.handlers), 1)
+            self.assertEqual(len(log.handlers), 2)
             self.assertIsInstance(log.handlers[0], logging.handlers.RotatingFileHandler)
+            self.assertFalse(log.handlers[1].enabled)
 
         async with get_logger(["start", "--verbose"]) as log:
             self.assertTrue(log.getChild("lbry").isEnabledFor(logging.DEBUG))
@@ -81,23 +82,30 @@ class CLILoggingTest(AsyncioTestCase):
 
     async def test_loggly(self):
         async with get_logger(["start"]) as log:  # default share_usage_data=False
-            self.assertEqual(len(log.getChild("lbry").handlers), 2)  # file and console
+            log = log.getChild("lbry")
+            self.assertIsInstance(log.handlers[0], logging.StreamHandler)
+            self.assertIsInstance(log.handlers[1], logging.StreamHandler)
+            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
+            self.assertFalse(log.handlers[2].enabled)
         async with get_logger(["start"], share_usage_data=True) as log:
             log = log.getChild("lbry")
             self.assertEqual(len(log.handlers), 3)
             self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
+            self.assertTrue(log.handlers[2].enabled)
         async with get_logger(["start"], share_usage_data=False) as log:  # explicit share_usage_data=False
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 2)
+            self.assertEqual(len(log.handlers), 3)
+            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
+            self.assertFalse(log.handlers[2].enabled)
 
     async def test_quiet(self):
         async with get_logger(["start"]) as log:  # default is loud
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 2)
+            self.assertEqual(len(log.handlers), 3)
             self.assertIs(type(log.handlers[1]), logging.StreamHandler)
         async with get_logger(["start", "--quiet"]) as log:
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 1)
+            self.assertEqual(len(log.handlers), 2)
             self.assertIsNot(type(log.handlers[0]), logging.StreamHandler)
 
 

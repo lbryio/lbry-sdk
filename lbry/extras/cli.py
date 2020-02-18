@@ -256,10 +256,9 @@ def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config
         else:
             logger.getChild('lbry').setLevel(logging.DEBUG)
 
-    if conf.share_usage_data:
-        loggly_handler = get_loggly_handler()
-        loggly_handler.setLevel(logging.ERROR)
-        logger.getChild('lbry').addHandler(loggly_handler)
+    loggly_handler = get_loggly_handler(lambda: conf.share_usage_data)
+    loggly_handler.setLevel(logging.ERROR)
+    logger.getChild('lbry').addHandler(loggly_handler)
 
 
 def run_daemon(args: argparse.Namespace, conf: Config):

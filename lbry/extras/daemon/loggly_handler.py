@@ -36,7 +36,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class HTTPSLogglyHandler(logging.Handler):
-    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None):
+    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None, feature_toggle=None):
         super().__init__()
         self.fqdn = fqdn
         self.localname = localname
@@ -47,6 +47,11 @@ class HTTPSLogglyHandler(logging.Handler):
         )
         self._loop = asyncio.get_event_loop()
         self._session = aiohttp.ClientSession()
+        self._toggle = feature_toggle
+
+    @property
+    def enabled(self):
+        return self._toggle is None or (self._toggle and self._toggle())
 
     @staticmethod
     def get_full_message(record):
@@ -62,12 +67,14 @@ class HTTPSLogglyHandler(logging.Handler):
                                           cookies=self.cookies) as response:
                 self.cookies.update(response.cookies)
         except ClientError:
-            if self._loop.is_running() and retry:
+            if self._loop.is_running() and retry and self.enabled:
                 await self._session.close()
                 self._session = aiohttp.ClientSession()
                 return await self._emit(record, retry=False)
 
     def emit(self, record):
+        if not self.enabled:
+            return
         try:
             asyncio.ensure_future(self._emit(record), loop=self._loop)
         except RuntimeError:  # TODO: use a second loop
@@ -83,7 +90,7 @@ class HTTPSLogglyHandler(logging.Handler):
             pass
 
 
-def get_loggly_handler():
-    handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
+def get_loggly_handler(feature_toggle):
+    handler = HTTPSLogglyHandler(LOGGLY_TOKEN, feature_toggle=feature_toggle)
     handler.setFormatter(JsonFormatter())
     return handler
