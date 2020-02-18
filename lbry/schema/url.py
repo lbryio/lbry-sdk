@@ -7,7 +7,7 @@ def _create_url_regex():
     # see https://spec.lbry.com/ and test_url.py
     invalid_names_regex = \
         r"[^=&#:$@%?;\"/\\<>%{}|^~`\[\]" \
-        r"\u0000-\u0008\u000b-\u000c\u000e-\u001F\uD800-\uDFFF\uFFFE-\uFFFF]+"
+        r"\u0000-\u0020\uD800-\uDFFF\uFFFE-\uFFFF]+"
 
     def _named(name, regex):
         return "(?P<" + name + ">" + regex + ")"

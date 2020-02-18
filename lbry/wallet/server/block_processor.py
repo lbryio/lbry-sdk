@@ -164,6 +164,7 @@ class BlockProcessor:
         # is consistent with self.height
         self.state_lock = asyncio.Lock()
 
+        self.search_cache = {}
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
         # cancellations from shutdown don't lose work - when the task
@@ -191,6 +192,8 @@ class BlockProcessor:
         if hprevs == chain:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+            for cache in self.search_cache.values():
+                cache.clear()
             await self._maybe_flush()
             processed_time = time.perf_counter() - start
             BLOCK_COUNT.set(self.height)
@@ -729,7 +732,6 @@ class LBRYBlockProcessor(BlockProcessor):
         self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
         self.sql: SQLDB = self.db.sql
         self.timer = Timer('BlockProcessor')
-        self.search_cache = {}
 
     def advance_blocks(self, blocks):
         self.sql.begin()
@@ -744,8 +746,6 @@ class LBRYBlockProcessor(BlockProcessor):
             self.timer.run(self.sql.execute, self.sql.SEARCH_INDEXES, timer_name='executing SEARCH_INDEXES')
             if self.env.individual_tag_indexes:
                 self.timer.run(self.sql.execute, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
-        for cache in self.search_cache.values():
-            cache.clear()
 
     def advance_txs(self, height, txs, header):
         timer = self.timer.sub_timers['advance_blocks']

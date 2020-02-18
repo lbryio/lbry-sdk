@@ -1,6 +1,7 @@
 CLAIM_TYPES = {
     'stream': 1,
     'channel': 2,
+    'repost': 3
 }
 
 STREAM_TYPES = {

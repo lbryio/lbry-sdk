@@ -21,6 +21,7 @@ from lbry.extras.daemon.component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.wallet import WalletManager
+from lbry.wallet.usage_payment import WalletServerPayer
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,7 @@ log = logging.getLogger(__name__)
 DATABASE_COMPONENT = "database"
 BLOB_COMPONENT = "blob_manager"
 WALLET_COMPONENT = "wallet"
+WALLET_SERVER_PAYMENTS_COMPONENT = "wallet_server_payments"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
 STREAM_MANAGER_COMPONENT = "stream_manager"
@@ -158,6 +160,34 @@ class WalletComponent(Component):
     async def stop(self):
         await self.wallet_manager.stop()
         self.wallet_manager = None
+
+
+class WalletServerPaymentsComponent(Component):
+    component_name = WALLET_SERVER_PAYMENTS_COMPONENT
+    depends_on = [WALLET_COMPONENT]
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.usage_payment_service = WalletServerPayer(
+            max_fee=self.conf.max_wallet_server_fee, analytics_manager=self.component_manager.analytics_manager,
+        )
+
+    @property
+    def component(self) -> typing.Optional[WalletServerPayer]:
+        return self.usage_payment_service
+
+    async def start(self):
+        wallet_manager = self.component_manager.get_component(WALLET_COMPONENT)
+        await self.usage_payment_service.start(wallet_manager.ledger, wallet_manager.default_wallet)
+
+    async def stop(self):
+        await self.usage_payment_service.stop()
+
+    async def get_status(self):
+        return {
+            'max_fee': self.usage_payment_service.max_fee,
+            'running': self.usage_payment_service.running
+        }
 
 
 class BlobComponent(Component):

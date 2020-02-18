@@ -297,6 +297,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
         self.conf = conf
+        self.platform_info = system_info.get_platform()
         self._video_file_analyzer = VideoFileAnalyzer(conf)
         self._node_id = None
         self._installation_id = None
@@ -307,7 +308,7 @@ class Daemon(metaclass=JSONRPCServerType):
             skip_components=conf.components_to_skip or []
         )
         self.component_startup_task = None
-        self._connection_status: typing.Tuple[float, bool] = [self.component_manager.loop.time(), False]
+        self._connection_status: typing.Tuple[float, bool] = (self.component_manager.loop.time(), False)
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         rpc_app = web.Application()
@@ -449,7 +450,7 @@ class Daemon(metaclass=JSONRPCServerType):
     async def start(self):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
-        log.info("Platform: %s", json.dumps(system_info.get_platform(), indent=2))
+        log.info("Platform: %s", json.dumps(self.platform_info, indent=2))
         await self.analytics_manager.send_server_startup()
         await self.rpc_runner.setup()
         await self.streaming_runner.setup()
@@ -894,9 +895,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'build': (str) "dev" | "qa" | "rc" | "release",
             }
         """
-        platform_info = system_info.get_platform()
-        log.info("Get version info: %s", json.dumps(platform_info))
-        return platform_info
+        return self.platform_info
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_resolve(self, urls: typing.Union[str, list], wallet_id=None):

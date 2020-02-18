@@ -80,27 +80,25 @@ class CLILoggingTest(AsyncioTestCase):
             self.assertFalse(log.getChild("torba").isEnabledFor(logging.DEBUG))
 
     async def test_loggly(self):
-        async with get_logger(["start"], share_usage_data=False) as log:
+        async with get_logger(["start"]) as log:  # default share_usage_data=False
             self.assertEqual(len(log.getChild("lbry").handlers), 2)  # file and console
-        async with get_logger(["start"]) as log:  # default share_usage_data=True
+        async with get_logger(["start"], share_usage_data=True) as log:
             log = log.getChild("lbry")
             self.assertEqual(len(log.handlers), 3)
             self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
-        async with get_logger(["start"], share_usage_data=True) as log:  # explicit share_usage_data=True
+        async with get_logger(["start"], share_usage_data=False) as log:  # explicit share_usage_data=False
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 3)
-            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
+            self.assertEqual(len(log.handlers), 2)
 
     async def test_quiet(self):
         async with get_logger(["start"]) as log:  # default is loud
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 3)
+            self.assertEqual(len(log.handlers), 2)
             self.assertIs(type(log.handlers[1]), logging.StreamHandler)
         async with get_logger(["start", "--quiet"]) as log:
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 2)
+            self.assertEqual(len(log.handlers), 1)
             self.assertIsNot(type(log.handlers[0]), logging.StreamHandler)
-            self.assertIsNot(type(log.handlers[1]), logging.StreamHandler)
 
 
 class CLITest(AsyncioTestCase):

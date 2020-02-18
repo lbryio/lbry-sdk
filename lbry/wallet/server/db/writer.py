@@ -94,6 +94,7 @@ class SQLDB:
         create index if not exists claim_txo_hash_idx on claim (txo_hash);
         create index if not exists claim_activation_height_idx on claim (activation_height, claim_hash);
         create index if not exists claim_expiration_height_idx on claim (expiration_height);
+        create index if not exists claim_reposted_claim_hash_idx on claim (reposted_claim_hash);
     """
 
     CREATE_SUPPORT_TABLE = """
@@ -129,35 +130,42 @@ class SQLDB:
         -- used by any tag clouds
         create index if not exists tag_tag_idx on tag (tag, claim_hash);
 
-        -- common ORDER BY
-        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash, release_time);
-        create unique index if not exists claim_release_time_idx on claim (release_time, claim_hash);
-        create unique index if not exists claim_trending_global_mixed_idx on claim (trending_global, trending_mixed, claim_hash);
-        create unique index if not exists claim_trending_group_mixed_idx on claim (trending_group, trending_mixed, claim_hash);
-        create unique index if not exists filter_fee_amount_order_release_time_idx on claim (fee_amount, release_time, claim_hash);
+        -- naked order bys (no filters)
+        create unique index if not exists claim_release_idx on claim (release_time, claim_hash);
+        create unique index if not exists claim_trending_idx on claim (trending_group, trending_mixed, claim_hash);
+        create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash);
 
-        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_global, trending_mixed, claim_hash);
+        -- claim_type filter + order by
         create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
+        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_group, trending_mixed, claim_hash);
         create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
 
-        create unique index if not exists channel_hash_release_time_idx on claim (channel_hash, release_time, claim_hash);
-        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_global, trending_mixed, claim_hash);
-        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, effective_amount, claim_hash);
+        -- stream_type filter + order by
+        create unique index if not exists stream_type_release_idx on claim (stream_type, release_time, claim_hash);
+        create unique index if not exists stream_type_trending_idx on claim (stream_type, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists stream_type_effective_amount_idx on claim (stream_type, effective_amount, claim_hash);
 
-        create unique index if not exists filter_stream_duration_idx on claim (duration, trending_global, trending_mixed, claim_hash);
+        -- channel_hash filter + order by
+        create unique index if not exists channel_hash_release_idx on claim (channel_hash, release_time, claim_hash);
+        create unique index if not exists channel_hash_trending_idx on claim (channel_hash, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists channel_hash_effective_amount_idx on claim (channel_hash, effective_amount, claim_hash);
+
+        -- duration filter + order by
+        create unique index if not exists duration_release_idx on claim (duration, release_time, claim_hash);
+        create unique index if not exists duration_trending_idx on claim (duration, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists duration_effective_amount_idx on claim (duration, effective_amount, claim_hash);
+
+        -- fee_amount + order by
+        create unique index if not exists fee_amount_release_idx on claim (fee_amount, release_time, claim_hash);
+        create unique index if not exists fee_amount_trending_idx on claim (fee_amount, trending_group, trending_mixed, claim_hash);
+        create unique index if not exists fee_amount_effective_amount_idx on claim (fee_amount, effective_amount, claim_hash);
 
         -- TODO: verify that all indexes below are used
         create index if not exists claim_height_normalized_idx on claim (height, normalized asc);
-
         create index if not exists claim_resolve_idx on claim (normalized, claim_id);
-
         create index if not exists claim_id_idx on claim (claim_id, claim_hash);
         create index if not exists claim_timestamp_idx on claim (timestamp);
         create index if not exists claim_public_key_hash_idx on claim (public_key_hash);
-
-        create index if not exists claim_stream_type_idx on claim (stream_type);
-        create index if not exists claim_media_type_idx on claim (media_type);
-
         create index if not exists claim_signature_valid_idx on claim (signature_valid);
     """
 
@@ -360,6 +368,7 @@ class SQLDB:
                     if isinstance(fee.amount, Decimal):
                         claim_record['fee_amount'] = int(fee.amount*1000)
             elif claim.is_repost:
+                claim_record['claim_type'] = CLAIM_TYPES['repost']
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']

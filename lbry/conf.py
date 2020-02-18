@@ -558,6 +558,7 @@ class Config(CLIConfig):
         "Don't download streams with fees exceeding this amount. When set to "
         "null, the amount is unbounded.", {'currency': 'USD', 'amount': 50.0}
     )
+    max_wallet_server_fee = String("Maximum daily LBC amount allowed as payment for wallet servers.", "1.0")
 
     # reflector settings
     reflect_streams = Toggle(
@@ -573,15 +574,15 @@ class Config(CLIConfig):
         ('reflector.lbry.com', 5566)
     ])
     lbryum_servers = Servers("SPV wallet servers", [
-        ('spv1.lbry.com', 50001),
-        ('spv2.lbry.com', 50001),
-        ('spv3.lbry.com', 50001),
-        ('spv4.lbry.com', 50001),
-        ('spv5.lbry.com', 50001),
-        ('spv6.lbry.com', 50001),
-        ('spv7.lbry.com', 50001),
-        ('spv8.lbry.com', 50001),
-        ('spv9.lbry.com', 50001),
+        ('spv11.lbry.com', 50001),
+        ('spv12.lbry.com', 50001),
+        ('spv13.lbry.com', 50001),
+        ('spv14.lbry.com', 50001),
+        ('spv15.lbry.com', 50001),
+        ('spv16.lbry.com', 50001),
+        ('spv17.lbry.com', 50001),
+        ('spv18.lbry.com', 50001),
+        ('spv19.lbry.com', 50001),
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('lbrynet1.lbry.com', 4444),  # US EAST
@@ -601,7 +602,7 @@ class Config(CLIConfig):
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
-        "Whether to share usage stats and diagnostic info with LBRY.", True,
+        "Whether to share usage stats and diagnostic info with LBRY.", False,
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
     track_bandwidth = Toggle("Track bandwidth usage", True)

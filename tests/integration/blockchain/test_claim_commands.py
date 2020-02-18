@@ -309,12 +309,14 @@ class ClaimSearchCommand(ClaimTestCase):
         octet = await self.stream_create()
         video = await self.stream_create('chrome', file_path=self.video_file_name)
         image = await self.stream_create('blank-image', data=self.image_data, suffix='.png')
+        repost = await self.stream_repost(self.get_claim_id(image))
         channel = await self.channel_create()
         unknown = self.sout(tx)
 
         # claim_type
         await self.assertFindsClaims([image, video, octet, unknown], claim_type='stream')
         await self.assertFindsClaims([channel], claim_type='channel')
+        await self.assertFindsClaims([repost], claim_type='repost')
 
         # stream_type
         await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
@@ -322,7 +324,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([image], stream_types=['image'])
         await self.assertFindsClaims([image, video], stream_types=['video', 'image'])
 
-        # stream_type
+        # media_type
         await self.assertFindsClaims([octet, unknown], media_types=['application/octet-stream'])
         await self.assertFindsClaims([video], media_types=['video/mp4'])
         await self.assertFindsClaims([image], media_types=['image/png'])
@@ -401,6 +403,8 @@ class ClaimCommands(ClaimTestCase):
         self.assertEqual({'stream', 'channel'}, {c['value_type'] for c in r})
 
     async def test_claim_stream_channel_list_with_resolve(self):
+        self.assertListEqual([], await self.claim_list(resolve=True))
+
         await self.channel_create()
         await self.stream_create()
 

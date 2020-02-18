@@ -253,6 +253,11 @@ class IntegrationTestCase(AsyncioTestCase):
             lambda e: e.tx.id == txid
         )
 
+    def on_address_update(self, address):
+        return self.ledger.on_transaction.where(
+            lambda e: e.address == address
+        )
+
     def on_transaction_address(self, tx, address):
         return self.ledger.on_transaction.where(
             lambda e: e.tx.id == tx.id and e.address == address

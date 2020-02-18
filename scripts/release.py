@@ -124,7 +124,11 @@ def release(args):
 
     current_version = Version.from_content(version_file)
     print(f'Current Version: {current_version}')
-    new_version = current_version.increment(args.action)
+
+    if args.action == 'current':
+        new_version = current_version
+    else:
+        new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
 
     previous_release = repo.release_from_tag(args.start_tag or current_version.tag)
@@ -241,7 +245,7 @@ def main():
     parser.add_argument("--confirm", default=False, action="store_true",
                         help="without this flag, it will only print what it will do but will not actually do it")
     parser.add_argument("--start-tag", help="custom starting tag for changelog generation")
-    parser.add_argument("action", choices=['test', 'major', 'minor', 'micro'])
+    parser.add_argument("action", choices=['test', 'current', 'major', 'minor', 'micro'])
     args = parser.parse_args()
 
     if args.action == "test":

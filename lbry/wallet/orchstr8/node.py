@@ -173,6 +173,9 @@ class SPVNode:
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
         conf = {
+            'DESCRIPTION': '',
+            'PAYMENT_ADDRESS': '',
+            'DAILY_FEE': '0',
             'DB_DIRECTORY': self.data_path,
             'DAEMON_URL': blockchain_node.rpc_url,
             'REORG_LIMIT': '100',

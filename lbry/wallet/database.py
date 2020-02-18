@@ -134,16 +134,20 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
             col, op = col[:-len('__not_like')], 'NOT LIKE'
         elif key.endswith('__in') or key.endswith('__not_in'):
             if key.endswith('__in'):
-                col, op = col[:-len('__in')], 'IN'
+                col, op, one_val_op = col[:-len('__in')], 'IN', '='
             else:
-                col, op = col[:-len('__not_in')], 'NOT IN'
+                col, op, one_val_op = col[:-len('__not_in')], 'NOT IN', '!='
             if constraint:
                 if isinstance(constraint, (list, set, tuple)):
-                    keys = []
-                    for i, val in enumerate(constraint):
-                        keys.append(f':{key}{tag}_{i}')
-                        values[f'{key}{tag}_{i}'] = val
-                    sql.append(f'{col} {op} ({", ".join(keys)})')
+                    if len(constraint) == 1:
+                        values[f'{key}{tag}'] = next(iter(constraint))
+                        sql.append(f'{col} {one_val_op} :{key}{tag}')
+                    else:
+                        keys = []
+                        for i, val in enumerate(constraint):
+                            keys.append(f':{key}{tag}_{i}')
+                            values[f'{key}{tag}_{i}'] = val
+                        sql.append(f'{col} {op} ({", ".join(keys)})')
                 elif isinstance(constraint, str):
                     sql.append(f'{col} {op} ({constraint})')
                 else:

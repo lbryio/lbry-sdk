@@ -630,7 +630,8 @@ class Ledger(metaclass=LedgerRegistry):
                     raise asyncio.TimeoutError('Timed out waiting for transaction.')
 
     async def _inflate_outputs(self, query, accounts) -> Tuple[List[Output], dict, int, int]:
-        outputs = Outputs.from_base64(await query)
+        encoded_outputs = await query
+        outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
         txs = []
         if len(outputs.txs) > 0:
             txs: List[Transaction] = await asyncio.gather(*(
