@@ -15,7 +15,6 @@ from .account import Account
 from .ledger import Ledger, LedgerRegistry
 from .transaction import Transaction, Output
 from .database import Database
-from .usage_payment import WalletServerPayer
 from .wallet import Wallet, WalletStorage, ENCRYPT_ON_DISK
 from .rpc.jsonrpc import CodeMessageError
 
@@ -34,7 +33,6 @@ class WalletManager:
         self.ledgers = ledgers or {}
         self.running = False
         self.config: Optional[Config] = None
-        self.usage_payment_service = WalletServerPayer()
 
     @classmethod
     def from_config(cls, config: dict) -> 'WalletManager':
@@ -81,15 +79,11 @@ class WalletManager:
         await asyncio.gather(*(
             l.start() for l in self.ledgers.values()
         ))
-        await self.usage_payment_service.start(
-            self.ledger, self.default_wallet, self.config.max_wallet_server_fee if self.config else None
-        )
 
     async def stop(self):
         await asyncio.gather(*(
             l.stop() for l in self.ledgers.values()
         ))
-        await self.usage_payment_service.stop()
         self.running = False
 
     def get_wallet_or_default(self, wallet_id: Optional[str]) -> Wallet:

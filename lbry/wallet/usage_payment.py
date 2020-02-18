@@ -8,13 +8,13 @@ log = logging.getLogger(__name__)
 
 
 class WalletServerPayer:
-    def __init__(self, payment_period=24 * 60 * 60, max_fee='1.0'):
+    def __init__(self, payment_period=24 * 60 * 60, max_fee='1.0', analytics_manager=None):
         self.ledger = None
         self.wallet = None
         self.running = False
         self.task = None
         self.payment_period = payment_period
-        self.analytics_manager = None
+        self.analytics_manager = analytics_manager
         self.max_fee = max_fee
 
     async def pay(self):
@@ -53,10 +53,9 @@ class WalletServerPayer:
             if self.analytics_manager:
                 await self.analytics_manager.send_credits_sent()
 
-    async def start(self, ledger, default_wallet, max_fee=None):
-        self.max_fee = max_fee or self.max_fee
+    async def start(self, ledger=None, wallet=None):
         self.ledger = ledger
-        self.wallet = default_wallet
+        self.wallet = wallet
         self.running = True
         self.task = asyncio.ensure_future(self.pay())
         self.task.add_done_callback(lambda _: log.info("Stopping wallet server payments."))

@@ -55,9 +55,10 @@ class TestSegwitServer(IntegrationTestCase):
 
 class TestUsagePayment(CommandTestCase):
     async def test_single_server_payment(self):
-        self.manager.usage_payment_service.payment_period = 1
-        await self.manager.usage_payment_service.stop()
-        await self.manager.usage_payment_service.start(self.ledger, self.wallet)
+        wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
+        wallet_pay_service.payment_period = 1
+        await wallet_pay_service.stop()
+        await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
 
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
         _, history = await self.ledger.get_local_status_and_history(address)
