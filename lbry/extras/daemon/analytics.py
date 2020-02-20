@@ -127,16 +127,14 @@ class AnalyticsManager:
 
     async def start(self):
         if self.task is None:
-            self.external_ip = await utils.get_external_ip() if self.enabled else None
             self.task = asyncio.create_task(self.run())
 
     async def run(self):
         while True:
             if self.enabled:
+                self.external_ip = await utils.get_external_ip()
                 await self._send_heartbeat()
             await asyncio.sleep(1800)
-            if self.enabled:
-                self.external_ip = await utils.get_external_ip()
 
     def stop(self):
         if self.task is not None and not self.task.done():

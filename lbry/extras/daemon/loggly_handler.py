@@ -51,7 +51,7 @@ class HTTPSLogglyHandler(logging.Handler):
 
     @property
     def enabled(self):
-        return self._toggle is None or (self._toggle and self._toggle())
+        return self._toggle and self._toggle()
 
     @staticmethod
     def get_full_message(record):
