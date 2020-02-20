@@ -38,22 +38,19 @@ class JsonFormatter(logging.Formatter):
 
 
 class HTTPSLogglyHandler(logging.Handler):
-    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None, config=None):
+    def __init__(self, loggly_token: str, config: 'Config'):
         super().__init__()
-        self.fqdn = fqdn
-        self.localname = localname
-        self.facility = facility
-        self.cookies = cookies or {}
+        self.cookies = {}
         self.url = "https://logs-01.loggly.com/inputs/{token}/tag/{tag}".format(
             token=utils.deobfuscate(loggly_token), tag='lbrynet-' + __version__
         )
         self._loop = asyncio.get_event_loop()
         self._session = aiohttp.ClientSession()
-        self._config: typing.Optional['Config'] = config
+        self._config = config
 
     @property
     def enabled(self):
-        return self._config and self._config.share_usage_data
+        return self._config.share_usage_data
 
     @staticmethod
     def get_full_message(record):
