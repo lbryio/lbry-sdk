@@ -386,9 +386,11 @@ class RPCSession(SessionBase):
         while not self.is_closing():
             try:
                 message = await self.framer.receive_message()
-            except MemoryError as e:
-                self.logger.warning(f'{e!r}')
-                continue
+            except MemoryError:
+                self.logger.warning('received oversized message from %s:%s, dropping connection',
+                                    self._address[0], self._address[1])
+                self._close()
+                return
 
             self.last_recv = time.perf_counter()
             self.recv_count += 1

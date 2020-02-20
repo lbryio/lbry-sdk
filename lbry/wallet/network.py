@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import json
 from time import perf_counter
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
@@ -68,7 +69,14 @@ class ClientSession(BaseClientSession):
                     log.info("timeout sending %s to %s:%i", method, *self.server)
                     raise asyncio.TimeoutError
                 if done:
-                    return request.result()
+                    try:
+                        return request.result()
+                    except ConnectionResetError:
+                        log.error(
+                            "wallet server (%s) reset connection upon our %s request, json of %i args is %i bytes",
+                            self.server[0], method, len(args), len(json.dumps(args))
+                        )
+                        raise
         except (RPCError, ProtocolError) as e:
             log.warning("Wallet server (%s:%i) returned an error. Code: %s Message: %s",
                         *self.server, *e.args)
