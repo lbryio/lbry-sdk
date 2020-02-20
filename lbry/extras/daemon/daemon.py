@@ -358,7 +358,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        not_grouped = ['routing_table_get']
+        not_grouped = ['routing_table_get', 'ffmpeg_find']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
