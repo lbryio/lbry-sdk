@@ -3,10 +3,12 @@ import json
 import logging.handlers
 import traceback
 
+import typing
 from aiohttp.client_exceptions import ClientError
 import aiohttp
 from lbry import utils, __version__
-
+if typing.TYPE_CHECKING:
+    from lbry.conf import Config
 
 LOGGLY_TOKEN = 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4'
 
@@ -36,7 +38,7 @@ class JsonFormatter(logging.Formatter):
 
 
 class HTTPSLogglyHandler(logging.Handler):
-    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None, feature_toggle=None):
+    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None, config=None):
         super().__init__()
         self.fqdn = fqdn
         self.localname = localname
@@ -47,11 +49,11 @@ class HTTPSLogglyHandler(logging.Handler):
         )
         self._loop = asyncio.get_event_loop()
         self._session = aiohttp.ClientSession()
-        self._toggle = feature_toggle
+        self._config: typing.Optional['Config'] = config
 
     @property
     def enabled(self):
-        return self._toggle and self._toggle()
+        return self._config and self._config.share_usage_data
 
     @staticmethod
     def get_full_message(record):
@@ -90,7 +92,7 @@ class HTTPSLogglyHandler(logging.Handler):
             pass
 
 
-def get_loggly_handler(feature_toggle):
-    handler = HTTPSLogglyHandler(LOGGLY_TOKEN, feature_toggle=feature_toggle)
+def get_loggly_handler(config):
+    handler = HTTPSLogglyHandler(LOGGLY_TOKEN, config=config)
     handler.setFormatter(JsonFormatter())
     return handler
