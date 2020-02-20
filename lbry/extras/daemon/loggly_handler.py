@@ -3,10 +3,12 @@ import json
 import logging.handlers
 import traceback
 
+import typing
 from aiohttp.client_exceptions import ClientError
 import aiohttp
 from lbry import utils, __version__
-
+if typing.TYPE_CHECKING:
+    from lbry.conf import Config
 
 LOGGLY_TOKEN = 'BQEzZmMzLJHgAGxkBF00LGD0YGuyATVgAmqxAQEuAQZ2BQH4'
 
@@ -36,17 +38,19 @@ class JsonFormatter(logging.Formatter):
 
 
 class HTTPSLogglyHandler(logging.Handler):
-    def __init__(self, loggly_token: str, fqdn=False, localname=None, facility=None, cookies=None):
+    def __init__(self, loggly_token: str, config: 'Config'):
         super().__init__()
-        self.fqdn = fqdn
-        self.localname = localname
-        self.facility = facility
-        self.cookies = cookies or {}
+        self.cookies = {}
         self.url = "https://logs-01.loggly.com/inputs/{token}/tag/{tag}".format(
             token=utils.deobfuscate(loggly_token), tag='lbrynet-' + __version__
         )
         self._loop = asyncio.get_event_loop()
         self._session = aiohttp.ClientSession()
+        self._config = config
+
+    @property
+    def enabled(self):
+        return self._config.share_usage_data
 
     @staticmethod
     def get_full_message(record):
@@ -62,12 +66,14 @@ class HTTPSLogglyHandler(logging.Handler):
                                           cookies=self.cookies) as response:
                 self.cookies.update(response.cookies)
         except ClientError:
-            if self._loop.is_running() and retry:
+            if self._loop.is_running() and retry and self.enabled:
                 await self._session.close()
                 self._session = aiohttp.ClientSession()
                 return await self._emit(record, retry=False)
 
     def emit(self, record):
+        if not self.enabled:
+            return
         try:
             asyncio.ensure_future(self._emit(record), loop=self._loop)
         except RuntimeError:  # TODO: use a second loop
@@ -83,7 +89,7 @@ class HTTPSLogglyHandler(logging.Handler):
             pass
 
 
-def get_loggly_handler():
-    handler = HTTPSLogglyHandler(LOGGLY_TOKEN)
+def get_loggly_handler(config):
+    handler = HTTPSLogglyHandler(LOGGLY_TOKEN, config=config)
     handler.setFormatter(JsonFormatter())
     return handler

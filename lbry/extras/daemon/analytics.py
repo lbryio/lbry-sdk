@@ -110,7 +110,6 @@ class AnalyticsManager:
         self.cookies = {}
         self.url = ANALYTICS_ENDPOINT
         self._write_key = utils.deobfuscate(ANALYTICS_TOKEN)
-        self._enabled = conf.share_usage_data
         self._tracked_data = collections.defaultdict(list)
         self.context = _make_context(system_info.get_platform())
         self.installation_id = installation_id
@@ -119,19 +118,23 @@ class AnalyticsManager:
         self.external_ip: typing.Optional[str] = None
 
     @property
+    def enabled(self):
+        return self.conf.share_usage_data
+
+    @property
     def is_started(self):
         return self.task is not None
 
     async def start(self):
-        if self._enabled and self.task is None:
-            self.external_ip = await utils.get_external_ip()
+        if self.task is None:
             self.task = asyncio.create_task(self.run())
 
     async def run(self):
         while True:
-            await self._send_heartbeat()
+            if self.enabled:
+                self.external_ip = await utils.get_external_ip()
+                await self._send_heartbeat()
             await asyncio.sleep(1800)
-            self.external_ip = await utils.get_external_ip()
 
     def stop(self):
         if self.task is not None and not self.task.done():
@@ -154,7 +157,7 @@ class AnalyticsManager:
 
     async def track(self, event: typing.Dict):
         """Send a single tracking event"""
-        if self._enabled:
+        if self.enabled:
             log.debug('Sending track event: %s', event)
             await self._post(event)
 
