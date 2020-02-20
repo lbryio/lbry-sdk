@@ -30,6 +30,7 @@ from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.server.prometheus import REQUESTS_COUNT, SQLITE_INTERRUPT_COUNT, SQLITE_INTERNAL_ERROR_COUNT
 from lbry.wallet.server.prometheus import SQLITE_OPERATIONAL_ERROR_COUNT, SQLITE_EXECUTOR_TIMES, SESSIONS_COUNT
 from lbry.wallet.server.prometheus import SQLITE_PENDING_COUNT, CLIENT_VERSIONS
+from lbry.wallet.rpc.framing import NewlineFramer
 import lbry.wallet.server.version as VERSION
 
 from lbry.wallet.rpc import (
@@ -621,6 +622,7 @@ class SessionBase(RPCSession):
 
     def __init__(self, session_mgr, db, mempool, peer_mgr, kind):
         connection = JSONRPCConnection(JSONRPCAutoDetect)
+        self.env = session_mgr.env
         super().__init__(connection=connection)
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.session_mgr = session_mgr
@@ -628,7 +630,6 @@ class SessionBase(RPCSession):
         self.mempool = mempool
         self.peer_mgr = peer_mgr
         self.kind = kind  # 'RPC', 'TCP' etc.
-        self.env = session_mgr.env
         self.coin = self.env.coin
         self.anon_logs = self.env.anon_logs
         self.txs_sent = 0
@@ -640,6 +641,9 @@ class SessionBase(RPCSession):
 
     async def notify(self, touched, height_changed):
         pass
+
+    def default_framer(self):
+        return NewlineFramer(self.env.max_receive)
 
     def peer_address_str(self, *, for_log=True):
         """Returns the peer's IP address and port as a human-readable

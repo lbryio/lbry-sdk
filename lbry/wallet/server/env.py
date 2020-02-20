@@ -76,6 +76,7 @@ class Env:
         self.donation_address = self.default('DONATION_ADDRESS', '')
         # Server limits to help prevent DoS
         self.max_send = self.integer('MAX_SEND', 1000000)
+        self.max_receive = self.integer('MAX_RECEIVE', 1000000)
         self.max_subs = self.integer('MAX_SUBS', 250000)
         self.max_sessions = self.sane_max_sessions()
         self.max_session_subs = self.integer('MAX_SESSION_SUBS', 50000)
