@@ -19,6 +19,7 @@ class VideoFileAnalyzer:
         self._available_encoders = ""
         self._ffmpeg_installed = False
         self._which = None
+        self._checked_ffmpeg = False
 
     async def _execute(self, command, arguments):
         args = shlex.split(arguments)
@@ -48,18 +49,20 @@ class VideoFileAnalyzer:
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
-    async def status(self, reset=False):
+    async def status(self, reset=False, recheck=False):
         if reset:
             self._available_encoders = ""
             self._ffmpeg_installed = False
             self._which = None
-
-        installed = True
-        try:
-            await self._verify_ffmpeg_installed()
-        except FileNotFoundError:
-            installed = False
-
+        if self._checked_ffmpeg and not recheck:
+            installed = self._ffmpeg_installed
+        else:
+            installed = True
+            try:
+                await self._verify_ffmpeg_installed()
+            except FileNotFoundError:
+                installed = False
+            self._checked_ffmpeg = True
         return {
             "available": installed,
             "which": self._which,

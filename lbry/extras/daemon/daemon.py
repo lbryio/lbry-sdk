@@ -358,7 +358,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        not_grouped = ['routing_table_get']
+        not_grouped = ['routing_table_get', 'ffmpeg_find']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -764,6 +764,26 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Shutting down lbrynet daemon")
         asyncio.get_event_loop().call_later(0, shutdown)
         return "Shutting down"
+
+    async def jsonrpc_ffmpeg_find(self):
+        """
+        Get ffmpeg installation information
+
+        Usage:
+            ffmpeg_find
+
+        Options:
+            None
+
+        Returns:
+            (dict) Dictionary of ffmpeg information
+            {
+                'available': (bool) found ffmpeg,
+                'which': (str) path to ffmpeg,
+                'analyze_audio_volume': (bool) should ffmpeg analyze audio
+            }
+        """
+        return await self._video_file_analyzer.status(recheck=True)
 
     async def jsonrpc_status(self):
         """
