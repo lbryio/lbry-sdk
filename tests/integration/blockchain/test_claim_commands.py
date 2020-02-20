@@ -1,9 +1,9 @@
+import asyncio
 import os.path
 import tempfile
 import logging
 from binascii import unhexlify
 from urllib.request import urlopen
-
 
 from lbry.error import InsufficientFundsError
 
@@ -72,6 +72,19 @@ class ClaimSearchCommand(ClaimTestCase):
                 (claim['txid'], self.get_claim_id(claim)),
                 (result['txid'], result['claim_id'])
             )
+
+    async def test_disconnect_on_memory_error(self):
+        claim_ids = [
+            '0000000000000000000000000000000000000000',
+        ] * 23828
+        self.assertListEqual([], await self.claim_search(claim_ids=claim_ids))
+
+        # 23829 claim ids makes the request just large enough
+        claim_ids = [
+            '0000000000000000000000000000000000000000',
+        ] * 23829
+        with self.assertRaises(ConnectionResetError):
+            await self.claim_search(claim_ids=claim_ids)
 
     async def test_basic_claim_search(self):
         await self.create_channel()
