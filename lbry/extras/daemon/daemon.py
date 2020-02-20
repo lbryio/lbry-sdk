@@ -765,6 +765,26 @@ class Daemon(metaclass=JSONRPCServerType):
         asyncio.get_event_loop().call_later(0, shutdown)
         return "Shutting down"
 
+    async def jsonrpc_ffmpeg_find(self):
+        """
+        Get ffmpeg installation information
+
+        Usage:
+            ffmpeg_find
+
+        Options:
+            None
+
+        Returns:
+            (dict) Dictionary of ffmpeg information
+            {
+                'available': (bool) found ffmpeg,
+                'which': (str) path to ffmpeg,
+                'analyze_audio_volume': (bool) should ffmpeg analyze audio
+            }
+        """
+        return await self._video_file_analyzer.status(recheck=True)
+
     async def jsonrpc_status(self):
         """
         Get daemon status
