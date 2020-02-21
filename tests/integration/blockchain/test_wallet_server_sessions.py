@@ -66,6 +66,7 @@ class TestUsagePayment(CommandTestCase):
 
         node = SPVNode(self.conductor.spv_module, node_number=2)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
+        self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
 
@@ -74,15 +75,18 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["daily_fee"], "1.1")
         with self.assertRaises(ServerPaymentFeeAboveMaxAllowedError):
             await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+
         await node.stop(False)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})
-        self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.0")
-        await asyncio.wait_for(self.on_address_update(address), timeout=1)
+        await asyncio.wait([
+            wallet_pay_service.on_payment.first,
+            self.on_address_update(address)
+        ], timeout=3)
         _, history = await self.ledger.get_local_status_and_history(address)
         txid, nout = history[0]
         tx_details = await self.daemon.jsonrpc_transaction_show(txid)
