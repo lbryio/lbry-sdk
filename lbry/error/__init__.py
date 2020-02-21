@@ -242,6 +242,27 @@ class IncompatibleWalletServerError(WalletError):
         super().__init__(f"'{server}:{port}' has an incompatibly old version.")
 
 
+class ServerPaymentInvalidAddressError(WalletError):
+
+    def __init__(self, address):
+        self.address = address
+        super().__init__(f"Invalid address from wallet server: '{address}' - skipping payment round.")
+
+
+class ServerPaymentWalletLockedError(WalletError):
+
+    def __init__(self):
+        super().__init__("Cannot spend funds with locked wallet, skipping payment round.")
+
+
+class ServerPaymentFeeAboveMaxAllowedError(WalletError):
+
+    def __init__(self, daily_fee, max_fee):
+        self.daily_fee = daily_fee
+        self.max_fee = max_fee
+        super().__init__(f"Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.")
+
+
 class BlobError(BaseError):
     """
     **Blobs**

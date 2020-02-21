@@ -1,7 +1,13 @@
 import asyncio
 import logging
 
+from lbry.error import (
+    ServerPaymentFeeAboveMaxAllowedError,
+    ServerPaymentInvalidAddressError,
+    ServerPaymentWalletLockedError
+)
 from lbry.wallet.dewies import lbc_to_dewies
+from lbry.wallet.stream import StreamController
 from lbry.wallet.transaction import Output, Transaction
 
 log = logging.getLogger(__name__)
@@ -16,6 +22,9 @@ class WalletServerPayer:
         self.payment_period = payment_period
         self.analytics_manager = analytics_manager
         self.max_fee = max_fee
+        self._on_payment_controller = StreamController()
+        self.on_payment = self._on_payment_controller.stream
+        self.on_payment.listen(None, on_error=lambda e: logging.warning(e.args[0]))
 
     async def pay(self):
         while self.running:
@@ -27,18 +36,18 @@ class WalletServerPayer:
                 continue
 
             if not self.ledger.is_valid_address(address):
-                log.warning("Invalid address from wallet server: '%s' - skipping payment round.", address)
+                self._on_payment_controller.add_error(ServerPaymentInvalidAddressError(address))
                 continue
+
             if self.wallet.is_locked:
-                log.warning("Cannot spend funds with locked wallet, skipping payment round.")
+                self._on_payment_controller.add_error(ServerPaymentWalletLockedError())
                 continue
 
             amount = lbc_to_dewies(features['daily_fee'])  # check that this is in lbc and not dewies
             limit = lbc_to_dewies(self.max_fee)
             if amount > limit:
-                log.warning(
-                    "Server asked %s LBC as daily fee, but maximum allowed is %s LBC. Skipping payment round.",
-                    features['daily_fee'], self.max_fee
+                self._on_payment_controller.add_error(
+                    ServerPaymentFeeAboveMaxAllowedError(features['daily_fee'], self.max_fee)
                 )
                 continue
 
@@ -52,6 +61,7 @@ class WalletServerPayer:
             await self.ledger.broadcast(tx)
             if self.analytics_manager:
                 await self.analytics_manager.send_credits_sent()
+            self._on_payment_controller.add(tx)
 
     async def start(self, ledger=None, wallet=None):
         self.ledger = ledger
