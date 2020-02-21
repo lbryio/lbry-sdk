@@ -90,12 +90,6 @@ class TestUsagePayment(CommandTestCase):
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.0")
-        await asyncio.wait([
-            wallet_pay_service.on_payment.first,
-            self.on_address_update(address)
-        ], timeout=3)
-        _, history = await self.ledger.get_local_status_and_history(address)
-        txid, nout = history[0]
-        tx_details = await self.daemon.jsonrpc_transaction_show(txid)
-        self.assertEqual(tx_details.outputs[nout].amount, 100000000)
-        self.assertEqual(tx_details.outputs[nout].get_address(self.ledger), address)
+        tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+        self.assertEqual(tx.outputs[0].amount, 100000000)
+        self.assertEqual(tx.outputs[0].get_address(self.ledger), address)
