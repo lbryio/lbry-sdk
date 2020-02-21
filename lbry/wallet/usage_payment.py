@@ -64,6 +64,8 @@ class WalletServerPayer:
             self._on_payment_controller.add(tx)
 
     async def start(self, ledger=None, wallet=None):
+        if lbc_to_dewies(self.max_fee) < 1:
+            return
         self.ledger = ledger
         self.wallet = wallet
         self.running = True
