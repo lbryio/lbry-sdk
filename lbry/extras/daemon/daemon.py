@@ -4089,7 +4089,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
             transaction_count = partial(
                 self.ledger.get_transaction_history_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(transactions, transaction_count, page, page_size)
+        return paginate_rows(transactions, transaction_count, page, page_size, read_only=True)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
