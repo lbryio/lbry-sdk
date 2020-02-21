@@ -260,7 +260,7 @@ class ServerPaymentFeeAboveMaxAllowedError(WalletError):
     def __init__(self, daily_fee, max_fee):
         self.daily_fee = daily_fee
         self.max_fee = max_fee
-        super().__init__(f"Server asked {daily_fee} LBC as daily fee, but maximum allowed is {max_fee} LBC. Skipping payment round.")
+        super().__init__(f"Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.")
 
 
 class BlobError(BaseError):
