@@ -57,6 +57,13 @@ class TestUsagePayment(CommandTestCase):
     async def test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
         wallet_pay_service.payment_period = 1
+        # only starts with a positive max key fee
+        wallet_pay_service.max_fee = "0.0"
+        await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
+        self.assertFalse(wallet_pay_service.running)
+        wallet_pay_service.max_fee = "1.0"
+        await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
+        self.assertTrue(wallet_pay_service.running)
         await wallet_pay_service.stop()
         await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
 
