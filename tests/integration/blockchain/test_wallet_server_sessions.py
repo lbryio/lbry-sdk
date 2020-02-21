@@ -2,10 +2,10 @@ import asyncio
 
 import lbry
 import lbry.wallet
+from lbry.error import ServerFeeHigherThanAllowedServerPaymentError
 from lbry.wallet.network import ClientSession
-from lbry.testcase import IntegrationTestCase, CommandTestCase, AdvanceTimeTestCase
+from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
-from lbry.wallet.usage_payment import WalletServerPayer
 
 
 class TestSessions(IntegrationTestCase):
@@ -67,23 +67,14 @@ class TestUsagePayment(CommandTestCase):
         node = SPVNode(self.conductor.spv_module, node_number=2)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
-        with self.assertLogs(level='WARNING') as cm:
-            await self.daemon.jsonrpc_wallet_reconnect()
+        on_error = wallet_pay_service.on_payment.where(lambda e: isinstance(e, ServerFeeHigherThanAllowedServerPaymentError))
+        await self.daemon.jsonrpc_wallet_reconnect()
 
-            features = await self.ledger.network.get_server_features()
-            self.assertEqual(features["payment_address"], address)
-            self.assertEqual(features["daily_fee"], "1.1")
-            elapsed = 0
-            while not cm.output:
-                await asyncio.sleep(0.1)
-                elapsed += 1
-                if elapsed > 30:
-                    raise TimeoutError('Nothing logged for 3 seconds.')
-            self.assertEqual(
-                cm.output,
-                ['WARNING:lbry.wallet.usage_payment:Server asked 1.1 LBC as daily fee, but '
-                 'maximum allowed is 1.0 LBC. Skipping payment round.']
-            )
+        features = await self.ledger.network.get_server_features()
+        self.assertEqual(features["payment_address"], address)
+        self.assertEqual(features["daily_fee"], "1.1")
+        with self.assertRaises(ServerFeeHigherThanAllowedServerPaymentError):
+            await asyncio.wait_for(on_error, timeout=3)
         await node.stop(False)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})
         self.addCleanup(node.stop)
