@@ -27,7 +27,9 @@ reader_context: Optional[ContextVar[ReaderProcessState]] = ContextVar('reader_co
 
 
 def initializer(path):
-    reader = ReaderProcessState(sqlite3.connect(path).cursor())
+    db = sqlite3.connect(path)
+    db.executescript("pragma journal_mode=WAL;")
+    reader = ReaderProcessState(db.cursor())
     reader_context.set(reader)
 
 
