@@ -7,9 +7,9 @@ from io import StringIO
 from datetime import datetime
 from functools import partial
 from operator import itemgetter
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 from binascii import hexlify, unhexlify
-from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict
+from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict, NamedTuple
 
 import pylru
 from lbry.schema.result import Outputs, INVALID, NOT_FOUND
@@ -53,16 +53,19 @@ class LedgerRegistry(type):
         return mcs.ledgers[ledger_id]
 
 
-class TransactionEvent(namedtuple('TransactionEvent', ('address', 'tx'))):
-    pass
+class TransactionEvent(NamedTuple):
+    address: str
+    tx: Transaction
 
 
-class AddressesGeneratedEvent(namedtuple('AddressesGeneratedEvent', ('address_manager', 'addresses'))):
-    pass
+class AddressesGeneratedEvent(NamedTuple):
+    address_manager: AddressManager
+    addresses: List[str]
 
 
-class BlockHeightEvent(namedtuple('BlockHeightEvent', ('height', 'change'))):
-    pass
+class BlockHeightEvent(NamedTuple):
+    height: int
+    change: int
 
 
 class TransactionCacheItem:
@@ -822,8 +825,8 @@ class Ledger(metaclass=LedgerRegistry):
     def get_support_count(self, **constraints):
         return self.db.get_support_count(**constraints)
 
-    async def get_transaction_history(self, **constraints):
-        txs: List[Transaction] = await self.db.get_transactions(**constraints)
+    async def get_transaction_history(self, read_only: bool = False, **constraints):
+        txs: List[Transaction] = await self.db.get_transactions(read_only=read_only, **constraints)
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
@@ -932,8 +935,8 @@ class Ledger(metaclass=LedgerRegistry):
             history.append(item)
         return history
 
-    def get_transaction_history_count(self, **constraints):
-        return self.db.get_transaction_count(**constraints)
+    def get_transaction_history_count(self, read_only: bool = False, **constraints):
+        return self.db.get_transaction_count(read_only=read_only, **constraints)
 
     async def get_detailed_balance(self, accounts, confirmations=0):
         result = {
