@@ -67,7 +67,7 @@ class TestUsagePayment(CommandTestCase):
         await wallet_pay_service.stop()
         await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
 
-        address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
+        address = await self.blockchain.get_raw_change_address()
         _, history = await self.ledger.get_local_status_and_history(address)
         self.assertEqual(history, [])
 
@@ -91,5 +91,6 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.0")
         tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+        self.assertIsNotNone(await self.blockchain.get_raw_transaction(tx.id))  # verify its broadcasted
         self.assertEqual(tx.outputs[0].amount, 100000000)
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address)

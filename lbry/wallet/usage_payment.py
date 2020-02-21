@@ -29,7 +29,7 @@ class WalletServerPayer:
     async def pay(self):
         while self.running:
             await asyncio.sleep(self.payment_period)
-            features = await self.ledger.network.get_server_features()
+            features = await self.ledger.network.retriable_call(self.ledger.network.get_server_features)
             address = features['payment_address']
             amount = str(features['daily_fee'])
             if not address or not amount:
