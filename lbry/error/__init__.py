@@ -242,6 +242,27 @@ class IncompatibleWalletServerError(WalletError):
         super().__init__(f"'{server}:{port}' has an incompatibly old version.")
 
 
+class ServerPaymentInvalidAddressError(WalletError):
+
+    def __init__(self, address):
+        self.address = address
+        super().__init__(f"Invalid address from wallet server: '{address}' - skipping payment round.")
+
+
+class ServerPaymentWalletLockedError(WalletError):
+
+    def __init__(self):
+        super().__init__("Cannot spend funds with locked wallet, skipping payment round.")
+
+
+class ServerPaymentFeeAboveMaxAllowedError(WalletError):
+
+    def __init__(self, daily_fee, max_fee):
+        self.daily_fee = daily_fee
+        self.max_fee = max_fee
+        super().__init__(f"Server asked {daily_fee} LBC as daily fee, but maximum allowed is {max_fee} LBC. Skipping payment round.")
+
+
 class BlobError(BaseError):
     """
     **Blobs**
@@ -377,31 +398,3 @@ class InvalidCurrencyError(CurrencyExchangeError):
     def __init__(self, currency):
         self.currency = currency
         super().__init__(f"Invalid currency: {currency} is not a supported currency.")
-
-
-class WalletServerPaymentError(BaseError):
-    """
-    **Wallet Server Payment**
-    """
-
-
-class InvalidAddressForServerPaymentError(WalletServerPaymentError):
-
-    def __init__(self, address):
-        self.address = address
-        super().__init__(f"Invalid address from wallet server: '{address}' - skipping payment round.")
-
-
-class WalletLockedDuringServerPaymentError(WalletServerPaymentError):
-
-    def __init__(self):
-        super().__init__("Cannot spend funds with locked wallet, skipping payment round.")
-
-
-class ServerFeeHigherThanAllowedServerPaymentError(WalletServerPaymentError):
-
-    def __init__(self, daily_fee, max_fee):
-        self.daily_fee = daily_fee
-        self.max_fee = max_fee
-        super().__init__(f"Server asked {daily_fee} LBC as daily fee,"
-                         f" but maximum allowed is {max_fee} LBC. Skipping payment round.")

@@ -57,6 +57,9 @@ Code | Name | Message
 420 | KeyFeeAboveMaxAllowed | {message}
 421 | InvalidPassword | Password is invalid.
 422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
+431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
+432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
+433 | ServerPaymentFeeAboveMaxAllowed | Server asked {daily_fee} LBC as daily fee, but maximum allowed is {max_fee} LBC. Skipping payment round.
 **5xx** | Blob | **Blobs**
 500 | BlobNotFound | Blob not found.
 501 | BlobPermissionDenied | Permission denied to read blob.
@@ -78,7 +81,3 @@ Code | Name | Message
 701 | InvalidExchangeRateResponse | Failed to get exchange rate from {source}: {reason}
 702 | CurrencyConversion | {message}
 703 | InvalidCurrency | Invalid currency: {currency} is not a supported currency.
-**8xx** | WalletServerPayment | **Wallet Server Payment**
-801 | InvalidAddressForServerPayment | Invalid address from wallet server: '{address}' - skipping payment round.
-802 | WalletLockedDuringServerPayment | Cannot spend funds with locked wallet, skipping payment round.
-803 | ServerFeeHigherThanAllowedServerPayment | Server asked {daily_fee} LBC as daily fee, but maximum allowed is {max_fee} LBC. Skipping payment round.

@@ -1,8 +1,11 @@
 import asyncio
 import logging
 
-from lbry.error import InvalidAddressForServerPaymentError, WalletLockedDuringServerPaymentError, \
-    ServerFeeHigherThanAllowedServerPaymentError
+from lbry.error import (
+    ServerPaymentFeeAboveMaxAllowedError,
+    ServerPaymentInvalidAddressError,
+    ServerPaymentWalletLockedError
+)
 from lbry.wallet.dewies import lbc_to_dewies
 from lbry.wallet.stream import StreamController
 from lbry.wallet.transaction import Output, Transaction
@@ -33,17 +36,18 @@ class WalletServerPayer:
                 continue
 
             if not self.ledger.is_valid_address(address):
-                self._on_payment_controller.add_error(InvalidAddressForServerPaymentError(address))
+                self._on_payment_controller.add_error(ServerPaymentInvalidAddressError(address))
                 continue
+
             if self.wallet.is_locked:
-                self._on_payment_controller.add_error(WalletLockedDuringServerPaymentError())
+                self._on_payment_controller.add_error(ServerPaymentWalletLockedError())
                 continue
 
             amount = lbc_to_dewies(features['daily_fee'])  # check that this is in lbc and not dewies
             limit = lbc_to_dewies(self.max_fee)
             if amount > limit:
                 self._on_payment_controller.add_error(
-                    ServerFeeHigherThanAllowedServerPaymentError(features['daily_fee'], self.max_fee)
+                    ServerPaymentFeeAboveMaxAllowedError(features['daily_fee'], self.max_fee)
                 )
                 continue
 
