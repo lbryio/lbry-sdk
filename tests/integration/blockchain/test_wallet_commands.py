@@ -239,6 +239,14 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             {"one": "1", "two": "2", "conflict": "2", "another": "B", "fruit": ["peach", "apricot"]}
         )
 
+        daemon.jsonrpc_preference_clear("one")
+
+        self.assertDictEqual(
+            # "two" key added and "conflict" value changed to "2"
+            daemon.jsonrpc_preference_get(),
+            {"two": "2", "conflict": "2", "another": "B", "fruit": ["peach", "apricot"]}
+        )
+
         # Channel Certificate
         channel = await daemon2.jsonrpc_channel_create('@foo', '0.1')
         await self.confirm_tx(channel.id, self.daemon2.ledger)

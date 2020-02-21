@@ -1151,6 +1151,25 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet.save()
         return {key: value}
 
+    def jsonrpc_preference_clear(self, key, wallet_id=None):
+        """
+        Clear daemon preference
+
+        Usage:
+            preference_clear (<key>) [--wallet_id=<wallet_id>]
+
+        Options:
+            --key=<key> : (str) key associated with value
+            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
+
+        Returns:
+            (dict) Updated dictionary of daemon preferences
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        del wallet.preferences[key]
+        wallet.save()
+        return wallet.preferences.to_dict_without_ts()
+
     WALLET_DOC = """
     Create, modify and inspect wallets.
     """
