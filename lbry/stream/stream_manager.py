@@ -116,7 +116,7 @@ class StreamManager:
     async def add_stream(self, rowid: int, sd_hash: str, file_name: Optional[str],
                          download_directory: Optional[str], status: str,
                          claim: Optional['StoredContentClaim'], content_fee: Optional['Transaction'],
-                         added_on: Optional[int]):
+                         added_on: Optional[int], fully_reflected: bool):
         try:
             descriptor = await self.blob_manager.get_stream_descriptor(sd_hash)
         except InvalidStreamDescriptorError as err:
@@ -127,6 +127,8 @@ class StreamManager:
             claim, content_fee=content_fee, rowid=rowid, descriptor=descriptor,
             analytics_manager=self.analytics_manager, added_on=added_on
         )
+        if fully_reflected:
+            stream.fully_reflected.set()
         self.streams[sd_hash] = stream
         self.storage.content_claim_callbacks[stream.stream_hash] = lambda: self._update_content_claim(stream)
 
@@ -159,7 +161,7 @@ class StreamManager:
                 file_info['rowid'], file_info['sd_hash'], file_name,
                 download_directory, file_info['status'],
                 file_info['claim'], file_info['content_fee'],
-                file_info['added_on']
+                file_info['added_on'], file_info['fully_reflected']
             )))
         if add_stream_tasks:
             await asyncio.gather(*add_stream_tasks, loop=self.loop)
