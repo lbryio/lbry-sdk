@@ -28,24 +28,21 @@ class ResolveCommand(BaseResolveTestCase):
         )
 
         # resolving a channel @abc
-        response = await self.daemon.jsonrpc_resolve('lbry://@abc')
-        self.assertSetEqual({'lbry://@abc'}, set(response))
-        self.assertEqual(response['lbry://@abc']['name'], '@abc')
-        self.assertEqual(response['lbry://@abc']['value_type'], 'channel')
-        self.assertEqual(response['lbry://@abc']['meta']['claims_in_channel'], 0)
+        response = await self.resolve('lbry://@abc')
+        self.assertEqual(response['name'], '@abc')
+        self.assertEqual(response['value_type'], 'channel')
+        self.assertEqual(response['meta']['claims_in_channel'], 0)
 
         await self.stream_create('foo', '0.01', channel_id=channel_id)
         await self.stream_create('foo2', '0.01', channel_id=channel_id)
 
         # resolving a channel @abc with some claims in it
-        response['lbry://@abc']['confirmations'] += 2
-        response['lbry://@abc']['meta']['claims_in_channel'] = 2
-        self.assertEqual(response, await self.daemon.jsonrpc_resolve('lbry://@abc'))
+        response['confirmations'] += 2
+        response['meta']['claims_in_channel'] = 2
+        self.assertEqual(response, await self.resolve('lbry://@abc'))
 
         # resolving claim foo within channel @abc
-        response = await self.daemon.jsonrpc_resolve('lbry://@abc/foo')
-        self.assertSetEqual({'lbry://@abc/foo'}, set(response))
-        claim = response['lbry://@abc/foo']
+        claim = await self.resolve('lbry://@abc/foo')
         self.assertEqual(claim['name'], 'foo')
         self.assertEqual(claim['value_type'], 'stream')
         self.assertEqual(claim['signing_channel']['name'], '@abc')
@@ -62,11 +59,10 @@ class ResolveCommand(BaseResolveTestCase):
         # resolving claim foo by itself
         self.assertEqual(claim, await self.resolve('lbry://foo'))
         # resolving from the given permanent url
-        permanent_url = response['lbry://@abc/foo']['permanent_url']
-        self.assertEqual(claim, await self.resolve(permanent_url))
+        self.assertEqual(claim, await self.resolve(claim['permanent_url']))
 
         # resolving multiple at once
-        response = await self.daemon.jsonrpc_resolve(['lbry://foo', 'lbry://foo2'])
+        response = await self.out(self.daemon.jsonrpc_resolve(['lbry://foo', 'lbry://foo2']))
         self.assertSetEqual({'lbry://foo', 'lbry://foo2'}, set(response))
         claim = response['lbry://foo2']
         self.assertEqual(claim['name'], 'foo2')
@@ -81,7 +77,7 @@ class ResolveCommand(BaseResolveTestCase):
         # resolve handles invalid data
         await self.blockchain_claim_name("gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
         await self.generate(1)
-        response = await self.daemon.jsonrpc_resolve("lbry://gibberish")
+        response = await self.out(self.daemon.jsonrpc_resolve("lbry://gibberish"))
         self.assertSetEqual({'lbry://gibberish'}, set(response))
         claim = response['lbry://gibberish']
         self.assertEqual(claim['name'], 'gibberish')

@@ -188,7 +188,6 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # He them checks that the claim doesn't resolve anymore.
         self.assertEqual(
-            response[uri],
             {'error': {
                 'name': 'NOT_FOUND',
                 'text': f'Could not find claim at "{uri}".'
