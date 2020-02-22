@@ -571,4 +571,4 @@ class CommandTestCase(IntegrationTestCase):
         return tx['outputs'][0]['claim_id']
 
     def assertItemCount(self, result, count):  # pylint: disable=invalid-name
-        self.assertEqual(result['total_items'], count)
+        self.assertEqual(count, result['total_items'])

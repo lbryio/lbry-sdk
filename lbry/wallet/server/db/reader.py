@@ -317,7 +317,13 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         constraints['claim.txo_hash'] = tx_hash + struct.pack('<I', nout)
 
     if 'claim_type' in constraints:
-        constraints['claim.claim_type'] = CLAIM_TYPES[constraints.pop('claim_type')]
+        claim_types = constraints.pop('claim_type')
+        if isinstance(claim_types, str):
+            claim_types = [claim_types]
+        if claim_types:
+            constraints['claim.claim_type__in'] = {
+                CLAIM_TYPES[claim_type] for claim_type in claim_types
+            }
     if 'stream_types' in constraints:
         stream_types = constraints.pop('stream_types')
         if stream_types:
@@ -484,6 +490,14 @@ def resolve_url(raw_url):
     return channel
 
 
+CLAIM_HASH_OR_REPOST_HASH_SQL = f"""
+CASE WHEN claim.claim_type = {CLAIM_TYPES['repost']}
+    THEN claim.reposted_claim_hash
+    ELSE claim.claim_hash
+END
+"""
+
+
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
     any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
     all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
@@ -503,7 +517,8 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
                 index_name = COMMON_TAGS[item]
                 any_queries[f'#_common_tag_{index_name}'] = f"""
                 EXISTS(
-                    SELECT 1 FROM tag INDEXED BY tag_{index_name}_idx WHERE claim.claim_hash=tag.claim_hash
+                    SELECT 1 FROM tag INDEXED BY tag_{index_name}_idx
+                    WHERE {CLAIM_HASH_OR_REPOST_HASH_SQL}=tag.claim_hash
                     AND tag = '{item}'
                 )
                 """
@@ -516,7 +531,7 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             )
             any_queries[f'#_any_common_tags'] = f"""
             EXISTS(
-                SELECT 1 FROM tag WHERE claim.claim_hash=tag.claim_hash
+                SELECT 1 FROM tag WHERE {CLAIM_HASH_OR_REPOST_HASH_SQL}=tag.claim_hash
                 AND tag IN ({values})
             )
             """
@@ -530,14 +545,16 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
         if for_count or attr == 'tag':
-            any_queries[f'claim.claim_hash__in#_any_{attr}'] = f"""
-            SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            any_queries[f'#_any_{attr}'] = f"""
+            {CLAIM_HASH_OR_REPOST_HASH_SQL} IN (
+                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            )
             """
         else:
             any_queries[f'#_any_{attr}'] = f"""
             EXISTS(
                 SELECT 1 FROM {attr} WHERE
-                    claim.claim_hash={attr}.claim_hash
+                    {CLAIM_HASH_OR_REPOST_HASH_SQL}={attr}.claim_hash
                 AND {attr} IN ({values})
             )
             """
@@ -556,15 +573,17 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             f':$all_{attr}{i}' for i in range(len(all_items))
         )
         if for_count:
-            constraints[f'claim.claim_hash__in#_all_{attr}'] = f"""
+            constraints[f'#_all_{attr}'] = f"""
+            {CLAIM_HASH_OR_REPOST_HASH_SQL} IN (
                 SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
                 GROUP BY claim_hash HAVING COUNT({attr}) = :$all_{attr}_count
+            )
             """
         else:
             constraints[f'#_all_{attr}'] = f"""
                 {len(all_items)}=(
                     SELECT count(*) FROM {attr} WHERE
-                        claim.claim_hash={attr}.claim_hash
+                        {CLAIM_HASH_OR_REPOST_HASH_SQL}={attr}.claim_hash
                     AND {attr} IN ({values})
                 )
             """
@@ -577,14 +596,16 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             f':$not_{attr}{i}' for i in range(len(not_items))
         )
         if for_count:
-            constraints[f'claim.claim_hash__not_in#_not_{attr}'] = f"""
+            constraints[f'#_not_{attr}'] = f"""
+            {CLAIM_HASH_OR_REPOST_HASH_SQL} NOT IN (
                 SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+            )
             """
         else:
             constraints[f'#_not_{attr}'] = f"""
                 NOT EXISTS(
                     SELECT 1 FROM {attr} WHERE
-                        claim.claim_hash={attr}.claim_hash
+                        {CLAIM_HASH_OR_REPOST_HASH_SQL}={attr}.claim_hash
                     AND {attr} IN ({values})
                 )
             """

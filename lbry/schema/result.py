@@ -38,7 +38,9 @@ class Censor:
         for claim_hash, lookup in (
                 (row['claim_hash'], self.streams),
                 (row['claim_hash'], self.channels),
-                (row['channel_hash'], self.channels)):
+                (row['channel_hash'], self.channels),
+                (row['reposted_claim_hash'], self.streams),
+                (row['reposted_claim_hash'], self.channels)):
             censoring_channel_hash = lookup.get(claim_hash)
             if censoring_channel_hash:
                 was_censored = True
