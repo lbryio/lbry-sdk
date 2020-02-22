@@ -263,6 +263,7 @@ class ClaimSearchCommand(ClaimTestCase):
         chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
         chan2_id = self.get_claim_id(await self.channel_create('@chan2'))
         chan3_id = self.get_claim_id(await self.channel_create('@chan3'))
+        chan4 = await self.channel_create('@chan4', '0.1')
 
         claim1 = await self.stream_create('claim1')
         claim2 = await self.stream_create('claim2', channel_id=chan1_id)
@@ -285,6 +286,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await match([claim6, claim5, claim4, claim1],                 not_channel_ids=[chan1_id], claim_type='stream')
         await match([claim6, claim3, claim2, claim1],                 not_channel_ids=[chan2_id], claim_type='stream')
         await match([claim6, claim1],                       not_channel_ids=[chan1_id, chan2_id], claim_type='stream')
+        await match([claim6, claim1, chan4],                not_channel_ids=[chan1_id, chan2_id])
 
         # not_channel_ids + valid_channel_signature
         await match([claim5, claim4, claim3, claim2, claim1],
@@ -858,25 +860,29 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(search['reposted_claim']['meta']['reposted'], 2)
         self.assertEqual(search['reposted_claim']['signing_channel']['name'], '@goodies')
 
-        resolved = await self.resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
+        resolved = await self.out(
+            self.daemon.jsonrpc_resolve(['@reposting-goodies/repost-on-channel', 'newstuff-again'])
+        )
         self.assertEqual(resolved['@reposting-goodies/repost-on-channel'], search)
         self.assertEqual(resolved['newstuff-again']['reposted_claim']['name'], 'newstuff')
 
     async def test_filtering_channels_for_removing_content(self):
-        await self.channel_create('@some_channel', '1.0')
-        await self.stream_create('good_content', '1.1', channel_name='@some_channel', tags=['good'])
+        await self.channel_create('@some_channel', '0.1')
+        await self.stream_create('good_content', '0.1', channel_name='@some_channel', tags=['good'])
         bad_content_id = self.get_claim_id(
-            await self.stream_create('bad_content', '1.1', channel_name='@some_channel', tags=['bad'])
+            await self.stream_create('bad_content', '0.1', channel_name='@some_channel', tags=['bad'])
         )
         filtering_channel_id = self.get_claim_id(
-            await self.channel_create('@filtering', '1.0')
+            await self.channel_create('@filtering', '0.1')
         )
         self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
             unhexlify(filtering_channel_id)[::-1]
         )
-        await self.stream_repost(bad_content_id, 'filter1', '1.1', channel_name='@filtering')
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_streams))
+        await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_streams))
 
-        # search for blocked content directly
+        # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
         blocked = result['blocked']
         self.assertEqual([], result['items'])
@@ -885,39 +891,83 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, blocked['channels'][0]['blocked'])
         self.assertTrue(blocked['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
 
-        # search channel containing blocked content
+        # search inside channel containing filtered content
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel'))
-        blocked = result['blocked']
+        filtered = result['blocked']
         self.assertEqual(1, len(result['items']))
-        self.assertEqual(1, blocked['total'])
-        self.assertEqual(1, len(blocked['channels']))
-        self.assertEqual(1, blocked['channels'][0]['blocked'])
-        self.assertTrue(blocked['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
+        self.assertEqual(1, filtered['total'])
+        self.assertEqual(1, len(filtered['channels']))
+        self.assertEqual(1, filtered['channels'][0]['blocked'])
+        self.assertTrue(filtered['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
 
         # content was filtered by not_tag before censoring
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', not_tags=["good", "bad"]))
         self.assertEqual(0, len(result['items']))
         self.assertEqual({"channels": [], "total": 0}, result['blocked'])
 
+        # filtered content can still be resolved
+        result = await self.resolve('lbry://@some_channel/bad_content')
+        self.assertEqual(bad_content_id, result['claim_id'])
+
         blocking_channel_id = self.get_claim_id(
-            await self.channel_create('@blocking', '1.0')
+            await self.channel_create('@blocking', '0.1')
         )
         self.conductor.spv_node.server.db.sql.blocking_channel_hashes.add(
             unhexlify(blocking_channel_id)[::-1]
         )
-
-        # filtered content can still be resolved
-        result = await self.out(self.daemon.jsonrpc_resolve('lbry://@some_channel/bad_content'))
-        self.assertEqual(bad_content_id, result['lbry://@some_channel/bad_content']['claim_id'])
-
-        await self.stream_repost(bad_content_id, 'block1', '1.1', channel_name='@blocking')
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_streams))
+        await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_streams))
 
         # blocked content is not resolveable
-        result = await self.out(self.daemon.jsonrpc_resolve('lbry://@some_channel/bad_content'))
-        error = result['lbry://@some_channel/bad_content']['error']
+        error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
         self.assertEqual(error['name'], 'BLOCKED')
         self.assertTrue(error['text'].startswith("Resolve of 'lbry://@some_channel/bad_content' was censored"))
         self.assertTrue(error['censor']['short_url'].startswith('lbry://@blocking#'))
+
+        # a filtered/blocked channel impacts all content inside it
+        bad_channel_id = self.get_claim_id(
+            await self.channel_create('@bad_channel', '0.1', tags=['bad-stuff'])
+        )
+        worse_content_id = self.get_claim_id(
+            await self.stream_create('worse_content', '0.1', channel_name='@bad_channel', tags=['bad-stuff'])
+        )
+
+        # check search before filtering channel
+        result = await self.out(self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height']))
+        self.assertEqual(2, result['total_items'])
+        self.assertEqual('worse_content', result['items'][0]['name'])
+        self.assertEqual('@bad_channel', result['items'][1]['name'])
+
+        # filter channel out
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+        await self.stream_repost(bad_channel_id, 'filter2', '0.1', channel_name='@filtering')
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+
+        # same claim search as previous now returns 0 results
+        result = await self.out(self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height']))
+        filtered = result['blocked']
+        self.assertEqual(0, len(result['items']))
+        self.assertEqual(2, filtered['total'])
+        self.assertEqual(1, len(filtered['channels']))
+        self.assertEqual(2, filtered['channels'][0]['blocked'])
+        self.assertTrue(filtered['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
+
+        # filtered channel should still resolve
+        result = await self.resolve('lbry://@bad_channel')
+        self.assertEqual(bad_channel_id, result['claim_id'])
+        result = await self.resolve('lbry://@bad_channel/worse_content')
+        self.assertEqual(worse_content_id, result['claim_id'])
+
+        # block channel
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+        await self.stream_repost(bad_channel_id, 'block2', '0.1', channel_name='@blocking')
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+
+        # channel, claim in channel or claim individually no longer resolve
+        self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
 
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')
@@ -1374,15 +1424,14 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 2)
         r = await self.resolve('lbry://@abc/foo')
         self.assertEqual(
-            r['lbry://@abc/foo']['claim_id'],
+            r['claim_id'],
             self.get_claim_id(tx3)
         )
 
         # publishing again clears channel
         tx4 = await self.publish('foo', languages='uk-UA', tags=['Anime', 'anime '])
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 2)
-        r = await self.resolve('lbry://foo')
-        claim = r['lbry://foo']
+        claim = await self.resolve('lbry://foo')
         self.assertEqual(claim['txid'], tx4['outputs'][0]['txid'])
         self.assertNotIn('signing_channel', claim)
         self.assertEqual(claim['value']['languages'], ['uk-UA'])

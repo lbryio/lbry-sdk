@@ -291,6 +291,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
             not_channel_ids_binary = {
                 unhexlify(ncid)[::-1] for ncid in not_channel_ids
             }
+            constraints['claim.claim_hash__not_in#not_channel_ids'] = not_channel_ids_binary
             if constraints.get('has_channel_signature', False):
                 constraints['claim.channel_hash__not_in'] = not_channel_ids_binary
             else:
