@@ -549,7 +549,7 @@ class CommandTestCase(IntegrationTestCase):
         )
 
     async def resolve(self, uri):
-        return await self.out(self.daemon.jsonrpc_resolve(uri))
+        return (await self.out(self.daemon.jsonrpc_resolve(uri)))[uri]
 
     async def claim_search(self, **kwargs):
         return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']

@@ -40,7 +40,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # And is the channel resolvable and empty?
         response = await self.resolve('lbry://@spam')
-        self.assertEqual(response['lbry://@spam']['value_type'], 'channel')
+        self.assertEqual(response['value_type'], 'channel')
 
         # "What goes well with spam?" ponders Chris...
         # "A hovercraft with eels!" he exclaims.
@@ -64,7 +64,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Also checks that his new story can be found on the blockchain before
         # giving the link to all his friends.
         response = await self.resolve('lbry://@spam/hovercraft')
-        self.assertEqual(response['lbry://@spam/hovercraft']['value_type'], 'stream')
+        self.assertEqual(response['value_type'], 'stream')
 
         # He goes to tell everyone about it and in the meantime 5 blocks are confirmed.
         await self.generate(5)
@@ -84,13 +84,12 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(abandon['txid'])
 
         # And now checks that the claim doesn't resolve anymore.
-        response = await self.resolve('lbry://@spam/hovercraft')
         self.assertEqual(
-            response['lbry://@spam/hovercraft'],
             {'error': {
                 'name': 'NOT_FOUND',
                 'text': 'Could not find claim at "lbry://@spam/hovercraft".'
-            }}
+            }},
+            await self.resolve('lbry://@spam/hovercraft')
         )
 
         # After abandoning he just waits for his LBCs to be returned to his account
@@ -140,8 +139,8 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And check if his support showed up
         resolve_result = await self.resolve(uri)
         # It obviously did! Because, blockchain baby \O/
-        self.assertEqual(resolve_result[uri]['amount'], '1.0')
-        self.assertEqual(resolve_result[uri]['meta']['effective_amount'], '1.2')
+        self.assertEqual(resolve_result['amount'], '1.0')
+        self.assertEqual(resolve_result['meta']['effective_amount'], '1.2')
         await self.generate(5)
 
         # Now he also wanted to support the original creator of the Award Winning Novel
@@ -154,7 +153,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And again checks if it went to the just right place
         resolve_result = await self.resolve(uri)
         # Which it obviously did. Because....?????
-        self.assertEqual(resolve_result[uri]['meta']['effective_amount'], '1.5')
+        self.assertEqual(resolve_result['meta']['effective_amount'], '1.5')
         await self.generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
@@ -188,11 +187,11 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.confirm_tx(abandon['txid'])
 
         # He them checks that the claim doesn't resolve anymore.
-        response = await self.resolve(uri)
         self.assertEqual(
             response[uri],
             {'error': {
                 'name': 'NOT_FOUND',
                 'text': f'Could not find claim at "{uri}".'
-            }}
+            }},
+            await self.resolve(uri)
         )

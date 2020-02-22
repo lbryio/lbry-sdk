@@ -12,7 +12,7 @@ from lbry.crypto.base58 import Base58
 class BaseResolveTestCase(CommandTestCase):
 
     async def assertResolvesToClaimId(self, name, claim_id):
-        other = (await self.resolve(name))[name]
+        other = await self.resolve(name)
         if claim_id is None:
             self.assertIn('error', other)
             self.assertEqual(other['error']['name'], 'NOT_FOUND')
@@ -28,7 +28,7 @@ class ResolveCommand(BaseResolveTestCase):
         )
 
         # resolving a channel @abc
-        response = await self.resolve('lbry://@abc')
+        response = await self.daemon.jsonrpc_resolve('lbry://@abc')
         self.assertSetEqual({'lbry://@abc'}, set(response))
         self.assertEqual(response['lbry://@abc']['name'], '@abc')
         self.assertEqual(response['lbry://@abc']['value_type'], 'channel')
@@ -40,10 +40,10 @@ class ResolveCommand(BaseResolveTestCase):
         # resolving a channel @abc with some claims in it
         response['lbry://@abc']['confirmations'] += 2
         response['lbry://@abc']['meta']['claims_in_channel'] = 2
-        self.assertEqual(response, await self.resolve('lbry://@abc'))
+        self.assertEqual(response, await self.daemon.jsonrpc_resolve('lbry://@abc'))
 
         # resolving claim foo within channel @abc
-        response = await self.resolve('lbry://@abc/foo')
+        response = await self.daemon.jsonrpc_resolve('lbry://@abc/foo')
         self.assertSetEqual({'lbry://@abc/foo'}, set(response))
         claim = response['lbry://@abc/foo']
         self.assertEqual(claim['name'], 'foo')
@@ -60,13 +60,13 @@ class ResolveCommand(BaseResolveTestCase):
         )
 
         # resolving claim foo by itself
-        self.assertEqual(claim, (await self.resolve('lbry://foo'))['lbry://foo'])
+        self.assertEqual(claim, await self.resolve('lbry://foo'))
         # resolving from the given permanent url
         permanent_url = response['lbry://@abc/foo']['permanent_url']
-        self.assertEqual(claim, (await self.resolve(permanent_url))[permanent_url])
+        self.assertEqual(claim, await self.resolve(permanent_url))
 
         # resolving multiple at once
-        response = await self.resolve(['lbry://foo', 'lbry://foo2'])
+        response = await self.daemon.jsonrpc_resolve(['lbry://foo', 'lbry://foo2'])
         self.assertSetEqual({'lbry://foo', 'lbry://foo2'}, set(response))
         claim = response['lbry://foo2']
         self.assertEqual(claim['name'], 'foo2')
@@ -81,7 +81,7 @@ class ResolveCommand(BaseResolveTestCase):
         # resolve handles invalid data
         await self.blockchain_claim_name("gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
         await self.generate(1)
-        response = await self.resolve("lbry://gibberish")
+        response = await self.daemon.jsonrpc_resolve("lbry://gibberish")
         self.assertSetEqual({'lbry://gibberish'}, set(response))
         claim = response['lbry://gibberish']
         self.assertEqual(claim['name'], 'gibberish')
@@ -89,10 +89,10 @@ class ResolveCommand(BaseResolveTestCase):
 
         # resolve retries
         await self.conductor.spv_node.stop()
-        resolving_future = asyncio.ensure_future(self.resolve('foo'))
+        resolve_task = asyncio.create_task(self.resolve('foo'))
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.on_ready.first
-        self.assertIsNotNone((await resolving_future)['foo']['claim_id'])
+        self.assertIsNotNone((await resolve_task)['claim_id'])
 
     async def test_winning_by_effective_amount(self):
         # first one remains winner unless something else changes
@@ -182,20 +182,18 @@ class ResolveCommand(BaseResolveTestCase):
 
         # Original channel doesn't exists anymore, so the signature is invalid. For invalid signatures, resolution is
         # only possible outside a channel
-        response = await self.resolve('lbry://@abc/on-channel-claim')
-        self.assertEqual(response, {
-            'lbry://@abc/on-channel-claim': {
-                'error': {
-                    'name': 'NOT_FOUND',
-                    'text': 'Could not find claim at "lbry://@abc/on-channel-claim".',
-                }
-            }
-        })
-        response = (await self.resolve('lbry://on-channel-claim'))['lbry://on-channel-claim']
+        self.assertEqual(
+            {'error': {
+                'name': 'NOT_FOUND',
+                'text': 'Could not find claim at "lbry://@abc/on-channel-claim".',
+            }},
+            await self.resolve('lbry://@abc/on-channel-claim')
+        )
+        response = await self.resolve('lbry://on-channel-claim')
         self.assertFalse(response['is_channel_signature_valid'])
         self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
         direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
-        response = (await self.resolve(direct_uri))[direct_uri]
+        response = await self.resolve(direct_uri)
         self.assertFalse(response['is_channel_signature_valid'])
         self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
         await self.stream_abandon(claim_id=orphan_claim_id)
@@ -205,7 +203,7 @@ class ResolveCommand(BaseResolveTestCase):
         valid_claim = await self.stream_create('on-channel-claim', '0.00000001', channel_id=channel['claim_id'])
         # resolves normally
         response = await self.resolve(uri)
-        self.assertTrue(response[uri]['is_channel_signature_valid'])
+        self.assertTrue(response['is_channel_signature_valid'])
 
         # ooops! claimed a valid conflict! (this happens on the wild, mostly by accident or race condition)
         await self.stream_create(
@@ -214,8 +212,8 @@ class ResolveCommand(BaseResolveTestCase):
 
         # it still resolves! but to the older claim
         response = await self.resolve(uri)
-        self.assertTrue(response[uri]['is_channel_signature_valid'])
-        self.assertEqual(response[uri]['txid'], valid_claim['txid'])
+        self.assertTrue(response['is_channel_signature_valid'])
+        self.assertEqual(response['txid'], valid_claim['txid'])
         claims = await self.claim_search(name='on-channel-claim')
         self.assertEqual(2, len(claims))
         self.assertEqual(
@@ -235,8 +233,8 @@ class ResolveCommand(BaseResolveTestCase):
         r1 = await self.resolve(f'lbry://{one}')
         r2 = await self.resolve(f'lbry://{two}')
 
-        self.assertEqual(winner_id, r1[f'lbry://{one}']['claim_id'])
-        self.assertEqual(winner_id, r2[f'lbry://{two}']['claim_id'])
+        self.assertEqual(winner_id, r1['claim_id'])
+        self.assertEqual(winner_id, r2['claim_id'])
 
     async def test_resolve_old_claim(self):
         channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
@@ -249,7 +247,7 @@ class ResolveCommand(BaseResolveTestCase):
         await self.confirm_tx(tx.id)
 
         response = await self.resolve('@olds/example')
-        self.assertTrue(response['@olds/example']['is_channel_signature_valid'])
+        self.assertTrue(response['is_channel_signature_valid'])
 
         claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
         tx = await Transaction.claim_create(
@@ -260,16 +258,14 @@ class ResolveCommand(BaseResolveTestCase):
         await self.confirm_tx(tx.id)
 
         response = await self.resolve('bad_example')
-        self.assertFalse(response['bad_example']['is_channel_signature_valid'])
-        response = await self.resolve('@olds/bad_example')
-        self.assertEqual(response, {
-            '@olds/bad_example': {
-                'error': {
-                    'name': 'NOT_FOUND',
-                    'text': 'Could not find claim at "@olds/bad_example".',
-                }
-            }
-        })
+        self.assertFalse(response['is_channel_signature_valid'])
+        self.assertEqual(
+            {'error': {
+                'name': 'NOT_FOUND',
+                'text': 'Could not find claim at "@olds/bad_example".',
+            }},
+            await self.resolve('@olds/bad_example')
+        )
 
 
 class ResolveAfterReorg(BaseResolveTestCase):
@@ -289,36 +285,36 @@ class ResolveAfterReorg(BaseResolveTestCase):
         channel_id = self.get_claim_id(
             await self.channel_create(channel_name, '0.01')
         )
-        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertNotIn('error', await self.resolve(channel_name))
         await self.reorg(206)
-        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
+        self.assertNotIn('error', await self.resolve(channel_name))
 
         stream_name = 'foo'
         stream_id = self.get_claim_id(
             await self.stream_create(stream_name, '0.01', channel_id=channel_id)
         )
-        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(stream_name))
         await self.reorg(206)
-        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(stream_name))
 
         await self.support_create(stream_id, '0.01')
-        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(stream_name))
         await self.reorg(206)
-        self.assertNotIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(stream_name))
 
         await self.stream_abandon(stream_id)
-        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
-        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(channel_name))
+        self.assertIn('error', await self.resolve(stream_name))
         await self.reorg(206)
-        self.assertNotIn('error', (await self.resolve(channel_name))[channel_name])
-        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertNotIn('error', await self.resolve(channel_name))
+        self.assertIn('error', await self.resolve(stream_name))
 
         await self.channel_abandon(channel_id)
-        self.assertIn('error', (await self.resolve(channel_name))[channel_name])
-        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertIn('error', await self.resolve(channel_name))
+        self.assertIn('error', await self.resolve(stream_name))
         await self.reorg(206)
-        self.assertIn('error', (await self.resolve(channel_name))[channel_name])
-        self.assertIn('error', (await self.resolve(stream_name))[stream_name])
+        self.assertIn('error', await self.resolve(channel_name))
+        self.assertIn('error', await self.resolve(stream_name))
 
 
 def generate_signed_legacy(address: bytes, output: Output):
