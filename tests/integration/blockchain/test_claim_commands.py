@@ -961,9 +961,9 @@ class StreamCommands(ClaimTestCase):
         result = await self.out(self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height']))
         filtered = result['blocked']
         self.assertEqual(0, len(result['items']))
-        self.assertEqual(2, filtered['total'])
+        self.assertEqual(3, filtered['total'])
         self.assertEqual(1, len(filtered['channels']))
-        self.assertEqual(2, filtered['channels'][0]['blocked'])
+        self.assertEqual(3, filtered['channels'][0]['blocked'])
         self.assertTrue(filtered['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
 
         # filtered channel should still resolve
