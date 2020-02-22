@@ -829,8 +829,11 @@ class StreamCommands(ClaimTestCase):
         self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
 
     async def test_repost(self):
+        sql = self.conductor.spv_node.server.bp.sql
+        sql.execute(sql.TAG_INDEXES)
+
         await self.channel_create('@goodies', '1.0')
-        tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies')
+        tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies', tags=['foo', 'gaming'])
         claim_id = self.get_claim_id(tx)
 
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
@@ -840,6 +843,16 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
         self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+
+        # tags are inherited (non-common / indexed tags)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(any_tags=['foo'], claim_type=['stream', 'repost']), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(all_tags=['foo'], claim_type=['stream', 'repost']), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(not_tags=['foo'], claim_type=['stream', 'repost']), 0)
+        # "common" / indexed tags work too
+        self.assertIn('gaming', sql.TAG_INDEXES)  # if this breaks, next test doesn't make sense
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(any_tags=['gaming'], claim_type=['stream', 'repost']), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(all_tags=['gaming'], claim_type=['stream', 'repost']), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_claim_search(not_tags=['gaming'], claim_type=['stream', 'repost']), 0)
 
         await self.channel_create('@reposting-goodies', '1.0')
         await self.stream_repost(claim_id, 'repost-on-channel', '1.1', channel_name='@reposting-goodies')
