@@ -313,9 +313,9 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers.estimated_timestamp(tx_height),
-            'is_fully_reflected': managed_stream.is_fully_reflected,
-            'reflector_progress': managed_stream.reflector_progress,
-            'uploading_to_reflector': managed_stream.uploading_to_reflector
+            'is_fully_reflected': managed_stream.is_fully_reflected if is_stream else False,
+            'reflector_progress': managed_stream.reflector_progress if is_stream else False,
+            'uploading_to_reflector': managed_stream.uploading_to_reflector if is_stream else False
         }
 
     def encode_claim(self, claim):

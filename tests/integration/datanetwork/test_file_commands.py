@@ -13,7 +13,7 @@ class FileCommands(CommandTestCase):
     async def initialize_torrent(self):
         self.seeder_session = TorrentSession(self.loop, None)
         self.addCleanup(self.seeder_session.stop)
-        await self.seeder_session.bind('localhost', 4040)
+        await self.seeder_session.bind(port=4040)
         self.btih = await self.seeder_session.add_fake_torrent()
         address = await self.account.receiving.get_or_create_usable_address()
         claim = Claim()
@@ -28,7 +28,7 @@ class FileCommands(CommandTestCase):
             self.loop, self.daemon.conf, client_session, self.daemon.storage, self.daemon.analytics_manager
         )
         await self.daemon.file_manager.source_managers['torrent'].start()
-        await client_session.bind('localhost', 4041)
+        await client_session.bind(port=4041)
         client_session._session.add_dht_node(('localhost', 4040))
 
     async def test_download_torrent(self):
