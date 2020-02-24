@@ -98,7 +98,7 @@ class StreamManager(SourceManager):
     async def _load_stream(self, rowid: int, sd_hash: str, file_name: Optional[str],
                            download_directory: Optional[str], status: str,
                            claim: Optional['StoredContentClaim'], content_fee: Optional['Transaction'],
-                           added_on: Optional[int]):
+                           added_on: Optional[int], fully_reflected: Optional[bool]):
         try:
             descriptor = await self.blob_manager.get_stream_descriptor(sd_hash)
         except InvalidStreamDescriptorError as err:

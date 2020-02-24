@@ -305,7 +305,7 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None,
-            'is_fully_reflected': managed_stream.is_fully_reflected
+            'is_fully_reflected': managed_stream.is_fully_reflected if is_stream else False
         }
 
     def encode_claim(self, claim):

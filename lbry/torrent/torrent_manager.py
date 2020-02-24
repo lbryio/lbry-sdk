@@ -59,6 +59,10 @@ class TorrentSource(ManagedDownloadSource):
     def torrent_name(self):
         return self.torrent_session.get_name(self.identifier)
 
+    @property
+    def bt_infohash(self):
+        return self.identifier
+
     def stop_tasks(self):
         pass
 

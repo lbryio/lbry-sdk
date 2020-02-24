@@ -1,6 +1,7 @@
 import asyncio
 import binascii
 import os
+import logging
 from hashlib import sha1
 from tempfile import mkdtemp
 from typing import Optional
@@ -33,6 +34,7 @@ NOTIFICATION_MASKS = [
     "upload",
     "block_progress"
 ]
+log = logging.getLogger(__name__)
 
 
 DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
@@ -65,22 +67,19 @@ class TorrentHandle:
         # fixme: cleanup
         status = self._handle.status()
         if status.has_metadata:
-            self.metadata_completed.set()
-            self._handle.pause()
             self.size = status.total_wanted
             self.total_wanted_done = status.total_wanted_done
             self.name = status.name
-            # metadata: libtorrent.torrent_info = self._handle.get_torrent_info()
-            # print(metadata)
-            # print(metadata.files())
-            # print(type(self._handle))
+            if not self.metadata_completed.is_set():
+                self.metadata_completed.set()
+                log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
         if not status.is_seeding:
-            print('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s' % (
+            log.debug('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s' % (
                 status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
                 status.num_peers, status.num_seeds, status.state, status.save_path))
         elif not self.finished.is_set():
             self.finished.set()
-            print("finished!")
+            log.info("Torrent finished: %s", self.name)
 
     async def status_loop(self):
         while True:
@@ -125,7 +124,6 @@ class TorrentSession:
             size = myfile.write(b'0' * 40 * 1024 * 1024)
         fs = libtorrent.file_storage()
         fs.add_file('tmp', size)
-        print(fs.file_path(0))
         t = libtorrent.create_torrent(fs, 0, 4 * 1024 * 1024)
         libtorrent.set_piece_hashes(t, dir)
         info = libtorrent.torrent_info(t.generate())
@@ -158,7 +156,7 @@ class TorrentSession:
 
     def _pop_alerts(self):
         for alert in self._session.pop_alerts():
-            print("alert: ", alert)
+            log.info("torrent alert: %s", alert)
 
     async def process_alerts(self):
         while True:
@@ -182,13 +180,6 @@ class TorrentSession:
 
     def _add_torrent(self, btih: str, download_directory: Optional[str]):
         params = {'info_hash': binascii.unhexlify(btih.encode())}
-        flags = DEFAULT_FLAGS
-        print(bin(flags))
-        flags ^= libtorrent.add_torrent_params_flags_t.flag_paused
-        flags ^= libtorrent.add_torrent_params_flags_t.flag_auto_managed
-        # flags ^= libtorrent.add_torrent_params_flags_t.flag_stop_when_ready
-        print(bin(flags))
-        # params['flags'] = flags
         if download_directory:
             params['save_path'] = download_directory
         handle = self._handles[btih] = TorrentHandle(self._loop, self._executor, self._session.add_torrent(params))
@@ -208,9 +199,8 @@ class TorrentSession:
             self._handles.pop(btih)
 
     async def save_file(self, btih, download_directory):
-        return
         handle = self._handles[btih]
-        handle._handle.move_storage(download_directory)
+        await handle.resume()
 
     def get_size(self, btih):
         return self._handles[btih].size
@@ -242,9 +232,7 @@ async def main():
     btih = await session.add_fake_torrent()
     session2._session.add_dht_node(('localhost', 4040))
     await session2.add_torrent(btih, "/tmp/down")
-    print('added')
     while True:
-        print("idling")
         await asyncio.sleep(100)
     await session.pause()
     executor.shutdown()
