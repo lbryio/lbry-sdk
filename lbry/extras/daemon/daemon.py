@@ -3350,7 +3350,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         stream_hash = None
         if not preview:
-            old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)[0]
+            old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)
+            old_stream = old_stream[0] if old_stream else None
             if file_path is not None:
                 if old_stream:
                     await self.file_manager.delete(old_stream, delete_file=False)

@@ -40,6 +40,8 @@ test:unit:
 test:datanetwork-integration:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y libboost1.65-all-dev
     - pip install tox-travis
     - tox -e datanetwork
 
@@ -92,8 +94,9 @@ build:linux:
     - apt-get install -y --no-install-recommends software-properties-common zip curl build-essential
     - add-apt-repository -y ppa:deadsnakes/ppa
     - apt-get update
-    - apt-get install -y --no-install-recommends python3.7-dev
+    - apt-get install -y --no-install-recommends python3.7-dev libboost1.65-all-dev
     - python3.7 <(curl -q https://bootstrap.pypa.io/get-pip.py) # make sure we get pip with python3.7
+    - pip install https://s3.amazonaws.com/files.lbry.io/python_libtorrent-1.2.4-py3-none-any.whl  # temporarly only on linux
 
 build:mac:
   extends: .build
