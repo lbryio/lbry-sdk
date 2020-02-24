@@ -45,6 +45,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
+      - if: matrix.test == 'datanetwork'
+        run: sudo apt install -y --no-install-recommends libboost1.67-all-dev
       - run: pip install tox-travis
       - run: tox -e ${{ matrix.test }}
 

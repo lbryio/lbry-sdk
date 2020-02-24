@@ -74,9 +74,9 @@ class TorrentHandle:
                 self.metadata_completed.set()
                 log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
         if not status.is_seeding:
-            log.debug('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s' % (
-                status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
-                status.num_peers, status.num_seeds, status.state, status.save_path))
+            log.debug('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s',
+                      status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
+                      status.num_peers, status.num_seeds, status.state, status.save_path)
         elif not self.finished.is_set():
             self.finished.set()
             log.info("Torrent finished: %s", self.name)
@@ -95,7 +95,7 @@ class TorrentHandle:
 
     async def resume(self):
         await self._loop.run_in_executor(
-            self._executor, self._handle.resume
+            self._executor, lambda: self._handle.resume()  # pylint: disable=unnecessary-lambda
         )
 
 
@@ -108,27 +108,14 @@ class TorrentSession:
         self.tasks = []
 
     async def add_fake_torrent(self):
-        dir = mkdtemp()
-        info, btih = self._create_fake(dir)
+        tmpdir = mkdtemp()
+        info, btih = _create_fake_torrent(tmpdir)
         flags = libtorrent.add_torrent_params_flags_t.flag_seed_mode
         handle = self._session.add_torrent({
-            'ti': info, 'save_path': dir, 'flags': flags
+            'ti': info, 'save_path': tmpdir, 'flags': flags
         })
         self._handles[btih] = TorrentHandle(self._loop, self._executor, handle)
         return btih
-
-    def _create_fake(self, dir):
-        # beware, that's just for testing
-        path = os.path.join(dir, 'tmp')
-        with open(path, 'wb') as myfile:
-            size = myfile.write(b'0' * 40 * 1024 * 1024)
-        fs = libtorrent.file_storage()
-        fs.add_file('tmp', size)
-        t = libtorrent.create_torrent(fs, 0, 4 * 1024 * 1024)
-        libtorrent.set_piece_hashes(t, dir)
-        info = libtorrent.torrent_info(t.generate())
-        btih = sha1(info.metadata()).hexdigest()
-        return info, btih
 
     async def bind(self, interface: str = '0.0.0.0', port: int = 10889):
         settings = {
@@ -214,6 +201,20 @@ class TorrentSession:
 
 def get_magnet_uri(btih):
     return f"magnet:?xt=urn:btih:{btih}"
+
+
+def _create_fake_torrent(tmpdir):
+    # beware, that's just for testing
+    path = os.path.join(tmpdir, 'tmp')
+    with open(path, 'wb') as myfile:
+        size = myfile.write(b'0' * 40 * 1024 * 1024)
+    file_storage = libtorrent.file_storage()
+    file_storage.add_file('tmp', size)
+    t = libtorrent.create_torrent(file_storage, 0, 4 * 1024 * 1024)
+    libtorrent.set_piece_hashes(t, tmpdir)
+    info = libtorrent.torrent_info(t.generate())
+    btih = sha1(info.metadata()).hexdigest()
+    return info, btih
 
 
 async def main():
