@@ -3,6 +3,7 @@ import itertools
 import json
 import time
 from functools import wraps
+from pylru import lrucache
 
 import aiohttp
 
@@ -42,6 +43,7 @@ class Daemon:
         self._height = None
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
+        self._block_hash_cache = lrucache(1000000)
 
     async def close(self):
         if self.connector:
@@ -219,8 +221,19 @@ class Daemon:
 
     async def block_hex_hashes(self, first, count):
         """Return the hex hashes of count block starting at height first."""
+        if first + count < (self.cached_height() or 0) - 200:
+            return await self._cached_block_hex_hashes(first, count)
         params_iterable = ((h, ) for h in range(first, first + count))
         return await self._send_vector('getblockhash', params_iterable)
+
+    async def _cached_block_hex_hashes(self, first, count):
+        """Return the hex hashes of count block starting at height first."""
+        cached = self._block_hash_cache.get((first, count))
+        if cached:
+            return cached
+        params_iterable = ((h, ) for h in range(first, first + count))
+        self._block_hash_cache[(first, count)] = await self._send_vector('getblockhash', params_iterable)
+        return self._block_hash_cache[(first, count)]
 
     async def deserialised_block(self, hex_hash):
         """Return the deserialised block with the given hex hash."""
