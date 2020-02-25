@@ -39,9 +39,10 @@ test:unit:
 
 test:datanetwork-integration:
   stage: test
+  image: ubuntu:18.04
   script:
     - apt-get update
-    - apt-get install -y libboost1.65-all-dev
+    - apt-get install -y libboost1.65-all-dev python3.7-dev
     - pip install tox-travis
     - tox -e datanetwork
 
