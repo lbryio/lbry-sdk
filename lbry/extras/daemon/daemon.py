@@ -1492,7 +1492,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
         balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=True
+            confirmations=confirmations, reserved_subtotals=True, read_only=True
         )
         return dict_values_to_lbc(balance)
 
@@ -1817,7 +1817,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
-        match = await self.ledger.db.get_address(address=address, accounts=[account])
+        match = await self.ledger.db.get_address(read_only=True, address=address, accounts=[account])
         if match is not None:
             return True
         return False
@@ -1853,7 +1853,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return paginate_rows(
             self.ledger.get_addresses,
             self.ledger.get_address_count,
-            page, page_size, **constraints
+            page, page_size, read_only=True, **constraints
         )
 
     @requires(WALLET_COMPONENT)
@@ -4153,8 +4153,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claims = account.get_txos
             claim_count = account.get_txo_count
         else:
-            claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts)
-            claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts)
+            claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts, read_only=True)
+            claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts, read_only=True)
         constraints = {'resolve': resolve, 'unspent': unspent, 'include_is_received': include_is_received}
         if is_received is True:
             constraints['is_received'] = True

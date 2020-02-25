@@ -71,6 +71,7 @@ class AddressManager:
 
     def _query_addresses(self, **constraints):
         return self.account.ledger.db.get_addresses(
+            read_only=constraints.pop("read_only", False),
             accounts=[self.account],
             chain=self.chain_number,
             **constraints
@@ -451,13 +452,14 @@ class Account:
     def get_public_key(self, chain: int, index: int) -> PubKey:
         return self.address_managers[chain].get_public_key(index)
 
-    def get_balance(self, confirmations: int = 0, include_claims=False, **constraints):
+    def get_balance(self, confirmations: int = 0, include_claims: bool = False,
+                    read_only: bool = False, **constraints):
         if not include_claims:
             constraints.update({'txo_type__in': (0, TXO_TYPES['purchase'])})
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.ledger.db.get_balance(accounts=[self], **constraints)
+        return self.ledger.db.get_balance(accounts=[self], read_only=read_only, **constraints)
 
     async def get_max_gap(self):
         change_gap = await self.change.get_max_gap()
@@ -561,9 +563,10 @@ class Account:
             if gap_changed:
                 self.wallet.save()
 
-    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
+    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False, read_only: bool = False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
-        get_total_balance = partial(self.get_balance, confirmations=confirmations, include_claims=True)
+        get_total_balance = partial(self.get_balance, read_only=read_only, confirmations=confirmations,
+                                    include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
             claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPES)

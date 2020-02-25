@@ -671,7 +671,8 @@ class Database(SQLiteMixin):
         constraints['is_reserved'] = False
         constraints['txoid__not_in'] = "SELECT txoid FROM txi"
 
-    async def get_txos(self, wallet=None, no_tx=False, unspent=False, include_is_received=False, **constraints):
+    async def get_txos(self, wallet=None, no_tx=False, unspent=False, include_is_received=False,
+                       read_only: bool = False, **constraints):
         include_is_received = include_is_received or 'is_received' in constraints
         if unspent:
             self.constrain_unspent(constraints)
@@ -687,7 +688,7 @@ class Database(SQLiteMixin):
                 where account_address.address=txo.address
             ), exists(select 1 from txi where txi.txoid=txo.txoid)
             """,
-            wallet=wallet, include_is_received=include_is_received, **constraints
+            wallet=wallet, include_is_received=include_is_received, read_only=read_only, **constraints
         )
         txos = []
         txs = {}
@@ -736,7 +737,8 @@ class Database(SQLiteMixin):
                 txo.claim_id: txo for txo in
                 (await self.get_channels(
                     wallet=wallet,
-                    claim_id__in=channel_ids
+                    claim_id__in=channel_ids,
+                    read_only=read_only
                 ))
             }
             for txo in txos:
@@ -756,18 +758,18 @@ class Database(SQLiteMixin):
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 
-    def get_utxos(self, **constraints):
-        return self.get_txos(unspent=True, **constraints)
+    def get_utxos(self, read_only: bool = False, **constraints):
+        return self.get_txos(unspent=True, read_only=read_only, **constraints)
 
     def get_utxo_count(self, **constraints):
         return self.get_txo_count(unspent=True, **constraints)
 
-    async def get_balance(self, wallet=None, accounts=None, **constraints):
+    async def get_balance(self, wallet=None, accounts=None, read_only: bool = False, **constraints):
         assert wallet or accounts, \
             "'wallet' or 'accounts' constraints required to calculate balance"
         constraints['accounts'] = accounts or wallet.accounts
         self.constrain_unspent(constraints)
-        balance = await self.select_txos('SUM(amount)', **constraints)
+        balance = await self.select_txos('SUM(amount)', read_only=read_only, **constraints)
         return balance[0][0] or 0
 
     async def select_addresses(self, cols, read_only: bool = False, **constraints):
@@ -794,8 +796,8 @@ class Database(SQLiteMixin):
         count = await self.select_addresses('count(*)', read_only=read_only, **constraints)
         return count[0][0]
 
-    async def get_address(self, **constraints):
-        addresses = await self.get_addresses(limit=1, **constraints)
+    async def get_address(self, read_only: bool = False, **constraints):
+        addresses = await self.get_addresses(read_only=read_only, limit=1, **constraints)
         if addresses:
             return addresses[0]
 
@@ -859,9 +861,9 @@ class Database(SQLiteMixin):
         else:
             constraints['txo_type__in'] = CLAIM_TYPES
 
-    async def get_claims(self, **constraints) -> List[Output]:
+    async def get_claims(self, read_only: bool = False, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
-        return await self.get_utxos(**constraints)
+        return await self.get_utxos(read_only=read_only, **constraints)
 
     def get_claim_count(self, **constraints):
         self.constrain_claims(constraints)
@@ -871,9 +873,9 @@ class Database(SQLiteMixin):
     def constrain_streams(constraints):
         constraints['txo_type'] = TXO_TYPES['stream']
 
-    def get_streams(self, **constraints):
+    def get_streams(self, read_only: bool = False, **constraints):
         self.constrain_streams(constraints)
-        return self.get_claims(**constraints)
+        return self.get_claims(read_only=read_only, **constraints)
 
     def get_stream_count(self, **constraints):
         self.constrain_streams(constraints)
