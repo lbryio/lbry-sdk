@@ -44,6 +44,7 @@ class Daemon:
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
         self._block_hash_cache = lrucache(1000000)
+        self._block_cache = lrucache(100000)
 
     async def close(self):
         if self.connector:
@@ -237,7 +238,9 @@ class Daemon:
 
     async def deserialised_block(self, hex_hash):
         """Return the deserialised block with the given hex hash."""
-        return await self._send_single('getblock', (hex_hash, True))
+        if not self._block_cache.get(hex_hash):
+            self._block_cache[hex_hash] = await self._send_single('getblock', (hex_hash, True))
+        return self._block_cache[hex_hash]
 
     async def raw_blocks(self, hex_hashes):
         """Return the raw binary blocks with the given hex hashes."""
