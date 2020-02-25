@@ -12,6 +12,7 @@ import itertools
 import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
+from concurrent.futures.thread import ThreadPoolExecutor
 
 import attr
 
@@ -105,6 +106,7 @@ class MemPool:
         # Prevents mempool refreshes during fee histogram calculation
         self.lock = asyncio.Lock()
         self.wakeup = asyncio.Event()
+        self.executor = ThreadPoolExecutor(4)
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
@@ -121,12 +123,15 @@ class MemPool:
             await synchronized_event.wait()
 
     async def _refresh_histogram(self, synchronized_event):
-        while True:
-            await synchronized_event.wait()
-            async with self.lock:
-                # Threaded as can be expensive
-                await asyncio.get_event_loop().run_in_executor(None, self._update_histogram, 100_000)
-            await asyncio.sleep(self.coin.MEMPOOL_HISTOGRAM_REFRESH_SECS)
+        try:
+            while True:
+                await synchronized_event.wait()
+                async with self.lock:
+                    # Threaded as can be expensive
+                    await asyncio.get_event_loop().run_in_executor(self.executor, self._update_histogram, 100_000)
+                await asyncio.sleep(self.coin.MEMPOOL_HISTOGRAM_REFRESH_SECS)
+        finally:
+            self.executor.shutdown(wait=True)
 
     def _update_histogram(self, bin_size):
         # Build a histogram by fee rate
@@ -289,7 +294,7 @@ class MemPool:
             return txs
 
         # Thread this potentially slow operation so as not to block
-        tx_map = await asyncio.get_event_loop().run_in_executor(None, deserialize_txs)
+        tx_map = await asyncio.get_event_loop().run_in_executor(self.executor, deserialize_txs)
 
         # Determine all prevouts not in the mempool, and fetch the
         # UTXO information from the database.  Failed prevout lookups
