@@ -124,10 +124,17 @@ class FileManager:
                 raise ResolveError(f"stream for {existing[0].claim_id} collides with existing download {txo.claim_id}")
             if existing:
                 log.info("claim contains a metadata only update to a stream we have")
-                await self.storage.save_content_claim(
-                    existing[0].stream_hash, outpoint
-                )
-                await source_manager._update_content_claim(existing[0])
+                if claim.stream.source.bt_infohash:
+                    await self.storage.save_torrent_content_claim(
+                        existing[0].identifier, outpoint, existing[0].torrent_length, existing[0].torrent_name
+                    )
+                    claim_info = await self.storage.get_content_claim_for_torrent(existing[0].identifier)
+                    existing[0].set_claim(claim_info, claim)
+                else:
+                    await self.storage.save_content_claim(
+                        existing[0].stream_hash, outpoint
+                    )
+                    await source_manager._update_content_claim(existing[0])
                 updated_stream = existing[0]
             else:
                 existing_for_claim_id = self.get_filtered(claim_id=txo.claim_id)

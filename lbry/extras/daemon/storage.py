@@ -805,10 +805,10 @@ class SQLiteStorage(SQLiteMixin):
     async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
         def _save_torrent(transaction):
             transaction.execute(
-                "insert into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
+                "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
             ).fetchall()
             transaction.execute(
-                "insert into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
+                "insert or replace into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
             ).fetchall()
         await self.db.run(_save_torrent)
         # update corresponding ManagedEncryptedFileDownloader object
