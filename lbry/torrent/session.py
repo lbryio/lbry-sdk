@@ -64,6 +64,19 @@ class TorrentHandle:
         self.total_wanted_done = 0
         self.name = ''
         self.tasks = []
+        self.torrent_file: Optional[libtorrent.torrent_info] = None
+        self._base_path = None
+
+    @property
+    def largest_file(self) -> Optional[str]:
+        if not self.torrent_file:
+            return None
+        largest_size, path = 0, None
+        for file_num in range(self.torrent_file.num_files()):
+            if self.torrent_file.file_size(file_num) > largest_size:
+                largest_size = self.torrent_file.file_size(file_num)
+                path = self.torrent_file.at(file_num).path
+        return os.path.join(self._base_path, path)
 
     def stop_tasks(self):
         while self.tasks:
@@ -79,6 +92,8 @@ class TorrentHandle:
             if not self.metadata_completed.is_set():
                 self.metadata_completed.set()
                 log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
+                self.torrent_file = self._handle.get_torrent_info().files()
+                self._base_path = status.save_path
         if not status.is_seeding:
             log.debug('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s',
                       status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
@@ -177,6 +192,9 @@ class TorrentSession:
             params['save_path'] = download_directory
         handle = self._handles[btih] = TorrentHandle(self._loop, self._executor, self._session.add_torrent(params))
         handle._handle.force_dht_announce()
+
+    def full_path(self, btih):
+        return self._handles[btih].largest_file
 
     async def add_torrent(self, btih, download_path):
         await self._loop.run_in_executor(

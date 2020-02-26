@@ -42,6 +42,10 @@ class TorrentSource(ManagedDownloadSource):
                          rowid, content_fee, analytics_manager, added_on)
         self.torrent_session = torrent_session
 
+    @property
+    def full_path(self) -> Optional[str]:
+        return self.torrent_session.full_path(self.identifier)
+
     async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
         await self.torrent_session.add_torrent(self.identifier, self.download_directory)
 
