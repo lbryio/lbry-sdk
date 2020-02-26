@@ -283,4 +283,4 @@ class FileManager:
 
     async def delete(self, source: ManagedDownloadSource, delete_file=False):
         for manager in self.source_managers.values():
-            return await manager.delete(source, delete_file)
+            await manager.delete(source, delete_file)

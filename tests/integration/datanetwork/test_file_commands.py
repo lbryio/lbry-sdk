@@ -53,6 +53,9 @@ class FileCommands(CommandTestCase):
         self.assertIn(new_btih, self.client_session._handles)
         self.assertNotIn(btih, self.client_session._handles)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
+        self.assertNotIn(new_btih, self.client_session._handles)
 
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []

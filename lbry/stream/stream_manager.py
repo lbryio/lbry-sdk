@@ -231,12 +231,14 @@ class StreamManager(SourceManager):
         return stream
 
     async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
-        if source.sd_hash in self.running_reflector_uploads:
-            self.running_reflector_uploads[source.sd_hash].cancel()
+        if not isinstance(source, ManagedStream):
+            return
+        if source.identifier in self.running_reflector_uploads:
+            self.running_reflector_uploads[source.identifier].cancel()
         source.stop_tasks()
-        if source.sd_hash in self.streams:
-            del self.streams[source.sd_hash]
-        blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
+        if source.identifier in self.streams:
+            del self.streams[source.identifier]
+        blob_hashes = [source.identifier] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
         await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
         await self.storage.delete_stream(source.descriptor)
         if delete_file and source.output_file_exists:

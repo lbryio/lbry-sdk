@@ -63,6 +63,11 @@ class TorrentHandle:
         self.size = 0
         self.total_wanted_done = 0
         self.name = ''
+        self.tasks = []
+
+    def stop_tasks(self):
+        while self.tasks:
+            self.tasks.pop().cancel()
 
     def _show_status(self):
         # fixme: cleanup
@@ -177,12 +182,13 @@ class TorrentSession:
         await self._loop.run_in_executor(
             self._executor, self._add_torrent, btih, download_path
         )
-        self._loop.create_task(self._handles[btih].status_loop())
+        self._handles[btih].tasks.append(self._loop.create_task(self._handles[btih].status_loop()))
         await self._handles[btih].metadata_completed.wait()
 
     def remove_torrent(self, btih, remove_files=False):
         if btih in self._handles:
             handle = self._handles[btih]
+            handle.stop_tasks()
             self._session.remove_torrent(handle._handle, 1 if remove_files else 0)
             self._handles.pop(btih)
 
