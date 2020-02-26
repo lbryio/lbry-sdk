@@ -10,32 +10,48 @@ from lbry.wallet import Transaction
 
 
 class FileCommands(CommandTestCase):
-    async def initialize_torrent(self):
-        self.seeder_session = TorrentSession(self.loop, None)
-        self.addCleanup(self.seeder_session.stop)
-        await self.seeder_session.bind(port=4040)
-        self.btih = await self.seeder_session.add_fake_torrent()
+    async def initialize_torrent(self, tx_to_update=None):
+        if not hasattr(self, 'seeder_session'):
+            self.seeder_session = TorrentSession(self.loop, None)
+            self.addCleanup(self.seeder_session.stop)
+            await self.seeder_session.bind(port=4040)
+        btih = await self.seeder_session.add_fake_torrent()
         address = await self.account.receiving.get_or_create_usable_address()
-        claim = Claim()
-        claim.stream.update(bt_infohash=self.btih)
-        tx = await Transaction.claim_create(
-            'torrent', claim, 1, address, [self.account], self.account)
+        if not tx_to_update:
+            claim = Claim()
+            claim.stream.update(bt_infohash=btih)
+            tx = await Transaction.claim_create(
+                'torrent', claim, 1, address, [self.account], self.account
+            )
+        else:
+            claim = tx_to_update.outputs[0].claim
+            claim.stream.update(bt_infohash=btih)
+            tx = await Transaction.claim_update(
+                tx_to_update.outputs[0], claim, 1, address, [self.account], self.account
+            )
         await tx.sign([self.account])
         await self.broadcast(tx)
         await self.confirm_tx(tx.id)
-        client_session = TorrentSession(self.loop, None)
-        self.daemon.file_manager.source_managers['torrent'] = TorrentManager(
-            self.loop, self.daemon.conf, client_session, self.daemon.storage, self.daemon.analytics_manager
-        )
-        await self.daemon.file_manager.source_managers['torrent'].start()
-        await client_session.bind(port=4041)
-        client_session._session.add_dht_node(('localhost', 4040))
+        self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
+        self.client_session._session.add_dht_node(('localhost', 4040))
+        return tx, btih
 
     async def test_download_torrent(self):
-        await self.initialize_torrent()
+        tx, btih = await self.initialize_torrent()
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        # second call, see its there and move on
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
+        self.assertIn(btih, self.client_session._handles)
+        tx, new_btih = await self.initialize_torrent(tx)
+        self.assertNotEqual(btih, new_btih)
+        # claim now points to another torrent, update to it
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertIn(new_btih, self.client_session._handles)
+        self.assertNotIn(btih, self.client_session._handles)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
     async def create_streams_in_range(self, *args, **kwargs):

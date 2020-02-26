@@ -2,6 +2,7 @@ import asyncio
 import binascii
 import os
 import logging
+import random
 from hashlib import sha1
 from tempfile import mkdtemp
 from typing import Optional
@@ -179,10 +180,10 @@ class TorrentSession:
         self._loop.create_task(self._handles[btih].status_loop())
         await self._handles[btih].metadata_completed.wait()
 
-    async def remove_torrent(self, btih, remove_files=False):
+    def remove_torrent(self, btih, remove_files=False):
         if btih in self._handles:
             handle = self._handles[btih]
-            self._session.remove_torrent(handle, 1 if remove_files else 0)
+            self._session.remove_torrent(handle._handle, 1 if remove_files else 0)
             self._handles.pop(btih)
 
     async def save_file(self, btih, download_directory):
@@ -207,7 +208,7 @@ def _create_fake_torrent(tmpdir):
     # beware, that's just for testing
     path = os.path.join(tmpdir, 'tmp')
     with open(path, 'wb') as myfile:
-        size = myfile.write(b'0' * 40 * 1024 * 1024)
+        size = myfile.write(bytes([random.randint(0, 255) for _ in range(40)]) * 1024)
     file_storage = libtorrent.file_storage()
     file_storage.add_file('tmp', size)
     t = libtorrent.create_torrent(file_storage, 0, 4 * 1024 * 1024)
