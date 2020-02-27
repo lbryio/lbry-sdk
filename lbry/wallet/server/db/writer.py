@@ -136,9 +136,9 @@ class SQLDB:
         create unique index if not exists claim_effective_amount_idx on claim (effective_amount, claim_hash);
 
         -- claim_type filter + order by
-        create unique index if not exists claim_type_release_idx on claim (claim_type, release_time, claim_hash);
-        create unique index if not exists claim_type_trending_idx on claim (claim_type, trending_group, trending_mixed, claim_hash);
-        create unique index if not exists claim_type_effective_amount_idx on claim (claim_type, effective_amount, claim_hash);
+        create unique index if not exists claim_type_release_idx on claim (release_time, claim_type, claim_hash);
+        create unique index if not exists claim_type_trending_idx on claim (trending_group, trending_mixed, claim_type, claim_hash);
+        create unique index if not exists claim_type_effective_amount_idx on claim (effective_amount, claim_type, claim_hash);
 
         -- stream_type filter + order by
         create unique index if not exists stream_type_release_idx on claim (stream_type, release_time, claim_hash);
