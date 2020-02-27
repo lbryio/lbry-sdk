@@ -4584,7 +4584,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             comment_create  (<comment> | --comment=<comment>)
                             (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)
-                            [--channel_id=<channel_id>] [--channel_name=<channel_name>]
+                            (--channel_id=<channel_id> | --channel_name=<channel_name>)
                             [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
         Options:
@@ -4612,23 +4612,23 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        channel = await self.get_channel_or_error(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True
+        )
+
         comment_body = {
             'comment': comment.strip(),
             'claim_id': claim_id,
             'parent_id': parent_id,
+            'channel_id': channel.claim_id,
+            'channel_name': channel.claim_name,
         }
-        channel = await self.get_channel_or_none(
-            wallet, channel_account_id, channel_id, channel_name, for_signing=True
-        )
-        if channel:
-            comment_body.update({
-                'channel_id': channel.claim_id,
-                'channel_name': channel.claim_name,
-            })
-            comment_client.sign_comment(comment_body, channel)
+        comment_client.sign_comment(comment_body, channel)
+
         response = await comment_client.jsonrpc_post(self.conf.comment_server, 'create_comment', comment_body)
-        if 'signature' in response:
-            response['is_claim_signature_valid'] = comment_client.is_comment_signed_by_channel(response, channel)
+        response.update({
+            'is_claim_signature_valid': comment_client.is_comment_signed_by_channel(response, channel)
+        })
         return response
 
     @requires(WALLET_COMPONENT)

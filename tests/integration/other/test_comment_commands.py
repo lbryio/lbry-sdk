@@ -278,7 +278,9 @@ class CommentCommands(CommandTestCase):
         channel = (await self.channel_create('@JimmyBuffett'))['outputs'][0]
         stream = (await self.stream_create())['outputs'][0]
 
-        self.assertEqual(0, len((await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']))
+        empty_list = await self.daemon.jsonrpc_comment_list(stream['claim_id'])
+        self.assertEqual(0, len(empty_list['items']))
+
         comment = await self.daemon.jsonrpc_comment_create(
             claim_id=stream['claim_id'],
             channel_id=channel['claim_id'],
@@ -296,66 +298,41 @@ class CommentCommands(CommandTestCase):
             comment='Let\'s all go to Margaritaville',
             parent_id=comments[0]['comment_id']
         )
+
         comments = (await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']
         self.assertEqual(2, len(comments))
         self.assertEqual(comments[0]['channel_id'], channel2['claim_id'])
         self.assertEqual(comments[0]['parent_id'], comments[1]['comment_id'])
 
-        comment = await self.daemon.jsonrpc_comment_create(
-            claim_id=stream['claim_id'],
-            comment='Anonymous comment'
-        )
-        comments = (await self.daemon.jsonrpc_comment_list(stream['claim_id']))['items']
-        self.assertEqual(comment['comment_id'], comments[0]['comment_id'])
-
-    async def test02_unsigned_comment_list(self):
-        stream = (await self.stream_create())['outputs'][0]
-        comments = []
-        num_items = 28
-        for i in range(num_items):
-            comment = await self.daemon.jsonrpc_comment_create(
-                comment=f'{i}',
-                claim_id=stream['claim_id'],
-            )
-            self.assertIn('comment_id', comment)
-            comments.append(comment)
-        list_fields = ['items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages']
-        comment_list = await self.daemon.jsonrpc_comment_list(stream['claim_id'])
-        for field in list_fields:
-            self.assertIn(field, comment_list)
-        self.assertEqual(comment_list['total_items'], num_items)
-        for comment in comment_list['items']:
-            self.assertEqual(comment['comment'], comments.pop()['comment'])
-
-        signed_comment_list = await self.daemon.jsonrpc_comment_list(
-            claim_id=stream['claim_id'],
-            is_channel_signature_valid=True
-        )
-        self.assertIs(len(signed_comment_list['items']), 0)
-
     async def test03_signed_comments_list(self):
         channel = (await self.channel_create('@JimmyBuffett'))['outputs'][0]
         stream = (await self.stream_create())['outputs'][0]
         comments = []
+
         for i in range(28):
             comment = await self.daemon.jsonrpc_comment_create(
                 comment=f'{i}',
                 claim_id=stream['claim_id'],
                 channel_id=channel['claim_id'],
             )
-            self.assertIn('comment_id', comment)
             comments.append(comment)
-        list_fields = ['items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages']
+            self.assertIn('comment_id', comment)
+
         comment_list = await self.daemon.jsonrpc_comment_list(
             claim_id=stream['claim_id']
         )
-        for field in list_fields:
-            self.assertIn(field, comment_list)
+
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(comment_list)
+        )
+
         self.assertIs(comment_list['page_size'], 50)
         self.assertIs(comment_list['page'], 1)
         self.assertIs(comment_list['total_items'], 28)
         for comment in comment_list['items']:
-            self.assertEqual(comment['comment'], comments.pop()['comment'])
+            comment_temp = comments.pop()
+            self.assertEqual(comment['comment'], comment_temp['comment'])
 
         signed_comment_list = await self.daemon.jsonrpc_comment_list(
             claim_id=stream['claim_id'],
@@ -366,12 +343,14 @@ class CommentCommands(CommandTestCase):
     async def test04_comment_abandons(self):
         rswanson = (await self.channel_create('@RonSwanson'))['outputs'][0]
         stream = (await self.stream_create('Pawnee_Tow_Hall_of_Fame_by_Leslie_Knope'))['outputs'][0]
+
         comment = await self.daemon.jsonrpc_comment_create(
             comment='KNOPE! WHAT DID I TELL YOU ABOUT PUTTING MY INFORMATION UP LIKE THAT',
             claim_id=stream['claim_id'],
             channel_id=rswanson['claim_id']
         )
         self.assertIn('signature', comment)
+
         abandoned = await self.daemon.jsonrpc_comment_abandon(comment['comment_id'])
         self.assertIn(comment['comment_id'], abandoned)
         self.assertTrue(abandoned[comment['comment_id']]['abandoned'])
@@ -436,12 +415,12 @@ class CommentCommands(CommandTestCase):
         for item in items_visible + items_hidden:
             self.assertIn(item, comments['items'])
 
-    async def test06_comment_list_test(self):
+    async def test06_comment_list(self):
         moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
         bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
-        moth_id = moth['claim_id']
-        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth_id)
+        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth['claim_id'])
         claim_id = stream['outputs'][0]['claim_id']
+
         hidden_comment = await self.daemon.jsonrpc_comment_create(
             comment='Who on earth would want to sit around on a lamp all day',
             claim_id=claim_id,
@@ -451,44 +430,48 @@ class CommentCommands(CommandTestCase):
         owner_comment = await self.daemon.jsonrpc_comment_create(
             comment='Go away you yellow freak',
             claim_id=claim_id,
-            channel_id=moth_id,
+            channel_id=moth['claim_id'],
         )
         other_comment = await self.daemon.jsonrpc_comment_create(
             comment='I got my swim trunks and my flippy-floppies',
             claim_id=claim_id,
             channel_id=bee['claim_id']
         )
-        anon_comment = await self.daemon.jsonrpc_comment_create(
-            claim_id=claim_id,
-            comment='Anonymous comment'
-        )
-        all_comments = [anon_comment, other_comment, owner_comment, hidden_comment]
-        list_fields = ['items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages']
+        all_comments = [other_comment, owner_comment, hidden_comment]
+
         normal_list = await self.daemon.jsonrpc_comment_list(claim_id)
-        for field in list_fields:
-            self.assertIn(field, normal_list)
-        self.assertEqual(normal_list['total_items'], 4)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(normal_list)
+        )
+        self.assertEqual(normal_list['total_items'], 3)
         self.assertTrue(normal_list['has_hidden_comments'])
         for i, cmnt in enumerate(all_comments):
             self.assertEqual(cmnt['comment_id'], normal_list['items'][i]['comment_id'])
 
         hidden = await self.daemon.jsonrpc_comment_list(claim_id, hidden=True)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(hidden)
+        )
         self.assertTrue(hidden['has_hidden_comments'])
-        for field in list_fields:
-            self.assertIn(field, hidden)
         self.assertEqual(hidden['total_items'], 1)
 
         visible = await self.daemon.jsonrpc_comment_list(claim_id, visible=True)
-        for field in list_fields:
-            self.assertIn(field, visible)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(visible)
+        )
         self.assertTrue(visible['has_hidden_comments'])
         self.assertEqual(visible['total_items'], normal_list['total_items'] - hidden['total_items'])
 
         valid_list = await self.daemon.jsonrpc_comment_list(claim_id, is_channel_signature_valid=True)
-        for field in list_fields:
-            self.assertIn(field, valid_list)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(valid_list)
+        )
         self.assertTrue(visible['has_hidden_comments'])
-        self.assertEqual(len(valid_list['items']), len(normal_list['items']) - 1)
+        self.assertEqual(len(valid_list['items']), len(normal_list['items']))
 
     async def test07_edit_comments(self):
         luda = (await self.channel_create('@Ludacris'))['outputs'][0]
@@ -536,19 +519,4 @@ class CommentCommands(CommandTestCase):
             await self.daemon.jsonrpc_comment_update(
                 comment='If you see it and you mean then you know you have to go',
                 comment_id=original_cid
-            )
-
-        # editing an anonymous comment
-        anon_comment = await self.daemon.jsonrpc_comment_create(
-            comment='fast and furiouuuuuus',
-            claim_id=claim_id
-        )
-
-        anon_cid = anon_comment.get('comment_id')
-        self.assertIsNotNone(anon_cid)
-
-        with self.assertRaises(ValueError):
-            await self.daemon.jsonrpc_comment_update(
-                comment='drift drift drift',
-                comment_id=anon_cid
             )
