@@ -63,6 +63,10 @@ class TorrentSource(ManagedDownloadSource):
         return self.torrent_session.get_size(self.identifier)
 
     @property
+    def written_bytes(self):
+        return self.torrent_session.get_downloaded(self.identifier)
+
+    @property
     def torrent_name(self):
         return self.torrent_session.get_name(self.identifier)
 
