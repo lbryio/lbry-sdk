@@ -6,8 +6,8 @@ import asyncio
 import struct
 from contextvars import ContextVar
 from concurrent.futures import ProcessPoolExecutor
-from torba.client.bcd_data_stream import BCDataStream
-from torba.client.hash import double_sha256
+from lbry.wallet.bcd_data_stream import BCDataStream
+from lbry.crypto.hash import double_sha256
 from lbry.wallet.transaction import Transaction
 from binascii import hexlify
 
@@ -49,10 +49,11 @@ def parse_header(header):
 
 def parse_txs(stream):
     tx_count = stream.read_compact_size()
-    return [Transaction.from_stream(i, stream) for i in range(tx_count)]
+    return [Transaction(position=i)._deserialize(stream) for i in range(tx_count)]
 
 
 def process_file(file_path):
+    print(f'started: {file_path}')
     sql = db.get()
     stream = BCDataStream()
     stream.data = open(file_path, 'rb')
@@ -85,6 +86,8 @@ def process_file(file_path):
                 except:
                     pass
         blocks.append((header['block_hash'], header['prev_block_hash'], 0 if is_first_block else None))
+
+    print(f'inserting sql in {file_path}')
 
     sql.execute('begin;')
     sql.executemany("insert into block values (?, ?, ?)", blocks)
@@ -265,7 +268,7 @@ async def main():
         total_txs += txs
     print(f'blocks: {total_blocks} (txs: {total_txs}) in {time.perf_counter()-start}s')
     print('cleaning chain: set block heights and delete forks')
-    clean_chain()
+    #clean_chain()
     print(f'done in {time.perf_counter()-start}s')
     executor.shutdown(True)
 

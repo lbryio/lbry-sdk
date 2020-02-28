@@ -56,8 +56,12 @@ class Process(asyncio.SubprocessProtocol):
 
 class Lbrycrd:
 
-    def __init__(self, path=None):
-        self.data_path = path
+    def __init__(self, path, regtest=False):
+        self.data_dir = self.actual_data_dir = path
+        self.regtest = regtest
+        if regtest:
+            self.actual_data_dir = os.path.join(self.data_dir, 'regtest')
+        self.blocks_dir = os.path.join(self.actual_data_dir, 'blocks')
         self.bin_dir = os.path.join(os.path.dirname(__file__), 'bin')
         self.daemon_bin = os.path.join(self.bin_dir, 'lbrycrdd')
         self.cli_bin = os.path.join(self.bin_dir, 'lbrycrd-cli')
@@ -71,13 +75,15 @@ class Lbrycrd:
         self.session: Optional[aiohttp.ClientSession] = None
         self.subscribed = False
         self.subscription: Optional[asyncio.Task] = None
+        self.subscription_url = 'tcp://127.0.0.1:29000'
+        self.default_generate_address = None
         self._on_block_controller = StreamController()
         self.on_block = self._on_block_controller.stream
         self.on_block.listen(lambda e: log.info('%s %s', hexlify(e['hash']), e['msg']))
 
     @classmethod
-    def regtest(cls):
-        return cls(tempfile.mkdtemp())
+    def temp_regtest(cls):
+        return cls(tempfile.mkdtemp(), True)
 
     @property
     def rpc_url(self):
@@ -125,18 +131,26 @@ class Lbrycrd:
     async def ensure(self):
         return self.exists or await self.download()
 
+    def get_start_command(self, *args):
+        if self.regtest:
+            args += '-regtest',
+        return (
+            self.daemon_bin,
+            f'-datadir={self.data_dir}',
+            f'-port={self.peerport}',
+            f'-rpcport={self.rpcport}',
+            f'-rpcuser={self.rpcuser}',
+            f'-rpcpassword={self.rpcpassword}',
+            f'-zmqpubhashblock={self.subscription_url}',
+            '-server', '-printtoconsole',
+            *args
+        )
+
     async def start(self, *args):
         loop = asyncio.get_event_loop()
-        command = [
-            self.daemon_bin,
-            f'-datadir={self.data_path}', '-printtoconsole', '-regtest', '-server',
-            f'-rpcuser={self.rpcuser}', f'-rpcpassword={self.rpcpassword}', f'-rpcport={self.rpcport}',
-            f'-port={self.peerport}', '-zmqpubhashblock=tcp://127.0.0.1:29000', *args
-        ]
+        command = self.get_start_command(*args)
         log.info(' '.join(command))
-        self.transport, self.protocol = await loop.subprocess_exec(
-            Process, *command
-        )
+        self.transport, self.protocol = await loop.subprocess_exec(Process, *command)
         await self.protocol.ready.wait()
         assert not self.protocol.stopped.is_set()
         self.session = aiohttp.ClientSession()
@@ -146,14 +160,14 @@ class Lbrycrd:
             await self.session.close()
             self.transport.terminate()
             await self.protocol.stopped.wait()
-            self.transport.close()
+            assert self.transport.get_returncode() == 0, "lbrycrd daemon exit with error"
         finally:
             if cleanup:
                 await self.cleanup()
 
     async def cleanup(self):
         await asyncio.get_running_loop().run_in_executor(
-            None, shutil.rmtree, self.data_path, True
+            None, shutil.rmtree, self.data_dir, True
         )
 
     def subscribe(self):
@@ -161,7 +175,7 @@ class Lbrycrd:
             self.subscribed = True
             ctx = zmq.asyncio.Context.instance()
             sock = ctx.socket(zmq.SUB)
-            sock.connect("tcp://127.0.0.1:29000")
+            sock.connect(self.subscription_url)
             sock.subscribe("hashblock")
             self.subscription = asyncio.create_task(self.subscription_handler(sock))
 
@@ -202,7 +216,24 @@ class Lbrycrd:
                 raise Exception(result['error'])
 
     async def generate(self, blocks):
-        return await self.rpc("generate", [blocks])
+        if self.default_generate_address is None:
+            self.default_generate_address = await self.get_new_address()
+        return await self.generate_to_address(blocks, self.default_generate_address)
+
+    async def get_new_address(self):
+        return await self.rpc("getnewaddress")
+
+    async def generate_to_address(self, blocks, address):
+        return await self.rpc("generatetoaddress", [blocks, address])
+
+    async def fund_raw_transaction(self, tx):
+        return await self.rpc("fundrawtransaction", [tx])
+
+    async def sign_raw_transaction_with_wallet(self, tx):
+        return await self.rpc("signrawtransactionwithwallet", [tx])
+
+    async def send_raw_transaction(self, tx):
+        return await self.rpc("sendrawtransaction", [tx])
 
     async def claim_name(self, name, data, amount):
         return await self.rpc("claimname", [name, data, amount])

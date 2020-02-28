@@ -15,8 +15,7 @@ class Block:
         'bits', 'nonce', 'txs'
     )
 
-    def __init__(self, stream):
-        stream.read_uint32()  # block size
+    def __init__(self, stream: BCDataStream):
         header = stream.data.read(112)
         version, = struct.unpack('<I', header[:4])
         timestamp, bits, nonce = struct.unpack('<III', header[100:112])
@@ -37,11 +36,3 @@ class Block:
     @property
     def is_first_block(self):
         return self.prev_block_hash == ZERO_BLOCK
-
-
-def read_blocks(block_file):
-    with open(block_file, 'rb') as fp:
-        stream = BCDataStream(fp=fp)
-        #while stream.read_uint32() == 4054508794:
-        while stream.read_uint32() == 3517637882:
-            yield Block(stream)
