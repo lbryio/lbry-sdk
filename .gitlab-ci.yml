@@ -39,12 +39,11 @@ test:unit:
 
 test:datanetwork-integration:
   stage: test
-  image: ubuntu:18.04
   script:
     - apt-get update
-    - apt-get install -y libboost1.65-all-dev python3.7-dev
-    - pip install tox-travis
-    - tox -e datanetwork
+    - apt-get install -y libboost-all-dev
+    - python3.7 -m pip install tox-travis
+    - LIBTORRENT_URL=https://s3.amazonaws.com/files.lbry.io/python_libtorrent-1.2.4-py2.py3-none-any.whl tox -e datanetwork --recreate
 
 test:blockchain-integration:
   stage: test
@@ -87,7 +86,7 @@ test:json-api:
 
 build:linux:
   extends: .build
-  image: ubuntu:16.04
+  image: ubuntu:18.04
   variables:
     OS: linux
   before_script:
