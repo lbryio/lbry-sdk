@@ -1,6 +1,7 @@
 import asyncio
 import binascii
 import logging
+import os
 import typing
 from typing import Optional
 from aiohttp.web import Request
@@ -44,7 +45,9 @@ class TorrentSource(ManagedDownloadSource):
 
     @property
     def full_path(self) -> Optional[str]:
-        return self.torrent_session.full_path(self.identifier)
+        full_path = self.torrent_session.full_path(self.identifier)
+        self.download_directory = os.path.dirname(full_path)
+        return full_path
 
     async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
         await self.torrent_session.add_torrent(self.identifier, self.download_directory)
@@ -72,7 +75,7 @@ class TorrentSource(ManagedDownloadSource):
 
     @property
     def completed(self):
-        return self.torrent_session.get_downloaded(self.identifier) == self.torrent_length
+        return self.torrent_session.is_completed(self.identifier)
 
 
 class TorrentManager(SourceManager):
