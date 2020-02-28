@@ -40,8 +40,6 @@ log = logging.getLogger(__name__)
 
 DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
         libtorrent.add_torrent_params_flags_t.flag_auto_managed
-        | libtorrent.add_torrent_params_flags_t.flag_paused
-        | libtorrent.add_torrent_params_flags_t.flag_duplicate_is_error
         | libtorrent.add_torrent_params_flags_t.flag_update_subscribe
 )
 
@@ -104,7 +102,6 @@ class TorrentHandle:
                 self.torrent_file = self._handle.get_torrent_info().files()
                 self._base_path = status.save_path
             first_piece = self.torrent_file.at(self.largest_file_index).offset
-            self._handle.read_piece(first_piece)
             if not self.started.is_set():
                 if self._handle.have_piece(first_piece):
                     self.started.set()
@@ -205,7 +202,7 @@ class TorrentSession:
         )
 
     def _add_torrent(self, btih: str, download_directory: Optional[str]):
-        params = {'info_hash': binascii.unhexlify(btih.encode())}
+        params = {'info_hash': binascii.unhexlify(btih.encode()), 'flags': DEFAULT_FLAGS}
         if download_directory:
             params['save_path'] = download_directory
         handle = self._session.add_torrent(params)
