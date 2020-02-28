@@ -278,7 +278,7 @@ class JSONResponseEncoder(JSONEncoder):
         best_height = self.ledger.headers.height
         is_stream = hasattr(managed_stream, 'stream_hash')
         return {
-            'streaming_url': managed_stream.stream_url if is_stream else None,
+            'streaming_url': managed_stream.stream_url if is_stream else f'file://{managed_stream.full_path}',
             'completed': managed_stream.completed,
             'file_name': managed_stream.file_name if output_exists else None,
             'download_directory': managed_stream.download_directory if output_exists else None,

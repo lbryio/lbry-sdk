@@ -58,25 +58,32 @@ class TorrentHandle:
         self._loop = loop
         self._executor = executor
         self._handle: libtorrent.torrent_handle = handle
+        self.started = asyncio.Event(loop=loop)
         self.finished = asyncio.Event(loop=loop)
         self.metadata_completed = asyncio.Event(loop=loop)
         self.size = 0
         self.total_wanted_done = 0
         self.name = ''
         self.tasks = []
-        self.torrent_file: Optional[libtorrent.torrent_info] = None
+        self.torrent_file: Optional[libtorrent.file_storage] = None
         self._base_path = None
+        self._handle.set_sequential_download(1)
 
     @property
     def largest_file(self) -> Optional[str]:
         if not self.torrent_file:
             return None
-        largest_size, path = 0, None
+        index = self.largest_file_index
+        return os.path.join(self._base_path, self.torrent_file.at(index).path)
+
+    @property
+    def largest_file_index(self):
+        largest_size, index = 0, 0
         for file_num in range(self.torrent_file.num_files()):
             if self.torrent_file.file_size(file_num) > largest_size:
                 largest_size = self.torrent_file.file_size(file_num)
-                path = self.torrent_file.at(file_num).path
-        return os.path.join(self._base_path, path)
+                index = file_num
+        return index
 
     def stop_tasks(self):
         while self.tasks:
@@ -84,6 +91,8 @@ class TorrentHandle:
 
     def _show_status(self):
         # fixme: cleanup
+        if not self._handle.is_valid():
+            return
         status = self._handle.status()
         if status.has_metadata:
             self.size = status.total_wanted
@@ -94,6 +103,14 @@ class TorrentHandle:
                 log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
                 self.torrent_file = self._handle.get_torrent_info().files()
                 self._base_path = status.save_path
+            first_piece = self.torrent_file.at(self.largest_file_index).offset
+            self._handle.read_piece(first_piece)
+            if not self.started.is_set():
+                if self._handle.have_piece(first_piece):
+                    self.started.set()
+                else:
+                    # prioritize it
+                    self._handle.set_piece_deadline(first_piece, 100)
         if not status.is_seeding:
             log.debug('%.2f%% complete (down: %.1f kB/s up: %.1f kB/s peers: %d seeds: %d) %s - %s',
                       status.progress * 100, status.download_rate / 1000, status.upload_rate / 1000,
@@ -127,6 +144,7 @@ class TorrentSession:
         self._session: Optional[libtorrent.session] = None
         self._handles = {}
         self.tasks = []
+        self.wait_start = True
 
     async def add_fake_torrent(self):
         tmpdir = mkdtemp()
@@ -190,8 +208,9 @@ class TorrentSession:
         params = {'info_hash': binascii.unhexlify(btih.encode())}
         if download_directory:
             params['save_path'] = download_directory
-        handle = self._handles[btih] = TorrentHandle(self._loop, self._executor, self._session.add_torrent(params))
-        handle._handle.force_dht_announce()
+        handle = self._session.add_torrent(params)
+        handle.force_dht_announce()
+        self._handles[btih] = TorrentHandle(self._loop, self._executor, handle)
 
     def full_path(self, btih):
         return self._handles[btih].largest_file
@@ -202,6 +221,9 @@ class TorrentSession:
         )
         self._handles[btih].tasks.append(self._loop.create_task(self._handles[btih].status_loop()))
         await self._handles[btih].metadata_completed.wait()
+        if self.wait_start:
+            # fixme: temporary until we add streaming support, otherwise playback fails!
+            await self._handles[btih].started.wait()
 
     def remove_torrent(self, btih, remove_files=False):
         if btih in self._handles:
@@ -222,6 +244,9 @@ class TorrentSession:
 
     def get_downloaded(self, btih):
         return self._handles[btih].total_wanted_done
+
+    def is_completed(self, btih):
+        return self._handles[btih].finished.is_set()
 
 
 def get_magnet_uri(btih):

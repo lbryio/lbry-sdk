@@ -5,7 +5,6 @@ from binascii import hexlify
 from lbry.schema import Claim
 from lbry.testcase import CommandTestCase
 from lbry.torrent.session import TorrentSession
-from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import Transaction
 
 
@@ -34,6 +33,7 @@ class FileCommands(CommandTestCase):
         await self.confirm_tx(tx.id)
         self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
         self.client_session._session.add_dht_node(('localhost', 4040))
+        self.client_session.wait_start = False  # fixme: this is super slow on tests
         return tx, btih
 
     async def test_download_torrent(self):
