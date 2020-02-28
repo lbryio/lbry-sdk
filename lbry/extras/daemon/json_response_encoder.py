@@ -277,6 +277,11 @@ class JSONResponseEncoder(JSONEncoder):
         tx_height = managed_stream.stream_claim_info.height
         best_height = self.ledger.headers.height
         is_stream = hasattr(managed_stream, 'stream_hash')
+        if is_stream:
+            total_bytes_lower_bound = managed_stream.descriptor.lower_bound_decrypted_length()
+            total_bytes = managed_stream.descriptor.upper_bound_decrypted_length()
+        else:
+            total_bytes_lower_bound = total_bytes = managed_stream.torrent_length
         return {
             'streaming_url': managed_stream.stream_url if is_stream else f'file://{managed_stream.full_path}',
             'completed': managed_stream.completed,
@@ -291,8 +296,8 @@ class JSONResponseEncoder(JSONEncoder):
             'sd_hash': managed_stream.descriptor.sd_hash if is_stream else None,
             'mime_type': managed_stream.mime_type if is_stream else None,
             'key': managed_stream.descriptor.key if is_stream else None,
-            'total_bytes_lower_bound': managed_stream.descriptor.lower_bound_decrypted_length() if is_stream else managed_stream.torrent_length,
-            'total_bytes': managed_stream.descriptor.upper_bound_decrypted_length() if is_stream else managed_stream.torrent_length,
+            'total_bytes_lower_bound': total_bytes_lower_bound,
+            'total_bytes': total_bytes,
             'written_bytes': managed_stream.written_bytes if is_stream else managed_stream.written_bytes,
             'blobs_completed': managed_stream.blobs_completed if is_stream else None,
             'blobs_in_stream': managed_stream.blobs_in_stream if is_stream else None,
