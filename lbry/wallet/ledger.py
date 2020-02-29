@@ -739,6 +739,7 @@ class Ledger(metaclass=LedgerRegistry):
         for txo in txos:
             resolved = response[txo.permanent_url]
             if isinstance(resolved, Output):
+                resolved.update_annotations(txo)
                 results.append(resolved)
             else:
                 if isinstance(resolved, dict) and 'error' in resolved:
