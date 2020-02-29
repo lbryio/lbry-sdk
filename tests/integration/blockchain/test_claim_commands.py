@@ -488,6 +488,9 @@ class ClaimCommands(ClaimTestCase):
         self.assertTrue(r[0]['meta']['is_controlling'])
         self.assertTrue(r[1]['meta']['is_controlling'])
 
+        # check that metadata is transfered
+        self.assertTrue(r[0]['is_mine'])
+
 
 class ChannelCommands(CommandTestCase):
 
