@@ -6,7 +6,7 @@
 # and warranty status of this software.
 
 """Mempool handling."""
-
+import os
 import asyncio
 import itertools
 import time
@@ -106,7 +106,7 @@ class MemPool:
         # Prevents mempool refreshes during fee histogram calculation
         self.lock = asyncio.Lock()
         self.wakeup = asyncio.Event()
-        self.executor = ThreadPoolExecutor(4)
+        self.executor = ThreadPoolExecutor(max(os.cpu_count() - 1, 1))
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
