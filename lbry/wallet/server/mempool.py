@@ -112,9 +112,9 @@ class MemPool:
         """Print regular logs of mempool stats."""
         self.logger.info('beginning processing of daemon mempool.  '
                          'This can take some time...')
-        start = time.time()
+        start = time.perf_counter()
         await synchronized_event.wait()
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         self.logger.info(f'synced in {elapsed:.2f}s')
         while True:
             self.logger.info(f'{len(self.txs):,d} txs '
