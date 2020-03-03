@@ -23,8 +23,10 @@ class VideoFileAnalyzer:
 
     async def _execute(self, command, arguments):
         args = shlex.split(arguments)
-        process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *args,
-                                                       stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        process = await asyncio.create_subprocess_exec(
+            os.path.join(self._conf.ffmpeg_folder, command), *args,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
 
@@ -45,7 +47,7 @@ class VideoFileAnalyzer:
             return
         await self._verify_executable("ffprobe")
         version = await self._verify_executable("ffmpeg")
-        self._which = shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg")
+        self._which = shutil.which("ffmpeg")
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
