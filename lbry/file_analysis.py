@@ -23,8 +23,10 @@ class VideoFileAnalyzer:
 
     async def _execute(self, command, arguments):
         args = shlex.split(arguments)
-        process = await asyncio.create_subprocess_exec(self._conf.ffmpeg_folder + command, *args,
-                                                       stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+        process = await asyncio.create_subprocess_exec(
+            os.path.join(self._conf.ffmpeg_folder, command), *args,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        )
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
 
