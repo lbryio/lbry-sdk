@@ -47,7 +47,7 @@ class VideoFileAnalyzer:
             return
         await self._verify_executable("ffprobe")
         version = await self._verify_executable("ffmpeg")
-        self._which = shutil.which(f"{self._conf.ffmpeg_folder}ffmpeg")
+        self._which = shutil.which("ffmpeg")
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
