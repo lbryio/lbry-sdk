@@ -866,7 +866,7 @@ class LBRYLevelDB(LevelDB):
         super().__init__(*args, **kwargs)
         path = os.path.join(self.env.db_dir, 'claims.db')
         trending = []
-        for algorithm_name in set(self.env.default('TRENDING_ALGORITHMS', 'zscore').split(' ')):
+        for algorithm_name in self.env.trending_algorithms:
             if algorithm_name in TRENDING_ALGORITHMS:
                 trending.append(TRENDING_ALGORITHMS[algorithm_name])
         self.sql = SQLDB(
