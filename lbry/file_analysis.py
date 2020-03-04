@@ -47,7 +47,7 @@ class VideoFileAnalyzer:
             return
         await self._verify_executable("ffprobe")
         version = await self._verify_executable("ffmpeg")
-        self._which = shutil.which("ffmpeg")
+        self._which = shutil.which(os.path.join(self._conf.ffmpeg_folder, "ffmpeg"))
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
@@ -286,12 +286,17 @@ class VideoFileAnalyzer:
 
         return scan_data
 
-    async def verify_or_repair(self, validate, repair, file_path):
+    async def verify_or_repair(self, validate, repair, file_path, ignore_non_video=False):
         if not validate and not repair:
             return file_path
 
         await self._verify_ffmpeg_installed()
-        scan_data = await self._get_scan_data(validate, file_path)
+        try:
+            scan_data = await self._get_scan_data(validate, file_path)
+        except ValueError:
+            if ignore_non_video:
+                return file_path
+            raise
 
         fast_start_msg = await self._verify_fast_start(scan_data, file_path)
         log.debug("Analyzing %s:", file_path)
