@@ -47,7 +47,7 @@ class VideoFileAnalyzer:
             return
         await self._verify_executable("ffprobe")
         version = await self._verify_executable("ffmpeg")
-        self._which = shutil.which("ffmpeg")
+        self._which = shutil.which(os.path.join(self._conf.ffmpeg_folder, "ffmpeg"))
         self._ffmpeg_installed = True
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
 
@@ -97,24 +97,21 @@ class VideoFileAnalyzer:
 
         return ""
 
-    @staticmethod
-    def _verify_bitrate(scan_data: json):
-        if "bit_rate" not in scan_data["format"]:
+    def _verify_bitrate(self, scan_data: json, file_path):
+        bit_rate_max = float(self._conf.video_bitrate_maximum)
+        if bit_rate_max <= 0:
             return ""
 
-        bit_rate = float(scan_data["format"]["bit_rate"])
-        log.debug("   Detected bitrate is %s Mbps", str(bit_rate / 1000000.0))
-        pixels = -1.0
-        for stream in scan_data["streams"]:
-            if stream["codec_type"] == "video":
-                pieces = stream["r_frame_rate"].split('/', 1)
-                frame_rate = float(pieces[0]) if len(pieces) == 1 \
-                    else float(pieces[0]) / float(pieces[1])
-                pixels = max(pixels, float(stream["height"]) * float(stream["width"]) * frame_rate)
+        if "bit_rate" in scan_data["format"]:
+            bit_rate = float(scan_data["format"]["bit_rate"])
+        else:
+            bit_rate = os.stat(file_path).st_size / float(scan_data["format"]["duration"])
+        log.debug("   Detected bitrate is %s Mbps. Allowed is %s Mbps",
+                  str(bit_rate / 1000000.0), str(bit_rate_max / 1000000.0))
 
-        if pixels > 0.0 and pixels / bit_rate < 3.0:
-            return "Bits per second is excessive for this data; this may impact web streaming performance. " \
-                   f"Actual: {str(bit_rate / 1000000.0)} Mbps"
+        if bit_rate > bit_rate_max:
+            return "The bit rate is above the configured maximum. Actual: " \
+                   f"{bit_rate / 1000000.0} Mbps; Allowed: {bit_rate_max / 1000000.0} Mbps"
 
         return ""
 
@@ -177,6 +174,9 @@ class VideoFileAnalyzer:
 
         # https://developers.google.com/media/vp9/settings/vod/
         return int(-0.011 * height + 40)
+
+    def _get_video_scaler(self):
+        return self._conf.video_scaler
 
     async def _get_video_encoder(self, scan_data):
         # use what the user said if it's there:
@@ -257,12 +257,12 @@ class VideoFileAnalyzer:
                     continue
                 codec = stream["codec_name"].split(",")
                 if "theora" in codec:
-                    return "ogg"
+                    return "ogv"
                 if {"vp8", "vp9", "av1"}.intersection(codec):
                     return "webm"
 
         if "theora" in video_encoder:
-            return "ogg"
+            return "ogv"
         elif re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
             return "webm"
         return "mp4"
@@ -274,31 +274,35 @@ class VideoFileAnalyzer:
             scan_data = json.loads(result)
         except Exception as e:
             log.debug("Failure in JSON parsing ffprobe results. Message: %s", str(e))
-            if validate:
-                raise Exception(f'Invalid video file: {file_path}')
-            log.info("Unable to optimize %s . FFmpeg output was unreadable.", file_path)
-            return
+            raise ValueError(f'Absent or unreadable video file: {file_path}')
 
-        if "format" not in scan_data:
-            if validate:
-                raise FileNotFoundError(f'Unexpected or absent video file contents at: {file_path}')
-            log.info("Unable to optimize %s . FFmpeg output is missing the format section.", file_path)
-            return
+        if "format" not in scan_data or "duration" not in scan_data["format"]:
+            log.debug("Format data is missing from ffprobe results for: %s", file_path)
+            raise ValueError(f'Media file does not appear to contain video content at: {file_path}')
+
+        if float(scan_data["format"]["duration"]) < 0.1:
+            log.debug("Media file appears to be an image: %s", file_path)
+            raise ValueError(f'Assuming image file at: {file_path}')
 
         return scan_data
 
-    async def verify_or_repair(self, validate, repair, file_path):
+    async def verify_or_repair(self, validate, repair, file_path, ignore_non_video=False):
         if not validate and not repair:
             return file_path
 
         await self._verify_ffmpeg_installed()
-        scan_data = await self._get_scan_data(validate, file_path)
+        try:
+            scan_data = await self._get_scan_data(validate, file_path)
+        except ValueError:
+            if ignore_non_video:
+                return file_path
+            raise
 
         fast_start_msg = await self._verify_fast_start(scan_data, file_path)
         log.debug("Analyzing %s:", file_path)
         log.debug("   Detected faststart is %s", "false" if fast_start_msg else "true")
         container_msg = self._verify_container(scan_data)
-        bitrate_msg = self._verify_bitrate(scan_data)
+        bitrate_msg = self._verify_bitrate(scan_data, file_path)
         video_msg = self._verify_video_encoding(scan_data)
         audio_msg = self._verify_audio_encoding(scan_data)
         volume_msg = await self._verify_audio_volume(self._conf.volume_analysis_time, file_path)
@@ -324,6 +328,8 @@ class VideoFileAnalyzer:
             if video_msg or bitrate_msg:
                 video_encoder = await self._get_video_encoder(scan_data)
                 transcode_command.append(video_encoder)
+                # could do the scaling only if bitrate_msg, but if we're going to the effort to re-encode anyway...
+                transcode_command.append(self._get_video_scaler())
             else:
                 transcode_command.append("copy")
 

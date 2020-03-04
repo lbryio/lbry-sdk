@@ -130,7 +130,7 @@ class TranscodeValidation(ClaimTestCase):
 
         scan_data = await self.analyzer._get_scan_data(True, self.video_file_ogg)
         extension = self.analyzer._get_best_container_extension(scan_data, "")
-        self.assertEqual(extension, "ogg")
+        self.assertEqual(extension, "ogv")
 
         scan_data = await self.analyzer._get_scan_data(True, self.video_file_webm)
         extension = self.analyzer._get_best_container_extension(scan_data, "")
@@ -143,7 +143,7 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual("webm", extension)
 
         extension = self.analyzer._get_best_container_extension("", "libtheora")
-        self.assertEqual("ogg", extension)
+        self.assertEqual("ogv", extension)
 
     async def test_no_ffmpeg(self):
         self.conf.ffmpeg_folder = "I don't really exist/"

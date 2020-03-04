@@ -148,6 +148,7 @@ types_map = {
     '.mobi': ('application/x-mobipocket-ebook', 'document'),
     '.oga': ('audio/ogg', 'audio'),
     '.ogv': ('video/ogg', 'video'),
+    '.ogg': ('video/ogg', 'video'),
     '.pct': ('image/pict', 'image'),
     '.pic': ('image/pict', 'image'),
     '.pict': ('image/pict', 'image'),
