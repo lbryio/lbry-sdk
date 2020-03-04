@@ -3142,8 +3142,9 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"Use --allow-duplicate-name flag to override."
                 )
 
-        file_path = await self._video_file_analyzer.verify_or_repair(validate_file, optimize_file,
-                                                                     file_path, ignore_non_video=True)
+        file_path = await self._video_file_analyzer.verify_or_repair(
+            validate_file, optimize_file, file_path, ignore_non_video=True
+        )
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
         tx = await Transaction.claim_create(
