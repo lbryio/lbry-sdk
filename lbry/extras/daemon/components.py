@@ -121,6 +121,7 @@ class WalletComponent(Component):
                 connected = f"{addr_and_port[0]}:{addr_and_port[1]}"
         result = {
             'connected': connected,
+            'connected_features': self.wallet_manager.ledger.network.server_features,
             'servers': [
                 {
                     'host': session.server[0],

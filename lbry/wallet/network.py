@@ -162,6 +162,7 @@ class Network:
         self.ledger = ledger
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
+        self.server_features = None
         self._switch_task: Optional[asyncio.Task] = None
         self.running = False
         self.remote_height: int = 0
@@ -189,17 +190,20 @@ class Network:
         while self.running:
             if self.is_connected:
                 await self.client.on_disconnected.first
+                self.server_features = None
                 self.client = None
                 continue
             self.client = await self.session_pool.wait_for_fastest_session()
             log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
             try:
+                self.server_features = await self.get_server_features()
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
                 log.info("Subscribed to headers: %s:%d", *self.client.server)
             except (asyncio.TimeoutError, ConnectionError):
                 log.info("Switching to %s:%d timed out, closing and retrying.", *self.client.server)
                 self.client.synchronous_close()
+                self.server_features = None
                 self.client = None
 
     async def start(self):
