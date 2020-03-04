@@ -93,6 +93,11 @@ class TranscodeValidation(ClaimTestCase):
         fixed_file = await self.analyzer.verify_or_repair(True, True, file_name)
         pathlib.Path(fixed_file).unlink()
 
+    async def test_max_bit_rate(self):
+        self.conf.video_bitrate_maximum = 100
+        with self.assertRaisesRegex(Exception, "The bit rate is above the configured maximum"):
+            await self.analyzer.verify_or_repair(True, False, self.video_file_name)
+
     async def test_video_format(self):
         file_name = self.make_name("bad_video_format_1")
         if not file_name.exists():

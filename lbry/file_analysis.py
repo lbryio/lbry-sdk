@@ -37,10 +37,10 @@ class VideoFileAnalyzer:
         try:
             version, code = await self._execute(name, "-version")
         except Exception as e:
-            log.warning("Unable to run %s, but it was requested. Message: %s", name, str(e))
             code = -1
-            version = ""
+            version = str(e)
         if code != 0 or not version.startswith(name):
+            log.warning("Unable to run %s, but it was requested. Code: %d; Message: %s", name, code, version)
             raise FileNotFoundError(f"Unable to locate or run {name}. Please install FFmpeg "
                                     f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
         return version
