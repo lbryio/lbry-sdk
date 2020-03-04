@@ -467,12 +467,16 @@ class TranscodeConfig(BaseConfig):
     ffmpeg_folder = String('The path to ffmpeg and ffprobe', '')
     video_encoder = String('FFmpeg codec and parameters for the video encoding. '
                            'Example: libaom-av1 -crf 25 -b:v 0 -strict experimental',
-                           'libx264 -crf 18 -vf "format=yuv420p"')
+                           'libx264 -crf 21 -preset faster -pix_fmt yuv420p')
+    video_bitrate_maximum = Integer('Maximum bits per second allowed for video streams (0 to disable).', 8400000)
+    video_scaler = String('FFmpeg scaling parameters for reducing bitrate. '
+                          'Example: -vf "scale=-2:720,fps=24" -maxrate 5M -bufsize 3M',
+                          '-vf "scale=if(gte(iw\,ih)\,min(2560\,iw)\,-2):if(lt(iw\,ih)\,min(2560\,ih)\,-2)" -maxrate 8400K -bufsize 5000K')
     audio_encoder = String('FFmpeg codec and parameters for the audio encoding. '
                            'Example: libopus -b:a 128k',
-                           'aac -b:a 192k')
+                           'aac -b:a 160k')
     volume_filter = String('FFmpeg filter for audio normalization.', '-af loudnorm')
-    volume_analysis_time = Integer('Maximum seconds into the file that we examine audio volume (0 to disable).', '240')
+    volume_analysis_time = Integer('Maximum seconds into the file that we examine audio volume (0 to disable).', 240)
 
 
 class CLIConfig(TranscodeConfig):

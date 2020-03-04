@@ -220,6 +220,9 @@ class IntegrationTestCase(AsyncioTestCase):
         self.account: Optional[Account] = None
 
     async def asyncSetUp(self):
+        if sys.version_info < (3, 8):
+            # hide warning about TaskWakeupMethWrapper, see bugs.python.org/issue38608
+            asyncio.get_running_loop().set_debug(False)
         self.conductor = Conductor(seed=self.SEED)
         await self.conductor.start_blockchain()
         self.addCleanup(self.conductor.stop_blockchain)

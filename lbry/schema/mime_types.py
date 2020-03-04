@@ -163,7 +163,6 @@ types_map = {
 
 
 def guess_media_type(path):
-    # should we be using "file --mime-type -b $filename" on linux?
     _, ext = os.path.splitext(path)
     extension = ext.strip().lower()
     if extension[1:]:
