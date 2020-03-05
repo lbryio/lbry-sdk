@@ -15,12 +15,20 @@ DISABLED = platform.system() == "Windows"
 
 class VideoFileAnalyzer:
 
+    def _replace_or_pop_env(self, variable):
+        if variable + '_ORIG' in self._env_copy:
+            self._env_copy[variable] = self._env_copy[variable + '_ORIG']
+        else:
+            self._env_copy.pop(variable, None)
+
     def __init__(self, conf: TranscodeConfig):
         self._conf = conf
         self._available_encoders = ""
         self._ffmpeg_installed = False
         self._which = None
         self._checked_ffmpeg = False
+        self._env_copy = dict(os.environ)
+        self._replace_or_pop_env('LD_LIBRARY_PATH')
 
     async def _execute(self, command, arguments):
         if DISABLED:
@@ -28,7 +36,7 @@ class VideoFileAnalyzer:
         args = shlex.split(arguments)
         process = await asyncio.create_subprocess_exec(
             os.path.join(self._conf.ffmpeg_folder, command), *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
         )
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
