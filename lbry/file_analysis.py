@@ -7,6 +7,8 @@ import re
 import shlex
 import shutil
 import platform
+
+import lbry.utils
 from lbry.conf import TranscodeConfig
 
 log = logging.getLogger(__name__)
@@ -15,12 +17,22 @@ DISABLED = platform.system() == "Windows"
 
 class VideoFileAnalyzer:
 
+    def _replace_or_pop_env(self, variable):
+        if variable + '_ORIG' in self._env_copy:
+            self._env_copy[variable] = self._env_copy[variable + '_ORIG']
+        else:
+            self._env_copy.pop(variable, None)
+
     def __init__(self, conf: TranscodeConfig):
         self._conf = conf
         self._available_encoders = ""
         self._ffmpeg_installed = False
         self._which = None
         self._checked_ffmpeg = False
+        self._env_copy = dict(os.environ)
+        if lbry.utils.is_running_from_bundle():
+            # handle the situation where PyInstaller overrides our runtime environment:
+            self._replace_or_pop_env('LD_LIBRARY_PATH')
 
     async def _execute(self, command, arguments):
         if DISABLED:
@@ -28,7 +40,7 @@ class VideoFileAnalyzer:
         args = shlex.split(arguments)
         process = await asyncio.create_subprocess_exec(
             os.path.join(self._conf.ffmpeg_folder, command), *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
         )
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
@@ -37,10 +49,10 @@ class VideoFileAnalyzer:
         try:
             version, code = await self._execute(name, "-version")
         except Exception as e:
-            log.warning("Unable to run %s, but it was requested. Message: %s", name, str(e))
             code = -1
-            version = ""
+            version = str(e)
         if code != 0 or not version.startswith(name):
+            log.warning("Unable to run %s, but it was requested. Code: %d; Message: %s", name, code, version)
             raise FileNotFoundError(f"Unable to locate or run {name}. Please install FFmpeg "
                                     f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
         return version
