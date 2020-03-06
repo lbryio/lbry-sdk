@@ -4,6 +4,7 @@ import datetime
 import random
 import socket
 import string
+import sys
 import json
 import typing
 import asyncio
@@ -276,3 +277,8 @@ async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled
                 return response['data']['ip']
     except Exception:
         return
+
+
+def is_running_from_bundle():
+    # see https://pyinstaller.readthedocs.io/en/stable/runtime-information.html
+    return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')

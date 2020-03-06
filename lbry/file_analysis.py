@@ -7,6 +7,8 @@ import re
 import shlex
 import shutil
 import platform
+
+import lbry.utils
 from lbry.conf import TranscodeConfig
 
 log = logging.getLogger(__name__)
@@ -28,7 +30,9 @@ class VideoFileAnalyzer:
         self._which = None
         self._checked_ffmpeg = False
         self._env_copy = dict(os.environ)
-        self._replace_or_pop_env('LD_LIBRARY_PATH')
+        if lbry.utils.is_running_from_bundle():
+            # handle the situation where PyInstaller overrides our runtime environment:
+            self._replace_or_pop_env('LD_LIBRARY_PATH')
 
     async def _execute(self, command, arguments):
         if DISABLED:
