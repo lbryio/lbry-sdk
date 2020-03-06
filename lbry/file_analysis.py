@@ -6,10 +6,11 @@ import pathlib
 import re
 import shlex
 import shutil
-
+import platform
 from lbry.conf import TranscodeConfig
 
 log = logging.getLogger(__name__)
+DISABLED = platform.system() == "Windows"
 
 
 class VideoFileAnalyzer:
@@ -22,6 +23,8 @@ class VideoFileAnalyzer:
         self._checked_ffmpeg = False
 
     async def _execute(self, command, arguments):
+        if DISABLED:
+            return "Disabled on Windows", -1
         args = shlex.split(arguments)
         process = await asyncio.create_subprocess_exec(
             os.path.join(self._conf.ffmpeg_folder, command), *args,
