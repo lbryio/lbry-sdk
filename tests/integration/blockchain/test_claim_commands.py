@@ -1394,7 +1394,6 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
-        self.assertTrue(txs[0]['abandon_info'][0]['is_spent'])
         self.assertTrue(txs[1]['update_info'][0]['is_spent'])
         self.assertTrue(txs[2]['claim_info'][0]['is_spent'])
         self.assertEqual(txs[0]['value'], '0.0')
