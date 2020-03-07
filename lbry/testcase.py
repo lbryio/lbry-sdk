@@ -548,6 +548,13 @@ class CommandTestCase(IntegrationTestCase):
             self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs), confirm
         )
 
+    async def support_abandon(self, *args, confirm=True, **kwargs):
+        if 'blocking' not in kwargs:
+            kwargs['blocking'] = False
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_support_abandon(*args, **kwargs), confirm
+        )
+
     async def resolve(self, uri):
         return (await self.out(self.daemon.jsonrpc_resolve(uri)))[uri]
 

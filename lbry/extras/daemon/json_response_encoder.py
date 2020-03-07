@@ -25,6 +25,7 @@ def encode_txo_doc():
         'address': "address of who can spend the txo",
         'confirmations': "number of confirmed blocks",
         'is_change': "payment to change address, only available when it can be determined",
+        'is_spent': "true if txo is spent, false or None if it could not be determined",
         'is_mine': "payment to one of your accounts, only available when it can be determined",
         'type': "one of 'claim', 'support' or 'purchase'",
         'name': "when type is 'claim' or 'support', this is the claim name",
@@ -168,6 +169,8 @@ class JSONResponseEncoder(JSONEncoder):
         }
         if txo.is_change is not None:
             output['is_change'] = txo.is_change
+        if txo.is_spent is not None:
+            output['is_spent'] = txo.is_spent
         if txo.is_my_account is not None:
             output['is_mine'] = txo.is_my_account
 

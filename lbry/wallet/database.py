@@ -488,6 +488,8 @@ class Database(SQLiteMixin):
             *query(f"SELECT {cols} FROM tx", **constraints)
         )
 
+    TXO_NOT_MINE = Output(None, None, is_my_account=False)
+
     async def get_transactions(self, wallet=None, **constraints):
         tx_rows = await self.select_transactions(
             'txid, raw, height, position, is_verified',
@@ -538,7 +540,7 @@ class Database(SQLiteMixin):
                 if _txo:
                     txo.update_annotations(_txo)
                 else:
-                    txo.update_annotations(None)
+                    txo.update_annotations(self.TXO_NOT_MINE)
 
         for tx in txs:
             txos = tx.outputs
@@ -577,7 +579,7 @@ class Database(SQLiteMixin):
             tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, amount, script, (
                 select group_concat(account||"|"||chain) from account_address
                 where account_address.address=txo.address
-            )
+            ), exists(select txoid from txi where txi.txoid=txo.txoid)
             """,
             **constraints
         )
@@ -599,6 +601,7 @@ class Database(SQLiteMixin):
                 txo = txs[row[0]].outputs[row[5]]
             row_accounts = dict(a.split('|') for a in row[8].split(','))
             account_match = set(row_accounts) & my_accounts
+            txo.is_spent = bool(row[9])
             if account_match:
                 txo.is_my_account = True
                 txo.is_change = row_accounts[account_match.pop()] == '1'
