@@ -467,6 +467,12 @@ class Account:
             'max_receiving_gap': receiving_gap,
         }
 
+    def get_txos(self, **constraints):
+        return self.ledger.get_txos(wallet=self.wallet, accounts=[self], **constraints)
+
+    def get_txo_count(self, **constraints):
+        return self.ledger.get_txo_count(wallet=self.wallet, accounts=[self], **constraints)
+
     def get_utxos(self, **constraints):
         return self.ledger.get_utxos(wallet=self.wallet, accounts=[self], **constraints)
 

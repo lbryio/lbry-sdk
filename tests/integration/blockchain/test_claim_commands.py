@@ -1,4 +1,3 @@
-import asyncio
 import os.path
 import tempfile
 import logging
@@ -399,12 +398,96 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], text='cloud')
 
 
+class TransactionCommands(ClaimTestCase):
+
+    async def test_transaction_list(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        await self.channel_update(channel_id, bid='0.5')
+        await self.channel_abandon(claim_id=channel_id)
+        stream_id = self.get_claim_id(await self.stream_create())
+        await self.stream_update(stream_id, bid='0.5')
+        await self.stream_abandon(claim_id=stream_id)
+
+        r = await self.transaction_list()
+        self.assertEqual(7, len(r))
+        self.assertEqual(stream_id, r[0]['abandon_info'][0]['claim_id'])
+        self.assertEqual(stream_id, r[1]['update_info'][0]['claim_id'])
+        self.assertEqual(stream_id, r[2]['claim_info'][0]['claim_id'])
+        self.assertEqual(channel_id, r[3]['abandon_info'][0]['claim_id'])
+        self.assertEqual(channel_id, r[4]['update_info'][0]['claim_id'])
+        self.assertEqual(channel_id, r[5]['claim_info'][0]['claim_id'])
+
+
+class TransactionOutputCommands(ClaimTestCase):
+
+    async def test_txo_list_filtering(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        await self.channel_update(channel_id, bid='0.5')
+        stream_id = self.get_claim_id(await self.stream_create())
+        await self.stream_update(stream_id, bid='0.5')
+
+        # type filtering
+        r = await self.txo_list(type='channel')
+        self.assertEqual(2, len(r))
+        self.assertEqual('channel', r[0]['value_type'])
+        self.assertFalse(r[0]['is_spent'])
+        self.assertEqual('channel', r[1]['value_type'])
+        self.assertTrue(r[1]['is_spent'])
+
+        r = await self.txo_list(type='stream')
+        self.assertEqual(2, len(r))
+        self.assertEqual('stream', r[0]['value_type'])
+        self.assertFalse(r[0]['is_spent'])
+        self.assertEqual('stream', r[1]['value_type'])
+        self.assertTrue(r[1]['is_spent'])
+
+        r = await self.txo_list(type=['stream', 'channel'])
+        self.assertEqual(4, len(r))
+        self.assertEqual({'stream', 'channel'}, {c['value_type'] for c in r})
+
+        # claim_id filtering
+        r = await self.txo_list(claim_id=stream_id)
+        self.assertEqual(2, len(r))
+        self.assertEqual({stream_id}, {c['claim_id'] for c in r})
+
+        r = await self.txo_list(claim_id=[stream_id, channel_id])
+        self.assertEqual(4, len(r))
+        self.assertEqual({stream_id, channel_id}, {c['claim_id'] for c in r})
+        stream_name, _, channel_name, _ = (c['name'] for c in r)
+
+        r = await self.txo_list(claim_id=['beef'])
+        self.assertEqual(0, len(r))
+
+        # claim_name filtering
+        r = await self.txo_list(name=stream_name)
+        self.assertEqual(2, len(r))
+        self.assertEqual({stream_id}, {c['claim_id'] for c in r})
+
+        r = await self.txo_list(name=[stream_name, channel_name])
+        self.assertEqual(4, len(r))
+        self.assertEqual({stream_id, channel_id}, {c['claim_id'] for c in r})
+
+        r = await self.txo_list(name=['beef'])
+        self.assertEqual(0, len(r))
+
+        r = await self.txo_list()
+        self.assertEqual(9, len(r))
+        await self.stream_abandon(claim_id=stream_id)
+        r = await self.txo_list()
+        self.assertEqual(10, len(r))
+        r = await self.txo_list(claim_id=stream_id)
+        self.assertEqual(2, len(r))
+        self.assertTrue(r[0]['is_spent'])
+        self.assertTrue(r[1]['is_spent'])
+
+
 class ClaimCommands(ClaimTestCase):
 
-    async def test_claim_list_type_filtering(self):
-        await self.channel_create()
-        await self.stream_create()
+    async def test_claim_list_filtering(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        stream_id = self.get_claim_id(await self.stream_create())
 
+        # type filtering
         r = await self.claim_list(claim_type='channel')
         self.assertEqual(1, len(r))
         self.assertEqual('channel', r[0]['value_type'])
@@ -416,6 +499,31 @@ class ClaimCommands(ClaimTestCase):
         r = await self.claim_list(claim_type=['stream', 'channel'])
         self.assertEqual(2, len(r))
         self.assertEqual({'stream', 'channel'}, {c['value_type'] for c in r})
+
+        # claim_id filtering
+        r = await self.claim_list(claim_id=stream_id)
+        self.assertEqual(1, len(r))
+        self.assertEqual({stream_id}, {c['claim_id'] for c in r})
+
+        r = await self.claim_list(claim_id=[stream_id, channel_id])
+        self.assertEqual(2, len(r))
+        self.assertEqual({stream_id, channel_id}, {c['claim_id'] for c in r})
+        stream_name, channel_name = (c['name'] for c in r)
+
+        r = await self.claim_list(claim_id=['beef'])
+        self.assertEqual(0, len(r))
+
+        # claim_name filtering
+        r = await self.claim_list(name=stream_name)
+        self.assertEqual(1, len(r))
+        self.assertEqual({stream_id}, {c['claim_id'] for c in r})
+
+        r = await self.claim_list(name=[stream_name, channel_name])
+        self.assertEqual(2, len(r))
+        self.assertEqual({stream_id, channel_id}, {c['claim_id'] for c in r})
+
+        r = await self.claim_list(name=['beef'])
+        self.assertEqual(0, len(r))
 
     async def test_claim_stream_channel_list_with_resolve(self):
         self.assertListEqual([], await self.claim_list(resolve=True))
@@ -1364,7 +1472,7 @@ class StreamCommands(ClaimTestCase):
 
         tx = await self.stream_create(bid='2.5')  # creates new claim
         claim_id = self.get_claim_id(tx)
-        txs = (await self.out(self.daemon.jsonrpc_transaction_list()))['items']
+        txs = await self.transaction_list()
         self.assertEqual(len(txs[0]['claim_info']), 1)
         self.assertEqual(txs[0]['confirmations'], 1)
         self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
@@ -1379,7 +1487,7 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
 
         await self.stream_update(claim_id, bid='1.0')  # updates previous claim
-        txs = (await self.out(self.daemon.jsonrpc_transaction_list()))['items']
+        txs = await self.transaction_list()
         self.assertEqual(len(txs[0]['update_info']), 1)
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim_id)
@@ -1390,7 +1498,7 @@ class StreamCommands(ClaimTestCase):
         await self.assertBalance(self.account, '8.9796765')
 
         await self.stream_abandon(claim_id)
-        txs = (await self.out(self.daemon.jsonrpc_transaction_list()))['items']
+        txs = await self.transaction_list()
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
@@ -1494,7 +1602,7 @@ class SupportCommands(CommandTestCase):
         await self.assertBalance(account2,     '3.9998585')
 
         # verify that the incoming tip is marked correctly as is_tip=True in account1
-        txs = (await self.out(self.daemon.jsonrpc_transaction_list(self.account.id)))['items']
+        txs = await self.transaction_list(account_id=self.account.id)
         self.assertEqual(len(txs[0]['support_info']), 1)
         self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim_id)
@@ -1504,9 +1612,7 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs[0]['fee'], '0.0')
 
         # verify that the outgoing tip is marked correctly as is_tip=True in account2
-        txs2 = (await self.out(
-            self.daemon.jsonrpc_transaction_list(wallet_id='wallet2', account_id=account2.id)
-        ))['items']
+        txs2 = await self.transaction_list(wallet_id='wallet2', account_id=account2.id)
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
@@ -1527,7 +1633,7 @@ class SupportCommands(CommandTestCase):
         await self.assertBalance(account2,     '1.999717')
 
         # verify that the outgoing support is marked correctly as is_tip=False in account2
-        txs2 = (await self.out(self.daemon.jsonrpc_transaction_list(wallet_id='wallet2')))['items']
+        txs2 = await self.transaction_list(wallet_id='wallet2')
         self.assertEqual(len(txs2[0]['support_info']), 1)
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
@@ -1539,7 +1645,7 @@ class SupportCommands(CommandTestCase):
         # abandoning the tip increases balance and shows tip as spent
         await self.support_abandon(claim_id)
         await self.assertBalance(self.account, '4.979662')
-        txs = (await self.out(self.daemon.jsonrpc_transaction_list(self.account.id)))['items']
+        txs = await self.transaction_list(account_id=self.account.id)
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(len(txs[1]['support_info']), 1)
         self.assertTrue(txs[1]['support_info'][0]['is_tip'])

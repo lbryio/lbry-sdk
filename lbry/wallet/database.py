@@ -107,7 +107,9 @@ def constraints_to_sql(constraints, joiner=' AND ', prepend_key=''):
         if not key:
             sql.append(constraint)
             continue
-        if key.startswith('$'):
+        if key.startswith('$$'):
+            col, key = col[2:], key[1:]
+        elif key.startswith('$'):
             values[key] = constraint
             continue
         if key.endswith('__not'):
@@ -219,6 +221,19 @@ def rows_to_dict(rows, fields):
         return [dict(zip(fields, r)) for r in rows]
     else:
         return []
+
+
+def constrain_single_or_list(constraints, column, value, convert=lambda x: x):
+    if value is not None:
+        if isinstance(value, list):
+            value = [convert(v) for v in value]
+            if len(value) == 1:
+                constraints[column] = value[0]
+            elif len(value) > 1:
+                constraints[f"{column}__in"] = value
+        else:
+            constraints[column] = convert(value)
+    return constraints
 
 
 class SQLiteMixin:
@@ -350,6 +365,7 @@ class Database(SQLiteMixin):
         create index if not exists txo_txid_idx on txo (txid);
         create index if not exists txo_address_idx on txo (address);
         create index if not exists txo_claim_id_idx on txo (claim_id);
+        create index if not exists txo_claim_name_idx on txo (claim_name);
         create index if not exists txo_txo_type_idx on txo (txo_type);
     """
 
@@ -474,16 +490,15 @@ class Database(SQLiteMixin):
     async def select_transactions(self, cols, accounts=None, **constraints):
         if not {'txid', 'txid__in'}.intersection(constraints):
             assert accounts, "'accounts' argument required when no 'txid' constraint is present"
-            constraints.update({
-                f'$account{i}': a.public_key.address for i, a in enumerate(accounts)
+            where, values = constraints_to_sql({
+                '$$account_address.account__in': [a.public_key.address for a in accounts]
             })
-            account_values = ', '.join([f':$account{i}' for i in range(len(accounts))])
-            where = f" WHERE account_address.account IN ({account_values})"
             constraints['txid__in'] = f"""
-                SELECT txo.txid FROM txo JOIN account_address USING (address) {where}
+                SELECT txo.txid FROM txo JOIN account_address USING (address) WHERE {where}
               UNION
-                SELECT txi.txid FROM txi JOIN account_address USING (address) {where}
+                SELECT txi.txid FROM txi JOIN account_address USING (address) WHERE {where}
             """
+            constraints.update(values)
         return await self.db.execute_fetchall(
             *query(f"SELECT {cols} FROM tx", **constraints)
         )
@@ -568,7 +583,14 @@ class Database(SQLiteMixin):
             sql += " JOIN account_address USING (address)"
         return await self.db.execute_fetchall(*query(sql, **constraints))
 
-    async def get_txos(self, wallet=None, no_tx=False, **constraints):
+    @staticmethod
+    def constrain_unspent(constraints):
+        constraints['is_reserved'] = False
+        constraints['txoid__not_in'] = "SELECT txoid FROM txi"
+
+    async def get_txos(self, wallet=None, no_tx=False, unspent=False, **constraints):
+        if unspent:
+            self.constrain_unspent(constraints)
         my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()
         if 'order_by' not in constraints:
             constraints['order_by'] = [
@@ -637,33 +659,28 @@ class Database(SQLiteMixin):
 
         return txos
 
-    async def get_txo_count(self, **constraints):
+    async def get_txo_count(self, unspent=False, **constraints):
         constraints.pop('resolve', None)
         constraints.pop('wallet', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
+        if unspent:
+            self.constrain_unspent(constraints)
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 
-    @staticmethod
-    def constrain_utxo(constraints):
-        constraints['is_reserved'] = False
-        constraints['txoid__not_in'] = "SELECT txoid FROM txi"
-
     def get_utxos(self, **constraints):
-        self.constrain_utxo(constraints)
-        return self.get_txos(**constraints)
+        return self.get_txos(unspent=True, **constraints)
 
     def get_utxo_count(self, **constraints):
-        self.constrain_utxo(constraints)
-        return self.get_txo_count(**constraints)
+        return self.get_txo_count(unspent=True, **constraints)
 
     async def get_balance(self, wallet=None, accounts=None, **constraints):
         assert wallet or accounts, \
             "'wallet' or 'accounts' constraints required to calculate balance"
         constraints['accounts'] = accounts or wallet.accounts
-        self.constrain_utxo(constraints)
+        self.constrain_unspent(constraints)
         balance = await self.select_txos('SUM(amount)', **constraints)
         return balance[0][0] or 0
 
@@ -746,11 +763,13 @@ class Database(SQLiteMixin):
 
     @staticmethod
     def constrain_claims(constraints):
+        if {'txo_type', 'txo_type__in'}.intersection(constraints):
+            return
         claim_types = constraints.pop('claim_type', None)
-        if isinstance(claim_types, str) and claim_types:
-            claim_types = [claim_types]
-        if isinstance(claim_types, list) and claim_types:
-            constraints['txo_type__in'] = [TXO_TYPES[ct] for ct in claim_types]
+        if claim_types:
+            constrain_single_or_list(
+                constraints, 'txo_type', claim_types, lambda x: TXO_TYPES[x]
+            )
         else:
             constraints['txo_type__in'] = CLAIM_TYPES
 

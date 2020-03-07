@@ -564,6 +564,9 @@ class CommandTestCase(IntegrationTestCase):
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']
 
+    async def txo_list(self, *args, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_txo_list(*args, **kwargs)))['items']
+
     async def claim_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 
@@ -572,6 +575,9 @@ class CommandTestCase(IntegrationTestCase):
 
     async def channel_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_channel_list(*args, **kwargs)))['items']
+
+    async def transaction_list(self, *args, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_transaction_list(*args, **kwargs)))['items']
 
     @staticmethod
     def get_claim_id(tx):
