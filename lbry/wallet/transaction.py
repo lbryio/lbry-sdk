@@ -207,7 +207,7 @@ class OutputEffectiveAmountEstimator:
 class Output(InputOutput):
 
     __slots__ = (
-        'amount', 'script', 'is_change', 'is_my_account',
+        'amount', 'script', 'is_change', 'is_spent', 'is_my_account',
         'channel', 'private_key', 'meta',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
@@ -215,13 +215,15 @@ class Output(InputOutput):
 
     def __init__(self, amount: int, script: OutputScript,
                  tx_ref: TXRef = None, position: int = None,
-                 is_change: Optional[bool] = None, is_my_account: Optional[bool] = None,
+                 is_change: Optional[bool] = None, is_spent: Optional[bool] = None,
+                 is_my_account: Optional[bool] = None,
                  channel: Optional['Output'] = None, private_key: Optional[str] = None
                  ) -> None:
         super().__init__(tx_ref, position)
         self.amount = amount
         self.script = script
         self.is_change = is_change
+        self.is_spent = is_spent
         self.is_my_account = is_my_account
         self.channel = channel
         self.private_key = private_key
@@ -234,10 +236,12 @@ class Output(InputOutput):
 
     def update_annotations(self, annotated):
         if annotated is None:
-            self.is_change = False
-            self.is_my_account = False
+            self.is_change = None
+            self.is_spent = None
+            self.is_my_account = None
         else:
             self.is_change = annotated.is_change
+            self.is_spent = annotated.is_spent
             self.is_my_account = annotated.is_my_account
         self.channel = annotated.channel if annotated else None
         self.private_key = annotated.private_key if annotated else None

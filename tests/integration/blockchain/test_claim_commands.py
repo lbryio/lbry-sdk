@@ -1369,6 +1369,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(txs[0]['confirmations'], 1)
         self.assertEqual(txs[0]['claim_info'][0]['balance_delta'], '-2.5')
         self.assertEqual(txs[0]['claim_info'][0]['claim_id'], claim_id)
+        self.assertFalse(txs[0]['claim_info'][0]['is_spent'])
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.020107')
         await self.assertBalance(self.account, '7.479893')
@@ -1382,6 +1383,8 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(len(txs[0]['update_info']), 1)
         self.assertEqual(txs[0]['update_info'][0]['balance_delta'], '1.5')
         self.assertEqual(txs[0]['update_info'][0]['claim_id'], claim_id)
+        self.assertFalse(txs[0]['update_info'][0]['is_spent'])
+        self.assertTrue(txs[1]['claim_info'][0]['is_spent'])
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.0002165')
         await self.assertBalance(self.account, '8.9796765')
@@ -1391,6 +1394,9 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(txs[0]['abandon_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['abandon_info'][0]['claim_id'], claim_id)
+        self.assertTrue(txs[0]['abandon_info'][0]['is_spent'])
+        self.assertTrue(txs[1]['update_info'][0]['is_spent'])
+        self.assertTrue(txs[2]['claim_info'][0]['is_spent'])
         self.assertEqual(txs[0]['value'], '0.0')
         self.assertEqual(txs[0]['fee'], '-0.000107')
         await self.assertBalance(self.account, '9.9795695')
@@ -1494,6 +1500,7 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs[0]['support_info'][0]['balance_delta'], '1.0')
         self.assertEqual(txs[0]['support_info'][0]['claim_id'], claim_id)
         self.assertTrue(txs[0]['support_info'][0]['is_tip'])
+        self.assertFalse(txs[0]['support_info'][0]['is_spent'])
         self.assertEqual(txs[0]['value'], '1.0')
         self.assertEqual(txs[0]['fee'], '0.0')
 
@@ -1505,6 +1512,7 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
         self.assertTrue(txs2[0]['support_info'][0]['is_tip'])
+        self.assertFalse(txs2[0]['support_info'][0]['is_spent'])
         self.assertEqual(txs2[0]['value'], '-1.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
 
@@ -1525,8 +1533,18 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-2.0')
         self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
         self.assertFalse(txs2[0]['support_info'][0]['is_tip'])
+        self.assertFalse(txs2[0]['support_info'][0]['is_spent'])
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+        # abandoning the tip increases balance and shows tip as spent
+        await self.support_abandon(claim_id)
+        await self.assertBalance(self.account, '4.979662')
+        txs = (await self.out(self.daemon.jsonrpc_transaction_list(self.account.id)))['items']
+        self.assertEqual(len(txs[0]['abandon_info']), 1)
+        self.assertEqual(len(txs[1]['support_info']), 1)
+        self.assertTrue(txs[1]['support_info'][0]['is_tip'])
+        self.assertTrue(txs[1]['support_info'][0]['is_spent'])
 
 
 class CollectionCommands(CommandTestCase):
