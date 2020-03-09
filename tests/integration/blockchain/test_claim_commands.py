@@ -480,6 +480,26 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertTrue(r[0]['is_spent'])
         self.assertTrue(r[1]['is_spent'])
 
+    async def test_txo_list_received_filtering(self):
+        wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
+        address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
+        await self.channel_create(claim_address=address2)
+
+        r = await self.txo_list(include_is_received=True)
+        self.assertEqual(2, len(r))
+        self.assertFalse(r[0]['is_received'])
+        self.assertTrue(r[1]['is_received'])
+        rt = await self.txo_list(is_not_received=True)
+        self.assertEqual(1, len(rt))
+        self.assertEqual(rt[0], r[0])
+        rf = await self.txo_list(is_received=True)
+        self.assertEqual(1, len(rf))
+        self.assertEqual(rf[0], r[1])
+
+        r = await self.txo_list(include_is_received=True, wallet_id=wallet2.id)
+        self.assertEqual(1, len(r))
+        self.assertTrue(r[0]['is_received'])
+
 
 class ClaimCommands(ClaimTestCase):
 

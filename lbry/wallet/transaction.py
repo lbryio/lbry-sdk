@@ -207,7 +207,7 @@ class OutputEffectiveAmountEstimator:
 class Output(InputOutput):
 
     __slots__ = (
-        'amount', 'script', 'is_change', 'is_spent', 'is_my_account',
+        'amount', 'script', 'is_change', 'is_spent', 'is_received', 'is_my_account',
         'channel', 'private_key', 'meta',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
@@ -216,7 +216,7 @@ class Output(InputOutput):
     def __init__(self, amount: int, script: OutputScript,
                  tx_ref: TXRef = None, position: int = None,
                  is_change: Optional[bool] = None, is_spent: Optional[bool] = None,
-                 is_my_account: Optional[bool] = None,
+                 is_received: Optional[bool] = None, is_my_account: Optional[bool] = None,
                  channel: Optional['Output'] = None, private_key: Optional[str] = None
                  ) -> None:
         super().__init__(tx_ref, position)
@@ -224,6 +224,7 @@ class Output(InputOutput):
         self.script = script
         self.is_change = is_change
         self.is_spent = is_spent
+        self.is_received = is_received
         self.is_my_account = is_my_account
         self.channel = channel
         self.private_key = private_key

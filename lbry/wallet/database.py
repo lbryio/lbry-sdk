@@ -577,7 +577,19 @@ class Database(SQLiteMixin):
         if txs:
             return txs[0]
 
-    async def select_txos(self, cols, **constraints):
+    async def select_txos(self, cols, wallet=None, include_is_received=False, **constraints):
+        if include_is_received:
+            assert wallet is not None, 'cannot use is_recieved filter without wallet argument'
+            account_in_wallet, values = constraints_to_sql({
+                '$$account__in#is_received': [a.public_key.address for a in wallet.accounts]
+            })
+            cols += f""",
+            NOT EXISTS(
+                SELECT 1 FROM txi JOIN account_address USING (address)
+                WHERE txi.txid=txo.txid AND {account_in_wallet}
+            ) as is_received
+            """
+            constraints.update(values)
         sql = f"SELECT {cols} FROM txo JOIN tx USING (txid)"
         if 'accounts' in constraints:
             sql += " JOIN account_address USING (address)"
@@ -588,7 +600,8 @@ class Database(SQLiteMixin):
         constraints['is_reserved'] = False
         constraints['txoid__not_in'] = "SELECT txoid FROM txi"
 
-    async def get_txos(self, wallet=None, no_tx=False, unspent=False, **constraints):
+    async def get_txos(self, wallet=None, no_tx=False, unspent=False, include_is_received=False, **constraints):
+        include_is_received = include_is_received or 'is_received' in constraints
         if unspent:
             self.constrain_unspent(constraints)
         my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()
@@ -601,9 +614,9 @@ class Database(SQLiteMixin):
             tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, amount, script, (
                 select group_concat(account||"|"||chain) from account_address
                 where account_address.address=txo.address
-            ), exists(select txoid from txi where txi.txoid=txo.txoid)
+            ), exists(select 1 from txi where txi.txoid=txo.txoid)
             """,
-            **constraints
+            wallet=wallet, include_is_received=include_is_received, **constraints
         )
         txos = []
         txs = {}
@@ -624,6 +637,8 @@ class Database(SQLiteMixin):
             row_accounts = dict(a.split('|') for a in row[8].split(','))
             account_match = set(row_accounts) & my_accounts
             txo.is_spent = bool(row[9])
+            if include_is_received:
+                txo.is_received = bool(row[10])
             if account_match:
                 txo.is_my_account = True
                 txo.is_change = row_accounts[account_match.pop()] == '1'
@@ -660,8 +675,8 @@ class Database(SQLiteMixin):
         return txos
 
     async def get_txo_count(self, unspent=False, **constraints):
+        constraints['include_is_received'] = 'is_received' in constraints
         constraints.pop('resolve', None)
-        constraints.pop('wallet', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)

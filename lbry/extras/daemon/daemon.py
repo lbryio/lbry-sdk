@@ -3902,18 +3902,19 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_support_list(self, *args, **kwargs):
+    def jsonrpc_support_list(self, *args, tips=None, **kwargs):
         """
         List supports and tips in my control.
 
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...]
+                         [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --name=<name>              : (str or list) claim name
             --claim_id=<claim_id>      : (str or list) claim id
+            --tips                     : (bool) only show tips (is_received=true)
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3923,6 +3924,9 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         kwargs['type'] = 'support'
         kwargs['unspent'] = True
+        kwargs['include_is_received'] = True
+        if tips is True:
+            kwargs['is_received'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4098,6 +4102,7 @@ class Daemon(metaclass=JSONRPCServerType):
     def jsonrpc_txo_list(
             self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
             claim_id=None, name=None, unspent=False,
+            include_is_received=False, is_received=None, is_not_received=None,
             wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my transaction outputs.
@@ -4105,7 +4110,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
-                     [--wallet_id=<wallet_id>]
+                     [--include_is_received] [--is_received] [--is_not_received]
+                     [--wallet_id=<wallet_id>] [--include_is_received] [--is_received]
                      [--page=<page>] [--page_size=<page_size>]
                      [--resolve]
 
@@ -4116,6 +4122,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --unspent                  : (bool) hide spent outputs, show only unspent ones
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
+            --include_is_received      : (bool) calculate the is_received property and
+                                         include in output, this happens automatically if you
+                                         use the --is_received or --is_not_received filters
+            --is_received              : (bool) only return txos sent from others to this account
+            --is_not_received          : (bool) only return txos created by this account
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -4132,7 +4143,11 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts)
             claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts)
-        constraints = {'resolve': resolve, 'unspent': unspent}
+        constraints = {'resolve': resolve, 'unspent': unspent, 'include_is_received': include_is_received}
+        if is_received is True:
+            constraints['is_received'] = True
+        elif is_not_received is True:
+            constraints['is_received'] = False
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)
