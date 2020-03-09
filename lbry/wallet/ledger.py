@@ -262,6 +262,15 @@ class Ledger(metaclass=LedgerRegistry):
         self.constraint_spending_utxos(constraints)
         return self.db.get_utxo_count(**constraints)
 
+    async def get_txos(self, resolve=False, **constraints):
+        txos = await self.db.get_txos(**constraints)
+        if resolve:
+            return await self._resolve_for_local_results(constraints.get('accounts', []), txos)
+        return txos
+
+    def get_txo_count(self, **constraints):
+        return self.db.get_txo_count(**constraints)
+
     def get_transactions(self, **constraints):
         return self.db.get_transactions(**constraints)
 
@@ -735,9 +744,11 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def _resolve_for_local_results(self, accounts, txos):
         results = []
-        response = await self.resolve(accounts, [txo.permanent_url for txo in txos])
+        response = await self.resolve(
+            accounts, [txo.permanent_url for txo in txos if txo.can_decode_claim]
+        )
         for txo in txos:
-            resolved = response[txo.permanent_url]
+            resolved = response.get(txo.permanent_url) if txo.can_decode_claim else None
             if isinstance(resolved, Output):
                 resolved.update_annotations(txo)
                 results.append(resolved)

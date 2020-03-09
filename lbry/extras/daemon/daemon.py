@@ -21,9 +21,10 @@ from prometheus_client import generate_latest as prom_generate_latest
 from google.protobuf.message import DecodeError
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
-    Transaction, Output, Input, Account
+    Transaction, Output, Input, Account, database
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
+from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -2167,19 +2168,20 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_claim_list(
-            self, claim_type=None, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
+    def jsonrpc_claim_list(self, claim_type=None, **kwargs):
         """
         List my stream and channel claims.
 
         Usage:
-            claim_list [--claim_type=<claim_type>...]
+            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
                        [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
                        [--resolve]
 
         Options:
-            --claim_type=<claim_type>  : (str) claim type: channel, stream, repost, collection
+            --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
+            --claim_id=<claim_id>      : (str or list) claim id
+            --name=<name>              : (str or list) claim name
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2188,15 +2190,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            claims = account.get_claims
-            claim_count = account.get_claim_count
-        else:
-            claims = partial(self.ledger.get_claims, wallet=wallet, accounts=wallet.accounts)
-            claim_count = partial(self.ledger.get_claim_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(claims, claim_count, page, page_size, claim_type=claim_type, resolve=resolve)
+        kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
+        kwargs['unspent'] = True
+        return self.jsonrpc_txo_list(**kwargs)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(self, **kwargs):
@@ -2699,15 +2695,18 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
+    def jsonrpc_channel_list(self, *args, **kwargs):
         """
         List my channel claims.
 
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+                         [--name=<name>...] [--claim_id=<claim_id>...]
                          [--page=<page>] [--page_size=<page_size>] [--resolve]
 
         Options:
+            --name=<name>              : (str or list) channel name
+            --claim_id=<claim_id>      : (str or list) channel id
             --account_id=<account_id>  : (str) id of the account to use
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2716,15 +2715,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            channels = account.get_channels
-            channel_count = account.get_channel_count
-        else:
-            channels = partial(self.ledger.get_channels, wallet=wallet, accounts=wallet.accounts)
-            channel_count = partial(self.ledger.get_channel_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(channels, channel_count, page, page_size, resolve=resolve)
+        kwargs['type'] = 'channel'
+        kwargs['unspent'] = True
+        return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_export(self, channel_id=None, channel_name=None, account_id=None, wallet_id=None):
@@ -3441,15 +3434,18 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_stream_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False):
+    def jsonrpc_stream_list(self, *args, **kwargs):
         """
         List my stream claims.
 
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                       [--page=<page>] [--page_size=<page_size>] [--resolve]
+                        [--name=<name>...] [--claim_id=<claim_id>...]
+                        [--page=<page>] [--page_size=<page_size>] [--resolve]
 
         Options:
+            --name=<name>              : (str or list) stream name
+            --claim_id=<claim_id>      : (str or list) stream id
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3458,15 +3454,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            streams = account.get_streams
-            stream_count = account.get_stream_count
-        else:
-            streams = partial(self.ledger.get_streams, wallet=wallet, accounts=wallet.accounts)
-            stream_count = partial(self.ledger.get_stream_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(streams, stream_count, page, page_size, resolve=resolve)
+        kwargs['type'] = 'stream'
+        kwargs['unspent'] = True
+        return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
               DHT_COMPONENT, DATABASE_COMPONENT)
@@ -3912,15 +3902,19 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_support_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_support_list(self, *args, tips=None, **kwargs):
         """
         List supports and tips in my control.
 
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+                         [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
                          [--page=<page>] [--page_size=<page_size>]
 
         Options:
+            --name=<name>              : (str or list) claim name
+            --claim_id=<claim_id>      : (str or list) claim id
+            --tips                     : (bool) only show tips (is_received=true)
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3928,15 +3922,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            supports = account.get_supports
-            support_count = account.get_support_count
-        else:
-            supports = partial(self.ledger.get_supports, wallet=wallet, accounts=wallet.accounts)
-            support_count = partial(self.ledger.get_support_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(supports, support_count, page, page_size)
+        kwargs['type'] = 'support'
+        kwargs['unspent'] = True
+        kwargs['include_is_received'] = True
+        if tips is True:
+            kwargs['is_received'] = True
+        return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_support_abandon(
@@ -4103,12 +4094,71 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         return self.wallet_manager.get_transaction(txid)
 
+    TXO_DOC = """
+    List transaction outputs.
+    """
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_txo_list(
+            self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
+            claim_id=None, name=None, unspent=False,
+            include_is_received=False, is_received=None, is_not_received=None,
+            wallet_id=None, page=None, page_size=None, resolve=False):
+        """
+        List my transaction outputs.
+
+        Usage:
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--include_is_received] [--is_received] [--is_not_received]
+                     [--wallet_id=<wallet_id>] [--include_is_received] [--is_received]
+                     [--page=<page>] [--page_size=<page_size>]
+                     [--resolve]
+
+        Options:
+            --type=<type>              : (str or list) claim type: stream, channel, support,
+                                         purchase, collection, repost, other
+            --txid=<txid>              : (str or list) transaction id of outputs
+            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --claim_id=<claim_id>      : (str or list) claim id
+            --name=<name>              : (str or list) claim name
+            --include_is_received      : (bool) calculate the is_received property and
+                                         include in output, this happens automatically if you
+                                         use the --is_received or --is_not_received filters
+            --is_received              : (bool) only return txos sent from others to this account
+            --is_not_received          : (bool) only return txos created by this account
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --page=<page>              : (int) page to return during paginating
+            --page_size=<page_size>    : (int) number of items on page during pagination
+            --resolve                  : (bool) resolves each claim to provide additional metadata
+
+        Returns: {Paginated[Output]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        if account_id:
+            account = wallet.get_account_or_error(account_id)
+            claims = account.get_txos
+            claim_count = account.get_txo_count
+        else:
+            claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts)
+            claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts)
+        constraints = {'resolve': resolve, 'unspent': unspent, 'include_is_received': include_is_received}
+        if is_received is True:
+            constraints['is_received'] = True
+        elif is_not_received is True:
+            constraints['is_received'] = False
+        database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
+        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
+        database.constrain_single_or_list(constraints, 'claim_name', name)
+        return paginate_rows(claims, claim_count, page, page_size, **constraints)
+
     UTXO_DOC = """
     Unspent transaction management.
     """
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_utxo_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_utxo_list(self, *args, **kwargs):
         """
         List unspent transaction outputs
 
@@ -4124,15 +4174,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            utxos = account.get_utxos
-            utxo_count = account.get_utxo_count
-        else:
-            utxos = partial(self.ledger.get_utxos, wallet=wallet, accounts=wallet.accounts)
-            utxo_count = partial(self.ledger.get_utxo_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(utxos, utxo_count, page, page_size)
+        kwargs['type'] = ['other', 'purchase']
+        kwargs['unspent'] = True
+        return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_utxo_release(self, account_id=None, wallet_id=None):

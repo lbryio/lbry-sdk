@@ -6,6 +6,7 @@ COIN = 100*CENT
 TIMEOUT = 30.0
 
 TXO_TYPES = {
+    "other": 0,
     "stream": 1,
     "channel": 2,
     "support": 3,
@@ -14,9 +15,13 @@ TXO_TYPES = {
     "repost": 6,
 }
 
+CLAIM_TYPE_NAMES = [
+    'stream',
+    'channel',
+    'collection',
+    'repost',
+]
+
 CLAIM_TYPES = [
-    TXO_TYPES['stream'],
-    TXO_TYPES['channel'],
-    TXO_TYPES['collection'],
-    TXO_TYPES['repost'],
+    TXO_TYPES[name] for name in CLAIM_TYPE_NAMES
 ]
