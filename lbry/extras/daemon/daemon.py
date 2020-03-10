@@ -4305,7 +4305,7 @@ class Daemon(metaclass=JSONRPCServerType):
             search_bottom_out_limit = 4
         peers = []
         peer_q = asyncio.Queue(loop=self.component_manager.loop)
-        await self.dht_node._value_producer(blob_hash, peer_q)
+        await self.dht_node._peers_for_value_producer(blob_hash, peer_q)
         while not peer_q.empty():
             peers.extend(peer_q.get_nowait())
         results = [
