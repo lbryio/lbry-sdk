@@ -8,6 +8,7 @@ import inspect
 import typing
 import random
 import hashlib
+import tracemalloc
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -4530,6 +4531,29 @@ class Daemon(metaclass=JSONRPCServerType):
 
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
+
+    TRACEMALLOC_DOC = """
+    Controls and queries tracemalloc memory tracing tools for troubleshooting.
+    """
+
+    def jsonrpc_tracemalloc_set(self, enable: bool):
+        """
+        Enable/disable tracemalloc memory tracing
+
+        Usage:
+            jsonrpc_tracemalloc_set (<enable>)
+
+        Options:
+            --enable               : (bool) True enables, False disables
+
+        Returns:
+            (bool) is it tracing?
+        """
+        if enable:
+            tracemalloc.start()
+        else:
+            tracemalloc.stop()
+        return tracemalloc.is_tracing()
 
     COMMENT_DOC = """
     View, create and abandon comments.
