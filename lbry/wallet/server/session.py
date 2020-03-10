@@ -801,6 +801,7 @@ class LBRYElectrumX(SessionBase):
             'blockchain.scripthash.subscribe': cls.scripthash_subscribe,
             'blockchain.transaction.broadcast': cls.transaction_broadcast,
             'blockchain.transaction.get': cls.transaction_get,
+            'blockchain.transaction.info': cls.transaction_info,
             'blockchain.transaction.get_merkle': cls.transaction_merkle,
             'server.add_peer': cls.add_peer,
             'server.banner': cls.banner,
@@ -1478,6 +1479,17 @@ class LBRYElectrumX(SessionBase):
             self.logger.info(f'error sending transaction: {message}')
             raise RPCError(BAD_REQUEST, 'the transaction was rejected by '
                                         f'network rules.\n\n{message}\n[{raw_tx}]')
+
+    async def transaction_info(self, tx_hash: str):
+        assert_tx_hash(tx_hash)
+        tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
+        raw_tx = tx_info['hex']
+        block_hash = tx_info.get('blockhash')
+        if not block_hash:
+            return raw_tx, {'block_height': -1}
+        merkle_height = (await self.daemon_request('deserialised_block', block_hash))['height']
+        merkle = await self.transaction_merkle(tx_hash, merkle_height)
+        return raw_tx, merkle
 
     async def transaction_get(self, tx_hash, verbose=False):
         """Return the serialized raw transaction given its hash
