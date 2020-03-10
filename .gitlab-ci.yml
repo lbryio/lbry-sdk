@@ -40,10 +40,8 @@ test:unit:
 test:datanetwork-integration:
   stage: test
   script:
-    - apt-get update
-    - apt-get install -y libboost-all-dev
-    - python3.7 -m pip install tox-travis
-    - LIBTORRENT_URL=https://s3.amazonaws.com/files.lbry.io/python_libtorrent-1.2.4-py2.py3-none-any.whl tox -e datanetwork --recreate
+    - pip install tox-travis
+    - tox -e datanetwork --recreate
 
 test:blockchain-integration:
   stage: test
@@ -86,7 +84,7 @@ test:json-api:
 
 build:linux:
   extends: .build
-  image: ubuntu:18.04
+  image: ubuntu:16.04
   variables:
     OS: linux
   before_script:
@@ -94,9 +92,9 @@ build:linux:
     - apt-get install -y --no-install-recommends software-properties-common zip curl build-essential
     - add-apt-repository -y ppa:deadsnakes/ppa
     - apt-get update
-    - apt-get install -y --no-install-recommends python3.7-dev libboost1.65-all-dev
+    - apt-get install -y --no-install-recommends python3.7-dev
     - python3.7 <(curl -q https://bootstrap.pypa.io/get-pip.py) # make sure we get pip with python3.7
-    - pip install https://s3.amazonaws.com/files.lbry.io/python_libtorrent-1.2.4-py3-none-any.whl  # temporarly only on linux
+    - pip install lbry-libtorrent
 
 build:mac:
   extends: .build
