@@ -33,6 +33,13 @@ class MockNetwork:
         self.get_transaction_called.append(tx_hash)
         return self.transaction[tx_hash]
 
+    async def get_transaction_and_merkle(self, tx_hash, known_height=None):
+        tx = await self.get_transaction(tx_hash)
+        merkle = {}
+        if known_height:
+            merkle = await self.get_merkle(tx_hash, known_height)
+        return tx, merkle
+
 
 class LedgerTestCase(AsyncioTestCase):
 

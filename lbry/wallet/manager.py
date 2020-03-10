@@ -256,18 +256,20 @@ class WalletManager:
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
 
-    async def get_transaction(self, txid):
+    async def get_transaction(self, txid: str):
         tx = await self.db.get_transaction(txid=txid)
-        if not tx:
-            try:
-                raw = await self.ledger.network.get_transaction(txid)
-                height = await self.ledger.network.get_transaction_height(txid)
-            except CodeMessageError as e:
-                if 'No such mempool or blockchain transaction.' in e.message:
-                    return {'success': False, 'code': 404, 'message': 'transaction not found'}
-                return {'success': False, 'code': e.code, 'message': e.message}
-            tx = Transaction(unhexlify(raw))
-            await self.ledger.maybe_verify_transaction(tx, height)
+        if tx:
+            return tx
+        try:
+            raw, merkle = await self.ledger.network.get_transaction_and_merkle(txid)
+        except CodeMessageError as e:
+            if 'No such mempool or blockchain transaction.' in e.message:
+                return {'success': False, 'code': 404, 'message': 'transaction not found'}
+            return {'success': False, 'code': e.code, 'message': e.message}
+        height = merkle.get('block_height')
+        tx = Transaction(unhexlify(raw), height=height)
+        if height and height > 0:
+            await self.ledger.maybe_verify_transaction(tx, height, merkle)
         return tx
 
     async def create_purchase_transaction(

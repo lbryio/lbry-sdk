@@ -587,19 +587,23 @@ class Ledger(metaclass=LedgerRegistry):
                 # check local db
                 tx = cache_item.tx = await self.db.get_transaction(txid=txid)
 
+            merkle = None
             if tx is None:
                 # fetch from network
-                _raw = await self.network.retriable_call(self.network.get_transaction, txid, remote_height)
-                tx = Transaction(unhexlify(_raw))
+                _raw, merkle = await self.network.retriable_call(
+                    self.network.get_transaction_and_merkle, txid, remote_height
+                )
+                tx = Transaction(unhexlify(_raw), height=merkle.get('block_height'))
                 cache_item.tx = tx  # make sure it's saved before caching it
 
-            await self.maybe_verify_transaction(tx, remote_height)
+            await self.maybe_verify_transaction(tx, remote_height, merkle)
             return tx
 
-    async def maybe_verify_transaction(self, tx, remote_height):
+    async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
         if 0 < remote_height < len(self.headers):
-            merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
+            if not merkle:
+                merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
