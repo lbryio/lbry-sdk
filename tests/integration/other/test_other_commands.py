@@ -44,3 +44,13 @@ class TroubleshootingCommands(CommandTestCase):
     async def test_tracemalloc_commands(self):
         self.assertFalse(self.daemon.jsonrpc_tracemalloc_set(False))
         self.assertTrue(self.daemon.jsonrpc_tracemalloc_set(True))
+
+        class WeirdObject():
+            pass
+        hold_em = [WeirdObject() for _ in range(500)]
+        self.assertEqual(
+            [{'code': 'hold_em = [WeirdObject() for _ in range(500)]',
+              'count': 502,
+              'line': 'other/test_other_commands.py:50',
+              'size': 36656}], self.daemon.jsonrpc_tracemalloc_top(items=1)
+        )

@@ -1,3 +1,4 @@
+import linecache
 import os
 import re
 import asyncio
@@ -4541,10 +4542,10 @@ class Daemon(metaclass=JSONRPCServerType):
         Enable/disable tracemalloc memory tracing
 
         Usage:
-            jsonrpc_tracemalloc_set (<enable>)
+            jsonrpc_tracemalloc_set (<enable> | --enable=<enable>)
 
         Options:
-            --enable               : (bool) True enables, False disables
+            --enable=<enable>               : (bool) True enables, False disables
 
         Returns:
             (bool) is it tracing?
@@ -4554,6 +4555,49 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             tracemalloc.stop()
         return tracemalloc.is_tracing()
+
+    def jsonrpc_tracemalloc_top(self, items: int = 10):
+        """
+        Show most common objects, the place that created them and their size.
+
+        Usage:
+            jsonrpc_tracemalloc_top [(<items> | --items=<items>)]
+
+        Options:
+            --items=<items>               : (int) maximum items to return, from the most common
+
+        Returns:
+            (dict) dictionary containing most common objects in memory
+            {
+                "line": (str) filename and line number where it was created,
+                "code": (str) code that created it,
+                "size": (int) size in bytes, for each "memory block",
+                "count" (int) number of memory blocks
+            }
+        """
+        if not tracemalloc.is_tracing():
+            raise Exception("Enable tracemalloc first! See 'tracemalloc set' command.")
+        stats = tracemalloc.take_snapshot().filter_traces((
+            tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
+            tracemalloc.Filter(False, "<unknown>"),
+            # tracemalloc and linecache here use some memory, but thats not relevant
+            tracemalloc.Filter(False, tracemalloc.__file__),
+            tracemalloc.Filter(False, linecache.__file__),
+        )).statistics('lineno', True)
+        results = []
+        for stat in stats:
+            frame = stat.traceback[0]
+            filename = os.sep.join(frame.filename.split(os.sep)[-2:])
+            line = linecache.getline(frame.filename, frame.lineno).strip()
+            results.append({
+                "line": f"{filename}:{frame.lineno}",
+                "code": line,
+                "size": stat.size,
+                "count": stat.count
+            })
+            if len(results) == items:
+                break
+        return results
 
     COMMENT_DOC = """
     View, create and abandon comments.
