@@ -4537,7 +4537,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Controls and queries tracemalloc memory tracing tools for troubleshooting.
     """
 
-    def jsonrpc_tracemalloc_set(self, enable: bool):
+    def jsonrpc_tracemalloc_set(self, enable: bool):  # pylint: disable=no-self-use
         """
         Enable/disable tracemalloc memory tracing
 
@@ -4556,7 +4556,7 @@ class Daemon(metaclass=JSONRPCServerType):
             tracemalloc.stop()
         return tracemalloc.is_tracing()
 
-    def jsonrpc_tracemalloc_top(self, items: int = 10):
+    def jsonrpc_tracemalloc_top(self, items: int = 10):  # pylint: disable=no-self-use
         """
         Show most common objects, the place that created them and their size.
 
