@@ -43,8 +43,8 @@ class Daemon:
         self._height = None
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
-        self._block_hash_cache = lrucache(1000000)
-        self._block_cache = lrucache(100000)
+        self._block_hash_cache = lrucache(100000)
+        self._block_cache = lrucache(10000)
 
     async def close(self):
         if self.connector:
