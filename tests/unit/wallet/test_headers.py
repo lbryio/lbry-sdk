@@ -15,11 +15,11 @@ def block_bytes(blocks):
 
 class TestHeaders(AsyncioTestCase):
 
-    def test_deserialize(self):
+    async def test_deserialize(self):
         self.maxDiff = None
         h = Headers(':memory:')
         h.io.write(HEADERS)
-        self.assertEqual(h[0], {
+        self.assertEqual(await h.get(0), {
             'bits': 520159231,
             'block_height': 0,
             'claim_trie_root': b'0000000000000000000000000000000000000000000000000000000000000001',
@@ -29,7 +29,7 @@ class TestHeaders(AsyncioTestCase):
             'timestamp': 1446058291,
             'version': 1
         })
-        self.assertEqual(h[10], {
+        self.assertEqual(await h.get(10), {
             'bits': 509349720,
             'block_height': 10,
             'merkle_root': b'f4d8fded6a181d4a8a2817a0eb423cc0f414af29490004a620e66c35c498a554',
@@ -112,11 +112,11 @@ class TestHeaders(AsyncioTestCase):
         await headers.connect(0, HEADERS)
         self.assertEqual(19, headers.height)
         with self.assertRaises(IndexError):
-            _ = headers[3001]
+            _ = await headers.get(3001)
         with self.assertRaises(IndexError):
-            _ = headers[-1]
-        self.assertIsNotNone(headers[19])
-        self.assertIsNotNone(headers[0])
+            _ = await headers.get(-1)
+        self.assertIsNotNone(await headers.get(19))
+        self.assertIsNotNone(await headers.get(0))
 
     async def test_repair(self):
         headers = Headers(':memory:')
@@ -166,7 +166,7 @@ class TestHeaders(AsyncioTestCase):
             for block_index in range(BLOCKS):
                 while len(headers) < block_index:
                     await asyncio.sleep(0.000001)
-                assert headers[block_index]['block_height'] == block_index
+                assert (await headers.get(block_index))['block_height'] == block_index
         reader_task = asyncio.create_task(reader())
         await writer()
         await reader_task

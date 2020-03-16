@@ -601,7 +601,7 @@ class Ledger(metaclass=LedgerRegistry):
         if 0 < remote_height < len(self.headers):
             merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
-            header = self.headers[remote_height]
+            header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
 
@@ -899,7 +899,7 @@ class Ledger(metaclass=LedgerRegistry):
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
-            ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
+            ts = headers.synchronous_get(tx.height)['timestamp'] if tx.height > 0 else None
             item = {
                 'txid': tx.id,
                 'timestamp': ts,

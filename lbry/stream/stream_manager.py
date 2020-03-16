@@ -338,7 +338,7 @@ class StreamManager:
                     'claim_sequence': -1,
                     'address': txo.get_address(wallet_manager.ledger),
                     'valid_at_height': txo.meta.get('activation_height', None),
-                    'timestamp': wallet_manager.ledger.headers[tx_height]['timestamp'],
+                    'timestamp': wallet_manager.ledger.headers.synchronous_get(tx_height)['timestamp'],
                     'supports': []
                 }
             else:

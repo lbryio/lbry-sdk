@@ -49,11 +49,11 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertTrue(claim['is_channel_signature_valid'])
         self.assertEqual(
             claim['timestamp'],
-            self.ledger.headers[claim['height']]['timestamp']
+            self.ledger.headers.synchronous_get(claim['height'])['timestamp']
         )
         self.assertEqual(
             claim['signing_channel']['timestamp'],
-            self.ledger.headers[claim['signing_channel']['height']]['timestamp']
+            self.ledger.headers.synchronous_get(claim['signing_channel']['height'])['timestamp']
         )
 
         # resolving claim foo by itself

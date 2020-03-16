@@ -104,7 +104,14 @@ class Headers:
     def __bool__(self):
         return True
 
-    def __getitem__(self, height) -> dict:
+    async def get(self, height) -> dict:
+        if isinstance(height, slice):
+            raise NotImplementedError("Slicing of header chain has not been implemented yet.")
+        if not 0 <= height <= self.height:
+            raise IndexError(f"{height} is out of bounds, current height: {self.height}")
+        return self.deserialize(height, self.get_raw_header(height))
+
+    def synchronous_get(self, height):
         if isinstance(height, slice):
             raise NotImplementedError("Slicing of header chain has not been implemented yet.")
         if not 0 <= height <= self.height:
@@ -167,7 +174,7 @@ class Headers:
         for height, chunk in self._iterate_chunks(start, headers):
             try:
                 # validate_chunk() is CPU bound and reads previous chunks from file system
-                self.validate_chunk(height, chunk)
+                await self.validate_chunk(height, chunk)
             except InvalidHeader as e:
                 bail = True
                 chunk = chunk[:(height-e.height)*self.header_size]
@@ -186,13 +193,13 @@ class Headers:
         self._size = self.io.tell() // self.header_size
         return written
 
-    def validate_chunk(self, height, chunk):
+    async def validate_chunk(self, height, chunk):
         previous_hash, previous_header, previous_previous_header = None, None, None
         if height > 0:
-            previous_header = self[height-1]
+            previous_header = await self.get(height-1)
             previous_hash = self.hash(height-1)
         if height > 1:
-            previous_previous_header = self[height-2]
+            previous_previous_header = await self.get(height-2)
         chunk_target = self.get_next_chunk_target(height // 2016 - 1)
         for current_hash, current_header in self._iterate_headers(height, chunk):
             block_target = self.get_next_block_target(chunk_target, previous_previous_header, previous_header)
