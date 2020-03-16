@@ -129,6 +129,8 @@ class TranscodeValidation(ClaimTestCase):
 
     async def test_extension_choice(self):
 
+        self.assertTrue((await self.analyzer.status())["available"])
+
         scan_data = await self.analyzer._get_scan_data(True, self.video_file_name)
         extension = self.analyzer._get_best_container_extension(scan_data, "")
         self.assertEqual(extension, pathlib.Path(self.video_file_name).suffix[1:])
@@ -151,6 +153,7 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual("ogv", extension)
 
     async def test_no_ffmpeg(self):
-        self.conf.ffmpeg_folder = "I don't really exist/"
+        self.conf.ffmpeg_path = "I don't really exist/"
+        self.analyzer._env_copy.pop("PATH", None)
         with self.assertRaisesRegex(Exception, "Unable to locate"):
             await self.analyzer.verify_or_repair(True, False, self.video_file_name)

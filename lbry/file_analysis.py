@@ -26,9 +26,9 @@ class VideoFileAnalyzer:
     def __init__(self, conf: TranscodeConfig):
         self._conf = conf
         self._available_encoders = ""
-        self._ffmpeg_installed = False
-        self._which = None
-        self._checked_ffmpeg = False
+        self._ffmpeg_installed = None
+        self._whichFFmpeg = None
+        self._whichFFprobe = None
         self._env_copy = dict(os.environ)
         if lbry.utils.is_running_from_bundle():
             # handle the situation where PyInstaller overrides our runtime environment:
@@ -38,12 +38,20 @@ class VideoFileAnalyzer:
         if DISABLED:
             return "Disabled on Windows", -1
         args = shlex.split(arguments)
+
         process = await asyncio.create_subprocess_exec(
-            os.path.join(self._conf.ffmpeg_folder, command), *args,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
+            command, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
         )
         stdout, stderr = await process.communicate()  # returns when the streams are closed
         return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+
+    async def _execute_ffmpeg(self, arguments):
+        assert self._ffmpeg_installed
+        return await self._execute(self._whichFFmpeg, arguments)
+
+    async def _execute_ffprobe(self, arguments):
+        assert self._ffmpeg_installed
+        return await self._execute(self._whichFFprobe, arguments)
 
     async def _verify_executable(self, name):
         try:
@@ -51,38 +59,48 @@ class VideoFileAnalyzer:
         except Exception as e:
             code = -1
             version = str(e)
-        if code != 0 or not version.startswith(name):
+        if code != 0 or not version.startswith(str(pathlib.Path(name).stem)):
             log.warning("Unable to run %s, but it was requested. Code: %d; Message: %s", name, code, version)
             raise FileNotFoundError(f"Unable to locate or run {name}. Please install FFmpeg "
-                                    f"and ensure that it is callable via PATH or conf.ffmpeg_folder")
+                                    f"and ensure that it is callable via PATH or conf.ffmpeg_path")
         return version
 
     async def _verify_ffmpeg_installed(self):
         if self._ffmpeg_installed:
             return
-        await self._verify_executable("ffprobe")
-        version = await self._verify_executable("ffmpeg")
-        self._which = shutil.which(os.path.join(self._conf.ffmpeg_folder, "ffmpeg"))
-        self._ffmpeg_installed = True
-        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which)
+        self._ffmpeg_installed = False
+        path = self._conf.ffmpeg_path
+        if hasattr(self._conf, "data_dir"):
+            path += os.path.pathsep + os.path.join(getattr(self._conf, "data_dir"), "ffmpeg", "bin")
+        path += os.path.pathsep + self._env_copy.get("PATH", "")
 
-    async def status(self, reset=False, recheck=False):
+        self._whichFFmpeg = shutil.which("ffmpeg", path=path)
+        if not self._whichFFmpeg:
+            log.warning("Unable to locate ffmpeg executable. Path: %s", path)
+            raise FileNotFoundError(f"Unable to locate ffmpeg executable. Path: {path}")
+        self._whichFFprobe = shutil.which("ffprobe", path=path)
+        if not self._whichFFprobe:
+            log.warning("Unable to locate ffprobe executable. Path: %s", path)
+            raise FileNotFoundError(f"Unable to locate ffprobe executable. Path: {path}")
+        if os.path.dirname(self._whichFFmpeg) != os.path.dirname(self._whichFFprobe):
+            log.warning("ffmpeg and ffprobe are in different folders!")
+        await self._verify_executable(self._whichFFprobe)
+        version = await self._verify_executable(self._whichFFmpeg)
+        self._ffmpeg_installed = True
+        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._whichFFmpeg)
+
+    async def status(self, reset=False):
         if reset:
             self._available_encoders = ""
-            self._ffmpeg_installed = False
-            self._which = None
-        if self._checked_ffmpeg and not recheck:
-            installed = self._ffmpeg_installed
-        else:
-            installed = True
+            self._ffmpeg_installed = None
+        if self._ffmpeg_installed is None:
             try:
                 await self._verify_ffmpeg_installed()
             except FileNotFoundError:
-                installed = False
-            self._checked_ffmpeg = True
+                pass
         return {
-            "available": installed,
-            "which": self._which,
+            "available": self._ffmpeg_installed,
+            "which": self._whichFFmpeg,
             "analyze_audio_volume": int(self._conf.volume_analysis_time) > 0
         }
 
@@ -135,7 +153,7 @@ class VideoFileAnalyzer:
         if {"webm", "ogg"}.intersection(container.split(",")):
             return ""
 
-        result, _ = await self._execute("ffprobe", f'-v debug "{video_file}"')
+        result, _ = await self._execute_ffprobe(f'-v debug "{video_file}"')
         match = re.search(r"Before avformat_find_stream_info.+?\s+seeks:(\d+)\s+", result)
         if match and int(match.group(1)) != 0:
             return "Video stream descriptors are not at the start of the file (the faststart flag was not used)."
@@ -163,8 +181,8 @@ class VideoFileAnalyzer:
         if not validate_volume:
             return ""
 
-        result, _ = await self._execute("ffmpeg", f'-i "{video_file}" -t {seconds} '
-                                        f'-af volumedetect -vn -sn -dn -f null "{os.devnull}"')
+        result, _ = await self._execute_ffmpeg(f'-i "{video_file}" -t {seconds} '
+                                               f'-af volumedetect -vn -sn -dn -f null "{os.devnull}"')
         try:
             mean_volume = float(re.search(r"mean_volume:\s+([-+]?\d*\.\d+|\d+)", result).group(1))
             max_volume = float(re.search(r"max_volume:\s+([-+]?\d*\.\d+|\d+)", result).group(1))
@@ -199,7 +217,7 @@ class VideoFileAnalyzer:
         # if we don't have h264 use vp9; it's fairly compatible even though it's slow
 
         if not self._available_encoders:
-            self._available_encoders, _ = await self._execute("ffmpeg", "-encoders -v quiet")
+            self._available_encoders, _ = await self._execute_ffmpeg("-encoders -v quiet")
 
         encoder = self._conf.video_encoder.split(" ", 1)[0]
         if re.search(fr"^\s*V..... {encoder} ", self._available_encoders, re.MULTILINE):
@@ -233,7 +251,7 @@ class VideoFileAnalyzer:
 
         wants_opus = extension != "mp4"
         if not self._available_encoders:
-            self._available_encoders, _ = await self._execute("ffmpeg", "-encoders -v quiet")
+            self._available_encoders, _ = await self._execute_ffmpeg("-encoders -v quiet")
 
         encoder = self._conf.audio_encoder.split(" ", 1)[0]
         if wants_opus and 'opus' in encoder:
@@ -283,8 +301,8 @@ class VideoFileAnalyzer:
         return "mp4"
 
     async def _get_scan_data(self, validate, file_path):
-        result, _ = await self._execute("ffprobe",
-                                        f'-v quiet -print_format json -show_format -show_streams "{file_path}"')
+        arguments = f'-v quiet -print_format json -show_format -show_streams "{file_path}"'
+        result, _ = await self._execute_ffprobe(arguments)
         try:
             scan_data = json.loads(result)
         except Exception as e:
@@ -293,7 +311,7 @@ class VideoFileAnalyzer:
 
         if "format" not in scan_data or "duration" not in scan_data["format"]:
             log.debug("Format data is missing from ffprobe results for: %s", file_path)
-            raise ValueError(f'Media file does not appear to contain video content at: {file_path}')
+            raise ValueError(f'Media file does not appear to contain video content: {file_path}')
 
         if float(scan_data["format"]["duration"]) < 0.1:
             log.debug("Media file appears to be an image: %s", file_path)
@@ -352,7 +370,6 @@ class VideoFileAnalyzer:
                 transcode_command.append("copy")
 
             transcode_command.append("-movflags +faststart -c:a")
-            path = pathlib.Path(file_path)
             extension = self._get_best_container_extension(scan_data, video_encoder)
 
             if audio_msg or volume_msg:
@@ -365,12 +382,13 @@ class VideoFileAnalyzer:
                 transcode_command.append("copy")
 
             # TODO: put it in a temp folder and delete it after we upload?
+            path = pathlib.Path(file_path)
             output = path.parent / f"{path.stem}_fixed.{extension}"
             transcode_command.append(f'"{output}"')
 
             ffmpeg_command = " ".join(transcode_command)
             log.info("Proceeding on transcode via: ffmpeg %s", ffmpeg_command)
-            result, code = await self._execute("ffmpeg", ffmpeg_command)
+            result, code = await self._execute_ffmpeg(ffmpeg_command)
             if code != 0:
                 raise Exception(f"Failure to complete the transcode command. Output: {result}")
         except Exception as e:

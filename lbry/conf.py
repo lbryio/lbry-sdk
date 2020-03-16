@@ -464,7 +464,9 @@ class BaseConfig:
 
 class TranscodeConfig(BaseConfig):
 
-    ffmpeg_folder = String('The path to ffmpeg and ffprobe', '')
+    ffmpeg_path = String('A list of places to check for ffmpeg and ffprobe. '
+                         f'$data_dir/ffmpeg/bin and $PATH are checked afterward. Separator: {os.pathsep}',
+                         '', previous_names=['ffmpeg_folder'])
     video_encoder = String('FFmpeg codec and parameters for the video encoding. '
                            'Example: libaom-av1 -crf 25 -b:v 0 -strict experimental',
                            'libx264 -crf 21 -preset faster -pix_fmt yuv420p')
