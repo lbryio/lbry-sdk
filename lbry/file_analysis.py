@@ -305,6 +305,9 @@ class VideoFileAnalyzer:
         if not validate and not repair:
             return file_path
 
+        if ignore_non_video and not file_path:
+            return file_path
+
         await self._verify_ffmpeg_installed()
         try:
             scan_data = await self._get_scan_data(validate, file_path)

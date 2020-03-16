@@ -3174,12 +3174,13 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, replace=False, **kwargs):
+            preview=False, blocking=False, replace=False, validate_file=False, optimize_file=False, **kwargs):
         """
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
 
         Usage:
             stream_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>] [--file_path=<file_path>]
+                    [--validate_file] [--optimize_file]
                     [--file_name=<file_name>] [--file_size=<file_size>] [--file_hash=<file_hash>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
                     [--fee_address=<fee_address>] [--clear_fee]
@@ -3199,6 +3200,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>          : (str) id of the stream claim to update
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --validate_file                : (bool) validate that the video container and encodings match
+                                             common web browser support or that optimization succeeds if specified.
+                                             FFmpeg is required and file_path must be specified.
+            --optimize_file                : (bool) transcode the video & audio if necessary to ensure common
+                                             web browser support. FFmpeg is required and file_path must be specified.
             --file_name=<file_name>        : (str) override file name, defaults to name from file_path.
             --file_size=<file_size>        : (str) override file size, otherwise automatically computed.
             --file_hash=<file_hash>        : (str) override file hash, otherwise automatically computed.
@@ -3326,6 +3332,10 @@ class Daemon(metaclass=JSONRPCServerType):
         fee_address = self.get_fee_address(kwargs, claim_address)
         if fee_address:
             kwargs['fee_address'] = fee_address
+
+        file_path = await self._video_file_analyzer.verify_or_repair(
+            validate_file, optimize_file, file_path, ignore_non_video=True
+        )
 
         if replace:
             claim = Claim()
