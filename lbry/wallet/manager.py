@@ -184,6 +184,7 @@ class WalletManager:
             'auto_connect': True,
             'default_servers': config.lbryum_servers,
             'data_path': config.wallet_dir,
+            'skip_transaction_verification': config.skip_transaction_verification,
         }
 
         wallets_directory = os.path.join(config.wallet_dir, 'wallets')

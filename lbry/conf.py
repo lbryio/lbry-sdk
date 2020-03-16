@@ -627,6 +627,10 @@ class Config(CLIConfig):
         "only disable this if file_x commands are not needed", True
     )
 
+    skip_transaction_verification = Toggle(
+        "Enable to skip transaction verification if you trust the wallet server you are connected to", False
+    )
+
     @property
     def streaming_host(self):
         return self.streaming_server.split(':')[0]

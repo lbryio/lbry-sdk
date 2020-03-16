@@ -567,7 +567,7 @@ class Ledger(metaclass=LedgerRegistry):
             cache_item = self._tx_cache[txid] = TransactionCacheItem()
         elif cache_item.tx is not None and \
                 cache_item.tx.height >= remote_height and \
-                (cache_item.tx.is_verified or remote_height < 1):
+                (cache_item.tx.is_verified or self.config.get('skip_transaction_verification') or remote_height < 1):
             return cache_item.tx  # cached tx is already up-to-date
 
         async with cache_item.lock:
@@ -589,6 +589,8 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height):
         tx.height = remote_height
+        if self.config.get("skip_transaction_verification"):
+            return
         if 0 < remote_height < len(self.headers):
             merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
