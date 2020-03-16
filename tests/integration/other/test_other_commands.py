@@ -42,8 +42,8 @@ class SettingsManagement(CommandTestCase):
 
 class TroubleshootingCommands(CommandTestCase):
     async def test_tracemalloc_commands(self):
-        self.assertFalse(self.daemon.jsonrpc_tracemalloc_set(False))
-        self.assertTrue(self.daemon.jsonrpc_tracemalloc_set(True))
+        self.assertFalse(self.daemon.jsonrpc_tracemalloc_disable())
+        self.assertTrue(self.daemon.jsonrpc_tracemalloc_enable())
 
         class WeirdObject():
             pass

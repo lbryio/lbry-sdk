@@ -4537,23 +4537,36 @@ class Daemon(metaclass=JSONRPCServerType):
     Controls and queries tracemalloc memory tracing tools for troubleshooting.
     """
 
-    def jsonrpc_tracemalloc_set(self, enable: bool):  # pylint: disable=no-self-use
+    def jsonrpc_tracemalloc_enable(self):  # pylint: disable=no-self-use
         """
-        Enable/disable tracemalloc memory tracing
+        Enable tracemalloc memory tracing
 
         Usage:
-            jsonrpc_tracemalloc_set (<enable> | --enable=<enable>)
+            jsonrpc_tracemalloc_enable
 
         Options:
-            --enable=<enable>               : (bool) True enables, False disables
+            None
 
         Returns:
             (bool) is it tracing?
         """
-        if enable:
-            tracemalloc.start()
-        else:
-            tracemalloc.stop()
+        tracemalloc.start()
+        return tracemalloc.is_tracing()
+
+    def jsonrpc_tracemalloc_disable(self):  # pylint: disable=no-self-use
+        """
+        Disable tracemalloc memory tracing
+
+        Usage:
+            jsonrpc_tracemalloc_disable
+
+        Options:
+            None
+
+        Returns:
+            (bool) is it tracing?
+        """
+        tracemalloc.stop()
         return tracemalloc.is_tracing()
 
     def jsonrpc_tracemalloc_top(self, items: int = 10):  # pylint: disable=no-self-use
