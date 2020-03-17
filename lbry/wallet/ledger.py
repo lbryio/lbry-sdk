@@ -825,7 +825,7 @@ class Ledger(metaclass=LedgerRegistry):
     def get_support_count(self, **constraints):
         return self.db.get_support_count(**constraints)
 
-    async def get_transaction_history(self, read_only: bool = False, **constraints):
+    async def get_transaction_history(self, read_only=False, **constraints):
         txs: List[Transaction] = await self.db.get_transactions(read_only=read_only, **constraints)
         headers = self.headers
         history = []
@@ -935,7 +935,7 @@ class Ledger(metaclass=LedgerRegistry):
             history.append(item)
         return history
 
-    def get_transaction_history_count(self, read_only: bool = False, **constraints):
+    def get_transaction_history_count(self, read_only=False, **constraints):
         return self.db.get_transaction_count(read_only=read_only, **constraints)
 
     async def get_detailed_balance(self, accounts, confirmations=0):

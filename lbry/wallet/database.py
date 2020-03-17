@@ -102,7 +102,7 @@ class AIOSQLite:
         return self.run(lambda conn: conn.executescript(script))
 
     async def _execute_fetch(self, sql: str, parameters: Iterable = None,
-                             read_only: bool = False, fetch_all: bool = False) -> Iterable[sqlite3.Row]:
+                             read_only=False, fetch_all: bool = False) -> Iterable[sqlite3.Row]:
         read_only_fn = run_read_only_fetchall if fetch_all else run_read_only_fetchone
         parameters = parameters if parameters is not None else []
         if read_only:
@@ -116,11 +116,11 @@ class AIOSQLite:
         return await self.run(lambda conn: conn.execute(sql, parameters).fetchone())
 
     async def execute_fetchall(self, sql: str, parameters: Iterable = None,
-                               read_only: bool = False) -> Iterable[sqlite3.Row]:
+                               read_only=False) -> Iterable[sqlite3.Row]:
         return await self._execute_fetch(sql, parameters, read_only, fetch_all=True)
 
     async def execute_fetchone(self, sql: str, parameters: Iterable = None,
-                               read_only: bool = False) -> Iterable[sqlite3.Row]:
+                               read_only=False) -> Iterable[sqlite3.Row]:
         return await self._execute_fetch(sql, parameters, read_only, fetch_all=False)
 
     def execute(self, sql: str, parameters: Iterable = None) -> Awaitable[sqlite3.Cursor]:
@@ -561,7 +561,7 @@ class Database(SQLiteMixin):
         # 2. update address histories removing deleted TXs
         return True
 
-    async def select_transactions(self, cols, accounts=None, read_only: bool = False, **constraints):
+    async def select_transactions(self, cols, accounts=None, read_only=False, **constraints):
         if not {'txid', 'txid__in'}.intersection(constraints):
             assert accounts, "'accounts' argument required when no 'txid' constraint is present"
             where, values = constraints_to_sql({
@@ -651,7 +651,7 @@ class Database(SQLiteMixin):
         if txs:
             return txs[0]
 
-    async def select_txos(self, cols, wallet=None, include_is_received=False, read_only: bool = False, **constraints):
+    async def select_txos(self, cols, wallet=None, include_is_received=False, read_only=False, **constraints):
         if include_is_received:
             assert wallet is not None, 'cannot use is_recieved filter without wallet argument'
             account_in_wallet, values = constraints_to_sql({
@@ -675,7 +675,7 @@ class Database(SQLiteMixin):
         constraints['txoid__not_in'] = "SELECT txoid FROM txi"
 
     async def get_txos(self, wallet=None, no_tx=False, unspent=False, include_is_received=False,
-                       read_only: bool = False, **constraints):
+                       read_only=False, **constraints):
         include_is_received = include_is_received or 'is_received' in constraints
         if unspent:
             self.constrain_unspent(constraints)
@@ -761,13 +761,13 @@ class Database(SQLiteMixin):
         count = await self.select_txos('count(*)', **constraints)
         return count[0][0]
 
-    def get_utxos(self, read_only: bool = False, **constraints):
+    def get_utxos(self, read_only=False, **constraints):
         return self.get_txos(unspent=True, read_only=read_only, **constraints)
 
     def get_utxo_count(self, **constraints):
         return self.get_txo_count(unspent=True, **constraints)
 
-    async def get_balance(self, wallet=None, accounts=None, read_only: bool = False, **constraints):
+    async def get_balance(self, wallet=None, accounts=None, read_only=False, **constraints):
         assert wallet or accounts, \
             "'wallet' or 'accounts' constraints required to calculate balance"
         constraints['accounts'] = accounts or wallet.accounts
@@ -775,13 +775,13 @@ class Database(SQLiteMixin):
         balance = await self.select_txos('SUM(amount)', read_only=read_only, **constraints)
         return balance[0][0] or 0
 
-    async def select_addresses(self, cols, read_only: bool = False, **constraints):
+    async def select_addresses(self, cols, read_only=False, **constraints):
         return await self.db.execute_fetchall(*query(
             f"SELECT {cols} FROM pubkey_address JOIN account_address USING (address)",
             **constraints
         ), read_only=read_only)
 
-    async def get_addresses(self, cols=None, read_only: bool = False, **constraints):
+    async def get_addresses(self, cols=None, read_only=False, **constraints):
         cols = cols or (
             'address', 'account', 'chain', 'history', 'used_times',
             'pubkey', 'chain_code', 'n', 'depth'
@@ -795,11 +795,11 @@ class Database(SQLiteMixin):
                 )
         return addresses
 
-    async def get_address_count(self, cols=None, read_only: bool = False, **constraints):
+    async def get_address_count(self, cols=None, read_only=False, **constraints):
         count = await self.select_addresses('count(*)', read_only=read_only, **constraints)
         return count[0][0]
 
-    async def get_address(self, read_only: bool = False, **constraints):
+    async def get_address(self, read_only=False, **constraints):
         addresses = await self.get_addresses(read_only=read_only, limit=1, **constraints)
         if addresses:
             return addresses[0]
@@ -864,7 +864,7 @@ class Database(SQLiteMixin):
         else:
             constraints['txo_type__in'] = CLAIM_TYPES
 
-    async def get_claims(self, read_only: bool = False, **constraints) -> List[Output]:
+    async def get_claims(self, read_only=False, **constraints) -> List[Output]:
         self.constrain_claims(constraints)
         return await self.get_utxos(read_only=read_only, **constraints)
 
@@ -876,7 +876,7 @@ class Database(SQLiteMixin):
     def constrain_streams(constraints):
         constraints['txo_type'] = TXO_TYPES['stream']
 
-    def get_streams(self, read_only: bool = False, **constraints):
+    def get_streams(self, read_only=False, **constraints):
         self.constrain_streams(constraints)
         return self.get_claims(read_only=read_only, **constraints)
 
@@ -928,7 +928,7 @@ class Database(SQLiteMixin):
             "  )", (account.public_key.address, )
         )
 
-    def get_supports_summary(self, account_id, read_only: bool = False):
+    def get_supports_summary(self, account_id, read_only=False):
         return self.db.execute_fetchall(f"""
             select txo.amount, exists(select * from txi where txi.txoid=txo.txoid) as spent,
                 (txo.txid in

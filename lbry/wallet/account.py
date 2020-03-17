@@ -435,7 +435,7 @@ class Account:
             addresses.extend(new_addresses)
         return addresses
 
-    async def get_addresses(self, read_only: bool = False, **constraints) -> List[str]:
+    async def get_addresses(self, read_only=False, **constraints) -> List[str]:
         rows = await self.ledger.db.select_addresses('address', read_only=read_only, accounts=[self], **constraints)
         return [r[0] for r in rows]
 
@@ -453,7 +453,7 @@ class Account:
         return self.address_managers[chain].get_public_key(index)
 
     def get_balance(self, confirmations: int = 0, include_claims: bool = False,
-                    read_only: bool = False, **constraints):
+                    read_only=False, **constraints):
         if not include_claims:
             constraints.update({'txo_type__in': (0, TXO_TYPES['purchase'])})
         if confirmations > 0:
@@ -563,7 +563,7 @@ class Account:
             if gap_changed:
                 self.wallet.save()
 
-    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False, read_only: bool = False):
+    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False, read_only=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
         get_total_balance = partial(self.get_balance, read_only=read_only, confirmations=confirmations,
                                     include_claims=True)
@@ -594,12 +594,12 @@ class Account:
             } if reserved_subtotals else None
         }
 
-    def get_transaction_history(self, read_only: bool = False, **constraints):
+    def get_transaction_history(self, read_only=False, **constraints):
         return self.ledger.get_transaction_history(
             read_only=read_only, wallet=self.wallet, accounts=[self], **constraints
         )
 
-    def get_transaction_history_count(self, read_only: bool = False, **constraints):
+    def get_transaction_history_count(self, read_only=False, **constraints):
         return self.ledger.get_transaction_history_count(
             read_only=read_only, wallet=self.wallet, accounts=[self], **constraints
         )
