@@ -452,8 +452,7 @@ class Account:
     def get_public_key(self, chain: int, index: int) -> PubKey:
         return self.address_managers[chain].get_public_key(index)
 
-    def get_balance(self, confirmations: int = 0, include_claims: bool = False,
-                    read_only=False, **constraints):
+    def get_balance(self, confirmations: int = 0, include_claims=False, read_only=False, **constraints):
         if not include_claims:
             constraints.update({'txo_type__in': (0, TXO_TYPES['purchase'])})
         if confirmations > 0:
