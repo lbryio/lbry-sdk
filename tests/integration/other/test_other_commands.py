@@ -38,3 +38,20 @@ class SettingsManagement(CommandTestCase):
         self.assertTrue(self.daemon.analytics_manager.enabled)
         self.assertTrue(loggly.enabled)
         self.daemon.jsonrpc_settings_set('share_usage_data', False)
+
+
+class TroubleshootingCommands(CommandTestCase):
+    async def test_tracemalloc_commands(self):
+        self.addCleanup(self.daemon.jsonrpc_tracemalloc_disable)
+        self.assertFalse(self.daemon.jsonrpc_tracemalloc_disable())
+        self.assertTrue(self.daemon.jsonrpc_tracemalloc_enable())
+
+        class WeirdObject():
+            pass
+        hold_em = [WeirdObject() for _ in range(500)]
+        top = self.daemon.jsonrpc_tracemalloc_top(1)
+        self.assertEqual(1, len(top))
+        self.assertEqual('hold_em = [WeirdObject() for _ in range(500)]', top[0]['code'])
+        self.assertTrue(top[0]['line'].startswith('other/test_other_commands.py:'))
+        self.assertGreaterEqual(top[0]['count'], 500)
+        self.assertGreater(top[0]['size'], 0)  # just matters that its a positive integer
