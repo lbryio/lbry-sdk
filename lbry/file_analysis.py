@@ -6,13 +6,12 @@ import pathlib
 import re
 import shlex
 import shutil
-import platform
+import subprocess
 
 import lbry.utils
 from lbry.conf import TranscodeConfig
 
 log = logging.getLogger(__name__)
-DISABLED = platform.system() == "Windows"
 
 
 class VideoFileAnalyzer:
@@ -27,31 +26,47 @@ class VideoFileAnalyzer:
         self._conf = conf
         self._available_encoders = ""
         self._ffmpeg_installed = None
-        self._whichFFmpeg = None
-        self._whichFFprobe = None
+        self._which_ffmpeg = None
+        self._which_ffprobe = None
         self._env_copy = dict(os.environ)
         if lbry.utils.is_running_from_bundle():
             # handle the situation where PyInstaller overrides our runtime environment:
             self._replace_or_pop_env('LD_LIBRARY_PATH')
 
     async def _execute(self, command, arguments):
-        if DISABLED:
-            return "Disabled on Windows", -1
         args = shlex.split(arguments)
 
-        process = await asyncio.create_subprocess_exec(
-            command, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
-        )
-        stdout, stderr = await process.communicate()  # returns when the streams are closed
-        return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+        # This create_subprocess_exec call is broken in Windows Python 3.7, but it's prettier than what's below.
+        # The recommended fix is switching to ProactorEventLoop, but that breaks UDP in Linux Python 3.7.
+        # Test it again in Python 3.8, both Linux and Windows.
+        # process = await asyncio.create_subprocess_exec(
+        #     command, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
+        # )
+        # stdout, stderr = await process.communicate()  # returns when the streams are closed
+        # return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+
+        def execute_internal():
+            args.insert(0, command)
+            try:
+                # if log.isEnabledFor(logging.DEBUG):
+                #    log.debug("Executing: %s", " ".join(args))
+                with subprocess.Popen(
+                        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env_copy
+                ) as process:
+                    (stdout, stderr) = process.communicate()  # blocks until the process exits
+                    return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+            except subprocess.SubprocessError as e:
+                return str(e), -1
+
+        return await asyncio.get_event_loop().run_in_executor(None, execute_internal)
 
     async def _execute_ffmpeg(self, arguments):
         assert self._ffmpeg_installed
-        return await self._execute(self._whichFFmpeg, arguments)
+        return await self._execute(self._which_ffmpeg, arguments)
 
     async def _execute_ffprobe(self, arguments):
         assert self._ffmpeg_installed
-        return await self._execute(self._whichFFprobe, arguments)
+        return await self._execute(self._which_ffprobe, arguments)
 
     async def _verify_executable(self, name):
         try:
@@ -74,20 +89,20 @@ class VideoFileAnalyzer:
             path += os.path.pathsep + os.path.join(getattr(self._conf, "data_dir"), "ffmpeg", "bin")
         path += os.path.pathsep + self._env_copy.get("PATH", "")
 
-        self._whichFFmpeg = shutil.which("ffmpeg", path=path)
-        if not self._whichFFmpeg:
+        self._which_ffmpeg = shutil.which("ffmpeg", path=path)
+        if not self._which_ffmpeg:
             log.warning("Unable to locate ffmpeg executable. Path: %s", path)
             raise FileNotFoundError(f"Unable to locate ffmpeg executable. Path: {path}")
-        self._whichFFprobe = shutil.which("ffprobe", path=path)
-        if not self._whichFFprobe:
+        self._which_ffprobe = shutil.which("ffprobe", path=path)
+        if not self._which_ffprobe:
             log.warning("Unable to locate ffprobe executable. Path: %s", path)
             raise FileNotFoundError(f"Unable to locate ffprobe executable. Path: {path}")
-        if os.path.dirname(self._whichFFmpeg) != os.path.dirname(self._whichFFprobe):
+        if os.path.dirname(self._which_ffmpeg) != os.path.dirname(self._which_ffprobe):
             log.warning("ffmpeg and ffprobe are in different folders!")
-        await self._verify_executable(self._whichFFprobe)
-        version = await self._verify_executable(self._whichFFmpeg)
+        await self._verify_executable(self._which_ffprobe)
+        version = await self._verify_executable(self._which_ffmpeg)
         self._ffmpeg_installed = True
-        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._whichFFmpeg)
+        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which_ffmpeg)
 
     async def status(self, reset=False):
         if reset:
@@ -100,7 +115,7 @@ class VideoFileAnalyzer:
                 pass
         return {
             "available": self._ffmpeg_installed,
-            "which": self._whichFFmpeg,
+            "which": self._which_ffmpeg,
             "analyze_audio_volume": int(self._conf.volume_analysis_time) > 0
         }
 
@@ -139,12 +154,12 @@ class VideoFileAnalyzer:
             bit_rate = float(scan_data["format"]["bit_rate"])
         else:
             bit_rate = os.stat(file_path).st_size / float(scan_data["format"]["duration"])
-        log.debug("   Detected bitrate is %s Mbps. Allowed is %s Mbps",
+        log.debug("   Detected bitrate is %s Mbps. Allowed max: %s Mbps",
                   str(bit_rate / 1000000.0), str(bit_rate_max / 1000000.0))
 
         if bit_rate > bit_rate_max:
             return "The bit rate is above the configured maximum. Actual: " \
-                   f"{bit_rate / 1000000.0} Mbps; Allowed: {bit_rate_max / 1000000.0} Mbps"
+                   f"{bit_rate / 1000000.0} Mbps; Allowed max: {bit_rate_max / 1000000.0} Mbps"
 
         return ""
 
