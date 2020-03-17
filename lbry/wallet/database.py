@@ -51,8 +51,11 @@ def run_read_only_fetchone(sql, params):
         raise
 
 
+READER_EXECUTOR_CLASS = ThreadPoolExecutor if 'ANDROID_ARGUMENT' in os.environ else ProcessPoolExecutor
+
+
 class AIOSQLite:
-    reader_executor: ProcessPoolExecutor
+    reader_executor: READER_EXECUTOR_CLASS
 
     def __init__(self):
         # has to be single threaded as there is no mapping of thread:connection
@@ -73,7 +76,7 @@ class AIOSQLite:
             db.writer_connection = sqlite3.connect(path, *args, **kwargs)
 
         readers = max(os.cpu_count() - 2, 2)
-        db.reader_executor = ProcessPoolExecutor(
+        db.reader_executor = READER_EXECUTOR_CLASS(
             max_workers=readers, initializer=initializer, initargs=(path, )
         )
         await asyncio.get_event_loop().run_in_executor(db.writer_executor, _connect_writer)
