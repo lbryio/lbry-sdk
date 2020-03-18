@@ -42,6 +42,7 @@ class TestHeaders(AsyncioTestCase):
 
     async def test_connect_from_genesis(self):
         headers = Headers(':memory:')
+        await headers.open()
         self.assertEqual(headers.height, -1)
         await headers.connect(0, HEADERS)
         self.assertEqual(headers.height, 19)
@@ -49,6 +50,7 @@ class TestHeaders(AsyncioTestCase):
     async def test_connect_from_middle(self):
         h = Headers(':memory:')
         h.io.write(HEADERS[:block_bytes(10)])
+        await h.open()
         self.assertEqual(h.height, 9)
         await h.connect(len(h), HEADERS[block_bytes(10):block_bytes(20)])
         self.assertEqual(h.height, 19)
@@ -140,6 +142,7 @@ class TestHeaders(AsyncioTestCase):
 
     async def test_checkpointed_writer(self):
         headers = Headers(':memory:')
+        await headers.open()
         getblocks = lambda start, end: HEADERS[block_bytes(start):block_bytes(end)]
         headers.checkpoint = 10, hexlify(sha256(getblocks(10, 11)))
         async with headers.checkpointed_connector() as buff:
@@ -149,6 +152,7 @@ class TestHeaders(AsyncioTestCase):
             buff.write(getblocks(10, 19))
         self.assertEqual(len(headers), 19)
         headers = Headers(':memory:')
+        await headers.open()
         async with headers.checkpointed_connector() as buff:
             buff.write(getblocks(0, 19))
         self.assertEqual(len(headers), 19)

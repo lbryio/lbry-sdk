@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import logging
 import zlib
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from io import BytesIO
 from contextlib import asynccontextmanager
@@ -47,6 +48,7 @@ class Headers:
         self.path = path
         self._size: Optional[int] = None
         self.chunk_getter: Optional[Callable] = None
+        self.executor = ThreadPoolExecutor(1)
 
     async def open(self):
         if self.path != ':memory:':
@@ -54,8 +56,10 @@ class Headers:
                 self.io = open(self.path, 'w+b')
             else:
                 self.io = open(self.path, 'r+b')
+        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
 
     async def close(self):
+        self.executor.shutdown()
         self.io.close()
 
     @staticmethod
@@ -103,27 +107,34 @@ class Headers:
         return new_target
 
     def __len__(self) -> int:
-        if self._size is None:
-            self._size = self.io.seek(0, os.SEEK_END) // self.header_size
         return self._size
 
     def __bool__(self):
         return True
 
     async def get(self, height) -> dict:
+        if height < 0:
+            raise IndexError(f"Height cannot be negative!!")
         if isinstance(height, slice):
             raise NotImplementedError("Slicing of header chain has not been implemented yet.")
-        return self.deserialize(height, await self.get_raw_header(height))
+        try:
+            return self.deserialize(height, await self.get_raw_header(height))
+        except struct.error:
+            raise IndexError(f"failed to get {height}, at {len(self)}")
 
     def estimated_timestamp(self, height):
         return self.first_block_timestamp + (height * self.timestamp_average_offset)
 
     async def get_raw_header(self, height) -> bytes:
-        await self.ensure_chunk_at(height)
-        self.io.seek(height * self.header_size, os.SEEK_SET)
-        return self.io.read(self.header_size)
+        if self.chunk_getter:
+            await self.ensure_chunk_at(height)
+        return await asyncio.get_running_loop().run_in_executor(self.executor, self._read, height)
 
-    async def chunk_hash(self, start, count):
+    def _read(self, height, count=1):
+        self.io.seek(height * self.header_size, os.SEEK_SET)
+        return self.io.read(self.header_size * count)
+
+    def chunk_hash(self, start, count):
         self.io.seek(start * self.header_size, os.SEEK_SET)
         return self.hash_header(self.io.read(count * self.header_size)).decode()
 
@@ -141,16 +152,20 @@ class Headers:
             zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
         )
         chunk_hash = self.hash_header(chunk).decode()
-        if HASHES[start] == chunk_hash:
-            return self._write(start, chunk)
+        if HASHES.get(start) == chunk_hash:
+            return await asyncio.get_running_loop().run_in_executor(self.executor, self._write, start, chunk)
+        elif start not in HASHES:
+            return  # todo: fixme
         raise Exception(
             f"Checkpoint mismatch at height {start}. Expected {HASHES[start]}, but got {chunk_hash} instead."
         )
 
     async def has_header(self, height):
-        empty = '56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d'
-        all_zeroes = '789d737d4f448e554b318c94063bbfa63e9ccda6e208f5648ca76ee68896557b'
-        return await self.chunk_hash(height, 1) not in (empty, all_zeroes)
+        def _has_header(height):
+            empty = '56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d'
+            all_zeroes = '789d737d4f448e554b318c94063bbfa63e9ccda6e208f5648ca76ee68896557b'
+            return self.chunk_hash(height, 1) not in (empty, all_zeroes)
+        return await asyncio.get_running_loop().run_in_executor(self.executor, _has_header, height)
 
     @property
     def height(self) -> int:
@@ -216,11 +231,11 @@ class Headers:
     def _write(self, height, verified_chunk):
         self.io.seek(height * self.header_size, os.SEEK_SET)
         written = self.io.write(verified_chunk) // self.header_size
-        self.io.truncate()
+        # self.io.truncate()
         # .seek()/.write()/.truncate() might also .flush() when needed
         # the goal here is mainly to ensure we're definitely flush()'ing
         self.io.flush()
-        self._size = self.io.tell() // self.header_size
+        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
         return written
 
     async def validate_chunk(self, height, chunk):
@@ -272,8 +287,9 @@ class Headers:
         previous_header_hash = fail = None
         batch_size = 36
         for start_height in range(0, self.height, batch_size):
-            self.io.seek(self.header_size * start_height)
-            headers = self.io.read(self.header_size*batch_size)
+            headers = await asyncio.get_running_loop().run_in_executor(
+                self.executor, self._read, start_height, batch_size
+            )
             if len(headers) % self.header_size != 0:
                 headers = headers[:(len(headers) // self.header_size) * self.header_size]
             for header_hash, header in self._iterate_headers(start_height, headers):
@@ -286,11 +302,12 @@ class Headers:
                         fail = True
                 if fail:
                     log.warning("Header file corrupted at height %s, truncating it.", height - 1)
-                    self.io.seek(max(0, (height - 1)) * self.header_size, os.SEEK_SET)
-                    self.io.truncate()
-                    self.io.flush()
-                    self._size = None
-                    return
+                    def __truncate(at_height):
+                        self.io.seek(max(0, (at_height - 1)) * self.header_size, os.SEEK_SET)
+                        self.io.truncate()
+                        self.io.flush()
+                        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
+                    return await asyncio.get_running_loop().run_in_executor(self.executor, __truncate, height)
                 previous_header_hash = header_hash
 
     @classmethod
