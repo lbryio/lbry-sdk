@@ -111,12 +111,12 @@ class Headers:
             raise NotImplementedError("Slicing of header chain has not been implemented yet.")
         if not 0 <= height <= self.height:
             raise IndexError(f"{height} is out of bounds, current height: {self.height}")
-        return self.deserialize(height, self.get_raw_header(height))
+        return self.deserialize(height, await self.get_raw_header(height))
 
     def estimated_timestamp(self, height):
         return self.first_block_timestamp + (height * self.timestamp_average_offset)
 
-    def get_raw_header(self, height) -> bytes:
+    async def get_raw_header(self, height) -> bytes:
         self.io.seek(height * self.header_size, os.SEEK_SET)
         return self.io.read(self.header_size)
 
@@ -128,9 +128,9 @@ class Headers:
     def bytes_size(self):
         return len(self) * self.header_size
 
-    def hash(self, height=None) -> bytes:
+    async def hash(self, height=None) -> bytes:
         return self.hash_header(
-            self.get_raw_header(height if height is not None else self.height)
+            await self.get_raw_header(height if height is not None else self.height)
         )
 
     @staticmethod
@@ -195,7 +195,7 @@ class Headers:
         previous_hash, previous_header, previous_previous_header = None, None, None
         if height > 0:
             previous_header = await self.get(height-1)
-            previous_hash = self.hash(height-1)
+            previous_hash = await self.hash(height-1)
         if height > 1:
             previous_previous_header = await self.get(height-2)
         chunk_target = self.get_next_chunk_target(height // 2016 - 1)
