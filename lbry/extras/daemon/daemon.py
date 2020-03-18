@@ -4114,7 +4114,8 @@ class Daemon(metaclass=JSONRPCServerType):
     def jsonrpc_txo_list(
             self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
             claim_id=None, name=None, unspent=False,
-            include_is_received=False, is_received=None, is_not_received=None,
+            include_is_my_output=False, is_my_output=None, is_not_my_output=None,
+            include_is_my_input=False, is_my_input=None, is_not_my_input=None,
             wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my transaction outputs.
@@ -4155,11 +4156,20 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts, read_only=True)
             claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts, read_only=True)
-        constraints = {'resolve': resolve, 'unspent': unspent, 'include_is_received': include_is_received}
-        if is_received is True:
-            constraints['is_received'] = True
-        elif is_not_received is True:
-            constraints['is_received'] = False
+        constraints = {
+            'resolve': resolve,
+            'unspent': unspent,
+            'include_is_my_input': include_is_my_input,
+            'include_is_my_output': include_is_my_output
+        }
+        if is_my_input is True:
+            constraints['is_my_input'] = True
+        elif is_not_my_input is True:
+            constraints['is_my_input'] = False
+        if is_my_output is True:
+            constraints['is_my_output'] = True
+        elif is_not_my_output is True:
+            constraints['is_my_output'] = False
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)

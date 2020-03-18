@@ -555,6 +555,11 @@ class CommandTestCase(IntegrationTestCase):
             self.daemon.jsonrpc_support_abandon(*args, **kwargs), confirm
         )
 
+    async def wallet_send(self, *args, confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_wallet_send(*args, **kwargs), confirm
+        )
+
     async def resolve(self, uri):
         return (await self.out(self.daemon.jsonrpc_resolve(uri)))[uri]
 

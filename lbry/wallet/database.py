@@ -450,11 +450,12 @@ class Database(SQLiteMixin):
     CREATE_TXI_TABLE = """
         create table if not exists txi (
             txid text references tx,
-            txoid text references txo,
-            address text references pubkey_address
+            txoid text references txo primary key,
+            address text references pubkey_address,
+            position integer not null
         );
         create index if not exists txi_address_idx on txi (address);
-        create index if not exists txi_txoid_idx on txi (txoid);
+        create index if not exists first_input_idx on txi (txid, address) where position=0;
     """
 
     CREATE_TABLES_QUERY = (
@@ -466,12 +467,11 @@ class Database(SQLiteMixin):
         CREATE_TXI_TABLE
     )
 
-    @staticmethod
-    def txo_to_row(tx, address, txo):
+    def txo_to_row(self, tx, txo):
         row = {
             'txid': tx.id,
             'txoid': txo.id,
-            'address': address,
+            'address': txo.get_address(self.ledger),
             'position': txo.position,
             'amount': txo.amount,
             'script': sqlite3.Binary(txo.script.source)
@@ -517,24 +517,28 @@ class Database(SQLiteMixin):
     def _transaction_io(self, conn: sqlite3.Connection, tx: Transaction, address, txhash):
         conn.execute(*self._insert_sql('tx', self.tx_to_row(tx), replace=True)).fetchall()
 
-        for txo in tx.outputs:
-            if txo.script.is_pay_pubkey_hash and txo.pubkey_hash == txhash:
-                conn.execute(*self._insert_sql(
-                    "txo", self.txo_to_row(tx, address, txo), ignore_duplicate=True
-                )).fetchall()
-            elif txo.script.is_pay_script_hash:
-                # TODO: implement script hash payments
-                log.warning('Database.save_transaction_io: pay script hash is not implemented!')
+        is_my_input = False
 
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
                 txo = txi.txo_ref.txo
                 if txo.has_address and txo.get_address(self.ledger) == address:
+                    is_my_input = True
                     conn.execute(*self._insert_sql("txi", {
                         'txid': tx.id,
                         'txoid': txo.id,
                         'address': address,
+                        'position': txi.position
                     }, ignore_duplicate=True)).fetchall()
+
+        for txo in tx.outputs:
+            if txo.script.is_pay_pubkey_hash and (txo.pubkey_hash == txhash or is_my_input):
+                conn.execute(*self._insert_sql(
+                    "txo", self.txo_to_row(tx, txo), ignore_duplicate=True
+                )).fetchall()
+            elif txo.script.is_pay_script_hash:
+                # TODO: implement script hash payments
+                log.warning('Database.save_transaction_io: pay script hash is not implemented!')
 
     def save_transaction_io(self, tx: Transaction, address, txhash, history):
         return self.save_transaction_io_batch([tx], address, txhash, history)
@@ -655,22 +659,44 @@ class Database(SQLiteMixin):
         if txs:
             return txs[0]
 
-    async def select_txos(self, cols, wallet=None, include_is_received=False, read_only=False, **constraints):
-        if include_is_received:
-            assert wallet is not None, 'cannot use is_recieved filter without wallet argument'
-            account_in_wallet, values = constraints_to_sql({
-                '$$account__in#is_received': [a.public_key.address for a in wallet.accounts]
+    async def select_txos(self, cols, accounts=None, is_my_input=None, is_my_output=True, read_only=True, **constraints):
+        if 'txoid' in constraints:
+            constraints['txo.txoid'] = constraints.pop('txoid')
+        if 'txoid__in' in constraints:
+            constraints['txo.txoid__in'] = constraints.pop('txoid__in')
+        if accounts:
+            account_in_sql, values = constraints_to_sql({
+                '$$account__in': [a.public_key.address for a in accounts]
             })
-            cols += f""",
-            NOT EXISTS(
-                SELECT 1 FROM txi JOIN account_address USING (address)
-                WHERE txi.txid=txo.txid AND {account_in_wallet}
-            ) as is_received
-            """
+            my_addresses = f"SELECT address FROM account_address WHERE {account_in_sql}"
             constraints.update(values)
-        sql = f"SELECT {cols} FROM txo JOIN tx USING (txid)"
-        if 'accounts' in constraints:
-            sql += " JOIN account_address USING (address)"
+            if is_my_input is True and is_my_output is True:  # special case
+                constraints['received_or_sent__or'] = {
+                    'txo.address__in': my_addresses,
+                    'sent__and': {
+                        'txi.address__is_not_null': True,
+                        'txi.address__in': my_addresses
+                    }
+                }
+            else:
+                if is_my_output is True:
+                    constraints['txo.address__in'] = my_addresses
+                elif is_my_output is False:
+                    constraints['txo.address__not_in'] = my_addresses
+                if is_my_input is True:
+                    constraints['txi.address__is_not_null'] = True
+                    constraints['txi.address__in'] = my_addresses
+                elif is_my_input is False:
+                    constraints['is_my_input_false__or'] = {
+                        'txi.address__is_null': True,
+                        'txi.address__not_in': my_addresses
+                    }
+        sql = f"""
+        SELECT {cols} FROM txo
+            JOIN tx ON (tx.txid=txo.txid)
+            LEFT JOIN txi ON (txi.position=0 AND txi.txid=txo.txid)
+            LEFT JOIN txi AS spent ON (spent.txoid=txo.txoid)
+        """
         return await self.db.execute_fetchall(*query(sql, **constraints), read_only=read_only)
 
     @staticmethod
@@ -678,24 +704,33 @@ class Database(SQLiteMixin):
         constraints['is_reserved'] = False
         constraints['txoid__not_in'] = "SELECT txoid FROM txi"
 
-    async def get_txos(self, wallet=None, no_tx=False, unspent=False, include_is_received=False,
-                       read_only=False, **constraints):
-        include_is_received = include_is_received or 'is_received' in constraints
+    async def get_txos(
+            self, wallet=None, no_tx=False, unspent=False,
+            include_is_my_input=False, include_is_my_output=False,
+            read_only=False, **constraints):
         if unspent:
             self.constrain_unspent(constraints)
         my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()
+        is_my_input_column = ""
+        if include_is_my_input and my_accounts:
+            account_in_wallet_sql, values = constraints_to_sql({'$$account__in#_wallet': my_accounts})
+            is_my_input_column = f""", (
+                txi.address IS NULL AND
+                txi.address IN (SELECT address FROM account_address WHERE {account_in_wallet_sql})
+            )
+            """
+            constraints.update(values)
         if 'order_by' not in constraints:
             constraints['order_by'] = [
                 "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
             ]
         rows = await self.select_txos(
-            """
+            f"""
             tx.txid, raw, tx.height, tx.position, tx.is_verified, txo.position, amount, script, (
                 select group_concat(account||"|"||chain) from account_address
                 where account_address.address=txo.address
-            ), exists(select 1 from txi where txi.txoid=txo.txoid)
-            """,
-            wallet=wallet, include_is_received=include_is_received, read_only=read_only, **constraints
+            ), spent.txoid IS NOT NULL {is_my_input_column}
+            """, read_only=read_only, **constraints
         )
         txos = []
         txs = {}
@@ -716,8 +751,8 @@ class Database(SQLiteMixin):
             row_accounts = dict(a.split('|') for a in row[8].split(','))
             account_match = set(row_accounts) & my_accounts
             txo.is_spent = bool(row[9])
-            if include_is_received:
-                txo.is_received = bool(row[10])
+            if include_is_my_input and my_accounts:
+                txo.is_received = not bool(row[10])
             if account_match:
                 txo.is_my_account = True
                 txo.is_change = row_accounts[account_match.pop()] == '1'
@@ -755,7 +790,9 @@ class Database(SQLiteMixin):
         return txos
 
     async def get_txo_count(self, unspent=False, **constraints):
-        constraints['include_is_received'] = 'is_received' in constraints
+        constraints.pop('include_is_my_input', None)
+        constraints.pop('include_is_my_output', None)
+        constraints.pop('wallet', None)
         constraints.pop('resolve', None)
         constraints.pop('offset', None)
         constraints.pop('limit', None)
