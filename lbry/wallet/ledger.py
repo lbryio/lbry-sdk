@@ -329,8 +329,8 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
-        async with self._header_processing_lock:
-            await self.update_headers()
+        #async with self._header_processing_lock:
+        # await self.update_headers()
         await self.subscribe_accounts()
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)
@@ -349,17 +349,17 @@ class Ledger(metaclass=LedgerRegistry):
     async def initial_headers_sync(self):
         target = self.network.remote_height + 1
         current = len(self.headers)
-        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
-        chunks = [asyncio.create_task(get_chunk(height)) for height in range(current, target, 4096)]
-        total = 0
-        async with self.headers.checkpointed_connector() as buffer:
-            for chunk in chunks:
-                headers = await chunk
-                total += buffer.write(
-                    zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
-                )
-                self._download_height = current + total // self.headers.header_size
+        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=1000, b64=True)
+        self.headers.chunk_getter = get_chunk
+        await self.headers.ensure_tip()
+
+        async def doit():
+            for height in range(current, target, 1000):
+                await self.headers.ensure_chunk_at(height)
+                self._download_height = height
                 log.info("Headers sync: %s / %s", self._download_height, target)
+        asyncio.ensure_future(doit())
+        return
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
@@ -598,7 +598,7 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height):
         tx.height = remote_height
-        if 0 < remote_height < len(self.headers):
+        if 0 < remote_height < self.network.remote_height:
             merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = await self.headers.get(remote_height)

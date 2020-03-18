@@ -1,16 +1,19 @@
+import base64
 import os
 import struct
 import asyncio
 import hashlib
 import logging
+import zlib
 
 from io import BytesIO
 from contextlib import asynccontextmanager
-from typing import Optional, Iterator, Tuple
+from typing import Optional, Iterator, Tuple, Callable
 from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha512, double_sha256, ripemd160
 from lbry.wallet.util import ArithUint256
+from .checkpoints import HASHES
 
 
 log = logging.getLogger(__name__)
@@ -43,6 +46,7 @@ class Headers:
             self.io = BytesIO()
         self.path = path
         self._size: Optional[int] = None
+        self.chunk_getter: Optional[Callable] = None
 
     async def open(self):
         if self.path != ':memory:':
@@ -109,16 +113,44 @@ class Headers:
     async def get(self, height) -> dict:
         if isinstance(height, slice):
             raise NotImplementedError("Slicing of header chain has not been implemented yet.")
-        if not 0 <= height <= self.height:
-            raise IndexError(f"{height} is out of bounds, current height: {self.height}")
         return self.deserialize(height, await self.get_raw_header(height))
 
     def estimated_timestamp(self, height):
         return self.first_block_timestamp + (height * self.timestamp_average_offset)
 
     async def get_raw_header(self, height) -> bytes:
+        await self.ensure_chunk_at(height)
         self.io.seek(height * self.header_size, os.SEEK_SET)
         return self.io.read(self.header_size)
+
+    async def chunk_hash(self, start, count):
+        self.io.seek(start * self.header_size, os.SEEK_SET)
+        return self.hash_header(self.io.read(count * self.header_size)).decode()
+
+    async def ensure_tip(self):
+        await self.ensure_chunk_at(max(HASHES.keys()))
+
+    async def ensure_chunk_at(self, height):
+        if await self.has_header(height):
+            log.info("has header %s", height)
+            return
+        log.info("on-demand fetching height %s", height)
+        start = (height // 1000) * 1000
+        headers = await self.chunk_getter(start)  # pylint: disable=not-callable
+        chunk = (
+            zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
+        )
+        chunk_hash = self.hash_header(chunk).decode()
+        if HASHES[start] == chunk_hash:
+            return self._write(start, chunk)
+        raise Exception(
+            f"Checkpoint mismatch at height {start}. Expected {HASHES[start]}, but got {chunk_hash} instead."
+        )
+
+    async def has_header(self, height):
+        empty = '56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d'
+        all_zeroes = '789d737d4f448e554b318c94063bbfa63e9ccda6e208f5648ca76ee68896557b'
+        return await self.chunk_hash(height, 1) not in (empty, all_zeroes)
 
     @property
     def height(self) -> int:
