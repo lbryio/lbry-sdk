@@ -899,7 +899,7 @@ class Ledger(metaclass=LedgerRegistry):
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
-            ts = headers.synchronous_get(tx.height)['timestamp'] if tx.height > 0 else None
+            ts = headers.estimated_timestamp(tx.height)['timestamp']
             item = {
                 'txid': tx.id,
                 'timestamp': ts,

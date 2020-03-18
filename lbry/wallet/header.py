@@ -33,6 +33,8 @@ class Headers:
     genesis_hash = b'9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
     target_timespan = 150
     checkpoint = (600_000, b'100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2')
+    first_block_timestamp = 1466646588  # block 1, as 0 is off by a lot
+    timestamp_average_offset = 160.6855883050695  # calculated at 733447
 
     validate_difficulty: bool = True
 
@@ -111,12 +113,8 @@ class Headers:
             raise IndexError(f"{height} is out of bounds, current height: {self.height}")
         return self.deserialize(height, self.get_raw_header(height))
 
-    def synchronous_get(self, height):
-        if isinstance(height, slice):
-            raise NotImplementedError("Slicing of header chain has not been implemented yet.")
-        if not 0 <= height <= self.height:
-            raise IndexError(f"{height} is out of bounds, current height: {self.height}")
-        return self.deserialize(height, self.get_raw_header(height))
+    def estimated_timestamp(self, height):
+        return self.first_block_timestamp + (height * self.timestamp_average_offset)
 
     def get_raw_header(self, height) -> bytes:
         self.io.seek(height * self.header_size, os.SEEK_SET)
@@ -282,10 +280,6 @@ class Headers:
             start, end = idx * self.header_size, (idx + 1) * self.header_size
             header = headers[start:end]
             yield self.hash_header(header), self.deserialize(height+idx, header)
-
-    @property
-    def claim_trie_root(self):
-        return self[self.height]['claim_trie_root']
 
     @staticmethod
     def header_hash_to_pow_hash(header_hash: bytes):

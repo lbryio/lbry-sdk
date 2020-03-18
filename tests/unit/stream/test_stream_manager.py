@@ -84,6 +84,9 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
     })
 
     class FakeHeaders:
+        def estimated_timestamp(self, height):
+            return 1984
+
         def __init__(self, height):
             self.height = height
 
