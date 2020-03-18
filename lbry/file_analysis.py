@@ -33,51 +33,44 @@ class VideoFileAnalyzer:
             # handle the situation where PyInstaller overrides our runtime environment:
             self._replace_or_pop_env('LD_LIBRARY_PATH')
 
-    async def _execute(self, command, arguments):
-        args = shlex.split(arguments)
+    @staticmethod
+    def _execute(command, environment):
+        args = shlex.split(command)
 
-        # This create_subprocess_exec call is broken in Windows Python 3.7, but it's prettier than what's below.
-        # The recommended fix is switching to ProactorEventLoop, but that breaks UDP in Linux Python 3.7.
-        # Test it again in Python 3.8, both Linux and Windows.
-        # process = await asyncio.create_subprocess_exec(
-        #     command, *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=self._env_copy
-        # )
-        # stdout, stderr = await process.communicate()  # returns when the streams are closed
-        # return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+        # if log.isEnabledFor(logging.DEBUG):
+        #    log.debug("Executing: %s", " ".join(args))
+        try:
+            with subprocess.Popen(
+                    args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment
+            ) as process:
+                (stdout, stderr) = process.communicate()  # blocks until the process exits
+                return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
+        except subprocess.SubprocessError as e:
+            return str(e), -1
 
-        def execute_internal():
-            args.insert(0, command)
-            try:
-                # if log.isEnabledFor(logging.DEBUG):
-                #    log.debug("Executing: %s", " ".join(args))
-                with subprocess.Popen(
-                        args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=self._env_copy
-                ) as process:
-                    (stdout, stderr) = process.communicate()  # blocks until the process exits
-                    return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
-            except subprocess.SubprocessError as e:
-                return str(e), -1
-
-        return await asyncio.get_event_loop().run_in_executor(None, execute_internal)
-
+    # This create_subprocess_exec call is broken in Windows Python 3.7, but it's prettier than what's here.
+    # The recommended fix is switching to ProactorEventLoop, but that breaks UDP in Linux Python 3.7.
+    # We work around that issue here by using run_in_executor. Check it again in Python 3.8.
     async def _execute_ffmpeg(self, arguments):
-        assert self._ffmpeg_installed
-        return await self._execute(self._which_ffmpeg, arguments)
+        arguments = self._which_ffmpeg + " " + arguments
+        return await asyncio.get_event_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
 
     async def _execute_ffprobe(self, arguments):
-        assert self._ffmpeg_installed
-        return await self._execute(self._which_ffprobe, arguments)
+        arguments = self._which_ffprobe + " " + arguments
+        return await asyncio.get_event_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
 
-    async def _verify_executable(self, name):
+    async def _verify_executables(self):
         try:
-            version, code = await self._execute(name, "-version")
+            await self._execute_ffprobe("-version")
+            version, code = await self._execute_ffmpeg("-version")
         except Exception as e:
             code = -1
             version = str(e)
-        if code != 0 or not version.startswith(str(pathlib.Path(name).stem)):
-            log.warning("Unable to run %s, but it was requested. Code: %d; Message: %s", name, code, version)
-            raise FileNotFoundError(f"Unable to locate or run {name}. Please install FFmpeg "
+        if code != 0 or not version.startswith("ffmpeg"):
+            log.warning("Unable to run ffmpeg, but it was requested. Code: %d; Message: %s", code, version)
+            raise FileNotFoundError(f"Unable to locate or run ffmpeg or ffprobe. Please install FFmpeg "
                                     f"and ensure that it is callable via PATH or conf.ffmpeg_path")
+        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which_ffmpeg)
         return version
 
     async def _verify_ffmpeg_installed(self):
@@ -99,10 +92,8 @@ class VideoFileAnalyzer:
             raise FileNotFoundError(f"Unable to locate ffprobe executable. Path: {path}")
         if os.path.dirname(self._which_ffmpeg) != os.path.dirname(self._which_ffprobe):
             log.warning("ffmpeg and ffprobe are in different folders!")
-        await self._verify_executable(self._which_ffprobe)
-        version = await self._verify_executable(self._which_ffmpeg)
+        await self._verify_executables()
         self._ffmpeg_installed = True
-        log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which_ffmpeg)
 
     async def status(self, reset=False):
         if reset:
