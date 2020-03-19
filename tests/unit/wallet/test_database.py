@@ -266,9 +266,10 @@ class TestQueries(AsyncioTestCase):
         # SQLite is usually compiled with 999 variables limit: https://www.sqlite.org/limits.html
         # This can be removed when there is a better way. See: https://github.com/lbryio/lbry-sdk/issues/2281
         fetchall = self.ledger.db.db.execute_fetchall
-        def check_parameters_length(sql, parameters):
+
+        def check_parameters_length(sql, parameters, read_only=False):
             self.assertLess(len(parameters or []), 999)
-            return fetchall(sql, parameters)
+            return fetchall(sql, parameters, read_only)
 
         self.ledger.db.db.execute_fetchall = check_parameters_length
         account = await self.create_account()
