@@ -17,7 +17,7 @@ def enable_logging():
 
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(message)s')  # %(asctime)s - %(levelname)s -
+    formatter = logging.Formatter('%(message)s')
     handler.setFormatter(formatter)
     root.addHandler(handler)
 
@@ -49,9 +49,6 @@ def main():
     video_file = sys.argv[1]
     conf = TranscodeConfig()
     analyzer = VideoFileAnalyzer(conf)
-    if sys.version_info < (3, 8) and platform.system() == "Windows":
-        # TODO: remove after we move to requiring Python 3.8
-        asyncio.set_event_loop(asyncio.ProactorEventLoop())
     try:
         asyncio.run(process_video(analyzer, video_file))
     except KeyboardInterrupt:

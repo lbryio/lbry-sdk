@@ -32,13 +32,14 @@ class TranscodeValidation(ClaimTestCase):
         self.conf = TranscodeConfig()
         self.conf.volume_analysis_time = 0  # disable it as the test file isn't very good here
         self.analyzer = VideoFileAnalyzer(self.conf)
+        self.assertTrue((await self.analyzer.status())["available"])  # ensure ffmpeg path detected
         file_ogg = self.make_name("ogg", ".ogg")
         self.video_file_ogg = str(file_ogg)
         if not file_ogg.exists():
             command = f'-i "{self.video_file_name}" -c:v libtheora -q:v 4 -c:a libvorbis -q:a 4 ' \
                       f'-c:s copy -c:d copy "{file_ogg}"'
             with MeasureTime(f"Creating {file_ogg.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
         file_webm = self.make_name("webm", ".webm")
@@ -47,7 +48,7 @@ class TranscodeValidation(ClaimTestCase):
             command = f'-i "{self.video_file_name}" -c:v libvpx-vp9 -crf 36 -b:v 0 -cpu-used 2 ' \
                       f'-c:a libopus -b:a 128k -c:s copy -c:d copy "{file_webm}"'
             with MeasureTime(f"Creating {file_webm.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
     async def test_should_work(self):
@@ -68,7 +69,7 @@ class TranscodeValidation(ClaimTestCase):
         if not file_name.exists():
             command = f'-i "{self.video_file_name}" -c copy -map 0 "{file_name}"'
             with MeasureTime(f"Creating {file_name.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
         with self.assertRaisesRegex(Exception, "Container format is not in the approved list"):
@@ -82,7 +83,7 @@ class TranscodeValidation(ClaimTestCase):
         if not file_name.exists():
             command = f'-i "{self.video_file_name}" -c copy -map 0 -c:v libx265 -preset superfast "{file_name}"'
             with MeasureTime(f"Creating {file_name.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
         with self.assertRaisesRegex(Exception, "Video codec is not in the approved list"):
@@ -104,7 +105,7 @@ class TranscodeValidation(ClaimTestCase):
             command = f'-i "{self.video_file_name}" -c copy -map 0 -c:v libx264 ' \
                       f'-vf format=yuv444p "{file_name}"'
             with MeasureTime(f"Creating {file_name.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
         with self.assertRaisesRegex(Exception, "pixel format does not match the approved"):
@@ -118,7 +119,7 @@ class TranscodeValidation(ClaimTestCase):
         if not file_name.exists():
             command = f'-i "{self.video_file_name}" -c copy -map 0 -c:a pcm_s16le "{file_name}"'
             with MeasureTime(f"Creating {file_name.name}"):
-                output, code = await self.analyzer._execute("ffmpeg", command)
+                output, code = await self.analyzer._execute_ffmpeg(command)
                 self.assertEqual(code, 0, output)
 
         with self.assertRaisesRegex(Exception, "Audio codec is not in the approved list"):
@@ -151,6 +152,8 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual("ogv", extension)
 
     async def test_no_ffmpeg(self):
-        self.conf.ffmpeg_folder = "I don't really exist/"
+        self.conf.ffmpeg_path = "I don't really exist/"
+        self.analyzer._env_copy.pop("PATH", None)
+        await self.analyzer.status(reset=True)
         with self.assertRaisesRegex(Exception, "Unable to locate"):
             await self.analyzer.verify_or_repair(True, False, self.video_file_name)
