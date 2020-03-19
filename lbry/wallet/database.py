@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import sqlite3
+import platform
 from binascii import hexlify
 from dataclasses import dataclass
 from contextvars import ContextVar
@@ -51,11 +52,14 @@ def run_read_only_fetchone(sql, params):
         raise
 
 
-READER_EXECUTOR_CLASS = ThreadPoolExecutor if 'ANDROID_ARGUMENT' in os.environ else ProcessPoolExecutor
+if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' in os.environ:
+    ReaderExecutorClass = ThreadPoolExecutor
+else:
+    ReaderExecutorClass = ProcessPoolExecutor
 
 
 class AIOSQLite:
-    reader_executor: READER_EXECUTOR_CLASS
+    reader_executor: ReaderExecutorClass
 
     def __init__(self):
         # has to be single threaded as there is no mapping of thread:connection
@@ -76,7 +80,7 @@ class AIOSQLite:
             db.writer_connection = sqlite3.connect(path, *args, **kwargs)
 
         readers = max(os.cpu_count() - 2, 2)
-        db.reader_executor = READER_EXECUTOR_CLASS(
+        db.reader_executor = ReaderExecutorClass(
             max_workers=readers, initializer=initializer, initargs=(path, )
         )
         await asyncio.get_event_loop().run_in_executor(db.writer_executor, _connect_writer)
