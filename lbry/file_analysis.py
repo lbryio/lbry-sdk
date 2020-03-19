@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import pathlib
+import platform
 import re
 import shlex
 import shutil
@@ -35,13 +36,11 @@ class VideoFileAnalyzer:
 
     @staticmethod
     def _execute(command, environment):
-        args = shlex.split(command)
-
-        # if log.isEnabledFor(logging.DEBUG):
-        #    log.debug("Executing: %s", " ".join(args))
+        # log.debug("Executing: %s", command)
         try:
             with subprocess.Popen(
-                    args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment
+                    shlex.split(command) if platform.system() != 'Windows' else command,
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=environment
             ) as process:
                 (stdout, stderr) = process.communicate()  # blocks until the process exits
                 return stdout.decode(errors='replace') + stderr.decode(errors='replace'), process.returncode
