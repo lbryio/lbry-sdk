@@ -4106,17 +4106,37 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.get_transaction(txid)
 
     TXO_DOC = """
-    List transaction outputs.
+    List and sum transaction outputs.
     """
 
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_txo_list(
-            self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
+    @staticmethod
+    def _constrain_txo_from_kwargs(
+            constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
             claim_id=None, name=None, unspent=False,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
-            is_my_input=None, is_not_my_input=None,
-            wallet_id=None, page=None, page_size=None, resolve=False):
+            is_my_input=None, is_not_my_input=None):
+        constraints['unspent'] = unspent
+        constraints['exclude_internal_transfers'] = exclude_internal_transfers
+        if is_my_input_or_output is True:
+            constraints['is_my_input_or_output'] = True
+        else:
+            if is_my_input is True:
+                constraints['is_my_input'] = True
+            elif is_not_my_input is True:
+                constraints['is_my_input'] = False
+            if is_my_output is True:
+                constraints['is_my_output'] = True
+            elif is_not_my_output is True:
+                constraints['is_my_output'] = False
+        database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
+        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
+        database.constrain_single_or_list(constraints, 'claim_name', name)
+        database.constrain_single_or_list(constraints, 'txid', txid)
+        return constraints
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_txo_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False, **kwargs):
         """
         List my transaction outputs.
 
@@ -4166,27 +4186,55 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts, read_only=True)
         constraints = {
             'resolve': resolve,
-            'unspent': unspent,
-            'exclude_internal_transfers': exclude_internal_transfers,
             'include_is_spent': True,
             'include_is_my_input': True,
             'include_is_my_output': True,
         }
-        if is_my_input_or_output is True:
-            constraints['is_my_input_or_output'] = True
-        else:
-            if is_my_input is True:
-                constraints['is_my_input'] = True
-            elif is_not_my_input is True:
-                constraints['is_my_input'] = False
-            if is_my_output is True:
-                constraints['is_my_output'] = True
-            elif is_not_my_output is True:
-                constraints['is_my_output'] = False
-        database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
-        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
-        database.constrain_single_or_list(constraints, 'claim_name', name)
+        self._constrain_txo_from_kwargs(constraints, **kwargs)
         return paginate_rows(claims, claim_count, page, page_size, **constraints)
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
+        """
+        Sum transaction outputs.
+
+        Usage:
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--is_my_input_or_output |
+                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
+                     ]
+                     [--exclude_internal_transfers]
+                     [--wallet_id=<wallet_id>]
+
+        Options:
+            --type=<type>              : (str or list) claim type: stream, channel, support,
+                                         purchase, collection, repost, other
+            --txid=<txid>              : (str or list) transaction id of outputs
+            --claim_id=<claim_id>      : (str or list) claim id
+            --name=<name>              : (str or list) claim name
+            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
+                                                if using this flag the other related flags
+                                                are ignored (--is_my_output, --is_my_input, etc)
+            --is_my_output             : (bool) show outputs controlled by you
+            --is_not_my_output         : (bool) show outputs not controlled by you
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                "--is_my_input --is_my_output --type=other"
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+
+        Returns: {Paginated[Output]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return self.ledger.get_txo_sum(
+            wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
+            read_only=True, **self._constrain_txo_from_kwargs({}, **kwargs)
+        )
 
     UTXO_DOC = """
     Unspent transaction management.

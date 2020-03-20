@@ -9,6 +9,7 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction
+from lbry.wallet.util import satoshis_to_coins as lbc
 
 
 log = logging.getLogger(__name__)
@@ -420,11 +421,21 @@ class TransactionCommands(ClaimTestCase):
 
 class TransactionOutputCommands(ClaimTestCase):
 
-    async def test_txo_list_filtering(self):
+    async def test_txo_list_and_sum_filtering(self):
         channel_id = self.get_claim_id(await self.channel_create())
+        self.assertEqual('1.0', lbc(await self.txo_sum(type='channel', unspent=True)))
         await self.channel_update(channel_id, bid='0.5')
-        stream_id = self.get_claim_id(await self.stream_create())
-        await self.stream_update(stream_id, bid='0.5')
+        self.assertEqual('0.5', lbc(await self.txo_sum(type='channel', unspent=True)))
+        self.assertEqual('1.5', lbc(await self.txo_sum(type='channel')))
+
+        stream_id = self.get_claim_id(await self.stream_create(bid='1.3'))
+        self.assertEqual('1.3', lbc(await self.txo_sum(type='stream', unspent=True)))
+        await self.stream_update(stream_id, bid='0.7')
+        self.assertEqual('0.7', lbc(await self.txo_sum(type='stream', unspent=True)))
+        self.assertEqual('2.0', lbc(await self.txo_sum(type='stream')))
+
+        self.assertEqual('1.2', lbc(await self.txo_sum(type=['stream', 'channel'], unspent=True)))
+        self.assertEqual('3.5', lbc(await self.txo_sum(type=['stream', 'channel'])))
 
         # type filtering
         r = await self.txo_list(type='channel')
