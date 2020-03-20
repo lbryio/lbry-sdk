@@ -801,6 +801,8 @@ class LBRYElectrumX(SessionBase):
             'blockchain.scripthash.subscribe': cls.scripthash_subscribe,
             'blockchain.transaction.broadcast': cls.transaction_broadcast,
             'blockchain.transaction.get': cls.transaction_get,
+            'blockchain.transaction.get_batch': cls.transaction_get_batch,
+            'blockchain.transaction.info': cls.transaction_info,
             'blockchain.transaction.get_merkle': cls.transaction_merkle,
             'server.add_peer': cls.add_peer,
             'server.banner': cls.banner,
@@ -1478,6 +1480,54 @@ class LBRYElectrumX(SessionBase):
             self.logger.info(f'error sending transaction: {message}')
             raise RPCError(BAD_REQUEST, 'the transaction was rejected by '
                                         f'network rules.\n\n{message}\n[{raw_tx}]')
+
+    async def transaction_info(self, tx_hash: str):
+        assert_tx_hash(tx_hash)
+        tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
+        raw_tx = tx_info['hex']
+        block_hash = tx_info.get('blockhash')
+        if not block_hash:
+            return raw_tx, {'block_height': -1}
+        merkle_height = (await self.daemon_request('deserialised_block', block_hash))['height']
+        merkle = await self.transaction_merkle(tx_hash, merkle_height)
+        return raw_tx, merkle
+
+    async def transaction_get_batch(self, *tx_hashes):
+        if len(tx_hashes) > 100:
+            raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
+        for tx_hash in tx_hashes:
+            assert_tx_hash(tx_hash)
+        batch_result = {}
+        height = None
+        block_hash = None
+        block = None
+        for tx_hash in tx_hashes:
+            tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
+            raw_tx = tx_info['hex']
+            if height is None:
+                if 'blockhash' in tx_info:
+                    block_hash = tx_info['blockhash']
+                    block = await self.daemon_request('deserialised_block', block_hash)
+                    height = block['height']
+                else:
+                    height = -1
+            if block_hash != tx_info.get('blockhash'):
+                raise RPCError(BAD_REQUEST, f'request contains a mix of transaction heights')
+            else:
+                if not block_hash:
+                    merkle = {'block_height': -1}
+                else:
+                    try:
+                        pos = block['tx'].index(tx_hash)
+                    except ValueError:
+                        raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
+                                                    f'block {block_hash} at height {height:,d}')
+                    merkle = {
+                        "merkle": self._get_merkle_branch(block['tx'], pos),
+                        "pos": pos
+                    }
+                batch_result[tx_hash] = [raw_tx, merkle]
+        return batch_result
 
     async def transaction_get(self, tx_hash, verbose=False):
         """Return the serialized raw transaction given its hash
