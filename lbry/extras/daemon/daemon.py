@@ -4145,7 +4145,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_my_input              : (bool) show outputs created by you
             --is_not_my_input          : (bool) show outputs not created by you
            --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
-                                                --is_my_input --is_my_output --type=other
+                                                "--is_my_input --is_my_output --type=other"
                                                 this allows to exclude "change" payments, this
                                                 flag can be used in combination with any of the other flags
             --account_id=<account_id>  : (str) id of the account to query
