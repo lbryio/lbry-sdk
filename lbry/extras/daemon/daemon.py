@@ -3926,7 +3926,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --name=<name>              : (str or list) claim name
             --claim_id=<claim_id>      : (str or list) claim id
-            --tips                     : (bool) only show tips (is_received=true)
+            --tips                     : (bool) only show tips
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3936,9 +3936,8 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         kwargs['type'] = 'support'
         kwargs['unspent'] = True
-        kwargs['include_is_received'] = True
         if tips is True:
-            kwargs['is_received'] = True
+            kwargs['is_my_output'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4114,8 +4113,9 @@ class Daemon(metaclass=JSONRPCServerType):
     def jsonrpc_txo_list(
             self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
             claim_id=None, name=None, unspent=False,
-            include_is_my_output=False, is_my_output=None, is_not_my_output=None,
-            include_is_my_input=False, is_my_input=None, is_not_my_input=None,
+            is_my_input_or_output=None, exclude_internal_transfers=False,
+            is_my_output=None, is_not_my_output=None,
+            is_my_input=None, is_not_my_input=None,
             wallet_id=None, page=None, page_size=None, resolve=False):
         """
         List my transaction outputs.
@@ -4123,23 +4123,31 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
-                     [--include_is_received] [--is_received] [--is_not_received]
-                     [--wallet_id=<wallet_id>] [--include_is_received] [--is_received]
-                     [--page=<page>] [--page_size=<page_size>]
+                     [--is_my_input_or_output |
+                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
+                     ]
+                     [--exclude_internal_transfers]
+                     [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
                      [--resolve]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
                                          purchase, collection, repost, other
             --txid=<txid>              : (str or list) transaction id of outputs
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --include_is_received      : (bool) calculate the is_received property and
-                                         include in output, this happens automatically if you
-                                         use the --is_received or --is_not_received filters
-            --is_received              : (bool) only return txos sent from others to this account
-            --is_not_received          : (bool) only return txos created by this account
+            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
+                                                if using this flag the other related flags
+                                                are ignored (--is_my_output, --is_my_input, etc)
+            --is_my_output             : (bool) show outputs controlled by you
+            --is_not_my_output         : (bool) show outputs not controlled by you
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                --is_my_input --is_my_output --type=other
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -4159,17 +4167,22 @@ class Daemon(metaclass=JSONRPCServerType):
         constraints = {
             'resolve': resolve,
             'unspent': unspent,
-            'include_is_my_input': include_is_my_input,
-            'include_is_my_output': include_is_my_output
+            'exclude_internal_transfers': exclude_internal_transfers,
+            'include_is_spent': True,
+            'include_is_my_input': True,
+            'include_is_my_output': True,
         }
-        if is_my_input is True:
-            constraints['is_my_input'] = True
-        elif is_not_my_input is True:
-            constraints['is_my_input'] = False
-        if is_my_output is True:
-            constraints['is_my_output'] = True
-        elif is_not_my_output is True:
-            constraints['is_my_output'] = False
+        if is_my_input_or_output is True:
+            constraints['is_my_input_or_output'] = True
+        else:
+            if is_my_input is True:
+                constraints['is_my_input'] = True
+            elif is_not_my_input is True:
+                constraints['is_my_input'] = False
+            if is_my_output is True:
+                constraints['is_my_output'] = True
+            elif is_not_my_output is True:
+                constraints['is_my_output'] = False
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)

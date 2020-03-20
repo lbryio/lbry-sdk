@@ -82,14 +82,14 @@ class TestSizeAndFeeEstimation(AsyncioTestCase):
 
 class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
 
-    def test_is_my_account_not_set(self):
+    def test_is_my_output_not_set(self):
         tx = get_transaction()
         with self.assertRaisesRegex(ValueError, "Cannot access net_account_balance"):
             _ = tx.net_account_balance
-        tx.inputs[0].txo_ref.txo.is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_output = True
         with self.assertRaisesRegex(ValueError, "Cannot access net_account_balance"):
             _ = tx.net_account_balance
-        tx.outputs[0].is_my_account = True
+        tx.outputs[0].is_my_output = True
         # all inputs/outputs are set now so it should work
         _ = tx.net_account_balance
 
@@ -98,9 +98,9 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].txo_ref.txo.is_my_account = True
-        tx.outputs[0].is_my_account = False
-        tx.outputs[1].is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_output = True
+        tx.outputs[0].is_my_output = False
+        tx.outputs[1].is_my_output = True
         self.assertEqual(tx.net_account_balance, -200*CENT)
 
     def test_paying_from_other_account_to_my_account(self):
@@ -108,9 +108,9 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].txo_ref.txo.is_my_account = False
-        tx.outputs[0].is_my_account = True
-        tx.outputs[1].is_my_account = False
+        tx.inputs[0].txo_ref.txo.is_my_output = False
+        tx.outputs[0].is_my_output = True
+        tx.outputs[1].is_my_output = False
         self.assertEqual(tx.net_account_balance, 190*CENT)
 
     def test_paying_from_my_account_to_my_account(self):
@@ -118,9 +118,9 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
             .add_inputs([get_input(300*CENT)]) \
             .add_outputs([get_output(190*CENT, NULL_HASH),
                           get_output(100*CENT, NULL_HASH)])
-        tx.inputs[0].txo_ref.txo.is_my_account = True
-        tx.outputs[0].is_my_account = True
-        tx.outputs[1].is_my_account = True
+        tx.inputs[0].txo_ref.txo.is_my_output = True
+        tx.outputs[0].is_my_output = True
+        tx.outputs[1].is_my_output = True
         self.assertEqual(tx.net_account_balance, -10*CENT)  # lost to fee
 
 

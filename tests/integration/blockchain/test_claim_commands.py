@@ -480,25 +480,69 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertTrue(r[0]['is_spent'])
         self.assertTrue(r[1]['is_spent'])
 
-    async def test_txo_list_received_filtering(self):
+    async def test_txo_list_my_input_output_filtering(self):
         wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
         address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
-        await self.channel_create(claim_address=address2)
+        await self.channel_create('@kept-channel')
+        await self.channel_create('@sent-channel', claim_address=address2)
 
-        r = await self.txo_list(include_is_received=True)
-        self.assertEqual(2, len(r))
-        self.assertFalse(r[0]['is_received'])
-        self.assertTrue(r[1]['is_received'])
-        rt = await self.txo_list(is_not_received=True)
-        self.assertEqual(1, len(rt))
-        self.assertEqual(rt[0], r[0])
-        rf = await self.txo_list(is_received=True)
-        self.assertEqual(1, len(rf))
-        self.assertEqual(rf[0], r[1])
+        # all txos on second wallet
+        received_channel, = await self.txo_list(wallet_id=wallet2.id, is_my_input_or_output=True)
+        self.assertEqual('1.0', received_channel['amount'])
+        self.assertFalse(received_channel['is_my_input'])
+        self.assertTrue(received_channel['is_my_output'])
+        self.assertFalse(received_channel['is_internal_transfer'])
 
-        r = await self.txo_list(include_is_received=True, wallet_id=wallet2.id)
-        self.assertEqual(1, len(r))
-        self.assertTrue(r[0]['is_received'])
+        # all txos on default wallet
+        r = await self.txo_list(is_my_input_or_output=True)
+        self.assertEqual(
+            ['1.0', '7.947786', '1.0', '8.973893', '10.0'],
+            [t['amount'] for t in r]
+        )
+
+        sent_channel, change2, kept_channel, change1, initial_funds = r
+
+        self.assertTrue(sent_channel['is_my_input'])
+        self.assertFalse(sent_channel['is_my_output'])
+        self.assertFalse(sent_channel['is_internal_transfer'])
+        self.assertTrue(change2['is_my_input'])
+        self.assertTrue(change2['is_my_output'])
+        self.assertTrue(change2['is_internal_transfer'])
+
+        self.assertTrue(kept_channel['is_my_input'])
+        self.assertTrue(kept_channel['is_my_output'])
+        self.assertFalse(kept_channel['is_internal_transfer'])
+        self.assertTrue(change1['is_my_input'])
+        self.assertTrue(change1['is_my_output'])
+        self.assertTrue(change1['is_internal_transfer'])
+
+        self.assertFalse(initial_funds['is_my_input'])
+        self.assertTrue(initial_funds['is_my_output'])
+        self.assertFalse(initial_funds['is_internal_transfer'])
+
+        # my stuff and stuff i sent excluding "change"
+        r = await self.txo_list(is_my_input_or_output=True, exclude_internal_transfers=True)
+        self.assertEqual([sent_channel, kept_channel, initial_funds], r)
+
+        # my unspent stuff and stuff i sent excluding "change"
+        r = await self.txo_list(is_my_input_or_output=True, unspent=True, exclude_internal_transfers=True)
+        self.assertEqual([sent_channel, kept_channel], r)
+
+        # only "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other")
+        self.assertEqual([change2, change1], r)
+
+        # only unspent "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", unspent=True)
+        self.assertEqual([change2], r)
+
+        # all my unspent stuff
+        r = await self.txo_list(is_my_output=True, unspent=True)
+        self.assertEqual([change2, kept_channel], r)
+
+        # stuff i sent
+        r = await self.txo_list(is_not_my_output=True)
+        self.assertEqual([sent_channel], r)
 
 
 class ClaimCommands(ClaimTestCase):
@@ -617,7 +661,7 @@ class ClaimCommands(ClaimTestCase):
         self.assertTrue(r[1]['meta']['is_controlling'])
 
         # check that metadata is transfered
-        self.assertTrue(r[0]['is_mine'])
+        self.assertTrue(r[0]['is_my_output'])
 
 
 class ChannelCommands(CommandTestCase):

@@ -159,11 +159,11 @@ class Input(InputOutput):
         return self.txo_ref.txo.amount
 
     @property
-    def is_my_account(self) -> Optional[bool]:
+    def is_my_input(self) -> Optional[bool]:
         """ True if the output this input spends is yours. """
         if self.txo_ref.txo is None:
             return False
-        return self.txo_ref.txo.is_my_account
+        return self.txo_ref.txo.is_my_output
 
     @classmethod
     def deserialize_from(cls, stream):
@@ -207,7 +207,7 @@ class OutputEffectiveAmountEstimator:
 class Output(InputOutput):
 
     __slots__ = (
-        'amount', 'script', 'is_change', 'is_spent', 'is_received', 'is_my_account',
+        'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
         'channel', 'private_key', 'meta',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
@@ -215,17 +215,17 @@ class Output(InputOutput):
 
     def __init__(self, amount: int, script: OutputScript,
                  tx_ref: TXRef = None, position: int = None,
-                 is_change: Optional[bool] = None, is_spent: Optional[bool] = None,
-                 is_received: Optional[bool] = None, is_my_account: Optional[bool] = None,
+                 is_internal_transfer: Optional[bool] = None, is_spent: Optional[bool] = None,
+                 is_my_output: Optional[bool] = None, is_my_input: Optional[bool] = None,
                  channel: Optional['Output'] = None, private_key: Optional[str] = None
                  ) -> None:
         super().__init__(tx_ref, position)
         self.amount = amount
         self.script = script
-        self.is_change = is_change
+        self.is_internal_transfer = is_internal_transfer
         self.is_spent = is_spent
-        self.is_received = is_received
-        self.is_my_account = is_my_account
+        self.is_my_output = is_my_output
+        self.is_my_input = is_my_input
         self.channel = channel
         self.private_key = private_key
         self.purchase: 'Output' = None  # txo containing purchase metadata
@@ -235,15 +235,17 @@ class Output(InputOutput):
         self.claims: List['Output'] = None  # resolved claims for collection
         self.meta = {}
 
-    def update_annotations(self, annotated):
+    def update_annotations(self, annotated: 'Output'):
         if annotated is None:
-            self.is_change = None
+            self.is_internal_transfer = None
             self.is_spent = None
-            self.is_my_account = None
+            self.is_my_output = None
+            self.is_my_input = None
         else:
-            self.is_change = annotated.is_change
+            self.is_internal_transfer = annotated.is_internal_transfer
             self.is_spent = annotated.is_spent
-            self.is_my_account = annotated.is_my_account
+            self.is_my_output = annotated.is_my_output
+            self.is_my_input = annotated.is_my_input
         self.channel = annotated.channel if annotated else None
         self.private_key = annotated.private_key if annotated else None
 
@@ -592,21 +594,21 @@ class Transaction:
         for txi in self.inputs:
             if txi.txo_ref.txo is None:
                 continue
-            if txi.is_my_account is None:
-                raise ValueError(
-                    "Cannot access net_account_balance if inputs/outputs do not "
-                    "have is_my_account set properly."
-                )
-            if txi.is_my_account:
+            if txi.is_my_input is True:
                 balance -= txi.amount
-        for txo in self.outputs:
-            if txo.is_my_account is None:
+            elif txi.is_my_input is None:
                 raise ValueError(
-                    "Cannot access net_account_balance if inputs/outputs do not "
-                    "have is_my_account set properly."
+                    "Cannot access net_account_balance if inputs do not "
+                    "have is_my_input set properly."
                 )
-            if txo.is_my_account:
+        for txo in self.outputs:
+            if txo.is_my_output is True:
                 balance += txo.amount
+            elif txo.is_my_output is None:
+                raise ValueError(
+                    "Cannot access net_account_balance if outputs do not "
+                    "have is_my_output set properly."
+                )
         return balance
 
     @property
@@ -751,7 +753,7 @@ class Transaction:
                         change_hash160 = change_account.ledger.address_to_hash160(change_address)
                         change_amount = change - cost_of_change
                         change_output = Output.pay_pubkey_hash(change_amount, change_hash160)
-                        change_output.is_change = True
+                        change_output.is_internal_transfer = True
                         tx.add_outputs([Output.pay_pubkey_hash(change_amount, change_hash160)])
 
                 if tx._outputs:
@@ -856,17 +858,17 @@ class Transaction:
     @property
     def my_inputs(self):
         for txi in self.inputs:
-            if txi.txo_ref.txo is not None and txi.txo_ref.txo.is_my_account:
+            if txi.txo_ref.txo is not None and txi.txo_ref.txo.is_my_output:
                 yield txi
 
     def _filter_my_outputs(self, f):
         for txo in self.outputs:
-            if txo.is_my_account and f(txo.script):
+            if txo.is_my_output and f(txo.script):
                 yield txo
 
     def _filter_other_outputs(self, f):
         for txo in self.outputs:
-            if not txo.is_my_account and f(txo.script):
+            if not txo.is_my_output and f(txo.script):
                 yield txo
 
     def _filter_any_outputs(self, f):
@@ -898,7 +900,7 @@ class Transaction:
     def my_abandon_outputs(self):
         for txi in self.inputs:
             abandon = txi.txo_ref.txo
-            if abandon is not None and abandon.is_my_account and abandon.script.is_claim_involved:
+            if abandon is not None and abandon.is_my_output and abandon.script.is_claim_involved:
                 is_update = False
                 if abandon.script.is_claim_name or abandon.script.is_update_claim:
                     for update in self.my_update_outputs:

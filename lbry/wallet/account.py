@@ -437,7 +437,7 @@ class Account:
 
     async def get_addresses(self, read_only=False, **constraints) -> List[str]:
         rows = await self.ledger.db.select_addresses('address', read_only=read_only, accounts=[self], **constraints)
-        return [r[0] for r in rows]
+        return [r['address'] for r in rows]
 
     def get_address_records(self, **constraints):
         return self.ledger.db.get_addresses(accounts=[self], **constraints)

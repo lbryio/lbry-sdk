@@ -168,14 +168,14 @@ class JSONResponseEncoder(JSONEncoder):
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
         }
-        if txo.is_change is not None:
-            output['is_change'] = txo.is_change
-        if txo.is_received is not None:
-            output['is_received'] = txo.is_received
         if txo.is_spent is not None:
             output['is_spent'] = txo.is_spent
-        if txo.is_my_account is not None:
-            output['is_mine'] = txo.is_my_account
+        if txo.is_my_output is not None:
+            output['is_my_output'] = txo.is_my_output
+        if txo.is_my_input is not None:
+            output['is_my_input'] = txo.is_my_input
+        if txo.is_internal_transfer is not None:
+            output['is_internal_transfer'] = txo.is_internal_transfer
 
         if txo.script.is_claim_name:
             output['type'] = 'claim'
