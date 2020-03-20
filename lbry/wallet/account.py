@@ -454,7 +454,7 @@ class Account:
 
     def get_balance(self, confirmations=0, include_claims=False, read_only=False, **constraints):
         if not include_claims:
-            constraints.update({'txo_type__in': (0, TXO_TYPES['purchase'])})
+            constraints.update({'txo_type__in': (TXO_TYPES['other'], TXO_TYPES['purchase'])})
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
@@ -569,14 +569,13 @@ class Account:
         total = await get_total_balance()
         if reserved_subtotals:
             claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPES)
-            for amount, spent, from_me, to_me, height in await self.get_support_summary():
-                if confirmations > 0 and not 0 < height <= self.ledger.headers.height - (confirmations - 1):
+            for txo in await self.get_support_summary():
+                if confirmations > 0 and not 0 < txo.tx_ref.height <= self.ledger.headers.height - (confirmations - 1):
                     continue
-                if not spent and to_me:
-                    if from_me:
-                        supports_balance += amount
-                    else:
-                        tips_balance += amount
+                if txo.is_my_input:
+                    supports_balance += txo.amount
+                else:
+                    tips_balance += txo.amount
             reserved = claims_balance + supports_balance + tips_balance
         else:
             reserved = await self.get_balance(
@@ -634,7 +633,7 @@ class Account:
         return self.ledger.get_support_count(wallet=self.wallet, accounts=[self], **constraints)
 
     def get_support_summary(self):
-        return self.ledger.db.get_supports_summary(account_id=self.id)
+        return self.ledger.db.get_supports_summary(wallet=self.wallet, accounts=[self])
 
     async def release_all_outputs(self):
         await self.ledger.db.release_all_outputs(self)

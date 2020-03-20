@@ -122,13 +122,13 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.blockchain.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
-        tx = (await account1.get_transactions())[1]
+        tx = (await account1.get_transactions(include_is_my_input=True, include_is_my_output=True))[1]
         self.assertEqual(satoshis_to_coins(tx.inputs[0].amount), '1.1')
         self.assertEqual(satoshis_to_coins(tx.inputs[1].amount), '1.1')
         self.assertEqual(satoshis_to_coins(tx.outputs[0].amount), '2.0')
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address2)
-        self.assertFalse(tx.outputs[0].is_change)
-        self.assertTrue(tx.outputs[1].is_change)
+        self.assertTrue(tx.outputs[0].is_internal_transfer)
+        self.assertTrue(tx.outputs[1].is_internal_transfer)
 
     async def test_history_edge_cases(self):
         await self.blockchain.generate(300)

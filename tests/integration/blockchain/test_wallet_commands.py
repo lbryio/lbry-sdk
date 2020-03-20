@@ -82,6 +82,11 @@ class WalletCommands(CommandTestCase):
 
     async def test_granular_balances(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
+        wallet2 = await self.daemon.jsonrpc_wallet_create('foo', create_account=True)
+        account3 = wallet2.default_account
+        address3 = await self.daemon.jsonrpc_address_unused(account3.id, wallet2.id)
+        await self.confirm_tx(await self.blockchain.send_to_address(address3, 1))
+        await self.generate(1)
 
         account_balance = self.daemon.jsonrpc_account_balance
         wallet_balance = self.daemon.jsonrpc_wallet_balance
@@ -128,7 +133,7 @@ class WalletCommands(CommandTestCase):
 
         # tip received
         support1 = await self.support_create(
-            self.get_claim_id(stream1), '0.3', tip=True, funding_account_ids=[account2.id]
+            self.get_claim_id(stream1), '0.3', tip=True, wallet_id=wallet2.id
         )
         self.assertEqual(await account_balance(), {
             'total': '9.27741',
@@ -137,8 +142,8 @@ class WalletCommands(CommandTestCase):
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'}
         })
         self.assertEqual(await wallet_balance(), {
-            'total': '9.977268',
-            'available': '6.677268',
+            'total': '10.27741',
+            'available': '6.97741',
             'reserved': '3.3',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'}
         })
@@ -153,8 +158,8 @@ class WalletCommands(CommandTestCase):
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
         self.assertEqual(await wallet_balance(), {
-            'total': '9.977161',
-            'available': '6.977161',
+            'total': '10.277303',
+            'available': '7.277303',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
@@ -165,17 +170,17 @@ class WalletCommands(CommandTestCase):
 
         # tip another claim
         await self.support_create(
-            self.get_claim_id(stream2), '0.2', tip=True, funding_account_ids=[self.account.id]
+            self.get_claim_id(stream2), '0.2', tip=True, wallet_id=wallet2.id
         )
         self.assertEqual(await account_balance(), {
-            'total': '9.077157',
-            'available': '6.077157',
+            'total': '9.277303',
+            'available': '6.277303',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
         self.assertEqual(await wallet_balance(), {
-            'total': '9.938908',
-            'available': '6.638908',
+            'total': '10.439196',
+            'available': '7.139196',
             'reserved': '3.3',
             'reserved_subtotals': {'claims': '1.1', 'supports': '2.0', 'tips': '0.2'}
         })

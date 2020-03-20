@@ -839,7 +839,7 @@ class Database(SQLiteMixin):
 
         return txos
 
-    async def get_txo_count(self, unspent=False, **constraints):
+    def _clean_txo_constraints_for_aggregation(self, unspent, constraints):
         constraints.pop('include_is_my_input', None)
         constraints.pop('include_is_my_output', None)
         constraints.pop('wallet', None)
@@ -849,8 +849,16 @@ class Database(SQLiteMixin):
         constraints.pop('order_by', None)
         if unspent:
             self.constrain_unspent(constraints)
+
+    async def get_txo_count(self, unspent=False, **constraints):
+        self._clean_txo_constraints_for_aggregation(unspent, constraints)
         count = await self.select_txos('COUNT(*) as total', **constraints)
         return count[0]['total']
+
+    async def get_txo_sum(self, unspent=False, **constraints):
+        self._clean_txo_constraints_for_aggregation(unspent, constraints)
+        result = await self.select_txos('SUM(amount) as total', **constraints)
+        return result[0]['total']
 
     def get_utxos(self, read_only=False, **constraints):
         return self.get_txos(unspent=True, read_only=read_only, **constraints)
@@ -1019,13 +1027,11 @@ class Database(SQLiteMixin):
             "  )", (account.public_key.address, )
         )
 
-    def get_supports_summary(self, account_id, read_only=False):
-        return self.db.execute_fetchall(f"""
-            select txo.amount, exists(select * from txi where txi.txoid=txo.txoid) as spent,
-                (txo.txid in
-                (select txi.txid from txi join account_address a on txi.address = a.address
-                    where a.account = ?)) as from_me,
-                (txo.address in (select address from account_address where account=?)) as to_me,
-                tx.height
-            from txo join tx using (txid) where txo_type={TXO_TYPES['support']}
-        """, (account_id, account_id), read_only=read_only)
+    def get_supports_summary(self, read_only=False, **constraints):
+        return self.get_txos(
+            txo_type=TXO_TYPES['support'],
+            unspent=True, is_my_output=True,
+            include_is_my_input=True,
+            no_tx=True, read_only=read_only,
+            **constraints
+        )
