@@ -441,6 +441,7 @@ class Database(SQLiteMixin):
             claim_id text,
             claim_name text,
 
+            channel_id text,
             reposted_claim_id text
         );
         create index if not exists txo_txid_idx on txo (txid);
@@ -448,6 +449,7 @@ class Database(SQLiteMixin):
         create index if not exists txo_claim_id_idx on txo (claim_id);
         create index if not exists txo_claim_name_idx on txo (claim_name);
         create index if not exists txo_txo_type_idx on txo (txo_type);
+        create index if not exists txo_channel_id_idx on txo (channel_id);
         create index if not exists txo_reposted_claim_idx on txo (reposted_claim_id);
     """
 
@@ -490,6 +492,8 @@ class Database(SQLiteMixin):
                 row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
                 if claim.is_repost:
                     row['reposted_claim_id'] = claim.repost.reference.claim_id
+                if claim.is_signed:
+                    row['channel_id'] = claim.signing_channel_id
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
@@ -779,7 +783,7 @@ class Database(SQLiteMixin):
         if include_is_spent:
             select_columns.append("spent.txoid IS NOT NULL AS is_spent")
 
-        if 'order_by' not in constraints:
+        if 'order_by' not in constraints or constraints['order_by'] == 'height':
             constraints['order_by'] = [
                 "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
             ]

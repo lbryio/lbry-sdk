@@ -2176,19 +2176,21 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
-                       [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                       [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
-                       [--resolve]
+                       [--resolve] [--order_by=<order_by>]
 
         Options:
             --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
             --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) streams in this channel
             --name=<name>              : (str or list) claim name
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
+            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
 
         Returns: {Paginated[Output]}
         """
@@ -4112,7 +4114,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, name=None, unspent=False, reposted_claim_id=None,
+            claim_id=None, channel_id=None, name=None, unspent=False, reposted_claim_id=None,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
@@ -4130,6 +4132,7 @@ class Daemon(metaclass=JSONRPCServerType):
             elif is_not_my_output is True:
                 constraints['is_my_output'] = False
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
+        database.constrain_single_or_list(constraints, 'channel_id', channel_id)
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)
         database.constrain_single_or_list(constraints, 'txid', txid)
@@ -4137,13 +4140,14 @@ class Daemon(metaclass=JSONRPCServerType):
         return constraints
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_txo_list(self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False, **kwargs):
+    def jsonrpc_txo_list(
+            self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False, order_by=None, **kwargs):
         """
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4156,6 +4160,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                          purchase, collection, repost, other
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) claims in this channel
             --name=<name>              : (str or list) claim name
             --unspent                  : (bool) hide spent outputs, show only unspent ones
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
@@ -4174,6 +4179,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
+            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
 
         Returns: {Paginated[Output]}
         """
@@ -4191,6 +4197,13 @@ class Daemon(metaclass=JSONRPCServerType):
             'include_is_my_input': True,
             'include_is_my_output': True,
         }
+        if order_by is not None:
+            if order_by == 'name':
+                constraints['order_by'] = 'txo.claim_name'
+            elif order_by in ('height', 'amount'):
+                constraints['order_by'] = order_by
+            else:
+                raise ValueError(f"'{order_by}' is not a valid --order_by value.")
         self._constrain_txo_from_kwargs(constraints, **kwargs)
         return paginate_rows(claims, claim_count, page, page_size, **constraints)
 

@@ -674,6 +674,22 @@ class ClaimCommands(ClaimTestCase):
         # check that metadata is transfered
         self.assertTrue(r[0]['is_my_output'])
 
+    async def assertClaimList(self, claim_ids, **kwargs):
+        self.assertEqual(claim_ids, [c['claim_id'] for c in await self.claim_list(**kwargs)])
+
+    async def test_list_streams_in_channel_and_order_by(self):
+        channel1_id = self.get_claim_id(await self.channel_create('@chan-one'))
+        channel2_id = self.get_claim_id(await self.channel_create('@chan-two'))
+        stream1_id = self.get_claim_id(await self.stream_create('stream-a', bid='0.3', channel_id=channel1_id))
+        stream2_id = self.get_claim_id(await self.stream_create('stream-b', bid='0.9', channel_id=channel1_id))
+        stream3_id = self.get_claim_id(await self.stream_create('stream-c', bid='0.6', channel_id=channel2_id))
+        await self.assertClaimList([stream2_id, stream1_id], channel_id=channel1_id)
+        await self.assertClaimList([stream3_id], channel_id=channel2_id)
+        await self.assertClaimList([stream3_id, stream2_id, stream1_id], channel_id=[channel1_id, channel2_id])
+        await self.assertClaimList([stream1_id, stream2_id, stream3_id], claim_type='stream', order_by='name')
+        await self.assertClaimList([stream1_id, stream3_id, stream2_id], claim_type='stream', order_by='amount')
+        await self.assertClaimList([stream3_id, stream2_id, stream1_id], claim_type='stream', order_by='height')
+
 
 class ChannelCommands(CommandTestCase):
 
