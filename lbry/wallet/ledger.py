@@ -316,6 +316,8 @@ class Ledger(metaclass=LedgerRegistry):
         first_connection = self.network.on_connected.first
         asyncio.ensure_future(self.network.start())
         await first_connection
+        async with self._header_processing_lock:
+            await self._update_tasks.add(self.initial_headers_sync())
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         if len(self.accounts) > 10:
@@ -326,10 +328,8 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
-        self._update_tasks.add(self.initial_headers_sync())
         async with self._header_processing_lock:
-            await self.headers.ensure_tip()
-            await self.update_headers()
+            await self._update_tasks.add(self.initial_headers_sync())
         await self.subscribe_accounts()
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)
@@ -353,8 +353,9 @@ class Ledger(metaclass=LedgerRegistry):
         async def doit():
             for height in reversed(range(0, target, 1000)):
                 await self.headers.ensure_chunk_at(height)
-        asyncio.ensure_future(doit())
-        return
+        await self.headers.ensure_tip()
+        self._update_tasks.add(doit())
+        await self.update_headers()
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
@@ -894,7 +895,7 @@ class Ledger(metaclass=LedgerRegistry):
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
-            ts = headers.estimated_timestamp(tx.height)['timestamp']
+            ts = headers.estimated_timestamp(tx.height)
             item = {
                 'txid': tx.id,
                 'timestamp': ts,

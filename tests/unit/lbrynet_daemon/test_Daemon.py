@@ -92,7 +92,7 @@ class TestCostEst(unittest.TestCase):
 @unittest.SkipTest
 class TestJsonRpc(unittest.TestCase):
     def setUp(self):
-        def noop():
+        async def noop():
             return None
 
         test_utils.reset_time(self)

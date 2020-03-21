@@ -337,7 +337,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         blocks = self.ledger.headers.height - start
         self.blockchain.block_expected = start - 1
         # go back to start
-        await self.blockchain.invalidate_block(self.ledger.headers.hash(start).decode())
+        await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode())
         # go to previous + 1
         await self.generate(blocks + 2)
 

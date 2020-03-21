@@ -143,7 +143,7 @@ class WalletComponent(Component):
                 progress = min(max(math.ceil(float(download_height) / float(target_height) * 100), 0), 100)
             else:
                 progress = 100
-            best_hash = self.wallet_manager.get_best_blockhash()
+            best_hash = await self.wallet_manager.get_best_blockhash()
             result.update({
                 'headers_synchronization_progress': progress,
                 'blocks': max(local_height, 0),

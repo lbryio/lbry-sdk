@@ -49,6 +49,8 @@ class Headers:
         self.executor = ThreadPoolExecutor(1)
 
     async def open(self):
+        if not self.executor:
+            self.executor = ThreadPoolExecutor(1)
         if self.path != ':memory:':
             if not os.path.exists(self.path):
                 self.io = open(self.path, 'w+b')
@@ -57,7 +59,9 @@ class Headers:
         self._size = self.io.seek(0, os.SEEK_END) // self.header_size
 
     async def close(self):
-        self.executor.shutdown()
+        if self.executor:
+            self.executor.shutdown()
+            self.executor = None
         self.io.close()
 
     @staticmethod
@@ -142,7 +146,7 @@ class Headers:
 
     async def ensure_chunk_at(self, height):
         if await self.has_header(height):
-            log.info("has header %s", height)
+            log.debug("has header %s", height)
             return
         log.info("on-demand fetching height %s", height)
         start = (height // 1000) * 1000
@@ -208,7 +212,7 @@ class Headers:
         # .seek()/.write()/.truncate() might also .flush() when needed
         # the goal here is mainly to ensure we're definitely flush()'ing
         self.io.flush()
-        self._size = self.io.tell() // self.header_size
+        self._size = max(self._size or 0, self.io.tell() // self.header_size)
         return written
 
     async def validate_chunk(self, height, chunk):
