@@ -1023,12 +1023,16 @@ class StreamCommands(ClaimTestCase):
         claim_id = self.get_claim_id(tx)
 
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
 
         tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1')
         repost_id = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
         self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+        self.assertEqual((await self.txo_list(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+        self.assertEqual((await self.txo_list(type='repost'))[0]['claim_id'], repost_id)
 
         # tags are inherited (non-common / indexed tags)
         self.assertItemCount(await self.daemon.jsonrpc_claim_search(any_tags=['foo'], claim_type=['stream', 'repost']), 2)

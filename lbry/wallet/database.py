@@ -439,13 +439,16 @@ class Database(SQLiteMixin):
 
             txo_type integer not null default 0,
             claim_id text,
-            claim_name text
+            claim_name text,
+
+            reposted_claim_id text
         );
         create index if not exists txo_txid_idx on txo (txid);
         create index if not exists txo_address_idx on txo (address);
         create index if not exists txo_claim_id_idx on txo (claim_id);
         create index if not exists txo_claim_name_idx on txo (claim_name);
         create index if not exists txo_txo_type_idx on txo (txo_type);
+        create index if not exists txo_reposted_claim_idx on txo (reposted_claim_id);
     """
 
     CREATE_TXI_TABLE = """
@@ -483,7 +486,10 @@ class Database(SQLiteMixin):
         }
         if txo.is_claim:
             if txo.can_decode_claim:
-                row['txo_type'] = TXO_TYPES.get(txo.claim.claim_type, TXO_TYPES['stream'])
+                claim = txo.claim
+                row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
+                if claim.is_repost:
+                    row['reposted_claim_id'] = claim.repost.reference.claim_id
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:

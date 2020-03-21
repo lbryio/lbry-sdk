@@ -4112,7 +4112,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, name=None, unspent=False,
+            claim_id=None, name=None, unspent=False, reposted_claim_id=None,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
@@ -4133,6 +4133,7 @@ class Daemon(metaclass=JSONRPCServerType):
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)
         database.constrain_single_or_list(constraints, 'txid', txid)
+        database.constrain_single_or_list(constraints, 'reposted_claim_id', reposted_claim_id)
         return constraints
 
     @requires(WALLET_COMPONENT)
@@ -4196,7 +4197,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
         """
-        Sum transaction outputs.
+        Sum of transaction outputs.
 
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
@@ -4204,8 +4205,7 @@ class Daemon(metaclass=JSONRPCServerType):
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
-                     [--exclude_internal_transfers]
-                     [--wallet_id=<wallet_id>]
+                     [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
@@ -4228,7 +4228,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
 
-        Returns: {Paginated[Output]}
+        Returns: int
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return self.ledger.get_txo_sum(
