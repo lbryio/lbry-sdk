@@ -19,6 +19,7 @@ class TestHeaders(AsyncioTestCase):
         self.maxDiff = None
         h = Headers(':memory:')
         h.io.write(HEADERS)
+        await h.open()
         self.assertEqual(await h.get(0), {
             'bits': 520159231,
             'block_height': 0,
@@ -140,23 +141,6 @@ class TestHeaders(AsyncioTestCase):
         await headers.connect(len(headers), HEADERS[block_bytes(8):])
         self.assertEqual(19, headers.height)
 
-    async def test_checkpointed_writer(self):
-        headers = Headers(':memory:')
-        await headers.open()
-        getblocks = lambda start, end: HEADERS[block_bytes(start):block_bytes(end)]
-        headers.checkpoint = 10, hexlify(sha256(getblocks(10, 11)))
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(0, 10))
-        self.assertEqual(len(headers), 10)
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(10, 19))
-        self.assertEqual(len(headers), 19)
-        headers = Headers(':memory:')
-        await headers.open()
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(0, 19))
-        self.assertEqual(len(headers), 19)
-
     async def test_concurrency(self):
         BLOCKS = 19
         headers_temporary_file = tempfile.mktemp()
@@ -168,7 +152,7 @@ class TestHeaders(AsyncioTestCase):
                 await headers.connect(block_index, HEADERS[block_bytes(block_index):block_bytes(block_index + 1)])
         async def reader():
             for block_index in range(BLOCKS):
-                while len(headers) < block_index:
+                while len(headers) <= block_index:
                     await asyncio.sleep(0.000001)
                 assert (await headers.get(block_index))['block_height'] == block_index
         reader_task = asyncio.create_task(reader())
