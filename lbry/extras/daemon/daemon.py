@@ -141,7 +141,7 @@ def encode_pagination_doc(items):
     }
 
 
-async def paginate_rows(get_records: Callable, get_record_count: Callable,
+async def paginate_rows(get_records: Callable, get_record_count: Optional[Callable],
                         page: Optional[int], page_size: Optional[int], **constraints):
     page = max(1, page or 1)
     page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
@@ -150,13 +150,12 @@ async def paginate_rows(get_records: Callable, get_record_count: Callable,
         "limit": page_size
     })
     items = await get_records(**constraints)
-    total_items = await get_record_count(**constraints)
-    return {
-        "items": items,
-        "total_pages": int((total_items + (page_size - 1)) / page_size),
-        "total_items": total_items,
-        "page": page, "page_size": page_size
-    }
+    result = {"items": items, "page": page, "page_size": page_size}
+    if get_record_count is not None:
+        total_items = await get_record_count(**constraints)
+        result["total_pages"] = int((total_items + (page_size - 1)) / page_size)
+        result["total_items"] = total_items
+    return result
 
 
 def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
@@ -2178,7 +2177,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
-                       [--resolve] [--order_by=<order_by>]
+                       [--resolve] [--order_by=<order_by>] [--no_totals]
 
         Options:
             --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
@@ -2191,6 +2190,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
             --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -2706,7 +2707,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--name=<name>...] [--claim_id=<claim_id>...]
-                         [--page=<page>] [--page_size=<page_size>] [--resolve]
+                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) channel name
@@ -2716,6 +2717,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each channel to provide additional metadata
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -3455,7 +3458,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                         [--name=<name>...] [--claim_id=<claim_id>...]
-                        [--page=<page>] [--page_size=<page_size>] [--resolve]
+                        [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) stream name
@@ -3465,6 +3468,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each stream to provide additional metadata
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -3923,7 +3928,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
-                         [--page=<page>] [--page_size=<page_size>]
+                         [--page=<page>] [--page_size=<page_size>] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) claim name
@@ -3933,13 +3938,18 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'support'
         kwargs['unspent'] = True
         if tips is True:
+            kwargs['is_not_my_input'] = True
             kwargs['is_my_output'] = True
+        else:
+            kwargs['is_my_input_or_output'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4141,7 +4151,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_list(
-            self, account_id=None, wallet_id=None, page=None, page_size=None, resolve=False, order_by=None, **kwargs):
+            self, account_id=None, wallet_id=None, page=None, page_size=None,
+            resolve=False, order_by=None, no_totals=False, **kwargs):
         """
         List my transaction outputs.
 
@@ -4153,7 +4164,7 @@ class Daemon(metaclass=JSONRPCServerType):
                      ]
                      [--exclude_internal_transfers]
                      [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
-                     [--resolve]
+                     [--resolve] [--no_totals]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
@@ -4180,6 +4191,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
             --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -4205,7 +4218,7 @@ class Daemon(metaclass=JSONRPCServerType):
             else:
                 raise ValueError(f"'{order_by}' is not a valid --order_by value.")
         self._constrain_txo_from_kwargs(constraints, **kwargs)
-        return paginate_rows(claims, claim_count, page, page_size, **constraints)
+        return paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
