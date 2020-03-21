@@ -4164,7 +4164,7 @@ class Daemon(metaclass=JSONRPCServerType):
                      ]
                      [--exclude_internal_transfers]
                      [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
-                     [--resolve] [--no_totals]
+                     [--resolve] [--order_by=<order_by>][--no_totals]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
@@ -4190,7 +4190,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
-            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
+            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount' and 'none'
             --no_totals                : (bool) do not calculate the total number of pages and items in result set
                                                 (significant performance boost)
 
@@ -4213,7 +4213,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if order_by is not None:
             if order_by == 'name':
                 constraints['order_by'] = 'txo.claim_name'
-            elif order_by in ('height', 'amount'):
+            elif order_by in ('height', 'amount', 'none'):
                 constraints['order_by'] = order_by
             else:
                 raise ValueError(f"'{order_by}' is not a valid --order_by value.")
