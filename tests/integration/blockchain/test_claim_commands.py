@@ -9,6 +9,7 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction
+from lbry.wallet.util import satoshis_to_coins as lbc
 
 
 log = logging.getLogger(__name__)
@@ -420,11 +421,21 @@ class TransactionCommands(ClaimTestCase):
 
 class TransactionOutputCommands(ClaimTestCase):
 
-    async def test_txo_list_filtering(self):
+    async def test_txo_list_and_sum_filtering(self):
         channel_id = self.get_claim_id(await self.channel_create())
+        self.assertEqual('1.0', lbc(await self.txo_sum(type='channel', unspent=True)))
         await self.channel_update(channel_id, bid='0.5')
-        stream_id = self.get_claim_id(await self.stream_create())
-        await self.stream_update(stream_id, bid='0.5')
+        self.assertEqual('0.5', lbc(await self.txo_sum(type='channel', unspent=True)))
+        self.assertEqual('1.5', lbc(await self.txo_sum(type='channel')))
+
+        stream_id = self.get_claim_id(await self.stream_create(bid='1.3'))
+        self.assertEqual('1.3', lbc(await self.txo_sum(type='stream', unspent=True)))
+        await self.stream_update(stream_id, bid='0.7')
+        self.assertEqual('0.7', lbc(await self.txo_sum(type='stream', unspent=True)))
+        self.assertEqual('2.0', lbc(await self.txo_sum(type='stream')))
+
+        self.assertEqual('1.2', lbc(await self.txo_sum(type=['stream', 'channel'], unspent=True)))
+        self.assertEqual('3.5', lbc(await self.txo_sum(type=['stream', 'channel'])))
 
         # type filtering
         r = await self.txo_list(type='channel')
@@ -480,25 +491,69 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertTrue(r[0]['is_spent'])
         self.assertTrue(r[1]['is_spent'])
 
-    async def test_txo_list_received_filtering(self):
+    async def test_txo_list_my_input_output_filtering(self):
         wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
         address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
-        await self.channel_create(claim_address=address2)
+        await self.channel_create('@kept-channel')
+        await self.channel_create('@sent-channel', claim_address=address2)
 
-        r = await self.txo_list(include_is_received=True)
-        self.assertEqual(2, len(r))
-        self.assertFalse(r[0]['is_received'])
-        self.assertTrue(r[1]['is_received'])
-        rt = await self.txo_list(is_not_received=True)
-        self.assertEqual(1, len(rt))
-        self.assertEqual(rt[0], r[0])
-        rf = await self.txo_list(is_received=True)
-        self.assertEqual(1, len(rf))
-        self.assertEqual(rf[0], r[1])
+        # all txos on second wallet
+        received_channel, = await self.txo_list(wallet_id=wallet2.id, is_my_input_or_output=True)
+        self.assertEqual('1.0', received_channel['amount'])
+        self.assertFalse(received_channel['is_my_input'])
+        self.assertTrue(received_channel['is_my_output'])
+        self.assertFalse(received_channel['is_internal_transfer'])
 
-        r = await self.txo_list(include_is_received=True, wallet_id=wallet2.id)
-        self.assertEqual(1, len(r))
-        self.assertTrue(r[0]['is_received'])
+        # all txos on default wallet
+        r = await self.txo_list(is_my_input_or_output=True)
+        self.assertEqual(
+            ['1.0', '7.947786', '1.0', '8.973893', '10.0'],
+            [t['amount'] for t in r]
+        )
+
+        sent_channel, change2, kept_channel, change1, initial_funds = r
+
+        self.assertTrue(sent_channel['is_my_input'])
+        self.assertFalse(sent_channel['is_my_output'])
+        self.assertFalse(sent_channel['is_internal_transfer'])
+        self.assertTrue(change2['is_my_input'])
+        self.assertTrue(change2['is_my_output'])
+        self.assertTrue(change2['is_internal_transfer'])
+
+        self.assertTrue(kept_channel['is_my_input'])
+        self.assertTrue(kept_channel['is_my_output'])
+        self.assertFalse(kept_channel['is_internal_transfer'])
+        self.assertTrue(change1['is_my_input'])
+        self.assertTrue(change1['is_my_output'])
+        self.assertTrue(change1['is_internal_transfer'])
+
+        self.assertFalse(initial_funds['is_my_input'])
+        self.assertTrue(initial_funds['is_my_output'])
+        self.assertFalse(initial_funds['is_internal_transfer'])
+
+        # my stuff and stuff i sent excluding "change"
+        r = await self.txo_list(is_my_input_or_output=True, exclude_internal_transfers=True)
+        self.assertEqual([sent_channel, kept_channel, initial_funds], r)
+
+        # my unspent stuff and stuff i sent excluding "change"
+        r = await self.txo_list(is_my_input_or_output=True, unspent=True, exclude_internal_transfers=True)
+        self.assertEqual([sent_channel, kept_channel], r)
+
+        # only "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other")
+        self.assertEqual([change2, change1], r)
+
+        # only unspent "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", unspent=True)
+        self.assertEqual([change2], r)
+
+        # all my unspent stuff
+        r = await self.txo_list(is_my_output=True, unspent=True)
+        self.assertEqual([change2, kept_channel], r)
+
+        # stuff i sent
+        r = await self.txo_list(is_not_my_output=True)
+        self.assertEqual([sent_channel], r)
 
 
 class ClaimCommands(ClaimTestCase):
@@ -617,7 +672,23 @@ class ClaimCommands(ClaimTestCase):
         self.assertTrue(r[1]['meta']['is_controlling'])
 
         # check that metadata is transfered
-        self.assertTrue(r[0]['is_mine'])
+        self.assertTrue(r[0]['is_my_output'])
+
+    async def assertClaimList(self, claim_ids, **kwargs):
+        self.assertEqual(claim_ids, [c['claim_id'] for c in await self.claim_list(**kwargs)])
+
+    async def test_list_streams_in_channel_and_order_by(self):
+        channel1_id = self.get_claim_id(await self.channel_create('@chan-one'))
+        channel2_id = self.get_claim_id(await self.channel_create('@chan-two'))
+        stream1_id = self.get_claim_id(await self.stream_create('stream-a', bid='0.3', channel_id=channel1_id))
+        stream2_id = self.get_claim_id(await self.stream_create('stream-b', bid='0.9', channel_id=channel1_id))
+        stream3_id = self.get_claim_id(await self.stream_create('stream-c', bid='0.6', channel_id=channel2_id))
+        await self.assertClaimList([stream2_id, stream1_id], channel_id=channel1_id)
+        await self.assertClaimList([stream3_id], channel_id=channel2_id)
+        await self.assertClaimList([stream3_id, stream2_id, stream1_id], channel_id=[channel1_id, channel2_id])
+        await self.assertClaimList([stream1_id, stream2_id, stream3_id], claim_type='stream', order_by='name')
+        await self.assertClaimList([stream1_id, stream3_id, stream2_id], claim_type='stream', order_by='amount')
+        await self.assertClaimList([stream3_id, stream2_id, stream1_id], claim_type='stream', order_by='height')
 
 
 class ChannelCommands(CommandTestCase):
@@ -968,12 +1039,16 @@ class StreamCommands(ClaimTestCase):
         claim_id = self.get_claim_id(tx)
 
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
 
         tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1')
         repost_id = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
         self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+        self.assertEqual((await self.txo_list(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
+        self.assertEqual((await self.txo_list(type='repost'))[0]['claim_id'], repost_id)
 
         # tags are inherited (non-common / indexed tags)
         self.assertItemCount(await self.daemon.jsonrpc_claim_search(any_tags=['foo'], claim_type=['stream', 'repost']), 2)

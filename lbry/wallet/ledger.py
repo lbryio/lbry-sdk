@@ -274,6 +274,9 @@ class Ledger(metaclass=LedgerRegistry):
     def get_txo_count(self, **constraints):
         return self.db.get_txo_count(**constraints)
 
+    def get_txo_sum(self, **constraints):
+        return self.db.get_txo_sum(**constraints)
+
     def get_transactions(self, **constraints):
         return self.db.get_transactions(**constraints)
 
@@ -521,7 +524,9 @@ class Ledger(metaclass=LedgerRegistry):
                         check_db_for_txos.append(txi.txo_ref.id)
 
                 referenced_txos = {} if not check_db_for_txos else {
-                    txo.id: txo for txo in await self.db.get_txos(txoid__in=check_db_for_txos, no_tx=True)
+                    txo.id: txo for txo in await self.db.get_txos(
+                        txoid__in=check_db_for_txos, order_by='txo.txoid', no_tx=True
+                    )
                 }
 
                 for txi in tx.inputs:
@@ -826,7 +831,10 @@ class Ledger(metaclass=LedgerRegistry):
         return self.db.get_support_count(**constraints)
 
     async def get_transaction_history(self, read_only=False, **constraints):
-        txs: List[Transaction] = await self.db.get_transactions(read_only=read_only, **constraints)
+        txs: List[Transaction] = await self.db.get_transactions(
+            include_is_my_output=True, include_is_spent=True,
+            read_only=read_only, **constraints
+        )
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
@@ -842,7 +850,7 @@ class Ledger(metaclass=LedgerRegistry):
                 'abandon_info': [],
                 'purchase_info': []
             }
-            is_my_inputs = all([txi.is_my_account for txi in tx.inputs])
+            is_my_inputs = all([txi.is_my_input for txi in tx.inputs])
             if is_my_inputs:
                 # fees only matter if we are the ones paying them
                 item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)

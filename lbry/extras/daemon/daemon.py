@@ -141,7 +141,7 @@ def encode_pagination_doc(items):
     }
 
 
-async def paginate_rows(get_records: Callable, get_record_count: Callable,
+async def paginate_rows(get_records: Callable, get_record_count: Optional[Callable],
                         page: Optional[int], page_size: Optional[int], **constraints):
     page = max(1, page or 1)
     page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
@@ -150,13 +150,12 @@ async def paginate_rows(get_records: Callable, get_record_count: Callable,
         "limit": page_size
     })
     items = await get_records(**constraints)
-    total_items = await get_record_count(**constraints)
-    return {
-        "items": items,
-        "total_pages": int((total_items + (page_size - 1)) / page_size),
-        "total_items": total_items,
-        "page": page, "page_size": page_size
-    }
+    result = {"items": items, "page": page, "page_size": page_size}
+    if get_record_count is not None:
+        total_items = await get_record_count(**constraints)
+        result["total_pages"] = int((total_items + (page_size - 1)) / page_size)
+        result["total_items"] = total_items
+    return result
 
 
 def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
@@ -2176,19 +2175,23 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
-                       [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                       [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
-                       [--resolve]
+                       [--resolve] [--order_by=<order_by>] [--no_totals]
 
         Options:
             --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
             --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) streams in this channel
             --name=<name>              : (str or list) claim name
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
+            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -2704,7 +2707,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--name=<name>...] [--claim_id=<claim_id>...]
-                         [--page=<page>] [--page_size=<page_size>] [--resolve]
+                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) channel name
@@ -2714,6 +2717,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each channel to provide additional metadata
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -3453,7 +3458,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                         [--name=<name>...] [--claim_id=<claim_id>...]
-                        [--page=<page>] [--page_size=<page_size>] [--resolve]
+                        [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) stream name
@@ -3463,6 +3468,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each stream to provide additional metadata
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -3921,24 +3928,25 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
-                         [--page=<page>] [--page_size=<page_size>]
+                         [--page=<page>] [--page_size=<page_size>] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) claim name
             --claim_id=<claim_id>      : (str or list) claim id
-            --tips                     : (bool) only show tips (is_received=true)
+            --tips                     : (bool) only show tips
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'support'
         kwargs['unspent'] = True
-        kwargs['include_is_received'] = True
         if tips is True:
-            kwargs['is_received'] = True
+            kwargs['is_not_my_input'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4107,43 +4115,81 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.wallet_manager.get_transaction(txid)
 
     TXO_DOC = """
-    List transaction outputs.
+    List and sum transaction outputs.
     """
+
+    @staticmethod
+    def _constrain_txo_from_kwargs(
+            constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
+            claim_id=None, channel_id=None, name=None, unspent=False, reposted_claim_id=None,
+            is_my_input_or_output=None, exclude_internal_transfers=False,
+            is_my_output=None, is_not_my_output=None,
+            is_my_input=None, is_not_my_input=None):
+        constraints['unspent'] = unspent
+        constraints['exclude_internal_transfers'] = exclude_internal_transfers
+        if is_my_input_or_output is True:
+            constraints['is_my_input_or_output'] = True
+        else:
+            if is_my_input is True:
+                constraints['is_my_input'] = True
+            elif is_not_my_input is True:
+                constraints['is_my_input'] = False
+            if is_my_output is True:
+                constraints['is_my_output'] = True
+            elif is_not_my_output is True:
+                constraints['is_my_output'] = False
+        database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
+        database.constrain_single_or_list(constraints, 'channel_id', channel_id)
+        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
+        database.constrain_single_or_list(constraints, 'claim_name', name)
+        database.constrain_single_or_list(constraints, 'txid', txid)
+        database.constrain_single_or_list(constraints, 'reposted_claim_id', reposted_claim_id)
+        return constraints
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_list(
-            self, account_id=None, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, name=None, unspent=False,
-            include_is_received=False, is_received=None, is_not_received=None,
-            wallet_id=None, page=None, page_size=None, resolve=False):
+            self, account_id=None, wallet_id=None, page=None, page_size=None,
+            resolve=False, order_by=None, no_totals=False, **kwargs):
         """
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
-                     [--include_is_received] [--is_received] [--is_not_received]
-                     [--wallet_id=<wallet_id>] [--include_is_received] [--is_received]
-                     [--page=<page>] [--page_size=<page_size>]
-                     [--resolve]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
+                     [--is_my_input_or_output |
+                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
+                     ]
+                     [--exclude_internal_transfers]
+                     [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
+                     [--resolve] [--order_by=<order_by>][--no_totals]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
                                          purchase, collection, repost, other
             --txid=<txid>              : (str or list) transaction id of outputs
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
             --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) claims in this channel
             --name=<name>              : (str or list) claim name
-            --include_is_received      : (bool) calculate the is_received property and
-                                         include in output, this happens automatically if you
-                                         use the --is_received or --is_not_received filters
-            --is_received              : (bool) only return txos sent from others to this account
-            --is_not_received          : (bool) only return txos created by this account
+            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
+                                                if using this flag the other related flags
+                                                are ignored (--is_my_output, --is_my_input, etc)
+            --is_my_output             : (bool) show outputs controlled by you
+            --is_not_my_output         : (bool) show outputs not controlled by you
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                "--is_my_input --is_my_output --type=other"
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
+            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount' and 'none'
+            --no_totals                : (bool) do not calculate the total number of pages and items in result set
+                                                (significant performance boost)
 
         Returns: {Paginated[Output]}
         """
@@ -4155,15 +4201,63 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts, read_only=True)
             claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts, read_only=True)
-        constraints = {'resolve': resolve, 'unspent': unspent, 'include_is_received': include_is_received}
-        if is_received is True:
-            constraints['is_received'] = True
-        elif is_not_received is True:
-            constraints['is_received'] = False
-        database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
-        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
-        database.constrain_single_or_list(constraints, 'claim_name', name)
-        return paginate_rows(claims, claim_count, page, page_size, **constraints)
+        constraints = {
+            'resolve': resolve,
+            'include_is_spent': True,
+            'include_is_my_input': True,
+            'include_is_my_output': True,
+        }
+        if order_by is not None:
+            if order_by == 'name':
+                constraints['order_by'] = 'txo.claim_name'
+            elif order_by in ('height', 'amount', 'none'):
+                constraints['order_by'] = order_by
+            else:
+                raise ValueError(f"'{order_by}' is not a valid --order_by value.")
+        self._constrain_txo_from_kwargs(constraints, **kwargs)
+        return paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
+
+    @requires(WALLET_COMPONENT)
+    def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
+        """
+        Sum of transaction outputs.
+
+        Usage:
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--is_my_input_or_output |
+                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
+                     ]
+                     [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
+
+        Options:
+            --type=<type>              : (str or list) claim type: stream, channel, support,
+                                         purchase, collection, repost, other
+            --txid=<txid>              : (str or list) transaction id of outputs
+            --claim_id=<claim_id>      : (str or list) claim id
+            --name=<name>              : (str or list) claim name
+            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
+                                                if using this flag the other related flags
+                                                are ignored (--is_my_output, --is_my_input, etc)
+            --is_my_output             : (bool) show outputs controlled by you
+            --is_not_my_output         : (bool) show outputs not controlled by you
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                "--is_my_input --is_my_output --type=other"
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+
+        Returns: int
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        return self.ledger.get_txo_sum(
+            wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
+            read_only=True, **self._constrain_txo_from_kwargs({}, **kwargs)
+        )
 
     UTXO_DOC = """
     Unspent transaction management.
