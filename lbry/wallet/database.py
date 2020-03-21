@@ -387,7 +387,7 @@ def dict_row_factory(cursor, row):
 
 class Database(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.1"
+    SCHEMA_VERSION = "1.2"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
@@ -633,7 +633,7 @@ class Database(SQLiteMixin):
                 txo.id: txo for txo in
                 (await self.get_txos(
                     wallet=wallet,
-                    txid__in=txids[offset:offset+step],
+                    txid__in=txids[offset:offset+step], order_by='txo.txid',
                     include_is_spent=include_is_spent,
                     include_is_my_input=include_is_my_input,
                     include_is_my_output=include_is_my_output,
@@ -646,7 +646,7 @@ class Database(SQLiteMixin):
                 txo.id: txo for txo in
                 (await self.get_txos(
                     wallet=wallet,
-                    txoid__in=txi_txoids[offset:offset+step],
+                    txoid__in=txi_txoids[offset:offset+step], order_by='txo.txoid',
                     include_is_my_output=include_is_my_output,
                 ))
             })
