@@ -3947,9 +3947,6 @@ class Daemon(metaclass=JSONRPCServerType):
         kwargs['unspent'] = True
         if tips is True:
             kwargs['is_not_my_input'] = True
-            kwargs['is_my_output'] = True
-        else:
-            kwargs['is_my_input_or_output'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
