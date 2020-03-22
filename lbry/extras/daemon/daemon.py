@@ -928,8 +928,9 @@ class Daemon(metaclass=JSONRPCServerType):
             resolve <urls>... [--wallet_id=<wallet_id>]
                     [--include_purchase_receipt]
                     [--include_is_my_output]
-                    [--include_my_supports]
-                    [--include_my_tips]
+                    [--include_sent_supports]
+                    [--include_sent_tips]
+                    [--include_received_tips]
 
         Options:
             --urls=<urls>              : (str, list) one or more urls to resolve
@@ -938,10 +939,14 @@ class Daemon(metaclass=JSONRPCServerType):
                                                 has purchased the claim being resolved
             --include_is_my_output     : (bool) lookup and include a boolean indicating
                                                 if claim being resolved is yours
-            --include_my_supports      : (bool) lookup and sum the total amount
+            --include_sent_supports    : (bool) lookup and sum the total amount
                                                 of supports you've made to this claim
-            --include_my_tips          : (bool) lookup and sum the total amount
+            --include_sent_tips        : (bool) lookup and sum the total amount
                                                 of tips you've made to this claim
+                                                (only makes sense when claim is not yours)
+            --include_received_tips    : (bool) lookup and sum the total amount
+                                                of tips you've received to this claim
+                                                (only makes sense when claim is yours)
 
         Returns:
             Dictionary of results, keyed by url
@@ -2244,7 +2249,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
-                         [--wallet_id=<wallet_id>]
+                         [--wallet_id=<wallet_id>] [--include_purchase_receipt]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
@@ -2346,6 +2351,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --no_totals                     : (bool) do not calculate the total number of pages and items in result set
                                                      (significant performance boost)
             --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
+            --include_purchase_receipt      : (bool) lookup and include a receipt if this wallet
+                                                     has purchased the claim
 
         Returns: {Paginated[Output]}
         """

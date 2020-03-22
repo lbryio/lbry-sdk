@@ -278,8 +278,9 @@ class ResolveCommand(BaseResolveTestCase):
         resolve = await self.resolve('priced')
         self.assertNotIn('is_my_output', resolve)
         self.assertNotIn('purchase_receipt', resolve)
-        self.assertNotIn('my_supports', resolve)
-        self.assertNotIn('my_tips', resolve)
+        self.assertNotIn('sent_supports', resolve)
+        self.assertNotIn('sent_tips', resolve)
+        self.assertNotIn('received_tips', resolve)
 
         # is_my_output
         resolve = await self.resolve('priced', include_is_my_output=True)
@@ -295,16 +296,29 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual('0.5', resolve['purchase_receipt']['amount'])
 
         # my supports and my tips
-        resolve = await self.resolve('priced', include_my_supports=True, include_my_tips=True)
-        self.assertEqual('0.0', resolve['my_supports'])
-        self.assertEqual('0.0', resolve['my_tips'])
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True
+        )
+        self.assertEqual('0.0', resolve['sent_supports'])
+        self.assertEqual('0.0', resolve['sent_tips'])
+        self.assertEqual('0.0', resolve['received_tips'])
         await self.support_create(stream_id, '0.3')
         await self.support_create(stream_id, '0.2')
         await self.support_create(stream_id, '0.4', tip=True)
         await self.support_create(stream_id, '0.5', tip=True)
-        resolve = await self.resolve('priced', include_my_supports=True, include_my_tips=True)
-        self.assertEqual('0.5', resolve['my_supports'])
-        self.assertEqual('0.9', resolve['my_tips'])
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True
+        )
+        self.assertEqual('0.5', resolve['sent_supports'])
+        self.assertEqual('0.9', resolve['sent_tips'])
+        self.assertEqual('0.0', resolve['received_tips'])
+
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True,
+            wallet_id=wallet2.id
+        )
+        self.assertEqual('0.0', resolve['sent_tips'])
+        self.assertEqual('0.9', resolve['received_tips'])
 
 
 class ResolveAfterReorg(BaseResolveTestCase):

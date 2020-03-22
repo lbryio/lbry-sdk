@@ -650,8 +650,9 @@ class Ledger(metaclass=LedgerRegistry):
             self, query, accounts,
             include_purchase_receipt=False,
             include_is_my_output=False,
-            include_my_supports=False,
-            include_my_tips=False) -> Tuple[List[Output], dict, int, int]:
+            include_sent_supports=False,
+            include_sent_tips=False,
+            include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
         txs = []
@@ -676,7 +677,7 @@ class Ledger(metaclass=LedgerRegistry):
                     for txo in priced_claims:
                         txo.purchase_receipt = receipts.get(txo.claim_id)
         txos, blocked = outputs.inflate(txs)
-        if any((include_is_my_output, include_my_supports, include_my_tips)):
+        if any((include_is_my_output, include_sent_supports, include_sent_tips)):
             for txo in txos:
                 if isinstance(txo, Output) and txo.can_decode_claim:
                     if include_is_my_output:
@@ -688,19 +689,27 @@ class Ledger(metaclass=LedgerRegistry):
                             txo.is_my_output = True
                         else:
                             txo.is_my_output = False
-                    if include_my_supports:
+                    if include_sent_supports:
                         supports = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=True,
                             unspent=True, accounts=accounts
                         )
-                        txo.my_supports = supports
-                    if include_my_tips:
+                        txo.sent_supports = supports
+                    if include_sent_tips:
                         tips = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
-                            is_my_input=True, is_my_output=False, accounts=accounts
+                            is_my_input=True, is_my_output=False,
+                            accounts=accounts
                         )
-                        txo.my_tips = tips
+                        txo.sent_tips = tips
+                    if include_received_tips:
+                        tips = await self.db.get_txo_sum(
+                            claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
+                            is_my_input=False, is_my_output=True,
+                            accounts=accounts
+                        )
+                        txo.received_tips = tips
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
@@ -718,8 +727,11 @@ class Ledger(metaclass=LedgerRegistry):
             result[url] = txo
         return result
 
-    async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], dict, int, int]:
-        return await self._inflate_outputs(self.network.claim_search(**kwargs), accounts)
+    async def claim_search(
+            self, accounts, include_purchase_receipt=False, **kwargs) -> Tuple[List[Output], dict, int, int]:
+        return await self._inflate_outputs(
+            self.network.claim_search(**kwargs), accounts, include_purchase_receipt=include_purchase_receipt
+        )
 
     async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:
         for claim in (await self.claim_search(accounts, claim_id=claim_id))[0]:

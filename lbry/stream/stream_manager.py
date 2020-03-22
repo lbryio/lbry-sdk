@@ -378,7 +378,7 @@ class StreamManager:
                 raise ResolveError("cannot download a channel claim, specify a /path")
             try:
                 response = await asyncio.wait_for(
-                    manager.ledger.resolve(wallet.accounts, [uri]),
+                    manager.ledger.resolve(wallet.accounts, [uri], include_purchase_receipt=True),
                     resolve_timeout
                 )
                 resolved_result = self._convert_to_old_resolve_output(manager, response)
