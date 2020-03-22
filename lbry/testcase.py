@@ -490,8 +490,8 @@ class CommandTestCase(IntegrationTestCase):
             self.daemon.jsonrpc_stream_update(claim_id, **kwargs), confirm
         )
 
-    def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
-        return self.confirm_and_render(
+    async def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
+        return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs), confirm
         )
 
@@ -500,6 +500,11 @@ class CommandTestCase(IntegrationTestCase):
             kwargs['blocking'] = False
         return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_abandon(*args, **kwargs), confirm
+        )
+
+    async def purchase_create(self, *args, confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.daemon.jsonrpc_purchase_create(*args, **kwargs), confirm
         )
 
     async def publish(self, name, *args, confirm=True, **kwargs):
@@ -560,8 +565,8 @@ class CommandTestCase(IntegrationTestCase):
             self.daemon.jsonrpc_wallet_send(*args, **kwargs), confirm
         )
 
-    async def resolve(self, uri):
-        return (await self.out(self.daemon.jsonrpc_resolve(uri)))[uri]
+    async def resolve(self, uri, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
     async def claim_search(self, **kwargs):
         return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']

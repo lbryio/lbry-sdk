@@ -208,7 +208,7 @@ class Output(InputOutput):
 
     __slots__ = (
         'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
-        'channel', 'private_key', 'meta',
+        'channel', 'private_key', 'meta', 'my_supports', 'my_tips',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
     )
@@ -217,6 +217,7 @@ class Output(InputOutput):
                  tx_ref: TXRef = None, position: int = None,
                  is_internal_transfer: Optional[bool] = None, is_spent: Optional[bool] = None,
                  is_my_output: Optional[bool] = None, is_my_input: Optional[bool] = None,
+                 my_supports: Optional[int] = None, my_tips: Optional[int] = None,
                  channel: Optional['Output'] = None, private_key: Optional[str] = None
                  ) -> None:
         super().__init__(tx_ref, position)
@@ -226,6 +227,8 @@ class Output(InputOutput):
         self.is_spent = is_spent
         self.is_my_output = is_my_output
         self.is_my_input = is_my_input
+        self.my_supports = my_supports
+        self.my_tips = my_tips
         self.channel = channel
         self.private_key = private_key
         self.purchase: 'Output' = None  # txo containing purchase metadata

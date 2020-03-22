@@ -174,6 +174,10 @@ class JSONResponseEncoder(JSONEncoder):
             output['is_my_output'] = txo.is_my_output
         if txo.is_my_input is not None:
             output['is_my_input'] = txo.is_my_input
+        if txo.my_supports is not None:
+            output['my_supports'] = dewies_to_lbc(txo.my_supports)
+        if txo.my_tips is not None:
+            output['my_tips'] = dewies_to_lbc(txo.my_tips)
         if txo.is_internal_transfer is not None:
             output['is_internal_transfer'] = txo.is_internal_transfer
 

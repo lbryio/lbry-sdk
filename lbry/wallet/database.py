@@ -446,7 +446,7 @@ class Database(SQLiteMixin):
         );
         create index if not exists txo_txid_idx on txo (txid);
         create index if not exists txo_address_idx on txo (address);
-        create index if not exists txo_claim_id_idx on txo (claim_id);
+        create index if not exists txo_claim_id_idx on txo (claim_id, txo_type);
         create index if not exists txo_claim_name_idx on txo (claim_name);
         create index if not exists txo_txo_type_idx on txo (txo_type);
         create index if not exists txo_channel_id_idx on txo (channel_id);
@@ -676,7 +676,7 @@ class Database(SQLiteMixin):
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
         count = await self.select_transactions('COUNT(*) as total', **constraints)
-        return count[0]['total']
+        return count[0]['total'] or 0
 
     async def get_transaction(self, **constraints):
         txs = await self.get_transactions(limit=1, **constraints)
@@ -865,12 +865,12 @@ class Database(SQLiteMixin):
     async def get_txo_count(self, unspent=False, **constraints):
         self._clean_txo_constraints_for_aggregation(unspent, constraints)
         count = await self.select_txos('COUNT(*) as total', **constraints)
-        return count[0]['total']
+        return count[0]['total'] or 0
 
     async def get_txo_sum(self, unspent=False, **constraints):
         self._clean_txo_constraints_for_aggregation(unspent, constraints)
         result = await self.select_txos('SUM(amount) as total', **constraints)
-        return result[0]['total']
+        return result[0]['total'] or 0
 
     def get_utxos(self, read_only=False, **constraints):
         return self.get_txos(unspent=True, read_only=read_only, **constraints)
@@ -908,7 +908,7 @@ class Database(SQLiteMixin):
 
     async def get_address_count(self, cols=None, read_only=False, **constraints):
         count = await self.select_addresses('COUNT(*) as total', read_only=read_only, **constraints)
-        return count[0]['total']
+        return count[0]['total'] or 0
 
     async def get_address(self, read_only=False, **constraints):
         addresses = await self.get_addresses(read_only=read_only, limit=1, **constraints)
