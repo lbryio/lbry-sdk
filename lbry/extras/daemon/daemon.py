@@ -2194,7 +2194,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
-                       [--resolve] [--order_by=<order_by>] [--no_totals]
+                       [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
 
         Options:
             --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
@@ -2209,6 +2209,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
             --no_totals                : (bool) do not calculate the total number of pages and items in result set
                                                 (significant performance boost)
+            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
 
         Returns: {Paginated[Output]}
         """
@@ -4170,7 +4171,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_list(
             self, account_id=None, wallet_id=None, page=None, page_size=None,
-            resolve=False, order_by=None, no_totals=False, **kwargs):
+            resolve=False, order_by=None, no_totals=False, include_received_tips=False, **kwargs):
         """
         List my transaction outputs.
 
@@ -4180,7 +4181,7 @@ class Daemon(metaclass=JSONRPCServerType):
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
-                     [--exclude_internal_transfers]
+                     [--exclude_internal_transfers] [--include_received_tips]
                      [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
                      [--resolve] [--order_by=<order_by>][--no_totals]
 
@@ -4203,6 +4204,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                 "--is_my_input --is_my_output --type=other"
                                                 this allows to exclude "change" payments, this
                                                 flag can be used in combination with any of the other flags
+            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -4227,6 +4229,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'include_is_spent': True,
             'include_is_my_input': True,
             'include_is_my_output': True,
+            'include_received_tips': include_received_tips
         }
         if order_by is not None:
             if order_by == 'name':

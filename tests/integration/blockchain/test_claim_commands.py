@@ -690,6 +690,44 @@ class ClaimCommands(ClaimTestCase):
         await self.assertClaimList([stream1_id, stream3_id, stream2_id], claim_type='stream', order_by='amount')
         await self.assertClaimList([stream3_id, stream2_id, stream1_id], claim_type='stream', order_by='height')
 
+    async def test_claim_list_with_tips(self):
+        wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
+        address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
+
+        await self.wallet_send('5.0', address2)
+
+        stream1_id = self.get_claim_id(await self.stream_create('one'))
+        stream2_id = self.get_claim_id(await self.stream_create('two'))
+
+        claims = await self.claim_list()
+        self.assertNotIn('received_tips', claims[0])
+        self.assertNotIn('received_tips', claims[1])
+
+        claims = await self.claim_list(include_received_tips=True)
+        self.assertEqual('0.0', claims[0]['received_tips'])
+        self.assertEqual('0.0', claims[1]['received_tips'])
+
+        await self.support_create(stream1_id, '0.7', tip=True)
+        await self.support_create(stream1_id, '0.3', tip=True, wallet_id=wallet2.id)
+        await self.support_create(stream1_id, '0.2', tip=True, wallet_id=wallet2.id)
+        await self.support_create(stream2_id, '0.4', tip=True, wallet_id=wallet2.id)
+        await self.support_create(stream2_id, '0.5', tip=True, wallet_id=wallet2.id)
+        await self.support_create(stream2_id, '0.1', tip=True, wallet_id=wallet2.id)
+
+        claims = await self.claim_list(include_received_tips=True)
+        self.assertEqual('1.0', claims[0]['received_tips'])
+        self.assertEqual('1.2', claims[1]['received_tips'])
+
+        await self.support_abandon(stream1_id)
+        claims = await self.claim_list(include_received_tips=True)
+        self.assertEqual('1.0', claims[0]['received_tips'])
+        self.assertEqual('0.0', claims[1]['received_tips'])
+
+        await self.support_abandon(stream2_id)
+        claims = await self.claim_list(include_received_tips=True)
+        self.assertEqual('0.0', claims[0]['received_tips'])
+        self.assertEqual('0.0', claims[1]['received_tips'])
+
 
 class ChannelCommands(CommandTestCase):
 

@@ -750,6 +750,7 @@ class Database(SQLiteMixin):
         include_is_spent = constraints.get('include_is_spent', False)
         include_is_my_input = constraints.get('include_is_my_input', False)
         include_is_my_output = constraints.pop('include_is_my_output', False)
+        include_received_tips = constraints.pop('include_received_tips', False)
 
         select_columns = [
             "tx.txid, raw, tx.height, tx.position as tx_position, tx.is_verified, "
@@ -777,11 +778,19 @@ class Database(SQLiteMixin):
                 select_columns.append(f"""(
                     txi.address IS NOT NULL AND
                     txi.address IN (SELECT address FROM account_address WHERE {my_accounts_sql})
-                ) AS is_my_input
-                """)
+                ) AS is_my_input""")
 
         if include_is_spent:
             select_columns.append("spent.txoid IS NOT NULL AS is_spent")
+
+        if include_received_tips:
+            select_columns.append(f"""(
+            SELECT COALESCE(SUM(support.amount), 0) FROM txo AS support WHERE
+                support.claim_id = txo.claim_id AND
+                support.txo_type = {TXO_TYPES['support']} AND
+                support.address IN (SELECT address FROM account_address WHERE {my_accounts_sql}) AND
+                support.txoid NOT IN (SELECT txoid FROM txi)
+            ) AS received_tips""")
 
         if 'order_by' not in constraints or constraints['order_by'] == 'height':
             constraints['order_by'] = [
@@ -820,6 +829,8 @@ class Database(SQLiteMixin):
                     txo.is_internal_transfer = True
                 else:
                     txo.is_internal_transfer = False
+            if include_received_tips:
+                txo.received_tips = row['received_tips']
             txos.append(txo)
 
         channel_ids = set()
@@ -854,6 +865,7 @@ class Database(SQLiteMixin):
     def _clean_txo_constraints_for_aggregation(self, unspent, constraints):
         constraints.pop('include_is_my_input', None)
         constraints.pop('include_is_my_output', None)
+        constraints.pop('include_received_tips', None)
         constraints.pop('wallet', None)
         constraints.pop('resolve', None)
         constraints.pop('offset', None)
