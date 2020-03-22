@@ -651,8 +651,7 @@ class Ledger(metaclass=LedgerRegistry):
             include_purchase_receipt=False,
             include_is_my_output=False,
             include_my_supports=False,
-            include_my_tips=False
-            ) -> Tuple[List[Output], dict, int, int]:
+            include_my_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
         txs = []

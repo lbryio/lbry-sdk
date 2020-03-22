@@ -934,7 +934,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --urls=<urls>              : (str, list) one or more urls to resolve
             --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase reciepts
-            --include_purchase_receipt : (bool) lookup and include a receipt if this wallet
+           --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet
                                                 has purchased the claim being resolved
             --include_is_my_output     : (bool) lookup and include a boolean indicating
                                                 if claim being resolved is yours
