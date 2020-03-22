@@ -105,7 +105,7 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
         network=manager.ledger.network, server=('fakespv.lbry.com', 50001)
     )
 
-    async def mock_resolve(*args):
+    async def mock_resolve(*args, **kwargs):
         result = {txo.meta['permanent_url']: txo}
         claims = [
             StreamManager._convert_to_old_resolve_output(manager, result)[txo.meta['permanent_url']]

@@ -263,6 +263,66 @@ class ResolveCommand(BaseResolveTestCase):
             await self.resolve('@olds/bad_example')
         )
 
+    async def test_resolve_with_includes(self):
+        wallet2 = await self.daemon.jsonrpc_wallet_create('wallet2', create_account=True)
+        address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
+
+        await self.wallet_send('1.0', address2)
+
+        stream = await self.stream_create(
+            'priced', '0.1', wallet_id=wallet2.id,
+            fee_amount='0.5', fee_currency='LBC', fee_address=address2
+        )
+        stream_id = self.get_claim_id(stream)
+
+        resolve = await self.resolve('priced')
+        self.assertNotIn('is_my_output', resolve)
+        self.assertNotIn('purchase_receipt', resolve)
+        self.assertNotIn('sent_supports', resolve)
+        self.assertNotIn('sent_tips', resolve)
+        self.assertNotIn('received_tips', resolve)
+
+        # is_my_output
+        resolve = await self.resolve('priced', include_is_my_output=True)
+        self.assertFalse(resolve['is_my_output'])
+        resolve = await self.resolve('priced', wallet_id=wallet2.id, include_is_my_output=True)
+        self.assertTrue(resolve['is_my_output'])
+
+        # purchase receipt
+        resolve = await self.resolve('priced', include_purchase_receipt=True)
+        self.assertNotIn('purchase_receipt', resolve)
+        await self.purchase_create(stream_id)
+        resolve = await self.resolve('priced', include_purchase_receipt=True)
+        self.assertEqual('0.5', resolve['purchase_receipt']['amount'])
+
+        # my supports and my tips
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True
+        )
+        self.assertEqual('0.0', resolve['sent_supports'])
+        self.assertEqual('0.0', resolve['sent_tips'])
+        self.assertEqual('0.0', resolve['received_tips'])
+        await self.support_create(stream_id, '0.3')
+        await self.support_create(stream_id, '0.2')
+        await self.support_create(stream_id, '0.4', tip=True)
+        await self.support_create(stream_id, '0.5', tip=True)
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True
+        )
+        self.assertEqual('0.5', resolve['sent_supports'])
+        self.assertEqual('0.9', resolve['sent_tips'])
+        self.assertEqual('0.0', resolve['received_tips'])
+
+        resolve = await self.resolve(
+            'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True,
+            wallet_id=wallet2.id
+        )
+        self.assertEqual('0.0', resolve['sent_supports'])
+        self.assertEqual('0.0', resolve['sent_tips'])
+        self.assertEqual('0.9', resolve['received_tips'])
+        self.assertEqual('1.4', resolve['meta']['support_amount'])
+        self.assertNotIn('purchase_receipt', resolve)  # prevent leaking cached receipts
+
 
 class ResolveAfterReorg(BaseResolveTestCase):
 

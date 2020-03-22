@@ -920,16 +920,33 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.platform_info
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_resolve(self, urls: typing.Union[str, list], wallet_id=None):
+    async def jsonrpc_resolve(self, urls: typing.Union[str, list], wallet_id=None, **kwargs):
         """
         Get the claim that a URL refers to.
 
         Usage:
             resolve <urls>... [--wallet_id=<wallet_id>]
+                    [--include_purchase_receipt]
+                    [--include_is_my_output]
+                    [--include_sent_supports]
+                    [--include_sent_tips]
+                    [--include_received_tips]
 
         Options:
-            --urls=<urls>           : (str, list) one or more urls to resolve
-            --wallet_id=<wallet_id> : (str) wallet to check for claim purchase reciepts
+            --urls=<urls>              : (str, list) one or more urls to resolve
+            --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase reciepts
+           --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet
+                                                has purchased the claim being resolved
+            --include_is_my_output     : (bool) lookup and include a boolean indicating
+                                                if claim being resolved is yours
+            --include_sent_supports    : (bool) lookup and sum the total amount
+                                                of supports you've made to this claim
+            --include_sent_tips        : (bool) lookup and sum the total amount
+                                                of tips you've made to this claim
+                                                (only makes sense when claim is not yours)
+            --include_received_tips    : (bool) lookup and sum the total amount
+                                                of tips you've received to this claim
+                                                (only makes sense when claim is yours)
 
         Returns:
             Dictionary of results, keyed by url
@@ -1002,7 +1019,7 @@ class Daemon(metaclass=JSONRPCServerType):
             except ValueError:
                 results[url] = {"error": f"{url} is not a valid url"}
 
-        resolved = await self.resolve(wallet.accounts, list(valid_urls))
+        resolved = await self.resolve(wallet.accounts, list(valid_urls), **kwargs)
 
         for resolved_uri in resolved:
             results[resolved_uri] = resolved[resolved_uri] if resolved[resolved_uri] is not None else \
@@ -2232,7 +2249,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
-                         [--wallet_id=<wallet_id>]
+                         [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
@@ -2334,6 +2351,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --no_totals                     : (bool) do not calculate the total number of pages and items in result set
                                                      (significant performance boost)
             --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
+            --include_purchase_receipt      : (bool) lookup and include a receipt if this wallet
+                                                     has purchased the claim
+            --include_is_my_output          : (bool) lookup and include a boolean indicating
+                                                     if claim being resolved is yours
 
         Returns: {Paginated[Output]}
         """
@@ -5100,8 +5121,8 @@ class Daemon(metaclass=JSONRPCServerType):
         except ValueError as e:
             raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
 
-    async def resolve(self, accounts, urls):
-        results = await self.ledger.resolve(accounts, urls)
+    async def resolve(self, accounts, urls, **kwargs):
+        results = await self.ledger.resolve(accounts, urls, **kwargs)
         if self.conf.save_resolved_claims and results:
             try:
                 claims = self.stream_manager._convert_to_old_resolve_output(self.wallet_manager, results)

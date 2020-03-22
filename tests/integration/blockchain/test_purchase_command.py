@@ -142,7 +142,7 @@ class PurchaseCommandTests(CommandTestCase):
         self.assertEqual(result['items'][0]['purchase_info'][0]['claim_id'], claim_id2)
         self.assertEqual(result['items'][2]['purchase_info'][0]['claim_id'], claim_id1)
 
-        result = await self.claim_search()
+        result = await self.claim_search(include_purchase_receipt=True)
         self.assertEqual(result[0]['claim_id'], result[0]['purchase_receipt']['claim_id'])
         self.assertEqual(result[1]['claim_id'], result[1]['purchase_receipt']['claim_id'])
 

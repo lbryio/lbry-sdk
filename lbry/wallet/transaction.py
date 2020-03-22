@@ -208,7 +208,7 @@ class Output(InputOutput):
 
     __slots__ = (
         'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
-        'channel', 'private_key', 'meta',
+        'channel', 'private_key', 'meta', 'sent_supports', 'sent_tips', 'received_tips',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims',
     )
@@ -217,6 +217,8 @@ class Output(InputOutput):
                  tx_ref: TXRef = None, position: int = None,
                  is_internal_transfer: Optional[bool] = None, is_spent: Optional[bool] = None,
                  is_my_output: Optional[bool] = None, is_my_input: Optional[bool] = None,
+                 sent_supports: Optional[int] = None, sent_tips: Optional[int] = None,
+                 received_tips: Optional[int] = None,
                  channel: Optional['Output'] = None, private_key: Optional[str] = None
                  ) -> None:
         super().__init__(tx_ref, position)
@@ -226,6 +228,9 @@ class Output(InputOutput):
         self.is_spent = is_spent
         self.is_my_output = is_my_output
         self.is_my_input = is_my_input
+        self.sent_supports = sent_supports
+        self.sent_tips = sent_tips
+        self.received_tips = received_tips
         self.channel = channel
         self.private_key = private_key
         self.purchase: 'Output' = None  # txo containing purchase metadata
@@ -241,11 +246,17 @@ class Output(InputOutput):
             self.is_spent = None
             self.is_my_output = None
             self.is_my_input = None
+            self.sent_supports = None
+            self.sent_tips = None
+            self.received_tips = None
         else:
             self.is_internal_transfer = annotated.is_internal_transfer
             self.is_spent = annotated.is_spent
             self.is_my_output = annotated.is_my_output
             self.is_my_input = annotated.is_my_input
+            self.sent_supports = annotated.sent_supports
+            self.sent_tips = annotated.sent_tips
+            self.received_tips = annotated.received_tips
         self.channel = annotated.channel if annotated else None
         self.private_key = annotated.private_key if annotated else None
 

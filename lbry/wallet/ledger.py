@@ -25,7 +25,7 @@ from .account import Account, AddressManager, SingleKey
 from .network import Network
 from .transaction import Transaction, Output
 from .header import Headers, UnvalidatedHeaders
-from .constants import TXO_TYPES, COIN, NULL_HASH32
+from .constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
 from .bip32 import PubKey, PrivateKey
 from .coinselection import CoinSelector
 
@@ -646,7 +646,13 @@ class Ledger(metaclass=LedgerRegistry):
                     print(record['history'], addresses, tx.id)
                     raise asyncio.TimeoutError('Timed out waiting for transaction.')
 
-    async def _inflate_outputs(self, query, accounts) -> Tuple[List[Output], dict, int, int]:
+    async def _inflate_outputs(
+            self, query, accounts,
+            include_purchase_receipt=False,
+            include_is_my_output=False,
+            include_sent_supports=False,
+            include_sent_tips=False,
+            include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
         txs = []
@@ -654,7 +660,7 @@ class Ledger(metaclass=LedgerRegistry):
             txs: List[Transaction] = await asyncio.gather(*(
                 self.cache_transaction(*tx) for tx in outputs.txs
             ))
-            if accounts:
+            if include_purchase_receipt and accounts:
                 priced_claims = []
                 for tx in txs:
                     for txo in tx.outputs:
@@ -671,11 +677,48 @@ class Ledger(metaclass=LedgerRegistry):
                     for txo in priced_claims:
                         txo.purchase_receipt = receipts.get(txo.claim_id)
         txos, blocked = outputs.inflate(txs)
+        if any((include_is_my_output, include_sent_supports, include_sent_tips)):
+            for txo in txos:
+                if isinstance(txo, Output) and txo.can_decode_claim:
+                    if include_is_my_output:
+                        mine = await self.db.get_txo_count(
+                            claim_id=txo.claim_id, txo_type__in=CLAIM_TYPES, is_my_output=True,
+                            unspent=True, accounts=accounts
+                        )
+                        if mine:
+                            txo.is_my_output = True
+                        else:
+                            txo.is_my_output = False
+                    if include_sent_supports:
+                        supports = await self.db.get_txo_sum(
+                            claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
+                            is_my_input=True, is_my_output=True,
+                            unspent=True, accounts=accounts
+                        )
+                        txo.sent_supports = supports
+                    if include_sent_tips:
+                        tips = await self.db.get_txo_sum(
+                            claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
+                            is_my_input=True, is_my_output=False,
+                            accounts=accounts
+                        )
+                        txo.sent_tips = tips
+                    if include_received_tips:
+                        tips = await self.db.get_txo_sum(
+                            claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
+                            is_my_input=False, is_my_output=True,
+                            accounts=accounts
+                        )
+                        txo.received_tips = tips
+                    if not include_purchase_receipt:
+                        # txo's are cached across wallets, this prevents
+                        # leaking receipts between wallets
+                        txo.purchase_receipt = None
         return txos, blocked, outputs.offset, outputs.total
 
-    async def resolve(self, accounts, urls):
+    async def resolve(self, accounts, urls, **kwargs):
         resolve = partial(self.network.retriable_call, self.network.resolve)
-        txos = (await self._inflate_outputs(resolve(urls), accounts))[0]
+        txos = (await self._inflate_outputs(resolve(urls), accounts, **kwargs))[0]
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
@@ -688,8 +731,14 @@ class Ledger(metaclass=LedgerRegistry):
             result[url] = txo
         return result
 
-    async def claim_search(self, accounts, **kwargs) -> Tuple[List[Output], dict, int, int]:
-        return await self._inflate_outputs(self.network.claim_search(**kwargs), accounts)
+    async def claim_search(
+            self, accounts, include_purchase_receipt=False, include_is_my_output=False,
+            **kwargs) -> Tuple[List[Output], dict, int, int]:
+        return await self._inflate_outputs(
+            self.network.claim_search(**kwargs), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output
+        )
 
     async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:
         for claim in (await self.claim_search(accounts, claim_id=claim_id))[0]:
