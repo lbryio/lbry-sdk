@@ -2155,11 +2155,11 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = wallet.get_accounts_or_all(funding_account_ids)
         txo = None
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id)
+            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
                 raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
         elif url:
-            txo = (await self.ledger.resolve(accounts, [url]))[url]
+            txo = (await self.ledger.resolve(accounts, [url], include_purchase_receipt=True))[url]
             if not isinstance(txo, Output) or not txo.is_claim:
                 raise Exception(f"Could not find claim with url '{url}'. ")
         else:

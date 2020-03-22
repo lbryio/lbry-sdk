@@ -752,8 +752,8 @@ class Ledger(metaclass=LedgerRegistry):
             include_is_my_output=include_is_my_output
         )
 
-    async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:
-        for claim in (await self.claim_search(accounts, claim_id=claim_id))[0]:
+    async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
+        for claim in (await self.claim_search(accounts, claim_id=claim_id, **kwargs))[0]:
             return claim
 
     async def _report_state(self):
