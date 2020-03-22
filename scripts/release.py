@@ -59,7 +59,8 @@ def get_label(pr, prefix):
 
 
 BACKWARDS_INCOMPATIBLE = 'backwards-incompatible:'
-RELEASE_TEXT = "release-text:"
+RELEASE_TEXT = 'release-text:'
+RELEASE_TEXT_LINES = 'release-text-lines:'
 
 
 def get_backwards_incompatible(desc: str):
@@ -69,9 +70,15 @@ def get_backwards_incompatible(desc: str):
 
 
 def get_release_text(desc: str):
+    in_release_lines = False
     for line in desc.splitlines():
-        if line.startswith(RELEASE_TEXT):
-            yield line[len(RELEASE_TEXT):]
+        if in_release_lines:
+            yield line.rstrip()
+        elif line.startswith(RELEASE_TEXT_LINES):
+            in_release_lines = True
+        elif line.startswith(RELEASE_TEXT):
+            yield line[len(RELEASE_TEXT):].strip()
+            yield ''
 
 
 class Version:
@@ -149,7 +156,7 @@ def release(args):
                 for incompat in get_backwards_incompatible(pr.body or ""):
                     incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
                 for release_text in get_release_text(pr.body or ""):
-                    release_texts.append(f'{release_text.strip()} ({pr.html_url})')
+                    release_texts.append(release_text)
                 if type_label == 'fixup':
                     fixups.append(f'  * {pr.title} ({pr.html_url}) by {pr.user["login"]}')
                 else:
@@ -169,7 +176,6 @@ def release(args):
         w('')
         for release_text in release_texts:
             w(release_text)
-            w('')
     if incompats:
         w('')
         w(f'### Backwards Incompatible Changes')
