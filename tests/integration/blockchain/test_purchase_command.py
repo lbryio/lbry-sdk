@@ -147,7 +147,7 @@ class PurchaseCommandTests(CommandTestCase):
         self.assertEqual(result[1]['claim_id'], result[1]['purchase_receipt']['claim_id'])
 
         url = result[0]['canonical_url']
-        resolve = await self.resolve(url)
+        resolve = await self.resolve(url, include_purchase_receipt=True)
         self.assertEqual(result[0]['claim_id'], resolve['purchase_receipt']['claim_id'])
 
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
