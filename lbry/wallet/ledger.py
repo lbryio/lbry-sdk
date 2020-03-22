@@ -732,9 +732,12 @@ class Ledger(metaclass=LedgerRegistry):
         return result
 
     async def claim_search(
-            self, accounts, include_purchase_receipt=False, **kwargs) -> Tuple[List[Output], dict, int, int]:
+            self, accounts, include_purchase_receipt=False, include_is_my_output=False,
+            **kwargs) -> Tuple[List[Output], dict, int, int]:
         return await self._inflate_outputs(
-            self.network.claim_search(**kwargs), accounts, include_purchase_receipt=include_purchase_receipt
+            self.network.claim_search(**kwargs), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output
         )
 
     async def get_claim_by_claim_id(self, accounts, claim_id) -> Output:

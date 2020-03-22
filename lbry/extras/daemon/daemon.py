@@ -2249,7 +2249,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
-                         [--wallet_id=<wallet_id>] [--include_purchase_receipt]
+                         [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
@@ -2353,6 +2353,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
             --include_purchase_receipt      : (bool) lookup and include a receipt if this wallet
                                                      has purchased the claim
+            --include_is_my_output          : (bool) lookup and include a boolean indicating
+                                                     if claim being resolved is yours
 
         Returns: {Paginated[Output]}
         """
