@@ -321,7 +321,14 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual('0.0', resolve['sent_tips'])
         self.assertEqual('0.9', resolve['received_tips'])
         self.assertEqual('1.4', resolve['meta']['support_amount'])
-        self.assertNotIn('purchase_receipt', resolve)  # prevent leaking cached receipts
+
+        # make sure nothing is leaked between wallets through cached tx/txos
+        resolve = await self.resolve('priced')
+        self.assertNotIn('is_my_output', resolve)
+        self.assertNotIn('purchase_receipt', resolve)
+        self.assertNotIn('sent_supports', resolve)
+        self.assertNotIn('sent_tips', resolve)
+        self.assertNotIn('received_tips', resolve)
 
 
 class ResolveAfterReorg(BaseResolveTestCase):

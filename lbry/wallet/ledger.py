@@ -1,5 +1,6 @@
 import os
 import zlib
+import copy
 import base64
 import asyncio
 import logging
@@ -660,12 +661,21 @@ class Ledger(metaclass=LedgerRegistry):
             txs: List[Transaction] = await asyncio.gather(*(
                 self.cache_transaction(*tx) for tx in outputs.txs
             ))
-            if include_purchase_receipt and accounts:
+
+        txos, blocked = outputs.inflate(txs)
+
+        includes = (
+            include_purchase_receipt, include_is_my_output,
+            include_sent_supports, include_sent_tips
+        )
+        if accounts and any(includes):
+            copies = []
+            receipts = {}
+            if include_purchase_receipt:
                 priced_claims = []
-                for tx in txs:
-                    for txo in tx.outputs:
-                        if txo.has_price:
-                            priced_claims.append(txo)
+                for txo in txos:
+                    if isinstance(txo, Output) and txo.has_price:
+                        priced_claims.append(txo)
                 if priced_claims:
                     receipts = {
                         txo.purchased_claim_id: txo for txo in
@@ -674,46 +684,48 @@ class Ledger(metaclass=LedgerRegistry):
                             purchased_claim_id__in=[c.claim_id for c in priced_claims]
                         )
                     }
-                    for txo in priced_claims:
-                        txo.purchase_receipt = receipts.get(txo.claim_id)
-        txos, blocked = outputs.inflate(txs)
-        if any((include_is_my_output, include_sent_supports, include_sent_tips)):
             for txo in txos:
                 if isinstance(txo, Output) and txo.can_decode_claim:
+                    # transactions and outputs are cached and shared between wallets
+                    # we don't want to leak informaion between wallet so we add the
+                    # wallet specific metadata on throw away copies of the txos
+                    txo_copy = copy.copy(txo)
+                    copies.append(txo_copy)
+                    if include_purchase_receipt:
+                        txo_copy.purchase_receipt = receipts.get(txo.claim_id)
                     if include_is_my_output:
                         mine = await self.db.get_txo_count(
                             claim_id=txo.claim_id, txo_type__in=CLAIM_TYPES, is_my_output=True,
                             unspent=True, accounts=accounts
                         )
                         if mine:
-                            txo.is_my_output = True
+                            txo_copy.is_my_output = True
                         else:
-                            txo.is_my_output = False
+                            txo_copy.is_my_output = False
                     if include_sent_supports:
                         supports = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=True,
                             unspent=True, accounts=accounts
                         )
-                        txo.sent_supports = supports
+                        txo_copy.sent_supports = supports
                     if include_sent_tips:
                         tips = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=False,
                             accounts=accounts
                         )
-                        txo.sent_tips = tips
+                        txo_copy.sent_tips = tips
                     if include_received_tips:
                         tips = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=False, is_my_output=True,
                             accounts=accounts
                         )
-                        txo.received_tips = tips
-                    if not include_purchase_receipt:
-                        # txo's are cached across wallets, this prevents
-                        # leaking receipts between wallets
-                        txo.purchase_receipt = None
+                        txo_copy.received_tips = tips
+                else:
+                    copies.append(txo)
+            txos = copies
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
