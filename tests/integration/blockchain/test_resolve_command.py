@@ -317,8 +317,11 @@ class ResolveCommand(BaseResolveTestCase):
             'priced', include_sent_supports=True, include_sent_tips=True, include_received_tips=True,
             wallet_id=wallet2.id
         )
+        self.assertEqual('0.0', resolve['sent_supports'])
         self.assertEqual('0.0', resolve['sent_tips'])
         self.assertEqual('0.9', resolve['received_tips'])
+        self.assertEqual('1.4', resolve['meta']['support_amount'])
+        self.assertNotIn('purchase_receipt', resolve)  # prevent leaking cached receipts
 
 
 class ResolveAfterReorg(BaseResolveTestCase):

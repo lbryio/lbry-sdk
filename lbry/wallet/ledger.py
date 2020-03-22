@@ -710,6 +710,10 @@ class Ledger(metaclass=LedgerRegistry):
                             accounts=accounts
                         )
                         txo.received_tips = tips
+                    if not include_purchase_receipt:
+                        # txo's are cached across wallets, this prevents
+                        # leaking receipts between wallets
+                        txo.purchase_receipt = None
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
