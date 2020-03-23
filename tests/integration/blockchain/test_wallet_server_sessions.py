@@ -90,7 +90,7 @@ class TestUsagePayment(CommandTestCase):
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.0")
-        tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+        tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=8)
         self.assertIsNotNone(await self.blockchain.get_raw_transaction(tx.id))  # verify its broadcasted
         self.assertEqual(tx.outputs[0].amount, 100000000)
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address)
