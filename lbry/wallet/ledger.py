@@ -344,15 +344,13 @@ class Ledger(metaclass=LedgerRegistry):
         return max(self.headers.height, self._download_height)
 
     async def initial_headers_sync(self):
-        target = self.network.remote_height + 1
         get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=1000, b64=True)
         self.headers.chunk_getter = get_chunk
 
         async def doit():
-            for height in reversed(range(0, target)):
-                async with self._header_processing_lock:
+            async with self._header_processing_lock:
+                for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
                     await self.headers.ensure_chunk_at(height)
-        await self.headers.ensure_tip()
         self._update_tasks.add(doit())
         await self.update_headers()
 

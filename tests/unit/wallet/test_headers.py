@@ -1,12 +1,15 @@
 import os
 import asyncio
 import tempfile
-from binascii import hexlify, unhexlify
+from binascii import unhexlify
 
-from lbry.crypto.hash import sha256
 from lbry.wallet.util import ArithUint256
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.ledger import Headers
+from lbry.wallet.ledger import Headers as _Headers
+
+
+class Headers(_Headers):
+    checkpoints = {}
 
 
 def block_bytes(blocks):
