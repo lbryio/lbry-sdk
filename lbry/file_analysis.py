@@ -113,9 +113,24 @@ class VideoFileAnalyzer:
     def _verify_container(scan_data: json):
         container = scan_data["format"]["format_name"]
         log.debug("   Detected container is %s", container)
-        if not {"webm", "mp4", "3gp", "ogg"}.intersection(container.split(",")):
+        splits = container.split(",")
+        if not {"webm", "mp4", "3gp", "ogg"}.intersection(splits):
             return "Container format is not in the approved list of WebM, MP4. " \
                    f"Actual: {container} [{scan_data['format']['format_long_name']}]"
+
+        if "matroska" in splits:
+            for stream in scan_data["streams"]:
+                if stream["codec_type"] == "video":
+                    codec = stream["codec_name"]
+                    if not {"vp8", "vp9", "av1"}.intersection(codec.split(",")):
+                        return "WebM format requires VP8/9 or AV1 video. " \
+                               f"Actual: {codec} [{stream['codec_long_name']}]"
+                elif stream["codec_type"] == "audio":
+                    codec = stream["codec_name"]
+                    if not {"vorbis", "opus"}.intersection(codec.split(",")):
+                        return "WebM format requires Vorbis or Opus audio. " \
+                               f"Actual: {codec} [{stream['codec_long_name']}]"
+
         return ""
 
     @staticmethod
@@ -289,20 +304,22 @@ class VideoFileAnalyzer:
         # if we are vp8/vp9/av1 we want webm
         # use mp4 for anything else
 
-        if not video_encoder:  # not re-encoding video
-            for stream in scan_data["streams"]:
-                if stream["codec_type"] != "video":
-                    continue
-                codec = stream["codec_name"].split(",")
-                if "theora" in codec:
-                    return "ogv"
-                if {"vp8", "vp9", "av1"}.intersection(codec):
-                    return "webm"
+        if video_encoder:  # not re-encoding video
+            if "theora" in video_encoder:
+                return "ogv"
+            if re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
+                return "webm"
+            return "mp4"
 
-        if "theora" in video_encoder:
-            return "ogv"
-        elif re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
-            return "webm"
+        for stream in scan_data["streams"]:
+            if stream["codec_type"] != "video":
+                continue
+            codec = stream["codec_name"].split(",")
+            if "theora" in codec:
+                return "ogv"
+            if {"vp8", "vp9", "av1"}.intersection(codec):
+                return "webm"
+
         return "mp4"
 
     async def _get_scan_data(self, validate, file_path):
