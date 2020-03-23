@@ -1,7 +1,5 @@
 import os
-import zlib
 import copy
-import base64
 import asyncio
 import logging
 from io import StringIO
@@ -318,7 +316,6 @@ class Ledger(metaclass=LedgerRegistry):
         await first_connection
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
-        await self._on_ready_controller.stream.first
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         if len(self.accounts) > 10:
@@ -330,7 +327,7 @@ class Ledger(metaclass=LedgerRegistry):
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
         async with self._header_processing_lock:
-            await self.update_headers()
+            await self._update_tasks.add(self.initial_headers_sync())
         await self.subscribe_accounts()
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)
@@ -347,19 +344,15 @@ class Ledger(metaclass=LedgerRegistry):
         return max(self.headers.height, self._download_height)
 
     async def initial_headers_sync(self):
-        target = self.network.remote_height + 1
-        current = len(self.headers)
-        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=4096, b64=True)
-        chunks = [asyncio.create_task(get_chunk(height)) for height in range(current, target, 4096)]
-        total = 0
-        async with self.headers.checkpointed_connector() as buffer:
-            for chunk in chunks:
-                headers = await chunk
-                total += buffer.write(
-                    zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
-                )
-                self._download_height = current + total // self.headers.header_size
-                log.info("Headers sync: %s / %s", self._download_height, target)
+        get_chunk = partial(self.network.retriable_call, self.network.get_headers, count=1000, b64=True)
+        self.headers.chunk_getter = get_chunk
+
+        async def doit():
+            async with self._header_processing_lock:
+                for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
+                    await self.headers.ensure_chunk_at(height)
+        self._update_tasks.add(doit())
+        await self.update_headers()
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
         rewound = 0
@@ -601,7 +594,7 @@ class Ledger(metaclass=LedgerRegistry):
         if 0 < remote_height < len(self.headers):
             merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
-            header = self.headers[remote_height]
+            header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
 
@@ -899,7 +892,7 @@ class Ledger(metaclass=LedgerRegistry):
         headers = self.headers
         history = []
         for tx in txs:  # pylint: disable=too-many-nested-blocks
-            ts = headers[tx.height]['timestamp'] if tx.height > 0 else None
+            ts = headers.estimated_timestamp(tx.height)
             item = {
                 'txid': tx.id,
                 'timestamp': ts,

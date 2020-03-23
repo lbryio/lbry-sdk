@@ -166,7 +166,7 @@ class JSONResponseEncoder(JSONEncoder):
             'amount': dewies_to_lbc(txo.amount),
             'address': txo.get_address(self.ledger) if txo.has_address else None,
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None
+            'timestamp': self.ledger.headers.estimated_timestamp(tx_height)
         }
         if txo.is_spent is not None:
             output['is_spent'] = txo.is_spent
@@ -244,7 +244,7 @@ class JSONResponseEncoder(JSONEncoder):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
         if 0 < meta.get('creation_height', 0) <= self.ledger.headers.height:
-            meta['creation_timestamp'] = self.ledger.headers[meta['creation_height']]['timestamp']
+            meta['creation_timestamp'] = self.ledger.headers.estimated_timestamp(meta['creation_height'])
         return meta
 
     def encode_input(self, txi):
@@ -306,7 +306,7 @@ class JSONResponseEncoder(JSONEncoder):
             'added_on': managed_stream.added_on,
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers[tx_height]['timestamp'] if 0 < tx_height <= best_height else None,
+            'timestamp': self.ledger.headers.estimated_timestamp(tx_height),
             'is_fully_reflected': managed_stream.is_fully_reflected
         }
 

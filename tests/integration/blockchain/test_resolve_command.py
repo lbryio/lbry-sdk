@@ -49,11 +49,11 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertTrue(claim['is_channel_signature_valid'])
         self.assertEqual(
             claim['timestamp'],
-            self.ledger.headers[claim['height']]['timestamp']
+            self.ledger.headers.estimated_timestamp(claim['height'])
         )
         self.assertEqual(
             claim['signing_channel']['timestamp'],
-            self.ledger.headers[claim['signing_channel']['height']]['timestamp']
+            self.ledger.headers.estimated_timestamp(claim['signing_channel']['height'])
         )
 
         # resolving claim foo by itself
@@ -337,7 +337,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         blocks = self.ledger.headers.height - start
         self.blockchain.block_expected = start - 1
         # go back to start
-        await self.blockchain.invalidate_block(self.ledger.headers.hash(start).decode())
+        await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode())
         # go to previous + 1
         await self.generate(blocks + 2)
 

@@ -1,12 +1,15 @@
 import os
 import asyncio
 import tempfile
-from binascii import hexlify, unhexlify
+from binascii import unhexlify
 
-from lbry.crypto.hash import sha256
 from lbry.wallet.util import ArithUint256
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.ledger import Headers
+from lbry.wallet.ledger import Headers as _Headers
+
+
+class Headers(_Headers):
+    checkpoints = {}
 
 
 def block_bytes(blocks):
@@ -15,11 +18,12 @@ def block_bytes(blocks):
 
 class TestHeaders(AsyncioTestCase):
 
-    def test_deserialize(self):
+    async def test_deserialize(self):
         self.maxDiff = None
         h = Headers(':memory:')
         h.io.write(HEADERS)
-        self.assertEqual(h[0], {
+        await h.open()
+        self.assertEqual(await h.get(0), {
             'bits': 520159231,
             'block_height': 0,
             'claim_trie_root': b'0000000000000000000000000000000000000000000000000000000000000001',
@@ -29,7 +33,7 @@ class TestHeaders(AsyncioTestCase):
             'timestamp': 1446058291,
             'version': 1
         })
-        self.assertEqual(h[10], {
+        self.assertEqual(await h.get(10), {
             'bits': 509349720,
             'block_height': 10,
             'merkle_root': b'f4d8fded6a181d4a8a2817a0eb423cc0f414af29490004a620e66c35c498a554',
@@ -42,6 +46,7 @@ class TestHeaders(AsyncioTestCase):
 
     async def test_connect_from_genesis(self):
         headers = Headers(':memory:')
+        await headers.open()
         self.assertEqual(headers.height, -1)
         await headers.connect(0, HEADERS)
         self.assertEqual(headers.height, 19)
@@ -49,6 +54,7 @@ class TestHeaders(AsyncioTestCase):
     async def test_connect_from_middle(self):
         h = Headers(':memory:')
         h.io.write(HEADERS[:block_bytes(10)])
+        await h.open()
         self.assertEqual(h.height, 9)
         await h.connect(len(h), HEADERS[block_bytes(10):block_bytes(20)])
         self.assertEqual(h.height, 19)
@@ -112,11 +118,11 @@ class TestHeaders(AsyncioTestCase):
         await headers.connect(0, HEADERS)
         self.assertEqual(19, headers.height)
         with self.assertRaises(IndexError):
-            _ = headers[3001]
+            _ = await headers.get(3001)
         with self.assertRaises(IndexError):
-            _ = headers[-1]
-        self.assertIsNotNone(headers[19])
-        self.assertIsNotNone(headers[0])
+            _ = await headers.get(-1)
+        self.assertIsNotNone(await headers.get(19))
+        self.assertIsNotNone(await headers.get(0))
 
     async def test_repair(self):
         headers = Headers(':memory:')
@@ -138,21 +144,6 @@ class TestHeaders(AsyncioTestCase):
         await headers.connect(len(headers), HEADERS[block_bytes(8):])
         self.assertEqual(19, headers.height)
 
-    async def test_checkpointed_writer(self):
-        headers = Headers(':memory:')
-        getblocks = lambda start, end: HEADERS[block_bytes(start):block_bytes(end)]
-        headers.checkpoint = 10, hexlify(sha256(getblocks(10, 11)))
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(0, 10))
-        self.assertEqual(len(headers), 10)
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(10, 19))
-        self.assertEqual(len(headers), 19)
-        headers = Headers(':memory:')
-        async with headers.checkpointed_connector() as buff:
-            buff.write(getblocks(0, 19))
-        self.assertEqual(len(headers), 19)
-
     async def test_concurrency(self):
         BLOCKS = 19
         headers_temporary_file = tempfile.mktemp()
@@ -164,9 +155,9 @@ class TestHeaders(AsyncioTestCase):
                 await headers.connect(block_index, HEADERS[block_bytes(block_index):block_bytes(block_index + 1)])
         async def reader():
             for block_index in range(BLOCKS):
-                while len(headers) < block_index:
+                while len(headers) <= block_index:
                     await asyncio.sleep(0.000001)
-                assert headers[block_index]['block_height'] == block_index
+                assert (await headers.get(block_index))['block_height'] == block_index
         reader_task = asyncio.create_task(reader())
         await writer()
         await reader_task

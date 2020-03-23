@@ -67,7 +67,7 @@ class LedgerTestCase(AsyncioTestCase):
         serialized = self.make_header(**kwargs)
         self.ledger.headers.io.seek(0, os.SEEK_END)
         self.ledger.headers.io.write(serialized)
-        self.ledger.headers._size = None
+        self.ledger.headers._size = self.ledger.headers.io.seek(0, os.SEEK_END) // self.ledger.headers.header_size
 
 
 class TestSynchronization(LedgerTestCase):

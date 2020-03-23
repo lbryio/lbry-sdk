@@ -248,10 +248,10 @@ class WalletManager:
             log.warning("Failed to migrate %s receiving addresses!",
                         len(set(receiving_addresses).difference(set(migrated_receiving))))
 
-    def get_best_blockhash(self):
+    async def get_best_blockhash(self):
         if len(self.ledger.headers) <= 0:
             return self.ledger.genesis_hash
-        return self.ledger.headers.hash(self.ledger.headers.height).decode()
+        return (await self.ledger.headers.hash(self.ledger.headers.height)).decode()
 
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()

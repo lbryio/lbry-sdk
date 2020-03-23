@@ -125,14 +125,14 @@ class FileCommands(CommandTestCase):
         file_list = await self.file_list()
         self.assertEqual(
             file_list[0]['timestamp'],
-            None
+            self.ledger.headers.estimated_timestamp(file_list[0]['height'])
         )
         self.assertEqual(file_list[0]['confirmations'], -1)
         await self.daemon.jsonrpc_resolve('foo')
         file_list = await self.file_list()
         self.assertEqual(
             file_list[0]['timestamp'],
-            self.ledger.headers[file_list[0]['height']]['timestamp']
+            self.ledger.headers.estimated_timestamp(file_list[0]['height'])
         )
         self.assertEqual(file_list[0]['confirmations'], 1)
 

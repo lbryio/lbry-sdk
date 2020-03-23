@@ -1,16 +1,18 @@
+import base64
 import os
 import struct
 import asyncio
-import hashlib
 import logging
+import zlib
+from concurrent.futures.thread import ThreadPoolExecutor
 
 from io import BytesIO
-from contextlib import asynccontextmanager
-from typing import Optional, Iterator, Tuple
+from typing import Optional, Iterator, Tuple, Callable
 from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha512, double_sha256, ripemd160
 from lbry.wallet.util import ArithUint256
+from .checkpoints import HASHES
 
 
 log = logging.getLogger(__name__)
@@ -32,7 +34,9 @@ class Headers:
     max_target = 0x0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash = b'9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463'
     target_timespan = 150
-    checkpoint = (600_000, b'100b33ca3d0b86a48f0d6d6f30458a130ecb89d5affefe4afccb134d5a40f4c2')
+    checkpoints = HASHES
+    first_block_timestamp = 1466646588  # block 1, as 0 is off by a lot
+    timestamp_average_offset = 160.6855883050695  # calculated at 733447
 
     validate_difficulty: bool = True
 
@@ -41,15 +45,27 @@ class Headers:
             self.io = BytesIO()
         self.path = path
         self._size: Optional[int] = None
+        self.chunk_getter: Optional[Callable] = None
+        self.executor = ThreadPoolExecutor(1)
+        self.known_missing_checkpointed_chunks = set()
+        self.check_chunk_lock = asyncio.Lock()
 
     async def open(self):
+        if not self.executor:
+            self.executor = ThreadPoolExecutor(1)
         if self.path != ':memory:':
             if not os.path.exists(self.path):
                 self.io = open(self.path, 'w+b')
             else:
                 self.io = open(self.path, 'r+b')
+        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
+        await self.ensure_checkpointed_size()
+        await self.get_all_missing_headers()
 
     async def close(self):
+        if self.executor:
+            self.executor.shutdown()
+            self.executor = None
         self.io.close()
 
     @staticmethod
@@ -97,23 +113,89 @@ class Headers:
         return new_target
 
     def __len__(self) -> int:
-        if self._size is None:
-            self._size = self.io.seek(0, os.SEEK_END) // self.header_size
         return self._size
 
     def __bool__(self):
         return True
 
-    def __getitem__(self, height) -> dict:
+    async def get(self, height) -> dict:
         if isinstance(height, slice):
             raise NotImplementedError("Slicing of header chain has not been implemented yet.")
+        try:
+            return self.deserialize(height, await self.get_raw_header(height))
+        except struct.error:
+            raise IndexError(f"failed to get {height}, at {len(self)}")
+
+    def estimated_timestamp(self, height):
+        return self.first_block_timestamp + (height * self.timestamp_average_offset)
+
+    async def get_raw_header(self, height) -> bytes:
+        if self.chunk_getter:
+            await self.ensure_chunk_at(height)
         if not 0 <= height <= self.height:
             raise IndexError(f"{height} is out of bounds, current height: {self.height}")
-        return self.deserialize(height, self.get_raw_header(height))
+        return await asyncio.get_running_loop().run_in_executor(self.executor, self._read, height)
 
-    def get_raw_header(self, height) -> bytes:
+    def _read(self, height, count=1):
         self.io.seek(height * self.header_size, os.SEEK_SET)
-        return self.io.read(self.header_size)
+        return self.io.read(self.header_size * count)
+
+    def chunk_hash(self, start, count):
+        self.io.seek(start * self.header_size, os.SEEK_SET)
+        return self.hash_header(self.io.read(count * self.header_size)).decode()
+
+    async def ensure_checkpointed_size(self):
+        max_checkpointed_height = max(self.checkpoints.keys() or [-1])
+        if self.height < max_checkpointed_height:
+            self._write(max_checkpointed_height, bytes([0] * self.header_size * 1000))
+
+    async def ensure_chunk_at(self, height):
+        async with self.check_chunk_lock:
+            if await self.has_header(height):
+                log.debug("has header %s", height)
+                return
+            return await self.fetch_chunk(height)
+
+    async def fetch_chunk(self, height):
+        log.info("on-demand fetching height %s", height)
+        start = (height // 1000) * 1000
+        headers = await self.chunk_getter(start)  # pylint: disable=not-callable
+        chunk = (
+            zlib.decompress(base64.b64decode(headers['base64']), wbits=-15, bufsize=600_000)
+        )
+        chunk_hash = self.hash_header(chunk).decode()
+        if self.checkpoints.get(start) == chunk_hash:
+            await asyncio.get_running_loop().run_in_executor(self.executor, self._write, start, chunk)
+            if start in self.known_missing_checkpointed_chunks:
+                self.known_missing_checkpointed_chunks.remove(start)
+            return
+        elif start not in self.checkpoints:
+            return  # todo: fixme
+        raise Exception(
+            f"Checkpoint mismatch at height {start}. Expected {self.checkpoints[start]}, but got {chunk_hash} instead."
+        )
+
+    async def has_header(self, height):
+        normalized_height = (height // 1000) * 1000
+        if normalized_height in self.checkpoints:
+            return normalized_height not in self.known_missing_checkpointed_chunks
+
+        def _has_header(height):
+            empty = '56944c5d3f98413ef45cf54545538103cc9f298e0575820ad3591376e2e0f65d'
+            all_zeroes = '789d737d4f448e554b318c94063bbfa63e9ccda6e208f5648ca76ee68896557b'
+            return self.chunk_hash(height, 1) not in (empty, all_zeroes)
+        return await asyncio.get_running_loop().run_in_executor(self.executor, _has_header, height)
+
+    async def get_all_missing_headers(self):
+        # Heavy operation done in one optimized shot
+        def _io_checkall():
+            for chunk_height, expected_hash in reversed(list(self.checkpoints.items())):
+                if chunk_height in self.known_missing_checkpointed_chunks:
+                    continue
+                if self.chunk_hash(chunk_height, 1000) != expected_hash:
+                    self.known_missing_checkpointed_chunks.add(chunk_height)
+            return self.known_missing_checkpointed_chunks
+        return await asyncio.get_running_loop().run_in_executor(self.executor, _io_checkall)
 
     @property
     def height(self) -> int:
@@ -123,9 +205,9 @@ class Headers:
     def bytes_size(self):
         return len(self) * self.header_size
 
-    def hash(self, height=None) -> bytes:
+    async def hash(self, height=None) -> bytes:
         return self.hash_header(
-            self.get_raw_header(height if height is not None else self.height)
+            await self.get_raw_header(height if height is not None else self.height)
         )
 
     @staticmethod
@@ -134,44 +216,18 @@ class Headers:
             return b'0' * 64
         return hexlify(double_sha256(header)[::-1])
 
-    @asynccontextmanager
-    async def checkpointed_connector(self):
-        buf = BytesIO()
-        try:
-            yield buf
-        finally:
-            await asyncio.sleep(0)
-            final_height = len(self) + buf.tell() // self.header_size
-            verifiable_bytes = (self.checkpoint[0] - len(self)) * self.header_size if self.checkpoint else 0
-            if verifiable_bytes > 0 and final_height >= self.checkpoint[0]:
-                buf.seek(0)
-                self.io.seek(0)
-                h = hashlib.sha256()
-                h.update(self.io.read())
-                h.update(buf.read(verifiable_bytes))
-                if h.hexdigest().encode() == self.checkpoint[1]:
-                    buf.seek(0)
-                    self._write(len(self), buf.read(verifiable_bytes))
-                    remaining = buf.read()
-                    buf.seek(0)
-                    buf.write(remaining)
-                    buf.truncate()
-                else:
-                    log.warning("Checkpoint mismatch, connecting headers through slow method.")
-            if buf.tell() > 0:
-                await self.connect(len(self), buf.getvalue())
-
     async def connect(self, start: int, headers: bytes) -> int:
         added = 0
         bail = False
         for height, chunk in self._iterate_chunks(start, headers):
             try:
                 # validate_chunk() is CPU bound and reads previous chunks from file system
-                self.validate_chunk(height, chunk)
+                await self.validate_chunk(height, chunk)
             except InvalidHeader as e:
                 bail = True
                 chunk = chunk[:(height-e.height)*self.header_size]
-            added += self._write(height, chunk) if chunk else 0
+            if chunk:
+                added += await asyncio.get_running_loop().run_in_executor(self.executor, self._write, height, chunk)
             if bail:
                 break
         return added
@@ -179,20 +235,21 @@ class Headers:
     def _write(self, height, verified_chunk):
         self.io.seek(height * self.header_size, os.SEEK_SET)
         written = self.io.write(verified_chunk) // self.header_size
-        self.io.truncate()
+        # self.io.truncate()
         # .seek()/.write()/.truncate() might also .flush() when needed
         # the goal here is mainly to ensure we're definitely flush()'ing
         self.io.flush()
-        self._size = self.io.tell() // self.header_size
+        self._size = max(self._size or 0, self.io.tell() // self.header_size)
         return written
 
-    def validate_chunk(self, height, chunk):
+    async def validate_chunk(self, height, chunk):
         previous_hash, previous_header, previous_previous_header = None, None, None
         if height > 0:
-            previous_header = self[height-1]
-            previous_hash = self.hash(height-1)
+            raw = await self.get_raw_header(height-1)
+            previous_header = self.deserialize(height-1, raw)
+            previous_hash = self.hash_header(raw)
         if height > 1:
-            previous_previous_header = self[height-2]
+            previous_previous_header = await self.get(height-2)
         chunk_target = self.get_next_chunk_target(height // 2016 - 1)
         for current_hash, current_header in self._iterate_headers(height, chunk):
             block_target = self.get_next_block_target(chunk_target, previous_previous_header, previous_header)
@@ -235,8 +292,9 @@ class Headers:
         previous_header_hash = fail = None
         batch_size = 36
         for start_height in range(0, self.height, batch_size):
-            self.io.seek(self.header_size * start_height)
-            headers = self.io.read(self.header_size*batch_size)
+            headers = await asyncio.get_running_loop().run_in_executor(
+                self.executor, self._read, start_height, batch_size
+            )
             if len(headers) % self.header_size != 0:
                 headers = headers[:(len(headers) // self.header_size) * self.header_size]
             for header_hash, header in self._iterate_headers(start_height, headers):
@@ -249,11 +307,12 @@ class Headers:
                         fail = True
                 if fail:
                     log.warning("Header file corrupted at height %s, truncating it.", height - 1)
-                    self.io.seek(max(0, (height - 1)) * self.header_size, os.SEEK_SET)
-                    self.io.truncate()
-                    self.io.flush()
-                    self._size = None
-                    return
+                    def __truncate(at_height):
+                        self.io.seek(max(0, (at_height - 1)) * self.header_size, os.SEEK_SET)
+                        self.io.truncate()
+                        self.io.flush()
+                        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
+                    return await asyncio.get_running_loop().run_in_executor(self.executor, __truncate, height)
                 previous_header_hash = header_hash
 
     @classmethod
@@ -276,10 +335,6 @@ class Headers:
             header = headers[start:end]
             yield self.hash_header(header), self.deserialize(height+idx, header)
 
-    @property
-    def claim_trie_root(self):
-        return self[self.height]['claim_trie_root']
-
     @staticmethod
     def header_hash_to_pow_hash(header_hash: bytes):
         header_hash_bytes = unhexlify(header_hash)[::-1]
@@ -295,3 +350,4 @@ class UnvalidatedHeaders(Headers):
     validate_difficulty = False
     max_target = 0x7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
     genesis_hash = b'6e3fcf1299d4ec5d79c3a4c91d624a4acf9e2e173d95a1a0504f677669687556'
+    checkpoints = {}
