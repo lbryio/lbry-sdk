@@ -151,6 +151,8 @@ class BaseClaim:
         for key, value in kwargs.items():
             setattr(self, key, value)
 
+        return self
+
     @property
     def title(self) -> str:
         return self.claim.message.title
@@ -266,6 +268,8 @@ class Stream(BaseClaim):
             media.update(**media_args)
 
         super().update(**kwargs)
+
+        return self
 
     @property
     def author(self) -> str:
