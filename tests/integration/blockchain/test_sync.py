@@ -27,7 +27,6 @@ class SyncTests(IntegrationTestCase):
         wallet_node = WalletNode(WalletManager, RegTestLedger, port=self.api_port)
         await wallet_node.start(self.conductor.spv_node, seed)
         self.started_nodes.append(wallet_node)
-        await wallet_node.ledger.on_ready.first
         return wallet_node
 
     async def test_nodes_with_same_account_stay_in_sync(self):

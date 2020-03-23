@@ -77,7 +77,6 @@ class Conductor:
     async def start_wallet(self):
         if not self.wallet_started:
             await self.wallet_node.start(self.spv_node)
-            await self.wallet_node.ledger.on_ready.first
             self.wallet_started = True
 
     async def stop_wallet(self):

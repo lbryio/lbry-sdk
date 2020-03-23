@@ -370,7 +370,6 @@ class CommandTestCase(IntegrationTestCase):
             )
             self.extra_wallet_node_port += 1
             await wallet_node.start(self.conductor.spv_node, seed=seed)
-            await wallet_node.ledger.on_ready.first
             self.extra_wallet_nodes.append(wallet_node)
 
         upload_dir = os.path.join(wallet_node.data_path, 'uploads')

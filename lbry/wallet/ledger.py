@@ -154,6 +154,7 @@ class Ledger(metaclass=LedgerRegistry):
 
         self._tx_cache = pylru.lrucache(100000)
         self._update_tasks = TaskGroup()
+        self._other_tasks = TaskGroup()  # that we dont need to start
         self._utxo_reservation_lock = asyncio.Lock()
         self._header_processing_lock = asyncio.Lock()
         self._address_update_locks: DefaultDict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -323,6 +324,7 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
+        await self.on_ready.first
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
@@ -334,7 +336,9 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def stop(self):
         self._update_tasks.cancel()
+        self._other_tasks.cancel()
         await self._update_tasks.done.wait()
+        await self._other_tasks.done.wait()
         await self.network.stop()
         await self.db.close()
         await self.headers.close()
@@ -351,7 +355,7 @@ class Ledger(metaclass=LedgerRegistry):
             async with self._header_processing_lock:
                 for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
                     await self.headers.ensure_chunk_at(height)
-        self._update_tasks.add(doit())
+        self._other_tasks.add(doit())
         await self.update_headers()
 
     async def update_headers(self, height=None, headers=None, subscription_update=False):
