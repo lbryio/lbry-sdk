@@ -323,6 +323,7 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
+        await self.on_ready.first
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
