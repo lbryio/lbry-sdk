@@ -1,7 +1,5 @@
 import os
-import zlib
 import copy
-import base64
 import asyncio
 import logging
 from io import StringIO
