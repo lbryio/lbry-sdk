@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 
 from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
@@ -18,6 +19,17 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(len(session.hashX_subs), 27)
         await self.daemon.jsonrpc_wallet_add(wallet.id)
         self.assertEqual(len(session.hashX_subs), 28)
+
+    async def test_wallet_syncing_status(self):
+        address = await self.daemon.jsonrpc_address_unused()
+        sendtxid = await self.blockchain.send_to_address(address, 1)
+
+        async def eventually_will_sync():
+            while not (await self.daemon.jsonrpc_status())['wallet']['wallet_syncing']:
+                pass
+        check_sync = asyncio.create_task(eventually_will_sync())
+        await self.confirm_tx(sendtxid, self.ledger)
+        await asyncio.wait_for(check_sync, timeout=10)
 
     async def test_wallet_reconnect(self):
         await self.conductor.spv_node.stop(True)

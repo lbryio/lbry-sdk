@@ -334,7 +334,7 @@ class Ledger(metaclass=LedgerRegistry):
         log.info("Subscribing and updating accounts.")
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
-        await self.subscribe_accounts()
+        await self._update_tasks.add(self.subscribe_accounts())
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)
 
