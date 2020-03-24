@@ -74,7 +74,7 @@ test:json-api:
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller
-    - pip install -e .
+    - make install
     - python3.7 docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --onefile --name lbrynet lbry/extras/cli.py
     - chmod +x dist/lbrynet
@@ -132,7 +132,7 @@ build:windows:
   script:
     - pip install --upgrade 'setuptools<45.0.0'
     - pip install pyinstaller==3.5
-    - pip install -e .
+    - make install
     - python docker/set_build.py # must come after lbry is installed because it imports lbry
     - pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico -F -n lbrynet lbry/extras/cli.py
     - 7z a -tzip $env:CI_PROJECT_DIR/lbrynet-${OS}.zip ./dist/lbrynet.exe
