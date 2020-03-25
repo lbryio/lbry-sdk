@@ -25,8 +25,8 @@ class WalletCommands(CommandTestCase):
         sendtxid = await self.blockchain.send_to_address(address, 1)
 
         async def eventually_will_sync():
-            while not (await self.daemon.jsonrpc_status())['wallet']['wallet_syncing']:
-                pass
+            while not self.daemon.jsonrpc_wallet_status()['is_syncing']:
+                await asyncio.sleep(0)
         check_sync = asyncio.create_task(eventually_will_sync())
         await self.confirm_tx(sendtxid, self.ledger)
         await asyncio.wait_for(check_sync, timeout=10)

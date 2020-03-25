@@ -1326,7 +1326,11 @@ class Daemon(metaclass=JSONRPCServerType):
             Dictionary of wallet status information.
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return {'is_encrypted': wallet.is_encrypted, 'is_locked': wallet.is_locked}
+        return {
+            'is_encrypted': wallet.is_encrypted,
+            'is_syncing': len(self.ledger._update_tasks) > 0,
+            'is_locked': wallet.is_locked
+        }
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_wallet_unlock(self, password, wallet_id=None):

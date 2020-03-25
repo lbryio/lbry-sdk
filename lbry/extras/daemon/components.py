@@ -146,7 +146,6 @@ class WalletComponent(Component):
             best_hash = await self.wallet_manager.get_best_blockhash()
             result.update({
                 'headers_synchronization_progress': progress,
-                'wallet_syncing': len(self.wallet_manager.ledger._update_tasks) > 0,
                 'blocks': max(local_height, 0),
                 'blocks_behind': max(remote_height - local_height, 0),
                 'best_blockhash': best_hash,
