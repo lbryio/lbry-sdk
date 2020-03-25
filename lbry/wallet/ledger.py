@@ -68,12 +68,13 @@ class BlockHeightEvent(NamedTuple):
 
 
 class TransactionCacheItem:
-    __slots__ = '_tx', 'lock', 'has_tx'
+    __slots__ = '_tx', 'lock', 'has_tx', 'pending_verifications'
 
     def __init__(self, tx: Optional[Transaction] = None, lock: Optional[asyncio.Lock] = None):
         self.has_tx = asyncio.Event()
         self.lock = lock or asyncio.Lock()
         self._tx = self.tx = tx
+        self.pending_verifications = 0
 
     @property
     def tx(self) -> Optional[Transaction]:
@@ -579,6 +580,14 @@ class Ledger(metaclass=LedgerRegistry):
                 (cache_item.tx.is_verified or remote_height < 1):
             return cache_item.tx  # cached tx is already up-to-date
 
+        try:
+            cache_item.pending_verifications += 1
+            return await self._update_cache_item(cache_item, txid, remote_height, check_local)
+        finally:
+            cache_item.pending_verifications -= 1
+
+    async def _update_cache_item(self, cache_item, txid, remote_height, check_local=True):
+
         async with cache_item.lock:
 
             tx = cache_item.tx
@@ -595,13 +604,12 @@ class Ledger(metaclass=LedgerRegistry):
                 )
                 tx = Transaction(unhexlify(_raw), height=merkle.get('block_height'))
                 cache_item.tx = tx  # make sure it's saved before caching it
-
             await self.maybe_verify_transaction(tx, remote_height, merkle)
             return tx
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
-        if 0 < remote_height < len(self.headers):
+        if 0 < remote_height < len(self.headers) and self._tx_cache[tx.id].pending_verifications == 1:
             if not merkle:
                 merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
