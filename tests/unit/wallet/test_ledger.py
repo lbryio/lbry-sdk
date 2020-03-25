@@ -80,6 +80,11 @@ class LedgerTestCase(AsyncioTestCase):
 class TestSynchronization(LedgerTestCase):
 
     async def test_update_history(self):
+        txid1 = '252bda9b22cc902ca2aa2de3548ee8baf06b8501ff7bfb3b0b7d980dbd1bf792'
+        txid2 = 'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9'
+        txid3 = 'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0'
+        txid4 = '047cf1d53ef68f0fd586d46f90c09ff8e57a4180f67e7f4b8dd0135c3741e828'
+
         account = Account.generate(self.ledger, Wallet(), "torba")
         address = await account.receiving.get_or_create_usable_address()
         address_details = await self.ledger.db.get_address(address=address)
@@ -90,46 +95,49 @@ class TestSynchronization(LedgerTestCase):
         self.add_header(block_height=2, merkle_root=b'abcd04')
         self.add_header(block_height=3, merkle_root=b'abcd04')
         self.ledger.network = MockNetwork([
-            {'tx_hash': 'abcd01', 'height': 0},
-            {'tx_hash': 'abcd02', 'height': 1},
-            {'tx_hash': 'abcd03', 'height': 2},
+            {'tx_hash': txid1, 'height': 0},
+            {'tx_hash': txid2, 'height': 1},
+            {'tx_hash': txid3, 'height': 2},
         ], {
-            'abcd01': hexlify(get_transaction(get_output(1)).raw),
-            'abcd02': hexlify(get_transaction(get_output(2)).raw),
-            'abcd03': hexlify(get_transaction(get_output(3)).raw),
+            txid1: hexlify(get_transaction(get_output(1)).raw),
+            txid2: hexlify(get_transaction(get_output(2)).raw),
+            txid3: hexlify(get_transaction(get_output(3)).raw),
         })
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
-        self.assertListEqual(self.ledger.network.get_transaction_called, ['abcd01', 'abcd02', 'abcd03'])
+        self.assertListEqual(self.ledger.network.get_transaction_called, [txid1, txid2, txid3])
 
         address_details = await self.ledger.db.get_address(address=address)
+
         self.assertEqual(
             address_details['history'],
-            '252bda9b22cc902ca2aa2de3548ee8baf06b8501ff7bfb3b0b7d980dbd1bf792:0:'
-            'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9:1:'
-            'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0:2:'
+            f'{txid1}:0:'
+            f'{txid2}:1:'
+            f'{txid3}:2:'
         )
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
+        for cache_item in self.ledger._tx_cache.values():
+            cache_item.tx.is_verified = True
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [])
 
-        self.ledger.network.history.append({'tx_hash': 'abcd04', 'height': 3})
-        self.ledger.network.transaction['abcd04'] = hexlify(get_transaction(get_output(4)).raw)
+        self.ledger.network.history.append({'tx_hash': txid4, 'height': 3})
+        self.ledger.network.transaction[txid4] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
-        self.assertListEqual(self.ledger.network.get_transaction_called, ['abcd04'])
+        self.assertListEqual(self.ledger.network.get_transaction_called, [txid4])
         address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(
             address_details['history'],
-            '252bda9b22cc902ca2aa2de3548ee8baf06b8501ff7bfb3b0b7d980dbd1bf792:0:'
-            'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9:1:'
-            'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0:2:'
-            '047cf1d53ef68f0fd586d46f90c09ff8e57a4180f67e7f4b8dd0135c3741e828:3:'
+            f'{txid1}:0:'
+            f'{txid2}:1:'
+            f'{txid3}:2:'
+            f'{txid4}:3:'
         )
 
 
