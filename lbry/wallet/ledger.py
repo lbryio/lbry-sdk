@@ -497,14 +497,15 @@ class Ledger(metaclass=LedgerRegistry):
             if not we_need:
                 return True
 
-            cache_tasks: List[asyncio.Future[Transaction]] = []
+            cache_tasks: List[asyncio.Task[Transaction]] = []
             synced_history = StringIO()
+            loop = asyncio.get_running_loop()
             for i, (txid, remote_height) in enumerate(remote_history):
                 if i < len(local_history) and local_history[i] == (txid, remote_height) and not cache_tasks:
                     synced_history.write(f'{txid}:{remote_height}:')
                 else:
                     check_local = (txid, remote_height) not in we_need
-                    cache_tasks.append(asyncio.ensure_future(
+                    cache_tasks.append(loop.create_task(
                         self.cache_transaction(txid, remote_height, check_local=check_local)
                     ))
 
