@@ -1,7 +1,7 @@
 import sys
 import os
 import unittest
-import sqlite3
+import apsw
 import tempfile
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -35,7 +35,7 @@ class TestAIOSQLite(AsyncioTestCase):
     async def test_foreign_keys_integrity_error(self):
         self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
 
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(apsw.ConstraintError):
             await self.db.run(self.delete_item)
         self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
 
@@ -52,7 +52,7 @@ class TestAIOSQLite(AsyncioTestCase):
     async def test_integrity_error_when_foreign_keys_disabled_and_skipped(self):
         await self.db.executescript("pragma foreign_keys=off;")
         self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
-        with self.assertRaises(sqlite3.IntegrityError):
+        with self.assertRaises(apsw.ConstraintError):
             await self.db.run_with_foreign_keys_disabled(self.delete_item)
         self.assertListEqual([(1, 'test')], await self.db.execute_fetchall("select * from parent"))
 
@@ -401,25 +401,25 @@ class TestUpgrade(AsyncioTestCase):
         os.remove(self.path)
 
     def get_version(self):
-        with sqlite3.connect(self.path) as conn:
+        with apsw.Connection(self.path) as conn:
             versions = conn.execute('select version from version').fetchall()
             assert len(versions) == 1
             return versions[0][0]
 
     def get_tables(self):
-        with sqlite3.connect(self.path) as conn:
+        with apsw.Connection(self.path) as conn:
             sql = "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
             return [col[0] for col in conn.execute(sql).fetchall()]
 
     def add_address(self, address):
-        with sqlite3.connect(self.path) as conn:
+        with apsw.Connection(self.path) as conn:
             conn.execute("""
             INSERT INTO account_address (address, account, chain, n, pubkey, chain_code, depth)
             VALUES (?, 'account1', 0, 0, 'pubkey', 'chain_code', 0)
             """, (address,))
 
     def get_addresses(self):
-        with sqlite3.connect(self.path) as conn:
+        with apsw.Connection(self.path) as conn:
             sql = "SELECT address FROM account_address ORDER BY address;"
             return [col[0] for col in conn.execute(sql).fetchall()]
 
@@ -472,7 +472,7 @@ class TestSQLiteRace(AsyncioTestCase):
     max_misuse_attempts = 40000
 
     def setup_db(self):
-        self.db = sqlite3.connect(":memory:", isolation_level=None)
+        self.db = apsw.Connection(":memory:")
         self.db.executescript(
             "create table test1 (id text primary key not null, val text);\n" +
             "create table test2 (id text primary key not null, val text);\n" +
@@ -505,7 +505,7 @@ class TestSQLiteRace(AsyncioTestCase):
                     [(unsupported_type(1), ), (unsupported_type(2), )]
                 )
                 self.assertTrue(False)
-            except sqlite3.InterfaceError as err:
+            except apsw.ConstraintError as err:
                 self.assertEqual(str(err), "Error binding parameter 0 - probably unsupported type.")
 
     async def test_unhandled_sqlite_misuse(self):
@@ -529,13 +529,13 @@ class TestSQLiteRace(AsyncioTestCase):
                 )
                 attempts += 1
                 await asyncio.gather(f1, f2)
-            print(f"\nsqlite3 {sqlite3.version}/python {python_version} "
+            print(f"\nsqlite3 {apsw.sqlitelibversion()}/python {python_version} "
                   f"did not raise SQLITE_MISUSE within {attempts} attempts of the race condition")
             self.assertTrue(False, 'this test failing means either the sqlite race conditions '
                                    'have been fixed in cpython or the test max_attempts needs to be increased')
-        except sqlite3.InterfaceError as err:
+        except apsw.ConstraintError as err:
             self.assertEqual(str(err), "Error binding parameter 0 - probably unsupported type.")
-        print(f"\nsqlite3 {sqlite3.version}/python {python_version} raised SQLITE_MISUSE "
+        print(f"\nsqlite3 {apsw.sqlitelibversion()}/python {python_version} raised SQLITE_MISUSE "
               f"after {attempts} attempts of the race condition")
 
     @unittest.SkipTest

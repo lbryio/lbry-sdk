@@ -344,6 +344,9 @@ class SQLiteStorage(SQLiteMixin):
         self.loop = loop or asyncio.get_event_loop()
         self.time_getter = time_getter or time.time
 
+    async def open(self):
+        await super().open()
+
     async def run_and_return_one_or_none(self, query, *args):
         for row in await self.db.execute_fetchall(query, args):
             if len(row) == 1:

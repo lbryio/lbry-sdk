@@ -33,6 +33,7 @@ setup(
         ],
     },
     install_requires=[
+        'apsw==3.30.1.post1',
         'aiohttp==3.5.4',
         'aioupnp==0.0.17',
         'appdirs==1.4.3',
