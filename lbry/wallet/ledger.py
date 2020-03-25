@@ -609,7 +609,14 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
-        if 0 < remote_height < len(self.headers) and self._tx_cache[tx.id].pending_verifications == 1:
+        cached = self._tx_cache.get(tx.id)
+        if not cached:
+            # cache txs looked up by transaction_show too
+            cached = TransactionCacheItem()
+            cached.tx = tx
+            self._tx_cache[tx.id] = cached
+        if 0 < remote_height < len(self.headers) and cached.pending_verifications <= 1:
+            # can't be tx.pending_verifications == 1 because we have to handle the transaction_show case
             if not merkle:
                 merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
