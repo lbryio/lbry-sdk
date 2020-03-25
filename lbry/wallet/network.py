@@ -55,7 +55,7 @@ class ClientSession(BaseClientSession):
 
     async def send_request(self, method, args=()):
         self.pending_amount += 1
-        log.debug("send %s to %s:%i", method, *self.server)
+        log.debug("send %s%s to %s:%i", method, tuple(args), *self.server)
         try:
             if method == 'server.version':
                 return await self.send_timed_server_version_request(args, self.timeout)
