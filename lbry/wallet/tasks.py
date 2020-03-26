@@ -8,6 +8,9 @@ class TaskGroup:
         self._tasks = set()
         self.done = Event()
 
+    def __len__(self):
+        return len(self._tasks)
+
     def add(self, coro):
         task = self._loop.create_task(coro)
         self._tasks.add(task)
