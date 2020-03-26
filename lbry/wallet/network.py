@@ -156,7 +156,7 @@ class ClientSession(BaseClientSession):
 class Network:
 
     PROTOCOL_VERSION = __version__
-    MINIMUM_REQUIRED = (0, 59, 0)
+    MINIMUM_REQUIRED = (0, 65, 0)
 
     def __init__(self, ledger):
         self.ledger = ledger
