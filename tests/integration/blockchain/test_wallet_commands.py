@@ -280,7 +280,9 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         wallet = daemon.wallet_manager.default_wallet
         wallet.save()
 
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': False})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {
+            'is_locked': False, 'is_encrypted': False, 'is_syncing': False
+        })
         self.assertIsNone(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK))
         self.assertWalletEncrypted(wallet.storage.path, False)
 
@@ -292,22 +294,26 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         daemon.jsonrpc_wallet_decrypt()  # already not encrypted
 
         daemon.jsonrpc_wallet_encrypt('password')
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True,
+                                                          'is_syncing': False})
         self.assertEqual(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK), {'encrypt-on-disk': True})
         self.assertWalletEncrypted(wallet.storage.path, True)
 
         daemon.jsonrpc_wallet_lock()
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': True, 'is_encrypted': True})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': True, 'is_encrypted': True,
+                                                          'is_syncing': False})
 
         # can't sign transactions with locked wallet
         with self.assertRaises(AssertionError):
             await daemon.jsonrpc_channel_create('@foo', '1.0')
         daemon.jsonrpc_wallet_unlock('password')
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True,
+                                                          'is_syncing': False})
         await daemon.jsonrpc_channel_create('@foo', '1.0')
 
         daemon.jsonrpc_wallet_decrypt()
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': False})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': False,
+                                                          'is_syncing': False})
         self.assertEqual(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK), {'encrypt-on-disk': False})
         self.assertWalletEncrypted(wallet.storage.path, False)
 
@@ -319,7 +325,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertTrue(daemon2.jsonrpc_wallet_encrypt('password'))
         self.assertTrue(daemon2.jsonrpc_wallet_lock())
         self.assertTrue(daemon2.jsonrpc_wallet_unlock("password"))
-        self.assertEqual(daemon2.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+        self.assertEqual(daemon2.jsonrpc_wallet_status(),
+                         {'is_locked': False, 'is_encrypted': True, 'is_syncing': False})
 
     async def test_sync_with_encryption_and_password_change(self):
         daemon, daemon2 = self.daemon, self.daemon2
@@ -340,7 +347,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         await daemon.jsonrpc_sync_apply('password2', data=data['data'], blocking=True)
         # sync_apply with new password2 also sets it as new local password
         self.assertEqual(wallet.encryption_password, 'password2')
-        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+        self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True,
+                                                          'is_syncing': True})
         self.assertEqual(daemon.jsonrpc_preference_get(ENCRYPT_ON_DISK), {'encrypt-on-disk': True})
         self.assertWalletEncrypted(wallet.storage.path, True)
 
@@ -357,7 +365,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         await daemon2.jsonrpc_sync_apply('password3', data=data['data'], blocking=True)
         # the other device got new password and on disk encryption
         self.assertEqual(wallet2.encryption_password, 'password3')
-        self.assertEqual(daemon2.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True})
+        self.assertEqual(daemon2.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True,
+                                                           'is_syncing': True})
         self.assertEqual(daemon2.jsonrpc_preference_get(ENCRYPT_ON_DISK), {'encrypt-on-disk': True})
         self.assertWalletEncrypted(wallet2.storage.path, True)
 
