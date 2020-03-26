@@ -113,9 +113,24 @@ class VideoFileAnalyzer:
     def _verify_container(scan_data: json):
         container = scan_data["format"]["format_name"]
         log.debug("   Detected container is %s", container)
-        if not {"webm", "mp4", "3gp", "ogg"}.intersection(container.split(",")):
+        splits = container.split(",")
+        if not {"webm", "mp4", "3gp", "ogg"}.intersection(splits):
             return "Container format is not in the approved list of WebM, MP4. " \
                    f"Actual: {container} [{scan_data['format']['format_long_name']}]"
+
+        if "matroska" in splits:
+            for stream in scan_data["streams"]:
+                if stream["codec_type"] == "video":
+                    codec = stream["codec_name"]
+                    if not {"vp8", "vp9", "av1"}.intersection(codec.split(",")):
+                        return "WebM format requires VP8/9 or AV1 video. " \
+                               f"Actual: {codec} [{stream['codec_long_name']}]"
+                elif stream["codec_type"] == "audio":
+                    codec = stream["codec_name"]
+                    if not {"vorbis", "opus"}.intersection(codec.split(",")):
+                        return "WebM format requires Vorbis or Opus audio. " \
+                               f"Actual: {codec} [{stream['codec_long_name']}]"
+
         return ""
 
     @staticmethod
@@ -289,20 +304,22 @@ class VideoFileAnalyzer:
         # if we are vp8/vp9/av1 we want webm
         # use mp4 for anything else
 
-        if not video_encoder:  # not re-encoding video
-            for stream in scan_data["streams"]:
-                if stream["codec_type"] != "video":
-                    continue
-                codec = stream["codec_name"].split(",")
-                if "theora" in codec:
-                    return "ogv"
-                if {"vp8", "vp9", "av1"}.intersection(codec):
-                    return "webm"
+        if video_encoder:  # not re-encoding video
+            if "theora" in video_encoder:
+                return "ogv"
+            if re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
+                return "webm"
+            return "mp4"
 
-        if "theora" in video_encoder:
-            return "ogv"
-        elif re.search(r"vp[89x]|av1", video_encoder.split(" ", 1)[0]):
-            return "webm"
+        for stream in scan_data["streams"]:
+            if stream["codec_type"] != "video":
+                continue
+            codec = stream["codec_name"].split(",")
+            if "theora" in codec:
+                return "ogv"
+            if {"vp8", "vp9", "av1"}.intersection(codec):
+                return "webm"
+
         return "mp4"
 
     async def _get_scan_data(self, validate, file_path):
@@ -324,23 +341,46 @@ class VideoFileAnalyzer:
 
         return scan_data
 
+    @staticmethod
+    def _build_spec(scan_data):
+        assert scan_data
+
+        duration = float(scan_data["format"]["duration"])  # existence verified when scan_data made
+        width = -1
+        height = -1
+        for stream in scan_data["streams"]:
+            if stream["codec_type"] != "video":
+                continue
+            width = max(width, int(stream["width"]))
+            height = max(height, int(stream["height"]))
+
+        log.debug("   Detected duration: %f sec. with resolution: %d x %d", duration, width, height)
+
+        spec = {"duration": duration}
+        if height >= 0:
+            spec["height"] = height
+        if width >= 0:
+            spec["width"] = width
+        return spec
+
     async def verify_or_repair(self, validate, repair, file_path, ignore_non_video=False):
         if not validate and not repair:
-            return file_path
+            return file_path, {}
 
         if ignore_non_video and not file_path:
-            return file_path
+            return file_path, {}
 
         await self._verify_ffmpeg_installed()
         try:
             scan_data = await self._get_scan_data(validate, file_path)
         except ValueError:
             if ignore_non_video:
-                return file_path
+                return file_path, {}
             raise
 
         fast_start_msg = await self._verify_fast_start(scan_data, file_path)
         log.debug("Analyzing %s:", file_path)
+        spec = self._build_spec(scan_data)
         log.debug("   Detected faststart is %s", "false" if fast_start_msg else "true")
         container_msg = self._verify_container(scan_data)
         bitrate_msg = self._verify_bitrate(scan_data, file_path)
@@ -350,7 +390,7 @@ class VideoFileAnalyzer:
         messages = [container_msg, bitrate_msg, fast_start_msg, video_msg, audio_msg, volume_msg]
 
         if not any(messages):
-            return file_path
+            return file_path, spec
 
         if not repair:
             errors = ["Streamability verification failed:"]
@@ -401,6 +441,6 @@ class VideoFileAnalyzer:
                 raise
             log.info("Unable to transcode %s . Message: %s", file_path, str(e))
             # TODO: delete partial output file here if it exists?
-            return file_path
+            return file_path, spec
 
-        return str(output)
+        return str(output), spec
