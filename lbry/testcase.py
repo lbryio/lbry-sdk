@@ -580,6 +580,9 @@ class CommandTestCase(IntegrationTestCase):
     async def txo_sum(self, *args, **kwargs):
         return await self.out(self.daemon.jsonrpc_txo_sum(*args, **kwargs))
 
+    async def txo_plot(self, *args, **kwargs):
+        return await self.out(self.daemon.jsonrpc_txo_plot(*args, **kwargs))
+
     async def claim_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 

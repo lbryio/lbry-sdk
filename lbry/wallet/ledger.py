@@ -277,6 +277,9 @@ class Ledger(metaclass=LedgerRegistry):
     def get_txo_sum(self, **constraints):
         return self.db.get_txo_sum(**constraints)
 
+    def get_txo_plot(self, **constraints):
+        return self.db.get_txo_plot(**constraints)
+
     def get_transactions(self, **constraints):
         return self.db.get_transactions(**constraints)
 
