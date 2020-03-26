@@ -55,7 +55,7 @@ class ClientSession(BaseClientSession):
 
     async def send_request(self, method, args=()):
         self.pending_amount += 1
-        log.debug("send %s to %s:%i", method, *self.server)
+        log.debug("send %s%s to %s:%i", method, tuple(args), *self.server)
         try:
             if method == 'server.version':
                 return await self.send_timed_server_version_request(args, self.timeout)
@@ -156,7 +156,7 @@ class ClientSession(BaseClientSession):
 class Network:
 
     PROTOCOL_VERSION = __version__
-    MINIMUM_REQUIRED = (0, 59, 0)
+    MINIMUM_REQUIRED = (0, 65, 0)
 
     def __init__(self, ledger):
         self.ledger = ledger
@@ -255,6 +255,11 @@ class Network:
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
+
+    def get_transaction_and_merkle(self, tx_hash, known_height=None):
+        # use any server if its old, otherwise restrict to who gave us the history
+        restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
+        return self.rpc('blockchain.transaction.info', [tx_hash], restricted)
 
     def get_transaction_height(self, tx_hash, known_height=None):
         restricted = not known_height or 0 > known_height > self.remote_height - 10
