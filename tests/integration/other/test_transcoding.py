@@ -52,12 +52,15 @@ class TranscodeValidation(ClaimTestCase):
                 self.assertEqual(code, 0, output)
 
     async def test_should_work(self):
-        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_name)
+        new_file_name, _ = await self.analyzer.verify_or_repair(True, False, self.video_file_name)
         self.assertEqual(self.video_file_name, new_file_name)
-        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_ogg)
+        new_file_name, _ = await self.analyzer.verify_or_repair(True, False, self.video_file_ogg)
         self.assertEqual(self.video_file_ogg, new_file_name)
-        new_file_name = await self.analyzer.verify_or_repair(True, False, self.video_file_webm)
+        new_file_name, spec = await self.analyzer.verify_or_repair(True, False, self.video_file_webm)
         self.assertEqual(self.video_file_webm, new_file_name)
+        self.assertEqual(spec["width"], 1280)
+        self.assertEqual(spec["height"], 720)
+        self.assertEqual(spec["duration"], 15.054)
 
     async def test_volume(self):
         self.conf.volume_analysis_time = 200
@@ -75,7 +78,7 @@ class TranscodeValidation(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "Container format is not in the approved list"):
             await self.analyzer.verify_or_repair(True, False, file_name)
 
-        fixed_file = await self.analyzer.verify_or_repair(True, True, file_name)
+        fixed_file, _ = await self.analyzer.verify_or_repair(True, True, file_name)
         pathlib.Path(fixed_file).unlink()
 
     async def test_video_codec(self):
@@ -91,7 +94,7 @@ class TranscodeValidation(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "faststart flag was not used"):
             await self.analyzer.verify_or_repair(True, False, file_name)
 
-        fixed_file = await self.analyzer.verify_or_repair(True, True, file_name)
+        fixed_file, _ = await self.analyzer.verify_or_repair(True, True, file_name)
         pathlib.Path(fixed_file).unlink()
 
     async def test_max_bit_rate(self):
@@ -111,7 +114,7 @@ class TranscodeValidation(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "pixel format does not match the approved"):
             await self.analyzer.verify_or_repair(True, False, file_name)
 
-        fixed_file = await self.analyzer.verify_or_repair(True, True, file_name)
+        fixed_file, _ = await self.analyzer.verify_or_repair(True, True, file_name)
         pathlib.Path(fixed_file).unlink()
 
     async def test_audio_codec(self):
@@ -125,7 +128,7 @@ class TranscodeValidation(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "Audio codec is not in the approved list"):
             await self.analyzer.verify_or_repair(True, False, file_name)
 
-        fixed_file = await self.analyzer.verify_or_repair(True, True, file_name)
+        fixed_file, _ = await self.analyzer.verify_or_repair(True, True, file_name)
         pathlib.Path(fixed_file).unlink()
 
     async def test_extension_choice(self):

@@ -33,7 +33,7 @@ async def process_video(analyzer, video_file):
         transcode = input("Would you like to make a repaired clone now? [y/N] ")
         if transcode == "y":
             try:
-                new_video_file = await analyzer.verify_or_repair(True, True, video_file)
+                new_video_file, _ = await analyzer.verify_or_repair(True, True, video_file)
                 print("Successfully created ", new_video_file)
             except Exception as e:
                 print("Unable to complete the transcode. Message: ", str(e))

@@ -253,7 +253,7 @@ class Stream(BaseClaim):
         if stream_type in ('image', 'video', 'audio'):
             media = getattr(self, stream_type)
             media_args = {'file_metadata': None}
-            if file_path is not None:
+            if file_path is not None and not all((duration, width, height)):
                 try:
                     media_args['file_metadata'] = binary_file_metadata(binary_file_parser(file_path))
                 except:
