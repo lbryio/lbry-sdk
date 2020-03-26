@@ -9,10 +9,12 @@ from contextvars import ContextVar
 from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent.futures.process import ProcessPoolExecutor
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
+from datetime import date
 
 from .bip32 import PubKey
 from .transaction import Transaction, Output, OutputScript, TXRefImmutable
 from .constants import TXO_TYPES, CLAIM_TYPES
+from .util import date_to_julian_day
 
 
 log = logging.getLogger(__name__)
@@ -254,6 +256,7 @@ def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
     limit = constraints.pop('limit', None)
     offset = constraints.pop('offset', None)
     order_by = constraints.pop('order_by', None)
+    group_by = constraints.pop('group_by', None)
 
     accounts = constraints.pop('accounts', [])
     if accounts:
@@ -263,6 +266,9 @@ def query(select, **constraints) -> Tuple[str, Dict[str, Any]]:
     if where:
         sql.append('WHERE')
         sql.append(where)
+
+    if group_by is not None:
+        sql.append(f'GROUP BY {group_by}')
 
     if order_by:
         sql.append('ORDER BY')
@@ -387,7 +393,7 @@ def dict_row_factory(cursor, row):
 
 class Database(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.2"
+    SCHEMA_VERSION = "1.3"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
@@ -422,7 +428,8 @@ class Database(SQLiteMixin):
             height integer not null,
             position integer not null,
             is_verified boolean not null default 0,
-            purchased_claim_id text
+            purchased_claim_id text,
+            day integer
         );
         create index if not exists tx_purchased_claim_id_idx on tx (purchased_claim_id);
     """
@@ -506,14 +513,14 @@ class Database(SQLiteMixin):
             row['claim_name'] = txo.claim_name
         return row
 
-    @staticmethod
-    def tx_to_row(tx):
+    def tx_to_row(self, tx):
         row = {
             'txid': tx.id,
             'raw': sqlite3.Binary(tx.raw),
             'height': tx.height,
             'position': tx.position,
-            'is_verified': tx.is_verified
+            'is_verified': tx.is_verified,
+            'day': tx.get_julian_day(self.ledger),
         }
         txos = tx.outputs
         if len(txos) >= 2 and txos[1].can_decode_purchase_data:
@@ -863,6 +870,7 @@ class Database(SQLiteMixin):
         return txos
 
     def _clean_txo_constraints_for_aggregation(self, unspent, constraints):
+        constraints.pop('include_is_spent', None)
         constraints.pop('include_is_my_input', None)
         constraints.pop('include_is_my_output', None)
         constraints.pop('include_received_tips', None)
@@ -876,13 +884,35 @@ class Database(SQLiteMixin):
 
     async def get_txo_count(self, unspent=False, **constraints):
         self._clean_txo_constraints_for_aggregation(unspent, constraints)
-        count = await self.select_txos('COUNT(*) as total', **constraints)
+        count = await self.select_txos('COUNT(*) AS total', **constraints)
         return count[0]['total'] or 0
 
     async def get_txo_sum(self, unspent=False, **constraints):
         self._clean_txo_constraints_for_aggregation(unspent, constraints)
-        result = await self.select_txos('SUM(amount) as total', **constraints)
+        result = await self.select_txos('SUM(amount) AS total', **constraints)
         return result[0]['total'] or 0
+
+    async def get_txo_plot(
+            self, unspent=False, start_day=None, days_back=0, end_day=None, days_after=None, **constraints):
+        self._clean_txo_constraints_for_aggregation(unspent, constraints)
+        if start_day is None:
+            constraints['day__gte'] = self.ledger.headers.estimated_julian_day(
+                self.ledger.headers.height
+            ) - days_back
+        else:
+            constraints['day__gte'] = date_to_julian_day(
+                date.fromisoformat(start_day)
+            )
+            if end_day is not None:
+                constraints['day__lte'] = date_to_julian_day(
+                    date.fromisoformat(end_day)
+                )
+            elif days_after is not None:
+                constraints['day__lte'] = constraints['day__gte'] + days_after
+        return await self.select_txos(
+            "DATE(day) AS day, SUM(amount) AS total",
+            group_by='day', order_by='day', **constraints
+        )
 
     def get_utxos(self, read_only=False, **constraints):
         return self.get_txos(unspent=True, read_only=read_only, **constraints)

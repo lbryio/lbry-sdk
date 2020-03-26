@@ -4,6 +4,7 @@ import logging
 import typing
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
+from datetime import date
 
 import ecdsa
 from cryptography.hazmat.backends import default_backend
@@ -494,7 +495,7 @@ class Output(InputOutput):
 class Transaction:
 
     def __init__(self, raw=None, version: int = 1, locktime: int = 0, is_verified: bool = False,
-                 height: int = -2, position: int = -1) -> None:
+                 height: int = -2, position: int = -1, julian_day: int = None) -> None:
         self._raw = raw
         self._raw_sans_segwit = None
         self.is_segwit_flag = 0
@@ -512,6 +513,7 @@ class Transaction:
         # +num: confirmed in a specific block (height)
         self.height = height
         self.position = position
+        self._day = julian_day
         if raw is not None:
             self._deserialize()
 
@@ -534,6 +536,11 @@ class Transaction:
     @property
     def hash(self):
         return self.ref.hash
+
+    def get_julian_day(self, ledger):
+        if self._day is None and self.height > 0:
+            self._day = ledger.headers.estimated_julian_day(self.height)
+        return self._day
 
     @property
     def raw(self):
