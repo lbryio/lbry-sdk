@@ -59,7 +59,15 @@ class Headers:
                 self.io = open(self.path, 'w+b')
             else:
                 self.io = open(self.path, 'r+b')
-        self._size = self.io.seek(0, os.SEEK_END) // self.header_size
+        bytes_size = self.io.seek(0, os.SEEK_END)
+        self._size = bytes_size // self.header_size
+        max_checkpointed_height = max(self.checkpoints.keys() or [-1]) + 1000
+        if bytes_size % self.header_size:
+            log.warning("Reader file size doesnt match header size. Repairing, might take a while.")
+            await self.repair()
+        else:
+            # try repairing any incomplete write on tip from previous runs (outside of checkpoints, that are ok)
+            await self.repair(start_height=max_checkpointed_height)
         await self.ensure_checkpointed_size()
         await self.get_all_missing_headers()
 
@@ -292,16 +300,16 @@ class Headers:
                     height, f"insufficient proof of work: {proof_of_work.value} vs target {target.value}"
                 )
 
-    async def repair(self):
+    async def repair(self, start_height=0):
         previous_header_hash = fail = None
         batch_size = 36
-        for start_height in range(0, self.height, batch_size):
+        for height in range(start_height, self.height, batch_size):
             headers = await asyncio.get_running_loop().run_in_executor(
-                self.executor, self._read, start_height, batch_size
+                self.executor, self._read, height, batch_size
             )
             if len(headers) % self.header_size != 0:
                 headers = headers[:(len(headers) // self.header_size) * self.header_size]
-            for header_hash, header in self._iterate_headers(start_height, headers):
+            for header_hash, header in self._iterate_headers(height, headers):
                 height = header['block_height']
                 if height:
                     if header['prev_block_hash'] != previous_header_hash:

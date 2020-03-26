@@ -144,6 +144,28 @@ class TestHeaders(AsyncioTestCase):
         await headers.connect(len(headers), HEADERS[block_bytes(8):])
         self.assertEqual(19, headers.height)
 
+    async def test_misalignment_triggers_repair_on_open(self):
+        headers = Headers(':memory:')
+        headers.io.seek(0)
+        headers.io.write(HEADERS)
+        with self.assertLogs(level='WARN') as cm:
+            await headers.open()
+            self.assertEqual(cm.output, [])
+            headers.io.seek(0)
+            headers.io.truncate()
+            headers.io.write(HEADERS[:block_bytes(10)])
+            headers.io.write(b'ops')
+            headers.io.write(HEADERS[block_bytes(10):])
+            await headers.open()
+            self.assertEqual(
+                cm.output, [
+                    'WARNING:lbry.wallet.header:Reader file size doesnt match header size. '
+                    'Repairing, might take a while.',
+                    'WARNING:lbry.wallet.header:Header file corrupted at height 9, truncating '
+                    'it.'
+                ]
+            )
+
     async def test_concurrency(self):
         BLOCKS = 19
         headers_temporary_file = tempfile.mktemp()
