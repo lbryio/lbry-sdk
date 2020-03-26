@@ -9,7 +9,7 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction
-from lbry.wallet.util import satoshis_to_coins as lbc, coins_to_satoshis as dewies
+from lbry.wallet.util import satoshis_to_coins as lbc
 
 
 log = logging.getLogger(__name__)
@@ -568,46 +568,46 @@ class TransactionOutputCommands(ClaimTestCase):
 
         plot = await self.txo_plot(type='support')
         self.assertEqual([
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
         plot = await self.txo_plot(type='support', days_back=1)
         self.assertEqual([
-            {'day': '2016-06-24', 'total': dewies('0.9')},
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-24', 'total': '0.9'},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
         plot = await self.txo_plot(type='support', days_back=2)
         self.assertEqual([
-            {'day': '2016-06-23', 'total': dewies('0.5')},
-            {'day': '2016-06-24', 'total': dewies('0.9')},
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-23', 'total': '0.5'},
+            {'day': '2016-06-24', 'total': '0.9'},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
 
         plot = await self.txo_plot(type='support', start_day='2016-06-23')
         self.assertEqual([
-            {'day': '2016-06-23', 'total': dewies('0.5')},
-            {'day': '2016-06-24', 'total': dewies('0.9')},
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-23', 'total': '0.5'},
+            {'day': '2016-06-24', 'total': '0.9'},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
         plot = await self.txo_plot(type='support', start_day='2016-06-24')
         self.assertEqual([
-            {'day': '2016-06-24', 'total': dewies('0.9')},
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-24', 'total': '0.9'},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
         plot = await self.txo_plot(type='support', start_day='2016-06-23', end_day='2016-06-24')
         self.assertEqual([
-            {'day': '2016-06-23', 'total': dewies('0.5')},
-            {'day': '2016-06-24', 'total': dewies('0.9')},
+            {'day': '2016-06-23', 'total': '0.5'},
+            {'day': '2016-06-24', 'total': '0.9'},
         ], plot)
         plot = await self.txo_plot(type='support', start_day='2016-06-23', days_after=1)
         self.assertEqual([
-            {'day': '2016-06-23', 'total': dewies('0.5')},
-            {'day': '2016-06-24', 'total': dewies('0.9')},
+            {'day': '2016-06-23', 'total': '0.5'},
+            {'day': '2016-06-24', 'total': '0.9'},
         ], plot)
         plot = await self.txo_plot(type='support', start_day='2016-06-23', days_after=2)
         self.assertEqual([
-            {'day': '2016-06-23', 'total': dewies('0.5')},
-            {'day': '2016-06-24', 'total': dewies('0.9')},
-            {'day': '2016-06-25', 'total': dewies('0.6')},
+            {'day': '2016-06-23', 'total': '0.5'},
+            {'day': '2016-06-24', 'total': '0.9'},
+            {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
 
 

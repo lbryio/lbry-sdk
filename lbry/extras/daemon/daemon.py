@@ -4284,7 +4284,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_txo_plot(
+    async def jsonrpc_txo_plot(
             self, account_id=None, wallet_id=None,
             days_back=0, start_day=None, days_after=None, end_day=None, **kwargs):
         """
@@ -4333,11 +4333,14 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: List[Dict]
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return self.ledger.get_txo_plot(
+        plot = await self.ledger.get_txo_plot(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
             read_only=True, days_back=days_back, start_day=start_day, days_after=days_after, end_day=end_day,
             **self._constrain_txo_from_kwargs({}, **kwargs)
         )
+        for row in plot:
+            row['total'] = dewies_to_lbc(row['total'])
+        return plot
 
     UTXO_DOC = """
     Unspent transaction management.
