@@ -4,7 +4,6 @@ import logging
 import typing
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
-from datetime import date
 
 import ecdsa
 from cryptography.hazmat.backends import default_backend
