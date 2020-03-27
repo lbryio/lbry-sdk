@@ -329,6 +329,9 @@ class Daemon(metaclass=JSONRPCServerType):
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         self.metrics_runner = web.AppRunner(prom_app)
 
+        self.need_connection_status_refresh = asyncio.Event()
+        self._connection_status_task: Optional[asyncio.Task] = None
+
     @property
     def dht_node(self) -> typing.Optional['Node']:
         return self.component_manager.get_component(DHT_COMPONENT)
@@ -441,18 +444,25 @@ class Daemon(metaclass=JSONRPCServerType):
             log.warning("detected internet connection was lost")
         self._connection_status = (self.component_manager.loop.time(), connected)
 
-    async def get_connection_status(self) -> str:
-        if self._connection_status[0] + 300 > self.component_manager.loop.time():
-            if not self._connection_status[1]:
-                await self.update_connection_status()
-        else:
+    async def keep_connection_status_up_to_date(self):
+        while True:
+            try:
+                await asyncio.wait_for(self.need_connection_status_refresh.wait(), 300)
+            except asyncio.TimeoutError:
+                pass
             await self.update_connection_status()
-        return CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
+            self.need_connection_status_refresh.clear()
 
     async def start(self):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
         log.info("Platform: %s", json.dumps(self.platform_info, indent=2))
+
+        self.need_connection_status_refresh.set()
+        self._connection_status_task = self.component_manager.loop.create_task(
+            self.keep_connection_status_up_to_date()
+        )
+
         await self.analytics_manager.send_server_startup()
         await self.rpc_runner.setup()
         await self.streaming_runner.setup()
@@ -511,6 +521,10 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.component_startup_task
 
     async def stop(self):
+        if self._connection_status_task:
+            if not self._connection_status_task.done():
+                self._connection_status_task.cancel()
+            self._connection_status_task = None
         if self.component_startup_task is not None:
             if self.component_startup_task.done():
                 await self.component_manager.stop()
@@ -875,14 +889,16 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        connection_code = await self.get_connection_status()
+        if not self._connection_status[1]:
+            self.need_connection_status_refresh.set()
+        connection_code = CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
         ffmpeg_status = await self._video_file_analyzer.status()
-
+        running_components = self.component_manager.get_components_status()
         response = {
             'installation_id': self.installation_id,
-            'is_running': all(self.component_manager.get_components_status().values()),
+            'is_running': all(running_components.values()),
             'skipped_components': self.component_manager.skip_components,
-            'startup_status': self.component_manager.get_components_status(),
+            'startup_status': running_components,
             'connection_status': {
                 'code': connection_code,
                 'message': CONNECTION_MESSAGES[connection_code],
