@@ -141,6 +141,7 @@ types_map = {
     '.cbz': ('application/vnd.comicbook+zip', 'document'),
     '.flac': ('audio/flac', 'audio'),
     '.lbry': ('application/x-ext-lbry', 'document'),
+    '.m4a': ('audio/mp4', 'audio'),
     '.m4v': ('video/m4v', 'video'),
     '.mid': ('audio/midi', 'audio'),
     '.midi': ('audio/midi', 'audio'),
