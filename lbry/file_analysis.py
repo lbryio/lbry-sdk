@@ -73,6 +73,10 @@ class VideoFileAnalyzer:
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which_ffmpeg)
         return version
 
+    @staticmethod
+    def _which_ffmpeg_and_ffmprobe(path):
+        return shutil.which("ffmpeg", path=path), shutil.which("ffprobe", path=path)
+
     async def _verify_ffmpeg_installed(self):
         if self._ffmpeg_installed:
             return
@@ -81,17 +85,18 @@ class VideoFileAnalyzer:
         if hasattr(self._conf, "data_dir"):
             path += os.path.pathsep + os.path.join(getattr(self._conf, "data_dir"), "ffmpeg", "bin")
         path += os.path.pathsep + self._env_copy.get("PATH", "")
-
-        self._which_ffmpeg = shutil.which("ffmpeg", path=path)
+        self._which_ffmpeg, self._which_ffprobe = await asyncio.get_running_loop().run_in_executor(
+            None, self._which_ffmpeg_and_ffmprobe, path
+        )
         if not self._which_ffmpeg:
             log.warning("Unable to locate ffmpeg executable. Path: %s", path)
             raise FileNotFoundError(f"Unable to locate ffmpeg executable. Path: {path}")
-        self._which_ffprobe = shutil.which("ffprobe", path=path)
         if not self._which_ffprobe:
             log.warning("Unable to locate ffprobe executable. Path: %s", path)
             raise FileNotFoundError(f"Unable to locate ffprobe executable. Path: {path}")
         if os.path.dirname(self._which_ffmpeg) != os.path.dirname(self._which_ffprobe):
             log.warning("ffmpeg and ffprobe are in different folders!")
+
         await self._verify_executables()
         self._ffmpeg_installed = True
 
