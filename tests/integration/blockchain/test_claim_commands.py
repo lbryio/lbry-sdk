@@ -610,6 +610,21 @@ class TransactionOutputCommands(ClaimTestCase):
             {'day': '2016-06-25', 'total': '0.6'},
         ], plot)
 
+    async def test_txo_spend(self):
+        stream_id = self.get_claim_id(await self.stream_create())
+        for _ in range(10):
+            await self.support_create(stream_id, '0.1')
+        await self.assertBalance(self.account, '7.978478')
+        self.assertEqual('1.0', lbc(await self.txo_sum(type='support', unspent=True)))
+        txs = await self.txo_spend(type='support', batch_size=3)
+        self.assertEqual(4, len(txs))
+        self.assertEqual(3, len(txs[0]['inputs']))
+        self.assertEqual(3, len(txs[1]['inputs']))
+        self.assertEqual(3, len(txs[2]['inputs']))
+        self.assertEqual(1, len(txs[3]['inputs']))
+        self.assertEqual('0.0', lbc(await self.txo_sum(type='support', unspent=True)))
+        await self.assertBalance(self.account, '8.977606')
+
 
 class ClaimCommands(ClaimTestCase):
 

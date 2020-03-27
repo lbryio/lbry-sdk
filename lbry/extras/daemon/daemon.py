@@ -4249,6 +4249,58 @@ class Daemon(metaclass=JSONRPCServerType):
         return paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
 
     @requires(WALLET_COMPONENT)
+    async def jsonrpc_txo_spend(
+            self, account_id=None, wallet_id=None, batch_size=1000,
+            preview=False, blocking=False, **kwargs):
+        """
+        Spend transaction outputs, batching into multiple transactions as necessary.
+
+        Usage:
+            txo_spend [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
+                      [--is_my_input | --is_not_my_input]
+                      [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
+                      [--batch_size=<batch_size>]
+
+        Options:
+            --type=<type>              : (str or list) claim type: stream, channel, support,
+                                         purchase, collection, repost, other
+            --txid=<txid>              : (str or list) transaction id of outputs
+            --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) claims in this channel
+            --name=<name>              : (str or list) claim name
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                "--is_my_input --is_my_output --type=other"
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --batch_size=<batch_size>  : (int) number of txos to spend per transactions
+
+        Returns: {List[Transaction]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
+        txos = await self.ledger.get_txos(
+            wallet=wallet, accounts=accounts, read_only=True,
+            **self._constrain_txo_from_kwargs({}, unspent=True, is_my_output=True, **kwargs)
+        )
+        txs = []
+        while txos:
+            txs.append(
+                await Transaction.create(
+                    [Input.spend(txos.pop()) for _ in range(min(len(txos), batch_size))],
+                    [], accounts, accounts[0]
+                )
+            )
+        if not preview:
+            for tx in txs:
+                await self.broadcast_or_release(tx, blocking)
+        return txs
+
+    @requires(WALLET_COMPONENT)
     def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
         """
         Sum of transaction outputs.
