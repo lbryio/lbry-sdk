@@ -30,6 +30,7 @@ class VideoFileAnalyzer:
         self._which_ffmpeg = None
         self._which_ffprobe = None
         self._env_copy = dict(os.environ)
+        self._checked_ffmpeg = False
         if lbry.utils.is_running_from_bundle():
             # handle the situation where PyInstaller overrides our runtime environment:
             self._replace_or_pop_env('LD_LIBRARY_PATH')
@@ -94,15 +95,18 @@ class VideoFileAnalyzer:
         await self._verify_executables()
         self._ffmpeg_installed = True
 
-    async def status(self, reset=False):
+    async def status(self, reset=False, recheck=False):
         if reset:
             self._available_encoders = ""
             self._ffmpeg_installed = None
-        if self._ffmpeg_installed is None:
+        if self._checked_ffmpeg and not recheck:
+            pass
+        elif self._ffmpeg_installed is None:
             try:
                 await self._verify_ffmpeg_installed()
             except FileNotFoundError:
                 pass
+            self._checked_ffmpeg = True
         return {
             "available": self._ffmpeg_installed,
             "which": self._which_ffmpeg,

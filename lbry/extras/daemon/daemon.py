@@ -785,7 +785,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'analyze_audio_volume': (bool) should ffmpeg analyze audio
             }
         """
-        return await self._video_file_analyzer.status(reset=True)
+        return await self._video_file_analyzer.status(reset=True, recheck=True)
 
     async def jsonrpc_status(self):
         """
