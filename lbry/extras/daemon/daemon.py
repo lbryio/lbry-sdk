@@ -4260,7 +4260,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
                       [--is_my_input | --is_not_my_input]
                       [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
-                      [--batch_size=<batch_size>]
+                      [--preview] [--blocking] [--batch_size=<batch_size>]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
@@ -4277,6 +4277,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                 flag can be used in combination with any of the other flags
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --preview                  : (bool) do not broadcast the transaction
+            --blocking                 : (bool) wait until abandon is in mempool
             --batch_size=<batch_size>  : (int) number of txos to spend per transactions
 
         Returns: {List[Transaction]}
