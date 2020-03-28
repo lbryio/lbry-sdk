@@ -311,12 +311,15 @@ class Headers:
                 headers = headers[:(len(headers) // self.header_size) * self.header_size]
             for header_hash, header in self._iterate_headers(height, headers):
                 height = header['block_height']
-                if height:
+                if previous_header_hash:
                     if header['prev_block_hash'] != previous_header_hash:
                         fail = True
-                else:
+                elif height == 0:
                     if header_hash != self.genesis_hash:
                         fail = True
+                else:
+                    # for sanity and clarity, since it is the only way we can end up here
+                    assert start_height > 0 and height == start_height
                 if fail:
                     log.warning("Header file corrupted at height %s, truncating it.", height - 1)
                     def __truncate(at_height):

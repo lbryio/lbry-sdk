@@ -143,6 +143,9 @@ class TestHeaders(AsyncioTestCase):
         self.assertEqual(7, headers.height)
         await headers.connect(len(headers), HEADERS[block_bytes(8):])
         self.assertEqual(19, headers.height)
+        # verify from middle
+        await headers.repair(start_height=10)
+        self.assertEqual(19, headers.height)
 
     async def test_misalignment_triggers_repair_on_open(self):
         headers = Headers(':memory:')
