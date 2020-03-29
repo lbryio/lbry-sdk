@@ -128,7 +128,7 @@ class Headers:
             raise IndexError(f"failed to get {height}, at {len(self)}")
 
     def estimated_timestamp(self, height):
-        return self.first_block_timestamp + (height * self.timestamp_average_offset)
+        return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
 
     def estimated_julian_day(self, height):
         return date_to_julian_day(date.fromtimestamp(self.estimated_timestamp(height)))
