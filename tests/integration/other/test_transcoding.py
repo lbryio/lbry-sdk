@@ -160,3 +160,26 @@ class TranscodeValidation(ClaimTestCase):
         await self.analyzer.status(reset=True)
         with self.assertRaisesRegex(Exception, "Unable to locate"):
             await self.analyzer.verify_or_repair(True, False, self.video_file_name)
+
+    async def test_dont_recheck_ffmpeg_installation(self):
+
+        call_count = 0
+
+        original = self.daemon._video_file_analyzer._verify_ffmpeg_installed
+
+        def _verify_ffmpeg_installed():
+            nonlocal call_count
+            call_count += 1
+            return original()
+
+        self.daemon._video_file_analyzer._verify_ffmpeg_installed = _verify_ffmpeg_installed
+        self.assertEqual(0, call_count)
+        await self.daemon.jsonrpc_status()
+        self.assertEqual(1, call_count)
+        # counter should not go up again
+        await self.daemon.jsonrpc_status()
+        self.assertEqual(1, call_count)
+
+        # this should force rechecking the installation
+        await self.daemon.jsonrpc_ffmpeg_find()
+        self.assertEqual(2, call_count)
