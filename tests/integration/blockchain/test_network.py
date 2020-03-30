@@ -1,4 +1,3 @@
-import logging
 import asyncio
 
 import lbry
@@ -61,7 +60,14 @@ class NetworkTests(IntegrationTestCase):
             }, await self.ledger.network.get_server_features())
 
 
-class ReconnectTests(IntegrationTestCase):
+class NetworkConnectionTests(IntegrationTestCase):
+
+    async def test_on_ready_listening_before_event_fix_2896(self):
+        await self.ledger.stop()
+        # slow down other parts to make network finish first and fire on_ready
+        self.account.maybe_migrate_certificates = lambda: asyncio.sleep(2)
+        await asyncio.wait_for(self.ledger.start(), timeout=3)
+        # above ledger.start() will fail if on_ready fired before listening
 
     async def test_multiple_servers(self):
         # we have a secondary node that connects later, so
