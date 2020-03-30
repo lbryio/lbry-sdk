@@ -4251,7 +4251,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     async def jsonrpc_txo_spend(
             self, account_id=None, wallet_id=None, batch_size=1000,
-            preview=False, blocking=False, **kwargs):
+            include_full_tx=False, preview=False, blocking=False, **kwargs):
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
 
@@ -4280,6 +4280,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --preview                  : (bool) do not broadcast the transaction
             --blocking                 : (bool) wait until abandon is in mempool
             --batch_size=<batch_size>  : (int) number of txos to spend per transactions
+            --include_full_tx          : (bool) include entire tx in output and not just the txid
 
         Returns: {List[Transaction]}
         """
@@ -4300,7 +4301,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if not preview:
             for tx in txs:
                 await self.broadcast_or_release(tx, blocking)
-        return txs
+        if include_full_tx:
+            return txs
+        return [{'txid': tx.id} for tx in txs]
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):

@@ -616,7 +616,7 @@ class TransactionOutputCommands(ClaimTestCase):
             await self.support_create(stream_id, '0.1')
         await self.assertBalance(self.account, '7.978478')
         self.assertEqual('1.0', lbc(await self.txo_sum(type='support', unspent=True)))
-        txs = await self.txo_spend(type='support', batch_size=3)
+        txs = await self.txo_spend(type='support', batch_size=3, include_full_tx=True)
         self.assertEqual(4, len(txs))
         self.assertEqual(3, len(txs[0]['inputs']))
         self.assertEqual(3, len(txs[1]['inputs']))
@@ -624,6 +624,11 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertEqual(1, len(txs[3]['inputs']))
         self.assertEqual('0.0', lbc(await self.txo_sum(type='support', unspent=True)))
         await self.assertBalance(self.account, '8.977606')
+
+        await self.support_create(stream_id, '0.1')
+        txs = await self.daemon.jsonrpc_txo_spend(type='support', batch_size=3)
+        self.assertEqual(1, len(txs))
+        self.assertEqual({'txid'}, set(txs[0]))
 
 
 class ClaimCommands(ClaimTestCase):
