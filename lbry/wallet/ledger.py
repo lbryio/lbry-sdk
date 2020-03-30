@@ -266,7 +266,7 @@ class Ledger(metaclass=LedgerRegistry):
         self.constraint_spending_utxos(constraints)
         return self.db.get_utxo_count(**constraints)
 
-    async def get_txos(self, resolve=False, **constraints):
+    async def get_txos(self, resolve=False, **constraints) -> List[Output]:
         txos = await self.db.get_txos(**constraints)
         if resolve:
             return await self._resolve_for_local_results(constraints.get('accounts', []), txos)

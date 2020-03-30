@@ -565,6 +565,14 @@ class CommandTestCase(IntegrationTestCase):
             self.daemon.jsonrpc_wallet_send(*args, **kwargs), confirm
         )
 
+    async def txo_spend(self, *args, confirm=True, **kwargs):
+        txs = await self.daemon.jsonrpc_txo_spend(*args, **kwargs)
+        if confirm:
+            await asyncio.wait([self.ledger.wait(tx) for tx in txs])
+            await self.generate(1)
+            await asyncio.wait([self.ledger.wait(tx, self.blockchain.block_expected) for tx in txs])
+        return self.sout(txs)
+
     async def resolve(self, uri, **kwargs):
         return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
