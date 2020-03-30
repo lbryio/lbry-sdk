@@ -316,11 +316,12 @@ class Ledger(metaclass=LedgerRegistry):
             self.db.open(),
             self.headers.open()
         ])
-        first_connection = self.network.on_connected.first
-        asyncio.ensure_future(self.network.start())
-        await first_connection
+        fully_synced = self.on_ready.first
+        asyncio.create_task(self.network.start())
+        await self.network.on_connected.first
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
+        await fully_synced
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         if len(self.accounts) > 10:
@@ -328,12 +329,9 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
-        await self.on_ready.first
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
-        async with self._header_processing_lock:
-            await self._update_tasks.add(self.initial_headers_sync())
         await self._update_tasks.add(self.subscribe_accounts())
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)

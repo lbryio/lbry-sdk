@@ -1,4 +1,3 @@
-import logging
 import asyncio
 
 import lbry
