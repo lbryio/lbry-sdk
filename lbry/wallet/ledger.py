@@ -317,6 +317,7 @@ class Ledger(metaclass=LedgerRegistry):
             self.headers.open()
         ])
         first_connection = self.network.on_connected.first
+        first_ready = self.on_ready.first
         asyncio.ensure_future(self.network.start())
         await first_connection
         async with self._header_processing_lock:
@@ -328,7 +329,7 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
-        await self.on_ready.first
+        await first_ready
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
