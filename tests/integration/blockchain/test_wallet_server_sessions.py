@@ -81,7 +81,7 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.1")
         with self.assertRaises(ServerPaymentFeeAboveMaxAllowedError):
-            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=8)
 
         await node.stop(False)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})
