@@ -354,8 +354,8 @@ class Ledger(metaclass=LedgerRegistry):
         self.headers.chunk_getter = get_chunk
 
         async def doit():
-            async with self._header_processing_lock:
-                for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
+            for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
+                async with self._header_processing_lock:
                     await self.headers.ensure_chunk_at(height)
         self._other_tasks.add(doit())
         await self.update_headers()
