@@ -4276,7 +4276,7 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
                       [--is_my_input | --is_not_my_input]
                       [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
-                      [--preview] [--blocking] [--batch_size=<batch_size>]
+                      [--preview] [--blocking] [--batch_size=<batch_size>] [--include_full_tx]
 
         Options:
             --type=<type>              : (str or list) claim type: stream, channel, support,
