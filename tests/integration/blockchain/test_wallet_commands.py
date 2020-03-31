@@ -33,7 +33,7 @@ class WalletCommands(CommandTestCase):
         # when component manager hasn't started yet
         wallet.wallet_manager = None
         self.assertEqual(
-            {'is_encrypted': None, 'is_syncing': True, 'is_locked': None},
+            {'is_encrypted': None, 'is_syncing': None, 'is_locked': None},
             self.daemon.jsonrpc_wallet_status()
         )
         wallet.wallet_manager = wallet_manager
