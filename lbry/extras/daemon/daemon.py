@@ -4266,7 +4266,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_txo_spend(
-            self, account_id=None, wallet_id=None, batch_size=1000,
+            self, account_id=None, wallet_id=None, batch_size=500,
             include_full_tx=False, preview=False, blocking=False, **kwargs):
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
