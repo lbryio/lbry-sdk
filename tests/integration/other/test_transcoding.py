@@ -60,7 +60,7 @@ class TranscodeValidation(ClaimTestCase):
         self.assertEqual(self.video_file_webm, new_file_name)
         self.assertEqual(spec["width"], 1280)
         self.assertEqual(spec["height"], 720)
-        self.assertEqual(spec["duration"], 15.054)
+        self.assertEqual(spec["duration"], 16)
 
     async def test_volume(self):
         self.conf.volume_analysis_time = 200
