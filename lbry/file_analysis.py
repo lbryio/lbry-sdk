@@ -354,7 +354,7 @@ class VideoFileAnalyzer:
     def _build_spec(scan_data):
         assert scan_data
 
-        duration = float(scan_data["format"]["duration"])  # existence verified when scan_data made
+        duration = int(scan_data["format"]["duration"])  # existence verified when scan_data made
         width = -1
         height = -1
         for stream in scan_data["streams"]:
@@ -363,7 +363,7 @@ class VideoFileAnalyzer:
             width = max(width, int(stream["width"]))
             height = max(height, int(stream["height"]))
 
-        log.debug("   Detected duration: %f sec. with resolution: %d x %d", duration, width, height)
+        log.debug("   Detected duration: %d sec. with resolution: %d x %d", duration, width, height)
 
         spec = {"duration": duration}
         if height >= 0:
