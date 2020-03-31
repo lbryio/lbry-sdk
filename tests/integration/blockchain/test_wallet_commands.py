@@ -1,6 +1,5 @@
 import asyncio
 import json
-import os
 
 from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
@@ -22,14 +21,26 @@ class WalletCommands(CommandTestCase):
 
     async def test_wallet_syncing_status(self):
         address = await self.daemon.jsonrpc_address_unused()
-        sendtxid = await self.blockchain.send_to_address(address, 1)
+        self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
+        await self.blockchain.send_to_address(address, 1)
+        await self.ledger._update_tasks.started.wait()
+        self.assertTrue(self.daemon.jsonrpc_wallet_status()['is_syncing'])
+        await self.ledger._update_tasks.done.wait()
+        self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
 
-        async def eventually_will_sync():
-            while not self.daemon.jsonrpc_wallet_status()['is_syncing']:
-                await asyncio.sleep(0)
-        check_sync = asyncio.create_task(eventually_will_sync())
-        await self.confirm_tx(sendtxid, self.ledger)
-        await asyncio.wait_for(check_sync, timeout=10)
+        wallet = self.daemon.component_manager.get_actual_component('wallet')
+        wallet_manager = wallet.wallet_manager
+        # when component manager hasn't started yet
+        wallet.wallet_manager = None
+        self.assertEqual(
+            {'is_encrypted': None, 'is_syncing': True, 'is_locked': None},
+            self.daemon.jsonrpc_wallet_status()
+        )
+        wallet.wallet_manager = wallet_manager
+        self.assertEqual(
+            {'is_encrypted': False, 'is_syncing': False, 'is_locked': False},
+            self.daemon.jsonrpc_wallet_status()
+        )
 
     async def test_wallet_reconnect(self):
         await self.conductor.spv_node.stop(True)

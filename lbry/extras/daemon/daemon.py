@@ -1341,6 +1341,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             Dictionary of wallet status information.
         """
+        if self.wallet_manager is None:
+            return {'is_encrypted': None, 'is_syncing': True, 'is_locked': None}
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return {
             'is_encrypted': wallet.is_encrypted,
