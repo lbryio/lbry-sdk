@@ -433,6 +433,15 @@ class SQLDB:
             return {r.channel_hash for r in affected_channels}
         return set()
 
+    def delete_claims_above_height(self, height: int):
+        claim_hashes = [x[0] for x in self.execute(
+            "SELECT claim_hash FROM claim WHERE height>=?", (height, )
+        ).fetchall()]
+        while claim_hashes:
+            batch = set(claim_hashes[:500])
+            claim_hashes = claim_hashes[500:]
+            self.delete_claims(batch)
+
     def _clear_claim_metadata(self, claim_hashes: Set[bytes]):
         if claim_hashes:
             for table in ('tag',):  # 'language', 'location', etc
