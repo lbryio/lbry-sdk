@@ -10,7 +10,7 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
-from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES
+from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES, REORG_COUNT
 
 
 class Prefetcher:
@@ -255,6 +255,7 @@ class BlockProcessor:
             last -= len(raw_blocks)
         self.db.sql.delete_claims_above_height(self.height)
         await self.prefetcher.reset_height(self.height)
+        REORG_COUNT.inc()
 
     async def reorg_hashes(self, count):
         """Return a pair (start, last, hashes) of blocks to back up during a

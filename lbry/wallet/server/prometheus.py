@@ -51,7 +51,9 @@ BLOCK_COUNT = Gauge(
     "block_count", "Number of processed blocks", namespace=NAMESPACE
 )
 BLOCK_UPDATE_TIMES = Histogram("block_time", "Block update times", namespace=NAMESPACE)
-
+REORG_COUNT = Gauge(
+    "reorg_count", "Number of reorgs", namespace=NAMESPACE
+)
 
 class PrometheusServer:
     def __init__(self):
