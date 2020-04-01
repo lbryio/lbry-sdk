@@ -1,5 +1,6 @@
 import logging
 import asyncio
+from binascii import hexlify
 from lbry.testcase import CommandTestCase
 from lbry.wallet.server.prometheus import REORG_COUNT
 
@@ -37,7 +38,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.assertBlockHash(208)
         self.assertEqual(2, REORG_COUNT._samples()[0][2])
 
-    async def test_reorg_dropping_claim(self):
+    async def test_reorg_change_claim_height(self):
         # sanity check
         txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
         self.assertListEqual(txos, [])
@@ -55,6 +56,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertEqual(1, len(txos))
         txo = txos[0]
         self.assertEqual(txo.tx_ref.id, broadcast_tx.id)
+        self.assertEqual(txo.tx_ref.height, 207)
 
         # check that our tx is in block 207 as returned by lbrycrdd
         invalidated_block_hash = (await self.ledger.headers.hash(207)).decode()
@@ -83,3 +85,18 @@ class BlockchainReorganizationTests(CommandTestCase):
         # verify the dropped claim is no longer returned by claim search
         txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
         self.assertListEqual(txos, [])
+
+        # broadcast the claim in a different block
+        new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
+        self.assertEqual(broadcast_tx.id, new_txid)
+        await self.blockchain.generate(1)
+
+        # wait for the client to catch up
+        await asyncio.wait_for(self.on_header(209), 1.0)
+
+        # verify the claim is in the new block and that it is returned by claim_search
+        block_209 = await self.blockchain.get_block((await self.ledger.headers.hash(209)).decode())
+        self.assertIn(txo.tx_ref.id, block_209['tx'])
+        txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
+        self.assertEqual(1, len(txos))
+        self.assertEqual(txos[0].tx_ref.id, new_txid)

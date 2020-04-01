@@ -390,6 +390,9 @@ class BlockchainNode:
     def get_block_hash(self, block):
         return self._cli_cmnd('getblockhash', str(block))
 
+    def sendrawtransaction(self, tx):
+        return self._cli_cmnd('sendrawtransaction', tx)
+
     async def get_block(self, block_hash):
         return json.loads(await self._cli_cmnd('getblock', block_hash, '1'))
 
