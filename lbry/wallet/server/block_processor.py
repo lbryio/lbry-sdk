@@ -253,7 +253,7 @@ class BlockProcessor:
             await self.run_in_thread_with_lock(self.backup_blocks, raw_blocks)
             await self.run_in_thread_with_lock(flush_backup)
             last -= len(raw_blocks)
-        self.db.sql.delete_claims_above_height(self.height)
+        await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
         await self.prefetcher.reset_height(self.height)
         REORG_COUNT.inc()
 
