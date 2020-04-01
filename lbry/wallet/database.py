@@ -694,7 +694,7 @@ class Database(SQLiteMixin):
             self, cols, accounts=None, is_my_input=None, is_my_output=True,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             include_is_spent=False, include_is_my_input=False,
-            read_only=False, **constraints):
+            is_spent=False, read_only=False, **constraints):
         for rename_col in ('txid', 'txoid'):
             for rename_constraint in (rename_col, rename_col+'__in', rename_col+'__not_in'):
                 if rename_constraint in constraints:
@@ -737,7 +737,9 @@ class Database(SQLiteMixin):
                     'txi.address__not_in': my_addresses
                 }
         sql = [f"SELECT {cols} FROM txo JOIN tx ON (tx.txid=txo.txid)"]
-        if include_is_spent:
+        if is_spent:
+            constraints['spent.txoid__is_not_null'] = True
+        if include_is_spent or is_spent:
             sql.append("LEFT JOIN txi AS spent ON (spent.txoid=txo.txoid)")
         if include_is_my_input:
             sql.append("LEFT JOIN txi ON (txi.position=0 AND txi.txid=txo.txid)")

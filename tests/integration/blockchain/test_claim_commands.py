@@ -547,6 +547,10 @@ class TransactionOutputCommands(ClaimTestCase):
         r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", unspent=True)
         self.assertEqual([change2], r)
 
+        # only spent "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", is_spent=True)
+        self.assertEqual([change1], r)
+
         # all my unspent stuff
         r = await self.txo_list(is_my_output=True, unspent=True)
         self.assertEqual([change2, kept_channel], r)

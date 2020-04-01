@@ -4168,11 +4168,15 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, channel_id=None, name=None, unspent=False, reposted_claim_id=None,
+            claim_id=None, channel_id=None, name=None, reposted_claim_id=None,
+            is_spent=False, is_not_spent=False, unspent=False,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
-        constraints['unspent'] = unspent
+        if unspent or is_not_spent:
+            constraints['unspent'] = True
+        elif is_spent:
+            constraints['is_spent'] = True
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
@@ -4201,7 +4205,8 @@ class Daemon(metaclass=JSONRPCServerType):
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--unspent]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                     [--is_spent] [--is_not_spent] [--unspent]
                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
@@ -4217,7 +4222,9 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
+            --unspent                  : (bool) deprecated, alias for --is_not_spent
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4330,7 +4337,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...]
+                     [--is_spent] [--is_not_spent] [--unspent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4342,7 +4350,9 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
+            --unspent                  : (bool) deprecated, alias for --is_not_spent
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
