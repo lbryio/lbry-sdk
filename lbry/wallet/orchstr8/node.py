@@ -335,9 +335,9 @@ class BlockchainNode:
             except asyncio.CancelledError:
                 self.running.clear()
                 raise
-            except:
+            except Exception as e:
                 self.running.clear()
-                log.exception("boom")
+                log.exception('failed to start lbrycrdd', exc_info=e)
 
     async def stop(self, cleanup=True):
         self.stopped = True
