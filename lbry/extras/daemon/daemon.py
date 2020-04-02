@@ -4333,7 +4333,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
             wallet=wallet, accounts=accounts, read_only=True,
-            **self._constrain_txo_from_kwargs({}, is_spent=False, is_my_output=True, **kwargs)
+            **self._constrain_txo_from_kwargs({}, is_not_spent=True, is_my_output=True, **kwargs)
         )
         txs = []
         while txos:
