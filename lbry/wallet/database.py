@@ -864,7 +864,8 @@ class Database(SQLiteMixin):
 
         return txos
 
-    def _clean_txo_constraints_for_aggregation(self, constraints):
+    @staticmethod
+    def _clean_txo_constraints_for_aggregation(constraints):
         constraints.pop('include_is_spent', None)
         constraints.pop('include_is_my_input', None)
         constraints.pop('include_is_my_output', None)

@@ -4333,7 +4333,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
             wallet=wallet, accounts=accounts, read_only=True,
-            **self._constrain_txo_from_kwargs({}, unspent=True, is_my_output=True, **kwargs)
+            **self._constrain_txo_from_kwargs({}, is_spent=False, is_my_output=True, **kwargs)
         )
         txs = []
         while txos:
@@ -4358,7 +4358,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--name=<name>...]
-                     [--is_spent] [--is_not_spent] [--unspent]
+                     [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4372,7 +4372,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>              : (str or list) claim name
             --is_spent                 : (bool) only show spent txos
             --is_not_spent             : (bool) only show not spent txos
-            --unspent                  : (bool) deprecated, alias for --is_not_spent
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4404,7 +4403,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_plot [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4419,7 +4418,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4476,7 +4476,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = ['other', 'purchase']
-        kwargs['unspent'] = True
+        kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
