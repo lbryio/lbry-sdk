@@ -24,6 +24,7 @@ from .account import Account, AddressManager, SingleKey
 from .network import Network
 from .transaction import Transaction, Output
 from .header import Headers, UnvalidatedHeaders
+from .checkpoints import HASHES
 from .constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
 from .bip32 import PubKey, PrivateKey
 from .coinselection import CoinSelector
@@ -108,6 +109,8 @@ class Ledger(metaclass=LedgerRegistry):
     default_fee_per_byte = 50
     default_fee_per_name_char = 200000
 
+    checkpoints = HASHES
+
     def __init__(self, config=None):
         self.config = config or {}
         self.db: Database = self.config.get('db') or Database(
@@ -117,6 +120,7 @@ class Ledger(metaclass=LedgerRegistry):
         self.headers: Headers = self.config.get('headers') or self.headers_class(
             os.path.join(self.path, "headers")
         )
+        self.headers.checkpoints = self.checkpoints
         self.network: Network = self.config.get('network') or Network(self)
         self.network.on_header.listen(self.receive_header)
         self.network.on_status.listen(self.process_status_update)
@@ -1056,6 +1060,7 @@ class TestNetLedger(Ledger):
     script_address_prefix = bytes((196,))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
+    checkpoints = {}
 
 
 class RegTestLedger(Ledger):
@@ -1070,3 +1075,4 @@ class RegTestLedger(Ledger):
     genesis_hash = '6e3fcf1299d4ec5d79c3a4c91d624a4acf9e2e173d95a1a0504f677669687556'
     genesis_bits = 0x207fffff
     target_timespan = 1
+    checkpoints = {}
