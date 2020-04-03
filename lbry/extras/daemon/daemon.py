@@ -2213,7 +2213,7 @@ class Daemon(metaclass=JSONRPCServerType):
         List my stream and channel claims.
 
         Usage:
-            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
+            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
                        [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
@@ -2223,6 +2223,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) streams in this channel
             --name=<name>              : (str or list) claim name
+            --is_spent                 : (bool) shows previous claim updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2236,7 +2237,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(**kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -2750,12 +2752,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...]
+                         [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
                          [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) channel name
             --claim_id=<claim_id>      : (str or list) channel id
+            --is_spent                 : (bool) shows previous channel updates and abandons
             --account_id=<account_id>  : (str) id of the account to use
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2767,7 +2770,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'channel'
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -3504,12 +3508,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                        [--name=<name>...] [--claim_id=<claim_id>...]
+                        [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) stream name
             --claim_id=<claim_id>      : (str or list) stream id
+            --is_spent                 : (bool) shows previous stream updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3521,7 +3526,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'stream'
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
@@ -3968,19 +3974,23 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_support_list(self, *args, tips=None, **kwargs):
+    def jsonrpc_support_list(self, *args, received=False, sent=False, staked=False, **kwargs):
         """
-        List supports and tips in my control.
+        List staked supports and sent/received tips.
 
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
+                         [--name=<name>...] [--claim_id=<claim_id>...]
+                         [--received | --sent | --staked] [--is_spent]
                          [--page=<page>] [--page_size=<page_size>] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) claim name
             --claim_id=<claim_id>      : (str or list) claim id
-            --tips                     : (bool) only show tips
+            --received                 : (bool) only show received (tips)
+            --sent                     : (bool) only show sent (tips)
+            --staked                   : (bool) only show my staked supports
+            --is_spent                 : (bool) show abandoned supports
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3991,9 +4001,20 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'support'
-        kwargs['unspent'] = True
-        if tips is True:
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
+        if received:
             kwargs['is_not_my_input'] = True
+            kwargs['is_my_output'] = True
+        elif sent:
+            kwargs['is_my_input'] = True
+            kwargs['is_not_my_output'] = True
+            # spent for not my outputs is undetermined
+            kwargs.pop('is_spent', None)
+            kwargs.pop('is_not_spent', None)
+        elif staked:
+            kwargs['is_my_input'] = True
+            kwargs['is_my_output'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4168,11 +4189,15 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, channel_id=None, name=None, unspent=False, reposted_claim_id=None,
+            claim_id=None, channel_id=None, name=None, reposted_claim_id=None,
+            is_spent=False, is_not_spent=False,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
-        constraints['unspent'] = unspent
+        if is_spent:
+            constraints['is_spent'] = True
+        elif is_not_spent:
+            constraints['is_spent'] = False
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
@@ -4201,8 +4226,9 @@ class Daemon(metaclass=JSONRPCServerType):
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--unspent]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
+                     [--is_spent | --is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4217,7 +4243,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4306,7 +4333,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
             wallet=wallet, accounts=accounts, read_only=True,
-            **self._constrain_txo_from_kwargs({}, unspent=True, is_my_output=True, **kwargs)
+            **self._constrain_txo_from_kwargs({}, is_not_spent=True, is_my_output=True, **kwargs)
         )
         txs = []
         while txos:
@@ -4330,7 +4357,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...]
+                     [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4342,7 +4370,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4374,7 +4403,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_plot [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4389,7 +4418,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4446,7 +4476,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = ['other', 'purchase']
-        kwargs['unspent'] = True
+        kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)

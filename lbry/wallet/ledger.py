@@ -714,7 +714,7 @@ class Ledger(metaclass=LedgerRegistry):
                     if include_is_my_output:
                         mine = await self.db.get_txo_count(
                             claim_id=txo.claim_id, txo_type__in=CLAIM_TYPES, is_my_output=True,
-                            unspent=True, accounts=accounts
+                            is_spent=False, accounts=accounts
                         )
                         if mine:
                             txo_copy.is_my_output = True
@@ -724,7 +724,7 @@ class Ledger(metaclass=LedgerRegistry):
                         supports = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=True,
-                            unspent=True, accounts=accounts
+                            is_spent=False, accounts=accounts
                         )
                         txo_copy.sent_supports = supports
                     if include_sent_tips:

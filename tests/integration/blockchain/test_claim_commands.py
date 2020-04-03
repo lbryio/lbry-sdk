@@ -423,18 +423,18 @@ class TransactionOutputCommands(ClaimTestCase):
 
     async def test_txo_list_and_sum_filtering(self):
         channel_id = self.get_claim_id(await self.channel_create())
-        self.assertEqual('1.0', lbc(await self.txo_sum(type='channel', unspent=True)))
+        self.assertEqual('1.0', lbc(await self.txo_sum(type='channel', is_not_spent=True)))
         await self.channel_update(channel_id, bid='0.5')
-        self.assertEqual('0.5', lbc(await self.txo_sum(type='channel', unspent=True)))
+        self.assertEqual('0.5', lbc(await self.txo_sum(type='channel', is_not_spent=True)))
         self.assertEqual('1.5', lbc(await self.txo_sum(type='channel')))
 
         stream_id = self.get_claim_id(await self.stream_create(bid='1.3'))
-        self.assertEqual('1.3', lbc(await self.txo_sum(type='stream', unspent=True)))
+        self.assertEqual('1.3', lbc(await self.txo_sum(type='stream', is_not_spent=True)))
         await self.stream_update(stream_id, bid='0.7')
-        self.assertEqual('0.7', lbc(await self.txo_sum(type='stream', unspent=True)))
+        self.assertEqual('0.7', lbc(await self.txo_sum(type='stream', is_not_spent=True)))
         self.assertEqual('2.0', lbc(await self.txo_sum(type='stream')))
 
-        self.assertEqual('1.2', lbc(await self.txo_sum(type=['stream', 'channel'], unspent=True)))
+        self.assertEqual('1.2', lbc(await self.txo_sum(type=['stream', 'channel'], is_not_spent=True)))
         self.assertEqual('3.5', lbc(await self.txo_sum(type=['stream', 'channel'])))
 
         # type filtering
@@ -536,7 +536,7 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertEqual([sent_channel, kept_channel, initial_funds], r)
 
         # my unspent stuff and stuff i sent excluding "change"
-        r = await self.txo_list(is_my_input_or_output=True, unspent=True, exclude_internal_transfers=True)
+        r = await self.txo_list(is_my_input_or_output=True, is_not_spent=True, exclude_internal_transfers=True)
         self.assertEqual([sent_channel, kept_channel], r)
 
         # only "change"
@@ -544,11 +544,15 @@ class TransactionOutputCommands(ClaimTestCase):
         self.assertEqual([change2, change1], r)
 
         # only unspent "change"
-        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", unspent=True)
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", is_not_spent=True)
         self.assertEqual([change2], r)
 
+        # only spent "change"
+        r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", is_spent=True)
+        self.assertEqual([change1], r)
+
         # all my unspent stuff
-        r = await self.txo_list(is_my_output=True, unspent=True)
+        r = await self.txo_list(is_my_output=True, is_not_spent=True)
         self.assertEqual([change2, kept_channel], r)
 
         # stuff i sent
@@ -615,14 +619,14 @@ class TransactionOutputCommands(ClaimTestCase):
         for _ in range(10):
             await self.support_create(stream_id, '0.1')
         await self.assertBalance(self.account, '7.978478')
-        self.assertEqual('1.0', lbc(await self.txo_sum(type='support', unspent=True)))
+        self.assertEqual('1.0', lbc(await self.txo_sum(type='support', is_not_spent=True)))
         txs = await self.txo_spend(type='support', batch_size=3, include_full_tx=True)
         self.assertEqual(4, len(txs))
         self.assertEqual(3, len(txs[0]['inputs']))
         self.assertEqual(3, len(txs[1]['inputs']))
         self.assertEqual(3, len(txs[2]['inputs']))
         self.assertEqual(1, len(txs[3]['inputs']))
-        self.assertEqual('0.0', lbc(await self.txo_sum(type='support', unspent=True)))
+        self.assertEqual('0.0', lbc(await self.txo_sum(type='support', is_not_spent=True)))
         await self.assertBalance(self.account, '8.977606')
 
         await self.support_create(stream_id, '0.1')
