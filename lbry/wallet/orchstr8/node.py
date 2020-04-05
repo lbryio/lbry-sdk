@@ -55,7 +55,8 @@ class Conductor:
 
     async def start_blockchain(self):
         if not self.blockchain_started:
-            await self.blockchain_node.start()
+            asyncio.create_task(self.blockchain_node.start())
+            await self.blockchain_node.running.wait()
             await self.blockchain_node.generate(200)
             self.blockchain_started = True
 
@@ -255,6 +256,10 @@ class BlockchainNode:
         self.rpcport = 9245 + 2  # avoid conflict with default rpc port
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
+        self.stopped = False
+        self.restart_ready = asyncio.Event()
+        self.restart_ready.set()
+        self.running = asyncio.Event()
 
     @property
     def rpc_url(self):
@@ -315,13 +320,27 @@ class BlockchainNode:
             f'-port={self.peerport}'
         ]
         self.log.info(' '.join(command))
-        self.transport, self.protocol = await loop.subprocess_exec(
-            BlockchainProcess, *command
-        )
-        await self.protocol.ready.wait()
-        assert not self.protocol.stopped.is_set()
+        while not self.stopped:
+            if self.running.is_set():
+                await asyncio.sleep(1)
+                continue
+            await self.restart_ready.wait()
+            try:
+                self.transport, self.protocol = await loop.subprocess_exec(
+                    BlockchainProcess, *command
+                )
+                await self.protocol.ready.wait()
+                assert not self.protocol.stopped.is_set()
+                self.running.set()
+            except asyncio.CancelledError:
+                self.running.clear()
+                raise
+            except Exception as e:
+                self.running.clear()
+                log.exception('failed to start lbrycrdd', exc_info=e)
 
     async def stop(self, cleanup=True):
+        self.stopped = True
         try:
             self.transport.terminate()
             await self.protocol.stopped.wait()
@@ -329,6 +348,16 @@ class BlockchainNode:
         finally:
             if cleanup:
                 self.cleanup()
+
+    async def clear_mempool(self):
+        self.restart_ready.clear()
+        self.transport.terminate()
+        await self.protocol.stopped.wait()
+        self.transport.close()
+        self.running.clear()
+        os.remove(os.path.join(self.data_path, 'regtest', 'mempool.dat'))
+        self.restart_ready.set()
+        await self.running.wait()
 
     def cleanup(self):
         shutil.rmtree(self.data_path, ignore_errors=True)
@@ -360,6 +389,12 @@ class BlockchainNode:
 
     def get_block_hash(self, block):
         return self._cli_cmnd('getblockhash', str(block))
+
+    def sendrawtransaction(self, tx):
+        return self._cli_cmnd('sendrawtransaction', tx)
+
+    async def get_block(self, block_hash):
+        return json.loads(await self._cli_cmnd('getblock', block_hash, '1'))
 
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')
