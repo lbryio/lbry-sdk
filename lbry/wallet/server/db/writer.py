@@ -435,7 +435,7 @@ class SQLDB:
 
     def delete_claims_above_height(self, height: int):
         claim_hashes = [x[0] for x in self.execute(
-            "SELECT claim_hash FROM claim WHERE height>=?", (height, )
+            "SELECT claim_hash FROM claim WHERE height>?", (height, )
         ).fetchall()]
         while claim_hashes:
             batch = set(claim_hashes[:500])
