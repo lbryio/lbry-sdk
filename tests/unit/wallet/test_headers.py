@@ -147,6 +147,12 @@ class TestHeaders(AsyncioTestCase):
         await headers.repair(start_height=10)
         self.assertEqual(19, headers.height)
 
+    def test_do_not_estimate_unconfirmed(self):
+        headers = Headers(':memory:')
+        self.assertIsNone(headers.estimated_timestamp(-1))
+        self.assertIsNone(headers.estimated_timestamp(0))
+        self.assertIsNotNone(headers.estimated_timestamp(1))
+
     async def test_misalignment_triggers_repair_on_open(self):
         headers = Headers(':memory:')
         headers.io.seek(0)
