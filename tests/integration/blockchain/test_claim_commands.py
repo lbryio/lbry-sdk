@@ -1,6 +1,7 @@
 import os.path
 import tempfile
 import logging
+import asyncio
 from binascii import unhexlify
 from urllib.request import urlopen
 
@@ -78,6 +79,12 @@ class ClaimSearchCommand(ClaimTestCase):
             '0000000000000000000000000000000000000000',
         ] * 23828
         self.assertListEqual([], await self.claim_search(claim_ids=claim_ids))
+
+        # this should do nothing... if the resolve (which is retried) results in the server disconnecting,
+        # it kerplodes
+        await asyncio.wait_for(self.daemon.jsonrpc_resolve([
+            f'0000000000000000000000000000000000000000{i}' for i in range(30000)
+        ]), 30)
 
         # 23829 claim ids makes the request just large enough
         claim_ids = [

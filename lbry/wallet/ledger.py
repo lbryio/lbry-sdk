@@ -752,7 +752,11 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def resolve(self, accounts, urls, **kwargs):
         resolve = partial(self.network.retriable_call, self.network.resolve)
-        txos = (await self._inflate_outputs(resolve(urls), accounts, **kwargs))[0]
+        urls_copy = list(urls)
+        txos = []
+        while urls_copy:
+            batch, urls_copy = urls_copy[:500], urls_copy[500:]
+            txos.extend((await self._inflate_outputs(resolve(batch), accounts, **kwargs))[0])
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
