@@ -5166,7 +5166,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if isinstance(comment_ids, str):
             comment_ids = [comment_ids]
 
-        comments = await comment_client.jsonrpc_post(self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids)
+        comments = await comment_client.jsonrpc_post(
+            self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids
+        )
         comments = comments['items']
         claim_ids = {comment['claim_id'] for comment in comments}
         claims = {cid: await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id=cid) for cid in claim_ids}
