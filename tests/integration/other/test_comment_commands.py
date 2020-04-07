@@ -106,11 +106,16 @@ class MockedCommentServer:
         return False
 
     def hide_comments(self, pieces: list):
-        comments_hidden = []
+        hidden = []
         for p in pieces:
             if self.hide_comment(**p):
-                comments_hidden.append(p['comment_id'])
-        return {'hidden': comments_hidden}
+                hidden.append(p['comment_id'])
+
+        comment_ids = {c['comment_id'] for c in pieces}
+        return {
+            'hidden': hidden,
+            'visible': list(comment_ids - set(hidden))
+        }
 
     def get_claim_comments(self, claim_id, page=1, page_size=50,**kwargs):
         comments = list(filter(lambda c: c['claim_id'] == claim_id, self.comments))
@@ -138,12 +143,19 @@ class MockedCommentServer:
     def get_comment_channel_by_id(self, comment_id: int, **kwargs):
         comment = self.comments[self.get_comment_id(comment_id)]
         return {
-            'channel_id': comment.get('channel_id'),
-            'channel_name': comment.get('channel_name')
+            'channel_id': comment['channel_id'],
+            'channel_name': comment['channel_name'],
         }
 
     def get_comments_by_id(self, comment_ids: list):
-        return [self.comments[self.get_comment_id(cid)] for cid in comment_ids]
+        comments = [self.comments[self.get_comment_id(cid)] for cid in comment_ids]
+        return {
+            'page': 1,
+            'page_size': len(comment_ids),
+            'total_pages': 1,
+            'items': comments,
+            'has_hidden_comments': bool({c for c in comments if c['is_hidden']})
+        }
 
     methods = {
         'get_claim_comments': get_claim_comments,
