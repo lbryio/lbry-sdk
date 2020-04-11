@@ -13,6 +13,7 @@ from typing import Type, Optional
 import urllib.request
 
 import lbry
+from lbry.db import Database
 from lbry.wallet.server.server import Server
 from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
@@ -125,12 +126,24 @@ class WalletNode:
         wallet_file_name = os.path.join(wallets_dir, 'my_wallet.json')
         with open(wallet_file_name, 'w') as wallet_file:
             wallet_file.write('{"version": 1, "accounts": []}\n')
+        db_driver = os.environ.get('TEST_DB', 'sqlite')
+        if db_driver == 'sqlite':
+            db = 'sqlite:///'+os.path.join(self.data_path, self.ledger_class.get_id(), 'blockchain.db')
+        elif db_driver == 'postgres':
+            db_name = f'lbry_test_{self.port}'
+            meta_db = Database(f'postgres:///postgres')
+            await meta_db.drop(db_name)
+            await meta_db.create(db_name)
+            db = f'postgres:///{db_name}'
+        else:
+            raise RuntimeError(f"Unsupported database driver: {db_driver}")
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
                     'api_port': self.port,
                     'default_servers': [(spv_node.hostname, spv_node.port)],
-                    'data_path': self.data_path
+                    'data_path': self.data_path,
+                    'db': Database(db)
                 }
             },
             'wallets': [wallet_file_name]

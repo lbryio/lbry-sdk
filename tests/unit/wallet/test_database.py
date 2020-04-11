@@ -6,9 +6,12 @@ import tempfile
 import asyncio
 from concurrent.futures.thread import ThreadPoolExecutor
 
+from sqlalchemy import Column, Text
+
 from lbry.wallet import (
-    Wallet, Account, Ledger, Database, Headers, Transaction, Input
+    Wallet, Account, Ledger, Headers, Transaction, Input
 )
+from lbry.db import Table, Version, Database, metadata
 from lbry.wallet.constants import COIN
 from lbry.wallet.database import query, interpolate, constraints_to_sql, AIOSQLite
 from lbry.crypto.hash import sha256
@@ -208,7 +211,7 @@ class TestQueries(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         self.wallet = Wallet()
@@ -265,13 +268,13 @@ class TestQueries(AsyncioTestCase):
     async def test_large_tx_doesnt_hit_variable_limits(self):
         # SQLite is usually compiled with 999 variables limit: https://www.sqlite.org/limits.html
         # This can be removed when there is a better way. See: https://github.com/lbryio/lbry-sdk/issues/2281
-        fetchall = self.ledger.db.db.execute_fetchall
+        fetchall = self.ledger.db.execute_fetchall
 
-        def check_parameters_length(sql, parameters, read_only=False):
+        def check_parameters_length(sql, parameters=None):
             self.assertLess(len(parameters or []), 999)
-            return fetchall(sql, parameters, read_only)
+            return fetchall(sql, parameters)
 
-        self.ledger.db.db.execute_fetchall = check_parameters_length
+        self.ledger.db.execute_fetchall = check_parameters_length
         account = await self.create_account()
         tx = await self.create_tx_from_nothing(account, 0)
         for height in range(1, 1200):
@@ -368,14 +371,14 @@ class TestQueries(AsyncioTestCase):
         self.assertEqual(txs[1].outputs[0].is_my_output, True)
         self.assertEqual(2, await self.ledger.db.get_transaction_count(accounts=[account2]))
 
-        tx = await self.ledger.db.get_transaction(txid=tx2.id)
+        tx = await self.ledger.db.get_transaction(tx_hash=tx2.hash)
         self.assertEqual(tx.id, tx2.id)
         self.assertIsNone(tx.inputs[0].is_my_input)
         self.assertIsNone(tx.outputs[0].is_my_output)
-        tx = await self.ledger.db.get_transaction(wallet=wallet1, txid=tx2.id, include_is_my_output=True)
+        tx = await self.ledger.db.get_transaction(wallet=wallet1, tx_hash=tx2.hash, include_is_my_output=True)
         self.assertTrue(tx.inputs[0].is_my_input)
         self.assertFalse(tx.outputs[0].is_my_output)
-        tx = await self.ledger.db.get_transaction(wallet=wallet2, txid=tx2.id, include_is_my_output=True)
+        tx = await self.ledger.db.get_transaction(wallet=wallet2, tx_hash=tx2.hash, include_is_my_output=True)
         self.assertFalse(tx.inputs[0].is_my_input)
         self.assertTrue(tx.outputs[0].is_my_output)
 
@@ -425,7 +428,7 @@ class TestUpgrade(AsyncioTestCase):
 
     async def test_reset_on_version_change(self):
         self.ledger = Ledger({
-            'db': Database(self.path),
+            'db': Database('sqlite:///'+self.path),
             'headers': Headers(':memory:')
         })
 
@@ -433,7 +436,8 @@ class TestUpgrade(AsyncioTestCase):
         self.ledger.db.SCHEMA_VERSION = None
         self.assertListEqual(self.get_tables(), [])
         await self.ledger.db.open()
-        self.assertEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo'])
+        metadata.drop_all(self.ledger.db.engine, [Version])  # simulate pre-version table db
+        self.assertEqual(self.get_tables(), ['account_address', 'block', 'pubkey_address', 'tx', 'txi', 'txo'])
         self.assertListEqual(self.get_addresses(), [])
         self.add_address('address1')
         await self.ledger.db.close()
@@ -442,28 +446,27 @@ class TestUpgrade(AsyncioTestCase):
         self.ledger.db.SCHEMA_VERSION = '1.0'
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'block', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertListEqual(self.get_addresses(), [])  # address1 deleted during version upgrade
         self.add_address('address2')
         await self.ledger.db.close()
 
         # nothing changes
         self.assertEqual(self.get_version(), '1.0')
-        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'block', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.0')
-        self.assertListEqual(self.get_tables(), ['account_address', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'block', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertListEqual(self.get_addresses(), ['address2'])
         await self.ledger.db.close()
 
         # upgrade version, database reset
+        foo = Table('foo', metadata, Column('bar', Text, primary_key=True))
+        self.addCleanup(metadata.remove, foo)
         self.ledger.db.SCHEMA_VERSION = '1.1'
-        self.ledger.db.CREATE_TABLES_QUERY += """
-        create table if not exists foo (bar text);
-        """
         await self.ledger.db.open()
         self.assertEqual(self.get_version(), '1.1')
-        self.assertListEqual(self.get_tables(), ['account_address', 'foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
+        self.assertListEqual(self.get_tables(), ['account_address', 'block', 'foo', 'pubkey_address', 'tx', 'txi', 'txo', 'version'])
         self.assertListEqual(self.get_addresses(), [])  # all tables got reset
         await self.ledger.db.close()
 

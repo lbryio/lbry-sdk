@@ -269,6 +269,10 @@ class Output(InputOutput):
         return self.ref.id
 
     @property
+    def hash(self):
+        return self.ref.hash
+
+    @property
     def pubkey_hash(self):
         return self.script.values['pubkey_hash']
 
@@ -478,6 +482,13 @@ class Output(InputOutput):
             return self.purchased_claim.claim_id
 
     @property
+    def purchased_claim_hash(self):
+        if self.purchase is not None:
+            return self.purchase.purchase_data.claim_hash
+        if self.purchased_claim is not None:
+            return self.purchased_claim.claim_hash
+
+    @property
     def has_price(self):
         if self.can_decode_claim:
             claim = self.claim
@@ -536,9 +547,9 @@ class Transaction:
     def hash(self):
         return self.ref.hash
 
-    def get_julian_day(self, ledger):
+    def get_ordinal_day(self, ledger):
         if self._day is None and self.height > 0:
-            self._day = ledger.headers.estimated_julian_day(self.height)
+            self._day = ledger.headers.estimated_date(self.height).toordinal()
         return self._day
 
     @property

@@ -14,11 +14,11 @@ from .dewies import dewies_to_lbc
 from .account import Account
 from .ledger import Ledger, LedgerRegistry
 from .transaction import Transaction, Output
-from .database import Database
 from .wallet import Wallet, WalletStorage, ENCRYPT_ON_DISK
 from .rpc.jsonrpc import CodeMessageError
 
 if typing.TYPE_CHECKING:
+    from lbry.db import Database
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 
@@ -109,7 +109,7 @@ class WalletManager:
         return self.default_account.ledger
 
     @property
-    def db(self) -> Database:
+    def db(self) -> 'Database':
         return self.ledger.db
 
     def check_locked(self):
@@ -256,12 +256,12 @@ class WalletManager:
     def get_unused_address(self):
         return self.default_account.receiving.get_or_create_usable_address()
 
-    async def get_transaction(self, txid: str):
-        tx = await self.db.get_transaction(txid=txid)
+    async def get_transaction(self, tx_hash: bytes):
+        tx = await self.db.get_transaction(tx_hash=tx_hash)
         if tx:
             return tx
         try:
-            raw, merkle = await self.ledger.network.get_transaction_and_merkle(txid)
+            raw, merkle = await self.ledger.network.get_transaction_and_merkle(tx_hash)
         except CodeMessageError as e:
             if 'No such mempool or blockchain transaction.' in e.message:
                 return {'success': False, 'code': 404, 'message': 'transaction not found'}

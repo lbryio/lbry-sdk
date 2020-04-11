@@ -10,6 +10,8 @@ from hashlib import sha256
 from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
 
+from sqlalchemy import text
+
 import ecdsa
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
@@ -71,7 +73,6 @@ class AddressManager:
 
     def _query_addresses(self, **constraints):
         return self.account.ledger.db.get_addresses(
-            read_only=constraints.pop("read_only", False),
             accounts=[self.account],
             chain=self.chain_number,
             **constraints
@@ -435,8 +436,8 @@ class Account:
             addresses.extend(new_addresses)
         return addresses
 
-    async def get_addresses(self, read_only=False, **constraints) -> List[str]:
-        rows = await self.ledger.db.select_addresses('address', read_only=read_only, accounts=[self], **constraints)
+    async def get_addresses(self, **constraints) -> List[str]:
+        rows = await self.ledger.db.select_addresses([text('account_address.address')], accounts=[self], **constraints)
         return [r['address'] for r in rows]
 
     def get_address_records(self, **constraints):
@@ -452,13 +453,13 @@ class Account:
     def get_public_key(self, chain: int, index: int) -> PubKey:
         return self.address_managers[chain].get_public_key(index)
 
-    def get_balance(self, confirmations=0, include_claims=False, read_only=False, **constraints):
+    def get_balance(self, confirmations=0, include_claims=False, **constraints):
         if not include_claims:
             constraints.update({'txo_type__in': (TXO_TYPES['other'], TXO_TYPES['purchase'])})
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.ledger.db.get_balance(accounts=[self], read_only=read_only, **constraints)
+        return self.ledger.db.get_balance(accounts=[self], **constraints)
 
     async def get_max_gap(self):
         change_gap = await self.change.get_max_gap()
@@ -564,9 +565,9 @@ class Account:
             if gap_changed:
                 self.wallet.save()
 
-    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False, read_only=False):
+    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
-        get_total_balance = partial(self.get_balance, read_only=read_only, confirmations=confirmations,
+        get_total_balance = partial(self.get_balance, confirmations=confirmations,
                                     include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
@@ -594,14 +595,14 @@ class Account:
             } if reserved_subtotals else None
         }
 
-    def get_transaction_history(self, read_only=False, **constraints):
+    def get_transaction_history(self, **constraints):
         return self.ledger.get_transaction_history(
-            read_only=read_only, wallet=self.wallet, accounts=[self], **constraints
+            wallet=self.wallet, accounts=[self], **constraints
         )
 
-    def get_transaction_history_count(self, read_only=False, **constraints):
+    def get_transaction_history_count(self, **constraints):
         return self.ledger.get_transaction_history_count(
-            read_only=read_only, wallet=self.wallet, accounts=[self], **constraints
+            wallet=self.wallet, accounts=[self], **constraints
         )
 
     def get_claims(self, **constraints):

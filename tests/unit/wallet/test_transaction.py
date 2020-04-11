@@ -4,7 +4,8 @@ from itertools import cycle
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, COIN, NULL_HASH32
-from lbry.wallet import Wallet, Account, Ledger, Database, Headers, Transaction, Output, Input
+from lbry.wallet import Wallet, Account, Ledger, Headers, Transaction, Output, Input
+from lbry.db import Database
 
 
 NULL_HASH = b'\x00'*32
@@ -38,7 +39,7 @@ class TestSizeAndFeeEstimation(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
@@ -264,7 +265,7 @@ class TestTransactionSigning(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
@@ -303,7 +304,7 @@ class TransactionIOBalancing(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()

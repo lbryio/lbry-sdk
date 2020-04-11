@@ -4,6 +4,7 @@ import json
 from time import perf_counter
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
+from binascii import hexlify
 
 from lbry import __version__
 from lbry.error import IncompatibleWalletServerError
@@ -254,20 +255,20 @@ class Network:
     def get_transaction(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.get', [hexlify(tx_hash[::-1]).decode()], restricted)
 
     def get_transaction_and_merkle(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.info', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.info', [hexlify(tx_hash[::-1]).decode()], restricted)
 
     def get_transaction_height(self, tx_hash, known_height=None):
         restricted = not known_height or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.get_height', [hexlify(tx_hash[::-1]).decode()], restricted)
 
     def get_merkle(self, tx_hash, height):
         restricted = 0 > height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
+        return self.rpc('blockchain.transaction.get_merkle', [hexlify(tx_hash[::-1]).decode(), height], restricted)
 
     def get_headers(self, height, count=10000, b64=False):
         restricted = height >= self.remote_height - 100

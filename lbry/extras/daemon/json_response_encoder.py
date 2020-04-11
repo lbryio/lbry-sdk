@@ -1,7 +1,7 @@
 import logging
 from decimal import Decimal
 from binascii import hexlify, unhexlify
-from datetime import datetime
+from datetime import datetime, date
 from json import JSONEncoder
 
 from google.protobuf.message import DecodeError
@@ -134,6 +134,8 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_claim(obj)
         if isinstance(obj, PubKey):
             return obj.extended_key_string()
+        if isinstance(obj, date):
+            return obj.isoformat()
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")
         if isinstance(obj, Decimal):

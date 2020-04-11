@@ -2,7 +2,8 @@ from types import GeneratorType
 
 from lbry.testcase import AsyncioTestCase
 
-from lbry.wallet import Ledger, Database, Headers
+from lbry.wallet import Ledger, Headers
+from lbry.db import Database
 from lbry.wallet.coinselection import CoinSelector, MAXIMUM_TRIES
 from lbry.constants import CENT
 
@@ -21,7 +22,7 @@ class BaseSelectionTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:'),
         })
         await self.ledger.db.open()

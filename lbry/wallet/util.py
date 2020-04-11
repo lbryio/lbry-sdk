@@ -3,10 +3,6 @@ from typing import TypeVar, Sequence, Optional
 from .constants import COIN
 
 
-def date_to_julian_day(d):
-    return d.toordinal() + 1721424.5
-
-
 def coins_to_satoshis(coins):
     if not isinstance(coins, str):
         raise ValueError("{coins} must be a string")

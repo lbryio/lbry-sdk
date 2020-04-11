@@ -1,8 +1,9 @@
 import os
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet import Wallet, Account, Transaction, Output, Input, Ledger, Database, Headers
+from lbry.wallet import Wallet, Account, Transaction, Output, Input, Ledger, Headers
+from lbry.db import Database
 
 from tests.unit.wallet.test_transaction import get_transaction, get_output
 from tests.unit.wallet.test_headers import HEADERS, block_bytes
@@ -45,7 +46,7 @@ class LedgerTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         self.account = Account.generate(self.ledger, Wallet(), "lbryum")
@@ -84,6 +85,10 @@ class TestSynchronization(LedgerTestCase):
         txid2 = 'ab9c0654dd484ac20437030f2034e25dcb29fc507e84b91138f80adc3af738f9'
         txid3 = 'a2ae3d1db3c727e7d696122cab39ee20a7f81856dab7019056dd539f38c548a0'
         txid4 = '047cf1d53ef68f0fd586d46f90c09ff8e57a4180f67e7f4b8dd0135c3741e828'
+        txhash1 = unhexlify(txid1)[::-1]
+        txhash2 = unhexlify(txid2)[::-1]
+        txhash3 = unhexlify(txid3)[::-1]
+        txhash4 = unhexlify(txid4)[::-1]
 
         account = Account.generate(self.ledger, Wallet(), "torba")
         address = await account.receiving.get_or_create_usable_address()
@@ -99,13 +104,13 @@ class TestSynchronization(LedgerTestCase):
             {'tx_hash': txid2, 'height': 1},
             {'tx_hash': txid3, 'height': 2},
         ], {
-            txid1: hexlify(get_transaction(get_output(1)).raw),
-            txid2: hexlify(get_transaction(get_output(2)).raw),
-            txid3: hexlify(get_transaction(get_output(3)).raw),
+            txhash1: hexlify(get_transaction(get_output(1)).raw),
+            txhash2: hexlify(get_transaction(get_output(2)).raw),
+            txhash3: hexlify(get_transaction(get_output(3)).raw),
         })
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
-        self.assertListEqual(self.ledger.network.get_transaction_called, [txid1, txid2, txid3])
+        self.assertListEqual(self.ledger.network.get_transaction_called, [txhash1, txhash2, txhash3])
 
         address_details = await self.ledger.db.get_address(address=address)
 
@@ -125,12 +130,12 @@ class TestSynchronization(LedgerTestCase):
         self.assertListEqual(self.ledger.network.get_transaction_called, [])
 
         self.ledger.network.history.append({'tx_hash': txid4, 'height': 3})
-        self.ledger.network.transaction[txid4] = hexlify(get_transaction(get_output(4)).raw)
+        self.ledger.network.transaction[txhash4] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
-        self.assertListEqual(self.ledger.network.get_transaction_called, [txid4])
+        self.assertListEqual(self.ledger.network.get_transaction_called, [txhash4])
         address_details = await self.ledger.db.get_address(address=address)
         self.assertEqual(
             address_details['history'],

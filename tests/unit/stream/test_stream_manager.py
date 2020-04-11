@@ -10,9 +10,10 @@ from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
-from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output, Database
+from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output
 from lbry.wallet.constants import CENT, NULL_HASH32
 from lbry.wallet.network import ClientSession
+from lbry.db import Database
 from lbry.conf import Config
 from lbry.extras.daemon.analytics import AnalyticsManager
 from lbry.stream.stream_manager import StreamManager
@@ -95,7 +96,7 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
     wallet = Wallet()
     ledger = Ledger({
-        'db': Database(':memory:'),
+        'db': Database('sqlite:///:memory:'),
         'headers': FakeHeaders(514082)
     })
     await ledger.db.open()

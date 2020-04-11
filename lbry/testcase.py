@@ -253,6 +253,11 @@ class IntegrationTestCase(AsyncioTestCase):
             lambda e: e.tx.id == txid
         )
 
+    def on_transaction_hash(self, tx_hash, ledger=None):
+        return (ledger or self.ledger).on_transaction.where(
+            lambda e: e.tx.hash == tx_hash
+        )
+
     def on_address_update(self, address):
         return self.ledger.on_transaction.where(
             lambda e: e.address == address
@@ -316,7 +321,7 @@ class CommandTestCase(IntegrationTestCase):
         self.server_config = None
         self.server_storage = None
         self.extra_wallet_nodes = []
-        self.extra_wallet_node_port = 5280
+        self.extra_wallet_node_port = 5281
         self.server_blob_manager = None
         self.server = None
         self.reflector = None

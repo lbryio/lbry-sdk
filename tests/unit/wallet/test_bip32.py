@@ -2,7 +2,8 @@ from binascii import unhexlify, hexlify
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.bip32 import PubKey, PrivateKey, from_extended_key_string
-from lbry.wallet import Ledger, Database, Headers
+from lbry.wallet import Ledger, Headers
+from lbry.db import Database
 
 from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
 
@@ -47,7 +48,7 @@ class BIP32Tests(AsyncioTestCase):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
             Ledger({
-                'db': Database(':memory:'),
+                'db': Database('sqlite:///:memory:'),
                 'headers': Headers(':memory:'),
             }),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
@@ -68,7 +69,7 @@ class BIP32Tests(AsyncioTestCase):
     async def test_private_key_derivation(self):
         private_key = PrivateKey(
             Ledger({
-                'db': Database(':memory:'),
+                'db': Database('sqlite:///:memory:'),
                 'headers': Headers(':memory:'),
             }),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
@@ -85,7 +86,7 @@ class BIP32Tests(AsyncioTestCase):
 
     async def test_from_extended_keys(self):
         ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:'),
         })
         self.assertIsInstance(

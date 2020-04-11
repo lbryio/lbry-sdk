@@ -16,8 +16,9 @@ from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
 
+from lbry.db import Database, AccountAddress
+
 from .tasks import TaskGroup
-from .database import Database
 from .stream import StreamController
 from .dewies import dewies_to_lbc
 from .account import Account, AddressManager, SingleKey
@@ -508,7 +509,7 @@ class Ledger(metaclass=LedgerRegistry):
                 else:
                     check_local = (txid, remote_height) not in we_need
                     cache_tasks.append(loop.create_task(
-                        self.cache_transaction(txid, remote_height, check_local=check_local)
+                        self.cache_transaction(unhexlify(txid)[::-1], remote_height, check_local=check_local)
                     ))
 
             synced_txs = []
@@ -519,18 +520,18 @@ class Ledger(metaclass=LedgerRegistry):
                 for txi in tx.inputs:
                     if txi.txo_ref.txo is not None:
                         continue
-                    cache_item = self._tx_cache.get(txi.txo_ref.tx_ref.id)
+                    cache_item = self._tx_cache.get(txi.txo_ref.tx_ref.hash)
                     if cache_item is not None:
                         if cache_item.tx is None:
                             await cache_item.has_tx.wait()
                         assert cache_item.tx is not None
                         txi.txo_ref = cache_item.tx.outputs[txi.txo_ref.position].ref
                     else:
-                        check_db_for_txos.append(txi.txo_ref.id)
+                        check_db_for_txos.append(txi.txo_ref.hash)
 
                 referenced_txos = {} if not check_db_for_txos else {
                     txo.id: txo for txo in await self.db.get_txos(
-                        txoid__in=check_db_for_txos, order_by='txo.txoid', no_tx=True
+                        txo_hash__in=check_db_for_txos, order_by='txo.txo_hash', no_tx=True
                     )
                 }
 
@@ -574,10 +575,10 @@ class Ledger(metaclass=LedgerRegistry):
             else:
                 return True
 
-    async def cache_transaction(self, txid, remote_height, check_local=True):
-        cache_item = self._tx_cache.get(txid)
+    async def cache_transaction(self, tx_hash, remote_height, check_local=True):
+        cache_item = self._tx_cache.get(tx_hash)
         if cache_item is None:
-            cache_item = self._tx_cache[txid] = TransactionCacheItem()
+            cache_item = self._tx_cache[tx_hash] = TransactionCacheItem()
         elif cache_item.tx is not None and \
                 cache_item.tx.height >= remote_height and \
                 (cache_item.tx.is_verified or remote_height < 1):
@@ -585,11 +586,11 @@ class Ledger(metaclass=LedgerRegistry):
 
         try:
             cache_item.pending_verifications += 1
-            return await self._update_cache_item(cache_item, txid, remote_height, check_local)
+            return await self._update_cache_item(cache_item, tx_hash, remote_height, check_local)
         finally:
             cache_item.pending_verifications -= 1
 
-    async def _update_cache_item(self, cache_item, txid, remote_height, check_local=True):
+    async def _update_cache_item(self, cache_item, tx_hash, remote_height, check_local=True):
 
         async with cache_item.lock:
 
@@ -597,13 +598,13 @@ class Ledger(metaclass=LedgerRegistry):
 
             if tx is None and check_local:
                 # check local db
-                tx = cache_item.tx = await self.db.get_transaction(txid=txid)
+                tx = cache_item.tx = await self.db.get_transaction(tx_hash=tx_hash)
 
             merkle = None
             if tx is None:
                 # fetch from network
                 _raw, merkle = await self.network.retriable_call(
-                    self.network.get_transaction_and_merkle, txid, remote_height
+                    self.network.get_transaction_and_merkle, tx_hash, remote_height
                 )
                 tx = Transaction(unhexlify(_raw), height=merkle.get('block_height'))
                 cache_item.tx = tx  # make sure it's saved before caching it
@@ -612,16 +613,16 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
-        cached = self._tx_cache.get(tx.id)
+        cached = self._tx_cache.get(tx.hash)
         if not cached:
             # cache txs looked up by transaction_show too
             cached = TransactionCacheItem()
             cached.tx = tx
-            self._tx_cache[tx.id] = cached
+            self._tx_cache[tx.hash] = cached
         if 0 < remote_height < len(self.headers) and cached.pending_verifications <= 1:
             # can't be tx.pending_verifications == 1 because we have to handle the transaction_show case
             if not merkle:
-                merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
+                merkle = await self.network.retriable_call(self.network.get_merkle, tx.hash, remote_height)
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
@@ -703,7 +704,7 @@ class Ledger(metaclass=LedgerRegistry):
                         txo.purchased_claim_id: txo for txo in
                         await self.db.get_purchases(
                             accounts=accounts,
-                            purchased_claim_id__in=[c.claim_id for c in priced_claims]
+                            purchased_claim_hash__in=[c.claim_hash for c in priced_claims]
                         )
                     }
             for txo in txos:
@@ -808,7 +809,7 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def _reset_balance_cache(self, e: TransactionEvent):
         account_ids = [
-            r['account'] for r in await self.db.get_addresses(('account',), address=e.address)
+            r['account'] for r in await self.db.get_addresses([AccountAddress.c.account], address=e.address)
         ]
         for account_id in account_ids:
             if account_id in self._balance_cache:
@@ -917,10 +918,10 @@ class Ledger(metaclass=LedgerRegistry):
     def get_support_count(self, **constraints):
         return self.db.get_support_count(**constraints)
 
-    async def get_transaction_history(self, read_only=False, **constraints):
+    async def get_transaction_history(self, **constraints):
         txs: List[Transaction] = await self.db.get_transactions(
             include_is_my_output=True, include_is_spent=True,
-            read_only=read_only, **constraints
+            **constraints
         )
         headers = self.headers
         history = []
@@ -1030,8 +1031,8 @@ class Ledger(metaclass=LedgerRegistry):
             history.append(item)
         return history
 
-    def get_transaction_history_count(self, read_only=False, **constraints):
-        return self.db.get_transaction_count(read_only=read_only, **constraints)
+    def get_transaction_history_count(self, **constraints):
+        return self.db.get_transaction_count(**constraints)
 
     async def get_detailed_balance(self, accounts, confirmations=0):
         result = {

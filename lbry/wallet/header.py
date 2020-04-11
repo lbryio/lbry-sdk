@@ -12,7 +12,7 @@ from typing import Optional, Iterator, Tuple, Callable
 from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha512, double_sha256, ripemd160
-from lbry.wallet.util import ArithUint256, date_to_julian_day
+from lbry.wallet.util import ArithUint256
 from .checkpoints import HASHES
 
 
@@ -140,8 +140,8 @@ class Headers:
             return
         return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
 
-    def estimated_julian_day(self, height):
-        return date_to_julian_day(date.fromtimestamp(self.estimated_timestamp(height)))
+    def estimated_date(self, height):
+        return date.fromtimestamp(self.estimated_timestamp(height))
 
     async def get_raw_header(self, height) -> bytes:
         if self.chunk_getter:

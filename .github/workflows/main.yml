@@ -36,6 +36,9 @@ jobs:
           - datanetwork
           - blockchain
           - other
+        db:
+          - postgres
+          - sqlite
     steps:
       - uses: actions/checkout@v1
       - uses: actions/setup-python@v1
@@ -44,7 +47,9 @@ jobs:
       - if: matrix.test == 'other'
         run: sudo apt install -y --no-install-recommends ffmpeg
       - run: pip install tox-travis
-      - run: tox -e ${{ matrix.test }}
+      - env:
+          TEST_DB: ${{ matrix.db }}
+        run: tox -e ${{ matrix.test }}
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]

@@ -46,13 +46,13 @@ class BasicTransactionTests(IntegrationTestCase):
                 [self.account], self.account
             ))
         await asyncio.wait([self.broadcast(tx) for tx in txs])
-        await asyncio.wait([self.ledger.wait(tx) for tx in txs])
+        await asyncio.wait([self.ledger.wait(tx, timeout=2) for tx in txs])
 
         # verify that a previous bug which failed to save TXIs doesn't come back
         # this check must happen before generating a new block
         self.assertTrue(all([
             tx.inputs[0].txo_ref.txo is not None
-            for tx in await self.ledger.db.get_transactions(txid__in=[tx.id for tx in txs])
+            for tx in await self.ledger.db.get_transactions(tx_hash__in=[tx.hash for tx in txs])
         ]))
 
         await self.blockchain.generate(1)

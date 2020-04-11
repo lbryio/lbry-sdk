@@ -18,6 +18,7 @@ from functools import wraps, partial
 
 import ecdsa
 import base58
+from sqlalchemy import text
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest
 from google.protobuf.message import DecodeError
@@ -1530,7 +1531,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
         balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=True, read_only=True
+            confirmations=confirmations, reserved_subtotals=True,
         )
         return dict_values_to_lbc(balance)
 
@@ -1855,7 +1856,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
-        match = await self.ledger.db.get_address(read_only=True, address=address, accounts=[account])
+        match = await self.ledger.db.get_address(address=address, accounts=[account])
         if match is not None:
             return True
         return False
@@ -1879,9 +1880,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Address]}
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        constraints = {
-            'cols': ('address', 'account', 'used_times', 'pubkey', 'chain_code', 'n', 'depth')
-        }
+        constraints = {}
         if address:
             constraints['address'] = address
         if account_id:
@@ -1891,7 +1890,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return paginate_rows(
             self.ledger.get_addresses,
             self.ledger.get_address_count,
-            page, page_size, read_only=True, **constraints
+            page, page_size, **constraints
         )
 
     @requires(WALLET_COMPONENT)
@@ -1968,7 +1967,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 txo.purchased_claim_id: txo for txo in
                 await self.ledger.db.get_purchases(
                     accounts=wallet.accounts,
-                    purchased_claim_id__in=[s.claim_id for s in paginated['items']]
+                    purchased_claim_hash__in=[unhexlify(s.claim_id)[::-1] for s in paginated['items']]
                 )
             }
             for stream in paginated['items']:
@@ -2630,7 +2629,7 @@ class Daemon(metaclass=JSONRPCServerType):
             accounts = wallet.accounts
 
         existing_channels = await self.ledger.get_claims(
-            wallet=wallet, accounts=accounts, claim_id=claim_id
+            wallet=wallet, accounts=accounts, claim_hash=unhexlify(claim_id)[::-1]
         )
         if len(existing_channels) != 1:
             account_ids = ', '.join(f"'{account.id}'" for account in accounts)
@@ -2721,7 +2720,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if txid is not None and nout is not None:
             claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, **{'txo.txid': txid, 'txo.position': nout}
+                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
             )
         elif claim_id is not None:
             claims = await self.ledger.get_claims(
@@ -3477,7 +3476,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if txid is not None and nout is not None:
             claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, **{'txo.txid': txid, 'txo.position': nout}
+                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
             )
         elif claim_id is not None:
             claims = await self.ledger.get_claims(
@@ -4053,7 +4052,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if txid is not None and nout is not None:
             supports = await self.ledger.get_supports(
-                wallet=wallet, accounts=accounts, **{'txo.txid': txid, 'txo.position': nout}
+                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
             )
         elif claim_id is not None:
             supports = await self.ledger.get_supports(
@@ -4165,7 +4164,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
             transaction_count = partial(
                 self.ledger.get_transaction_history_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(transactions, transaction_count, page, page_size, read_only=True)
+        return paginate_rows(transactions, transaction_count, page, page_size)
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_transaction_show(self, txid):
@@ -4180,7 +4179,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
-        return self.wallet_manager.get_transaction(txid)
+        return self.wallet_manager.get_transaction(unhexlify(txid)[::-1])
 
     TXO_DOC = """
     List and sum transaction outputs.
@@ -4210,12 +4209,13 @@ class Daemon(metaclass=JSONRPCServerType):
                 constraints['is_my_output'] = True
             elif is_not_my_output is True:
                 constraints['is_my_output'] = False
+        to_hash = lambda x: unhexlify(x)[::-1]
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
-        database.constrain_single_or_list(constraints, 'channel_id', channel_id)
-        database.constrain_single_or_list(constraints, 'claim_id', claim_id)
+        database.constrain_single_or_list(constraints, 'channel_hash', channel_id, to_hash)
+        database.constrain_single_or_list(constraints, 'claim_hash', claim_id, to_hash)
         database.constrain_single_or_list(constraints, 'claim_name', name)
-        database.constrain_single_or_list(constraints, 'txid', txid)
-        database.constrain_single_or_list(constraints, 'reposted_claim_id', reposted_claim_id)
+        database.constrain_single_or_list(constraints, 'tx_hash', txid, to_hash)
+        database.constrain_single_or_list(constraints, 'reposted_claim_hash', reposted_claim_id, to_hash)
         return constraints
 
     @requires(WALLET_COMPONENT)
@@ -4274,8 +4274,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claims = account.get_txos
             claim_count = account.get_txo_count
         else:
-            claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts, read_only=True)
-            claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts, read_only=True)
+            claims = partial(self.ledger.get_txos, wallet=wallet, accounts=wallet.accounts)
+            claim_count = partial(self.ledger.get_txo_count, wallet=wallet, accounts=wallet.accounts)
         constraints = {
             'resolve': resolve,
             'include_is_spent': True,
@@ -4332,7 +4332,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
-            wallet=wallet, accounts=accounts, read_only=True,
+            wallet=wallet, accounts=accounts,
             **self._constrain_txo_from_kwargs({}, is_not_spent=True, is_my_output=True, **kwargs)
         )
         txs = []
@@ -4391,7 +4391,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return self.ledger.get_txo_sum(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
-            read_only=True, **self._constrain_txo_from_kwargs({}, **kwargs)
+            **self._constrain_txo_from_kwargs({}, **kwargs)
         )
 
     @requires(WALLET_COMPONENT)
@@ -4447,7 +4447,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         plot = await self.ledger.get_txo_plot(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
-            read_only=True, days_back=days_back, start_day=start_day, days_after=days_after, end_day=end_day,
+            days_back=days_back, start_day=start_day, days_after=days_after, end_day=end_day,
             **self._constrain_txo_from_kwargs({}, **kwargs)
         )
         for row in plot:

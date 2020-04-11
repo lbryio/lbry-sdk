@@ -1,8 +1,9 @@
 import asyncio
 
-import lbry
 from unittest.mock import Mock
+from binascii import unhexlify
 
+import lbry
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
@@ -100,15 +101,15 @@ class ReconnectTests(IntegrationTestCase):
         # disconnect and send a new tx, should reconnect and get it
         self.ledger.network.client.connection_lost(Exception())
         self.assertFalse(self.ledger.network.is_connected)
-        sendtxid = await self.blockchain.send_to_address(address1, 1.1337)
-        await asyncio.wait_for(self.on_transaction_id(sendtxid), 1.0)  # mempool
+        tx_hash = unhexlify((await self.blockchain.send_to_address(address1, 1.1337)))[::-1]
+        await asyncio.wait_for(self.on_transaction_hash(tx_hash), 2.0)  # mempool
         await self.blockchain.generate(1)
-        await self.on_transaction_id(sendtxid)  # confirmed
+        await self.on_transaction_hash(tx_hash)  # confirmed
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
         await self.assertBalance(self.account, '1.1337')
         # is it real? are we rich!? let me see this tx...
-        d = self.ledger.network.get_transaction(sendtxid)
+        d = self.ledger.network.get_transaction(tx_hash)
         # what's that smoke on my ethernet cable? oh no!
         master_client = self.ledger.network.client
         self.ledger.network.client.connection_lost(Exception())
@@ -117,15 +118,15 @@ class ReconnectTests(IntegrationTestCase):
         self.assertIsNone(master_client.response_time)  # response time unknown as it failed
         # rich but offline? no way, no water, let's retry
         with self.assertRaisesRegex(ConnectionError, 'connection is not available'):
-            await self.ledger.network.get_transaction(sendtxid)
+            await self.ledger.network.get_transaction(tx_hash)
         # * goes to pick some water outside... * time passes by and another donation comes in
-        sendtxid = await self.blockchain.send_to_address(address1, 42)
+        tx_hash = unhexlify((await self.blockchain.send_to_address(address1, 42)))[::-1]
         await self.blockchain.generate(1)
         # (this is just so the test doesn't hang forever if it doesn't reconnect)
         if not self.ledger.network.is_connected:
             await asyncio.wait_for(self.ledger.network.on_connected.first, timeout=1.0)
         # omg, the burned cable still works! torba is fire proof!
-        await self.ledger.network.get_transaction(sendtxid)
+        await self.ledger.network.get_transaction(tx_hash)
 
     async def test_timeout_then_reconnect(self):
         # tests that it connects back after some failed attempts

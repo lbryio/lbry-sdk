@@ -1,13 +1,14 @@
 from binascii import hexlify
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet import Wallet, Ledger, Database, Headers, Account, SingleKey, HierarchicalDeterministic
+from lbry.wallet import Wallet, Ledger, Headers, Account, SingleKey, HierarchicalDeterministic
+from lbry.db import Database
 
 
 class TestAccount(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
@@ -233,7 +234,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.ledger = Ledger({
-            'db': Database(':memory:'),
+            'db': Database('sqlite:///:memory:'),
             'headers': Headers(':memory:')
         })
         await self.ledger.db.open()
