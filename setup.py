@@ -1,5 +1,6 @@
 import os
 import sys
+from extensions_setup import ext_modules, BuildExt
 from lbry import __name__, __version__
 from setuptools import setup, find_packages
 
@@ -32,6 +33,9 @@ setup(
             'orchstr8=lbry.wallet.orchstr8.cli:main',
         ],
     },
+    setup_requires=["pybind11"],
+    ext_modules=ext_modules,
+    cmdclass={'build_ext': BuildExt},
     install_requires=[
         'aiohttp==3.5.4',
         'aioupnp==0.0.17',
