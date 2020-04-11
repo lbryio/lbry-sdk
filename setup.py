@@ -50,6 +50,7 @@ setup(
         'attrs==18.2.0',
         'pylru==1.1.0',
         'pyzmq==18.1.1',
+        'sqlalchemy',
     ],
     classifiers=[
         'Framework :: AsyncIO',
