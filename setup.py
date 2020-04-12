@@ -52,6 +52,7 @@ setup(
         'pyzmq==18.1.1',
         'plyvel==1.0.5',
         'sqlalchemy @ git+https://github.com/sqlalchemy/sqlalchemy.git',
+        'psycopg2',
     ],
     classifiers=[
         'Framework :: AsyncIO',
