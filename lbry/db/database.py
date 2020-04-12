@@ -21,7 +21,13 @@ from lbry.wallet import PubKey
 from lbry.wallet.transaction import Transaction, Output, OutputScript, TXRefImmutable
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES
 
-from .tables import metadata, Version, TX, TXI, TXO, PubkeyAddress, AccountAddress
+from .tables import (
+    metadata, Version,
+    PubkeyAddress, AccountAddress,
+    TX,
+    TXO, txo_join_account,
+    TXI, txi_join_account,
+)
 
 
 log = logging.getLogger(__name__)
@@ -229,8 +235,8 @@ class Database:
     def sync_create(self, name):
         engine = sqlalchemy.create_engine(self.url)
         db = engine.connect()
-        db.execute('commit')
-        db.execute(f'create database {name}')
+        db.execute(text('commit'))
+        db.execute(text(f'create database {name}'))
 
     async def create(self, name):
         await asyncio.get_event_loop().run_in_executor(
@@ -240,8 +246,8 @@ class Database:
     def sync_drop(self, name):
         engine = sqlalchemy.create_engine(self.url)
         db = engine.connect()
-        db.execute('commit')
-        db.execute(f'drop database if exists {name}')
+        db.execute(text('commit'))
+        db.execute(text(f'drop database if exists {name}'))
 
     async def drop(self, name):
         await asyncio.get_event_loop().run_in_executor(
@@ -366,8 +372,8 @@ class Database:
             assert accounts, "'accounts' argument required when no 'tx_hash' constraint is present"
             where = in_account(accounts)
             tx_hashes = union(
-                select(TXO.c.tx_hash).select_from(TXO.join(AccountAddress)).where(where),
-                select(TXI.c.tx_hash).select_from(TXI.join(AccountAddress)).where(where)
+                select(TXO.c.tx_hash).select_from(txo_join_account).where(where),
+                select(TXI.c.tx_hash).select_from(txi_join_account).where(where)
             )
             s = s.where(TX.c.tx_hash.in_(tx_hashes))
         return await self.execute_fetchall(query2([TX], s, **constraints))
@@ -753,7 +759,7 @@ class Database:
         if not {'purchased_claim_hash', 'purchased_claim_hash__in'}.intersection(constraints):
             constraints['purchased_claim_hash__is_not_null'] = True
         constraints['tx_hash__in'] = (
-            select(TXI.c.tx_hash).select_from(TXI.join(AccountAddress)).where(in_account(accounts))
+            select(TXI.c.tx_hash).select_from(txi_join_account).where(in_account(accounts))
         )
 
     async def get_purchases(self, **constraints):
