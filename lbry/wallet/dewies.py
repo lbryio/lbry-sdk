@@ -1,4 +1,5 @@
 import textwrap
+from decimal import Decimal
 from .util import coins_to_satoshis, satoshis_to_coins
 
 
@@ -36,7 +37,7 @@ def dewies_to_lbc(dewies) -> str:
 def dict_values_to_lbc(d):
     lbc_dict = {}
     for key, value in d.items():
-        if isinstance(value, int):
+        if isinstance(value, (int, Decimal)):
             lbc_dict[key] = dewies_to_lbc(value)
         elif isinstance(value, dict):
             lbc_dict[key] = dict_values_to_lbc(value)
