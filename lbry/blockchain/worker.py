@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from itertools import islice
 
 from lbry.wallet.bcd_data_stream import BCDataStream
-from .db import BlockchainDB
+from lbry.db import Database
+from .lbrycrd import Lbrycrd
 from .block import Block
 
 
@@ -23,7 +24,8 @@ def chunk(rows, step):
 
 @dataclass
 class WorkerContext:
-    db: BlockchainDB
+    lbrycrd: Lbrycrd
+    db: Database
     progress: Queue
     stop: Event
 
@@ -31,9 +33,10 @@ class WorkerContext:
 context: ContextVar[Optional[WorkerContext]] = ContextVar('context')
 
 
-def initializer(data_dir: str, progress: Queue, stop: Event):
+def initializer(data_dir: str, regtest: bool, db_path: str, progress: Queue, stop: Event):
     context.set(WorkerContext(
-        db=BlockchainDB(data_dir).open(),
+        lbrycrd=Lbrycrd(data_dir, regtest),
+        db=Database(db_path).sync_open(),
         progress=progress,
         stop=stop
     ))
@@ -41,19 +44,19 @@ def initializer(data_dir: str, progress: Queue, stop: Event):
 
 def process_block_file(block_file_number):
     ctx: WorkerContext = context.get()
-    db, progress, stop = ctx.db, ctx.progress, ctx.stop
-    block_file_path = db.get_block_file_path_from_number(block_file_number)
+    lbrycrd, db, progress, stop = ctx.lbrycrd, ctx.db, ctx.progress, ctx.stop
+    block_file_path = lbrycrd.get_block_file_path_from_number(block_file_number)
     num = 0
     progress.put_nowait((block_file_number, 1, num))
     with open(block_file_path, 'rb') as fp:
         stream = BCDataStream(fp=fp)
         blocks, txs, claims, supports, spends = [], [], [], [], []
-        for num, block_info in enumerate(db.get_blocks_not_synced(block_file_number), start=1):
-            if ctx.stop.is_set():
+        for num, block_info in enumerate(lbrycrd.db.get_file_details(block_file_number), start=1):
+            if stop.is_set():
                 return
             if num % 100 == 0:
                 progress.put_nowait((block_file_number, 1, num))
-            fp.seek(block_info.data_offset)
+            fp.seek(block_info['data_offset'])
             block = Block(stream)
             for tx in block.txs:
                 txs.append((block.block_hash, tx.position, tx.hash))
@@ -76,9 +79,11 @@ def process_block_file(block_file_number):
                                 block.block_hash, tx.hash, tx.position, output.ref.hash, output.claim_hash,
                                 output.claim_name, 2, output.amount, None, None
                             ))
-                    except:
+                    except Exception:
                         pass
-            blocks.append((block.block_hash, block.prev_block_hash, block_file_number, 0 if block.is_first_block else None))
+            blocks.append(
+                (block.block_hash, block.prev_block_hash, block_file_number, 0 if block.is_first_block else None)
+            )
 
     progress.put((block_file_number, 1, num))
 
@@ -95,7 +100,7 @@ def process_block_file(block_file_number):
     progress.put((block_file_number, 2, done_txs))
     for sql, rows in queries:
         for chunk_size, chunk_rows in chunk(rows, 10000):
-            db.execute_many_tx(sql, chunk_rows)
+            db.sync_executemany(sql, chunk_rows)
             done_txs += int(chunk_size/step)
             progress.put((block_file_number, 2, done_txs))
     progress.put((block_file_number, 2, total_txs))

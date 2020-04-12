@@ -18,7 +18,6 @@ from functools import wraps, partial
 
 import ecdsa
 import base58
-from sqlalchemy import text
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest
 from google.protobuf.message import DecodeError

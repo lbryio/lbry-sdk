@@ -8,6 +8,7 @@ import tempfile
 import urllib.request
 from typing import Optional
 from binascii import hexlify
+from concurrent.futures import ThreadPoolExecutor
 
 import aiohttp
 import zmq
@@ -15,12 +16,13 @@ import zmq.asyncio
 
 from lbry.wallet.stream import StreamController
 
+from .database import BlockchainDB
+
 
 log = logging.getLogger(__name__)
 
-download_url = (
-#    'https://github.com/lbryio/lbrycrd/releases/download/v0.17.4.2/lbrycrd-linux-1742.zip'
-    'https://build.lbry.io/lbrycrd/fix_flush_to_not_corrupt/lbrycrd-linux.zip'
+DOWNLOAD_URL = (
+    'https://github.com/lbryio/lbrycrd/releases/download/v0.17.4.4/lbrycrd-linux-1744.zip'
 )
 
 
@@ -81,6 +83,22 @@ class Lbrycrd:
         self.on_block = self._on_block_controller.stream
         self.on_block.listen(lambda e: log.info('%s %s', hexlify(e['hash']), e['msg']))
 
+        self.db = BlockchainDB(self.actual_data_dir)
+        self.executor = ThreadPoolExecutor(max_workers=1)
+
+    def get_block_file_path_from_number(self, block_file_number):
+        return os.path.join(self.actual_data_dir, 'blocks', f'blk{block_file_number:05}.dat')
+
+    async def get_block_files(self):
+        return await asyncio.get_running_loop().run_in_executor(
+            self.executor, self.db.get_block_files
+        )
+
+    async def get_file_details(self, block_file):
+        return await asyncio.get_running_loop().run_in_executor(
+            self.executor, self.db.get_file_details, block_file
+        )
+
     @classmethod
     def temp_regtest(cls):
         return cls(tempfile.mkdtemp(), True)
@@ -98,23 +116,23 @@ class Lbrycrd:
 
     async def download(self):
         downloaded_file = os.path.join(
-            self.bin_dir, download_url[download_url.rfind('/')+1:]
+            self.bin_dir, DOWNLOAD_URL[DOWNLOAD_URL.rfind('/')+1:]
         )
 
         if not os.path.exists(self.bin_dir):
             os.mkdir(self.bin_dir)
 
         if not os.path.exists(downloaded_file):
-            log.info('Downloading: %s', download_url)
+            log.info('Downloading: %s', DOWNLOAD_URL)
             async with aiohttp.ClientSession() as session:
-                async with session.get(download_url) as response:
+                async with session.get(DOWNLOAD_URL) as response:
                     with open(downloaded_file, 'wb') as out_file:
                         while True:
                             chunk = await response.content.read(4096)
                             if not chunk:
                                 break
                             out_file.write(chunk)
-            with urllib.request.urlopen(download_url) as response:
+            with urllib.request.urlopen(DOWNLOAD_URL) as response:
                 with open(downloaded_file, 'wb') as out_file:
                     shutil.copyfileobj(response, out_file)
 
@@ -133,7 +151,7 @@ class Lbrycrd:
 
     def get_start_command(self, *args):
         if self.regtest:
-            args += '-regtest',
+            args += ('-regtest',)
         return (
             self.daemon_bin,
             f'-datadir={self.data_dir}',
@@ -174,7 +192,7 @@ class Lbrycrd:
         if not self.subscribed:
             self.subscribed = True
             ctx = zmq.asyncio.Context.instance()
-            sock = ctx.socket(zmq.SUB)
+            sock = ctx.socket(zmq.SUB)  # pylint: disable=no-member
             sock.connect(self.subscription_url)
             sock.subscribe("hashblock")
             self.subscription = asyncio.create_task(self.subscription_handler(sock))
