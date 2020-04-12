@@ -131,10 +131,10 @@ class WalletNode:
             db = 'sqlite:///'+os.path.join(self.data_path, self.ledger_class.get_id(), 'blockchain.db')
         elif db_driver == 'postgres':
             db_name = f'lbry_test_{self.port}'
-            meta_db = Database(f'postgres:///postgres')
+            meta_db = Database(f'postgresql+psycopg2:///postgres')
             await meta_db.drop(db_name)
             await meta_db.create(db_name)
-            db = f'postgres:///{db_name}'
+            db = f'postgresql+psycopg2:///{db_name}'
         else:
             raise RuntimeError(f"Unsupported database driver: {db_driver}")
         self.manager = self.manager_class.from_config({
