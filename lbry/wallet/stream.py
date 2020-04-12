@@ -66,7 +66,7 @@ class StreamController:
             next_sub = next_sub._next
             yield subscription
 
-    def _notify_and_create_task(self, notify):
+    def _notify_and_ensure_future(self, notify):
         tasks = []
         for subscription in self._iterate_subscriptions:
             maybe_coroutine = notify(subscription)
@@ -82,7 +82,7 @@ class StreamController:
     def add(self, event):
         skip = self._merge_repeated and event == self._last_event
         self._last_event = event
-        return self._notify_and_create_task(
+        return self._notify_and_ensure_future(
             lambda subscription: None if skip else subscription._add(event)
         )
 
