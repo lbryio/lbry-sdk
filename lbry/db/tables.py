@@ -2,7 +2,7 @@
 
 from sqlalchemy import (
     MetaData, Table, Column, ForeignKey,
-    LargeBinary, Text, SmallInteger, Integer, Boolean
+    LargeBinary, Text, SmallInteger, Integer, BigInteger, Boolean
 )
 
 
@@ -63,7 +63,7 @@ TXO = Table(
     Column('txo_hash', LargeBinary, primary_key=True),
     Column('address', Text),
     Column('position', Integer),
-    Column('amount', Integer),
+    Column('amount', BigInteger),
     Column('script', LargeBinary),
     Column('is_reserved', Boolean, server_default='0'),
     Column('txo_type', Integer, server_default='0'),

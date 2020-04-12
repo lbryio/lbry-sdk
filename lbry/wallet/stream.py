@@ -1,4 +1,6 @@
 import asyncio
+import threading
+import multiprocessing
 
 
 class BroadcastSubscription:
@@ -64,7 +66,7 @@ class StreamController:
             next_sub = next_sub._next
             yield subscription
 
-    def _notify_and_ensure_future(self, notify):
+    def _notify_and_create_task(self, notify):
         tasks = []
         for subscription in self._iterate_subscriptions:
             maybe_coroutine = notify(subscription)
@@ -80,7 +82,7 @@ class StreamController:
     def add(self, event):
         skip = self._merge_repeated and event == self._last_event
         self._last_event = event
-        return self._notify_and_ensure_future(
+        return self._notify_and_create_task(
             lambda subscription: None if skip else subscription._add(event)
         )
 
@@ -159,3 +161,31 @@ class Stream:
     def _cancel_and_error(subscription: BroadcastSubscription, future: asyncio.Future, exception):
         subscription.cancel()
         future.set_exception(exception)
+
+
+class EventQueuePublisher(threading.Thread):
+
+    STOP = object()
+
+    def __init__(self, queue: multiprocessing.Queue, stream_controller: StreamController):
+        super().__init__()
+        self.queue = queue
+        self.stream_controller = stream_controller
+        self.loop = asyncio.get_running_loop()
+
+    def run(self):
+        while True:
+            msg = self.queue.get()
+            if msg == self.STOP:
+                return
+            self.loop.call_soon_threadsafe(self.stream_controller.add, msg)
+
+    def stop(self):
+        self.queue.put(self.STOP)
+        self.join()
+
+    def __enter__(self):
+        self.start()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()

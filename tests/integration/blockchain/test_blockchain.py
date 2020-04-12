@@ -2,6 +2,7 @@ import os
 import time
 import asyncio
 import logging
+from unittest import skip
 from binascii import unhexlify, hexlify
 from random import choice
 
@@ -19,6 +20,7 @@ from lbry.wallet.bcd_data_stream import BCDataStream
 log = logging.getLogger(__name__)
 
 
+@skip
 class TestBlockchain(AsyncioTestCase):
 
     async def asyncSetUp(self):

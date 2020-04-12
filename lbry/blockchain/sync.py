@@ -5,7 +5,7 @@ from threading import Thread
 from multiprocessing import Queue, Event
 from concurrent import futures
 
-from lbry.wallet.stream import StreamController
+from lbry.wallet.stream import StreamController, EventQueuePublisher
 from lbry.db import Database
 
 from .lbrycrd import Lbrycrd
@@ -64,9 +64,6 @@ class BlockchainSync:
             return futures.ThreadPoolExecutor(max_workers=1, **args)
         return futures.ProcessPoolExecutor(max_workers=max(os.cpu_count()-1, 4), **args)
 
-    def get_progress_monitor(self, state, queue) -> ProgressMonitorThread:
-        return ProgressMonitorThread(state, queue, self._on_progress_controller)
-
     async def load_blocks(self):
         jobs = []
         queue, full_stop = Queue(), Event()
@@ -81,7 +78,7 @@ class BlockchainSync:
                 'total_blocks': file.blocks,
             } for file in files
         }
-        progress = self.get_progress_monitor(state, queue)
+        progress = EventQueuePublisher(queue, self._on_progress_controller)
         progress.start()
 
         def cancel_all_the_things():
@@ -91,6 +88,7 @@ class BlockchainSync:
             for job in jobs:
                 exception = job.exception()
                 if exception is not None:
+                    log.exception(exception)
                     raise exception
 
         try:
@@ -109,5 +107,5 @@ class BlockchainSync:
             raise
 
         finally:
-            progress.shutdown()
+            progress.stop()
             executor.shutdown()
