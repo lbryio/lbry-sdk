@@ -78,11 +78,12 @@ class TestUsagePayment(CommandTestCase):
         await node.stop(False)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
+        next_payment = wallet_pay_service.on_payment.first
         await self.daemon.jsonrpc_wallet_reconnect()
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.0")
-        tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=8)
+        tx = await asyncio.wait_for(next_payment, timeout=8)
         self.assertIsNotNone(await self.blockchain.get_raw_transaction(tx.id))  # verify its broadcasted
         self.assertEqual(tx.outputs[0].amount, 100000000)
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address)
