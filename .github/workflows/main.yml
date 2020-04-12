@@ -45,9 +45,9 @@ jobs:
         with:
           python-version: '3.7'
       - if: matrix.test == 'other'
-        run:
-          - apt-get update
-          - apt-get install -y --no-install-recommends ffmpeg
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ffmpeg
       - run: pip install tox-travis
       - env:
           TEST_DB: ${{ matrix.db }}
