@@ -5154,10 +5154,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --comment_ids=<comment_ids>  : (str, list) one or more comment_id to hide.
             --wallet_id=<wallet_id>      : (str) restrict operation to specific wallet
 
-        Returns:
-            (dict) keyed by comment_id, containing success info
-            '<comment_id>': {
-                "hidden": (bool)  flag indicating if comment_id was hidden
+        Returns: lists containing the ids comments that are hidden and visible.
+
+            {
+                "hidden":   (list) IDs of hidden comments.
+                "visible":  (list) IDs of visible comments.
             }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
@@ -5168,6 +5169,7 @@ class Daemon(metaclass=JSONRPCServerType):
         comments = await comment_client.jsonrpc_post(
             self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids
         )
+        comments = comments['items']
         claim_ids = {comment['claim_id'] for comment in comments}
         claims = {cid: await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id=cid) for cid in claim_ids}
         pieces = []
