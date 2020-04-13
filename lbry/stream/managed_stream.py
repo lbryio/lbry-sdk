@@ -65,6 +65,7 @@ class ManagedStream:
         'downloader',
         'analytics_manager',
         'fully_reflected',
+        'reflector_progress',
         'file_output_task',
         'delayed_stop_task',
         'streaming_responses',
@@ -101,6 +102,7 @@ class ManagedStream:
         self.analytics_manager = analytics_manager
 
         self.fully_reflected = asyncio.Event(loop=self.loop)
+        self.reflector_progress = 0
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
         self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
@@ -445,9 +447,10 @@ class ManagedStream:
             ]
             log.info("we have %i/%i needed blobs needed by reflector for lbry://%s#%s", len(we_have), len(needed),
                      self.claim_name, self.claim_id)
-            for blob_hash in we_have:
+            for i, blob_hash in enumerate(we_have):
                 await protocol.send_blob(blob_hash)
                 sent.append(blob_hash)
+                self.reflector_progress = int((i + 1) / len(we_have) * 100)
         except (asyncio.TimeoutError, ValueError):
             return sent
         except ConnectionRefusedError:
