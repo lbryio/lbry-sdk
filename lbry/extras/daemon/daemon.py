@@ -1917,9 +1917,8 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(STREAM_MANAGER_COMPONENT)
-    async def jsonrpc_file_list(
-            self, sort=None, reverse=False, comparison=None,
-            wallet_id=None, page=None, page_size=None, **kwargs):
+    async def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, wallet_id=None, page=None,
+                                page_size=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1940,17 +1939,17 @@ class Daemon(metaclass=JSONRPCServerType):
             --stream_hash=<stream_hash>            : (str) get file with matching stream hash
             --rowid=<rowid>                        : (int) get file with matching row id
             --added_on=<added_on>                  : (int) get file with matching time of insertion
-            --claim_id=<claim_id>                  : (str) get file with matching claim id
-            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint
+            --claim_id=<claim_id>                  : (str) get file with matching claim id(s)
+            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint(s)
             --txid=<txid>                          : (str) get file with matching claim txid
             --nout=<nout>                          : (int) get file with matching claim nout
-            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
+            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id(s)
             --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
-            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
+            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le | in)
             --page=<page>                          : (int) page to return during paginating
             --page_size=<page_size>                : (int) number of items on page during pagination
             --wallet_id=<wallet_id>                : (str) add purchase receipts from this wallet
@@ -1960,6 +1959,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
+
         paginated = paginate_list(
             self.stream_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
         )

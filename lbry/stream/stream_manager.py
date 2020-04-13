@@ -23,6 +23,9 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
+    from lbry.wallet.transaction import Transaction
+    from lbry.wallet.manager import WalletManager
+    from lbry.wallet.wallet import Wallet
 
 log = logging.getLogger(__name__)
 
@@ -46,6 +49,12 @@ FILTER_FIELDS = [
     'blobs_in_stream'
 ]
 
+SET_FILTER_FIELDS = {
+    "claim_ids": "claim_id",
+    "channel_claim_ids": "channel_claim_id",
+    "outpoints": "outpoint"
+}
+
 COMPARISON_OPERATORS = {
     'eq': lambda a, b: a == b,
     'ne': lambda a, b: a != b,
@@ -53,6 +62,7 @@ COMPARISON_OPERATORS = {
     'l': lambda a, b: a < b,
     'ge': lambda a, b: a >= b,
     'le': lambda a, b: a <= b,
+    'in': lambda a, b: a in b
 }
 
 
@@ -276,15 +286,34 @@ class StreamManager:
             raise ValueError(f"'{comparison}' is not a valid comparison")
         if 'full_status' in search_by:
             del search_by['full_status']
+
         for search in search_by:
             if search not in FILTER_FIELDS:
                 raise ValueError(f"'{search}' is not a valid search operation")
+
+        compare_sets = {}
+        if isinstance(search_by.get('claim_id'), list):
+            compare_sets['claim_ids'] = search_by.pop('claim_id')
+        if isinstance(search_by.get('outpoint'), list):
+            compare_sets['outpoints'] = search_by.pop('outpoint')
+        if isinstance(search_by.get('channel_claim_id'), list):
+            compare_sets['channel_claim_ids'] = search_by.pop('channel_claim_id')
+
         if search_by:
             comparison = comparison or 'eq'
             streams = []
             for stream in self.streams.values():
+                matched = False
+                for set_search, val in compare_sets.items():
+                    if COMPARISON_OPERATORS[comparison](getattr(stream, SET_FILTER_FIELDS[set_search]), val):
+                        streams.append(stream)
+                        matched = True
+                        break
+                if matched:
+                    continue
                 for search, val in search_by.items():
-                    if COMPARISON_OPERATORS[comparison](getattr(stream, search), val):
+                    this_stream = getattr(stream, search)
+                    if COMPARISON_OPERATORS[comparison](this_stream, val):
                         streams.append(stream)
                         break
         else:
