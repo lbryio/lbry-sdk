@@ -17,7 +17,7 @@ jobs:
     name: "tests / unit"
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
@@ -37,12 +37,14 @@ jobs:
           - blockchain
           - other
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
       - if: matrix.test == 'other'
-        run: sudo apt install -y --no-install-recommends ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
       - run: pip install tox-travis
       - run: tox -e ${{ matrix.test }}
 
@@ -57,7 +59,7 @@ jobs:
           - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
