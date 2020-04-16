@@ -733,8 +733,9 @@ class Database(SQLiteMixin):
                 include_is_my_input = True
                 constraints['exclude_internal_payments__or'] = {
                     'txo.txo_type__not': TXO_TYPES['other'],
+                    'txo.address__not_in': my_addresses,
                     'txi.address__is_null': True,
-                    'txi.address__not_in': my_addresses
+                    'txi.address__not_in': my_addresses,
                 }
         sql = [f"SELECT {cols} FROM txo JOIN tx ON (tx.txid=txo.txid)"]
         if is_spent:

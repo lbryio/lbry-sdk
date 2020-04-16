@@ -503,22 +503,35 @@ class TransactionOutputCommands(ClaimTestCase):
         address2 = await self.daemon.jsonrpc_address_unused(wallet_id=wallet2.id)
         await self.channel_create('@kept-channel')
         await self.channel_create('@sent-channel', claim_address=address2)
+        await self.wallet_send('2.9', address2)
 
         # all txos on second wallet
-        received_channel, = await self.txo_list(wallet_id=wallet2.id, is_my_input_or_output=True)
+        received_payment, received_channel = await self.txo_list(
+            wallet_id=wallet2.id, is_my_input_or_output=True)
         self.assertEqual('1.0', received_channel['amount'])
         self.assertFalse(received_channel['is_my_input'])
         self.assertTrue(received_channel['is_my_output'])
         self.assertFalse(received_channel['is_internal_transfer'])
+        self.assertEqual('2.9', received_payment['amount'])
+        self.assertFalse(received_payment['is_my_input'])
+        self.assertTrue(received_payment['is_my_output'])
+        self.assertFalse(received_payment['is_internal_transfer'])
 
         # all txos on default wallet
         r = await self.txo_list(is_my_input_or_output=True)
         self.assertEqual(
-            ['1.0', '7.947786', '1.0', '8.973893', '10.0'],
+            ['2.9', '5.047662', '1.0', '7.947786', '1.0', '8.973893', '10.0'],
             [t['amount'] for t in r]
         )
 
-        sent_channel, change2, kept_channel, change1, initial_funds = r
+        sent_payment, change3, sent_channel, change2, kept_channel, change1, initial_funds = r
+
+        self.assertTrue(sent_payment['is_my_input'])
+        self.assertFalse(sent_payment['is_my_output'])
+        self.assertFalse(sent_payment['is_internal_transfer'])
+        self.assertTrue(change3['is_my_input'])
+        self.assertTrue(change3['is_my_output'])
+        self.assertTrue(change3['is_internal_transfer'])
 
         self.assertTrue(sent_channel['is_my_input'])
         self.assertFalse(sent_channel['is_my_output'])
@@ -540,31 +553,31 @@ class TransactionOutputCommands(ClaimTestCase):
 
         # my stuff and stuff i sent excluding "change"
         r = await self.txo_list(is_my_input_or_output=True, exclude_internal_transfers=True)
-        self.assertEqual([sent_channel, kept_channel, initial_funds], r)
+        self.assertEqual([sent_payment, sent_channel, kept_channel, initial_funds], r)
 
         # my unspent stuff and stuff i sent excluding "change"
         r = await self.txo_list(is_my_input_or_output=True, is_not_spent=True, exclude_internal_transfers=True)
-        self.assertEqual([sent_channel, kept_channel], r)
+        self.assertEqual([sent_payment, sent_channel, kept_channel], r)
 
         # only "change"
         r = await self.txo_list(is_my_input=True, is_my_output=True, type="other")
-        self.assertEqual([change2, change1], r)
+        self.assertEqual([change3, change2, change1], r)
 
         # only unspent "change"
         r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", is_not_spent=True)
-        self.assertEqual([change2], r)
+        self.assertEqual([change3], r)
 
         # only spent "change"
         r = await self.txo_list(is_my_input=True, is_my_output=True, type="other", is_spent=True)
-        self.assertEqual([change1], r)
+        self.assertEqual([change2, change1], r)
 
         # all my unspent stuff
         r = await self.txo_list(is_my_output=True, is_not_spent=True)
-        self.assertEqual([change2, kept_channel], r)
+        self.assertEqual([change3, kept_channel], r)
 
         # stuff i sent
         r = await self.txo_list(is_not_my_output=True)
-        self.assertEqual([sent_channel], r)
+        self.assertEqual([sent_payment, sent_channel], r)
 
     async def test_txo_plot(self):
         day_blocks = int((24 * 60 * 60) / self.ledger.headers.timestamp_average_offset)
