@@ -545,11 +545,19 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             f':$any_{attr}{i}' for i in range(len(any_items))
         )
         if for_count or attr == 'tag':
-            any_queries[f'#_any_{attr}'] = f"""
-            {CLAIM_HASH_OR_REPOST_HASH_SQL} IN (
-                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-            )
-            """
+            if attr == 'tag':
+                any_queries[f'#_any_{attr}'] = f"""
+                    (claim.claim_type != {CLAIM_TYPES['repost']}
+                     AND claim.claim_hash IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))) OR
+                    (claim.claim_type == {CLAIM_TYPES['repost']} AND
+                     claim.reposted_claim_hash IN (SELECT claim_hash FROM tag WHERE tag IN ({values})))
+                """
+            else:
+                any_queries[f'#_any_{attr}'] = f"""
+                {CLAIM_HASH_OR_REPOST_HASH_SQL} IN (
+                    SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+                )
+                """
         else:
             any_queries[f'#_any_{attr}'] = f"""
             EXISTS(
@@ -596,11 +604,19 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             f':$not_{attr}{i}' for i in range(len(not_items))
         )
         if for_count:
-            constraints[f'#_not_{attr}'] = f"""
-            {CLAIM_HASH_OR_REPOST_HASH_SQL} NOT IN (
-                SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
-            )
-            """
+            if attr == 'tag':
+                constraints[f'#_not_{attr}'] = f"""
+                    (claim.claim_type != {CLAIM_TYPES['repost']}
+                     AND claim.claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))) AND
+                    (claim.claim_type == {CLAIM_TYPES['repost']} AND
+                     claim.reposted_claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values})))
+                """
+            else:
+                constraints[f'#_not_{attr}'] = f"""
+                {CLAIM_HASH_OR_REPOST_HASH_SQL} NOT IN (
+                    SELECT claim_hash FROM {attr} WHERE {attr} IN ({values})
+                )
+                """
         else:
             constraints[f'#_not_{attr}'] = f"""
                 NOT EXISTS(
