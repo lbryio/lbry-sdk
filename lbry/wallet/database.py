@@ -694,7 +694,7 @@ class Database(SQLiteMixin):
             self, cols, accounts=None, is_my_input=None, is_my_output=True,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             include_is_spent=False, include_is_my_input=False,
-            read_only=False, **constraints):
+            is_spent=None, read_only=False, **constraints):
         for rename_col in ('txid', 'txoid'):
             for rename_constraint in (rename_col, rename_col+'__in', rename_col+'__not_in'):
                 if rename_constraint in constraints:
@@ -733,27 +733,23 @@ class Database(SQLiteMixin):
                 include_is_my_input = True
                 constraints['exclude_internal_payments__or'] = {
                     'txo.txo_type__not': TXO_TYPES['other'],
+                    'txo.address__not_in': my_addresses,
                     'txi.address__is_null': True,
-                    'txi.address__not_in': my_addresses
+                    'txi.address__not_in': my_addresses,
                 }
         sql = [f"SELECT {cols} FROM txo JOIN tx ON (tx.txid=txo.txid)"]
-        if include_is_spent:
+        if is_spent:
+            constraints['spent.txoid__is_not_null'] = True
+        elif is_spent is False:
+            constraints['is_reserved'] = False
+            constraints['spent.txoid__is_null'] = True
+        if include_is_spent or is_spent is not None:
             sql.append("LEFT JOIN txi AS spent ON (spent.txoid=txo.txoid)")
         if include_is_my_input:
             sql.append("LEFT JOIN txi ON (txi.position=0 AND txi.txid=txo.txid)")
         return await self.db.execute_fetchall(*query(' '.join(sql), **constraints), read_only=read_only)
 
-    @staticmethod
-    def constrain_unspent(constraints):
-        constraints['is_reserved'] = False
-        constraints['include_is_spent'] = True
-        constraints['spent.txoid__is_null'] = True
-
-    async def get_txos(self, wallet=None, no_tx=False, unspent=False, read_only=False, **constraints):
-
-        if unspent:
-            self.constrain_unspent(constraints)
-
+    async def get_txos(self, wallet=None, no_tx=False, read_only=False, **constraints):
         include_is_spent = constraints.get('include_is_spent', False)
         include_is_my_input = constraints.get('include_is_my_input', False)
         include_is_my_output = constraints.pop('include_is_my_output', False)
@@ -869,7 +865,8 @@ class Database(SQLiteMixin):
 
         return txos
 
-    def _clean_txo_constraints_for_aggregation(self, unspent, constraints):
+    @staticmethod
+    def _clean_txo_constraints_for_aggregation(constraints):
         constraints.pop('include_is_spent', None)
         constraints.pop('include_is_my_input', None)
         constraints.pop('include_is_my_output', None)
@@ -879,22 +876,19 @@ class Database(SQLiteMixin):
         constraints.pop('offset', None)
         constraints.pop('limit', None)
         constraints.pop('order_by', None)
-        if unspent:
-            self.constrain_unspent(constraints)
 
-    async def get_txo_count(self, unspent=False, **constraints):
-        self._clean_txo_constraints_for_aggregation(unspent, constraints)
+    async def get_txo_count(self, **constraints):
+        self._clean_txo_constraints_for_aggregation(constraints)
         count = await self.select_txos('COUNT(*) AS total', **constraints)
         return count[0]['total'] or 0
 
-    async def get_txo_sum(self, unspent=False, **constraints):
-        self._clean_txo_constraints_for_aggregation(unspent, constraints)
+    async def get_txo_sum(self, **constraints):
+        self._clean_txo_constraints_for_aggregation(constraints)
         result = await self.select_txos('SUM(amount) AS total', **constraints)
         return result[0]['total'] or 0
 
-    async def get_txo_plot(
-            self, unspent=False, start_day=None, days_back=0, end_day=None, days_after=None, **constraints):
-        self._clean_txo_constraints_for_aggregation(unspent, constraints)
+    async def get_txo_plot(self, start_day=None, days_back=0, end_day=None, days_after=None, **constraints):
+        self._clean_txo_constraints_for_aggregation(constraints)
         if start_day is None:
             constraints['day__gte'] = self.ledger.headers.estimated_julian_day(
                 self.ledger.headers.height
@@ -915,17 +909,18 @@ class Database(SQLiteMixin):
         )
 
     def get_utxos(self, read_only=False, **constraints):
-        return self.get_txos(unspent=True, read_only=read_only, **constraints)
+        return self.get_txos(is_spent=False, read_only=read_only, **constraints)
 
     def get_utxo_count(self, **constraints):
-        return self.get_txo_count(unspent=True, **constraints)
+        return self.get_txo_count(is_spent=False, **constraints)
 
     async def get_balance(self, wallet=None, accounts=None, read_only=False, **constraints):
         assert wallet or accounts, \
             "'wallet' or 'accounts' constraints required to calculate balance"
         constraints['accounts'] = accounts or wallet.accounts
-        self.constrain_unspent(constraints)
-        balance = await self.select_txos('SUM(amount) as total', read_only=read_only, **constraints)
+        balance = await self.select_txos(
+            'SUM(amount) as total', is_spent=False, read_only=read_only, **constraints
+        )
         return balance[0]['total'] or 0
 
     async def select_addresses(self, cols, read_only=False, **constraints):
@@ -1084,7 +1079,7 @@ class Database(SQLiteMixin):
     def get_supports_summary(self, read_only=False, **constraints):
         return self.get_txos(
             txo_type=TXO_TYPES['support'],
-            unspent=True, is_my_output=True,
+            is_spent=False, is_my_output=True,
             include_is_my_input=True,
             no_tx=True, read_only=read_only,
             **constraints

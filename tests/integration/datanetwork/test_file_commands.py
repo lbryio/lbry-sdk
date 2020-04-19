@@ -21,6 +21,11 @@ class FileCommands(CommandTestCase):
         self.assertEqual(file1['claim_name'], 'foo')
         self.assertEqual(file2['claim_name'], 'foo2')
 
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(claim_id=[file1['claim_id'], file2['claim_id']]), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(claim_id=file1['claim_id']), 1)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(outpoint=[file1['outpoint'], file2['outpoint']]), 2)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(outpoint=file1['outpoint']), 1)
+
         await self.daemon.jsonrpc_file_delete(claim_name='foo')
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         await self.daemon.jsonrpc_file_delete(claim_name='foo2')

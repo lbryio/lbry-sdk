@@ -2,7 +2,7 @@ import time
 import asyncio
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
-
+from typing import Optional
 import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.server.db.writer import SQLDB
@@ -10,7 +10,7 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
-from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES
+from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES, REORG_COUNT
 
 
 class Prefetcher:
@@ -219,7 +219,7 @@ class BlockProcessor:
                                 'resetting the prefetcher')
             await self.prefetcher.reset_height(self.height)
 
-    async def reorg_chain(self, count=None):
+    async def reorg_chain(self, count: Optional[int] = None):
         """Handle a chain reorganisation.
 
         Count is the number of blocks to simulate a reorg, or None for
@@ -253,7 +253,9 @@ class BlockProcessor:
             await self.run_in_thread_with_lock(self.backup_blocks, raw_blocks)
             await self.run_in_thread_with_lock(flush_backup)
             last -= len(raw_blocks)
+        await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
         await self.prefetcher.reset_height(self.height)
+        REORG_COUNT.inc()
 
     async def reorg_hashes(self, count):
         """Return a pair (start, last, hashes) of blocks to back up during a
@@ -270,7 +272,7 @@ class BlockProcessor:
 
         return start, last, await self.db.fs_block_hashes(start, count)
 
-    async def calc_reorg_range(self, count):
+    async def calc_reorg_range(self, count: Optional[int]):
         """Calculate the reorg range"""
 
         def diff_pos(hashes1, hashes2):

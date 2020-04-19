@@ -158,11 +158,14 @@ class ComponentManager:
             for component in self.components
         }
 
-    def get_component(self, component_name):
+    def get_actual_component(self, component_name):
         for component in self.components:
             if component.component_name == component_name:
-                return component.component
+                return component
         raise NameError(component_name)
+
+    def get_component(self, component_name):
+        return self.get_actual_component(component_name).component
 
     def has_component(self, component_name):
         return any(component for component in self.components if component_name == component.component_name)

@@ -24,6 +24,7 @@ from .account import Account, AddressManager, SingleKey
 from .network import Network
 from .transaction import Transaction, Output
 from .header import Headers, UnvalidatedHeaders
+from .checkpoints import HASHES
 from .constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
 from .bip32 import PubKey, PrivateKey
 from .coinselection import CoinSelector
@@ -108,6 +109,8 @@ class Ledger(metaclass=LedgerRegistry):
     default_fee_per_byte = 50
     default_fee_per_name_char = 200000
 
+    checkpoints = HASHES
+
     def __init__(self, config=None):
         self.config = config or {}
         self.db: Database = self.config.get('db') or Database(
@@ -117,6 +120,7 @@ class Ledger(metaclass=LedgerRegistry):
         self.headers: Headers = self.config.get('headers') or self.headers_class(
             os.path.join(self.path, "headers")
         )
+        self.headers.checkpoints = self.checkpoints
         self.network: Network = self.config.get('network') or Network(self)
         self.network.on_header.listen(self.receive_header)
         self.network.on_status.listen(self.process_status_update)
@@ -266,7 +270,7 @@ class Ledger(metaclass=LedgerRegistry):
         self.constraint_spending_utxos(constraints)
         return self.db.get_utxo_count(**constraints)
 
-    async def get_txos(self, resolve=False, **constraints):
+    async def get_txos(self, resolve=False, **constraints) -> List[Output]:
         txos = await self.db.get_txos(**constraints)
         if resolve:
             return await self._resolve_for_local_results(constraints.get('accounts', []), txos)
@@ -316,11 +320,12 @@ class Ledger(metaclass=LedgerRegistry):
             self.db.open(),
             self.headers.open()
         ])
-        first_connection = self.network.on_connected.first
-        asyncio.ensure_future(self.network.start())
-        await first_connection
+        fully_synced = self.on_ready.first
+        asyncio.create_task(self.network.start())
+        await self.network.on_connected.first
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
+        await fully_synced
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         if len(self.accounts) > 10:
@@ -328,12 +333,9 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             await self._report_state()
         self.on_transaction.listen(self._reset_balance_cache)
-        await self.on_ready.first
 
     async def join_network(self, *_):
         log.info("Subscribing and updating accounts.")
-        async with self._header_processing_lock:
-            await self._update_tasks.add(self.initial_headers_sync())
         await self._update_tasks.add(self.subscribe_accounts())
         await self._update_tasks.done.wait()
         self._on_ready_controller.add(True)
@@ -356,8 +358,8 @@ class Ledger(metaclass=LedgerRegistry):
         self.headers.chunk_getter = get_chunk
 
         async def doit():
-            async with self._header_processing_lock:
-                for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
+            for height in reversed(sorted(self.headers.known_missing_checkpointed_chunks)):
+                async with self._header_processing_lock:
                     await self.headers.ensure_chunk_at(height)
         self._other_tasks.add(doit())
         await self.update_headers()
@@ -716,7 +718,7 @@ class Ledger(metaclass=LedgerRegistry):
                     if include_is_my_output:
                         mine = await self.db.get_txo_count(
                             claim_id=txo.claim_id, txo_type__in=CLAIM_TYPES, is_my_output=True,
-                            unspent=True, accounts=accounts
+                            is_spent=False, accounts=accounts
                         )
                         if mine:
                             txo_copy.is_my_output = True
@@ -726,7 +728,7 @@ class Ledger(metaclass=LedgerRegistry):
                         supports = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=True,
-                            unspent=True, accounts=accounts
+                            is_spent=False, accounts=accounts
                         )
                         txo_copy.sent_supports = supports
                     if include_sent_tips:
@@ -750,7 +752,11 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def resolve(self, accounts, urls, **kwargs):
         resolve = partial(self.network.retriable_call, self.network.resolve)
-        txos = (await self._inflate_outputs(resolve(urls), accounts, **kwargs))[0]
+        urls_copy = list(urls)
+        txos = []
+        while urls_copy:
+            batch, urls_copy = urls_copy[:500], urls_copy[500:]
+            txos.extend((await self._inflate_outputs(resolve(batch), accounts, **kwargs))[0])
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
         for url, txo in zip(urls, txos):
@@ -1058,6 +1064,7 @@ class TestNetLedger(Ledger):
     script_address_prefix = bytes((196,))
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
+    checkpoints = {}
 
 
 class RegTestLedger(Ledger):
@@ -1072,3 +1079,4 @@ class RegTestLedger(Ledger):
     genesis_hash = '6e3fcf1299d4ec5d79c3a4c91d624a4acf9e2e173d95a1a0504f677669687556'
     genesis_bits = 0x207fffff
     target_timespan = 1
+    checkpoints = {}

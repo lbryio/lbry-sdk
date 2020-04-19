@@ -329,6 +329,9 @@ class Daemon(metaclass=JSONRPCServerType):
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         self.metrics_runner = web.AppRunner(prom_app)
 
+        self.need_connection_status_refresh = asyncio.Event()
+        self._connection_status_task: Optional[asyncio.Task] = None
+
     @property
     def dht_node(self) -> typing.Optional['Node']:
         return self.component_manager.get_component(DHT_COMPONENT)
@@ -441,18 +444,25 @@ class Daemon(metaclass=JSONRPCServerType):
             log.warning("detected internet connection was lost")
         self._connection_status = (self.component_manager.loop.time(), connected)
 
-    async def get_connection_status(self) -> str:
-        if self._connection_status[0] + 300 > self.component_manager.loop.time():
-            if not self._connection_status[1]:
-                await self.update_connection_status()
-        else:
+    async def keep_connection_status_up_to_date(self):
+        while True:
+            try:
+                await asyncio.wait_for(self.need_connection_status_refresh.wait(), 300)
+            except asyncio.TimeoutError:
+                pass
             await self.update_connection_status()
-        return CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
+            self.need_connection_status_refresh.clear()
 
     async def start(self):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
         log.info("Platform: %s", json.dumps(self.platform_info, indent=2))
+
+        self.need_connection_status_refresh.set()
+        self._connection_status_task = self.component_manager.loop.create_task(
+            self.keep_connection_status_up_to_date()
+        )
+
         await self.analytics_manager.send_server_startup()
         await self.rpc_runner.setup()
         await self.streaming_runner.setup()
@@ -511,6 +521,10 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.component_startup_task
 
     async def stop(self):
+        if self._connection_status_task:
+            if not self._connection_status_task.done():
+                self._connection_status_task.cancel()
+            self._connection_status_task = None
         if self.component_startup_task is not None:
             if self.component_startup_task.done():
                 await self.component_manager.stop()
@@ -785,7 +799,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'analyze_audio_volume': (bool) should ffmpeg analyze audio
             }
         """
-        return await self._video_file_analyzer.status(reset=True)
+        return await self._video_file_analyzer.status(reset=True, recheck=True)
 
     async def jsonrpc_status(self):
         """
@@ -875,14 +889,16 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
 
-        connection_code = await self.get_connection_status()
+        if not self._connection_status[1]:
+            self.need_connection_status_refresh.set()
+        connection_code = CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
         ffmpeg_status = await self._video_file_analyzer.status()
-
+        running_components = self.component_manager.get_components_status()
         response = {
             'installation_id': self.installation_id,
-            'is_running': all(self.component_manager.get_components_status().values()),
+            'is_running': all(running_components.values()),
             'skipped_components': self.component_manager.skip_components,
-            'startup_status': self.component_manager.get_components_status(),
+            'startup_status': running_components,
             'connection_status': {
                 'code': connection_code,
                 'message': CONNECTION_MESSAGES[connection_code],
@@ -1325,6 +1341,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             Dictionary of wallet status information.
         """
+        if self.wallet_manager is None:
+            return {'is_encrypted': None, 'is_syncing': None, 'is_locked': None}
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return {
             'is_encrypted': wallet.is_encrypted,
@@ -1899,9 +1917,8 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(STREAM_MANAGER_COMPONENT)
-    async def jsonrpc_file_list(
-            self, sort=None, reverse=False, comparison=None,
-            wallet_id=None, page=None, page_size=None, **kwargs):
+    async def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, wallet_id=None, page=None,
+                                page_size=None, **kwargs):
         """
         List files limited by optional filters
 
@@ -1922,17 +1939,17 @@ class Daemon(metaclass=JSONRPCServerType):
             --stream_hash=<stream_hash>            : (str) get file with matching stream hash
             --rowid=<rowid>                        : (int) get file with matching row id
             --added_on=<added_on>                  : (int) get file with matching time of insertion
-            --claim_id=<claim_id>                  : (str) get file with matching claim id
-            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint
+            --claim_id=<claim_id>                  : (str) get file with matching claim id(s)
+            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint(s)
             --txid=<txid>                          : (str) get file with matching claim txid
             --nout=<nout>                          : (int) get file with matching claim nout
-            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
+            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id(s)
             --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
-            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
+            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le | in)
             --page=<page>                          : (int) page to return during paginating
             --page_size=<page_size>                : (int) number of items on page during pagination
             --wallet_id=<wallet_id>                : (str) add purchase receipts from this wallet
@@ -1942,6 +1959,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
+
         paginated = paginate_list(
             self.stream_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
         )
@@ -2195,7 +2213,7 @@ class Daemon(metaclass=JSONRPCServerType):
         List my stream and channel claims.
 
         Usage:
-            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...]
+            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--page=<page>] [--page_size=<page_size>]
                        [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
@@ -2205,6 +2223,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) streams in this channel
             --name=<name>              : (str or list) claim name
+            --is_spent                 : (bool) shows previous claim updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2218,7 +2237,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(**kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -2732,12 +2752,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...]
+                         [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
                          [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) channel name
             --claim_id=<claim_id>      : (str or list) channel id
+            --is_spent                 : (bool) shows previous channel updates and abandons
             --account_id=<account_id>  : (str) id of the account to use
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -2749,7 +2770,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'channel'
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -3486,12 +3508,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                        [--name=<name>...] [--claim_id=<claim_id>...]
+                        [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) stream name
             --claim_id=<claim_id>      : (str or list) stream id
+            --is_spent                 : (bool) shows previous stream updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3503,7 +3526,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'stream'
-        kwargs['unspent'] = True
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT,
@@ -3950,19 +3974,23 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_support_list(self, *args, tips=None, **kwargs):
+    def jsonrpc_support_list(self, *args, received=False, sent=False, staked=False, **kwargs):
         """
-        List supports and tips in my control.
+        List staked supports and sent/received tips.
 
         Usage:
             support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...] [--tips]
+                         [--name=<name>...] [--claim_id=<claim_id>...]
+                         [--received | --sent | --staked] [--is_spent]
                          [--page=<page>] [--page_size=<page_size>] [--no_totals]
 
         Options:
             --name=<name>              : (str or list) claim name
             --claim_id=<claim_id>      : (str or list) claim id
-            --tips                     : (bool) only show tips
+            --received                 : (bool) only show received (tips)
+            --sent                     : (bool) only show sent (tips)
+            --staked                   : (bool) only show my staked supports
+            --is_spent                 : (bool) show abandoned supports
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
@@ -3973,9 +4001,20 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'support'
-        kwargs['unspent'] = True
-        if tips is True:
+        if 'is_spent' not in kwargs:
+            kwargs['is_not_spent'] = True
+        if received:
             kwargs['is_not_my_input'] = True
+            kwargs['is_my_output'] = True
+        elif sent:
+            kwargs['is_my_input'] = True
+            kwargs['is_not_my_output'] = True
+            # spent for not my outputs is undetermined
+            kwargs.pop('is_spent', None)
+            kwargs.pop('is_not_spent', None)
+        elif staked:
+            kwargs['is_my_input'] = True
+            kwargs['is_my_output'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -4150,11 +4189,15 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, channel_id=None, name=None, unspent=False, reposted_claim_id=None,
+            claim_id=None, channel_id=None, name=None, reposted_claim_id=None,
+            is_spent=False, is_not_spent=False,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
-        constraints['unspent'] = unspent
+        if is_spent:
+            constraints['is_spent'] = True
+        elif is_not_spent:
+            constraints['is_spent'] = False
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
@@ -4183,8 +4226,9 @@ class Daemon(metaclass=JSONRPCServerType):
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--unspent]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
+                     [--is_spent | --is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4199,7 +4243,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4249,13 +4294,71 @@ class Daemon(metaclass=JSONRPCServerType):
         return paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
 
     @requires(WALLET_COMPONENT)
+    async def jsonrpc_txo_spend(
+            self, account_id=None, wallet_id=None, batch_size=500,
+            include_full_tx=False, preview=False, blocking=False, **kwargs):
+        """
+        Spend transaction outputs, batching into multiple transactions as necessary.
+
+        Usage:
+            txo_spend [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
+                      [--is_my_input | --is_not_my_input]
+                      [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
+                      [--preview] [--blocking] [--batch_size=<batch_size>] [--include_full_tx]
+
+        Options:
+            --type=<type>              : (str or list) claim type: stream, channel, support,
+                                         purchase, collection, repost, other
+            --txid=<txid>              : (str or list) transaction id of outputs
+            --claim_id=<claim_id>      : (str or list) claim id
+            --channel_id=<channel_id>  : (str or list) claims in this channel
+            --name=<name>              : (str or list) claim name
+            --is_my_input              : (bool) show outputs created by you
+            --is_not_my_input          : (bool) show outputs not created by you
+           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
+                                                "--is_my_input --is_my_output --type=other"
+                                                this allows to exclude "change" payments, this
+                                                flag can be used in combination with any of the other flags
+            --account_id=<account_id>  : (str) id of the account to query
+            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --preview                  : (bool) do not broadcast the transaction
+            --blocking                 : (bool) wait until abandon is in mempool
+            --batch_size=<batch_size>  : (int) number of txos to spend per transactions
+            --include_full_tx          : (bool) include entire tx in output and not just the txid
+
+        Returns: {List[Transaction]}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
+        txos = await self.ledger.get_txos(
+            wallet=wallet, accounts=accounts, read_only=True,
+            **self._constrain_txo_from_kwargs({}, is_not_spent=True, is_my_output=True, **kwargs)
+        )
+        txs = []
+        while txos:
+            txs.append(
+                await Transaction.create(
+                    [Input.spend(txos.pop()) for _ in range(min(len(txos), batch_size))],
+                    [], accounts, accounts[0]
+                )
+            )
+        if not preview:
+            for tx in txs:
+                await self.broadcast_or_release(tx, blocking)
+        if include_full_tx:
+            return txs
+        return [{'txid': tx.id} for tx in txs]
+
+    @requires(WALLET_COMPONENT)
     def jsonrpc_txo_sum(self, account_id=None, wallet_id=None, **kwargs):
         """
         Sum of transaction outputs.
 
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...]
+                     [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4267,7 +4370,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4299,7 +4403,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_plot [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--unspent]
+                     [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4314,7 +4418,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
-            --unspent                  : (bool) hide spent outputs, show only unspent ones
+            --is_spent                 : (bool) only show spent txos
+            --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
                                                 if using this flag the other related flags
                                                 are ignored (--is_my_output, --is_my_input, etc)
@@ -4371,7 +4476,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = ['other', 'purchase']
-        kwargs['unspent'] = True
+        kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
@@ -5049,10 +5154,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --comment_ids=<comment_ids>  : (str, list) one or more comment_id to hide.
             --wallet_id=<wallet_id>      : (str) restrict operation to specific wallet
 
-        Returns:
-            (dict) keyed by comment_id, containing success info
-            '<comment_id>': {
-                "hidden": (bool)  flag indicating if comment_id was hidden
+        Returns: lists containing the ids comments that are hidden and visible.
+
+            {
+                "hidden":   (list) IDs of hidden comments.
+                "visible":  (list) IDs of visible comments.
             }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
@@ -5063,6 +5169,7 @@ class Daemon(metaclass=JSONRPCServerType):
         comments = await comment_client.jsonrpc_post(
             self.conf.comment_server, 'get_comments_by_id', comment_ids=comment_ids
         )
+        comments = comments['items']
         claim_ids = {comment['claim_id'] for comment in comments}
         claims = {cid: await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id=cid) for cid in claim_ids}
         pieces = []

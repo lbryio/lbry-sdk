@@ -108,7 +108,8 @@ def encode_file_doc():
         'metadata': '(dict) None if claim is not found else the claim metadata',
         'channel_claim_id': '(str) None if claim is not found or not signed',
         'channel_name': '(str) None if claim is not found or not signed',
-        'claim_name': '(str) None if claim is not found else the claim name'
+        'claim_name': '(str) None if claim is not found else the claim name',
+        'reflector_progress': '(int) reflector upload progress, 0 to 100'
     }
 
 
@@ -307,7 +308,8 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers.estimated_timestamp(tx_height),
-            'is_fully_reflected': managed_stream.is_fully_reflected
+            'is_fully_reflected': managed_stream.is_fully_reflected,
+            'reflector_progress': managed_stream.reflector_progress
         }
 
     def encode_claim(self, claim):

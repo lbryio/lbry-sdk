@@ -45,14 +45,6 @@ class TestSessions(IntegrationTestCase):
             await self.ledger.network.broadcast('13370042004200')
 
 
-class TestSegwitServer(IntegrationTestCase):
-    LEDGER = lbry.wallet
-    ENABLE_SEGWIT = True
-
-    async def test_at_least_it_starts(self):
-        await asyncio.wait_for(self.ledger.network.get_headers(0, 1), 1.0)
-
-
 class TestUsagePayment(CommandTestCase):
     async def test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
@@ -81,7 +73,7 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.1")
         with self.assertRaises(ServerPaymentFeeAboveMaxAllowedError):
-            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=3)
+            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=8)
 
         await node.stop(False)
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.0"})

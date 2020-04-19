@@ -39,8 +39,7 @@ from lbry.wallet.tasks import TaskGroup
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
-from .util import Concurrency
-from lbry.wallet.server.prometheus import NOTIFICATION_COUNT, RESPONSE_TIMES, REQUEST_ERRORS_COUNT
+from lbry.wallet.server.prometheus import NOTIFICATION_COUNT, RESPONSE_TIMES, REQUEST_ERRORS_COUNT, RESET_CONNECTIONS
 
 
 class Connector:
@@ -389,6 +388,7 @@ class RPCSession(SessionBase):
             except MemoryError:
                 self.logger.warning('received oversized message from %s:%s, dropping connection',
                                     self._address[0], self._address[1])
+                RESET_CONNECTIONS.labels(version=self.client_version).inc()
                 self._close()
                 return
 

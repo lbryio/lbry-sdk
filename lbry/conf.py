@@ -602,8 +602,6 @@ class Config(CLIConfig):
 
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
-    s3_headers_depth = Integer("download headers from s3 when the local height is more than 10 chunks behind", 96 * 10)
-    cache_time = Integer("Time to cache resolved claims", 150)  # TODO: use this
 
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)

@@ -46,7 +46,9 @@ class TestStreamAssembler(AsyncioTestCase):
         reflector.start_server(5566, '127.0.0.1')
         await reflector.started_listening.wait()
         self.addCleanup(reflector.stop_server)
+        self.assertEqual(0, self.stream.reflector_progress)
         sent = await self.stream.upload_to_reflector('127.0.0.1', 5566)
+        self.assertEqual(100, self.stream.reflector_progress)
         self.assertSetEqual(
             set(sent),
             set(map(lambda b: b.blob_hash,

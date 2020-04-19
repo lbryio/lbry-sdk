@@ -51,6 +51,13 @@ BLOCK_COUNT = Gauge(
     "block_count", "Number of processed blocks", namespace=NAMESPACE
 )
 BLOCK_UPDATE_TIMES = Histogram("block_time", "Block update times", namespace=NAMESPACE)
+REORG_COUNT = Gauge(
+    "reorg_count", "Number of reorgs", namespace=NAMESPACE
+)
+RESET_CONNECTIONS = Counter(
+    "reset_clients", "Number of reset connections by client version",
+    namespace=NAMESPACE, labelnames=("version",)
+)
 
 
 class PrometheusServer:
