@@ -33,11 +33,13 @@ def is_valid_public_ipv4(address, allow_localhost: bool = False):
         parsed_ip = ipaddress.ip_address(address)
         if parsed_ip.is_loopback and allow_localhost:
             return True
-        if parsed_ip.version != 4 or parsed_ip.is_unspecified or parsed_ip.is_link_local or parsed_ip.is_loopback or parsed_ip.is_multicast or parsed_ip.is_reserved or parsed_ip.is_private or parsed_ip.is_reserved:
-        	return False
+
+        if any(parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local, parsed_ip.is_loopback,
+               parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private, parsed_ip.is_reserved):
+            return False
         else:
-        	return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
-                        IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
+            return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
+                            IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
     except ipaddress.AddressValueError:
         return False
 
