@@ -74,7 +74,8 @@ class ManagedStream:
         'saving',
         'finished_writing',
         'started_writing',
-        'finished_write_attempt'
+        'finished_write_attempt',
+        'uploading_to_reflector'
     ]
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
@@ -103,6 +104,7 @@ class ManagedStream:
 
         self.fully_reflected = asyncio.Event(loop=self.loop)
         self.reflector_progress = 0
+        self.uploading_to_reflector = False
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
         self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
@@ -432,6 +434,7 @@ class ManagedStream:
         sent = []
         protocol = StreamReflectorClient(self.blob_manager, self.descriptor)
         try:
+            self.uploading_to_reflector = True
             await self.loop.create_connection(lambda: protocol, host, port)
             await protocol.send_handshake()
             sent_sd, needed = await protocol.send_descriptor()
@@ -458,6 +461,7 @@ class ManagedStream:
         finally:
             if protocol.transport:
                 protocol.transport.close()
+            self.uploading_to_reflector = False
         if not self.fully_reflected.is_set():
             self.fully_reflected.set()
             await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
