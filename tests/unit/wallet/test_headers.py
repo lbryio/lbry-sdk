@@ -192,6 +192,7 @@ class TestHeaders(AsyncioTestCase):
         reader_task = asyncio.create_task(reader())
         await writer()
         await reader_task
+        await headers.close()
 
 
 HEADERS = unhexlify(
