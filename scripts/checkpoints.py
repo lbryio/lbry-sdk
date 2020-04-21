@@ -1,4 +1,5 @@
 import asyncio
+import textwrap
 import os
 
 from lbry.extras.cli import ensure_directory_exists
@@ -24,11 +25,18 @@ async def main():
         return
     print(f"Headers file at {headers.height}, checkpointing up to {target}."
           f"Current checkpoint at {current_checkpoint_tip}.")
+    timestamps = []
     with open(outpath, 'w') as outfile:
         print('HASHES = {', file=outfile)
         for height in range(0, target, 1000):
+            timestamps.append((await headers.get(height))['timestamp'])
             print(f"    {height}: '{headers.chunk_hash(height, 1000)}',", file=outfile)
         print('}', file=outfile)
+        print('CHUNK_TIMES = [', file=outfile)
+        for line in textwrap.wrap(f'{", ".join(map(str, timestamps))}', 120, initial_indent=' '*4, subsequent_indent=' '*4):
+            print(line, file=outfile)
+        print(']', file=outfile)
+
 
 
 if __name__ == "__main__":

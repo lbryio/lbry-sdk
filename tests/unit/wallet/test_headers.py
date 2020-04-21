@@ -153,6 +153,15 @@ class TestHeaders(AsyncioTestCase):
         self.assertIsNone(headers.estimated_timestamp(0))
         self.assertIsNotNone(headers.estimated_timestamp(1))
 
+    def test_estimate_from_checkpoints(self):
+        headers = _Headers(':memory:')  # here we use the real version, with checkpoints
+        # check estimations matches real timestamps (LBRY, main net) by at most 20 minutes
+        self.assertAlmostEqual(headers.estimated_timestamp(101010), 1482899706, delta=60 * 20)
+        self.assertAlmostEqual(headers.estimated_timestamp(505050), 1547865484, delta=60 * 20)
+        self.assertAlmostEqual(headers.estimated_timestamp(707070), 1580258295, delta=60 * 20)
+        # tip uses old algorithm as the range doesnt exist
+        self.assertIsNotNone(headers.estimated_timestamp(max(headers.checkpoints.keys())))
+
     async def test_misalignment_triggers_repair_on_open(self):
         headers = Headers(':memory:')
         headers.io.seek(0)

@@ -13,7 +13,7 @@ from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha512, double_sha256, ripemd160
 from lbry.wallet.util import ArithUint256, date_to_julian_day
-from .checkpoints import HASHES
+from .checkpoints import HASHES, CHUNK_TIMES
 
 
 log = logging.getLogger(__name__)
@@ -138,7 +138,13 @@ class Headers:
     def estimated_timestamp(self, height):
         if height <= 0:
             return
-        return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
+        if height >= max(self.checkpoints.keys()):
+            return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
+        chunk_index = min(height // 1000, len(CHUNK_TIMES) - 1)
+        offset = height - chunk_index * 1000
+        chunk_start_time = CHUNK_TIMES[chunk_index]
+        chunk_end_time = CHUNK_TIMES[chunk_index + 1]
+        return int(offset * ((chunk_end_time - chunk_start_time) / 1000) + chunk_start_time)
 
     def estimated_julian_day(self, height):
         return date_to_julian_day(date.fromtimestamp(self.estimated_timestamp(height)))
