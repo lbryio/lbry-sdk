@@ -929,7 +929,7 @@ class Ledger(metaclass=LedgerRegistry):
             item = {
                 'txid': tx.id,
                 'timestamp': ts,
-                'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
+                'date': datetime.utcfromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
                 'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
