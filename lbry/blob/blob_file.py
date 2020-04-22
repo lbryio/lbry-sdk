@@ -110,7 +110,7 @@ class AbstractBlob:
                 if reader in self.readers:
                     self.readers.remove(reader)
 
-    def _write_blob(self, blob_bytes: bytes):
+    def _write_blob(self, blob_bytes: bytes) -> asyncio.Task:
         raise NotImplementedError()
 
     def set_length(self, length) -> None:
@@ -198,11 +198,17 @@ class AbstractBlob:
     def save_verified_blob(self, verified_bytes: bytes):
         if self.verified.is_set():
             return
-        if self.is_writeable():
-            self._write_blob(verified_bytes)
+
+        def update_events(_):
             self.verified.set()
+            self.writing.clear()
+
+        if self.is_writeable():
+            self.writing.set()
+            task = self._write_blob(verified_bytes)
+            task.add_done_callback(update_events)
             if self.blob_completed_callback:
-                self.blob_completed_callback(self)
+                task.add_done_callback(lambda _: self.blob_completed_callback(self))
 
     def get_blob_writer(self, peer_address: typing.Optional[str] = None,
                         peer_port: typing.Optional[int] = None) -> HashBlobWriter:
@@ -261,9 +267,11 @@ class BlobBuffer(AbstractBlob):
             self.verified.clear()
 
     def _write_blob(self, blob_bytes: bytes):
-        if self._verified_bytes:
-            raise OSError("already have bytes for blob")
-        self._verified_bytes = BytesIO(blob_bytes)
+        async def write():
+            if self._verified_bytes:
+                raise OSError("already have bytes for blob")
+            self._verified_bytes = BytesIO(blob_bytes)
+        return self.loop.create_task(write())
 
     def delete(self):
         if self._verified_bytes:
@@ -319,8 +327,14 @@ class BlobFile(AbstractBlob):
             handle.close()
 
     def _write_blob(self, blob_bytes: bytes):
-        with open(self.file_path, 'wb') as f:
-            f.write(blob_bytes)
+        def _write_blob():
+            with open(self.file_path, 'wb') as f:
+                f.write(blob_bytes)
+
+        async def write_blob():
+            await self.loop.run_in_executor(None, _write_blob)
+
+        return self.loop.create_task(write_blob())
 
     def delete(self):
         if os.path.isfile(self.file_path):
