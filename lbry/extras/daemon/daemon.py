@@ -2237,7 +2237,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
-        if 'is_spent' not in kwargs:
+        if not kwargs.get('is_spent', False):
             kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(**kwargs)
 
