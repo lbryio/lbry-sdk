@@ -331,6 +331,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         self.need_connection_status_refresh = asyncio.Event()
         self._connection_status_task: Optional[asyncio.Task] = None
+        self._received_requests_counter = 0
+        self._in_flight_requests: typing.Dict[int, typing.Tuple[str, float, typing.Tuple, typing.Dict]] = {}
 
     @property
     def dht_node(self) -> typing.Optional['Node']:
@@ -363,7 +365,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        not_grouped = ['routing_table_get', 'ffmpeg_find']
+        not_grouped = ['routing_table_get', 'ffmpeg_find', 'debug_in_flight']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -615,6 +617,8 @@ class Daemon(metaclass=JSONRPCServerType):
         return await self.stream_manager.stream_partial_content(request, sd_hash)
 
     async def _process_rpc_call(self, data):
+        request_id = int(self._received_requests_counter)
+        self._received_requests_counter += 1
         args = data.get('params', {})
 
         try:
@@ -663,7 +667,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 JSONRPCError.CODE_INVALID_PARAMS,
                 params_error_message,
             )
-
+        self._in_flight_requests[request_id] = (function_name, time.perf_counter(), _args, _kwargs)
         try:
             result = method(self, *_args, **_kwargs)
             if asyncio.iscoroutine(result):
@@ -677,6 +681,8 @@ class Daemon(metaclass=JSONRPCServerType):
             return JSONRPCError.create_command_exception(
                 command=function_name, args=_args, kwargs=_kwargs, exception=e, traceback=format_exc()
             )
+        finally:
+            del self._in_flight_requests[request_id]
 
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:
@@ -895,6 +901,7 @@ class Daemon(metaclass=JSONRPCServerType):
         ffmpeg_status = await self._video_file_analyzer.status()
         running_components = self.component_manager.get_components_status()
         response = {
+            'requests_in_flight': len(self._in_flight_requests),
             'installation_id': self.installation_id,
             'is_running': all(running_components.values()),
             'skipped_components': self.component_manager.skip_components,
@@ -910,6 +917,25 @@ class Daemon(metaclass=JSONRPCServerType):
             if status:
                 response[component.component_name] = status
         return response
+
+    def jsonrpc_debug_in_flight(self):
+        """
+        Debug currently in flight api requests
+
+        Usage:
+            debug_in_flight
+
+        Options:
+            None
+
+        Returns:
+            (dict) Dictionary of in flight requests
+        """
+        now = time.perf_counter()
+        return {
+            f"{method}-{req_id}": now - started_ts
+            for req_id, (method, started_ts, _, _) in self._in_flight_requests.items()
+        }
 
     def jsonrpc_version(self):  # pylint: disable=no-self-use
         """
