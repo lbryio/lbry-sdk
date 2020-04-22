@@ -153,6 +153,16 @@ class TestHeaders(AsyncioTestCase):
         self.assertIsNone(headers.estimated_timestamp(0))
         self.assertIsNotNone(headers.estimated_timestamp(1))
 
+    async def test_dont_estimate_whats_there(self):
+        headers = Headers(':memory:')
+        await headers.open()
+        estimated = headers.estimated_timestamp(10)
+        await headers.connect(0, HEADERS)
+        real_time = (await headers.get(10))['timestamp']
+        after_downloading_header_estimated = headers.estimated_timestamp(10)
+        self.assertNotEqual(estimated, after_downloading_header_estimated)
+        self.assertEqual(after_downloading_header_estimated, real_time)
+
     async def test_misalignment_triggers_repair_on_open(self):
         headers = Headers(':memory:')
         headers.io.seek(0)

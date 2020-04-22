@@ -136,6 +136,9 @@ class Headers:
     def estimated_timestamp(self, height):
         if height <= 0:
             return
+        if self.has_header(height):
+            offset = height * self.header_size
+            return struct.unpack('<I', self.io.getbuffer()[offset + 100: offset + 104])[0]
         return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
 
     def estimated_julian_day(self, height):
@@ -162,7 +165,7 @@ class Headers:
 
     async def ensure_chunk_at(self, height):
         async with self.check_chunk_lock:
-            if await self.has_header(height):
+            if self.has_header(height):
                 log.debug("has header %s", height)
                 return
             return await self.fetch_chunk(height)
@@ -186,7 +189,7 @@ class Headers:
             f"Checkpoint mismatch at height {start}. Expected {self.checkpoints[start]}, but got {chunk_hash} instead."
         )
 
-    async def has_header(self, height):
+    def has_header(self, height):
         normalized_height = (height // 1000) * 1000
         if normalized_height in self.checkpoints:
             return normalized_height not in self.known_missing_checkpointed_chunks
