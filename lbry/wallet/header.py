@@ -5,7 +5,6 @@ import asyncio
 import logging
 import zlib
 from datetime import date
-from concurrent.futures.thread import ThreadPoolExecutor
 
 from io import BytesIO
 from typing import Optional, Iterator, Tuple, Callable
@@ -42,7 +41,7 @@ class Headers:
     validate_difficulty: bool = True
 
     def __init__(self, path) -> None:
-        self.io = BytesIO()
+        self.io = None
         self.path = path
         self._size: Optional[int] = None
         self.chunk_getter: Optional[Callable] = None
@@ -50,6 +49,7 @@ class Headers:
         self.check_chunk_lock = asyncio.Lock()
 
     async def open(self):
+        self.io = BytesIO()
         if self.path != ':memory:':
             if os.path.exists(self.path):
                 with open(self.path, 'r+b') as header_file:
@@ -133,16 +133,16 @@ class Headers:
         except struct.error:
             raise IndexError(f"failed to get {height}, at {len(self)}")
 
-    def estimated_timestamp(self, height):
+    def estimated_timestamp(self, height, try_real_headers=True):
         if height <= 0:
             return
-        if self.has_header(height):
+        if try_real_headers and self.has_header(height):
             offset = height * self.header_size
             return struct.unpack('<I', self.io.getbuffer()[offset + 100: offset + 104])[0]
         return int(self.first_block_timestamp + (height * self.timestamp_average_offset))
 
     def estimated_julian_day(self, height):
-        return date_to_julian_day(date.fromtimestamp(self.estimated_timestamp(height)))
+        return date_to_julian_day(date.fromtimestamp(self.estimated_timestamp(height, False)))
 
     async def get_raw_header(self, height) -> bytes:
         if self.chunk_getter:

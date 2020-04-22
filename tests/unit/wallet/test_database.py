@@ -211,6 +211,7 @@ class TestQueries(AsyncioTestCase):
             'db': Database(':memory:'),
             'headers': Headers(':memory:')
         })
+        await self.ledger.headers.open()
         self.wallet = Wallet()
         await self.ledger.db.open()
 
