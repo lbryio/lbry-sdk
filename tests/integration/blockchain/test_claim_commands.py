@@ -661,12 +661,15 @@ class ClaimCommands(ClaimTestCase):
         channel_id = self.get_claim_id(await self.channel_create())
         stream_id = self.get_claim_id(await self.stream_create())
 
+        await self.stream_update(stream_id, title='foo')
+
         # type filtering
         r = await self.claim_list(claim_type='channel')
         self.assertEqual(1, len(r))
         self.assertEqual('channel', r[0]['value_type'])
 
-        r = await self.claim_list(claim_type='stream')
+        # catch a bug where cli sends is_spent=False by default
+        r = await self.claim_list(claim_type='stream', is_spent=False)
         self.assertEqual(1, len(r))
         self.assertEqual('stream', r[0]['value_type'])
 
