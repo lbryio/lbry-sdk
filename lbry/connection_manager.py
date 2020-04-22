@@ -42,8 +42,7 @@ class ConnectionManager:
             self.outgoing_connected.add(host_and_port)
 
     def connection_received(self, host_and_port: str):
-        # self.incoming_connected.add(host_and_port)
-        pass
+        self.incoming_connected.add(host_and_port)
 
     def outgoing_connection_lost(self, host_and_port: str):
         if self._running and host_and_port in self.outgoing_connected:
@@ -62,7 +61,9 @@ class ConnectionManager:
             'total_sent': 0,
             'total_received': 0,
             'max_incoming_mbs': 0.0,
-            'max_outgoing_mbs': 0.0
+            'max_outgoing_mbs': 0.0,
+            'outbound_connections': 0,
+            'incoming_connections': 0
         }
 
         while True:
@@ -87,6 +88,8 @@ class ConnectionManager:
             self._max_outgoing_mbs = max(self._max_outgoing_mbs, self._status['total_outgoing_mbs'])
             self._status['max_incoming_mbs'] = self._max_incoming_mbs
             self._status['max_outgoing_mbs'] = self._max_outgoing_mbs
+            self._status['outbound_connections'] = len(self.outgoing_connected)
+            self._status['incoming_connections'] = len(self.incoming_connected)
 
     def stop(self):
         if self._task:
