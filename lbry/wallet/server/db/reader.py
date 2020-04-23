@@ -547,10 +547,10 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
         if for_count or attr == 'tag':
             if attr == 'tag':
                 any_queries[f'#_any_{attr}'] = f"""
-                    (claim.claim_type != {CLAIM_TYPES['repost']}
+                    ((claim.claim_type != {CLAIM_TYPES['repost']}
                      AND claim.claim_hash IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))) OR
                     (claim.claim_type == {CLAIM_TYPES['repost']} AND
-                     claim.reposted_claim_hash IN (SELECT claim_hash FROM tag WHERE tag IN ({values})))
+                     claim.reposted_claim_hash IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))))
                 """
             else:
                 any_queries[f'#_any_{attr}'] = f"""
@@ -606,10 +606,10 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
         if for_count:
             if attr == 'tag':
                 constraints[f'#_not_{attr}'] = f"""
-                    (claim.claim_type != {CLAIM_TYPES['repost']}
-                     AND claim.claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))) AND
+                    ((claim.claim_type != {CLAIM_TYPES['repost']}
+                     AND claim.claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))) OR
                     (claim.claim_type == {CLAIM_TYPES['repost']} AND
-                     claim.reposted_claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values})))
+                     claim.reposted_claim_hash NOT IN (SELECT claim_hash FROM tag WHERE tag IN ({values}))))
                 """
             else:
                 constraints[f'#_not_{attr}'] = f"""
