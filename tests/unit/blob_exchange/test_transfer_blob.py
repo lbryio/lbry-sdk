@@ -130,10 +130,14 @@ class TestBlobExchange(BlobExchangeTestBase):
         write_blob = blob._write_blob
         write_called_count = 0
 
-        def wrap_write_blob(blob_bytes):
+        async def _wrap_write_blob(blob_bytes):
             nonlocal write_called_count
             write_called_count += 1
-            write_blob(blob_bytes)
+            await write_blob(blob_bytes)
+
+        def wrap_write_blob(blob_bytes):
+            return asyncio.create_task(_wrap_write_blob(blob_bytes))
+
         blob._write_blob = wrap_write_blob
 
         writer1 = blob.get_blob_writer(peer_port=1)
@@ -166,6 +170,7 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         self.assertDictEqual({1: mock_blob_bytes, 2: mock_blob_bytes}, results)
         self.assertEqual(1, write_called_count)
+        await blob.verified.wait()
         self.assertTrue(blob.get_is_verified())
         self.assertDictEqual({}, blob.writers)
 

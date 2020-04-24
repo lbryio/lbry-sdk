@@ -343,9 +343,10 @@ class ManagedStream:
                 self.streaming.clear()
 
     @staticmethod
-    def _write_decrypted_blob(handle: typing.IO, data: bytes):
-        handle.write(data)
-        handle.flush()
+    def _write_decrypted_blob(output_path: str, data: bytes):
+        with open(output_path, 'ab') as handle:
+            handle.write(data)
+            handle.flush()
 
     async def _save_file(self, output_path: str):
         log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
@@ -355,12 +356,12 @@ class ManagedStream:
         self.finished_writing.clear()
         self.started_writing.clear()
         try:
-            with open(output_path, 'wb') as file_write_handle:
-                async for blob_info, decrypted in self._aiter_read_stream(connection_id=self.SAVING_ID):
-                    log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
-                    await self.loop.run_in_executor(None, self._write_decrypted_blob, file_write_handle, decrypted)
-                    if not self.started_writing.is_set():
-                        self.started_writing.set()
+            open(output_path, 'wb').close()
+            async for blob_info, decrypted in self._aiter_read_stream(connection_id=self.SAVING_ID):
+                log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
+                await self.loop.run_in_executor(None, self._write_decrypted_blob, output_path, decrypted)
+                if not self.started_writing.is_set():
+                    self.started_writing.set()
             await self.update_status(ManagedStream.STATUS_FINISHED)
             if self.analytics_manager:
                 self.loop.create_task(self.analytics_manager.send_download_finished(
