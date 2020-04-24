@@ -10,7 +10,8 @@ import aiohttp
 from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.util import hex_to_bytes, class_logger
 from lbry.wallet.rpc import JSONRPC
-from lbry.wallet.server.prometheus import LBRYCRD_REQUEST_TIMES, LBRYCRD_PENDING_COUNT
+from lbry.wallet.server import prometheus
+
 
 class DaemonError(Exception):
     """Raised when the daemon returns an error in its results."""
@@ -129,7 +130,7 @@ class Daemon:
         while True:
             try:
                 for method in methods:
-                    LBRYCRD_PENDING_COUNT.labels(method=method).inc()
+                    prometheus.METRICS.LBRYCRD_PENDING_COUNT.labels(method=method).inc()
                 result = await self._send_data(data)
                 result = processor(result)
                 if on_good_message:
@@ -154,7 +155,7 @@ class Daemon:
                 on_good_message = 'running normally'
             finally:
                 for method in methods:
-                    LBRYCRD_PENDING_COUNT.labels(method=method).dec()
+                    prometheus.METRICS.LBRYCRD_PENDING_COUNT.labels(method=method).dec()
             await asyncio.sleep(retry)
             retry = max(min(self.max_retry, retry * 2), self.init_retry)
 
@@ -175,7 +176,7 @@ class Daemon:
         if params:
             payload['params'] = params
         result = await self._send(payload, processor)
-        LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter() - start)
+        prometheus.METRICS.LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter() - start)
         return result
 
     async def _send_vector(self, method, params_iterable, replace_errs=False):
@@ -200,7 +201,7 @@ class Daemon:
         result = []
         if payload:
             result = await self._send(payload, processor)
-        LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter()-start)
+        prometheus.METRICS.LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter()-start)
         return result
 
     async def _is_rpc_available(self, method):

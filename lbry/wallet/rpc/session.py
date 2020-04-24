@@ -39,7 +39,7 @@ from lbry.wallet.tasks import TaskGroup
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
-from lbry.wallet.server.prometheus import NOTIFICATION_COUNT, RESPONSE_TIMES, REQUEST_ERRORS_COUNT, RESET_CONNECTIONS
+from lbry.wallet.server import prometheus
 
 
 class Connector:
@@ -388,7 +388,7 @@ class RPCSession(SessionBase):
             except MemoryError:
                 self.logger.warning('received oversized message from %s:%s, dropping connection',
                                     self._address[0], self._address[1])
-                RESET_CONNECTIONS.labels(version=self.client_version).inc()
+                prometheus.METRICS.RESET_CONNECTIONS.labels(version=self.client_version).inc()
                 self._close()
                 return
 
@@ -422,7 +422,7 @@ class RPCSession(SessionBase):
                               'internal server error')
         if isinstance(request, Request):
             message = request.send_result(result)
-            RESPONSE_TIMES.labels(
+            prometheus.METRICS.RESPONSE_TIMES.labels(
                 method=request.method,
                 version=self.client_version
             ).observe(time.perf_counter() - start)
@@ -430,7 +430,7 @@ class RPCSession(SessionBase):
                 await self._send_message(message)
         if isinstance(result, Exception):
             self._bump_errors()
-            REQUEST_ERRORS_COUNT.labels(
+            prometheus.METRICS.REQUEST_ERRORS_COUNT.labels(
                 method=request.method,
                 version=self.client_version
             ).inc()
@@ -467,7 +467,7 @@ class RPCSession(SessionBase):
     async def send_notification(self, method, args=()):
         """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
-        NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
+        prometheus.METRICS.NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
         await self._send_message(message)
 
     def send_batch(self, raise_errors=False):
