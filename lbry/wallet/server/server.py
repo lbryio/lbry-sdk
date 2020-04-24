@@ -7,7 +7,6 @@ import typing
 import lbry
 from lbry.wallet.server.mempool import MemPool, MemPoolAPI
 from lbry.prometheus import PrometheusServer
-from lbry.wallet.server.prometheus import METRICS
 
 
 class Notifications:
@@ -93,7 +92,6 @@ class Server:
         )
 
     async def start(self):
-        METRICS.install()
         env = self.env
         min_str, max_str = env.coin.SESSIONCLS.protocol_min_max_strings()
         self.log.info(f'software version: {lbry.__version__}')
@@ -123,7 +121,6 @@ class Server:
             self.prometheus_server = None
         self.shutdown_event.set()
         await self.daemon.close()
-        METRICS.uninstall()
 
     def run(self):
         loop = asyncio.get_event_loop()

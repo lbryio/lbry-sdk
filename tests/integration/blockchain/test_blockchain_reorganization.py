@@ -2,7 +2,6 @@ import logging
 import asyncio
 from binascii import hexlify
 from lbry.testcase import CommandTestCase
-from lbry.wallet.server import prometheus
 
 
 class BlockchainReorganizationTests(CommandTestCase):
@@ -16,7 +15,8 @@ class BlockchainReorganizationTests(CommandTestCase):
         )
 
     async def test_reorg(self):
-        prometheus.METRICS.REORG_COUNT.set(0)
+        bp = self.conductor.spv_node.server.bp
+        bp.reorg_count_metric.set(0)
         # invalidate current block, move forward 2
         self.assertEqual(self.ledger.headers.height, 206)
         await self.assertBlockHash(206)
@@ -26,7 +26,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertEqual(self.ledger.headers.height, 207)
         await self.assertBlockHash(206)
         await self.assertBlockHash(207)
-        self.assertEqual(1, prometheus.METRICS.REORG_COUNT._samples()[0][2])
+        self.assertEqual(1, bp.reorg_count_metric._samples()[0][2])
 
         # invalidate current block, move forward 3
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
@@ -36,7 +36,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.assertBlockHash(206)
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
-        self.assertEqual(2, prometheus.METRICS.REORG_COUNT._samples()[0][2])
+        self.assertEqual(2, bp.reorg_count_metric._samples()[0][2])
 
     async def test_reorg_change_claim_height(self):
         # sanity check

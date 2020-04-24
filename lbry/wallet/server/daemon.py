@@ -6,11 +6,11 @@ from functools import wraps
 from pylru import lrucache
 
 import aiohttp
+from prometheus_client import Gauge, Histogram
 
 from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.util import hex_to_bytes, class_logger
 from lbry.wallet.rpc import JSONRPC
-from lbry.wallet.server import prometheus
 
 
 class DaemonError(Exception):
@@ -25,11 +25,22 @@ class WorkQueueFullError(Exception):
     """Internal - when the daemon's work queue is full."""
 
 
+NAMESPACE = "wallet_server"
+
+
 class Daemon:
     """Handles connections to a daemon at the given URL."""
 
     WARMING_UP = -28
     id_counter = itertools.count()
+
+    lbrycrd_request_time_metric = Histogram(
+        "lbrycrd_request", "lbrycrd requests count", namespace=NAMESPACE, labelnames=("method",)
+    )
+    lbrycrd_pending_count_metric = Gauge(
+        "lbrycrd_pending_count", "Number of lbrycrd rpcs that are in flight", namespace=NAMESPACE,
+        labelnames=("method",)
+    )
 
     def __init__(self, coin, url, max_workqueue=10, init_retry=0.25,
                  max_retry=4.0):
@@ -130,7 +141,7 @@ class Daemon:
         while True:
             try:
                 for method in methods:
-                    prometheus.METRICS.LBRYCRD_PENDING_COUNT.labels(method=method).inc()
+                    self.lbrycrd_pending_count_metric.labels(method=method).inc()
                 result = await self._send_data(data)
                 result = processor(result)
                 if on_good_message:
@@ -155,7 +166,7 @@ class Daemon:
                 on_good_message = 'running normally'
             finally:
                 for method in methods:
-                    prometheus.METRICS.LBRYCRD_PENDING_COUNT.labels(method=method).dec()
+                    self.lbrycrd_pending_count_metric.labels(method=method).dec()
             await asyncio.sleep(retry)
             retry = max(min(self.max_retry, retry * 2), self.init_retry)
 
@@ -176,7 +187,7 @@ class Daemon:
         if params:
             payload['params'] = params
         result = await self._send(payload, processor)
-        prometheus.METRICS.LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter() - start)
+        self.lbrycrd_request_time_metric.labels(method=method).observe(time.perf_counter() - start)
         return result
 
     async def _send_vector(self, method, params_iterable, replace_errs=False):
@@ -201,7 +212,7 @@ class Daemon:
         result = []
         if payload:
             result = await self._send(payload, processor)
-        prometheus.METRICS.LBRYCRD_REQUEST_TIMES.labels(method=method).observe(time.perf_counter()-start)
+        self.lbrycrd_request_time_metric.labels(method=method).observe(time.perf_counter() - start)
         return result
 
     async def _is_rpc_available(self, method):

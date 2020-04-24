@@ -3,6 +3,7 @@ import logging
 import asyncio
 import sqlite3
 import platform
+import time
 from binascii import hexlify
 from dataclasses import dataclass
 from contextvars import ContextVar
@@ -10,6 +11,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from concurrent.futures.process import ProcessPoolExecutor
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 from datetime import date
+from prometheus_client import Gauge
 
 from .bip32 import PubKey
 from .transaction import Transaction, Output, OutputScript, TXRefImmutable
@@ -64,6 +66,13 @@ else:
 class AIOSQLite:
     reader_executor: ReaderExecutorClass
 
+    waiting_writes_metric = Gauge(
+        "waiting_writes_count", "Number of waiting db writes", namespace="daemon_database"
+    )
+    waiting_reads_metric = Gauge(
+        "waiting_reads_count", "Number of waiting db writes", namespace="daemon_database"
+    )
+
     def __init__(self):
         # has to be single threaded as there is no mapping of thread:connection
         self.writer_executor = ThreadPoolExecutor(max_workers=1)
@@ -117,6 +126,7 @@ class AIOSQLite:
         still_waiting = False
         urgent_read = False
         if read_only:
+            self.waiting_reads_metric.inc()
             try:
                 while self.writers:  # more writes can come in while we are waiting for the first
                     if not urgent_read and still_waiting and self.urgent_read_done.is_set():
@@ -133,6 +143,7 @@ class AIOSQLite:
                 if urgent_read:
                     #  unthrottle the writers if they had to be throttled
                     self.urgent_read_done.set()
+                self.waiting_reads_metric.dec()
         if fetch_all:
             return await self.run(lambda conn: conn.execute(sql, parameters).fetchall())
         return await self.run(lambda conn: conn.execute(sql, parameters).fetchone())
@@ -150,7 +161,12 @@ class AIOSQLite:
         return self.run(lambda conn: conn.execute(sql, parameters))
 
     async def run(self, fun, *args, **kwargs):
-        await self.urgent_read_done.wait()
+        self.waiting_writes_metric.inc()
+        try:
+            await self.urgent_read_done.wait()
+        except Exception as e:
+            self.waiting_writes_metric.dec()
+            raise e
         self.writers += 1
         self.read_ready.clear()
         try:
@@ -160,6 +176,7 @@ class AIOSQLite:
                 )
         finally:
             self.writers -= 1
+            self.waiting_writes_metric.dec()
             if not self.writers:
                 self.read_ready.set()
 
