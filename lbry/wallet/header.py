@@ -51,10 +51,12 @@ class Headers:
     async def open(self):
         self.io = BytesIO()
         if self.path != ':memory:':
-            if os.path.exists(self.path):
-                with open(self.path, 'r+b') as header_file:
-                    self.io.seek(0)
-                    self.io.write(header_file.read())
+            def _readit():
+                if os.path.exists(self.path):
+                    with open(self.path, 'r+b') as header_file:
+                        self.io.seek(0)
+                        self.io.write(header_file.read())
+            await asyncio.get_event_loop().run_in_executor(None, _readit)
         bytes_size = self.io.seek(0, os.SEEK_END)
         self._size = bytes_size // self.header_size
         max_checkpointed_height = max(self.checkpoints.keys() or [-1]) + 1000
@@ -69,9 +71,11 @@ class Headers:
 
     async def close(self):
         if self.io is not None:
-            flags = 'r+b' if os.path.exists(self.path) else 'w+b'
-            with open(self.path, flags) as header_file:
-                header_file.write(self.io.getbuffer())
+            def _close():
+                flags = 'r+b' if os.path.exists(self.path) else 'w+b'
+                with open(self.path, flags) as header_file:
+                    header_file.write(self.io.getbuffer())
+            await asyncio.get_event_loop().run_in_executor(None, _close)
             self.io.close()
             self.io = None
 
