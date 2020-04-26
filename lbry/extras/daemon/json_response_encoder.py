@@ -127,9 +127,7 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_account(obj)
         if isinstance(obj, Wallet):
             return self.encode_wallet(obj)
-        if isinstance(obj, ManagedStream):
-            return self.encode_file(obj)
-        if isinstance(obj, TorrentSource):
+        if isinstance(obj, (ManagedStream, TorrentSource)):
             return self.encode_file(obj)
         if isinstance(obj, Transaction):
             return self.encode_transaction(obj)
@@ -282,26 +280,26 @@ class JSONResponseEncoder(JSONEncoder):
             total_bytes = managed_stream.descriptor.upper_bound_decrypted_length()
         else:
             total_bytes_lower_bound = total_bytes = managed_stream.torrent_length
-        return {
-            'streaming_url': managed_stream.stream_url if is_stream else f'file://{managed_stream.full_path}',
+        result = {
+            'streaming_url': None,
             'completed': managed_stream.completed,
-            'file_name': managed_stream.file_name if output_exists else None,
-            'download_directory': managed_stream.download_directory if output_exists else None,
-            'download_path': managed_stream.full_path if output_exists else None,
+            'file_name': None,
+            'download_directory': None,
+            'download_path': None,
             'points_paid': 0.0,
             'stopped': not managed_stream.running,
-            'stream_hash': managed_stream.stream_hash if is_stream else None,
-            'stream_name': managed_stream.descriptor.stream_name if is_stream else None,
-            'suggested_file_name': managed_stream.descriptor.suggested_file_name if is_stream else None,
-            'sd_hash': managed_stream.descriptor.sd_hash if is_stream else None,
-            'mime_type': managed_stream.mime_type if is_stream else None,
-            'key': managed_stream.descriptor.key if is_stream else None,
+            'stream_hash': None,
+            'stream_name': None,
+            'suggested_file_name': None,
+            'sd_hash': None,
+            'mime_type': None,
+            'key': None,
             'total_bytes_lower_bound': total_bytes_lower_bound,
             'total_bytes': total_bytes,
-            'written_bytes': managed_stream.written_bytes if is_stream else managed_stream.written_bytes,
-            'blobs_completed': managed_stream.blobs_completed if is_stream else None,
-            'blobs_in_stream': managed_stream.blobs_in_stream if is_stream else None,
-            'blobs_remaining': managed_stream.blobs_remaining if is_stream else None,
+            'written_bytes': managed_stream.written_bytes,
+            'blobs_completed': None,
+            'blobs_in_stream': None,
+            'blobs_remaining': None,
             'status': managed_stream.status,
             'claim_id': managed_stream.claim_id,
             'txid': managed_stream.txid,
@@ -318,10 +316,37 @@ class JSONResponseEncoder(JSONEncoder):
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
             'timestamp': self.ledger.headers.estimated_timestamp(tx_height),
-            'is_fully_reflected': managed_stream.is_fully_reflected if is_stream else False,
-            'reflector_progress': managed_stream.reflector_progress if is_stream else False,
-            'uploading_to_reflector': managed_stream.uploading_to_reflector if is_stream else False
+            'is_fully_reflected': False,
+            'reflector_progress': False,
+            'uploading_to_reflector': False
         }
+        if is_stream:
+            result.update({
+                'streaming_url': managed_stream.stream_url,
+                'stream_hash': managed_stream.stream_hash,
+                'stream_name': managed_stream.descriptor.stream_name,
+                'suggested_file_name': managed_stream.descriptor.suggested_file_name,
+                'sd_hash': managed_stream.descriptor.sd_hash,
+                'mime_type': managed_stream.mime_type,
+                'key': managed_stream.descriptor.key,
+                'blobs_completed': managed_stream.blobs_completed,
+                'blobs_in_stream': managed_stream.blobs_in_stream,
+                'blobs_remaining': managed_stream.blobs_remaining,
+                'is_fully_reflected': managed_stream.is_fully_reflected,
+                'reflector_progress': managed_stream.reflector_progress,
+                'uploading_to_reflector': managed_stream.uploading_to_reflector
+            })
+        else:
+            result.update({
+                'streaming_url': f'file://{managed_stream.full_path}',
+            })
+        if output_exists:
+            result.update({
+                'file_name': managed_stream.file_name,
+                'download_directory': managed_stream.download_directory,
+                'download_path': managed_stream.full_path,
+            })
+        return result
 
     def encode_claim(self, claim):
         encoded = getattr(claim, claim.claim_type).to_dict()
