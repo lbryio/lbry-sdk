@@ -95,21 +95,40 @@ class SourceManager:
             raise ValueError(f"'{comparison}' is not a valid comparison")
         if 'full_status' in search_by:
             del search_by['full_status']
+
         for search in search_by:
             if search not in self.filter_fields:
                 raise ValueError(f"'{search}' is not a valid search operation")
+
+        compare_sets = {}
+        if isinstance(search_by.get('claim_id'), list):
+            compare_sets['claim_ids'] = search_by.pop('claim_id')
+        if isinstance(search_by.get('outpoint'), list):
+            compare_sets['outpoints'] = search_by.pop('outpoint')
+        if isinstance(search_by.get('channel_claim_id'), list):
+            compare_sets['channel_claim_ids'] = search_by.pop('channel_claim_id')
+
         if search_by:
             comparison = comparison or 'eq'
-            sources = []
+            streams = []
             for stream in self._sources.values():
+                matched = False
+                for set_search, val in compare_sets.items():
+                    if COMPARISON_OPERATORS[comparison](getattr(stream, self.filter_fields[set_search]), val):
+                        streams.append(stream)
+                        matched = True
+                        break
+                if matched:
+                    continue
                 for search, val in search_by.items():
-                    if COMPARISON_OPERATORS[comparison](getattr(stream, search), val):
-                        sources.append(stream)
+                    this_stream = getattr(stream, search)
+                    if COMPARISON_OPERATORS[comparison](this_stream, val):
+                        streams.append(stream)
                         break
         else:
-            sources = list(self._sources.values())
+            streams = list(self._sources.values())
         if sort_by:
-            sources.sort(key=lambda s: getattr(s, sort_by))
+            streams.sort(key=lambda s: getattr(s, sort_by))
             if reverse:
-                sources.reverse()
-        return sources
+                streams.reverse()
+        return streams
