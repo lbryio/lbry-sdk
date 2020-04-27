@@ -8,7 +8,7 @@ install:
 	pip install -e .
 
 tools:
-	pip install mypy==0.701
+	pip install mypy==0.701 pylint==2.4.4
 	pip install coverage astroid pylint
 
 lint:
