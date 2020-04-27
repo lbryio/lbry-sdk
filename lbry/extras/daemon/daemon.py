@@ -2971,6 +2971,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
+
+        start = time.perf_counter()
+        log.info("got publish request for '%s'", name)
         self.valid_stream_name_or_error(name)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
         if kwargs.get('account_id'):
@@ -2980,6 +2983,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claims = await self.ledger.get_claims(
             wallet=wallet, accounts=accounts, claim_name=name
         )
+        log.info("got claim list for '%s' in %fs", name, time.perf_counter()-start)
         if len(claims) == 0:
             if 'bid' not in kwargs:
                 raise Exception("'bid' is a required argument for new publishes.")
@@ -3172,14 +3176,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
+        start = time.perf_counter()
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         self.valid_stream_name_or_error(name)
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
+        log.info("got channel for '%s' in %fs", name, time.perf_counter()-start)
+        start = time.perf_counter()
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
+        log.info("got claim address for '%s' in %fs", name, time.perf_counter()-start)
+        start = time.perf_counter()
         kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
         claims = await account.get_claims(claim_name=name)
@@ -3189,35 +3198,47 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"You already have a stream claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
                 )
-
+        log.info("checked claims for '%s' in %fs", name, time.perf_counter()-start)
+        start = time.perf_counter()
         file_path, spec = await self._video_file_analyzer.verify_or_repair(
             validate_file, optimize_file, file_path, ignore_non_video=True
         )
+        log.info("ran ffmpeg for '%s' in %fs", name, time.perf_counter()-start)
         kwargs.update(spec)
 
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
+        start = time.perf_counter()
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
-
+        log.info("created tx for '%s' in %fs", name, time.perf_counter()-start)
         file_stream = None
         if not preview:
+            start = time.perf_counter()
             file_stream = await self.stream_manager.create_stream(file_path)
             claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
+            log.info("created stream for '%s' in %fs", name, time.perf_counter() - start)
 
         if channel:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
         if not preview:
+            log.info("broadcast and release")
+            start = time.perf_counter()
             await self.broadcast_or_release(tx, blocking)
+            log.info("broadcast '%s' in %fs", name, time.perf_counter() - start)
+            start = time.perf_counter()
             await self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
             )])
+            log.info("saved claims '%s' in %fs", name, time.perf_counter() - start)
+            start = time.perf_counter()
             await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
+            log.info("saved content claim '%s' in %fs", name, time.perf_counter() - start)
             self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
