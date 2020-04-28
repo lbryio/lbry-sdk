@@ -16,7 +16,7 @@ from lbry.error import ResolveCensoredError
 from lbry.schema.url import URL, normalize_name
 from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs, Censor
-from lbry.wallet import Ledger, RegTestLedger
+from lbry.blockchain.ledger import Ledger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
 from .full_text_search import FTS_ORDER_BY
