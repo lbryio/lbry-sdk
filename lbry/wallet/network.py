@@ -87,7 +87,7 @@ class ClientSession(BaseClientSession):
             raise
         except asyncio.CancelledError:
             log.info("cancelled sending %s to %s:%i", method, *self.server)
-            self.synchronous_close()
+            # self.synchronous_close()
             raise
         finally:
             self.pending_amount -= 1
