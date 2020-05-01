@@ -6,9 +6,9 @@ from lbry.error import (
     ServerPaymentInvalidAddressError,
     ServerPaymentWalletLockedError
 )
-from lbry.wallet.dewies import lbc_to_dewies
-from lbry.wallet.stream import StreamController
-from lbry.wallet.transaction import Output, Transaction
+from lbry.blockchain.dewies import lbc_to_dewies
+from lbry.event import EventController
+from lbry.blockchain.transaction import Output, Transaction
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class WalletServerPayer:
         self.payment_period = payment_period
         self.analytics_manager = analytics_manager
         self.max_fee = max_fee
-        self._on_payment_controller = StreamController()
+        self._on_payment_controller = EventController()
         self.on_payment = self._on_payment_controller.stream
         self.on_payment.listen(None, on_error=lambda e: logging.warning(e.args[0]))
 

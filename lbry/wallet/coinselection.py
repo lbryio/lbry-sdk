@@ -1,16 +1,30 @@
 from random import Random
 from typing import List
 
-from lbry.wallet.transaction import OutputEffectiveAmountEstimator
+from lbry.blockchain.transaction import Input, Output
 
 MAXIMUM_TRIES = 100000
 
-STRATEGIES = []
+COIN_SELECTION_STRATEGIES = []
 
 
 def strategy(method):
-    STRATEGIES.append(method.__name__)
+    COIN_SELECTION_STRATEGIES.append(method.__name__)
     return method
+
+
+class OutputEffectiveAmountEstimator:
+
+    __slots__ = 'txo', 'txi', 'fee', 'effective_amount'
+
+    def __init__(self, ledger, txo: Output) -> None:
+        self.txo = txo
+        self.txi = Input.spend(txo)
+        self.fee: int = self.txi.get_fee(ledger)
+        self.effective_amount: int = txo.amount - self.fee
+
+    def __lt__(self, other):
+        return self.effective_amount < other.effective_amount
 
 
 class CoinSelector:

@@ -2,7 +2,6 @@ import os
 import time
 import json
 import logging
-import typing
 import asyncio
 import random
 from functools import partial
@@ -16,14 +15,15 @@ import ecdsa
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 
-from .bip32 import PrivateKey, PubKey, from_extended_key_string
-from .mnemonic import Mnemonic
-from .constants import COIN, CLAIM_TYPES, TXO_TYPES
-from .transaction import Transaction, Input, Output
+from lbry.crypto.bip32 import PrivateKey, PubKey, from_extended_key_string
+from lbry.constants import COIN
+from lbry.blockchain.transaction import Transaction, Input, Output
+from lbry.blockchain.ledger import Ledger
+from lbry.db import Database
+from lbry.db.constants import CLAIM_TYPE_CODES, TXO_TYPES
 
-if typing.TYPE_CHECKING:
-    from .ledger import Ledger
-    from .wallet import Wallet
+from .mnemonic import Mnemonic
+
 
 log = logging.getLogger(__name__)
 
@@ -71,12 +71,12 @@ class AddressManager:
     def to_dict_instance(self) -> Optional[dict]:
         raise NotImplementedError
 
-    def _query_addresses(self, **constraints):
-        return self.account.ledger.db.get_addresses(
-            accounts=[self.account],
+    async def _query_addresses(self, **constraints):
+        return (await self.account.db.get_addresses(
+            account=self.account,
             chain=self.chain_number,
             **constraints
-        )
+        ))[0]
 
     def get_private_key(self, index: int) -> PrivateKey:
         raise NotImplementedError
@@ -166,22 +166,22 @@ class HierarchicalDeterministic(AddressManager):
             start = addresses[0]['pubkey'].n+1 if addresses else 0
             end = start + (self.gap - existing_gap)
             new_keys = await self._generate_keys(start, end-1)
-            await self.account.ledger.announce_addresses(self, new_keys)
+            #await self.account.ledger.announce_addresses(self, new_keys)
             return new_keys
 
     async def _generate_keys(self, start: int, end: int) -> List[str]:
         if not self.address_generator_lock.locked():
             raise RuntimeError('Should not be called outside of address_generator_lock.')
         keys = [self.public_key.child(index) for index in range(start, end+1)]
-        await self.account.ledger.db.add_keys(self.account, self.chain_number, keys)
+        await self.account.db.add_keys(self.account, self.chain_number, keys)
         return [key.address for key in keys]
 
-    def get_address_records(self, only_usable: bool = False, **constraints):
+    async def get_address_records(self, only_usable: bool = False, **constraints):
         if only_usable:
             constraints['used_times__lt'] = self.maximum_uses_per_address
         if 'order_by' not in constraints:
             constraints['order_by'] = "used_times asc, n asc"
-        return self._query_addresses(**constraints)
+        return await self._query_addresses(**constraints)
 
 
 class SingleKey(AddressManager):
@@ -213,14 +213,14 @@ class SingleKey(AddressManager):
         async with self.address_generator_lock:
             exists = await self.get_address_records()
             if not exists:
-                await self.account.ledger.db.add_keys(self.account, self.chain_number, [self.public_key])
+                await self.account.db.add_keys(self.account, self.chain_number, [self.public_key])
                 new_keys = [self.public_key.address]
-                await self.account.ledger.announce_addresses(self, new_keys)
+                #await self.account.ledger.announce_addresses(self, new_keys)
                 return new_keys
             return []
 
-    def get_address_records(self, only_usable: bool = False, **constraints):
-        return self._query_addresses(**constraints)
+    async def get_address_records(self, only_usable: bool = False, **constraints):
+        return await self._query_addresses(**constraints)
 
 
 class Account:
@@ -233,12 +233,12 @@ class Account:
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: 'Ledger', wallet: 'Wallet', name: str,
+    def __init__(self, ledger: 'Ledger', db: 'Database', name: str,
                  seed: str, private_key_string: str, encrypted: bool,
                  private_key: Optional[PrivateKey], public_key: PubKey,
                  address_generator: dict, modified_on: float, channel_keys: dict) -> None:
         self.ledger = ledger
-        self.wallet = wallet
+        self.db = db
         self.id = public_key.address
         self.name = name
         self.seed = seed
@@ -253,8 +253,6 @@ class Account:
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {am.chain_number: am for am in {self.receiving, self.change}}
         self.channel_keys = channel_keys
-        ledger.add_account(self)
-        wallet.add_account(self)
 
     def get_init_vector(self, key) -> Optional[bytes]:
         init_vector = self.init_vectors.get(key, None)
@@ -263,9 +261,9 @@ class Account:
         return init_vector
 
     @classmethod
-    def generate(cls, ledger: 'Ledger', wallet: 'Wallet',
+    def generate(cls, ledger: 'Ledger', db: 'Database',
                  name: str = None, address_generator: dict = None):
-        return cls.from_dict(ledger, wallet, {
+        return cls.from_dict(ledger, db, {
             'name': name,
             'seed': cls.mnemonic_class().make_seed(),
             'address_generator': address_generator or {}
@@ -297,14 +295,14 @@ class Account:
         return seed, private_key, public_key
 
     @classmethod
-    def from_dict(cls, ledger: 'Ledger', wallet: 'Wallet', d: dict):
+    def from_dict(cls, ledger: 'Ledger', db: 'Database', d: dict):
         seed, private_key, public_key = cls.keys_from_dict(ledger, d)
         name = d.get('name')
         if not name:
             name = f'Account #{public_key.address}'
         return cls(
             ledger=ledger,
-            wallet=wallet,
+            db=db,
             name=name,
             seed=seed,
             private_key_string=d.get('private_key', ''),
@@ -328,7 +326,6 @@ class Account:
             if seed:
                 seed = aes_encrypt(encrypt_password, self.seed, self.get_init_vector('seed'))
         d = {
-            'ledger': self.ledger.get_id(),
             'name': self.name,
             'seed': seed,
             'encrypted': bool(self.encrypted or encrypt_password),
@@ -365,7 +362,6 @@ class Account:
         details = {
             'id': self.id,
             'name': self.name,
-            'ledger': self.ledger.get_id(),
             'coins': round(satoshis/COIN, 2),
             'satoshis': satoshis,
             'encrypted': self.encrypted,
@@ -436,15 +432,18 @@ class Account:
             addresses.extend(new_addresses)
         return addresses
 
+    async def get_address_records(self, **constraints):
+        return await self.db.get_addresses(account=self, **constraints)
+
     async def get_addresses(self, **constraints) -> List[str]:
-        rows = await self.ledger.db.select_addresses([text('account_address.address')], accounts=[self], **constraints)
+        rows, _ = await self.get_address_records(cols=['account_address.address'], **constraints)
         return [r['address'] for r in rows]
 
-    def get_address_records(self, **constraints):
-        return self.ledger.db.get_addresses(accounts=[self], **constraints)
-
-    def get_address_count(self, **constraints):
-        return self.ledger.db.get_address_count(accounts=[self], **constraints)
+    async def get_valid_receiving_address(self, default_address: str) -> str:
+        if default_address is None:
+            return await self.receiving.get_or_create_usable_address()
+        self.ledger.valid_address_or_error(default_address)
+        return default_address
 
     def get_private_key(self, chain: int, index: int) -> PrivateKey:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
@@ -459,7 +458,7 @@ class Account:
         if confirmations > 0:
             height = self.ledger.headers.height - (confirmations-1)
             constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.ledger.db.get_balance(accounts=[self], **constraints)
+        return self.db.get_balance(account=self, **constraints)
 
     async def get_max_gap(self):
         change_gap = await self.change.get_max_gap()
@@ -468,24 +467,6 @@ class Account:
             'max_change_gap': change_gap,
             'max_receiving_gap': receiving_gap,
         }
-
-    def get_txos(self, **constraints):
-        return self.ledger.get_txos(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_txo_count(self, **constraints):
-        return self.ledger.get_txo_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_utxos(self, **constraints):
-        return self.ledger.get_utxos(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_utxo_count(self, **constraints):
-        return self.ledger.get_utxo_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_transactions(self, **constraints):
-        return self.ledger.get_transactions(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_transaction_count(self, **constraints):
-        return self.ledger.get_transaction_count(wallet=self.wallet, accounts=[self], **constraints)
 
     async def fund(self, to_account, amount=None, everything=False,
                    outputs=1, broadcast=False, **constraints):
@@ -551,9 +532,9 @@ class Account:
             self.wallet.save()
 
     async def save_max_gap(self):
+        gap_changed = False
         if issubclass(self.address_generator, HierarchicalDeterministic):
             gap = await self.get_max_gap()
-            gap_changed = False
             new_receiving_gap = max(20, gap['max_receiving_gap'] + 1)
             if self.receiving.gap != new_receiving_gap:
                 self.receiving.gap = new_receiving_gap
@@ -562,8 +543,10 @@ class Account:
             if self.change.gap != new_change_gap:
                 self.change.gap = new_change_gap
                 gap_changed = True
-            if gap_changed:
-                self.wallet.save()
+        return gap_changed
+
+    def get_support_summary(self):
+        return self.db.get_supports_summary(account=self)
 
     async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0
@@ -571,7 +554,7 @@ class Account:
                                     include_claims=True)
         total = await get_total_balance()
         if reserved_subtotals:
-            claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPES)
+            claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPE_CODES)
             for txo in await self.get_support_summary():
                 if confirmations > 0 and not 0 < txo.tx_ref.height <= self.ledger.headers.height - (confirmations - 1):
                     continue
@@ -594,49 +577,3 @@ class Account:
                 'tips': tips_balance
             } if reserved_subtotals else None
         }
-
-    def get_transaction_history(self, **constraints):
-        return self.ledger.get_transaction_history(
-            wallet=self.wallet, accounts=[self], **constraints
-        )
-
-    def get_transaction_history_count(self, **constraints):
-        return self.ledger.get_transaction_history_count(
-            wallet=self.wallet, accounts=[self], **constraints
-        )
-
-    def get_claims(self, **constraints):
-        return self.ledger.get_claims(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_claim_count(self, **constraints):
-        return self.ledger.get_claim_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_streams(self, **constraints):
-        return self.ledger.get_streams(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_stream_count(self, **constraints):
-        return self.ledger.get_stream_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_channels(self, **constraints):
-        return self.ledger.get_channels(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_channel_count(self, **constraints):
-        return self.ledger.get_channel_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_collections(self, **constraints):
-        return self.ledger.get_collections(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_collection_count(self, **constraints):
-        return self.ledger.get_collection_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_supports(self, **constraints):
-        return self.ledger.get_supports(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_support_count(self, **constraints):
-        return self.ledger.get_support_count(wallet=self.wallet, accounts=[self], **constraints)
-
-    def get_support_summary(self):
-        return self.ledger.db.get_supports_summary(wallet=self.wallet, accounts=[self])
-
-    async def release_all_outputs(self):
-        await self.ledger.db.release_all_outputs(self)
