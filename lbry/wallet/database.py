@@ -137,15 +137,15 @@ class AIOSQLite:
     async def run(self, fun, *args, **kwargs):
         self.writers += 1
         self.read_ready.clear()
-        async with self.write_lock:
-            try:
+        try:
+            async with self.write_lock:
                 return await asyncio.get_event_loop().run_in_executor(
                     self.writer_executor, lambda: self.__run_transaction(fun, *args, **kwargs)
                 )
-            finally:
-                self.writers -= 1
-                if not self.writers:
-                    self.read_ready.set()
+        finally:
+            self.writers -= 1
+            if not self.writers:
+                self.read_ready.set()
 
     def __run_transaction(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs):
         self.writer_connection.execute('begin')
