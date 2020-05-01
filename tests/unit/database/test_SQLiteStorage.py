@@ -70,9 +70,9 @@ fake_claim_info = {
 
 class StorageTest(AsyncioTestCase):
     async def asyncSetUp(self):
-        self.conf = Config()
-        self.storage = SQLiteStorage(self.conf, ':memory:')
         self.blob_dir = tempfile.mkdtemp()
+        self.conf = Config.with_same_dir(self.blob_dir)
+        self.storage = SQLiteStorage(self.conf, ':memory:')
         self.addCleanup(shutil.rmtree, self.blob_dir)
         self.blob_manager = BlobManager(asyncio.get_event_loop(), self.blob_dir, self.storage, self.conf)
         await self.storage.open()

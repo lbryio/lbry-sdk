@@ -18,7 +18,7 @@ class TestBlob(AsyncioTestCase):
         self.tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(self.tmp_dir))
         self.loop = asyncio.get_running_loop()
-        self.config = Config()
+        self.config = Config.with_same_dir(self.tmp_dir)
         self.storage = SQLiteStorage(self.config, ":memory:", self.loop)
         self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage, self.config)
         await self.storage.open()

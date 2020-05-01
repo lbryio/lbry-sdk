@@ -10,7 +10,7 @@ from lbry.extras.daemon.components import HASH_ANNOUNCER_COMPONENT
 from lbry.extras.daemon.components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbry.extras.daemon.components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbry.extras.daemon.daemon import Daemon as LBRYDaemon
-from lbry.wallet import WalletManager, Wallet
+from lbry.wallet.manager import WalletManager, Wallet
 
 from tests import test_utils
 # from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager

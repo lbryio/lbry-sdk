@@ -3,7 +3,7 @@ import hashlib
 from lbry.extras.daemon.comment_client import sign_comment
 from lbry.extras.daemon.comment_client import is_comment_signed_by_channel
 
-from tests.unit.wallet.test_schema_signing import get_stream, get_channel
+from unit.schema.test_schema_signing import get_stream, get_channel
 
 
 class TestSigningComments(AsyncioTestCase):

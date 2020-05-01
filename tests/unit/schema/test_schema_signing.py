@@ -1,41 +1,25 @@
+from unittest import TestCase
 from binascii import unhexlify
 
-from lbry.testcase import AsyncioTestCase
-from lbry.wallet.constants import CENT, NULL_HASH32
-
-from lbry.wallet import Ledger, Headers, Transaction, Input, Output
-from lbry.db import Database
+from lbry.testcase import get_transaction
+from lbry.blockchain.ledger import Ledger
+from lbry.blockchain.transaction import Transaction, Output
+from lbry.constants import CENT
 from lbry.schema.claim import Claim
-
-
-def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
-    return Transaction() \
-        .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
-        .outputs[0]
-
-
-def get_input():
-    return Input.spend(get_output())
-
-
-def get_tx():
-    return Transaction().add_inputs([get_input()])
 
 
 def get_channel(claim_name='@foo'):
     channel_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
     channel_txo.generate_channel_private_key()
-    get_tx().add_outputs([channel_txo])
-    return channel_txo
+    return get_transaction(channel_txo).outputs[0]
 
 
 def get_stream(claim_name='foo'):
     stream_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
-    get_tx().add_outputs([stream_txo])
-    return stream_txo
+    return get_transaction(stream_txo).outputs[0]
 
 
-class TestSigningAndValidatingClaim(AsyncioTestCase):
+class TestSigningAndValidatingClaim(TestCase):
 
     def test_successful_create_sign_and_validate(self):
         channel = get_channel()
@@ -65,7 +49,7 @@ class TestSigningAndValidatingClaim(AsyncioTestCase):
         self.assertFalse(channel.is_channel_private_key(get_channel().private_key))
 
 
-class TestValidatingOldSignatures(AsyncioTestCase):
+class TestValidatingOldSignatures(TestCase):
 
     def test_signed_claim_made_by_ytsync(self):
         stream_tx = Transaction(unhexlify(
@@ -109,9 +93,4 @@ class TestValidatingOldSignatures(AsyncioTestCase):
         ))
         channel = channel_tx.outputs[0]
 
-        ledger = Ledger({
-            'db': Database(':memory:'),
-            'headers': Headers(':memory:')
-        })
-
-        self.assertTrue(stream.is_signed_by(channel, ledger))
+        self.assertTrue(stream.is_signed_by(channel, Ledger()))

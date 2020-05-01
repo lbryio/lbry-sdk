@@ -10,11 +10,10 @@ from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
-from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output
-from lbry.wallet.constants import CENT, NULL_HASH32
-from lbry.wallet.network import ClientSession
-from lbry.db import Database
-from lbry.conf import Config
+from lbry.blockchain.ledger import Ledger
+from lbry.blockchain.transaction import Transaction, Input, Output
+from lbry.constants import CENT, NULL_HASH32
+from lbry.service.full_node import FullNode
 from lbry.extras.daemon.analytics import AnalyticsManager
 from lbry.stream.stream_manager import StreamManager
 from lbry.stream.descriptor import StreamDescriptor
@@ -64,7 +63,7 @@ def get_claim_transaction(claim_name, claim=b''):
     )
 
 
-async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
+async def get_mock_wallet(sd_hash, storage, conf, balance=10.0, fee=None):
     claim = Claim()
     if fee:
         if fee['currency'] == 'LBC':
@@ -84,45 +83,26 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
     })
 
-    class FakeHeaders:
-        def estimated_timestamp(self, height):
-            return 1984
-
-        def __init__(self, height):
-            self.height = height
-
-        def __getitem__(self, item):
-            return {'timestamp': 1984}
-
-    wallet = Wallet()
-    ledger = Ledger({
-        'db': Database('sqlite:///:memory:'),
-        'headers': FakeHeaders(514082)
-    })
-    await ledger.db.open()
-    wallet.generate_account(ledger)
-    manager = WalletManager()
-    manager.config = Config()
-    manager.wallets.append(wallet)
-    manager.ledgers[Ledger] = ledger
-    manager.ledger.network.client = ClientSession(
-        network=manager.ledger.network, server=('fakespv.lbry.com', 50001)
-    )
+    service = FullNode(Ledger(conf), 'sqlite:///:memory:')
+    await service.db.open()
+    await service.wallet_manager.open()
 
     async def mock_resolve(*args, **kwargs):
         result = {txo.meta['permanent_url']: txo}
         claims = [
-            StreamManager._convert_to_old_resolve_output(manager, result)[txo.meta['permanent_url']]
+            StreamManager._convert_to_old_resolve_output(
+                service.wallet_manager, result
+            )[txo.meta['permanent_url']]
         ]
         await storage.save_claims(claims)
         return result
-    manager.ledger.resolve = mock_resolve
+    service.resolve = mock_resolve
 
     async def get_balance(*_):
         return balance
-    manager.get_balance = get_balance
+    service.get_balance = get_balance
 
-    return manager, txo.meta['permanent_url']
+    return service, txo.meta['permanent_url']
 
 
 class TestStreamManager(BlobExchangeTestBase):
@@ -138,8 +118,10 @@ class TestStreamManager(BlobExchangeTestBase):
             self.loop, self.server_blob_manager.blob_dir, file_path, old_sort=old_sort
         )
         self.sd_hash = descriptor.sd_hash
-        self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
-        self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
+        self.service, self.uri = await get_mock_wallet(
+            self.sd_hash, self.client_storage, self.client_config, balance, fee
+        )
+        self.stream_manager = StreamManager(self.loop, self.client_config, self.client_blob_manager, self.service,
                                             self.client_storage, get_mock_node(self.server_from_client),
                                             AnalyticsManager(self.client_config,
                                                              binascii.hexlify(generate_id()).decode(),

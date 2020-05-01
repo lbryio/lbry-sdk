@@ -1,16 +1,10 @@
+from unittest import TestCase
 from types import GeneratorType
 
-from lbry.testcase import AsyncioTestCase
-
-from lbry.wallet import Ledger, Headers
-from lbry.db import Database
-from lbry.wallet.coinselection import CoinSelector, MAXIMUM_TRIES
+from lbry.blockchain.ledger import RegTestLedger
+from lbry.wallet.coinselection import CoinSelector, OutputEffectiveAmountEstimator, MAXIMUM_TRIES
 from lbry.constants import CENT
-
-from tests.unit.wallet.test_transaction import get_output as utxo
-
-
-NULL_HASH = b'\x00'*32
+from lbry.testcase import get_output as utxo
 
 
 def search(*args, **kwargs):
@@ -18,21 +12,14 @@ def search(*args, **kwargs):
     return [o.txo.amount for o in selection] if selection else selection
 
 
-class BaseSelectionTestCase(AsyncioTestCase):
+class BaseSelectionTestCase(TestCase):
 
-    async def asyncSetUp(self):
-        self.ledger = Ledger({
-            'db': Database('sqlite:///:memory:'),
-            'headers': Headers(':memory:'),
-        })
-        await self.ledger.db.open()
-
-    async def asyncTearDown(self):
-        await self.ledger.db.close()
+    def setUp(self):
+        self.ledger = RegTestLedger()
 
     def estimates(self, *args):
         txos = args[0] if isinstance(args[0], (GeneratorType, list)) else args
-        return [txo.get_estimator(self.ledger) for txo in txos]
+        return [OutputEffectiveAmountEstimator(self.ledger, txo) for txo in txos]
 
 
 class TestCoinSelectionTests(BaseSelectionTestCase):
@@ -41,7 +28,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         self.assertListEqual(CoinSelector(0, 0).select([]), [])
 
     def test_skip_binary_search_if_total_not_enough(self):
-        fee = utxo(CENT).get_estimator(self.ledger).fee
+        fee = OutputEffectiveAmountEstimator(self.ledger, utxo(CENT)).fee
         big_pool = self.estimates(utxo(CENT+fee) for _ in range(100))
         selector = CoinSelector(101 * CENT, 0)
         self.assertListEqual(selector.select(big_pool), [])
@@ -52,7 +39,7 @@ class TestCoinSelectionTests(BaseSelectionTestCase):
         self.assertEqual(selector.tries, 201)
 
     def test_exact_match(self):
-        fee = utxo(CENT).get_estimator(self.ledger).fee
+        fee = OutputEffectiveAmountEstimator(self.ledger, utxo(CENT)).fee
         utxo_pool = self.estimates(
             utxo(CENT + fee),
             utxo(CENT),

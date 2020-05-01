@@ -1,14 +1,15 @@
+from unittest import TestCase
 from binascii import unhexlify, hexlify
 
-from lbry.testcase import AsyncioTestCase
-from lbry.wallet.bip32 import PubKey, PrivateKey, from_extended_key_string
-from lbry.wallet import Ledger, Headers
-from lbry.db import Database
+from lbry.blockchain.ledger import Ledger
+from lbry.crypto.bip32 import PubKey, PrivateKey, from_extended_key_string
 
-from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
+from tests.unit.wallet.key_fixtures import (
+    expected_ids, expected_privkeys, expected_hardened_privkeys
+)
 
 
-class BIP32Tests(AsyncioTestCase):
+class BIP32Tests(TestCase):
 
     def test_pubkey_validation(self):
         with self.assertRaisesRegex(TypeError, 'chain code must be raw bytes'):
@@ -41,16 +42,13 @@ class BIP32Tests(AsyncioTestCase):
             self.assertIsInstance(new_key, PubKey)
             self.assertEqual(hexlify(new_key.identifier()), expected_ids[i])
 
-    async def test_private_key_validation(self):
+    def test_private_key_validation(self):
         with self.assertRaisesRegex(TypeError, 'private key must be raw bytes'):
             PrivateKey(None, None, b'abcd'*8, 0, 255)
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
-            Ledger({
-                'db': Database('sqlite:///:memory:'),
-                'headers': Headers(':memory:'),
-            }),
+            Ledger(),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -66,12 +64,9 @@ class BIP32Tests(AsyncioTestCase):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
 
-    async def test_private_key_derivation(self):
+    def test_private_key_derivation(self):
         private_key = PrivateKey(
-            Ledger({
-                'db': Database('sqlite:///:memory:'),
-                'headers': Headers(':memory:'),
-            }),
+            Ledger(),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -84,21 +79,17 @@ class BIP32Tests(AsyncioTestCase):
             self.assertIsInstance(new_privkey, PrivateKey)
             self.assertEqual(hexlify(new_privkey.private_key_bytes), expected_hardened_privkeys[i - 1 - PrivateKey.HARDENED])
 
-    async def test_from_extended_keys(self):
-        ledger = Ledger({
-            'db': Database('sqlite:///:memory:'),
-            'headers': Headers(':memory:'),
-        })
+    def test_from_extended_keys(self):
         self.assertIsInstance(
             from_extended_key_string(
-                ledger,
+                Ledger(),
                 'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
                 '6yz3jMbycrLrRMpeAJxR8qDg8',
             ), PrivateKey
         )
         self.assertIsInstance(
             from_extended_key_string(
-                ledger,
+                Ledger(),
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
             ), PubKey

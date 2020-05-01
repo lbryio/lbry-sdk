@@ -18,7 +18,7 @@ class TestStreamAssembler(AsyncioTestCase):
 
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        self.conf = Config()
+        self.conf = Config.with_same_dir(tmp_dir)
         self.storage = SQLiteStorage(self.conf, os.path.join(tmp_dir, "lbrynet.sqlite"))
         await self.storage.open()
         self.blob_manager = BlobManager(self.loop, tmp_dir, self.storage, self.conf)
@@ -26,7 +26,7 @@ class TestStreamAssembler(AsyncioTestCase):
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(server_tmp_dir))
-        self.server_conf = Config()
+        self.server_conf = Config.with_same_dir(server_tmp_dir)
         self.server_storage = SQLiteStorage(self.server_conf, os.path.join(server_tmp_dir, "lbrynet.sqlite"))
         await self.server_storage.open()
         self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage, self.server_conf)
