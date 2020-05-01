@@ -1,7 +1,7 @@
 import unittest
 from binascii import hexlify, unhexlify
 
-from lbry.wallet.claim_proofs import get_hash_for_outpoint, verify_proof
+from lbry.blockchain.claim_proofs import get_hash_for_outpoint, verify_proof
 from lbry.crypto.hash import double_sha256
 
 

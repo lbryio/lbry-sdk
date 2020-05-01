@@ -9,8 +9,8 @@ from lbry.error import InsufficientFundsError
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
-from lbry.wallet.transaction import Transaction
-from lbry.wallet.util import satoshis_to_coins as lbc
+from lbry.blockchain.transaction import Transaction
+from lbry.blockchain.util import satoshis_to_coins as lbc
 
 
 log = logging.getLogger(__name__)
@@ -142,7 +142,6 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2, self.channel_id],
                                      valid_channel_signature=True, invalid_channel_signature=False)
         # invalid signature still returns channel_id
-        self.ledger._tx_cache.clear()
         invalid_claims = await self.claim_search(invalid_channel_signature=True, has_channel_signature=True)
         self.assertEqual(3, len(invalid_claims))
         self.assertTrue(all([not c['is_channel_signature_valid'] for c in invalid_claims]))
@@ -234,7 +233,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
 
     async def test_order_by(self):
-        height = self.ledger.network.remote_height
+        height = self.ledger.sync.network.remote_height
         claims = [await self.stream_create(f'claim{i}') for i in range(5)]
 
         await self.assertFindsClaims(claims, order_by=["^height"])
@@ -820,7 +819,7 @@ class ChannelCommands(CommandTestCase):
     async def test_create_channel_names(self):
         # claim new name
         await self.channel_create('@foo')
-        self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 1)
+        self.assertItemCount(await self.api.channel_list(), 1)
         await self.assertBalance(self.account, '8.991893')
 
         # fail to claim duplicate
@@ -832,12 +831,12 @@ class ChannelCommands(CommandTestCase):
             await self.channel_create('foo')
 
         # nothing's changed after failed attempts
-        self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 1)
+        self.assertItemCount(await self.api.channel_list(), 1)
         await self.assertBalance(self.account, '8.991893')
 
         # succeed overriding duplicate restriction
         await self.channel_create('@foo', allow_duplicate_name=True)
-        self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 2)
+        self.assertItemCount(await self.api.channel_list(), 2)
         await self.assertBalance(self.account, '7.983786')
 
     async def test_channel_bids(self):

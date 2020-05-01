@@ -8,15 +8,16 @@ import tempfile
 import urllib.request
 from typing import Optional
 from binascii import hexlify
-from concurrent.futures import ThreadPoolExecutor
 
 import aiohttp
 import zmq
 import zmq.asyncio
 
-from lbry.wallet.stream import StreamController
+from lbry.conf import Config
+from lbry.event import EventController
 
 from .database import BlockchainDB
+from .ledger import Ledger, RegTestLedger
 
 
 log = logging.getLogger(__name__)
@@ -58,10 +59,10 @@ class Process(asyncio.SubprocessProtocol):
 
 class Lbrycrd:
 
-    def __init__(self, path, regtest=False):
-        self.data_dir = self.actual_data_dir = path
-        self.regtest = regtest
-        if regtest:
+    def __init__(self, ledger: Ledger):
+        self.ledger = ledger
+        self.data_dir = self.actual_data_dir = ledger.conf.lbrycrd_dir
+        if self.is_regtest:
             self.actual_data_dir = os.path.join(self.data_dir, 'regtest')
         self.blocks_dir = os.path.join(self.actual_data_dir, 'blocks')
         self.bin_dir = os.path.join(os.path.dirname(__file__), 'bin')
@@ -74,34 +75,27 @@ class Lbrycrd:
         self.rpcport = 9245 + 2  # avoid conflict with default rpc port
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
-        self.session: Optional[aiohttp.ClientSession] = None
         self.subscribed = False
         self.subscription: Optional[asyncio.Task] = None
         self.subscription_url = 'tcp://127.0.0.1:29000'
         self.default_generate_address = None
-        self._on_block_controller = StreamController()
+        self._on_block_controller = EventController()
         self.on_block = self._on_block_controller.stream
         self.on_block.listen(lambda e: log.info('%s %s', hexlify(e['hash']), e['msg']))
 
         self.db = BlockchainDB(self.actual_data_dir)
-        self.executor = ThreadPoolExecutor(max_workers=1)
+        self.session: Optional[aiohttp.ClientSession] = None
+
+    @classmethod
+    def temp_regtest(cls):
+        return cls(RegTestLedger(Config.with_same_dir(tempfile.mkdtemp())))
 
     def get_block_file_path_from_number(self, block_file_number):
         return os.path.join(self.actual_data_dir, 'blocks', f'blk{block_file_number:05}.dat')
 
-    async def get_block_files(self):
-        return await asyncio.get_running_loop().run_in_executor(
-            self.executor, self.db.get_block_files
-        )
-
-    async def get_file_details(self, block_file):
-        return await asyncio.get_running_loop().run_in_executor(
-            self.executor, self.db.get_file_details, block_file
-        )
-
-    @classmethod
-    def temp_regtest(cls):
-        return cls(tempfile.mkdtemp(), True)
+    @property
+    def is_regtest(self):
+        return isinstance(self.ledger, RegTestLedger)
 
     @property
     def rpc_url(self):
@@ -150,7 +144,7 @@ class Lbrycrd:
         return self.exists or await self.download()
 
     def get_start_command(self, *args):
-        if self.regtest:
+        if self.is_regtest:
             args += ('-regtest',)
         return (
             self.daemon_bin,
@@ -164,6 +158,14 @@ class Lbrycrd:
             *args
         )
 
+    async def open(self):
+        self.session = aiohttp.ClientSession()
+        await self.db.open()
+
+    async def close(self):
+        await self.db.close()
+        await self.session.close()
+
     async def start(self, *args):
         loop = asyncio.get_event_loop()
         command = self.get_start_command(*args)
@@ -171,11 +173,11 @@ class Lbrycrd:
         self.transport, self.protocol = await loop.subprocess_exec(Process, *command)
         await self.protocol.ready.wait()
         assert not self.protocol.stopped.is_set()
-        self.session = aiohttp.ClientSession()
+        await self.open()
 
     async def stop(self, cleanup=True):
         try:
-            await self.session.close()
+            await self.close()
             self.transport.terminate()
             await self.protocol.stopped.wait()
             assert self.transport.get_returncode() == 0, "lbrycrd daemon exit with error"
@@ -201,7 +203,7 @@ class Lbrycrd:
         try:
             while self.subscribed:
                 msg = await sock.recv_multipart()
-                self._on_block_controller.add({
+                await self._on_block_controller.add({
                     'hash': msg[1],
                     'msg': struct.unpack('<I', msg[2])[0]
                 })
@@ -244,6 +246,15 @@ class Lbrycrd:
     async def generate_to_address(self, blocks, address):
         return await self.rpc("generatetoaddress", [blocks, address])
 
+    async def send_to_address(self, address, amount):
+        return await self.rpc("sendtoaddress", [address, amount])
+
+    async def get_block(self, block_hash):
+        return await self.rpc("getblock", [block_hash])
+
+    async def get_raw_transaction(self, txid):
+        return await self.rpc("getrawtransaction", [txid])
+
     async def fund_raw_transaction(self, tx):
         return await self.rpc("fundrawtransaction", [tx])
 
@@ -255,3 +266,15 @@ class Lbrycrd:
 
     async def claim_name(self, name, data, amount):
         return await self.rpc("claimname", [name, data, amount])
+
+    async def update_claim(self, txid, data, amount):
+        return await self.rpc("updateclaim", [txid, data, amount])
+
+    async def abandon_claim(self, txid, address):
+        return await self.rpc("abandonclaim", [txid, address])
+
+    async def support_claim(self, name, claim_id, amount, value="", istip=False):
+        return await self.rpc("supportclaim", [name, claim_id, amount, value, istip])
+
+    async def abandon_support(self, txid, address):
+        return await self.rpc("abandonsupport", [txid, address])

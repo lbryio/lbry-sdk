@@ -3,7 +3,7 @@ import asyncio
 import lbry
 import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
-from lbry.wallet.network import ClientSession
+from lbry.service.network import ClientSession
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
 

@@ -1,9 +1,8 @@
 import struct
 import hashlib
 import logging
-import typing
 from binascii import hexlify, unhexlify
-from typing import List, Iterable, Optional, Tuple
+from typing import List, Iterable, Optional
 
 import ecdsa
 from cryptography.hazmat.backends import default_backend
@@ -13,7 +12,6 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
 from cryptography.exceptions import InvalidSignature
 
-from lbry.error import InsufficientFundsError
 from lbry.crypto.hash import hash160, sha256
 from lbry.crypto.base58 import Base58
 from lbry.schema.url import normalize_name
@@ -21,15 +19,9 @@ from lbry.schema.claim import Claim
 from lbry.schema.purchase import Purchase
 
 from .script import InputScript, OutputScript
-from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
-
-if typing.TYPE_CHECKING:
-    from lbry.wallet.account import Account
-    from lbry.wallet.ledger import Ledger
-    from lbry.wallet.wallet import Wallet
 
 log = logging.getLogger()
 
@@ -190,20 +182,6 @@ class Input(InputOutput):
         stream.write_uint32(self.sequence)
 
 
-class OutputEffectiveAmountEstimator:
-
-    __slots__ = 'txo', 'txi', 'fee', 'effective_amount'
-
-    def __init__(self, ledger: 'Ledger', txo: 'Output') -> None:
-        self.txo = txo
-        self.txi = Input.spend(txo)
-        self.fee: int = self.txi.get_fee(ledger)
-        self.effective_amount: int = txo.amount - self.fee
-
-    def __lt__(self, other):
-        return self.effective_amount < other.effective_amount
-
-
 class Output(InputOutput):
 
     __slots__ = (
@@ -283,18 +261,15 @@ class Output(InputOutput):
     def get_address(self, ledger):
         return ledger.hash160_to_address(self.pubkey_hash)
 
-    def get_estimator(self, ledger):
-        return OutputEffectiveAmountEstimator(ledger, self)
-
     @classmethod
     def pay_pubkey_hash(cls, amount, pubkey_hash):
         return cls(amount, OutputScript.pay_pubkey_hash(pubkey_hash))
 
     @classmethod
-    def deserialize_from(cls, stream):
+    def deserialize_from(cls, stream, offset):
         return cls(
             amount=stream.read_uint64(),
-            script=OutputScript(stream.read_string())
+            script=OutputScript(stream.read_string(), offset=offset+9)
         )
 
     def serialize_to(self, stream, alternate_script=None):
@@ -525,7 +500,7 @@ class Transaction:
         self.position = position
         self._day = julian_day
         if raw is not None:
-            self._deserialize()
+            self.deserialize()
 
     @property
     def is_broadcast(self):
@@ -685,9 +660,10 @@ class Transaction:
         stream.write_uint32(self.signature_hash_type(1))  # signature hash type: SIGHASH_ALL
         return stream.get_bytes()
 
-    def _deserialize(self, stream=None):
+    def deserialize(self, stream=None):
         if self._raw is not None or stream is not None:
             stream = stream or BCDataStream(self._raw)
+            start = stream.tell()
             self.version = stream.read_uint32()
             input_count = stream.read_compact_size()
             if input_count == 0:
@@ -698,7 +674,7 @@ class Transaction:
             ])
             output_count = stream.read_compact_size()
             self._add(self._outputs, [
-                Output.deserialize_from(stream) for _ in range(output_count)
+                Output.deserialize_from(stream, stream.tell()-start) for _ in range(output_count)
             ])
             if self.is_segwit_flag:
                 # drain witness portion of transaction
@@ -710,179 +686,9 @@ class Transaction:
             self.locktime = stream.read_uint32()
         return self
 
-    @classmethod
-    def ensure_all_have_same_ledger_and_wallet(
-            cls, funding_accounts: Iterable['Account'],
-            change_account: 'Account' = None) -> Tuple['Ledger', 'Wallet']:
-        ledger = wallet = None
-        for account in funding_accounts:
-            if ledger is None:
-                ledger = account.ledger
-                wallet = account.wallet
-            if ledger != account.ledger:
-                raise ValueError(
-                    'All funding accounts used to create a transaction must be on the same ledger.'
-                )
-            if wallet != account.wallet:
-                raise ValueError(
-                    'All funding accounts used to create a transaction must be from the same wallet.'
-                )
-        if change_account is not None:
-            if change_account.ledger != ledger:
-                raise ValueError('Change account must use same ledger as funding accounts.')
-            if change_account.wallet != wallet:
-                raise ValueError('Change account must use same wallet as funding accounts.')
-        if ledger is None:
-            raise ValueError('No ledger found.')
-        if wallet is None:
-            raise ValueError('No wallet found.')
-        return ledger, wallet
-
-    @classmethod
-    async def create(cls, inputs: Iterable[Input], outputs: Iterable[Output],
-                     funding_accounts: Iterable['Account'], change_account: 'Account',
-                     sign: bool = True):
-        """ Find optimal set of inputs when only outputs are provided; add change
-            outputs if only inputs are provided or if inputs are greater than outputs. """
-
-        tx = cls() \
-            .add_inputs(inputs) \
-            .add_outputs(outputs)
-
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-
-        # value of the outputs plus associated fees
-        cost = (
-            tx.get_base_fee(ledger) +
-            tx.get_total_output_sum(ledger)
-        )
-        # value of the inputs less the cost to spend those inputs
-        payment = tx.get_effective_input_sum(ledger)
-
-        try:
-
-            for _ in range(5):
-
-                if payment < cost:
-                    deficit = cost - payment
-                    spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
-                    if not spendables:
-                        raise InsufficientFundsError()
-                    payment += sum(s.effective_amount for s in spendables)
-                    tx.add_inputs(s.txi for s in spendables)
-
-                cost_of_change = (
-                    tx.get_base_fee(ledger) +
-                    Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
-                )
-                if payment > cost:
-                    change = payment - cost
-                    if change > cost_of_change:
-                        change_address = await change_account.change.get_or_create_usable_address()
-                        change_hash160 = change_account.ledger.address_to_hash160(change_address)
-                        change_amount = change - cost_of_change
-                        change_output = Output.pay_pubkey_hash(change_amount, change_hash160)
-                        change_output.is_internal_transfer = True
-                        tx.add_outputs([Output.pay_pubkey_hash(change_amount, change_hash160)])
-
-                if tx._outputs:
-                    break
-                # this condition and the outer range(5) loop cover an edge case
-                # whereby a single input is just enough to cover the fee and
-                # has some change left over, but the change left over is less
-                # than the cost_of_change: thus the input is completely
-                # consumed and no output is added, which is an invalid tx.
-                # to be able to spend this input we must increase the cost
-                # of the TX and run through the balance algorithm a second time
-                # adding an extra input and change output, making tx valid.
-                # we do this 5 times in case the other UTXOs added are also
-                # less than the fee, after 5 attempts we give up and go home
-                cost += cost_of_change + 1
-
-            if sign:
-                await tx.sign(funding_accounts)
-
-        except Exception as e:
-            log.exception('Failed to create transaction:')
-            await ledger.release_tx(tx)
-            raise e
-
-        return tx
-
     @staticmethod
     def signature_hash_type(hash_type):
         return hash_type
-
-    async def sign(self, funding_accounts: Iterable['Account']):
-        ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
-        for i, txi in enumerate(self._inputs):
-            assert txi.script is not None
-            assert txi.txo_ref.txo is not None
-            txo_script = txi.txo_ref.txo.script
-            if txo_script.is_pay_pubkey_hash:
-                address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = await ledger.get_private_key_for_address(wallet, address)
-                assert private_key is not None, 'Cannot find private key for signing output.'
-                tx = self._serialize_for_signature(i)
-                txi.script.values['signature'] = \
-                    private_key.sign(tx) + bytes((self.signature_hash_type(1),))
-                txi.script.values['pubkey'] = private_key.public_key.pubkey_bytes
-                txi.script.generate()
-            else:
-                raise NotImplementedError("Don't know how to spend this output.")
-        self._reset()
-
-    @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
-        return cls.create([], [output], funding_accounts, change_account)
-
-    @classmethod
-    def claim_create(
-            cls, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, claim, ledger.address_to_hash160(holding_address)
-        )
-        if signing_channel is not None:
-            claim_output.sign(signing_channel, b'placeholder txid:nout')
-        return cls.create([], [claim_output], funding_accounts, change_account, sign=False)
-
-    @classmethod
-    def claim_update(
-            cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        updated_claim = Output.pay_update_claim_pubkey_hash(
-            amount, previous_claim.claim_name, previous_claim.claim_id,
-            claim, ledger.address_to_hash160(holding_address)
-        )
-        if signing_channel is not None:
-            updated_claim.sign(signing_channel, b'placeholder txid:nout')
-        else:
-            updated_claim.clear_signature()
-        return cls.create(
-            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
-        )
-
-    @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        support_output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
-        )
-        return cls.create([], [support_output], funding_accounts, change_account)
-
-    @classmethod
-    def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
-                 funding_accounts: List['Account'], change_account: 'Account'):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
-        data = Output.add_purchase_data(Purchase(claim_id))
-        return cls.create([], [payment, data], funding_accounts, change_account)
 
     @property
     def my_inputs(self):

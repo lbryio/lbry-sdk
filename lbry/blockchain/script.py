@@ -294,19 +294,24 @@ class Template:
 
 class Script:
 
-    __slots__ = 'source', '_template', '_values', '_template_hint'
+    __slots__ = 'source', 'offset', '_template', '_values', '_template_hint'
 
     templates: List[Template] = []
 
     NO_SCRIPT = Template('no_script', None)  # special case
 
-    def __init__(self, source=None, template=None, values=None, template_hint=None):
+    def __init__(self, source=None, template=None, values=None, template_hint=None, offset=None):
         self.source = source
+        self.offset = offset
         self._template = template
         self._values = values
         self._template_hint = template_hint
         if source is None and template and values:
             self.generate()
+
+    @property
+    def length(self):
+        return len(self.source)
 
     @property
     def template(self):

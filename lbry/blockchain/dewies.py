@@ -1,6 +1,6 @@
 import textwrap
 from decimal import Decimal
-from .util import coins_to_satoshis, satoshis_to_coins
+from lbry.blockchain.util import coins_to_satoshis, satoshis_to_coins
 
 
 def lbc_to_dewies(lbc: str) -> int:

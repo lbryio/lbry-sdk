@@ -12,7 +12,7 @@ from typing import Optional, Iterator, Tuple, Callable
 from binascii import hexlify, unhexlify
 
 from lbry.crypto.hash import sha512, double_sha256, ripemd160
-from lbry.wallet.util import ArithUint256
+from lbry.blockchain.util import ArithUint256
 from .checkpoints import HASHES
 
 

@@ -80,7 +80,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
     async def test_sending_and_receiving(self):
         account1, account2 = self.account, self.wallet.generate_account(self.ledger)
-        await self.ledger.subscribe_account(account2)
+        await self.ledger.sync.subscribe_account(account2)
 
         await self.assertBalance(account1, '0.0')
         await self.assertBalance(account2, '0.0')
@@ -151,8 +151,8 @@ class BasicTransactionTests(IntegrationTestCase):
         for batch in range(0, len(sends), 10):
             txids = await asyncio.gather(*sends[batch:batch + 10])
             await asyncio.wait([self.on_transaction_id(txid) for txid in txids])
-        remote_status = await self.ledger.network.subscribe_address(address)
-        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        remote_status = await self.ledger.sync.network.subscribe_address(address)
+        self.assertTrue(await self.ledger.sync.update_history(address, remote_status))
         # 20 unconfirmed txs, 10 from blockchain, 10 from local to local
         utxos = await self.account.get_utxos()
         txs = []
@@ -165,11 +165,11 @@ class BasicTransactionTests(IntegrationTestCase):
             await self.broadcast(tx)
             txs.append(tx)
         await asyncio.wait([self.on_transaction_address(tx, address) for tx in txs], timeout=1)
-        remote_status = await self.ledger.network.subscribe_address(address)
-        self.assertTrue(await self.ledger.update_history(address, remote_status))
+        remote_status = await self.ledger.sync.network.subscribe_address(address)
+        self.assertTrue(await self.ledger.sync.update_history(address, remote_status))
         # server history grows unordered
         txid = await self.blockchain.send_to_address(address, 1)
         await self.on_transaction_id(txid)
-        self.assertTrue(await self.ledger.update_history(address, remote_status))
-        self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
+        self.assertTrue(await self.ledger.sync.update_history(address, remote_status))
+        self.assertEqual(21, len((await self.ledger.sync.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))

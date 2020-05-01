@@ -1,37 +1,59 @@
 import struct
+from hashlib import sha256
+from typing import Set
+from binascii import unhexlify
+from typing import NamedTuple, List
+
+from chiabip158 import PyBIP158
+
 from lbry.crypto.hash import double_sha256
-from lbry.wallet.transaction import Transaction
-from lbry.wallet.bcd_data_stream import BCDataStream
+from lbry.blockchain.transaction import Transaction
+from lbry.blockchain.bcd_data_stream import BCDataStream
 
 
 ZERO_BLOCK = bytes((0,)*32)
 
 
-class Block:
+def create_block_filter(addresses: Set[str]) -> bytes:
+    return bytes(PyBIP158([bytearray(a.encode()) for a in addresses]).GetEncoded())
 
-    __slots__ = (
-        'version', 'block_hash', 'prev_block_hash',
-        'merkle_root', 'claim_trie_root', 'timestamp',
-        'bits', 'nonce', 'txs'
-    )
 
-    def __init__(self, stream: BCDataStream):
+def get_block_filter(block_filter: str) -> PyBIP158:
+    return PyBIP158(bytearray(unhexlify(block_filter)))
+
+
+class Block(NamedTuple):
+    height: int
+    version: int
+    file_number: int
+    block_hash: bytes
+    prev_block_hash: bytes
+    merkle_root: bytes
+    claim_trie_root: bytes
+    timestamp: int
+    bits: int
+    nonce: int
+    txs: List[Transaction]
+
+    @staticmethod
+    def from_data_stream(stream: BCDataStream, height: int, file_number: int):
         header = stream.data.read(112)
         version, = struct.unpack('<I', header[:4])
         timestamp, bits, nonce = struct.unpack('<III', header[100:112])
-        self.version = version
-        self.block_hash = double_sha256(header)
-        self.prev_block_hash = header[4:36]
-        self.merkle_root = header[36:68]
-        self.claim_trie_root = header[68:100][::-1]
-        self.timestamp = timestamp
-        self.bits = bits
-        self.nonce = nonce
         tx_count = stream.read_compact_size()
-        self.txs = [
-            Transaction(position=i)._deserialize(stream)
-            for i in range(tx_count)
-        ]
+        return Block(
+            height=height,
+            version=version,
+            file_number=file_number,
+            block_hash=double_sha256(header),
+            prev_block_hash=header[4:36],
+            merkle_root=header[36:68],
+            claim_trie_root=header[68:100][::-1],
+            timestamp=timestamp,
+            bits=bits,
+            nonce=nonce,
+            txs=[Transaction(height=height, position=i).deserialize(stream) for i in range(tx_count)]
+        )
 
     @property
     def is_first_block(self):

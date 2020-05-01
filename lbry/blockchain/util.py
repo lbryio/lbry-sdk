@@ -1,6 +1,6 @@
 import re
 from typing import TypeVar, Sequence, Optional
-from .constants import COIN
+from lbry.constants import COIN
 
 
 def coins_to_satoshis(coins):
@@ -38,18 +38,6 @@ class ReadOnlyList(Sequence[T]):
 
 def subclass_tuple(name, base):
     return type(name, (base,), {'__slots__': ()})
-
-
-class cachedproperty:
-
-    def __init__(self, f):
-        self.f = f
-
-    def __get__(self, obj, objtype):
-        obj = obj or objtype
-        value = self.f(obj)
-        setattr(obj, self.f.__name__, value)
-        return value
 
 
 class ArithUint256:

@@ -1,9 +1,9 @@
-import unittest
+from unittest import TestCase
 
-from lbry.wallet.bcd_data_stream import BCDataStream
+from lbry.blockchain.bcd_data_stream import BCDataStream
 
 
-class TestBCDataStream(unittest.TestCase):
+class TestBCDataStream(TestCase):
 
     def test_write_read(self):
         s = BCDataStream()

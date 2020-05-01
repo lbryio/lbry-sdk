@@ -3,9 +3,9 @@ import asyncio
 import tempfile
 from binascii import unhexlify
 
-from lbry.wallet.util import ArithUint256
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.ledger import Headers as _Headers
+from lbry.blockchain.util import ArithUint256
+from lbry.blockchain.ledger import Headers as _Headers
 
 
 class Headers(_Headers):
@@ -168,9 +168,9 @@ class TestHeaders(AsyncioTestCase):
             await headers.open()
             self.assertEqual(
                 cm.output, [
-                    'WARNING:lbry.wallet.header:Reader file size doesnt match header size. '
+                    'WARNING:lbry.blockchain.header:Reader file size doesnt match header size. '
                     'Repairing, might take a while.',
-                    'WARNING:lbry.wallet.header:Header file corrupted at height 9, truncating '
+                    'WARNING:lbry.blockchain.header:Header file corrupted at height 9, truncating '
                     'it.'
                 ]
             )

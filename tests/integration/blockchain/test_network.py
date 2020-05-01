@@ -4,7 +4,7 @@ from unittest.mock import Mock
 from binascii import unhexlify
 
 import lbry
-from lbry.wallet.network import Network
+from lbry.service.network import Network
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase

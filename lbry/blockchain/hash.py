@@ -1,5 +1,5 @@
 from binascii import hexlify, unhexlify
-from .constants import NULL_HASH32
+from lbry.constants import NULL_HASH32
 
 
 class TXRef:

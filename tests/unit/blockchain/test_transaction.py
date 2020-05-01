@@ -1,51 +1,21 @@
-import unittest
+from unittest import TestCase
 from binascii import hexlify, unhexlify
-from itertools import cycle
 
-from lbry.testcase import AsyncioTestCase
-from lbry.wallet.constants import CENT, COIN, NULL_HASH32
-from lbry.wallet import Wallet, Account, Ledger, Headers, Transaction, Output, Input
-from lbry.db import Database
+from lbry.blockchain.ledger import Ledger
+from lbry.constants import CENT, NULL_HASH32
+from lbry.blockchain.transaction import Transaction
+from lbry.testcase import (
+    get_transaction, get_input, get_output, get_claim_transaction
+)
 
-
-NULL_HASH = b'\x00'*32
 FEE_PER_BYTE = 50
 FEE_PER_CHAR = 200000
 
 
-def get_output(amount=CENT, pubkey_hash=NULL_HASH32, height=-2):
-    return Transaction(height=height) \
-        .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
-        .outputs[0]
+class TestSizeAndFeeEstimation(TestCase):
 
-
-def get_input(amount=CENT, pubkey_hash=NULL_HASH):
-    return Input.spend(get_output(amount, pubkey_hash))
-
-
-def get_transaction(txo=None):
-    return Transaction() \
-        .add_inputs([get_input()]) \
-        .add_outputs([txo or Output.pay_pubkey_hash(CENT, NULL_HASH32)])
-
-
-def get_claim_transaction(claim_name, claim=b''):
-    return get_transaction(
-        Output.pay_claim_name_pubkey_hash(CENT, claim_name, claim, NULL_HASH32)
-    )
-
-
-class TestSizeAndFeeEstimation(AsyncioTestCase):
-
-    async def asyncSetUp(self):
-        self.ledger = Ledger({
-            'db': Database('sqlite:///:memory:'),
-            'headers': Headers(':memory:')
-        })
-        await self.ledger.db.open()
-
-    async def asyncTearDown(self):
-        await self.ledger.db.close()
+    def setUp(self):
+        self.ledger = Ledger()
 
     def test_output_size_and_fee(self):
         txo = get_output()
@@ -81,7 +51,7 @@ class TestSizeAndFeeEstimation(AsyncioTestCase):
         self.assertEqual(tx.get_base_fee(self.ledger), FEE_PER_BYTE * tx.base_size)
 
 
-class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
+class TestAccountBalanceImpactFromTransaction(TestCase):
 
     def test_is_my_output_not_set(self):
         tx = get_transaction()
@@ -97,8 +67,8 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
     def test_paying_from_my_account_to_other_account(self):
         tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
-            .add_outputs([get_output(190*CENT, NULL_HASH),
-                          get_output(100*CENT, NULL_HASH)])
+            .add_outputs([get_output(190*CENT, NULL_HASH32),
+                          get_output(100*CENT, NULL_HASH32)])
         tx.inputs[0].txo_ref.txo.is_my_output = True
         tx.outputs[0].is_my_output = False
         tx.outputs[1].is_my_output = True
@@ -107,8 +77,8 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
     def test_paying_from_other_account_to_my_account(self):
         tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
-            .add_outputs([get_output(190*CENT, NULL_HASH),
-                          get_output(100*CENT, NULL_HASH)])
+            .add_outputs([get_output(190*CENT, NULL_HASH32),
+                          get_output(100*CENT, NULL_HASH32)])
         tx.inputs[0].txo_ref.txo.is_my_output = False
         tx.outputs[0].is_my_output = True
         tx.outputs[1].is_my_output = False
@@ -117,15 +87,15 @@ class TestAccountBalanceImpactFromTransaction(unittest.TestCase):
     def test_paying_from_my_account_to_my_account(self):
         tx = Transaction() \
             .add_inputs([get_input(300*CENT)]) \
-            .add_outputs([get_output(190*CENT, NULL_HASH),
-                          get_output(100*CENT, NULL_HASH)])
+            .add_outputs([get_output(190*CENT, NULL_HASH32),
+                          get_output(100*CENT, NULL_HASH32)])
         tx.inputs[0].txo_ref.txo.is_my_output = True
         tx.outputs[0].is_my_output = True
         tx.outputs[1].is_my_output = True
         self.assertEqual(tx.net_account_balance, -10*CENT)  # lost to fee
 
 
-class TestTransactionSerialization(unittest.TestCase):
+class TestTransactionSerialization(TestCase):
 
     def test_genesis_transaction(self):
         raw = unhexlify(
@@ -259,164 +229,3 @@ class TestTransactionSerialization(unittest.TestCase):
 
         tx._reset()
         self.assertEqual(tx.raw, raw)
-
-
-class TestTransactionSigning(AsyncioTestCase):
-
-    async def asyncSetUp(self):
-        self.ledger = Ledger({
-            'db': Database('sqlite:///:memory:'),
-            'headers': Headers(':memory:')
-        })
-        await self.ledger.db.open()
-
-    async def asyncTearDown(self):
-        await self.ledger.db.close()
-
-    async def test_sign(self):
-        account = Account.from_dict(
-            self.ledger, Wallet(), {
-                "seed":
-                    "carbon smart garage balance margin twelve chest sword toas"
-                    "t envelope bottom stomach absent"
-            }
-        )
-
-        await account.ensure_address_gap()
-        address1, address2 = await account.receiving.get_addresses(limit=2)
-        pubkey_hash1 = self.ledger.address_to_hash160(address1)
-        pubkey_hash2 = self.ledger.address_to_hash160(address2)
-
-        tx = Transaction() \
-            .add_inputs([Input.spend(get_output(int(2*COIN), pubkey_hash1))]) \
-            .add_outputs([Output.pay_pubkey_hash(int(1.9*COIN), pubkey_hash2)])
-
-        await tx.sign([account])
-
-        self.assertEqual(
-            hexlify(tx.inputs[0].script.values['signature']),
-            b'304402200dafa26ad7cf38c5a971c8a25ce7d85a076235f146126762296b1223c42ae21e022020ef9eeb8'
-            b'398327891008c5c0be4357683f12cb22346691ff23914f457bf679601'
-        )
-
-
-class TransactionIOBalancing(AsyncioTestCase):
-
-    async def asyncSetUp(self):
-        self.ledger = Ledger({
-            'db': Database('sqlite:///:memory:'),
-            'headers': Headers(':memory:')
-        })
-        await self.ledger.db.open()
-        self.account = Account.from_dict(
-            self.ledger, Wallet(), {
-                "seed": "carbon smart garage balance margin twelve chest sword "
-                        "toast envelope bottom stomach absent"
-            }
-        )
-
-        addresses = await self.account.ensure_address_gap()
-        self.pubkey_hash = [self.ledger.address_to_hash160(a) for a in addresses]
-        self.hash_cycler = cycle(self.pubkey_hash)
-
-    async def asyncTearDown(self):
-        await self.ledger.db.close()
-
-    def txo(self, amount, address=None):
-        return get_output(int(amount*COIN), address or next(self.hash_cycler))
-
-    def txi(self, txo):
-        return Input.spend(txo)
-
-    def tx(self, inputs, outputs):
-        return Transaction.create(inputs, outputs, [self.account], self.account)
-
-    async def create_utxos(self, amounts):
-        utxos = [self.txo(amount) for amount in amounts]
-
-        self.funding_tx = Transaction(is_verified=True) \
-            .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
-            .add_outputs(utxos)
-
-        await self.ledger.db.insert_transaction(self.funding_tx)
-
-        for utxo in utxos:
-            await self.ledger.db.save_transaction_io(
-                self.funding_tx,
-                self.ledger.hash160_to_address(utxo.script.values['pubkey_hash']),
-                utxo.script.values['pubkey_hash'], ''
-            )
-
-        return utxos
-
-    @staticmethod
-    def inputs(tx):
-        return [round(i.amount/COIN, 2) for i in tx.inputs]
-
-    @staticmethod
-    def outputs(tx):
-        return [round(o.amount/COIN, 2) for o in tx.outputs]
-
-    async def test_basic_use_cases(self):
-        self.ledger.fee_per_byte = int(.01*CENT)
-
-        # available UTXOs for filling missing inputs
-        utxos = await self.create_utxos([
-            1, 1, 3, 5, 10
-        ])
-
-        # pay 3 coins (3.02 w/ fees)
-        tx = await self.tx(
-            [],            # inputs
-            [self.txo(3)]  # outputs
-        )
-        # best UTXO match is 5 (as UTXO 3 will be short 0.02 to cover fees)
-        self.assertListEqual(self.inputs(tx), [5])
-        # a change of 1.98 is added to reach balance
-        self.assertListEqual(self.outputs(tx), [3, 1.98])
-
-        await self.ledger.release_outputs(utxos)
-
-        # pay 2.98 coins (3.00 w/ fees)
-        tx = await self.tx(
-            [],               # inputs
-            [self.txo(2.98)]  # outputs
-        )
-        # best UTXO match is 3 and no change is needed
-        self.assertListEqual(self.inputs(tx), [3])
-        self.assertListEqual(self.outputs(tx), [2.98])
-
-        await self.ledger.release_outputs(utxos)
-
-        # supplied input and output, but input is not enough to cover output
-        tx = await self.tx(
-            [self.txi(self.txo(10))],  # inputs
-            [self.txo(11)]             # outputs
-        )
-        # additional input is chosen (UTXO 3)
-        self.assertListEqual([10, 3], self.inputs(tx))
-        # change is now needed to consume extra input
-        self.assertListEqual([11, 1.96], self.outputs(tx))
-
-        await self.ledger.release_outputs(utxos)
-
-        # liquidating a UTXO
-        tx = await self.tx(
-            [self.txi(self.txo(10))],  # inputs
-            []                         # outputs
-        )
-        self.assertListEqual([10], self.inputs(tx))
-        # missing change added to consume the amount
-        self.assertListEqual([9.98], self.outputs(tx))
-
-        await self.ledger.release_outputs(utxos)
-
-        # liquidating at a loss, requires adding extra inputs
-        tx = await self.tx(
-            [self.txi(self.txo(0.01))],  # inputs
-            []                           # outputs
-        )
-        # UTXO 1 is added to cover some of the fee
-        self.assertListEqual([0.01, 1], self.inputs(tx))
-        # change is now needed to consume extra input
-        self.assertListEqual([0.97], self.outputs(tx))

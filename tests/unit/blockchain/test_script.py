@@ -1,8 +1,8 @@
 import unittest
 from binascii import hexlify, unhexlify
 
-from lbry.wallet.bcd_data_stream import BCDataStream
-from lbry.wallet.script import (
+from lbry.blockchain.bcd_data_stream import BCDataStream
+from lbry.blockchain.script import (
     InputScript, OutputScript, Template, ParseError, tokenize, push_data,
     PUSH_SINGLE, PUSH_INTEGER, PUSH_MANY, OP_HASH160, OP_EQUAL
 )
