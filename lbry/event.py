@@ -1,11 +1,15 @@
 import asyncio
 import threading
 import multiprocessing
+import logging
+
+
+log = logging.getLogger(__name__)
 
 
 class BroadcastSubscription:
 
-    def __init__(self, controller, on_data, on_error, on_done):
+    def __init__(self, controller: 'EventController', on_data, on_error, on_done):
         self._controller = controller
         self._previous = self._next = None
         self._on_data = on_data
@@ -45,10 +49,10 @@ class BroadcastSubscription:
             self.is_closed = True
 
 
-class StreamController:
+class EventController:
 
     def __init__(self, merge_repeated_events=False):
-        self.stream = Stream(self)
+        self.stream = EventStream(self)
         self._first_subscription = None
         self._last_subscription = None
         self._last_event = None
@@ -66,30 +70,25 @@ class StreamController:
             next_sub = next_sub._next
             yield subscription
 
-    def _notify_and_ensure_future(self, notify):
-        tasks = []
-        for subscription in self._iterate_subscriptions:
-            maybe_coroutine = notify(subscription)
+    async def _notify(self, notify, event):
+        try:
+            maybe_coroutine = notify(event)
             if asyncio.iscoroutine(maybe_coroutine):
-                tasks.append(maybe_coroutine)
-        if tasks:
-            return asyncio.ensure_future(asyncio.wait(tasks))
-        else:
-            f = asyncio.get_event_loop().create_future()
-            f.set_result(None)
-            return f
+                await maybe_coroutine
+        except Exception as e:
+            log.exception(e)
+            raise
 
-    def add(self, event):
-        skip = self._merge_repeated and event == self._last_event
+    async def add(self, event):
+        if self._merge_repeated and event == self._last_event:
+            return
         self._last_event = event
-        return self._notify_and_ensure_future(
-            lambda subscription: None if skip else subscription._add(event)
-        )
+        for subscription in self._iterate_subscriptions:
+            await self._notify(subscription._add, event)
 
-    def add_error(self, exception):
-        return self._notify_and_ensure_future(
-            lambda subscription: subscription._add_error(exception)
-        )
+    async def add_error(self, exception):
+        for subscription in self._iterate_subscriptions:
+            await self._notify(subscription._add_error, exception)
 
     def close(self):
         for subscription in self._iterate_subscriptions:
@@ -121,16 +120,16 @@ class StreamController:
         return subscription
 
 
-class Stream:
+class EventStream:
 
     def __init__(self, controller):
         self._controller = controller
 
-    def listen(self, on_data, on_error=None, on_done=None):
+    def listen(self, on_data, on_error=None, on_done=None) -> BroadcastSubscription:
         return self._controller._listen(on_data, on_error, on_done)
 
     def where(self, condition) -> asyncio.Future:
-        future = asyncio.get_event_loop().create_future()
+        future = asyncio.get_running_loop().create_future()
 
         def where_test(value):
             if condition(value):
@@ -144,7 +143,7 @@ class Stream:
         return future
 
     @property
-    def first(self):
+    def first(self) -> asyncio.Future:
         future = asyncio.get_event_loop().create_future()
         subscription = self.listen(
             lambda value: not future.done() and self._cancel_and_callback(subscription, future, value),
@@ -165,12 +164,12 @@ class Stream:
 
 class EventQueuePublisher(threading.Thread):
 
-    STOP = object()
+    STOP = 'STOP'
 
-    def __init__(self, queue: multiprocessing.Queue, stream_controller: StreamController):
+    def __init__(self, queue: multiprocessing.Queue, event_controller: EventController):
         super().__init__()
         self.queue = queue
-        self.stream_controller = stream_controller
+        self.event_controller = event_controller
         self.loop = asyncio.get_running_loop()
 
     def run(self):
@@ -178,7 +177,9 @@ class EventQueuePublisher(threading.Thread):
             msg = self.queue.get()
             if msg == self.STOP:
                 return
-            self.loop.call_soon_threadsafe(self.stream_controller.add, msg)
+            asyncio.run_coroutine_threadsafe(
+                self.event_controller.add(msg), self.loop
+            )
 
     def stop(self):
         self.queue.put(self.STOP)

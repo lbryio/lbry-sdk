@@ -282,3 +282,15 @@ async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled
 def is_running_from_bundle():
     # see https://pyinstaller.readthedocs.io/en/stable/runtime-information.html
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+
+class cachedproperty:
+
+    def __init__(self, f):
+        self.f = f
+
+    def __get__(self, obj, objtype):
+        obj = obj or objtype
+        value = self.f(obj)
+        setattr(obj, self.f.__name__, value)
+        return value

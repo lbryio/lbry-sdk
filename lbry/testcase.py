@@ -14,13 +14,18 @@ from time import time
 from binascii import unhexlify
 from functools import partial
 
-from lbry.wallet import WalletManager, Wallet, Ledger, Account, Transaction
+from lbry.blockchain.ledger import Ledger
+from lbry.blockchain.transaction import Transaction, Input, Output
+from lbry.blockchain.util import satoshis_to_coins
+from lbry.constants import CENT, NULL_HASH32
+from lbry.wallet.wallet import Wallet, Account
+from lbry.wallet.manager import WalletManager
 from lbry.conf import Config
-from lbry.wallet.util import satoshis_to_coins
-from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
+from lbry.blockchain.lbrycrd import Lbrycrd
+from lbry.service.full_node import FullNode
+from lbry.service.daemon import Daemon
 
-from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
+from lbry.extras.daemon.daemon import jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
 from lbry.extras.daemon.components import (
     DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
@@ -34,6 +39,28 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
 from lbry.blob_exchange.server import BlobServer
+
+
+def get_output(amount=CENT, pubkey_hash=NULL_HASH32, height=-2):
+    return Transaction(height=height) \
+        .add_outputs([Output.pay_pubkey_hash(amount, pubkey_hash)]) \
+        .outputs[0]
+
+
+def get_input(amount=CENT, pubkey_hash=NULL_HASH32):
+    return Input.spend(get_output(amount, pubkey_hash))
+
+
+def get_transaction(txo=None):
+    return Transaction() \
+        .add_inputs([get_input()]) \
+        .add_outputs([txo or Output.pay_pubkey_hash(CENT, NULL_HASH32)])
+
+
+def get_claim_transaction(claim_name, claim=b''):
+    return get_transaction(
+        Output.pay_claim_name_pubkey_hash(CENT, claim_name, claim, NULL_HASH32)
+    )
 
 
 class ColorHandler(logging.StreamHandler):
@@ -327,6 +354,32 @@ class CommandTestCase(IntegrationTestCase):
         self.reflector = None
 
     async def asyncSetUp(self):
+        self.chain = Lbrycrd.temp_regtest()
+        self.ledger = self.chain.ledger
+        await self.chain.ensure()
+        self.addCleanup(self.chain.stop)
+        await self.chain.start('-rpcworkqueue=128')
+
+        self.block_expected = 0
+        await self.generate(200, wait=False)
+
+        self.chain.ledger.conf.spv_address_filters = False
+        self.service = FullNode(
+            self.ledger, f'sqlite:///{self.chain.data_dir}/full_node.db', Lbrycrd(self.ledger)
+        )
+        self.daemon = Daemon(self.service)
+        self.api = self.daemon.api
+        self.addCleanup(self.daemon.stop)
+        await self.daemon.start()
+
+        self.wallet = self.service.wallet_manager.default_wallet
+        self.account = self.wallet.accounts[0]
+        addresses = await self.account.ensure_address_gap()
+
+        await self.chain.send_to_address(addresses[0], '10.0')
+        await self.generate(5)
+
+    async def XasyncSetUp(self):
         await super().asyncSetUp()
 
         logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
@@ -435,10 +488,15 @@ class CommandTestCase(IntegrationTestCase):
             addresses.add(txo['address'])
         return list(addresses)
 
-    async def generate(self, blocks):
+    def is_expected_block(self, b):
+        return self.block_expected == b.height
+
+    async def generate(self, blocks, wait=True):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
-        await self.blockchain.generate(blocks)
-        await self.ledger.on_header.where(self.blockchain.is_expected_block)
+        await self.chain.generate(blocks)
+        self.block_expected += blocks
+        if wait:
+            await self.service.sync.on_block.where(self.is_expected_block)
 
     async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
@@ -454,18 +512,18 @@ class CommandTestCase(IntegrationTestCase):
 
     async def out(self, awaitable):
         """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """
-        return json.loads(jsonrpc_dumps_pretty(await awaitable, ledger=self.ledger))['result']
+        return json.loads(jsonrpc_dumps_pretty(await awaitable, service=self.service))['result']
 
     def sout(self, value):
         """ Synchronous version of `out` method. """
-        return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
+        return json.loads(jsonrpc_dumps_pretty(value, service=self.service))['result']
 
     async def confirm_and_render(self, awaitable, confirm) -> Transaction:
         tx = await awaitable
         if confirm:
-            await self.ledger.wait(tx)
+            await self.service.wait(tx)
             await self.generate(1)
-            await self.ledger.wait(tx, self.blockchain.block_expected)
+            await self.service.wait(tx)
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
@@ -519,7 +577,7 @@ class CommandTestCase(IntegrationTestCase):
 
     async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_channel_create(name, bid, **kwargs), confirm
+            self.api.channel_create(name, bid, **kwargs), confirm
         )
 
     async def channel_update(self, claim_id, confirm=True, **kwargs):
@@ -582,7 +640,7 @@ class CommandTestCase(IntegrationTestCase):
         return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
     async def claim_search(self, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
+        return (await self.out(self.api.claim_search(**kwargs)))['items']
 
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']

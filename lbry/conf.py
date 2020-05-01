@@ -10,7 +10,7 @@ import yaml
 from appdirs import user_data_dir, user_config_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
-from lbry.wallet.coinselection import STRATEGIES
+from lbry.wallet.coinselection import COIN_SELECTION_STRATEGIES
 
 log = logging.getLogger(__name__)
 
@@ -382,8 +382,12 @@ class BaseConfig:
         self.environment = {}  # from environment variables
         self.persisted = {}    # from config file
         self._updating_config = False
+        self.set(**kwargs)
+
+    def set(self, **kwargs):
         for key, value in kwargs.items():
             setattr(self, key, value)
+        return self
 
     @contextmanager
     def update_config(self):
@@ -603,6 +607,17 @@ class Config(CLIConfig):
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
 
+    spv_address_filters = Toggle(
+        "Generate Golomb-Rice coding filters for blocks and transactions. Enables "
+        "light client to synchronize with a full node.",
+        True
+    )
+
+    lbrycrd_dir = Path(
+        "Directory containing lbrycrd data.",
+        previous_names=['lbrycrd_dir'], metavar='DIR'
+    )
+
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
@@ -620,7 +635,7 @@ class Config(CLIConfig):
 
     coin_selection_strategy = StringChoice(
         "Strategy to use when selecting UTXOs for a transaction",
-        STRATEGIES, "standard")
+        COIN_SELECTION_STRATEGIES, "standard")
 
     save_resolved_claims = Toggle(
         "Save content claims to the database when they are resolved to keep file_list up to date, "
@@ -638,6 +653,15 @@ class Config(CLIConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_default_paths()
+
+    @classmethod
+    def with_same_dir(cls, same_dir):
+        return cls(
+            data_dir=same_dir,
+            download_dir=same_dir,
+            wallet_dir=same_dir,
+            lbrycrd_dir=same_dir,
+        )
 
     def set_default_paths(self):
         if 'darwin' in sys.platform.lower():
