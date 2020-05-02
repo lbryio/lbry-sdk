@@ -7,9 +7,10 @@ from functools import partial
 from sqlalchemy import create_engine, text
 
 from lbry.crypto.bip32 import PubKey
+from lbry.schema.result import Censor
 from lbry.blockchain.ledger import Ledger
 from lbry.blockchain.transaction import Transaction, Output
-from .constants import TXO_TYPES, CLAIM_TYPE_CODES
+from .constants import TXO_TYPES
 from . import queries as q
 
 
@@ -182,7 +183,7 @@ class Database:
     async def get_purchases(self, **constraints) -> Tuple[List[Output], Optional[int]]:
         return await self.run_in_executor(q.get_purchases, **constraints)
 
-    async def search_claims(self, **constraints):
+    async def search_claims(self, **constraints) -> Tuple[List[Output], Optional[int], Censor]:
         return await self.run_in_executor(q.search, **constraints)
 
     async def get_txo_sum(self, **constraints):

@@ -119,11 +119,23 @@ def constraints_to_clause(tables, constraints):
         else:
             col, op = key, '__eq__'
         attr = None
-        for table in tables:
-            attr = getattr(table.c, col, None)
-            if attr is not None:
-                clause.append(getattr(attr, op)(constraint))
-                break
+        if '.' in col:
+            table_name, col = col.split('.')
+            _table = None
+            for table in tables:
+                if table.name == table_name.lower():
+                    _table = table
+                    break
+            if _table is not None:
+                attr = getattr(_table.c, col)
+            else:
+                raise ValueError(f"Table '{table_name}' not available: {', '.join([t.name for t in tables])}.")
+        else:
+            for table in tables:
+                attr = getattr(table.c, col, None)
+                if attr is not None:
+                    break
         if attr is None:
             raise ValueError(f"Attribute '{col}' not found on tables: {', '.join([t.name for t in tables])}.")
+        clause.append(getattr(attr, op)(constraint))
     return and_(*clause)

@@ -19,6 +19,11 @@ CLAIM_TYPE_CODES = [
     TXO_TYPES[name] for name in CLAIM_TYPE_NAMES
 ]
 
+SPENDABLE_TYPE_CODES = [
+    TXO_TYPES['other'],
+    TXO_TYPES['purchase']
+]
+
 STREAM_TYPES = {
     'video': 1,
     'audio': 2,

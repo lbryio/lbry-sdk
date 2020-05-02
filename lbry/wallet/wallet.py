@@ -11,7 +11,7 @@ from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
 
-from lbry.db import Database
+from lbry.db import Database, SPENDABLE_TYPE_CODES
 from lbry.blockchain.ledger import Ledger
 from lbry.constants import COIN, NULL_HASH32
 from lbry.blockchain.transaction import Transaction, Input, Output
@@ -294,7 +294,11 @@ class Wallet:
 
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[Account]):
         estimators = []
-        for utxo in (await self.db.get_utxos(accounts=funding_accounts))[0]:
+        utxos = await self.db.get_utxos(
+            accounts=funding_accounts,
+            txo_type__in=SPENDABLE_TYPE_CODES
+        )
+        for utxo in utxos[0]:
             estimators.append(OutputEffectiveAmountEstimator(self.ledger, utxo))
         return estimators
 

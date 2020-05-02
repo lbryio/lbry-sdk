@@ -2,10 +2,11 @@ import os
 import asyncio
 import logging
 from datetime import datetime
-from typing import Iterable, List, Optional, NamedTuple
+from typing import Iterable, List, Optional, Tuple, NamedTuple
 
 from lbry.db import Database
 from lbry.db.constants import TXO_TYPES
+from lbry.schema.result import Censor
 from lbry.blockchain.dewies import dewies_to_lbc
 from lbry.blockchain.transaction import Transaction, Output
 from lbry.blockchain.ledger import Ledger
@@ -198,8 +199,7 @@ class Service:
     async def resolve(self, accounts, urls, **kwargs):
         raise NotImplementedError
 
-    async def search_claims(
-            self, accounts, include_purchase_receipt=False, include_is_my_output=False, **kwargs):
+    async def search_claims(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int], Censor]:
         raise NotImplementedError
 
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:

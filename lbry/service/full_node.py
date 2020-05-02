@@ -43,8 +43,7 @@ class FullNode(Service):
         }
 
     async def search_claims(self, accounts, **kwargs):
-        txo_rows, extra_txo_rows, offset, total, search_censor = await self.db.search_claims(**kwargs)
-        return txo_rows, None, None, total
+        return await self.db.search_claims(**kwargs)
 
     async def get_transaction_address_filters(self, block_hash):
         return {

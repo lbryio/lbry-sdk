@@ -1603,10 +1603,10 @@ class API:
             kwargs['signature_valid'] = 0
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, blocked, _, total = await self.service.search_claims(wallet.accounts, **kwargs)
+        txos, total, censored = await self.service.search_claims(wallet.accounts, **kwargs)
         result = {
             "items": txos,
-            "blocked": blocked,
+            #"blocked": censored,
             "page": page_num,
             "page_size": page_size
         }
