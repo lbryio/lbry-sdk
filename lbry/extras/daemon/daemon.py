@@ -290,6 +290,11 @@ class JSONRPCServerType(type):
         return klass
 
 
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
+
 class Daemon(metaclass=JSONRPCServerType):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
@@ -315,7 +320,7 @@ class Daemon(metaclass=JSONRPCServerType):
         labelnames=("method",)
     )
     response_time_metric = Histogram(
-        "response_time", "Response times", namespace="daemon_api",
+        "response_time", "Response times", namespace="daemon_api", buckets=HISTOGRAM_BUCKETS,
         labelnames=("method",)
     )
 

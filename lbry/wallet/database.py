@@ -22,6 +22,10 @@ from .util import date_to_julian_day
 log = logging.getLogger(__name__)
 sqlite3.enable_callback_tracebacks(True)
 
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
 
 @dataclass
 class ReaderProcessState:
@@ -79,10 +83,10 @@ class AIOSQLite:
         "read_count", "Number of database reads", namespace="daemon_database"
     )
     acquire_write_lock_metric = Histogram(
-        f'write_lock_acquired', 'Time to acquire the write lock', namespace="daemon_database"
+        f'write_lock_acquired', 'Time to acquire the write lock', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
     )
     held_write_lock_metric = Histogram(
-        f'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database"
+        f'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
     )
 
     def __init__(self):
@@ -642,7 +646,7 @@ class Database(SQLiteMixin):
         return self.db.run(__many)
 
     async def reserve_outputs(self, txos, is_reserved=True):
-        txoids = ((is_reserved, txo.id) for txo in txos)
+        txoids = [(is_reserved, txo.id) for txo in txos]
         await self.db.executemany("UPDATE txo SET is_reserved = ? WHERE txoid = ?", txoids)
 
     async def release_outputs(self, txos):
