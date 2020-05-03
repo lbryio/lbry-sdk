@@ -306,6 +306,14 @@ class Daemon(metaclass=JSONRPCServerType):
         "requests_count", "Number of requests received", namespace="daemon_api",
         labelnames=("method",)
     )
+    failed_request_metric = Counter(
+        "failed_request_count", "Number of failed requests", namespace="daemon_api",
+        labelnames=("method",)
+    )
+    cancelled_request_metric = Counter(
+        "cancelled_request_count", "Number of cancelled requests", namespace="daemon_api",
+        labelnames=("method",)
+    )
     response_time_metric = Histogram(
         "response_time", "Response times", namespace="daemon_api",
         labelnames=("method",)
@@ -685,9 +693,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 result = await result
             return result
         except asyncio.CancelledError:
+            self.cancelled_request_metric.labels(method=function_name).inc()
             log.info("cancelled API call for: %s", function_name)
             raise
         except Exception as e:  # pylint: disable=broad-except
+            self.failed_request_metric.labels(method=function_name).inc()
             log.exception("error handling api request")
             return JSONRPCError.create_command_exception(
                 command=function_name, args=_args, kwargs=_kwargs, exception=e, traceback=format_exc()
