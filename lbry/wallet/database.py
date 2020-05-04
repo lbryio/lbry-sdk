@@ -181,12 +181,18 @@ class AIOSQLite:
     async def run(self, fun, *args, **kwargs):
         self.write_count_metric.inc()
         self.waiting_writes_metric.inc()
+        # it's possible many writes are coming in one after the other, these can
+        # block reader calls for a long time
+        # if the reader waits for the writers to finish and then has to wait for
+        # yet more, it will clear the urgent_read_done event to block more writers
+        # piling on
         try:
             await self.urgent_read_done.wait()
         except Exception as e:
             self.waiting_writes_metric.dec()
             raise e
         self.writers += 1
+        # block readers
         self.read_ready.clear()
         try:
             async with self.write_lock:
@@ -197,6 +203,7 @@ class AIOSQLite:
             self.writers -= 1
             self.waiting_writes_metric.dec()
             if not self.writers:
+                # unblock the readers once the last enqueued writer finishes
                 self.read_ready.set()
 
     def __run_transaction(self, fun: Callable[[sqlite3.Connection, Any, Any], Any], *args, **kwargs):
