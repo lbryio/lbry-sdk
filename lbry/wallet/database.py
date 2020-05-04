@@ -86,7 +86,8 @@ class AIOSQLite:
         f'write_lock_acquired', 'Time to acquire the write lock', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
     )
     held_write_lock_metric = Histogram(
-        f'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
+        f'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database",
+        buckets=HISTOGRAM_BUCKETS
     )
 
     def __init__(self):

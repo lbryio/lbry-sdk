@@ -20,7 +20,6 @@ import pkg_resources
 
 import certifi
 import aiohttp
-from prometheus_client import Histogram
 from lbry.schema.claim import Claim
 
 log = logging.getLogger(__name__)
