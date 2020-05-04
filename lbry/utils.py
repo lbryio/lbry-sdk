@@ -3,6 +3,7 @@ import codecs
 import datetime
 import random
 import socket
+import time
 import string
 import sys
 import json
@@ -282,3 +283,25 @@ async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled
 def is_running_from_bundle():
     # see https://pyinstaller.readthedocs.io/en/stable/runtime-information.html
     return getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS')
+
+
+class LockWithMetrics(asyncio.Lock):
+    def __init__(self, acquire_metric, held_time_metric, loop=None):
+        super().__init__(loop=loop)
+        self._acquire_metric = acquire_metric
+        self._lock_held_time_metric = held_time_metric
+        self._lock_acquired_time = None
+
+    async def acquire(self):
+        start = time.perf_counter()
+        try:
+            return await super().acquire()
+        finally:
+            self._lock_acquired_time = time.perf_counter()
+            self._acquire_metric.observe(self._lock_acquired_time - start)
+
+    def release(self):
+        try:
+            return super().release()
+        finally:
+            self._lock_held_time_metric.observe(time.perf_counter() - self._lock_acquired_time)

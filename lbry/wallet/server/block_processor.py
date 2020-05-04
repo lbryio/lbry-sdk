@@ -3,6 +3,7 @@ import asyncio
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional
+from prometheus_client import Gauge, Histogram
 import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.server.db.writer import SQLDB
@@ -10,7 +11,6 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
-from lbry.wallet.server.prometheus import BLOCK_COUNT, BLOCK_UPDATE_TIMES, REORG_COUNT
 
 
 class Prefetcher:
@@ -129,12 +129,23 @@ class ChainError(Exception):
     """Raised on error processing blocks."""
 
 
+NAMESPACE = "wallet_server"
+
+
 class BlockProcessor:
     """Process blocks and update the DB state to match.
 
     Employ a prefetcher to prefetch blocks in batches for processing.
     Coordinate backing up in case of chain reorganisations.
     """
+
+    block_count_metric = Gauge(
+        "block_count", "Number of processed blocks", namespace=NAMESPACE
+    )
+    block_update_time_metric = Histogram("block_time", "Block update times", namespace=NAMESPACE)
+    reorg_count_metric = Gauge(
+        "reorg_count", "Number of reorgs", namespace=NAMESPACE
+    )
 
     def __init__(self, env, db, daemon, notifications):
         self.env = env
@@ -199,8 +210,8 @@ class BlockProcessor:
                 cache.clear()
             await self._maybe_flush()
             processed_time = time.perf_counter() - start
-            BLOCK_COUNT.set(self.height)
-            BLOCK_UPDATE_TIMES.observe(processed_time)
+            self.block_count_metric.set(self.height)
+            self.block_update_time_metric.observe(processed_time)
             if not self.db.first_sync:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
@@ -255,7 +266,7 @@ class BlockProcessor:
             last -= len(raw_blocks)
         await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
         await self.prefetcher.reset_height(self.height)
-        REORG_COUNT.inc()
+        self.reorg_count_metric.inc()
 
     async def reorg_hashes(self, count):
         """Return a pair (start, last, hashes) of blocks to back up during a

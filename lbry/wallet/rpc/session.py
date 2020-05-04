@@ -33,13 +33,12 @@ from asyncio import Event, CancelledError
 import logging
 import time
 from contextlib import suppress
-
+from prometheus_client import Counter, Histogram
 from lbry.wallet.tasks import TaskGroup
 
 from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Notification
 from .jsonrpc import RPCError, ProtocolError
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
-from lbry.wallet.server.prometheus import NOTIFICATION_COUNT, RESPONSE_TIMES, REQUEST_ERRORS_COUNT, RESET_CONNECTIONS
 
 
 class Connector:
@@ -372,9 +371,25 @@ class BatchRequest:
                     raise BatchError(self)
 
 
+NAMESPACE = "wallet_server"
+
+
 class RPCSession(SessionBase):
     """Base class for protocols where a message can lead to a response,
     for example JSON RPC."""
+
+    RESPONSE_TIMES = Histogram("response_time", "Response times", namespace=NAMESPACE,
+                               labelnames=("method", "version"))
+    NOTIFICATION_COUNT = Counter("notification", "Number of notifications sent (for subscriptions)",
+                                 namespace=NAMESPACE, labelnames=("method", "version"))
+    REQUEST_ERRORS_COUNT = Counter(
+        "request_error", "Number of requests that returned errors", namespace=NAMESPACE,
+        labelnames=("method", "version")
+    )
+    RESET_CONNECTIONS = Counter(
+        "reset_clients", "Number of reset connections by client version",
+        namespace=NAMESPACE, labelnames=("version",)
+    )
 
     def __init__(self, *, framer=None, loop=None, connection=None):
         super().__init__(framer=framer, loop=loop)
@@ -388,7 +403,7 @@ class RPCSession(SessionBase):
             except MemoryError:
                 self.logger.warning('received oversized message from %s:%s, dropping connection',
                                     self._address[0], self._address[1])
-                RESET_CONNECTIONS.labels(version=self.client_version).inc()
+                self.RESET_CONNECTIONS.labels(version=self.client_version).inc()
                 self._close()
                 return
 
@@ -422,7 +437,7 @@ class RPCSession(SessionBase):
                               'internal server error')
         if isinstance(request, Request):
             message = request.send_result(result)
-            RESPONSE_TIMES.labels(
+            self.RESPONSE_TIMES.labels(
                 method=request.method,
                 version=self.client_version
             ).observe(time.perf_counter() - start)
@@ -430,7 +445,7 @@ class RPCSession(SessionBase):
                 await self._send_message(message)
         if isinstance(result, Exception):
             self._bump_errors()
-            REQUEST_ERRORS_COUNT.labels(
+            self.REQUEST_ERRORS_COUNT.labels(
                 method=request.method,
                 version=self.client_version
             ).inc()
@@ -467,7 +482,7 @@ class RPCSession(SessionBase):
     async def send_notification(self, method, args=()):
         """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
-        NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
+        self.NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
         await self._send_message(message)
 
     def send_batch(self, raise_errors=False):

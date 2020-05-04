@@ -19,7 +19,7 @@ from functools import wraps, partial
 import ecdsa
 import base58
 from aiohttp import web
-from prometheus_client import generate_latest as prom_generate_latest
+from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
 from google.protobuf.message import DecodeError
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
@@ -290,12 +290,39 @@ class JSONRPCServerType(type):
         return klass
 
 
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
+
 class Daemon(metaclass=JSONRPCServerType):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
     callable_methods: dict
     deprecated_methods: dict
+
+    pending_requests_metric = Gauge(
+        "pending_requests", "Number of running api requests", namespace="daemon_api",
+        labelnames=("method",)
+    )
+
+    requests_count_metric = Counter(
+        "requests_count", "Number of requests received", namespace="daemon_api",
+        labelnames=("method",)
+    )
+    failed_request_metric = Counter(
+        "failed_request_count", "Number of failed requests", namespace="daemon_api",
+        labelnames=("method",)
+    )
+    cancelled_request_metric = Counter(
+        "cancelled_request_count", "Number of cancelled requests", namespace="daemon_api",
+        labelnames=("method",)
+    )
+    response_time_metric = Histogram(
+        "response_time", "Response times", namespace="daemon_api", buckets=HISTOGRAM_BUCKETS,
+        labelnames=("method",)
+    )
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
         self.conf = conf
@@ -457,7 +484,6 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
         log.info("Platform: %s", json.dumps(self.platform_info, indent=2))
-
         self.need_connection_status_refresh.set()
         self._connection_status_task = self.component_manager.loop.create_task(
             self.keep_connection_status_up_to_date()
@@ -663,20 +689,27 @@ class Daemon(metaclass=JSONRPCServerType):
                 JSONRPCError.CODE_INVALID_PARAMS,
                 params_error_message,
             )
-
+        self.pending_requests_metric.labels(method=function_name).inc()
+        self.requests_count_metric.labels(method=function_name).inc()
+        start = time.perf_counter()
         try:
             result = method(self, *_args, **_kwargs)
             if asyncio.iscoroutine(result):
                 result = await result
             return result
         except asyncio.CancelledError:
+            self.cancelled_request_metric.labels(method=function_name).inc()
             log.info("cancelled API call for: %s", function_name)
             raise
         except Exception as e:  # pylint: disable=broad-except
+            self.failed_request_metric.labels(method=function_name).inc()
             log.exception("error handling api request")
             return JSONRPCError.create_command_exception(
                 command=function_name, args=_args, kwargs=_kwargs, exception=e, traceback=format_exc()
             )
+        finally:
+            self.pending_requests_metric.labels(method=function_name).dec()
+            self.response_time_metric.labels(method=function_name).observe(time.perf_counter() - start)
 
     def _verify_method_is_callable(self, function_path):
         if function_path not in self.callable_methods:

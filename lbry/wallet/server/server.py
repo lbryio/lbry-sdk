@@ -6,7 +6,7 @@ import typing
 
 import lbry
 from lbry.wallet.server.mempool import MemPool, MemPoolAPI
-from lbry.wallet.server.prometheus import PrometheusServer
+from lbry.prometheus import PrometheusServer
 
 
 class Notifications:
@@ -143,4 +143,4 @@ class Server:
     async def start_prometheus(self):
         if not self.prometheus_server and self.env.prometheus_port:
             self.prometheus_server = PrometheusServer()
-            await self.prometheus_server.start(self.env.prometheus_port)
+            await self.prometheus_server.start("0.0.0.0", self.env.prometheus_port)
