@@ -54,7 +54,8 @@ class API:
 
     def __init__(self, service: Service):
         self.service = service
-        self.wallet_manager = service.wallet_manager
+        self.wallets = service.wallets
+        self.ledger = service.ledger
 
     async def stop(self):
         """
@@ -291,7 +292,7 @@ class API:
         if isinstance(urls, str):
             urls = [urls]
         return await self.service.resolve(
-            urls, wallet=self.wallet_manager.get_wallet_or_default(wallet_id), **kwargs
+            urls, wallet=self.wallets.get_or_default(wallet_id), **kwargs
         )
 
     async def get(
@@ -317,7 +318,7 @@ class API:
         """
         return await self.service.get(
             uri, file_name=file_name, download_directory=download_directory, timeout=timeout, save_file=save_file,
-            wallet=self.wallet_manager.get_wallet_or_default(wallet_id)
+            wallet=self.wallets.get_or_default(wallet_id)
         )
 
     SETTINGS_DOC = """
@@ -396,7 +397,7 @@ class API:
         Returns:
             (dict) Dictionary of preference(s)
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if key:
             if key in wallet.preferences:
                 return {key: wallet.preferences[key]}
@@ -418,7 +419,7 @@ class API:
         Returns:
             (dict) Dictionary with key/value of new preference
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if value and isinstance(value, str) and value[0] in ('[', '{'):
             value = json.loads(value)
         wallet.preferences[key] = value
@@ -444,8 +445,8 @@ class API:
         Returns: {Paginated[Wallet]}
         """
         if wallet_id:
-            return paginate_list([self.wallet_manager.get_wallet_or_error(wallet_id)], 1, 1)
-        return paginate_list(self.wallet_manager.wallets, page, page_size)
+            return paginate_list([self.wallets.get_wallet_or_error(wallet_id)], 1, 1)
+        return paginate_list(self.wallets.wallets, page, page_size)
 
     async def wallet_reconnect(self):
         """
@@ -458,7 +459,7 @@ class API:
 
         Returns: None
         """
-        return self.wallet_manager.reset()
+        return self.wallets.reset()
 
     async def wallet_create(
             self, wallet_id, skip_on_startup=False, create_account=False, single_key=False):
@@ -478,13 +479,13 @@ class API:
         Returns: {Wallet}
         """
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
-        for wallet in self.wallet_manager.wallets:
+        for wallet in self.wallets.wallets:
             if wallet.id == wallet_id:
                 raise Exception(f"Wallet at path '{wallet_path}' already exists and is loaded.")
         if os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' already exists, use 'wallet_add' to load wallet.")
 
-        wallet = self.wallet_manager.import_wallet(wallet_path)
+        wallet = self.wallets.import_wallet(wallet_path)
         if not wallet.accounts and create_account:
             account = Account.generate(
                 self.ledger, wallet, address_generator={
@@ -512,12 +513,12 @@ class API:
         Returns: {Wallet}
         """
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
-        for wallet in self.wallet_manager.wallets:
+        for wallet in self.wallets.wallets:
             if wallet.id == wallet_id:
                 raise Exception(f"Wallet at path '{wallet_path}' is already loaded.")
         if not os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' was not found.")
-        wallet = self.wallet_manager.import_wallet(wallet_path)
+        wallet = self.wallets.import_wallet(wallet_path)
         if self.ledger.sync.network.is_connected:
             for account in wallet.accounts:
                 await self.ledger.subscribe_account(account)
@@ -535,8 +536,8 @@ class API:
 
         Returns: {Wallet}
         """
-        wallet = self.wallet_manager.get_wallet_or_error(wallet_id)
-        self.wallet_manager.wallets.remove(wallet)
+        wallet = self.wallets.get_wallet_or_error(wallet_id)
+        self.wallets.wallets.remove(wallet)
         for account in wallet.accounts:
             await self.ledger.unsubscribe_account(account)
         return wallet
@@ -556,7 +557,7 @@ class API:
         Returns:
             (decimal) amount of lbry credits in wallet
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         balance = await self.ledger.get_detailed_balance(
             accounts=wallet.accounts, confirmations=confirmations
         )
@@ -575,9 +576,9 @@ class API:
         Returns:
             Dictionary of wallet status information.
         """
-        if self.wallet_manager is None:
+        if self.wallets is None:
             return {'is_encrypted': None, 'is_syncing': None, 'is_locked': None}
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         return {
             'is_encrypted': wallet.is_encrypted,
             'is_syncing': len(self.ledger._update_tasks) > 0,
@@ -598,7 +599,7 @@ class API:
         Returns:
             (bool) true if wallet is unlocked, otherwise false
         """
-        return self.wallet_manager.get_wallet_or_default(wallet_id).unlock(password)
+        return self.wallets.get_or_default(wallet_id).unlock(password)
 
     async def wallet_lock(self, wallet_id=None):
         """
@@ -613,7 +614,7 @@ class API:
         Returns:
             (bool) true if wallet is locked, otherwise false
         """
-        return self.wallet_manager.get_wallet_or_default(wallet_id).lock()
+        return self.wallets.get_or_default(wallet_id).lock()
 
     async def wallet_decrypt(self, wallet_id=None):
         """
@@ -628,7 +629,7 @@ class API:
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallet_manager.get_wallet_or_default(wallet_id).decrypt()
+        return self.wallets.get_or_default(wallet_id).decrypt()
 
     async def wallet_encrypt(self, new_password, wallet_id=None):
         """
@@ -645,7 +646,7 @@ class API:
         Returns:
             (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallet_manager.get_wallet_or_default(wallet_id).encrypt(new_password)
+        return self.wallets.get_or_default(wallet_id).encrypt(new_password)
 
     async def wallet_send(
             self, amount, addresses, wallet_id=None,
@@ -666,10 +667,10 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        account = wallet.get_account_or_default(change_account_id)
-        accounts = wallet.get_accounts_or_all(funding_account_ids)
+        account = wallet.accounts.get_or_default(change_account_id)
+        accounts = wallet.accounts.get_or_all(funding_account_ids)
 
         amount = self.get_dewies_or_error("amount", amount)
 
@@ -730,7 +731,7 @@ class API:
             'confirmations': confirmations,
             'show_seed': show_seed
         }
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             return paginate_list([await wallet.get_account_or_error(account_id).get_details(**kwargs)], 1, 1)
         else:
@@ -754,8 +755,8 @@ class API:
         Returns:
             (decimal) amount of lbry credits in wallet
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
+        wallet = self.wallets.get_or_default(wallet_id)
+        account = wallet.accounts.get_or_default(account_id)
         balance = await account.get_detailed_balance(
             confirmations=confirmations, reserved_subtotals=True,
         )
@@ -783,7 +784,7 @@ class API:
 
         Returns: {Account}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         account = Account.from_dict(
             self.ledger, wallet, {
                 'name': account_name,
@@ -816,7 +817,7 @@ class API:
 
         Returns: {Account}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         account = Account.generate(
             self.ledger.ledger, wallet, account_name, {
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
@@ -840,7 +841,7 @@ class API:
 
         Returns: {Account}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.get_account_or_error(account_id)
         wallet.accounts.remove(account)
         wallet.save()
@@ -872,7 +873,7 @@ class API:
 
         Returns: {Account}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.get_account_or_error(account_id)
         change_made = False
 
@@ -921,7 +922,7 @@ class API:
         Returns:
             (map) maximum gap for change and receiving addresses
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         return wallet.get_account_or_error(account_id).get_max_gap()
 
     async def account_fund(self, to_account=None, from_account=None, amount='0.0',
@@ -950,9 +951,9 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        to_account = wallet.get_account_or_default(to_account)
-        from_account = wallet.get_account_or_default(from_account)
+        wallet = self.wallets.get_or_default(wallet_id)
+        to_account = wallet.accounts.get_or_default(to_account)
+        from_account = wallet.accounts.get_or_default(from_account)
         amount = self.get_dewies_or_error('amount', amount) if amount else None
         if not isinstance(outputs, int):
             raise ValueError("--outputs must be an integer.")
@@ -1000,7 +1001,7 @@ class API:
         Returns:
             (str) sha256 hash of wallet
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         return hexlify(wallet.hash).decode()
 
     async def sync_apply(self, password, data=None, wallet_id=None, blocking=False):
@@ -1026,10 +1027,10 @@ class API:
             (map) sync hash and data
 
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         wallet_changed = False
         if data is not None:
-            added_accounts = wallet.merge(self.wallet_manager, password, data)
+            added_accounts = wallet.merge(self.wallets, password, data)
             if added_accounts and self.ledger.sync.network.is_connected:
                 if blocking:
                     await asyncio.wait([
@@ -1070,8 +1071,8 @@ class API:
         Returns:
             (bool) true, if address is associated with current wallet
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
+        wallet = self.wallets.get_or_default(wallet_id)
+        account = wallet.accounts.get_or_default(account_id)
         match = await self.ledger.db.get_address(address=address, accounts=[account])
         if match is not None:
             return True
@@ -1094,7 +1095,7 @@ class API:
 
         Returns: {Paginated[Address]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         constraints = {}
         if address:
             constraints['address'] = address
@@ -1122,8 +1123,8 @@ class API:
 
         Returns: {Address}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.get_account_or_default(account_id).receiving.get_or_create_usable_address()
+        wallet = self.wallets.get_or_default(wallet_id)
+        return wallet.accounts.get_or_default(account_id).receiving.get_or_create_usable_address()
 
     async def address_block_filters(self):
         return await self.service.get_block_address_filters()
@@ -1175,7 +1176,7 @@ class API:
 
         Returns: {Paginated[File]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
         paginated = paginate_list(
@@ -1348,7 +1349,7 @@ class API:
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         constraints = {
             "wallet": wallet,
             "accounts": [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
@@ -1385,9 +1386,9 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        accounts = wallet.get_accounts_or_all(funding_account_ids)
+        accounts = wallet.accounts.get_or_all(funding_account_ids)
         txo = None
         if claim_id:
             txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
@@ -1407,7 +1408,7 @@ class API:
         claim = txo.claim
         if not claim.is_stream or not claim.stream.has_fee:
             raise Exception(f"Claim '{claim_id}' does not have a purchase price.")
-        tx = await self.wallet_manager.create_purchase_transaction(
+        tx = await self.wallets.create_purchase_transaction(
             accounts, txo, self.exchange_rate_manager, override_max_key_fee
         )
         if not preview:
@@ -1594,7 +1595,7 @@ class API:
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
+        wallet = self.wallets.get_or_default(kwargs.pop('wallet_id', None))
         if {'claim_id', 'claim_ids'}.issubset(kwargs):
             raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
         if kwargs.pop('valid_channel_signature', False):
@@ -1697,16 +1698,15 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        account = wallet.get_account_or_default(account_id)
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.service.ledger.valid_channel_name_or_error(name)
-        #amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        amount = lbc_to_dewies(bid)
+        wallet = self.wallets.get_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
+        account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await account.get_valid_receiving_address(claim_address)
 
-        existing_channels, _ = await self.service.get_channels(wallet=wallet, claim_name=name)
+        existing_channels, _ = await wallet.channels.list(claim_name=name)
         if len(existing_channels) > 0:
             if not allow_duplicate_name:
                 raise Exception(
@@ -1714,14 +1714,14 @@ class API:
                     f"Use --allow-duplicate-name flag to override."
                 )
 
-        tx = await wallet.create_channel(
+        tx = await wallet.channels.create(
             name, amount, account, funding_accounts, claim_address, preview, **kwargs
         )
 
         if not preview:
             await self.service.broadcast_or_release(tx, blocking)
         else:
-            await account.ledger.release_tx(tx)
+            await self.service.release_tx(tx)
 
         return tx
 
@@ -1813,9 +1813,9 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -1903,7 +1903,7 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
             account = wallet.get_account_or_error(account_id)
@@ -1985,7 +1985,7 @@ class API:
         Returns:
             (str) serialized channel private key
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         channel = await self.get_channel_or_error(wallet, account_id, channel_id, channel_name, for_signing=True)
         address = channel.get_address(self.ledger)
         public_key = await self.ledger.get_public_key_for_address(wallet, address)
@@ -2014,7 +2014,7 @@ class API:
         Returns:
             (dict) Result dictionary
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
 
         decoded = base58.b58decode(channel_data)
         data = json.loads(decoded)
@@ -2161,7 +2161,7 @@ class API:
         Returns: {Transaction}
         """
         self.valid_stream_name_or_error(name)
-        wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
+        wallet = self.wallets.get_or_default(kwargs.get('wallet_id'))
         if kwargs.get('account_id'):
             accounts = [wallet.get_account_or_error(kwargs.get('account_id'))]
         else:
@@ -2218,10 +2218,10 @@ class API:
 
             Returns: {Transaction}
             """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         self.valid_stream_name_or_error(name)
-        account = wallet.get_account_or_default(account_id)
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
@@ -2359,17 +2359,17 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        self.ledger.valid_stream_name_or_error(name)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        self.valid_stream_name_or_error(name)
-        account = wallet.get_account_or_default(account_id)
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
-        channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        claim_address = await self.get_receiving_address(claim_address, account)
-        kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
+        account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        channel = await wallet.channels.get_for_signing_or_none(claim_id=channel_id, claim_name=channel_name)
+        amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
+        claim_address = await account.get_valid_receiving_address(claim_address)
+        kwargs['fee_address'] = self.ledger.get_fee_address(kwargs, claim_address)
 
-        claims = await account.get_claims(claim_name=name)
+        claims = await wallet.streams.list(claim_name=name)
         if len(claims) > 0:
             if not allow_duplicate_name:
                 raise Exception(
@@ -2377,11 +2377,15 @@ class API:
                     f"Use --allow-duplicate-name flag to override."
                 )
 
-        file_path, spec = await self._video_file_analyzer.verify_or_repair(
-            validate_file, optimize_file, file_path, ignore_non_video=True
-        )
-        kwargs.update(spec)
+        # TODO: fix
+        #file_path, spec = await self._video_file_analyzer.verify_or_repair(
+        #    validate_file, optimize_file, file_path, ignore_non_video=True
+        #)
+        #kwargs.update(spec)
 
+        wallet.streams.create(
+
+        )
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
         tx = await Transaction.claim_create(
@@ -2529,9 +2533,9 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -2651,7 +2655,7 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
             account = wallet.get_account_or_error(account_id)
@@ -2813,9 +2817,9 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        wallet = self.wallets.get_or_default(wallet_id)
+        account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
         self.valid_collection_name_or_error(name)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
@@ -2933,8 +2937,8 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        wallet = self.wallets.get_or_default(wallet_id)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -3041,7 +3045,7 @@ class API:
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             collections = account.get_collections
@@ -3069,7 +3073,7 @@ class API:
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
 
         if claim_id:
             txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
@@ -3121,14 +3125,14 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
-        amount = self.get_dewies_or_error("amount", amount)
+        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        amount = self.ledger.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
         claim_address = claim.get_address(self.ledger.ledger)
         if not tip:
-            account = wallet.get_account_or_default(account_id)
+            account = wallet.accounts.get_or_default(account_id)
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
@@ -3217,7 +3221,7 @@ class API:
 
         Returns: {Transaction}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         if account_id:
             account = wallet.get_account_or_error(account_id)
@@ -3329,7 +3333,7 @@ class API:
             }
 
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             transactions = account.get_transaction_history
@@ -3441,7 +3445,7 @@ class API:
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             claims = account.get_txos
@@ -3501,7 +3505,7 @@ class API:
 
         Returns: {List[Transaction]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
             wallet=wallet, accounts=accounts,
@@ -3559,7 +3563,7 @@ class API:
 
         Returns: int
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         return self.ledger.get_txo_sum(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
             **self._constrain_txo_from_kwargs({}, **kwargs)
@@ -3614,7 +3618,7 @@ class API:
 
         Returns: List[Dict]
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         plot = await self.ledger.get_txo_plot(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
             days_back=days_back, start_day=start_day, days_after=days_after, end_day=end_day,
@@ -3666,7 +3670,7 @@ class API:
         Returns:
             None
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         if account_id is not None:
             await wallet.get_account_or_error(account_id).release_all_outputs()
         else:
@@ -4160,7 +4164,7 @@ class API:
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         channel = await self.get_channel_or_error(
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
@@ -4216,7 +4220,7 @@ class API:
         if 'error' in channel:
             raise ValueError(channel['error'])
 
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         # channel = await self.get_channel_or_none(wallet, None, **channel)
         channel_claim = await self.get_channel_or_error(wallet, [], **channel)
         edited_comment = {
@@ -4249,7 +4253,7 @@ class API:
                 }
             }
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
         abandon_comment_body = {'comment_id': comment_id}
         channel = await comment_client.post(
             self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
@@ -4281,7 +4285,7 @@ class API:
                 "hidden": (bool)  flag indicating if comment_id was hidden
             }
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        wallet = self.wallets.get_or_default(wallet_id)
 
         if isinstance(comment_ids, str):
             comment_ids = [comment_ids]

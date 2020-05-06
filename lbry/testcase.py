@@ -14,16 +14,15 @@ from time import time
 from binascii import unhexlify
 from functools import partial
 
+from lbry.wallet import WalletManager, Wallet, Account
 from lbry.blockchain.ledger import Ledger
 from lbry.blockchain.transaction import Transaction, Input, Output
 from lbry.blockchain.util import satoshis_to_coins
-from lbry.constants import CENT, NULL_HASH32
-from lbry.wallet.wallet import Wallet, Account
-from lbry.wallet.manager import WalletManager
-from lbry.conf import Config
 from lbry.blockchain.lbrycrd import Lbrycrd
+from lbry.constants import CENT, NULL_HASH32
 from lbry.service.full_node import FullNode
 from lbry.service.daemon import Daemon
+from lbry.conf import Config
 
 from lbry.extras.daemon.daemon import jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
@@ -363,7 +362,7 @@ class CommandTestCase(IntegrationTestCase):
         self.block_expected = 0
         await self.generate(200, wait=False)
 
-        self.chain.ledger.conf.spv_address_filters = False
+        self.ledger.conf.spv_address_filters = False
         self.service = FullNode(
             self.ledger, f'sqlite:///{self.chain.data_dir}/full_node.db', Lbrycrd(self.ledger)
         )
@@ -372,9 +371,12 @@ class CommandTestCase(IntegrationTestCase):
         self.addCleanup(self.daemon.stop)
         await self.daemon.start()
 
-        self.wallet = self.service.wallet_manager.default_wallet
-        self.account = self.wallet.accounts[0]
+        self.wallet = self.service.wallets.default
+        self.account = self.wallet.accounts.default
         addresses = await self.account.ensure_address_gap()
+
+        self.ledger.conf.upload_dir = os.path.join(self.ledger.conf.data_dir, 'uploads')
+        os.mkdir(self.ledger.conf.upload_dir)
 
         await self.chain.send_to_address(addresses[0], '10.0')
         await self.generate(5)
@@ -527,7 +529,9 @@ class CommandTestCase(IntegrationTestCase):
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
-        file_path = tempfile.mktemp(prefix=prefix or "tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)
+        file_path = tempfile.mktemp(
+            prefix=prefix or "tmp", suffix=suffix or "", dir=self.ledger.conf.upload_dir
+        )
         with open(file_path, 'w+b') as file:
             file.write(data)
             file.flush()
@@ -539,7 +543,7 @@ class CommandTestCase(IntegrationTestCase):
         if file_path is None:
             file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm
+            self.api.stream_create(name, bid, file_path=file_path, **kwargs), confirm
         )
 
     async def stream_update(

@@ -1,15 +1,13 @@
 import os
-import time
-import stat
 import json
 import zlib
-import typing
+import asyncio
 import logging
-from typing import List, Sequence, MutableSequence, Optional, Iterable
-from collections import UserDict
+from typing import List, Sequence, Tuple, Optional, Iterable
 from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
+
 
 from lbry.db import Database, SPENDABLE_TYPE_CODES
 from lbry.blockchain.ledger import Ledger
@@ -22,51 +20,15 @@ from lbry.schema.claim import Claim
 from lbry.schema.purchase import Purchase
 from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowedError
 
-from .account import Account
+from .account import Account, SingleKey, HierarchicalDeterministic
 from .coinselection import CoinSelector, OutputEffectiveAmountEstimator
-
-if typing.TYPE_CHECKING:
-    from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
+from .storage import WalletStorage
+from .preferences import TimestampedPreferences
 
 
 log = logging.getLogger(__name__)
 
 ENCRYPT_ON_DISK = 'encrypt-on-disk'
-
-
-class TimestampedPreferences(UserDict):
-
-    def __init__(self, d: dict = None):
-        super().__init__()
-        if d is not None:
-            self.data = d.copy()
-
-    def __getitem__(self, key):
-        return self.data[key]['value']
-
-    def __setitem__(self, key, value):
-        self.data[key] = {
-            'value': value,
-            'ts': time.time()
-        }
-
-    def __repr__(self):
-        return repr(self.to_dict_without_ts())
-
-    def to_dict_without_ts(self):
-        return {
-            key: value['value'] for key, value in self.data.items()
-        }
-
-    @property
-    def hash(self):
-        return sha256(json.dumps(self.data).encode()).digest()
-
-    def merge(self, other: dict):
-        for key, value in other.items():
-            if key in self.data and value['ts'] < self.data[key]['ts']:
-                continue
-            self.data[key] = value
 
 
 class Wallet:
@@ -76,102 +38,45 @@ class Wallet:
         by physical files on the filesystem.
     """
 
-    preferences: TimestampedPreferences
-    encryption_password: Optional[str]
-
-    def __init__(self, ledger: Ledger, db: Database,
-                 name: str = 'Wallet', accounts: MutableSequence[Account] = None,
-                 storage: 'WalletStorage' = None, preferences: dict = None) -> None:
+    def __init__(self, ledger: Ledger, db: Database, name: str, storage: WalletStorage, preferences: dict):
         self.ledger = ledger
         self.db = db
         self.name = name
-        self.accounts = accounts or []
-        self.storage = storage or WalletStorage()
+        self.storage = storage
         self.preferences = TimestampedPreferences(preferences or {})
-        self.encryption_password = None
+        self.encryption_password: Optional[str] = None
         self.id = self.get_id()
+
+        self.utxo_lock = asyncio.Lock()
+
+        self.accounts = AccountListManager(self)
+        self.claims = ClaimListManager(self)
+        self.streams = StreamListManager(self)
+        self.channels = ChannelListManager(self)
+        self.collections = CollectionListManager(self)
+        self.purchases = PurchaseListManager(self)
+        self.supports = SupportListManager(self)
 
     def get_id(self):
         return os.path.basename(self.storage.path) if self.storage.path else self.name
 
-    def generate_account(self, name: str = None, address_generator: dict = None) -> Account:
-        account = Account.generate(self.ledger, self.db, name, address_generator)
-        self.accounts.append(account)
-        return account
-
-    def add_account(self, account_dict) -> Account:
-        account = Account.from_dict(self.ledger, self.db, account_dict)
-        self.accounts.append(account)
-        return account
-
-    @property
-    def default_account(self) -> Optional[Account]:
-        for account in self.accounts:
-            return account
-        return None
-
-    def get_account_or_default(self, account_id: str) -> Optional[Account]:
-        if account_id is None:
-            return self.default_account
-        return self.get_account_or_error(account_id)
-
-    def get_account_or_error(self, account_id: str) -> Account:
-        for account in self.accounts:
-            if account.id == account_id:
-                return account
-        raise ValueError(f"Couldn't find account: {account_id}.")
-
-    def get_accounts_or_all(self, account_ids: List[str]) -> Sequence[Account]:
-        return [
-            self.get_account_or_error(account_id)
-            for account_id in account_ids
-        ] if account_ids else self.accounts
-
-    async def get_detailed_accounts(self, **kwargs):
-        accounts = []
-        for i, account in enumerate(self.accounts):
-            details = await account.get_details(**kwargs)
-            details['is_default'] = i == 0
-            accounts.append(details)
-        return accounts
-
-    async def _get_account_and_address_info_for_address(self, address):
-        match = await self.db.get_address(accounts=self.accounts, address=address)
-        if match:
-            for account in self.accounts:
-                if match['account'] == account.public_key.address:
-                    return account, match
-
-    async def get_private_key_for_address(self, address) -> Optional[PrivateKey]:
-        match = await self._get_account_and_address_info_for_address(address)
-        if match:
-            account, address_info = match
-            return account.get_private_key(address_info['chain'], address_info['pubkey'].n)
-        return None
-
-    async def get_public_key_for_address(self, address) -> Optional[PubKey]:
-        match = await self._get_account_and_address_info_for_address(address)
-        if match:
-            _, address_info = match
-            return address_info['pubkey']
-        return None
-
-    async def get_account_for_address(self, address):
-        match = await self._get_account_and_address_info_for_address(address)
-        if match:
-            return match[0]
-
-    async def save_max_gap(self):
-        gap_changed = False
-        for account in self.accounts:
-            if await account.save_max_gap():
-                gap_changed = True
-        if gap_changed:
-            self.save()
+    @classmethod
+    async def create(cls, ledger: Ledger, db: Database, path: str, name: str, create_account=False, single_key=False):
+        wallet = cls(ledger, db, name, WalletStorage(path), {})
+        if create_account:
+            wallet.accounts.generate(address_generator={
+                'name': SingleKey.name if single_key else HierarchicalDeterministic.name
+            })
+        await wallet.save()
+        return wallet
 
     @classmethod
-    def from_storage(cls, ledger: Ledger, db: Database, storage: 'WalletStorage') -> 'Wallet':
-        json_dict = storage.read()
+    async def from_path(cls, ledger: Ledger, db: Database, path: str):
+        return await cls.from_storage(ledger, db, WalletStorage(path))
+
+    @classmethod
+    async def from_storage(cls, ledger: Ledger, db: Database, storage: WalletStorage) -> 'Wallet':
+        json_dict = await storage.read()
         if 'ledger' in json_dict and json_dict['ledger'] != ledger.get_id():
             raise ValueError(
                 f"Using ledger {ledger.get_id()} but wallet is {json_dict['ledger']}."
@@ -179,33 +84,32 @@ class Wallet:
         wallet = cls(
             ledger, db,
             name=json_dict.get('name', 'Wallet'),
+            storage=storage,
             preferences=json_dict.get('preferences', {}),
-            storage=storage
         )
-        account_dicts: Sequence[dict] = json_dict.get('accounts', [])
-        for account_dict in account_dicts:
-            wallet.add_account(account_dict)
+        for account_dict in json_dict.get('accounts', []):
+            wallet.accounts.add_from_dict(account_dict)
         return wallet
 
     def to_dict(self, encrypt_password: str = None):
         return {
-            'version': WalletStorage.LATEST_VERSION,
-            'name': self.name,
+            'version': WalletStorage.VERSION,
             'ledger': self.ledger.get_id(),
+            'name': self.name,
             'preferences': self.preferences.data,
             'accounts': [a.to_dict(encrypt_password) for a in self.accounts]
         }
 
-    def save(self):
+    async def save(self):
         if self.preferences.get(ENCRYPT_ON_DISK, False):
             if self.encryption_password is not None:
-                return self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
+                return await self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
             elif not self.is_locked:
                 log.warning(
                     "Disk encryption requested but no password available for encryption. "
                     "Saving wallet in an unencrypted state."
                 )
-        return self.storage.write(self.to_dict())
+        return await self.storage.write(self.to_dict())
 
     @property
     def hash(self) -> bytes:
@@ -248,7 +152,7 @@ class Wallet:
                 local_match.merge(account_dict)
             else:
                 added_accounts.append(
-                    self.add_account(account_dict)
+                    self.accounts.add_from_dict(account_dict)
                 )
         return added_accounts
 
@@ -292,6 +196,44 @@ class Wallet:
         self.save()
         return True
 
+    @property
+    def has_accounts(self):
+        return len(self.accounts) > 0
+
+    async def _get_account_and_address_info_for_address(self, address):
+        match = await self.db.get_address(accounts=self.accounts, address=address)
+        if match:
+            for account in self.accounts:
+                if match['account'] == account.public_key.address:
+                    return account, match
+
+    async def get_private_key_for_address(self, address) -> Optional[PrivateKey]:
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            account, address_info = match
+            return account.get_private_key(address_info['chain'], address_info['pubkey'].n)
+        return None
+
+    async def get_public_key_for_address(self, address) -> Optional[PubKey]:
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            _, address_info = match
+            return address_info['pubkey']
+        return None
+
+    async def get_account_for_address(self, address):
+        match = await self._get_account_and_address_info_for_address(address)
+        if match:
+            return match[0]
+
+    async def save_max_gap(self):
+        gap_changed = False
+        for account in self.accounts:
+            if await account.save_max_gap():
+                gap_changed = True
+        if gap_changed:
+            self.save()
+
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[Account]):
         estimators = []
         utxos = await self.db.get_utxos(
@@ -303,13 +245,20 @@ class Wallet:
         return estimators
 
     async def get_spendable_utxos(self, amount: int, funding_accounts: Iterable[Account]):
-        txos = await self.get_effective_amount_estimators(funding_accounts)
-        fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self.ledger)
-        selector = CoinSelector(amount, fee)
-        spendables = selector.select(txos, self.ledger.coin_selection_strategy)
-        if spendables:
-            await self.db.reserve_outputs(s.txo for s in spendables)
-        return spendables
+        async with self.utxo_lock:
+            txos = await self.get_effective_amount_estimators(funding_accounts)
+            fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self.ledger)
+            selector = CoinSelector(amount, fee)
+            spendables = selector.select(txos, self.ledger.coin_selection_strategy)
+            if spendables:
+                await self.db.reserve_outputs(s.txo for s in spendables)
+            return spendables
+
+    async def list_transactions(self, **constraints):
+        return txs_to_dict(await self.db.get_transactions(
+            include_is_my_output=True, include_is_spent=True,
+            **constraints
+        ), self.ledger)
 
     async def create_transaction(self, inputs: Iterable[Input], outputs: Iterable[Output],
                      funding_accounts: Iterable[Account], change_account: Account,
@@ -397,46 +346,271 @@ class Wallet:
                 raise NotImplementedError("Don't know how to spend this output.")
         tx._reset()
 
-    @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account'):
-        output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
-        return cls.create([], [output], funding_accounts, change_account)
+    async def pay(self, amount: int, address: bytes, funding_accounts: List[Account], change_account: Account):
+        output = Output.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))
+        return await self.create_transaction([], [output], funding_accounts, change_account)
 
-    def claim_create(
+    async def _report_state(self):
+        try:
+            for account in self.accounts:
+                balance = dewies_to_lbc(await account.get_balance(include_claims=True))
+                _, channel_count = await account.get_channels(limit=1)
+                claim_count = await account.get_claim_count()
+                if isinstance(account.receiving, SingleKey):
+                    log.info("Loaded single key account %s with %s LBC. "
+                             "%d channels, %d certificates and %d claims",
+                             account.id, balance, channel_count, len(account.channel_keys), claim_count)
+                else:
+                    total_receiving = len(await account.receiving.get_addresses())
+                    total_change = len(await account.change.get_addresses())
+                    log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
+                             "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
+                             account.id, balance, total_receiving, account.receiving.gap, total_change,
+                             account.change.gap, channel_count, len(account.channel_keys), claim_count)
+        except Exception as err:
+            if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
+                raise
+            log.exception(
+                'Failed to display wallet state, please file issue '
+                'for this bug along with the traceback you see below:')
+
+
+class AccountListManager:
+    __slots__ = 'wallet', '_accounts'
+
+    def __init__(self, wallet: Wallet):
+        self.wallet = wallet
+        self._accounts: List[Account] = []
+
+    def __len__(self):
+        return self._accounts.__len__()
+
+    def __iter__(self):
+        return self._accounts.__iter__()
+
+    def __getitem__(self, account_id: str) -> Account:
+        for account in self:
+            if account.id == account_id:
+                return account
+        raise ValueError(f"Couldn't find account: {account_id}.")
+
+    @property
+    def default(self) -> Optional[Account]:
+        for account in self:
+            return account
+
+    def generate(self, name: str = None, address_generator: dict = None) -> Account:
+        account = Account.generate(self.wallet.ledger, self.wallet.db, name, address_generator)
+        self._accounts.append(account)
+        return account
+
+    def add_from_dict(self, account_dict: dict) -> Account:
+        account = Account.from_dict(self.wallet.ledger, self.wallet.db, account_dict)
+        self._accounts.append(account)
+        return account
+
+    async def remove(self, account_id: str) -> Account:
+        account = self[account_id]
+        self._accounts.remove(account)
+        await self.wallet.save()
+        return account
+
+    def get_or_none(self, account_id: str) -> Optional[Account]:
+        if account_id is not None:
+            return self[account_id]
+
+    def get_or_default(self, account_id: str) -> Optional[Account]:
+        if account_id is None:
+            return self.default
+        return self[account_id]
+
+    def get_or_all(self, account_ids: List[str]) -> List[Account]:
+        return [self[account_id] for account_id in account_ids] if account_ids else self._accounts
+
+    async def get_account_details(self, **kwargs):
+        accounts = []
+        for i, account in enumerate(self._accounts):
+            details = await account.get_details(**kwargs)
+            details['is_default'] = i == 0
+            accounts.append(details)
+        return accounts
+
+
+class BaseListManager:
+    __slots__ = 'wallet', 'db'
+
+    def __init__(self, wallet: Wallet):
+        self.wallet = wallet
+        self.db = wallet.db
+
+    async def create(self, **kwargs) -> Transaction:
+        raise NotImplementedError
+
+    async def delete(self, **constraints):
+        raise NotImplementedError
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        raise NotImplementedError
+
+    async def get(self, **constraints) -> Output:
+        raise NotImplementedError
+
+    async def get_or_none(self, **constraints) -> Optional[Output]:
+        raise NotImplementedError
+
+
+class ClaimListManager(BaseListManager):
+    name = 'claim'
+    __slots__ = ()
+
+    async def create(
             self, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, claim, self.ledger.address_to_hash160(holding_address)
+            amount, name, claim, self.wallet.ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
             claim_output.sign(signing_channel, b'placeholder txid:nout')
-        return self.create_transaction(
+        return await self.wallet.create_transaction(
             [], [claim_output], funding_accounts, change_account, sign=False
         )
 
-    @classmethod
-    def claim_update(
-            cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+    async def update(
+            self, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
+            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
-            claim, ledger.address_to_hash160(holding_address)
+            claim, self.wallet.ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
             updated_claim.sign(signing_channel, b'placeholder txid:nout')
         else:
             updated_claim.clear_signature()
-        return cls.create(
+        return await self.wallet.create_transaction(
             [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
         )
 
-    @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List['Account'], change_account: 'Account'):
-        support_output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+    async def delete(self, claim_id=None, txid=None, nout=None):
+        claim = await self.get(claim_id=claim_id, txid=txid, nout=nout)
+        return await self.wallet.create_transaction(
+            [Input.spend(claim)], [], self.wallet._accounts, self.wallet._accounts[0]
         )
-        return cls.create([], [support_output], funding_accounts, change_account)
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_claims(wallet=self.wallet, **constraints)
+
+    async def get(self, claim_id=None, claim_name=None, txid=None, nout=None) -> Output:
+        if txid is not None and nout is not None:
+            key, value, constraints = 'txid:nout', f'{txid}:{nout}', {'tx_hash': '', 'position': nout}
+        elif claim_id is not None:
+            key, value, constraints = 'id', claim_id, {'claim_id': claim_id}
+        elif claim_name is not None:
+            key, value, constraints = 'name', claim_name, {'claim_name': claim_name}
+        else:
+            raise ValueError(f"Couldn't find {self.name} because an {self.name}_id or name was not provided.")
+        claims, _ = await self.list(**constraints)
+        if len(claims) == 1:
+            return claims[0]
+        elif len(claims) > 1:
+            raise ValueError(
+                f"Multiple {self.name}s found with {key} '{value}', "
+                f"pass a {self.name}_id to narrow it down."
+            )
+        raise ValueError(f"Couldn't find {self.name} with {key} '{value}'.")
+
+    async def get_or_none(self, claim_id=None, claim_name=None, txid=None, nout=None) -> Optional[Output]:
+        if any((claim_id, claim_name, all((txid, nout)))):
+            return await self.get(claim_id, claim_name, txid, nout)
+
+
+class StreamListManager(ClaimListManager):
+    __slots__ = ()
+
+    async def create(self, *args, **kwargs):
+        return await super().create(*args, **kwargs)
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_streams(wallet=self.wallet, **constraints)
+
+
+class CollectionListManager(ClaimListManager):
+    __slots__ = ()
+
+    async def create(self, *args, **kwargs):
+        return await super().create(*args, **kwargs)
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_collections(wallet=self.wallet, **constraints)
+
+
+class ChannelListManager(ClaimListManager):
+    name = 'channel'
+    __slots__ = ()
+
+    async def create(self, name: str, amount: int, account: Account, funding_accounts: List[Account],
+                     claim_address: str, preview=False, **kwargs):
+        claim = Claim()
+        claim.channel.update(**kwargs)
+        tx = await super().create(
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
+        )
+        txo = tx.outputs[0]
+        txo.generate_channel_private_key()
+        await self.wallet.sign(tx)
+        if not preview:
+            account.add_channel_private_key(txo.private_key)
+            await self.wallet.save()
+        return tx
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_channels(wallet=self.wallet, **constraints)
+
+    async def get_for_signing(self, **kwargs) -> Output:
+        channel = await self.get(**kwargs)
+        if not channel.has_private_key:
+            raise Exception(
+                f"Couldn't find private key for channel '{channel.claim_name}', can't use channel for signing. "
+            )
+        return channel
+
+    async def get_for_signing_or_none(self, **kwargs) -> Optional[Output]:
+        if any(kwargs.values()):
+            return await self.get_for_signing(**kwargs)
+
+
+class SupportListManager(BaseListManager):
+    __slots__ = ()
+
+    async def create(self, name: str, claim_id: str, amount: int, holding_address: str,
+                     funding_accounts: List[Account], change_account: Account) -> Transaction:
+        support_output = Output.pay_support_pubkey_hash(
+            amount, name, claim_id, self.wallet.ledger.address_to_hash160(holding_address)
+        )
+        return await self.wallet.create_transaction(
+            [], [support_output], funding_accounts, change_account
+        )
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_supports(**constraints)
+
+    async def get(self, **constraints) -> Output:
+        raise NotImplementedError
+
+    async def get_or_none(self, **constraints) -> Optional[Output]:
+        raise NotImplementedError
+
+
+class PurchaseListManager(BaseListManager):
+    __slots__ = ()
+
+    async def create(self, name: str, claim_id: str, amount: int, holding_address: str,
+                     funding_accounts: List[Account], change_account: Account) -> Transaction:
+        support_output = Output.pay_support_pubkey_hash(
+            amount, name, claim_id, self.wallet.ledger.address_to_hash160(holding_address)
+        )
+        return await self.wallet.create_transaction(
+            [], [support_output], funding_accounts, change_account
+        )
 
     def purchase(self, claim_id: str, amount: int, merchant_address: bytes,
                  funding_accounts: List['Account'], change_account: 'Account'):
@@ -470,84 +644,120 @@ class Wallet:
             txo.claim_id, fee_amount, fee_address, accounts, accounts[0]
         )
 
-    async def create_channel(
-            self, name, amount, account, funding_accounts,
-            claim_address, preview=False, **kwargs):
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.db.get_purchases(**constraints)
 
-        claim = Claim()
-        claim.channel.update(**kwargs)
-        tx = await self.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
-        )
-        txo = tx.outputs[0]
-        txo.generate_channel_private_key()
+    async def get(self, **constraints) -> Output:
+        raise NotImplementedError
 
-        await self.sign(tx)
-
-        if not preview:
-            account.add_channel_private_key(txo.private_key)
-            self.save()
-
-        return tx
-
-    async def get_channels(self):
-        return await self.db.get_channels()
+    async def get_or_none(self, **constraints) -> Optional[Output]:
+        raise NotImplementedError
 
 
-class WalletStorage:
-
-    LATEST_VERSION = 1
-
-    def __init__(self, path=None, default=None):
-        self.path = path
-        self._default = default or {
-            'version': self.LATEST_VERSION,
-            'name': 'My Wallet',
-            'preferences': {},
-            'accounts': []
+def txs_to_dict(txs, ledger):
+    history = []
+    for tx in txs:  # pylint: disable=too-many-nested-blocks
+        ts = headers.estimated_timestamp(tx.height)
+        item = {
+            'txid': tx.id,
+            'timestamp': ts,
+            'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
+            'confirmations': (headers.height + 1) - tx.height if tx.height > 0 else 0,
+            'claim_info': [],
+            'update_info': [],
+            'support_info': [],
+            'abandon_info': [],
+            'purchase_info': []
         }
-
-    def read(self):
-        if self.path and os.path.exists(self.path):
-            with open(self.path, 'r') as f:
-                json_data = f.read()
-                json_dict = json.loads(json_data)
-                if json_dict.get('version') == self.LATEST_VERSION and \
-                        set(json_dict) == set(self._default):
-                    return json_dict
-                else:
-                    return self.upgrade(json_dict)
+        is_my_inputs = all([txi.is_my_input for txi in tx.inputs])
+        if is_my_inputs:
+            # fees only matter if we are the ones paying them
+            item['value'] = dewies_to_lbc(tx.net_account_balance + tx.fee)
+            item['fee'] = dewies_to_lbc(-tx.fee)
         else:
-            return self._default.copy()
-
-    def upgrade(self, json_dict):
-        json_dict = json_dict.copy()
-        version = json_dict.pop('version', -1)
-        if version == -1:
-            pass
-        upgraded = self._default.copy()
-        upgraded.update(json_dict)
-        return json_dict
-
-    def write(self, json_dict):
-
-        json_data = json.dumps(json_dict, indent=4, sort_keys=True)
-        if self.path is None:
-            return json_data
-
-        temp_path = "{}.tmp.{}".format(self.path, os.getpid())
-        with open(temp_path, "w") as f:
-            f.write(json_data)
-            f.flush()
-            os.fsync(f.fileno())
-
-        if os.path.exists(self.path):
-            mode = os.stat(self.path).st_mode
-        else:
-            mode = stat.S_IREAD | stat.S_IWRITE
-        try:
-            os.rename(temp_path, self.path)
-        except Exception:  # pylint: disable=broad-except
-            os.remove(self.path)
-            os.rename(temp_path, self.path)
-        os.chmod(self.path, mode)
+            # someone else paid the fees
+            item['value'] = dewies_to_lbc(tx.net_account_balance)
+            item['fee'] = '0.0'
+        for txo in tx.my_claim_outputs:
+            item['claim_info'].append({
+                'address': txo.get_address(self.ledger),
+                'balance_delta': dewies_to_lbc(-txo.amount),
+                'amount': dewies_to_lbc(txo.amount),
+                'claim_id': txo.claim_id,
+                'claim_name': txo.claim_name,
+                'nout': txo.position,
+                'is_spent': txo.is_spent,
+            })
+        for txo in tx.my_update_outputs:
+            if is_my_inputs:  # updating my own claim
+                previous = None
+                for txi in tx.inputs:
+                    if txi.txo_ref.txo is not None:
+                        other_txo = txi.txo_ref.txo
+                        if (other_txo.is_claim or other_txo.script.is_support_claim) \
+                                and other_txo.claim_id == txo.claim_id:
+                            previous = other_txo
+                            break
+                if previous is not None:
+                    item['update_info'].append({
+                        'address': txo.get_address(self),
+                        'balance_delta': dewies_to_lbc(previous.amount - txo.amount),
+                        'amount': dewies_to_lbc(txo.amount),
+                        'claim_id': txo.claim_id,
+                        'claim_name': txo.claim_name,
+                        'nout': txo.position,
+                        'is_spent': txo.is_spent,
+                    })
+            else:  # someone sent us their claim
+                item['update_info'].append({
+                    'address': txo.get_address(self),
+                    'balance_delta': dewies_to_lbc(0),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'nout': txo.position,
+                    'is_spent': txo.is_spent,
+                })
+        for txo in tx.my_support_outputs:
+            item['support_info'].append({
+                'address': txo.get_address(self.ledger),
+                'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
+                'amount': dewies_to_lbc(txo.amount),
+                'claim_id': txo.claim_id,
+                'claim_name': txo.claim_name,
+                'is_tip': not is_my_inputs,
+                'nout': txo.position,
+                'is_spent': txo.is_spent,
+            })
+        if is_my_inputs:
+            for txo in tx.other_support_outputs:
+                item['support_info'].append({
+                    'address': txo.get_address(self.ledger),
+                    'balance_delta': dewies_to_lbc(-txo.amount),
+                    'amount': dewies_to_lbc(txo.amount),
+                    'claim_id': txo.claim_id,
+                    'claim_name': txo.claim_name,
+                    'is_tip': is_my_inputs,
+                    'nout': txo.position,
+                    'is_spent': txo.is_spent,
+                })
+        for txo in tx.my_abandon_outputs:
+            item['abandon_info'].append({
+                'address': txo.get_address(self.ledger),
+                'balance_delta': dewies_to_lbc(txo.amount),
+                'amount': dewies_to_lbc(txo.amount),
+                'claim_id': txo.claim_id,
+                'claim_name': txo.claim_name,
+                'nout': txo.position
+            })
+        for txo in tx.any_purchase_outputs:
+            item['purchase_info'].append({
+                'address': txo.get_address(self.ledger),
+                'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
+                'amount': dewies_to_lbc(txo.amount),
+                'claim_id': txo.purchased_claim_id,
+                'nout': txo.position,
+                'is_spent': txo.is_spent,
+            })
+        history.append(item)
+    return history

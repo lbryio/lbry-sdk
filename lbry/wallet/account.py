@@ -9,12 +9,10 @@ from hashlib import sha256
 from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
 
-from sqlalchemy import text
-
 import ecdsa
+
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
-
 from lbry.crypto.bip32 import PrivateKey, PubKey, from_extended_key_string
 from lbry.constants import COIN
 from lbry.blockchain.transaction import Transaction, Input, Output
