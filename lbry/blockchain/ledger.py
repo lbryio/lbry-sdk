@@ -6,6 +6,7 @@ from lbry.conf import Config
 from lbry.schema.url import URL
 from .header import Headers, UnvalidatedHeaders
 from .checkpoints import HASHES
+from .dewies import lbc_to_dewies
 
 
 class Ledger:
@@ -60,13 +61,11 @@ class Ledger:
         except:
             raise Exception(f"'{address}' is not a valid address")
 
-    @classmethod
-    def valid_channel_name_or_error(cls, name):
+    @staticmethod
+    def valid_channel_name_or_error(name: str):
         try:
             if not name:
-                raise Exception(
-                    "Channel name cannot be blank."
-                )
+                raise Exception("Channel name cannot be blank.")
             parsed = URL.parse(name)
             if not parsed.has_channel:
                 raise Exception("Channel names must start with '@' symbol.")
@@ -74,6 +73,53 @@ class Ledger:
                 raise Exception("Channel name has invalid character")
         except (TypeError, ValueError):
             raise Exception("Invalid channel name.")
+
+    @staticmethod
+    def valid_stream_name_or_error(name: str):
+        try:
+            if not name:
+                raise Exception('Stream name cannot be blank.')
+            parsed = URL.parse(name)
+            if parsed.has_channel:
+                raise Exception(
+                    "Stream names cannot start with '@' symbol. This is reserved for channels claims."
+                )
+            if not parsed.has_stream or parsed.stream.name != name:
+                raise Exception('Stream name has invalid characters.')
+        except (TypeError, ValueError):
+            raise Exception("Invalid stream name.")
+
+    @staticmethod
+    def valid_collection_name_or_error(name: str):
+        try:
+            if not name:
+                raise Exception('Collection name cannot be blank.')
+            parsed = URL.parse(name)
+            if parsed.has_channel:
+                raise Exception(
+                    "Collection names cannot start with '@' symbol. This is reserved for channels claims."
+                )
+            if not parsed.has_stream or parsed.stream.name != name:
+                raise Exception('Collection name has invalid characters.')
+        except (TypeError, ValueError):
+            raise Exception("Invalid collection name.")
+
+    @staticmethod
+    def get_dewies_or_error(argument: str, lbc: str, positive_value=False):
+        try:
+            dewies = lbc_to_dewies(lbc)
+            if positive_value and dewies <= 0:
+                raise ValueError(f"'{argument}' value must be greater than 0.0")
+            return dewies
+        except ValueError as e:
+            raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+
+    def get_fee_address(self, kwargs: dict, claim_address: str) -> str:
+        if 'fee_address' in kwargs:
+            self.valid_address_or_error(kwargs['fee_address'])
+            return kwargs['fee_address']
+        if 'fee_currency' in kwargs or 'fee_amount' in kwargs:
+            return claim_address
 
     @classmethod
     def public_key_to_address(cls, public_key):
