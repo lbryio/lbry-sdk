@@ -518,6 +518,12 @@ class Config(CLIConfig):
         "Wallet files in 'wallet_dir' to load at startup.",
         ['default_wallet']
     )
+    create_default_wallet = Toggle(
+        "Create an initial wallet if it does not exist on startup.", True
+    )
+    create_default_account = Toggle(
+        "Create an initial account if it does not exist in the default wallet.", True
+    )
 
     # network
     use_upnp = Toggle(
