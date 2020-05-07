@@ -277,8 +277,17 @@ class Strings(ListSetting):
 class EnvironmentAccess:
     PREFIX = 'LBRY_'
 
-    def __init__(self, environ: dict):
-        self.environ = environ
+    def __init__(self, config: 'BaseConfig', environ: dict):
+        self.configuration = config
+        self.environ = {}
+        if environ:
+            self.load(environ)
+
+    def load(self, environ):
+        for setting in self.configuration.get_settings():
+            value = environ.get(f'{self.PREFIX}{setting.name.upper()}', NOT_SET)
+            if value != NOT_SET and not (isinstance(setting, ListSetting) and value is None):
+                self.environ[f'{self.PREFIX}{setting.name.upper()}'] = setting.deserialize(value)
 
     def __contains__(self, item: str):
         return f'{self.PREFIX}{item.upper()}' in self.environ
@@ -443,7 +452,7 @@ class BaseConfig:
         self.arguments = ArgumentAccess(self, args)
 
     def set_environment(self, environ=None):
-        self.environment = EnvironmentAccess(environ or os.environ)
+        self.environment = EnvironmentAccess(self, dict(environ or os.environ))
 
     def set_persisted(self, config_file_path=None):
         if config_file_path is None:

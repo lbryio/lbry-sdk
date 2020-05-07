@@ -93,6 +93,11 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(c.test_str, 'the default')
         c.set_environment({'LBRY_TEST_STR': 'from environ'})
         self.assertEqual(c.test_str, 'from environ')
+        
+        c = TestConfig()
+        self.assertEqual(c.test_int, 9)
+        c.set_environment({'LBRY_TEST_INT': '1'})
+        self.assertEqual(c.test_int, 1)
 
     def test_persisted(self):
         with tempfile.TemporaryDirectory() as temp_dir:
