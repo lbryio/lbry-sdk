@@ -3613,7 +3613,6 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     given name. default: false.
             --title=<title>                : (str) title of the collection
             --description=<description>    : (str) description of the collection
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
             --tags=<tags>                  : (list) content tags
             --clear_languages              : (bool) clear existing languages (prior to adding new ones)
             --languages=<languages>        : (list) languages used by the collection,
