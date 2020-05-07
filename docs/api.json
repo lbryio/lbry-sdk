@@ -2043,13 +2043,7 @@
                         "type": "str",
                         "description": "description of the collection",
                         "is_required": false
-                    },
-                    {
-                        "name": "clear_languages",
-                        "type": "bool",
-                        "description": "clear existing languages (prior to adding new ones)",
-                        "is_required": false
-                    },
+                    },                    
                     {
                         "name": "tags",
                         "type": "list",
