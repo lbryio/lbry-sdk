@@ -76,7 +76,8 @@ class TestManagedStream(BlobExchangeTestBase):
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = mock_accumulate_peers or _mock_accumulate_peers
-        await self.stream.save_file(node=mock_node)
+        self.stream.downloader.node = mock_node
+        await self.stream.save_file()
         await self.stream.finished_write_attempt.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         if stop_when_done:
@@ -109,7 +110,6 @@ class TestManagedStream(BlobExchangeTestBase):
         await self.setup_stream(2)
 
         mock_node = mock.Mock(spec=Node)
-        q = asyncio.Queue()
 
         bad_peer = make_kademlia_peer(b'2' * 48, "127.0.0.1", tcp_port=3334, allow_localhost=True)
 
@@ -123,7 +123,8 @@ class TestManagedStream(BlobExchangeTestBase):
 
         mock_node.accumulate_peers = _mock_accumulate_peers
 
-        await self.stream.save_file(node=mock_node)
+        self.stream.downloader.node = mock_node
+        await self.stream.save_file()
         await self.stream.finished_writing.wait()
         self.assertTrue(os.path.isfile(self.stream.full_path))
         with open(self.stream.full_path, 'rb') as f:

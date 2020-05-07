@@ -41,7 +41,7 @@ test:datanetwork-integration:
   stage: test
   script:
     - pip install tox-travis
-    - tox -e datanetwork
+    - tox -e datanetwork --recreate
 
 test:blockchain-integration:
   stage: test
@@ -94,6 +94,7 @@ build:linux:
     - apt-get update
     - apt-get install -y --no-install-recommends python3.7-dev
     - python3.7 <(curl -q https://bootstrap.pypa.io/get-pip.py) # make sure we get pip with python3.7
+    - pip install lbry-libtorrent
 
 build:mac:
   extends: .build

@@ -2,10 +2,60 @@ import asyncio
 import os
 from binascii import hexlify
 
+from lbry.schema import Claim
 from lbry.testcase import CommandTestCase
+from lbry.torrent.session import TorrentSession
+from lbry.wallet import Transaction
 
 
 class FileCommands(CommandTestCase):
+    async def initialize_torrent(self, tx_to_update=None):
+        if not hasattr(self, 'seeder_session'):
+            self.seeder_session = TorrentSession(self.loop, None)
+            self.addCleanup(self.seeder_session.stop)
+            await self.seeder_session.bind(port=4040)
+        btih = await self.seeder_session.add_fake_torrent()
+        address = await self.account.receiving.get_or_create_usable_address()
+        if not tx_to_update:
+            claim = Claim()
+            claim.stream.update(bt_infohash=btih)
+            tx = await Transaction.claim_create(
+                'torrent', claim, 1, address, [self.account], self.account
+            )
+        else:
+            claim = tx_to_update.outputs[0].claim
+            claim.stream.update(bt_infohash=btih)
+            tx = await Transaction.claim_update(
+                tx_to_update.outputs[0], claim, 1, address, [self.account], self.account
+            )
+        await tx.sign([self.account])
+        await self.broadcast(tx)
+        await self.confirm_tx(tx.id)
+        self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
+        self.client_session._session.add_dht_node(('localhost', 4040))
+        self.client_session.wait_start = False  # fixme: this is super slow on tests
+        return tx, btih
+
+    async def test_download_torrent(self):
+        tx, btih = await self.initialize_torrent()
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        # second call, see its there and move on
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
+        self.assertIn(btih, self.client_session._handles)
+        tx, new_btih = await self.initialize_torrent(tx)
+        self.assertNotEqual(btih, new_btih)
+        # claim now points to another torrent, update to it
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertIn(new_btih, self.client_session._handles)
+        self.assertNotIn(btih, self.client_session._handles)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
+        self.assertNotIn(new_btih, self.client_session._handles)
 
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []
@@ -228,11 +278,11 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_get('lbry://foo')
         with open(original_path, 'wb') as handle:
             handle.write(b'some other stuff was there instead')
-        self.daemon.stream_manager.stop()
-        await self.daemon.stream_manager.start()
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
-        stream = self.daemon.stream_manager.get_stream_by_stream_hash(file_info['stream_hash'])
+        stream = self.daemon.file_manager.get_filtered(stream_hash=file_info['stream_hash'])[0]
         file_info = (await self.file_list())[0]
         self.assertEqual(stream.file_name, file_info['file_name'])
         # checks if what the API shows is what he have at the very internal level.
@@ -255,7 +305,7 @@ class FileCommands(CommandTestCase):
         resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(path))
-        self.daemon.stream_manager.stop()
+        self.daemon.file_manager.stop()
         await asyncio.sleep(0.01, loop=self.loop)  # FIXME: this sleep should not be needed
         self.assertFalse(os.path.isfile(path))
 
@@ -348,8 +398,8 @@ class FileCommands(CommandTestCase):
 
         # restart the daemon and make sure the fee is still there
 
-        self.daemon.stream_manager.stop()
-        await self.daemon.stream_manager.start()
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].content_fee.raw, raw_content_fee)
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')

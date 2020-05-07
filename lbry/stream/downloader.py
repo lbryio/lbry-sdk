@@ -92,8 +92,8 @@ class StreamDownloader:
 
     async def start(self, node: typing.Optional['Node'] = None, connection_id: int = 0):
         # set up peer accumulation
-        if node:
-            self.node = node
+        self.node = node or self.node  # fixme: this shouldnt be set here!
+        if self.node:
             if self.accumulate_task and not self.accumulate_task.done():
                 self.accumulate_task.cancel()
             _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)

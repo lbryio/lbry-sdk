@@ -40,7 +40,7 @@ from lbry.error import (
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbry.extras.daemon.components import STREAM_MANAGER_COMPONENT
+from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT
 from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
@@ -57,8 +57,8 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.components import UPnPComponent
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.stream.stream_manager import StreamManager
     from lbry.wallet import WalletManager, Ledger
+    from lbry.file.file_manager import FileManager
 
 log = logging.getLogger(__name__)
 
@@ -372,8 +372,8 @@ class Daemon(metaclass=JSONRPCServerType):
         return self.component_manager.get_component(DATABASE_COMPONENT)
 
     @property
-    def stream_manager(self) -> typing.Optional['StreamManager']:
-        return self.component_manager.get_component(STREAM_MANAGER_COMPONENT)
+    def file_manager(self) -> typing.Optional['FileManager']:
+        return self.component_manager.get_component(FILE_MANAGER_COMPONENT)
 
     @property
     def exchange_rate_manager(self) -> typing.Optional['ExchangeRateManager']:
@@ -609,8 +609,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             name, claim_id = name_and_claim_id.split("/")
             uri = f"lbry://{name}#{claim_id}"
-        if not self.stream_manager.started.is_set():
-            await self.stream_manager.started.wait()
+        if not self.file_manager.started.is_set():
+            await self.file_manager.started.wait()
         stream = await self.jsonrpc_get(uri)
         if isinstance(stream, dict):
             raise web.HTTPServerError(text=stream['error'])
@@ -634,11 +634,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def _handle_stream_range_request(self, request: web.Request):
         sd_hash = request.path.split("/stream/")[1]
-        if not self.stream_manager.started.is_set():
-            await self.stream_manager.started.wait()
-        if sd_hash not in self.stream_manager.streams:
+        if not self.file_manager.started.is_set():
+            await self.file_manager.started.wait()
+        if sd_hash not in self.file_manager.streams:
             return web.HTTPNotFound()
-        return await self.stream_manager.stream_partial_content(request, sd_hash)
+        return await self.file_manager.stream_partial_content(request, sd_hash)
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
@@ -858,7 +858,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     'exchange_rate_manager': (bool),
                     'hash_announcer': (bool),
                     'peer_protocol_server': (bool),
-                    'stream_manager': (bool),
+                    'file_manager': (bool),
+                    'libtorrent_component': (bool),
                     'upnp': (bool),
                     'wallet': (bool),
                 },
@@ -885,6 +886,9 @@ class Daemon(metaclass=JSONRPCServerType):
                         }
                     ],
                 },
+                'libtorrent_component': {
+                    'running': (bool) libtorrent was detected and started successfully,
+                },
                 'dht': {
                     'node_id': (str) lbry dht node id - hex encoded,
                     'peers_in_routing_table': (int) the number of peers in the routing table,
@@ -906,7 +910,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'hash_announcer': {
                     'announce_queue_size': (int) number of blobs currently queued to be announced
                 },
-                'stream_manager': {
+                'file_manager': {
                     'managed_files': (int) count of files in the stream manager,
                 },
                 'upnp': {
@@ -1077,7 +1081,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return results
 
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              STREAM_MANAGER_COMPONENT)
+              FILE_MANAGER_COMPONENT)
     async def jsonrpc_get(
             self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
         """
@@ -1103,7 +1107,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if download_directory and not os.path.isdir(download_directory):
             return {"error": f"specified download directory \"{download_directory}\" does not exist"}
         try:
-            stream = await self.stream_manager.download_stream_from_uri(
+            stream = await self.file_manager.download_from_uri(
                 uri, self.exchange_rate_manager, timeout, file_name, download_directory,
                 save_file=save_file, wallet=wallet
             )
@@ -1949,7 +1953,7 @@ class Daemon(metaclass=JSONRPCServerType):
     File management.
     """
 
-    @requires(STREAM_MANAGER_COMPONENT)
+    @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_list(self, sort=None, reverse=False, comparison=None, wallet_id=None, page=None,
                                 page_size=None, **kwargs):
         """
@@ -1994,7 +1998,7 @@ class Daemon(metaclass=JSONRPCServerType):
         comparison = comparison or 'eq'
 
         paginated = paginate_list(
-            self.stream_manager.get_filtered_streams(sort, reverse, comparison, **kwargs), page, page_size
+            self.file_manager.get_filtered(sort, reverse, comparison, **kwargs), page, page_size
         )
         if paginated['items']:
             receipts = {
@@ -2008,7 +2012,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 stream.purchase_receipt = receipts.get(stream.claim_id)
         return paginated
 
-    @requires(STREAM_MANAGER_COMPONENT)
+    @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_set_status(self, status, **kwargs):
         """
         Start or stop downloading a file
@@ -2032,12 +2036,12 @@ class Daemon(metaclass=JSONRPCServerType):
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
         if not streams:
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
-            await stream.save_file(node=self.stream_manager.node)
+            await stream.save_file()
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
             await stream.stop()
@@ -2049,7 +2053,7 @@ class Daemon(metaclass=JSONRPCServerType):
             )
         return msg
 
-    @requires(STREAM_MANAGER_COMPONENT)
+    @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
         """
         Delete a LBRY file
@@ -2081,7 +2085,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) true if deletion was successful
         """
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
 
         if len(streams) > 1:
             if not delete_all:
@@ -2098,12 +2102,12 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             for stream in streams:
                 message = f"Deleted file {stream.file_name}"
-                await self.stream_manager.delete_stream(stream, delete_file=delete_from_download_dir)
+                await self.file_manager.delete(stream, delete_file=delete_from_download_dir)
                 log.info(message)
             result = True
         return result
 
-    @requires(STREAM_MANAGER_COMPONENT)
+    @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_save(self, file_name=None, download_directory=None, **kwargs):
         """
         Start saving a file to disk.
@@ -2130,7 +2134,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {File}
         """
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.file_manager.get_filtered(**kwargs)
 
         if len(streams) > 1:
             log.warning("There are %i matching files, use narrower filters to select one", len(streams))
@@ -2905,7 +2909,7 @@ class Daemon(metaclass=JSONRPCServerType):
     Create, update, abandon, list and inspect your stream claims.
     """
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_publish(self, name, **kwargs):
         """
         Create or replace a stream claim at a given name (use 'stream create/update' for more control).
@@ -3027,7 +3031,7 @@ class Daemon(metaclass=JSONRPCServerType):
             f"to update a specific stream claim."
         )
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_repost(self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
                                     channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
                                     claim_address=None, funding_account_ids=None, preview=False, blocking=False):
@@ -3099,7 +3103,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_create(
             self, name, bid, file_path, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
@@ -3237,7 +3241,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         file_stream = None
         if not preview:
-            file_stream = await self.stream_manager.create_stream(file_path)
+            file_stream = await self.file_manager.create_stream(file_path)
             claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
 
@@ -3257,7 +3261,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return tx
 
-    @requires(WALLET_COMPONENT, STREAM_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
+    @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_update(
             self, claim_id, bid=None, file_path=None,
             channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
@@ -3447,11 +3451,12 @@ class Daemon(metaclass=JSONRPCServerType):
 
         stream_hash = None
         if not preview:
-            old_stream = self.stream_manager.streams.get(old_txo.claim.stream.source.sd_hash, None)
+            old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)
+            old_stream = old_stream[0] if old_stream else None
             if file_path is not None:
                 if old_stream:
-                    await self.stream_manager.delete_stream(old_stream, delete_file=False)
-                file_stream = await self.stream_manager.create_stream(file_path)
+                    await self.file_manager.delete(old_stream, delete_file=False)
+                file_stream = await self.file_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
                 stream_hash = file_stream.stream_hash
@@ -4583,9 +4588,9 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         if not blob_hash or not is_valid_blobhash(blob_hash):
             return f"Invalid blob hash to delete '{blob_hash}'"
-        streams = self.stream_manager.get_filtered_streams(sd_hash=blob_hash)
+        streams = self.file_manager.get_filtered(sd_hash=blob_hash)
         if streams:
-            await self.stream_manager.delete_stream(streams[0])
+            await self.file_manager.delete(streams[0])
         else:
             await self.blob_manager.delete_blobs([blob_hash])
         return "Deleted %s" % blob_hash
@@ -4758,7 +4763,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         raise NotImplementedError()
 
-    @requires(STREAM_MANAGER_COMPONENT)
+    @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_reflect(self, **kwargs):
         """
         Reflect all the blobs in a file matching the filter criteria
@@ -4787,8 +4792,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
-            self.stream_manager.reflect_stream(stream, server, port)
-            for stream in self.stream_manager.get_filtered_streams(**kwargs)
+            self.file_manager['stream'].reflect_stream(stream, server, port)
+            for stream in self.file_manager.get_filtered_streams(**kwargs)
         ])
         total = []
         for reflected_for_stream in reflected:
@@ -5334,10 +5339,10 @@ class Daemon(metaclass=JSONRPCServerType):
         results = await self.ledger.resolve(accounts, urls, **kwargs)
         if self.conf.save_resolved_claims and results:
             try:
-                claims = self.stream_manager._convert_to_old_resolve_output(self.wallet_manager, results)
-                await self.storage.save_claims_for_resolve([
-                    value for value in claims.values() if 'error' not in value
-                ])
+                await self.storage.save_claim_from_output(
+                    self.ledger,
+                    *(result for result in results.values() if isinstance(result, Output))
+                )
             except DecodeError:
                 pass
         return results
