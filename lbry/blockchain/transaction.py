@@ -1,6 +1,7 @@
 import struct
 import hashlib
 import logging
+import asyncio
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional
 
@@ -266,11 +267,12 @@ class Output(InputOutput):
         return cls(amount, OutputScript.pay_pubkey_hash(pubkey_hash))
 
     @classmethod
-    def deserialize_from(cls, stream, offset):
-        return cls(
-            amount=stream.read_uint64(),
-            script=OutputScript(stream.read_string(), offset=offset+9)
-        )
+    def deserialize_from(cls, stream, transaction_offset: int = 0):
+        amount = stream.read_uint64()
+        length = stream.read_compact_size()
+        offset = stream.tell()-transaction_offset
+        script = OutputScript(stream.read(length), offset=offset)
+        return cls(amount=amount, script=script)
 
     def serialize_to(self, stream, alternate_script=None):
         stream.write_uint64(self.amount)
@@ -391,9 +393,18 @@ class Output(InputOutput):
         self.channel = None
         self.claim.clear_signature()
 
-    def generate_channel_private_key(self):
-        self.private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
-        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
+    @staticmethod
+    def _sync_generate_channel_private_key():
+        private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        public_key_bytes = private_key.get_verifying_key().to_der()
+        return private_key, public_key_bytes
+
+    async def generate_channel_private_key(self):
+        private_key, public_key_bytes = await asyncio.get_running_loop().run_in_executor(
+            None, Output._sync_generate_channel_private_key
+        )
+        self.private_key = private_key
+        self.claim.channel.public_key_bytes = public_key_bytes
         self.script.generate()
         return self.private_key
 
@@ -674,7 +685,7 @@ class Transaction:
             ])
             output_count = stream.read_compact_size()
             self._add(self._outputs, [
-                Output.deserialize_from(stream, stream.tell()-start) for _ in range(output_count)
+                Output.deserialize_from(stream, start) for _ in range(output_count)
             ])
             if self.is_segwit_flag:
                 # drain witness portion of transaction
