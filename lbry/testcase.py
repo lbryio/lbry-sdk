@@ -6,11 +6,11 @@ import logging
 import tempfile
 import functools
 import asyncio
+import time
 from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
 from unittest.case import _Outcome
 from typing import Optional
-from time import time
 from binascii import unhexlify
 from functools import partial
 
@@ -108,7 +108,7 @@ class AsyncioTestCase(unittest.TestCase):
     # Implementation inspired by discussion:
     #  https://bugs.python.org/issue32972
 
-    LOOP_SLOW_CALLBACK_DURATION = 0.2
+    LOOP_SLOW_CALLBACK_DURATION = 0.1
 
     maxDiff = None
 
@@ -300,8 +300,8 @@ class FakeExchangeRateManager(ExchangeRateManager):
     def __init__(self, market_feeds, rates):  # pylint: disable=super-init-not-called
         self.market_feeds = market_feeds
         for feed in self.market_feeds:
-            feed.last_check = time()
-            feed.rate = ExchangeRate(feed.market, rates[feed.market], time())
+            feed.last_check = time.time()
+            feed.rate = ExchangeRate(feed.market, rates[feed.market], time.time())
 
     def start(self):
         pass
@@ -551,32 +551,32 @@ class CommandTestCase(IntegrationTestCase):
         if data is not None:
             file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
             return await self.confirm_and_render(
-                self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs), confirm
+                self.api.stream_update(claim_id, file_path=file_path, **kwargs), confirm
             )
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_update(claim_id, **kwargs), confirm
+            self.api.stream_update(claim_id, **kwargs), confirm
         )
 
     async def stream_repost(self, claim_id, name='repost', bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs), confirm
+            self.api.stream_repost(claim_id=claim_id, name=name, bid=bid, **kwargs), confirm
         )
 
     async def stream_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_abandon(*args, **kwargs), confirm
+            self.api.stream_abandon(*args, **kwargs), confirm
         )
 
     async def purchase_create(self, *args, confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_purchase_create(*args, **kwargs), confirm
+            self.api.purchase_create(*args, **kwargs), confirm
         )
 
     async def publish(self, name, *args, confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_publish(name, *args, **kwargs), confirm
+            self.api.publish(name, *args, **kwargs), confirm
         )
 
     async def channel_create(self, name='@arena', bid='1.0', confirm=True, **kwargs):
@@ -586,54 +586,64 @@ class CommandTestCase(IntegrationTestCase):
 
     async def channel_update(self, claim_id, confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_channel_update(claim_id, **kwargs), confirm
+            self.api.channel_update(claim_id, **kwargs), confirm
         )
 
     async def channel_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_channel_abandon(*args, **kwargs), confirm
+            self.api.channel_abandon(*args, **kwargs), confirm
         )
 
     async def collection_create(
             self, name='firstcollection', bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_collection_create(name, bid, **kwargs), confirm
+            self.api.collection_create(name, bid, **kwargs), confirm
         )
 
     async def collection_update(
             self, claim_id, confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_collection_update(claim_id, **kwargs), confirm
+            self.api.collection_update(claim_id, **kwargs), confirm
         )
 
     async def collection_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_abandon(*args, **kwargs), confirm
+            self.api.stream_abandon(*args, **kwargs), confirm
         )
 
     async def support_create(self, claim_id, bid='1.0', confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_support_create(claim_id, bid, **kwargs), confirm
+            self.api.support_create(claim_id, bid, **kwargs), confirm
         )
 
     async def support_abandon(self, *args, confirm=True, **kwargs):
         if 'blocking' not in kwargs:
             kwargs['blocking'] = False
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_support_abandon(*args, **kwargs), confirm
+            self.api.support_abandon(*args, **kwargs), confirm
+        )
+
+    async def account_fund(self, *args, confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.api.account_fund(*args, **kwargs), confirm
+        )
+
+    async def account_send(self, *args, confirm=True, **kwargs):
+        return await self.confirm_and_render(
+            self.api.account_send(*args, **kwargs), confirm
         )
 
     async def wallet_send(self, *args, confirm=True, **kwargs):
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_wallet_send(*args, **kwargs), confirm
+            self.api.wallet_send(*args, **kwargs), confirm
         )
 
     async def txo_spend(self, *args, confirm=True, **kwargs):
-        txs = await self.daemon.jsonrpc_txo_spend(*args, **kwargs)
+        txs = await self.api.txo_spend(*args, **kwargs)
         if confirm:
             await asyncio.wait([self.ledger.wait(tx) for tx in txs])
             await self.generate(1)
@@ -641,38 +651,41 @@ class CommandTestCase(IntegrationTestCase):
         return self.sout(txs)
 
     async def resolve(self, uri, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
+        return (await self.out(self.api.resolve(uri, **kwargs)))[uri]
 
     async def claim_search(self, **kwargs):
         return (await self.out(self.api.claim_search(**kwargs)))['items']
 
     async def file_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.file_list(*args, **kwargs)))['items']
 
     async def txo_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_txo_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.txo_list(*args, **kwargs)))['items']
 
     async def txo_sum(self, *args, **kwargs):
-        return await self.out(self.daemon.jsonrpc_txo_sum(*args, **kwargs))
+        return await self.out(self.api.txo_sum(*args, **kwargs))
 
     async def txo_plot(self, *args, **kwargs):
-        return await self.out(self.daemon.jsonrpc_txo_plot(*args, **kwargs))
+        return await self.out(self.api.txo_plot(*args, **kwargs))
 
     async def claim_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.claim_list(*args, **kwargs)))['items']
 
     async def stream_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_stream_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.stream_list(*args, **kwargs)))['items']
 
     async def channel_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_channel_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.channel_list(*args, **kwargs)))['items']
+
+    async def collection_list(self, *args, **kwargs):
+        return (await self.out(self.api.collection_list(*args, **kwargs)))['items']
+
+    async def collection_resolve(self, *args, **kwargs):
+        return (await self.out(self.api.collection_resolve(*args, **kwargs)))['items']
 
     async def transaction_list(self, *args, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_transaction_list(*args, **kwargs)))['items']
+        return (await self.out(self.api.transaction_list(*args, **kwargs)))['items']
 
     @staticmethod
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']
-
-    def assertItemCount(self, result, count):  # pylint: disable=invalid-name
-        self.assertEqual(count, result['total_items'])
