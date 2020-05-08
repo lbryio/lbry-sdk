@@ -386,6 +386,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.blockchain_name = 'lbrycrd_regtest'
         conf.lbryum_servers = [('127.0.0.1', 50001)]
         conf.reflector_servers = [('127.0.0.1', 5566)]
+        conf.fixed_peers = [('127.0.0.1', 5567)]
         conf.known_dht_nodes = []
         conf.blob_lru_cache_size = self.blob_lru_cache_size
         conf.components_to_skip = [

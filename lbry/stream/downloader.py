@@ -51,15 +51,15 @@ class StreamDownloader:
         def _delayed_add_fixed_peers():
             self.added_fixed_peers = True
             self.peer_queue.put_nowait([
-                make_kademlia_peer(None, address, None, tcp_port=port + 1, allow_localhost=True)
+                make_kademlia_peer(None, address, None, tcp_port=port, allow_localhost=True)
                 for address, port in addresses
             ])
 
-        if not self.config.reflector_servers:
+        if not self.config.fixed_peers:
             return
         addresses = [
-            (await resolve_host(url, port + 1, proto='tcp'), port)
-            for url, port in self.config.reflector_servers
+            (await resolve_host(url, port, proto='tcp'), port)
+            for url, port in self.config.fixed_peers
         ]
         if 'dht' in self.config.components_to_skip or not self.node or not \
                 len(self.node.protocol.routing_table.get_peers()) > 0:
