@@ -1,6 +1,6 @@
 import os
 import asyncio
-from typing import List, Optional, Tuple, Iterable
+from typing import List, Optional, Tuple, Iterable, TYPE_CHECKING
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 
@@ -8,10 +8,13 @@ from sqlalchemy import create_engine, text
 
 from lbry.crypto.bip32 import PubKey
 from lbry.schema.result import Censor
-from lbry.blockchain.ledger import Ledger
 from lbry.blockchain.transaction import Transaction, Output
 from .constants import TXO_TYPES
 from . import queries as q
+
+
+if TYPE_CHECKING:
+    from lbry.blockchain.ledger import Ledger
 
 
 def clean_wallet_account_ids(constraints):
@@ -28,12 +31,12 @@ def clean_wallet_account_ids(constraints):
         constraints['account_ids'] = [account.id for account in accounts]
 
 
-def add_channel_keys_to_txo_results(accounts: List, txos: Iterable[Output]):
+async def add_channel_keys_to_txo_results(accounts: List, txos: Iterable[Output]):
     sub_channels = set()
     for txo in txos:
         if txo.claim.is_channel:
             for account in accounts:
-                private_key = account.get_channel_private_key(
+                private_key = await account.get_channel_private_key(
                     txo.claim.channel.public_key_bytes
                 )
                 if private_key:
@@ -42,16 +45,20 @@ def add_channel_keys_to_txo_results(accounts: List, txos: Iterable[Output]):
         if txo.channel is not None:
             sub_channels.add(txo.channel)
     if sub_channels:
-        add_channel_keys_to_txo_results(accounts, sub_channels)
+        await add_channel_keys_to_txo_results(accounts, sub_channels)
 
 
 class Database:
 
-    def __init__(self, ledger: Ledger, url: str, multiprocess=False):
+    def __init__(self, ledger: 'Ledger', url: str, multiprocess=False):
         self.url = url
         self.ledger = ledger
         self.multiprocess = multiprocess
         self.executor: Optional[Executor] = None
+
+    @classmethod
+    def from_memory(cls, ledger):
+        return cls(ledger, 'sqlite:///:memory:')
 
     def sync_create(self, name):
         engine = create_engine(self.url)
@@ -145,8 +152,8 @@ class Database:
     async def get_balance(self, **constraints):
         return await self.run_in_executor(q.get_balance, **constraints)
 
-    async def get_supports_summary(self, **constraints):
-        return await self.run_in_executor(self.get_supports_summary, **constraints)
+    async def get_report(self, accounts):
+        return await self.run_in_executor(q.get_report, accounts=accounts)
 
     async def get_addresses(self, **constraints) -> Tuple[List[dict], Optional[int]]:
         addresses, count = await self.run_in_executor(q.get_addresses, **constraints)
@@ -193,10 +200,10 @@ class Database:
         return await self.run_in_executor(q.get_txo_plot, **constraints)
 
     async def get_txos(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        txos = await self.run_in_executor(q.get_txos, **constraints)
+        txos, count = await self.run_in_executor(q.get_txos, **constraints)
         if 'wallet' in constraints:
-            add_channel_keys_to_txo_results(constraints['wallet'], txos)
-        return txos
+            await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
+        return txos, count
 
     async def get_utxos(self, **constraints) -> Tuple[List[Output], Optional[int]]:
         return await self.get_txos(is_spent=False, **constraints)
@@ -207,7 +214,7 @@ class Database:
     async def get_claims(self, **constraints) -> Tuple[List[Output], Optional[int]]:
         txos, count = await self.run_in_executor(q.get_claims, **constraints)
         if 'wallet' in constraints:
-            add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
+            await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
         return txos, count
 
     async def get_streams(self, **constraints) -> Tuple[List[Output], Optional[int]]:

@@ -737,6 +737,14 @@ def get_txo_sum(**constraints):
     return result[0]['total'] or 0
 
 
+def get_balance(**constraints):
+    return get_txo_sum(is_spent=False, **constraints)
+
+
+def get_report(account_ids):
+    return
+
+
 def get_txo_plot(start_day=None, days_back=0, end_day=None, days_after=None, **constraints):
     _clean_txo_constraints_for_aggregation(constraints)
     if start_day is None:
@@ -769,13 +777,6 @@ def get_purchases(**constraints) -> Tuple[List[Output], Optional[int]]:
     )
     txs, count = get_transactions(**constraints)
     return [tx.outputs[0] for tx in txs], count
-
-
-def get_balance(**constraints):
-    balance = select_txos(
-        [func.sum(TXO.c.amount).label('total')], is_spent=False, **constraints
-    )
-    return balance[0]['total'] or 0
 
 
 def select_addresses(cols, **constraints):
