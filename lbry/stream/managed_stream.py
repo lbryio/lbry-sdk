@@ -21,7 +21,7 @@ if typing.TYPE_CHECKING:
     from lbry.blob.blob_info import BlobInfo
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
-    from lbry.wallet.transaction import Transaction
+    from lbry.blockchain.transaction import Transaction
 
 log = logging.getLogger(__name__)
 
