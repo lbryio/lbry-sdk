@@ -1,5 +1,6 @@
 import os
 import copy
+import time
 import asyncio
 import logging
 from io import StringIO
@@ -639,6 +640,7 @@ class Ledger(metaclass=LedgerRegistry):
         return self.network.broadcast(hexlify(tx.raw).decode())
 
     async def wait(self, tx: Transaction, height=-1, timeout=1):
+        timeout = timeout or 600  # after 10 minutes there is almost 0 hope
         addresses = set()
         for txi in tx.inputs:
             if txi.txo_ref.txo is not None:
@@ -648,13 +650,20 @@ class Ledger(metaclass=LedgerRegistry):
         for txo in tx.outputs:
             if txo.has_address:
                 addresses.add(self.hash160_to_address(txo.pubkey_hash))
+        start = int(time.perf_counter())
+        while timeout and (int(time.perf_counter()) - start) <= timeout:
+            if await self._wait_round(tx, height, addresses):
+                return
+        raise asyncio.TimeoutError('Timed out waiting for transaction.')
+
+    async def _wait_round(self, tx: Transaction, height: int, addresses: Iterable[str]):
         records = await self.db.get_addresses(address__in=addresses)
         _, pending = await asyncio.wait([
             self.on_transaction.where(partial(
                 lambda a, e: a == e.address and e.tx.height >= height and e.tx.id == tx.id,
                 address_record['address']
             )) for address_record in records
-        ], timeout=timeout)
+        ], timeout=1)
         if pending:
             records = await self.db.get_addresses(address__in=addresses)
             for record in records:
@@ -666,8 +675,9 @@ class Ledger(metaclass=LedgerRegistry):
                     if txid == tx.id and local_height >= height:
                         found = True
                 if not found:
-                    print(record['history'], addresses, tx.id)
-                    raise asyncio.TimeoutError('Timed out waiting for transaction.')
+                    log.debug("timeout: %s, %s, %s", record['history'], addresses, tx.id)
+                    return False
+        return True
 
     async def _inflate_outputs(
             self, query, accounts,
