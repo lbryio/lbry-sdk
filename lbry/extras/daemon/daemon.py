@@ -1966,8 +1966,8 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
                       [--blobs_remaining=<blobs_remaining>] [--uploading_to_reflector=<uploading_to_reflector>]
-                      [--is_fully_reflected=<is_fully_reflected>] [--status=<status>] [--sort=<sort_by>]
-                      [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
+                      [--is_fully_reflected=<is_fully_reflected>] [--status=<status>] [--completed=<completed>]
+                      [--sort=<sort_by>] [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
                       [--page=<page>] [--page_size=<page_size>] [--wallet_id=<wallet_id>]
 
         Options:
@@ -1988,6 +1988,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --uploading_to_reflector=<uploading_to_reflector> : (bool) get files currently uploading to reflector
             --is_fully_reflected=<is_fully_reflected>         : (bool) get files that have been uploaded to reflector
             --status=<status>                      : (str) match by status, ( running | finished | stopped )
+            --completed=<completed>                : (bool) match only completed
             --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
             --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
             --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le | in)

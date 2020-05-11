@@ -34,7 +34,8 @@ class SourceManager:
         'txid',
         'nout',
         'channel_claim_id',
-        'channel_name'
+        'channel_name',
+        'completed'
     }
 
     set_filter_fields = {
