@@ -918,7 +918,7 @@ class Database(SQLiteMixin):
                     channel_ids.add(txo.claim.signing_channel_id)
                 if txo.claim.is_channel and wallet:
                     for account in wallet.accounts:
-                        private_key = account.get_channel_private_key(
+                        private_key = await account.get_channel_private_key(
                             txo.claim.channel.public_key_bytes
                         )
                         if private_key:

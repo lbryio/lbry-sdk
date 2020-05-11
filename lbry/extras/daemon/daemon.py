@@ -2550,7 +2550,7 @@ class Daemon(metaclass=JSONRPCServerType):
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         txo = tx.outputs[0]
-        txo.generate_channel_private_key()
+        await txo.generate_channel_private_key()
 
         await tx.sign(funding_accounts)
 
@@ -2702,7 +2702,7 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo = tx.outputs[0]
 
         if new_signing_key:
-            new_txo.generate_channel_private_key()
+            await new_txo.generate_channel_private_key()
         else:
             new_txo.private_key = old_txo.private_key
 

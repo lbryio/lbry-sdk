@@ -525,11 +525,13 @@ class Account:
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
 
-    def get_channel_private_key(self, public_key_bytes):
+    async def get_channel_private_key(self, public_key_bytes):
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
         if private_key_pem:
-            return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
+            return await asyncio.get_event_loop().run_in_executor(
+                None, ecdsa.SigningKey.from_pem, private_key_pem, sha256
+            )
 
     async def maybe_migrate_certificates(self):
         def to_der(private_key_pem):
