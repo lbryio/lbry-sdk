@@ -66,7 +66,7 @@ def _download_properties(conf: Config, external_ip: str, resolve_duration: float
         "node_rpc_timeout": conf.node_rpc_timeout,
         "peer_connect_timeout": conf.peer_connect_timeout,
         "blob_download_timeout": conf.blob_download_timeout,
-        "use_fixed_peers": len(conf.reflector_servers) > 0,
+        "use_fixed_peers": len(conf.fixed_peers) > 0,
         "fixed_peer_delay": fixed_peer_delay,
         "added_fixed_peers": added_fixed_peers,
         "active_peer_count": active_peer_count,

@@ -187,7 +187,7 @@ class TestStreamManager(BlobExchangeTestBase):
         await self._test_time_to_first_bytes(check_post)
 
     async def test_fixed_peer_delay_dht_peers_found(self):
-        self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
+        self.client_config.fixed_peers = [(self.server_from_client.address, self.server_from_client.tcp_port)]
         server_from_client = None
         self.server_from_client, server_from_client = server_from_client, self.server_from_client
 
@@ -231,7 +231,7 @@ class TestStreamManager(BlobExchangeTestBase):
         await self._test_time_to_first_bytes(check_post, DownloadSDTimeoutError, after_setup=after_setup)
 
     async def test_override_fixed_peer_delay_dht_disabled(self):
-        self.client_config.reflector_servers = [(self.server_from_client.address, self.server_from_client.tcp_port - 1)]
+        self.client_config.fixed_peers = [(self.server_from_client.address, self.server_from_client.tcp_port)]
         self.client_config.components_to_skip = ['dht', 'hash_announcer']
         self.client_config.fixed_peer_delay = 9001.0
         self.server_from_client = None

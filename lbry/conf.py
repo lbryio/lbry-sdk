@@ -577,9 +577,14 @@ class Config(CLIConfig):
     )
 
     # servers
-    reflector_servers = Servers("Reflector re-hosting servers", [
+    reflector_servers = Servers("Reflector re-hosting servers for mirroring publishes", [
         ('reflector.lbry.com', 5566)
     ])
+
+    fixed_peers = Servers("Fixed peers to fall back to if none are found on P2P for a blob", [
+        ('cdn.reflector.lbry.com', 5567)
+    ])
+
     lbryum_servers = Servers("SPV wallet servers", [
         ('spv11.lbry.com', 50001),
         ('spv12.lbry.com', 50001),
