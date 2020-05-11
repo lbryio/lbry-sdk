@@ -582,7 +582,7 @@ class Config(CLIConfig):
     ])
 
     fixed_peers = Servers("Fixed peers to fall back to if none are found on P2P for a blob", [
-        ('reflector.lbry.com', 5567)
+        ('cdn.reflector.lbry.com', 5567)
     ])
 
     lbryum_servers = Servers("SPV wallet servers", [
