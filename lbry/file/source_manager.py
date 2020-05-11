@@ -37,6 +37,12 @@ class SourceManager:
         'channel_name'
     }
 
+    set_filter_fields = {
+        "claim_ids": "claim_id",
+        "channel_claim_ids": "channel_claim_id",
+        "outpoints": "outpoint"
+    }
+
     source_class = ManagedDownloadSource
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', storage: 'SQLiteStorage',
@@ -108,23 +114,19 @@ class SourceManager:
         if isinstance(search_by.get('channel_claim_id'), list):
             compare_sets['channel_claim_ids'] = search_by.pop('channel_claim_id')
 
-        if search_by:
+        if search_by or compare_sets:
             comparison = comparison or 'eq'
             streams = []
             for stream in self._sources.values():
-                matched = False
-                for set_search, val in compare_sets.items():
-                    if COMPARISON_OPERATORS[comparison](getattr(stream, self.filter_fields[set_search]), val):
-                        streams.append(stream)
-                        matched = True
-                        break
-                if matched:
+                if compare_sets and not all(
+                        getattr(stream, self.set_filter_fields[set_search]) in val
+                        for set_search, val in compare_sets.items()):
                     continue
-                for search, val in search_by.items():
-                    this_stream = getattr(stream, search)
-                    if COMPARISON_OPERATORS[comparison](this_stream, val):
-                        streams.append(stream)
-                        break
+                if search_by and not all(
+                        COMPARISON_OPERATORS[comparison](getattr(stream, search), val)
+                        for search, val in search_by.items()):
+                    continue
+                streams.append(stream)
         else:
             streams = list(self._sources.values())
         if sort_by:
