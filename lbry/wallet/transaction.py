@@ -2,6 +2,7 @@ import struct
 import hashlib
 import logging
 import typing
+import asyncio
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
 
@@ -412,8 +413,10 @@ class Output(InputOutput):
         self.channel = None
         self.claim.clear_signature()
 
-    def generate_channel_private_key(self):
-        self.private_key = ecdsa.SigningKey.generate(curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+    async def generate_channel_private_key(self):
+        self.private_key = await asyncio.get_event_loop().run_in_executor(
+            None, ecdsa.SigningKey.generate, ecdsa.SECP256k1, None, hashlib.sha256
+        )
         self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
         self.script.generate()
         return self.private_key
