@@ -57,7 +57,6 @@ class ManagedStream(ManagedDownloadSource):
         self.downloader = StreamDownloader(self.loop, self.config, self.blob_manager, sd_hash, descriptor)
         self.analytics_manager = analytics_manager
 
-        self.fully_reflected = asyncio.Event(loop=self.loop)
         self.reflector_progress = 0
         self.uploading_to_reflector = False
         self.file_output_task: typing.Optional[asyncio.Task] = None

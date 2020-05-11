@@ -38,7 +38,9 @@ class StreamManager(SourceManager):
         'stream_hash',
         'full_status',  # TODO: remove
         'blobs_remaining',
-        'blobs_in_stream'
+        'blobs_in_stream',
+        'uploading_to_reflector',
+        'is_fully_reflected'
     })
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
