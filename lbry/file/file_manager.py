@@ -142,6 +142,8 @@ class FileManager:
                     log.info("claim contains an update to a stream we have, downloading it")
                     if save_file and existing_for_claim_id[0].output_file_exists:
                         save_file = False
+                    if not claim.stream.source.bt_infohash:
+                        existing_for_claim_id[0].downloader.node = source_manager.node
                     await existing_for_claim_id[0].start(timeout=timeout, save_now=save_file)
                     if not existing_for_claim_id[0].output_file_exists and (
                             save_file or file_name or download_directory):
@@ -155,6 +157,8 @@ class FileManager:
                 log.info("already have stream for %s", uri)
                 if save_file and updated_stream.output_file_exists:
                     save_file = False
+                if not claim.stream.source.bt_infohash:
+                    updated_stream.downloader.node = source_manager.node
                 await updated_stream.start(timeout=timeout, save_now=save_file)
                 if not updated_stream.output_file_exists and (save_file or file_name or download_directory):
                     await updated_stream.save_file(
