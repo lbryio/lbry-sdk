@@ -247,4 +247,7 @@ class StreamManager(SourceManager):
             os.remove(source.full_path)
 
     async def stream_partial_content(self, request: Request, sd_hash: str):
-        return await self._sources[sd_hash].stream_file(request, self.node)
+        stream = self._sources[sd_hash]
+        if not stream.downloader.node:
+            stream.downloader.node = self.node
+        return await stream.stream_file(request)

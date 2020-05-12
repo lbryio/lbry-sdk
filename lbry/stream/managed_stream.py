@@ -193,13 +193,13 @@ class ManagedStream(ManagedDownloadSource):
                 decrypted = await self.downloader.read_blob(blob_info, connection_id)
             yield (blob_info, decrypted)
 
-    async def stream_file(self, request: Request, node: Optional['Node'] = None) -> StreamResponse:
+    async def stream_file(self, request: Request) -> StreamResponse:
         log.info("stream file to browser for lbry://%s#%s (sd hash %s...)", self.claim_name, self.claim_id,
                  self.sd_hash[:6])
         headers, size, skip_blobs, first_blob_start_offset = self._prepare_range_response_headers(
             request.headers.get('range', 'bytes=0-')
         )
-        await self.start(node)
+        await self.start()
         response = StreamResponse(
             status=206,
             headers=headers

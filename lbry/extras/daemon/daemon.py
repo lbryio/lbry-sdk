@@ -2046,6 +2046,8 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
+            if not hasattr(stream, 'bt_infohash') and 'dht' not in self.conf.components_to_skip:
+                stream.downloader.node = self.dht_node
             await stream.save_file()
             msg = "Resumed download"
         elif status == 'stop' and stream.running:
@@ -2148,6 +2150,8 @@ class Daemon(metaclass=JSONRPCServerType):
             log.warning("There is no file to save")
             return False
         stream = streams[0]
+        if not hasattr(stream, 'bt_infohash') and 'dht' not in self.conf.components_to_skip:
+            stream.downloader.node = self.dht_node
         await stream.save_file(file_name, download_directory)
         return stream
 
