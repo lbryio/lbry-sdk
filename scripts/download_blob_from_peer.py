@@ -3,6 +3,7 @@ import os
 import asyncio
 import socket
 import ipaddress
+import lbry.wallet
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
