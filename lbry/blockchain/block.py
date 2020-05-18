@@ -1,5 +1,4 @@
 import struct
-from hashlib import sha256
 from typing import Set
 from binascii import unhexlify
 from typing import NamedTuple, List
@@ -14,12 +13,12 @@ from lbry.blockchain.bcd_data_stream import BCDataStream
 ZERO_BLOCK = bytes((0,)*32)
 
 
-def create_block_filter(addresses: Set[str]) -> bytes:
-    return bytes(PyBIP158([bytearray(a.encode()) for a in addresses]).GetEncoded())
+def create_block_filter(address_hashes: Set[bytes]) -> bytes:
+    return bytes(PyBIP158([bytearray(a) for a in address_hashes]).GetEncoded())
 
 
-def get_block_filter(block_filter: str) -> PyBIP158:
-    return PyBIP158(bytearray(unhexlify(block_filter)))
+def get_block_filter(block_filter: bytes) -> PyBIP158:
+    return PyBIP158(bytearray(block_filter))
 
 
 class Block(NamedTuple):

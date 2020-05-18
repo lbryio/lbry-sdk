@@ -1,11 +1,19 @@
+import re
 import textwrap
 from decimal import Decimal
-from lbry.blockchain.util import coins_to_satoshis, satoshis_to_coins
+
+from lbry.constants import COIN
 
 
 def lbc_to_dewies(lbc: str) -> int:
     try:
-        return coins_to_satoshis(lbc)
+        if not isinstance(lbc, str):
+            raise ValueError("{coins} must be a string")
+        result = re.search(r'^(\d{1,10})\.(\d{1,8})$', lbc)
+        if result is not None:
+            whole, fractional = result.groups()
+            return int(whole + fractional.ljust(8, "0"))
+        raise ValueError(f"'{lbc}' is not a valid coin decimal")
     except ValueError:
         raise ValueError(textwrap.dedent(
             f"""
@@ -31,7 +39,11 @@ def lbc_to_dewies(lbc: str) -> int:
 
 
 def dewies_to_lbc(dewies) -> str:
-    return satoshis_to_coins(dewies)
+    coins = '{:.8f}'.format(dewies / COIN).rstrip('0')
+    if coins.endswith('.'):
+        return coins+'0'
+    else:
+        return coins
 
 
 def dict_values_to_lbc(d):

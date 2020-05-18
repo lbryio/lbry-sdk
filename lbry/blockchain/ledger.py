@@ -1,4 +1,5 @@
 from binascii import unhexlify
+from string import hexdigits
 
 from lbry.crypto.hash import hash160, double_sha256
 from lbry.crypto.base58 import Base58
@@ -60,6 +61,13 @@ class Ledger:
             assert cls.is_valid_address(address)
         except:
             raise Exception(f"'{address}' is not a valid address")
+
+    @staticmethod
+    def valid_claim_id(claim_id: str):
+        if not len(claim_id) == 40:
+            raise Exception(f"Incorrect claimid length: {len(claim_id)}")
+        if set(claim_id).difference(hexdigits):
+            raise Exception("Claim id is not hex encoded")
 
     @staticmethod
     def valid_channel_name_or_error(name: str):

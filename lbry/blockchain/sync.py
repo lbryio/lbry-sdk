@@ -11,12 +11,11 @@ from sqlalchemy.future import select
 
 from lbry.event import EventController, BroadcastSubscription
 from lbry.service.base import Service, Sync, BlockEvent
-from lbry.db import (
-    queries, TXO_TYPES, Claim, Claimtrie, TX, TXO, TXI, Block as BlockTable,
-)
+from lbry.db import queries, TXO_TYPES
+from lbry.db.tables import Claim, Claimtrie, TX, TXO, TXI, Block as BlockTable
 
 from .lbrycrd import Lbrycrd
-from .block import Block, create_block_filter
+from .block import Block, create_block_filter, get_block_filter
 from .bcd_data_stream import BCDataStream
 from .ledger import Ledger
 
@@ -106,23 +105,32 @@ def process_claimtrie():
 
 
 def process_block_and_tx_filters():
-    execute = queries.ctx().execute
+    context = queries.ctx()
+    execute = context.execute
+    ledger = context.ledger
 
     blocks = []
+    all_filters = []
+    all_addresses = []
     for block in queries.get_blocks_without_filters():
-        block_filter = create_block_filter(
-            {r['address'] for r in queries.get_block_tx_addresses(block_hash=block['block_hash'])}
-        )
+        addresses = {
+            ledger.address_to_hash160(r['address'])
+            for r in queries.get_block_tx_addresses(block_hash=block['block_hash'])
+        }
+        all_addresses.extend(addresses)
+        block_filter = create_block_filter(addresses)
+        all_filters.append(block_filter)
         blocks.append({'pk': block['block_hash'], 'block_filter': block_filter})
+    filters = [get_block_filter(f) for f in all_filters]
     execute(BlockTable.update().where(BlockTable.c.block_hash == bindparam('pk')), blocks)
 
-    txs = []
-    for tx in queries.get_transactions_without_filters():
-        tx_filter = create_block_filter(
-            {r['address'] for r in queries.get_block_tx_addresses(tx_hash=tx['tx_hash'])}
-        )
-        txs.append({'pk': tx['tx_hash'], 'tx_filter': tx_filter})
-    execute(TX.update().where(TX.c.tx_hash == bindparam('pk')), txs)
+#    txs = []
+#    for tx in queries.get_transactions_without_filters():
+#        tx_filter = create_block_filter(
+#            {r['address'] for r in queries.get_block_tx_addresses(tx_hash=tx['tx_hash'])}
+#        )
+#        txs.append({'pk': tx['tx_hash'], 'tx_filter': tx_filter})
+#    execute(TX.update().where(TX.c.tx_hash == bindparam('pk')), txs)
 
 
 class BlockchainSync(Sync):

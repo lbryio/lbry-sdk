@@ -75,7 +75,9 @@ class BlockchainDB:
         return self.sync_execute_fetchall(
             """
             SELECT datapos as data_offset, height, hash as block_hash, txCount as txs
-            FROM block_info WHERE file = ? ORDER BY datapos ASC;
+            FROM block_info
+            WHERE file = ? and status&1 > 0
+            ORDER BY datapos ASC;
             """, (block_file,)
         )
 
