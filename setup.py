@@ -1,19 +1,30 @@
 import os
-from lbry import __name__, __version__
+import codecs
 from setuptools import setup, find_packages
 
-BASE = os.path.dirname(__file__)
-with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
-    long_description = fh.read()
+
+def read(relative_path):
+    here = os.path.abspath(os.path.dirname(__file__))
+    with codecs.open(os.path.join(here, relative_path), 'r') as fp:
+        return fp.read()
+
+
+def get_version(relative_path):
+    for line in read(relative_path).splitlines():
+        if line.startswith('__version__'):
+            return line.split('"')[1]
+    else:
+        raise RuntimeError("Unable to find version string.")
+
 
 setup(
-    name=__name__,
-    version=__version__,
+    name='lbry',
+    version=get_version('lbry/__init__.py'),
     author="LBRY Inc.",
     author_email="hello@lbry.com",
     url="https://lbry.com",
     description="A decentralized media library and marketplace",
-    long_description=long_description,
+    long_description=read('README.md'),
     long_description_content_type="text/markdown",
     keywords="lbry protocol media",
     license='MIT',
@@ -22,9 +33,7 @@ setup(
     zip_safe=False,
     entry_points={
         'console_scripts': [
-            'lbrynet=lbry.extras.cli:main',
-            'torba-server=lbry.wallet.server.cli:main',
-            'orchstr8=lbry.wallet.orchstr8.cli:main',
+            'lbrynet=lbry.cli:main',
         ],
     },
     install_requires=[
@@ -46,14 +55,15 @@ setup(
         'hachoir',
         'multidict==4.6.1',
         'coincurve==11.0.0',
-        'pbkdf2==1.3',
         'attrs==18.2.0',
-        'pylru==1.1.0',
         'pyzmq==18.1.1',
-        'plyvel==1.0.5',
         'sqlalchemy@git+https://github.com/sqlalchemy/sqlalchemy.git',
-        'psycopg2',
+        'chiabip158@git+https://github.com/Chia-Network/chiabip158.git',
     ],
+    extras_require={
+        'ui': ['pyside2'],
+        'postgresql': ['psycopg2']
+    },
     classifiers=[
         'Framework :: AsyncIO',
         'Intended Audience :: Developers',
