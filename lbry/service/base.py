@@ -1,14 +1,17 @@
 import os
 import asyncio
 import logging
+import signal
 from typing import List, Optional, Tuple, NamedTuple
+
+from aiohttp.web import GracefulExit
 
 from lbry.db import Database
 from lbry.db.constants import TXO_TYPES
 from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Transaction, Output
 from lbry.blockchain.ledger import Ledger
-from lbry.wallet import WalletManager, AddressManager
+from lbry.wallet import WalletManager
 from lbry.event import EventController
 
 log = logging.getLogger(__name__)
@@ -71,6 +74,30 @@ class Service:
         self._on_connected_controller = EventController()
         self.on_connected = self._on_connected_controller.stream
 
+    def run(self):
+        loop = asyncio.get_event_loop()
+
+        def exit():
+            raise GracefulExit()
+
+        try:
+            loop.add_signal_handler(signal.SIGINT, exit)
+            loop.add_signal_handler(signal.SIGTERM, exit)
+        except NotImplementedError:
+            pass  # Not implemented on Windows
+
+        try:
+            loop.run_until_complete(self.start())
+            loop.run_forever()
+        except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            loop.run_until_complete(self.stop())
+            logging.shutdown()
+
+        if hasattr(loop, 'shutdown_asyncgens'):
+            loop.run_until_complete(loop.shutdown_asyncgens())
+
     async def start(self):
         await self.db.open()
         await self.wallets.ensure_path_exists()
@@ -119,11 +146,11 @@ class Service:
         self.constraint_spending_utxos(constraints)
         return self.db.get_utxos(**constraints)
 
-    async def get_txos(self, resolve=False, **constraints) -> List[Output]:
-        txos = await self.db.get_txos(**constraints)
+    async def get_txos(self, resolve=False, **constraints) -> Tuple[List[Output], Optional[int]]:
+        txos, count = await self.db.get_txos(**constraints)
         if resolve:
-            return await self._resolve_for_local_results(constraints.get('accounts', []), txos)
-        return txos
+            return await self._resolve_for_local_results(constraints.get('accounts', []), txos), count
+        return txos, count
 
     def get_txo_sum(self, **constraints):
         return self.db.get_txo_sum(**constraints)
@@ -153,10 +180,10 @@ class Service:
     async def search_transactions(self, txids):
         raise NotImplementedError
 
-    async def announce_addresses(self, address_manager: AddressManager, addresses: List[str]):
+    async def announce_addresses(self, address_manager, addresses: List[str]):
         await self.ledger.announce_addresses(address_manager, addresses)
 
-    async def get_address_manager_for_address(self, address) -> Optional[AddressManager]:
+    async def get_address_manager_for_address(self, address):
         details = await self.db.get_address(address=address)
         for account in self.accounts:
             if account.id == details['account']:
@@ -177,12 +204,14 @@ class Service:
             return self.ledger.genesis_hash
         return (await self.ledger.headers.hash(self.ledger.headers.height)).decode()
 
-    async def broadcast_or_release(self, tx, blocking=False):
+    async def maybe_broadcast_or_release(self, tx, blocking=False, preview=False):
+        if preview:
+            return await self.release_tx(tx)
         try:
             await self.broadcast(tx)
             if blocking:
                 await self.wait(tx, timeout=None)
-        except:
+        except Exception:
             await self.release_tx(tx)
             raise
 

@@ -1,36 +1,41 @@
 import json
-from typing import Union, Callable, Optional, List
+import time
+import hashlib
+import inspect
+from typing import Union, Tuple, Callable, Optional, List, Dict
 from binascii import hexlify, unhexlify
-
 from functools import partial
+
+import ecdsa
+import base58
 import aiohttp
 
 from lbry.conf import Setting, NOT_SET
-from lbry.blockchain.dewies import dewies_to_lbc, dict_values_to_lbc, lbc_to_dewies
+from lbry.db import TXO_TYPES
 from lbry.db.utils import constrain_single_or_list
-from lbry.db.constants import TXO_TYPES
+from lbry.wallet import Wallet, Account, SingleKey, HierarchicalDeterministic
+from lbry.blockchain import Transaction, Output, dewies_to_lbc, dict_values_to_lbc
+from lbry.stream.managed_stream import ManagedStream
 
 
-from lbry.service.base import Service
+from .base import Service
 
 
 DEFAULT_PAGE_SIZE = 20
 
 
-async def paginate_rows(get_records: Callable, get_record_count: Optional[Callable],
-                        page: Optional[int], page_size: Optional[int], **constraints):
+async def paginate_rows(get_records: Callable, page: Optional[int], page_size: Optional[int], **constraints):
     page = max(1, page or 1)
     page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
     constraints.update({
         "offset": page_size * (page - 1),
         "limit": page_size
     })
-    items = await get_records(**constraints)
+    items, count = await get_records(**constraints)
     result = {"items": items, "page": page, "page_size": page_size}
-    if get_record_count is not None:
-        total_items = await get_record_count(**constraints)
-        result["total_pages"] = int((total_items + (page_size - 1)) / page_size)
-        result["total_items"] = total_items
+    if count is not None:
+        result["total_pages"] = int((count + (page_size - 1)) / page_size)
+        result["total_items"] = count
     return result
 
 
@@ -50,6 +55,322 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
     }
 
 
+StrOrList = Union[str, list]
+Paginated = List
+Address = Dict
+
+
+kwarg_expanders = {}
+
+
+def expander(m):
+    assert m.__name__.endswith('_kwargs'), "Argument expanders must end with '_kwargs'."
+    name = m.__name__[:-7]
+    dict_name = f'_{name}_dict'
+
+    template = {
+        k: v.default
+        for (k, v) in inspect.signature(m).parameters.items()
+        if v.kind != inspect.Parameter.VAR_KEYWORD
+    }
+
+    sub_expanders = {}
+    for k in inspect.signature(m).parameters:
+        if k.endswith('_kwargs'):
+            sub_expanders = {
+                f'{e}_expander': f'_{e}_dict'
+                for e in k[:-7].split('_and_')
+            }
+            break
+
+    def expand(**kwargs):
+        d = kwargs.pop(dict_name, None)
+        if d is None:
+            d = template.copy()
+            d.update({k: v for k, v in kwargs.items() if k in d})
+        _kwargs = {k: v for k, v in kwargs.items() if k not in d}
+        for expander_name, expander_dict_name in sub_expanders.items():
+            _kwargs = kwarg_expanders[expander_name](**_kwargs)
+            d.update(_kwargs.pop(expander_dict_name))
+        return {dict_name: d, **_kwargs}
+
+    kwarg_expanders[f'{name}_original'] = m
+    kwarg_expanders[f'{name}_expander'] = expand
+    return expand
+
+
+def remove_nulls(d):
+    return {key: val for key, val in d.items() if val is not None}
+
+
+def pop_kwargs(k, d) -> Tuple[dict, dict]:
+    return d.pop(f'_{k}_dict'), d
+
+
+def assert_consumed_kwargs(d):
+    if d:
+        raise ValueError(f"Unknown argument pass: {d}")
+
+
+@expander
+def pagination_kwargs(
+    page: int = None,       # page to return for paginating
+    page_size: int = None,  # number of items on page for pagination
+    include_total=False,    # calculate total number of items and pages
+):
+    pass
+
+
+@expander
+def tx_kwargs(
+    wallet_id: str = None,              # restrict operation to specific wallet
+    change_account_id: str = None,      # account to send excess change (LBC)
+    fund_account_id: StrOrList = None,  # accounts to fund the transaction
+    preview=False,                      # do not broadcast the transaction
+    blocking=False,                     # wait until transaction is in mempool
+):
+    pass
+
+
+@expander
+def claim_kwargs(
+    title: str = None,
+    description: str = None,
+    thumbnail_url: str = None,   # url to thumbnail image
+    tag: StrOrList = None,
+    language: StrOrList = None,  # languages used by the channel,
+                                 #   using RFC 5646 format, eg:
+                                 #   for English `--language=en`
+                                 #   for Spanish (Spain) `--language=es-ES`
+                                 #   for Spanish (Mexican) `--language=es-MX`
+                                 #   for Chinese (Simplified) `--language=zh-Hans`
+                                 #   for Chinese (Traditional) `--language=zh-Hant`
+    location: StrOrList = None,  # locations of the channel, consisting of 2 letter
+                                 #   `country` code and a `state`, `city` and a postal
+                                 #   `code` along with a `latitude` and `longitude`.
+                                 #   for JSON RPC: pass a dictionary with aforementioned
+                                 #       attributes as keys, eg:
+                                 #       ...
+                                 #       "locations": [{'country': 'US', 'state': 'NH'}]
+                                 #       ...
+                                 #   for command line: pass a colon delimited list
+                                 #       with values in the following order:
+                                 #         "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
+                                 #       making sure to include colon for blank values, for
+                                 #       example to provide only the city:
+                                 #         ... --locations="::Manchester"
+                                 #       with all values set:
+                                 #        ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                 #       optionally, you can just pass the "LATITUDE:LONGITUDE":
+                                 #         ... --locations="42.990605:-71.460989"
+                                 #       finally, you can also pass JSON string of dictionary
+                                 #       on the command line as you would via JSON RPC
+                                 #         ... --locations="{'country': 'US', 'state': 'NH'}"
+    account_id: str = None,      # account to hold the claim
+    claim_address: str = None,   # specific address where the claim is held, if not specified
+                                 # it will be determined automatically from the account
+):
+    pass
+
+
+@expander
+def claim_edit_kwargs(
+    replace=False,          # instead of modifying specific values on
+                            # the claim, this will clear all existing values
+                            # and only save passed in values, useful for form
+                            # submissions where all values are always set
+    clear_tags=False,       # clear existing tags (prior to adding new ones)
+    clear_languages=False,  # clear existing languages (prior to adding new ones)
+    clear_locations=False,  # clear existing locations (prior to adding new ones)
+):
+    pass
+
+
+@expander
+def signed_kwargs(
+    channel_id: str = None,    # claim id of the publishing channel
+    channel_name: str = None,  # name of publishing channel
+):
+    pass
+
+
+@expander
+def stream_kwargs(
+    file_path: str = None,      # path to file to be associated with name.
+    validate_file=False,        # validate that the video container and encodings match
+                                # common web browser support or that optimization succeeds if specified.
+                                # FFmpeg is required
+    optimize_file=False,        # transcode the video & audio if necessary to ensure
+                                # common web browser support. FFmpeg is required
+    fee_currency: str = None,   # specify fee currency
+    fee_amount: str = None,     # content download fee
+    fee_address: str = None,    # address where to send fee payments, will use
+                                # the claim holding address by default
+    author: str = None,         # author of the publication. The usage for this field is not
+                                # the same as for channels. The author field is used to credit an author
+                                # who is not the publisher and is not represented by the channel. For
+                                # example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
+                                # by published to a channel such as '@classics', or to no channel at all
+    license: str = None,        # publication license
+    license_url: str = None,    # publication license url
+    release_time: int = None,   # original public release of content, seconds since UNIX epoch
+    width: int = None,          # image/video width, automatically calculated from media file
+    height: int = None,         # image/video height, automatically calculated from media file
+    duration: int = None,       # audio/video duration in seconds, automatically calculated
+    **claim_and_signed_kwargs
+):
+    pass
+
+
+@expander
+def stream_edit_kwargs(
+    clear_fee=False,      # clear fee
+    clear_channel=False,  # clear channel signature
+    **stream_and_claim_edit_kwargs
+):
+    pass
+
+
+@expander
+def channel_kwargs(
+    email: str = None,           # email of channel owner
+    website_url: str = None,     # website url
+    cover_url: str = None,       # url to cover image
+    featured: StrOrList = None,  # claim_id(s) of featured content in channel
+    **claim_and_signed_kwargs
+):
+    pass
+
+
+@expander
+def channel_edit_kwargs(
+    new_signing_key=False,  # generate a new signing key, will invalidate all previous publishes
+    clear_featured=False,   # clear existing featured content (prior to adding new ones)
+    **channel_and_claim_edit_kwargs
+):
+    pass
+
+
+@expander
+def abandon_kwargs(
+    claim_id: str = None,    # claim_id of the claim to abandon
+    txid: str = None,        # txid of the claim to abandon
+    nout: int = 0,           # nout of the claim to abandon
+    account_id: str = None,  # restrict operation to specific account, otherwise all accounts in wallet
+):
+    pass
+
+
+@expander
+def claim_filter_kwargs(
+    name: StrOrList = None,          # claim name (normalized)
+    claim_id: StrOrList = None,      # full or partial claim id
+    text: str = None,                # full text search
+    txid: str = None,                # transaction id
+    nout: int = None,                # position in the transaction
+    height: int = None,              # last updated block height (supports equality constraints)
+    timestamp: int = None,           # last updated timestamp (supports equality constraints)
+    creation_height: int = None,     # created at block height (supports equality constraints)
+    creation_timestamp: int = None,  # created at timestamp (supports equality constraints)
+    amount: str = None,              # claim amount (supports equality constraints)
+    any_tag: StrOrList = None,       # containing any of the tags
+    all_tag: StrOrList = None,       # containing every tag
+    not_tag: StrOrList = None,       # not containing any of these tags
+    any_language: StrOrList = None,  # containing any of the languages
+    all_language: StrOrList = None,  # containing every language
+    not_language: StrOrList = None,  # not containing any of these languages
+    any_location: StrOrList = None,  # containing any of the locations
+    all_location: StrOrList = None,  # containing every location
+    not_location: StrOrList = None,  # not containing any of these locations
+    release_time: int = None,        # limit to claims self-described as having been released
+                                     # to the public on or after this UTC timestamp, when claim
+                                     # does not provide a release time the publish time is used
+                                     # instead (supports equality constraints)
+):
+    pass
+
+
+@expander
+def signed_filter_kwargs(
+    channel: str = None,               # signed by this channel (argument is
+                                       # a URL which automatically gets resolved),
+                                       # see --channel_id if you need to filter by
+                                       # multiple channels at the same time,
+                                       # includes results with invalid signatures,
+                                       # use in conjunction with --valid_channel_signature
+    channel_id: StrOrList = None,      # signed by any of these channels including invalid signatures,
+                                       # implies --has_channel_signature,
+                                       # use in conjunction with --valid_channel_signature
+    not_channel_id: StrOrList = None,  # exclude everything signed by any of these channels
+    has_channel_signature=False,       # results with a channel signature (valid or invalid)
+    valid_channel_signature=False,     # results with a valid channel signature or no signature,
+                                       # use in conjunction with --has_channel_signature to
+                                       # only get results with valid signatures
+    invalid_channel_signature=False,   # results with invalid channel signature or no signature,
+                                       # use in conjunction with --has_channel_signature to
+                                       # only get results with invalid signatures
+):
+    pass
+
+
+@expander
+def stream_filter_kwargs(
+    stream_type: StrOrList = None,  # filter by 'video', 'image', 'document', etc
+    media_type: StrOrList = None,   # filter by 'video/mp4', 'image/png', etc
+    fee_currency: str = None,       # specify fee currency# LBC, BTC, USD
+    fee_amount: str = None,         # content download fee (supports equality constraints)
+    duration: int = None,           # duration of video or audio in seconds (supports equality constraints)
+    **signed_filter_kwargs
+):
+    pass
+
+
+@expander
+def file_filter_kwargs(
+    sd_hash: str = None,           # filter by sd hash
+    file_name: str = None,         # filter by file name
+    stream_hash: str = None,       # filter by stream hash
+    rowid: int = None,             # filter by row id
+    added_on: int = None,          # filter by time of insertion
+    claim_id: str = None,          # filter by claim id
+    outpoint: str = None,          # filter by claim outpoint
+    txid: str = None,              # filter by claim txid
+    nout: int = None,              # filter by claim nout
+    channel_claim_id: str = None,  # filter by channel claim id
+    channel_name: str = None,      # filter by channel name
+    claim_name: str = None,        # filter by claim name
+    blobs_in_stream: int = None,   # filter by blobs in stream
+    blobs_remaining: int = None,   # filter by number of remaining blobs to download
+):
+    pass
+
+
+@expander
+def txo_filter_kwargs(
+    type: StrOrList = None,            # claim type: stream, channel, support, purchase, collection, repost, other
+    txid: StrOrList = None,            # transaction id of outputs
+    claim_id: StrOrList = None,        # claim id
+    channel_id: StrOrList = None,      # claims in this channel
+    name: StrOrList = None,            # claim name
+    is_spent=False,                    # only show spent txos
+    is_not_spent=False,                # only show not spent txos
+    is_my_input_or_output=False,       # txos which have your inputs or your outputs,
+                                       # if using this flag the other related flags
+                                       # are ignored (--is_my_output, --is_my_input, etc)
+    is_my_output=False,                # show outputs controlled by you
+    is_not_my_output=False,            # show outputs not controlled by you
+    is_my_input=False,                 # show outputs created by you
+    is_not_my_input=False,             # show outputs not created by you
+    exclude_internal_transfers=False,  # excludes any outputs that are exactly this combination:
+                                       # "--is_my_input --is_my_output --type=other"
+                                       # this allows to exclude "change" payments, this
+                                       # flag can be used in combination with any of the other flags
+    account_id: StrOrList = None,      # id(s) of the account(s) to query
+    wallet_id: str = None,             # restrict results to specific wallet
+):
+    pass
+
+
 class API:
 
     def __init__(self, service: Service):
@@ -57,33 +378,15 @@ class API:
         self.wallets = service.wallets
         self.ledger = service.ledger
 
-    async def stop(self):
-        """
-        Stop lbrynet API server.
-
-        Usage:
-            stop
-
-        Options:
-            None
-
-        Returns:
-            (string) Shutdown message
-        """
+    async def stop(self) -> str:  # Shutdown message
+        """ Stop lbrynet API server. """
         return await self.service.stop()
 
-    async def ffmpeg_find(self):
+    async def ffmpeg_find(self) -> dict:  # ffmpeg information
         """
         Get ffmpeg installation information
 
-        Usage:
-            ffmpeg_find
-
-        Options:
-            None
-
         Returns:
-            (dict) Dictionary of ffmpeg information
             {
                 'available': (bool) found ffmpeg,
                 'which': (str) path to ffmpeg,
@@ -92,18 +395,11 @@ class API:
         """
         return await self.service.find_ffmpeg()
 
-    async def status(self):
+    async def status(self) -> dict:  # lbrynet daemon status
         """
         Get daemon status
 
-        Usage:
-            status
-
-        Options:
-            None
-
         Returns:
-            (dict) lbrynet-daemon status
             {
                 'installation_id': (str) installation id - base58,
                 'is_running': (bool),
@@ -181,18 +477,11 @@ class API:
         """
         return await self.service.get_status()
 
-    async def version(self):
+    async def version(self) -> dict:  # lbrynet version information
         """
         Get lbrynet API server version information
 
-        Usage:
-            version
-
-        Options:
-            None
-
         Returns:
-            (dict) Dictionary of lbry version information
             {
                 'processor': (str) processor type,
                 'python_version': (str) python version,
@@ -205,7 +494,21 @@ class API:
         """
         return await self.service.get_version()
 
-    async def resolve(self, urls: Union[str, list], wallet_id=None, **kwargs):
+    async def resolve(
+        self,
+        urls: StrOrList,                 # one or more urls to resolve
+        wallet_id: str = None,           # wallet to check for claim purchase reciepts
+        include_purchase_receipt=False,  # lookup and include a receipt if this wallet
+                                         # has purchased the claim being resolved
+        include_is_my_output=False,      # lookup and include a boolean indicating
+                                         # if claim being resolved is yours
+        include_sent_supports=False,     # lookup and sum the total amount
+                                         # of supports you've made to this claim
+        include_sent_tips=False,         # lookup and sum the total amount
+                                         # of tips you've made to this claim
+        include_received_tips=False      # lookup and sum the total amount
+                                         # of tips you've received to this claim
+    ) -> dict:  # resolve results, keyed by url
         """
         Get the claim that a URL refers to.
 
@@ -217,24 +520,7 @@ class API:
                     [--include_sent_tips]
                     [--include_received_tips]
 
-        Options:
-            --urls=<urls>              : (str, list) one or more urls to resolve
-            --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase reciepts
-           --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet
-                                                has purchased the claim being resolved
-            --include_is_my_output     : (bool) lookup and include a boolean indicating
-                                                if claim being resolved is yours
-            --include_sent_supports    : (bool) lookup and sum the total amount
-                                                of supports you've made to this claim
-            --include_sent_tips        : (bool) lookup and sum the total amount
-                                                of tips you've made to this claim
-                                                (only makes sense when claim is not yours)
-            --include_received_tips    : (bool) lookup and sum the total amount
-                                                of tips you've received to this claim
-                                                (only makes sense when claim is yours)
-
         Returns:
-            Dictionary of results, keyed by url
             '<url>': {
                     If a resolution error occurs:
                     'error': Error message
@@ -292,67 +578,53 @@ class API:
         if isinstance(urls, str):
             urls = [urls]
         return await self.service.resolve(
-            urls, wallet=self.wallets.get_or_default(wallet_id), **kwargs
+            urls, wallet=self.wallets.get_or_default(wallet_id),
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output,
+            include_sent_supports=include_sent_supports,
+            include_sent_tips=include_sent_tips,
+            include_received_tips=include_received_tips
         )
 
     async def get(
-            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
+        self,
+        uri: str,                        # uri of the content to download
+        file_name: str = None,           # specified name for the downloaded file, overrides the stream file name
+        download_directory: str = None,  # full path to the directory to download into
+        timeout: int = None,             # download timeout in number of seconds
+        save_file: bool = None,          # save the file to the downloads directory
+        wallet_id: str = None            # wallet to check for claim purchase reciepts
+    ) -> ManagedStream:
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>]
-             [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
+             [<download_directory> | --download_directory=<download_directory>]
+             [<timeout> | --timeout=<timeout>]
              [--save_file=<save_file>] [--wallet_id=<wallet_id>]
 
-
-        Options:
-            --uri=<uri>              : (str) uri of the content to download
-            --file_name=<file_name>  : (str) specified name for the downloaded file, overrides the stream file name
-            --download_directory=<download_directory>  : (str) full path to the directory to download into
-            --timeout=<timeout>      : (int) download timeout in number of seconds
-            --save_file=<save_file>  : (bool) save the file to the downloads directory
-            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase reciepts
-
-        Returns: {File}
         """
         return await self.service.get(
-            uri, file_name=file_name, download_directory=download_directory, timeout=timeout, save_file=save_file,
-            wallet=self.wallets.get_or_default(wallet_id)
+            uri, file_name=file_name, download_directory=download_directory,
+            timeout=timeout, save_file=save_file, wallet=self.wallets.get_or_default(wallet_id)
         )
 
     SETTINGS_DOC = """
     Settings management.
     """
 
-    async def settings_get(self):
-        """
-        Get daemon settings
-
-        Usage:
-            settings_get
-
-        Options:
-            None
-
-        Returns:
-            (dict) Dictionary of daemon settings
-            See ADJUSTABLE_SETTINGS in lbry/conf.py for full list of settings
-        """
+    async def settings_get(self) -> dict:  # daemon settings
+        """ Get daemon settings """
         return self.service.ledger.conf.settings_dict
 
-    async def settings_set(self, key, value):
+    async def settings_set(self, key: str, value: str) -> dict:  # updated daemon setting
         """
         Set daemon settings
 
         Usage:
-            settings_set (<key>) (<value>)
+            settings set <key> <value>
 
-        Options:
-            None
-
-        Returns:
-            (dict) Updated dictionary of daemon settings
         """
         with self.service.ledger.conf.update_config() as c:
             if value and isinstance(value, str) and value[0] in ('[', '{'):
@@ -362,18 +634,13 @@ class API:
             setattr(c, key, cleaned)
         return {key: cleaned}
 
-    async def settings_clear(self, key):
+    async def settings_clear(self, key: str) -> dict:  # updated daemon setting
         """
         Clear daemon settings
 
         Usage:
-            settings_clear (<key>)
+            settings clear (<key>)
 
-        Options:
-            None
-
-        Returns:
-            (dict) Updated dictionary of daemon settings
         """
         with self.service.ledger.conf.update_config() as c:
             setattr(c, key, NOT_SET)
@@ -383,41 +650,37 @@ class API:
     Preferences management.
     """
 
-    async def preference_get(self, key=None, wallet_id=None):
+    async def preference_get(
+        self,
+        key: str = None,       # key associated with value
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> dict:  # preferences
         """
         Get preference value for key or all values if not key is passed in.
 
         Usage:
-            preference_get [<key>] [--wallet_id=<wallet_id>]
+            preference get [<key>] [--wallet_id=<wallet_id>]
 
-        Options:
-            --key=<key> : (str) key associated with value
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns:
-            (dict) Dictionary of preference(s)
         """
         wallet = self.wallets.get_or_default(wallet_id)
         if key:
             if key in wallet.preferences:
                 return {key: wallet.preferences[key]}
-            return
+            return {}
         return wallet.preferences.to_dict_without_ts()
 
-    async def preference_set(self, key, value, wallet_id=None):
+    async def preference_set(
+        self,
+        key: str,              # key for the value
+        value: str,            # the value itself
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> dict:  # updated user preference
         """
         Set preferences
 
         Usage:
-            preference_set (<key>) (<value>) [--wallet_id=<wallet_id>]
+            preference set (<key>) (<value>) [--wallet_id=<wallet_id>]
 
-        Options:
-            --key=<key> : (str) key associated with value
-            --value=<key> : (str) key associated with value
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns:
-            (dict) Dictionary with key/value of new preference
         """
         wallet = self.wallets.get_or_default(wallet_id)
         if value and isinstance(value, str) and value[0] in ('[', '{'):
@@ -430,53 +693,40 @@ class API:
     Create, modify and inspect wallets.
     """
 
-    async def wallet_list(self, wallet_id=None, page=None, page_size=None):
+    async def wallet_list(
+        self,
+        wallet_id: str = None,  # show specific wallet only
+        **pagination_kwargs
+    ) -> Paginated[Wallet]:
         """
         List wallets.
 
         Usage:
-            wallet_list [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
+            wallet list [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
 
-        Options:
-            --wallet_id=<wallet_id>  : (str) show specific wallet only
-            --page=<page>            : (int) page to return during paginating
-            --page_size=<page_size>  : (int) number of items on page during pagination
-
-        Returns: {Paginated[Wallet]}
         """
         if wallet_id:
             return paginate_list([self.wallets.get_wallet_or_error(wallet_id)], 1, 1)
-        return paginate_list(self.wallets.wallets, page, page_size)
+        return paginate_list(self.wallets.wallets, **pagination_kwargs)
 
     async def wallet_reconnect(self):
-        """
-        Reconnects ledger network client, applying new configurations.
-
-        Usage:
-            wallet_reconnect
-
-        Options:
-
-        Returns: None
-        """
+        """ Reconnects ledger network client, applying new configurations. """
         return self.wallets.reset()
 
     async def wallet_create(
-            self, wallet_id, skip_on_startup=False, create_account=False, single_key=False):
+        self,
+        wallet_id: str,         # wallet file name
+        skip_on_startup=False,  # don't add wallet to daemon_settings.yml
+        create_account=False,   # generates the default account
+        single_key=False        # used with --create_account, creates single-key account
+    ) -> Wallet:  # newly created wallet
         """
         Create a new wallet.
 
         Usage:
-            wallet_create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]
+            wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]
                           [--create_account] [--single_key]
 
-        Options:
-            --wallet_id=<wallet_id>  : (str) wallet file name
-            --skip_on_startup        : (bool) don't add wallet to daemon_settings.yml
-            --create_account         : (bool) generates the default account
-            --single_key             : (bool) used with --create_account, creates single-key account
-
-        Returns: {Wallet}
         """
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
         for wallet in self.wallets.wallets:
@@ -500,17 +750,16 @@ class API:
                 c.wallets += [wallet_id]
         return wallet
 
-    async def wallet_add(self, wallet_id):
+    async def wallet_add(
+        self,
+        wallet_id: str  # wallet file name
+    ) -> Wallet:  # added wallet
         """
         Add existing wallet.
 
         Usage:
-            wallet_add (<wallet_id> | --wallet_id=<wallet_id>)
+            wallet add (<wallet_id> | --wallet_id=<wallet_id>)
 
-        Options:
-            --wallet_id=<wallet_id>  : (str) wallet file name
-
-        Returns: {Wallet}
         """
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
         for wallet in self.wallets.wallets:
@@ -524,17 +773,16 @@ class API:
                 await self.ledger.subscribe_account(account)
         return wallet
 
-    async def wallet_remove(self, wallet_id):
+    async def wallet_remove(
+        self,
+        wallet_id: str  # id of wallet to remove
+    ) -> Wallet:  # removed wallet
         """
         Remove an existing wallet.
 
         Usage:
-            wallet_remove (<wallet_id> | --wallet_id=<wallet_id>)
+            wallet remove (<wallet_id> | --wallet_id=<wallet_id>)
 
-        Options:
-            --wallet_id=<wallet_id>    : (str) name of wallet to remove
-
-        Returns: {Wallet}
         """
         wallet = self.wallets.get_wallet_or_error(wallet_id)
         self.wallets.wallets.remove(wallet)
@@ -542,20 +790,17 @@ class API:
             await self.ledger.unsubscribe_account(account)
         return wallet
 
-    async def wallet_balance(self, wallet_id=None, confirmations=0):
+    async def wallet_balance(
+        self,
+        wallet_id: str = None,  # balance for specific wallet, other than default wallet
+        confirmations=0         # only include transactions with this many confirmed blocks.
+    ) -> dict:
         """
         Return the balance of a wallet
 
         Usage:
-            wallet_balance [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]
+            wallet balance [<wallet_id>] [--confirmations=<confirmations>]
 
-        Options:
-            --wallet_id=<wallet_id>         : (str) balance for specific wallet
-            --confirmations=<confirmations> : (int) Only include transactions with this many
-                                              confirmed blocks.
-
-        Returns:
-            (decimal) amount of lbry credits in wallet
         """
         wallet = self.wallets.get_or_default(wallet_id)
         balance = await self.ledger.get_detailed_balance(
@@ -563,18 +808,18 @@ class API:
         )
         return dict_values_to_lbc(balance)
 
-    async def wallet_status(self, wallet_id=None):
+    async def wallet_status(
+        self,
+        wallet_id: str = None  # status of specific wallet
+    ) -> dict:  # status of the wallet
         """
         Status of wallet including encryption/lock state.
 
         Usage:
-            wallet_status [<wallet_id> | --wallet_id=<wallet_id>]
-
-        Options:
-            --wallet_id=<wallet_id>    : (str) status of specific wallet
+            wallet status [<wallet_id> | --wallet_id=<wallet_id>]
 
         Returns:
-            Dictionary of wallet status information.
+            {'is_encrypted': (bool), 'is_syncing': (bool), 'is_locked': (bool)}
         """
         if self.wallets is None:
             return {'is_encrypted': None, 'is_syncing': None, 'is_locked': None}
@@ -585,117 +830,94 @@ class API:
             'is_locked': wallet.is_locked
         }
 
-    async def wallet_unlock(self, password, wallet_id=None):
+    async def wallet_unlock(
+        self,
+        password: str,         # password to use for unlocking
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> bool:  # true if wallet has become unlocked
         """
         Unlock an encrypted wallet
 
         Usage:
-            wallet_unlock (<password> | --password=<password>) [--wallet_id=<wallet_id>]
+            wallet unlock (<password> | --password=<password>) [--wallet_id=<wallet_id>]
 
-        Options:
-            --password=<password>      : (str) password to use for unlocking
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is unlocked, otherwise false
         """
         return self.wallets.get_or_default(wallet_id).unlock(password)
 
-    async def wallet_lock(self, wallet_id=None):
+    async def wallet_lock(
+        self,
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> bool:  # true if wallet has become locked
         """
         Lock an unlocked wallet
 
         Usage:
-            wallet_lock [--wallet_id=<wallet_id>]
+            wallet lock [--wallet_id=<wallet_id>]
 
-        Options:
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is locked, otherwise false
         """
         return self.wallets.get_or_default(wallet_id).lock()
 
-    async def wallet_decrypt(self, wallet_id=None):
+    async def wallet_decrypt(
+        self,
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> bool:  # true if wallet has been decrypted
         """
         Decrypt an encrypted wallet, this will remove the wallet password. The wallet must be unlocked to decrypt it
 
         Usage:
-            wallet_decrypt [--wallet_id=<wallet_id>]
+            wallet decrypt [--wallet_id=<wallet_id>]
 
-        Options:
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallets.get_or_default(wallet_id).decrypt()
+        return await self.wallets.get_or_default(wallet_id).decrypt()
 
-    async def wallet_encrypt(self, new_password, wallet_id=None):
+    async def wallet_encrypt(
+        self,
+        new_password: str,     # password to encrypt account
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> bool:  # true if wallet has been encrypted
         """
         Encrypt an unencrypted wallet with a password
 
         Usage:
-            wallet_encrypt (<new_password> | --new_password=<new_password>)
-                            [--wallet_id=<wallet_id>]
+            wallet encrypt (<new_password> | --new_password=<new_password>)
+                           [--wallet_id=<wallet_id>]
 
-        Options:
-            --new_password=<new_password>  : (str) password to encrypt account
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true if wallet is decrypted, otherwise false
         """
-        return self.wallets.get_or_default(wallet_id).encrypt(new_password)
+        return await self.wallets.get_or_default(wallet_id).encrypt(new_password)
 
     async def wallet_send(
-            self, amount, addresses, wallet_id=None,
-            change_account_id=None, funding_account_ids=None, preview=False):
+        self,
+        amount: str,           # amount to send to each address
+        addresses: StrOrList,  # addresses to send amounts to
+        **tx_kwargs
+    ) -> Transaction:
         """
         Send the same number of credits to multiple addresses using all accounts in wallet to
         fund the transaction and the default account to receive any change.
 
         Usage:
-            wallet_send <amount> <addresses>... [--wallet_id=<wallet_id>] [--preview]
-                        [--change_account_id=None] [--funding_account_ids=<funding_account_ids>...]
+            wallet send <amount> <addresses>...
+                        {kwargs}
 
-        Options:
-            --wallet_id=<wallet_id>         : (str) restrict operation to specific wallet
-            --change_account_id=<wallet_id> : (str) account where change will go
-            --funding_account_ids=<funding_account_ids> : (str) accounts to fund the transaction
-            --preview                  : (bool) do not broadcast the transaction
-
-        Returns: {Transaction}
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        account = wallet.accounts.get_or_default(change_account_id)
-        accounts = wallet.accounts.get_or_all(funding_account_ids)
-
-        amount = self.get_dewies_or_error("amount", amount)
-
+        args = transaction(**transaction_kwargs)
+        wallet = self.wallets.get_or_default_for_spending(args['wallet_id'])
+        account = wallet.accounts.get_or_default(args['change_account_id'])
+        accounts = wallet.accounts.get_or_all(args['funding_account_id'])
+        amount = self.ledger.get_dewies_or_error("amount", amount)
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]
-
         outputs = []
         for address in addresses:
-            self.valid_address_or_error(address)
+            self.ledger.valid_address_or_error(address)
             outputs.append(
                 Output.pay_pubkey_hash(
-                    amount, self.ledger.ledger.address_to_hash160(address)
+                    amount, self.ledger.address_to_hash160(address)
                 )
             )
-
-        tx = await Transaction.create(
-            [], outputs, accounts, account
-        )
-
-        if not preview:
-            await self.ledger.broadcast(tx)
-            self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())
-        else:
-            await self.ledger.release_tx(tx)
-
+        tx = await wallet.create_transaction([], outputs, accounts, account)
+        await wallet.sign(tx)
+        await self.service.maybe_broadcast_or_release(tx, args['blocking'], args['preview'])
         return tx
 
     ACCOUNT_DOC = """
@@ -703,57 +925,41 @@ class API:
     """
 
     async def account_list(
-            self, account_id=None, wallet_id=None, confirmations=0,
-            include_claims=False, show_seed=False, page=None, page_size=None):
+        self,
+        account_id: str = None,  # show specific wallet only
+        wallet_id: str = None,   # restrict operation to specific wallet
+        confirmations=0,         # required confirmations for account balance
+        include_seed=False,      # include the seed phrase of the accounts
+        **pagination_kwargs
+    ) -> Paginated[Account]:  # paginated accounts
         """
         List details of all of the accounts or a specific account.
 
         Usage:
-            account_list [<account_id>] [--wallet_id=<wallet_id>]
-                         [--confirmations=<confirmations>]
-                         [--include_claims] [--show_seed]
-                         [--page=<page>] [--page_size=<page_size>]
+            account list [<account_id>] [--wallet_id=<wallet_id>]
+                         [--confirmations=<confirmations>] [--include_seed]
+                         {kwargs}
 
-        Options:
-            --account_id=<account_id>       : (str) If provided only the balance for this
-                                                    account will be given
-            --wallet_id=<wallet_id>         : (str) accounts in specific wallet
-            --confirmations=<confirmations> : (int) required confirmations (default: 0)
-            --include_claims                : (bool) include claims, requires than a
-                                                     LBC account is specified (default: false)
-            --show_seed                     : (bool) show the seed for the account
-            --page=<page>                   : (int) page to return during paginating
-            --page_size=<page_size>         : (int) number of items on page during pagination
-
-        Returns: {Paginated[Account]}
         """
-        kwargs = {
-            'confirmations': confirmations,
-            'show_seed': show_seed
-        }
+        kwargs = {'confirmations': confirmations, 'show_seed': include_seed}
         wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             return paginate_list([await wallet.get_account_or_error(account_id).get_details(**kwargs)], 1, 1)
         else:
-            return paginate_list(await wallet.get_detailed_accounts(**kwargs), page, page_size)
+            return paginate_list(await wallet.get_detailed_accounts(**kwargs), **pagination_kwargs)
 
-    async def account_balance(self, account_id=None, wallet_id=None, confirmations=0):
+    async def account_balance(
+        self,
+        account_id: str = None,  # balance for specific account, default otherwise
+        wallet_id: str = None,   # restrict operation to specific wallet
+        confirmations=0          # required confirmations of transactions included
+    ) -> dict:
         """
         Return the balance of an account
 
         Usage:
-            account_balance [<account_id>] [<address> | --address=<address>] [--wallet_id=<wallet_id>]
-                            [<confirmations> | --confirmations=<confirmations>]
+            account balance [<account_id>] [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]
 
-        Options:
-            --account_id=<account_id>       : (str) If provided only the balance for this
-                                              account will be given. Otherwise default account.
-            --wallet_id=<wallet_id>         : (str) balance for specific wallet
-            --confirmations=<confirmations> : (int) Only include transactions with this many
-                                              confirmed blocks.
-
-        Returns:
-            (decimal) amount of lbry credits in wallet
         """
         wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.accounts.get_or_default(account_id)
@@ -763,29 +969,26 @@ class API:
         return dict_values_to_lbc(balance)
 
     async def account_add(
-            self, account_name, wallet_id=None, single_key=False,
-            seed=None, private_key=None, public_key=None):
+        self,
+        account_name: str,        # name of the account being add
+        wallet_id: str = None,    # add account to specific wallet
+        single_key=False,         # create single key account, default is multi-key
+        seed: str = None,         # seed to generate account from
+        private_key: str = None,  # private key of account
+        public_key: str = None    # public key of account
+    ) -> Account:  # added account
         """
         Add a previously created account from a seed, private key or public key (read-only).
         Specify --single_key for single address or vanity address accounts.
 
         Usage:
-            account_add (<account_name> | --account_name=<account_name>)
+            account add (<account_name> | --account_name=<account_name>)
                  (--seed=<seed> | --private_key=<private_key> | --public_key=<public_key>)
                  [--single_key] [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_name=<account_name>  : (str) name of the account to add
-            --seed=<seed>                  : (str) seed to generate new account from
-            --private_key=<private_key>    : (str) private key for new account
-            --public_key=<public_key>      : (str) public key for new account
-            --single_key                   : (bool) create single key account, default is multi-key
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-
-        Returns: {Account}
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = Account.from_dict(
+        account = await Account.from_dict(
             self.ledger, wallet, {
                 'name': account_name,
                 'seed': seed,
@@ -801,77 +1004,72 @@ class API:
             await self.ledger.subscribe_account(account)
         return account
 
-    async def account_create(self, account_name, single_key=False, wallet_id=None):
+    async def account_create(
+        self,
+        account_name: str,     # name of the account being created
+        language='en',         # language to use for seed phrase words,
+                               # available languages: en, fr, it, ja, es, zh
+        single_key=False,      # create single key account, default is multi-key
+        wallet_id: str = None  # create account in specific wallet
+    ) -> Account:  # created account
         """
         Create a new account. Specify --single_key if you want to use
         the same address for all transactions (not recommended).
 
         Usage:
-            account_create (<account_name> | --account_name=<account_name>)
+            account create (<account_name> | --account_name=<account_name>)
+                           [--language=<language>]
                            [--single_key] [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_name=<account_name>  : (str) name of the account to create
-            --single_key                   : (bool) create single key account, default is multi-key
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-
-        Returns: {Account}
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = Account.generate(
-            self.ledger.ledger, wallet, account_name, {
-                'name': SingleKey.name if single_key else HierarchicalDeterministic.name
-            }
-        )
-        wallet.save()
-        if self.ledger.sync.network.is_connected:
-            await self.ledger.sync.subscribe_account(account)
+        account = await wallet.accounts.generate(account_name, language, {
+            'name': SingleKey.name if single_key else HierarchicalDeterministic.name
+        })
+        await wallet.save()
+        # TODO: fix
+        #if self.ledger.sync.network.is_connected:
+        #    await self.ledger.sync.subscribe_account(account)
         return account
 
-    async def account_remove(self, account_id, wallet_id=None):
+    async def account_remove(
+        self,
+        account_id: str,       # id of account to remove
+        wallet_id: str = None  # remove account from specific wallet
+    ) -> Account:  # removed account
         """
         Remove an existing account.
 
         Usage:
-            account_remove (<account_id> | --account_id=<account_id>) [--wallet_id=<wallet_id>]
+            account remove (<account_id> | --account_id=<account_id>) [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_id=<account_id>  : (str) id of the account to remove
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
-        Returns: {Account}
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = wallet.get_account_or_error(account_id)
+        account = wallet.accounts.get_account_or_error(account_id)
         wallet.accounts.remove(account)
-        wallet.save()
+        await wallet.save()
         return account
 
     async def account_set(
-            self, account_id, wallet_id=None, default=False, new_name=None,
-            change_gap=None, change_max_uses=None, receiving_gap=None, receiving_max_uses=None):
+        self,
+        account_id: str,                # id of account to modify
+        wallet_id: str = None,          # restrict operation to specific wallet
+        default=False,                  # make this account the default
+        new_name: str = None,           # new name for the account
+        change_gap: int = None,         # set the gap for change addresses
+        change_max_uses: int = None,    # set the maximum number of times to
+        receiving_gap: int = None,      # set the gap for receiving addresses use a change address
+        receiving_max_uses: int = None  # set the maximum number of times to use a receiving address
+    ) -> Account:  # modified account
         """
         Change various settings on an account.
 
         Usage:
-            account_set (<account_id> | --account_id=<account_id>) [--wallet_id=<wallet_id>]
+            account set (<account_id> | --account_id=<account_id>) [--wallet_id=<wallet_id>]
                 [--default] [--new_name=<new_name>]
                 [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]
                 [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]
 
-        Options:
-            --account_id=<account_id>       : (str) id of the account to change
-            --wallet_id=<wallet_id>         : (str) restrict operation to specific wallet
-            --default                       : (bool) make this account the default
-            --new_name=<new_name>           : (str) new name for the account
-            --receiving_gap=<receiving_gap> : (int) set the gap for receiving addresses
-            --receiving_max_uses=<receiving_max_uses> : (int) set the maximum number of times to
-                                                              use a receiving address
-            --change_gap=<change_gap>           : (int) set the gap for change addresses
-            --change_max_uses=<change_max_uses> : (int) set the maximum number of times to
-                                                        use a change address
-
-        Returns: {Account}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.get_account_or_error(account_id)
@@ -900,11 +1098,15 @@ class API:
 
         if change_made:
             account.modified_on = time.time()
-            wallet.save()
+            await wallet.save()
 
         return account
 
-    async def account_max_address_gap(self, account_id, wallet_id=None):
+    async def account_max_address_gap(
+        self,
+        account_id: str,       # account for which to get max gaps
+        wallet_id: str = None  # restrict operation to specific wallet
+    ) -> dict:  # maximum gap for change and receiving addresses
         """
         Finds ranges of consecutive addresses that are unused and returns the length
         of the longest such range: for change and receiving address chains. This is
@@ -912,21 +1114,27 @@ class API:
         account settings.
 
         Usage:
-            account_max_address_gap (<account_id> | --account_id=<account_id>)
+            account max_address_gap (<account_id> | --account_id=<account_id>)
                                     [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_id=<account_id>  : (str) account for which to get max gaps
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-
         Returns:
-            (map) maximum gap for change and receiving addresses
+            {
+                'max_change_gap': (int),
+                'max_receiving_gap': (int),
+            }
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        return wallet.get_account_or_error(account_id).get_max_gap()
+        return await self.wallets.get_or_default(wallet_id).accounts[account_id].get_max_gap()
 
-    async def account_fund(self, to_account=None, from_account=None, amount='0.0',
-                             everything=False, outputs=1, broadcast=False, wallet_id=None):
+    async def account_fund(
+        self,
+        to_account: str = None,    # send to this account
+        from_account: str = None,  # spend from this account
+        amount='0.0',              # the amount of LBC to transfer
+        everything=False,          # transfer everything (excluding claims)
+        outputs=1,                 # split payment across many outputs
+        broadcast=False,           # broadcast the transaction
+        wallet_id: str = None      # restrict operation to specific wallet
+    ) -> Transaction:
         """
         Transfer some amount (or --everything) to an account from another
         account (can be the same account). Amounts are interpreted as LBC.
@@ -934,77 +1142,51 @@ class API:
         be used together with --everything).
 
         Usage:
-            account_fund [<to_account> | --to_account=<to_account>]
+            account fund [<to_account> | --to_account=<to_account>]
                 [<from_account> | --from_account=<from_account>]
                 (<amount> | --amount=<amount> | --everything)
                 [<outputs> | --outputs=<outputs>] [--wallet_id=<wallet_id>]
                 [--broadcast]
 
-        Options:
-            --to_account=<to_account>     : (str) send to this account
-            --from_account=<from_account> : (str) spend from this account
-            --amount=<amount>             : (str) the amount to transfer lbc
-            --everything                  : (bool) transfer everything (excluding claims), default: false.
-            --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
-            --wallet_id=<wallet_id>       : (str) limit operation to specific wallet.
-            --broadcast                   : (bool) actually broadcast the transaction, default: false.
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         to_account = wallet.accounts.get_or_default(to_account)
         from_account = wallet.accounts.get_or_default(from_account)
-        amount = self.get_dewies_or_error('amount', amount) if amount else None
+        amount = self.ledger.get_dewies_or_error('amount', amount) if amount else None
         if not isinstance(outputs, int):
             raise ValueError("--outputs must be an integer.")
         if everything and outputs > 1:
             raise ValueError("Using --everything along with --outputs is not supported.")
-        return from_account.fund(
+        return await from_account.fund(
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
-        )
-
-    async def account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False):
-        """
-        Send the same number of credits to multiple addresses from a specific account (or default account).
-
-        Usage:
-            account_send <amount> <addresses>... [--account_id=<account_id>] [--wallet_id=<wallet_id>] [--preview]
-
-        Options:
-            --account_id=<account_id>  : (str) account to fund the transaction
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-            --preview                  : (bool) do not broadcast the transaction
-
-        Returns: {Transaction}
-        """
-        return self.wallet_send(
-            amount=amount, addresses=addresses, wallet_id=wallet_id,
-            change_account_id=account_id, funding_account_ids=[account_id] if account_id else [],
-            preview=preview
         )
 
     SYNC_DOC = """
     Wallet synchronization.
     """
 
-    async def sync_hash(self, wallet_id=None):
+    async def sync_hash(
+        self,
+        wallet_id: str = None  # wallet for which to generate hash
+    ) -> str:  # sha256 hash of wallet
         """
         Deterministic hash of the wallet.
 
         Usage:
-            sync_hash [<wallet_id> | --wallet_id=<wallet_id>]
+            sync hash [<wallet_id> | --wallet_id=<wallet_id>]
 
-        Options:
-            --wallet_id=<wallet_id>   : (str) wallet for which to generate hash
-
-        Returns:
-            (str) sha256 hash of wallet
         """
         wallet = self.wallets.get_or_default(wallet_id)
         return hexlify(wallet.hash).decode()
 
-    async def sync_apply(self, password, data=None, wallet_id=None, blocking=False):
+    async def sync_apply(
+        self,
+        password: str,          # password to decrypt incoming and encrypt outgoing data
+        data: str = None,       # incoming sync data, if any
+        wallet_id: str = None,  # wallet being sync'ed
+        blocking=False          # wait until any new accounts have sync'ed
+    ) -> dict:  # sync hash and data
         """
         Apply incoming synchronization data, if provided, and return a sync hash and update wallet data.
 
@@ -1015,22 +1197,18 @@ class API:
         will be used for local encryption (overwriting previous local encryption password).
 
         Usage:
-            sync_apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]
-
-        Options:
-            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
-            --data=<data>                 : (str) incoming sync data, if any
-            --wallet_id=<wallet_id>       : (str) wallet being sync'ed
-            --blocking                    : (bool) wait until any new accounts have sync'ed
+            sync apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]
 
         Returns:
-            (map) sync hash and data
-
+            {
+                'hash': (str) hash of wallet,
+                'data': (str) encrypted wallet
+            }
         """
         wallet = self.wallets.get_or_default(wallet_id)
         wallet_changed = False
         if data is not None:
-            added_accounts = wallet.merge(self.wallets, password, data)
+            added_accounts = await wallet.merge(self.wallets, password, data)
             if added_accounts and self.ledger.sync.network.is_connected:
                 if blocking:
                     await asyncio.wait([
@@ -1055,21 +1233,19 @@ class API:
     List, generate and verify addresses. Golomb-Rice coding filters for addresses.
     """
 
-    async def address_is_mine(self, address, account_id=None, wallet_id=None):
+    async def address_is_mine(
+        self,
+        address: str,            # address to check
+        account_id: str = None,  # id of the account to use
+        wallet_id: str = None    # restrict operation to specific wallet
+    ) -> bool:  # if address is associated with current wallet
         """
         Checks if an address is associated with the current wallet.
 
         Usage:
-            address_is_mine (<address> | --address=<address>)
+            address is_mine (<address> | --address=<address>)
                             [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
 
-        Options:
-            --address=<address>       : (str) address to check
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true, if address is associated with current wallet
         """
         wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.accounts.get_or_default(account_id)
@@ -1078,22 +1254,20 @@ class API:
             return True
         return False
 
-    async def address_list(self, address=None, account_id=None, wallet_id=None, page=None, page_size=None):
+    async def address_list(
+        self,
+        address: str = None,     # just show details for single address
+        account_id: str = None,  # id of the account to use
+        wallet_id: str = None,   # restrict operation to specific wallet
+        **pagination_kwargs
+    ) -> Paginated[Address]:
         """
         List account addresses or details of single address.
 
         Usage:
-            address_list [--address=<address>] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--page=<page>] [--page_size=<page_size>]
+            address list [--address=<address>] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                         {kwargs}
 
-        Options:
-            --address=<address>        : (str) just show details for single address
-            --account_id=<account_id>  : (str) id of the account to use
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns: {Paginated[Address]}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         constraints = {}
@@ -1103,13 +1277,16 @@ class API:
             constraints['accounts'] = [wallet.get_account_or_error(account_id)]
         else:
             constraints['accounts'] = wallet.accounts
-        return paginate_rows(
+        return await paginate_rows(
             self.ledger.get_addresses,
-            self.ledger.get_address_count,
-            page, page_size, **constraints
+            **pagination_kwargs, **constraints
         )
 
-    async def address_unused(self, account_id=None, wallet_id=None):
+    async def address_unused(
+        self,
+        account_id: str = None,  # id of the account to use
+        wallet_id: str = None    # restrict operation to specific wallet
+    ) -> str:  # unused address
         """
         Return an address containing no balance, will create
         a new address if there is none.
@@ -1117,19 +1294,17 @@ class API:
         Usage:
             address_unused [--account_id=<account_id>] [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns: {Address}
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        return wallet.accounts.get_or_default(account_id).receiving.get_or_create_usable_address()
+        return await (
+            self.wallets.get_or_default(wallet_id)
+            .accounts.get_or_default(account_id)
+            .receiving.get_or_create_usable_address()
+        )
 
     async def address_block_filters(self):
         return await self.service.get_block_address_filters()
 
-    async def address_transaction_filters(self, block_hash):
+    async def address_transaction_filters(self, block_hash: str):
         return await self.service.get_transaction_address_filters(block_hash)
 
     FILE_DOC = """
@@ -1137,45 +1312,24 @@ class API:
     """
 
     async def file_list(
-            self, sort=None, reverse=False, comparison=None,
-            wallet_id=None, page=None, page_size=None, **kwargs):
+        self,
+        wallet_id: str = None,   # add purchase receipts from this wallet
+        sort: str = None,        # field to sort by
+        reverse=False,           # reverse sort order
+        comparison: str = None,  # logical comparison, (eq|ne|g|ge|l|le)
+        **file_filter_and_pagination_kwargs
+    ) -> Paginated[ManagedStream]:
         """
         List files limited by optional filters
 
         Usage:
-            file_list [--sd_hash=<sd_hash>] [--file_name=<file_name>] [--stream_hash=<stream_hash>]
-                      [--rowid=<rowid>] [--added_on=<added_on>] [--claim_id=<claim_id>]
-                      [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
-                      [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
-                      [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
-                      [--blobs_remaining=<blobs_remaining>] [--sort=<sort_by>]
-                      [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [--page=<page>] [--page_size=<page_size>] [--wallet_id=<wallet_id>]
+            file list [--wallet_id=<wallet_id>]
+                      [--sort=<sort_by>] [--reverse] [--comparison=<comparison>]
+                      {kwargs}
 
-        Options:
-            --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
-            --file_name=<file_name>                : (str) get file with matching file name in the
-                                                     downloads folder
-            --stream_hash=<stream_hash>            : (str) get file with matching stream hash
-            --rowid=<rowid>                        : (int) get file with matching row id
-            --added_on=<added_on>                  : (int) get file with matching time of insertion
-            --claim_id=<claim_id>                  : (str) get file with matching claim id
-            --outpoint=<outpoint>                  : (str) get file with matching claim outpoint
-            --txid=<txid>                          : (str) get file with matching claim txid
-            --nout=<nout>                          : (int) get file with matching claim nout
-            --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id
-            --channel_name=<channel_name>          : (str) get file with matching channel name
-            --claim_name=<claim_name>              : (str) get file with matching claim name
-            --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
-            --blobs_remaining=<blobs_remaining>    : (int) amount of remaining blobs to download
-            --sort=<sort_by>                       : (str) field to sort by (one of the above filter fields)
-            --comparison=<comparison>              : (str) logical comparison, (eq | ne | g | ge | l | le)
-            --page=<page>                          : (int) page to return during paginating
-            --page_size=<page_size>                : (int) number of items on page during pagination
-            --wallet_id=<wallet_id>                : (str) add purchase receipts from this wallet
-
-        Returns: {Paginated[File]}
         """
+        kwargs = file_filter_and_pagination_kwargs
+        page, page_size = kwargs.pop('page', None), kwargs.pop('page', None)
         wallet = self.wallets.get_or_default(wallet_id)
         sort = sort or 'rowid'
         comparison = comparison or 'eq'
@@ -1194,32 +1348,25 @@ class API:
                 stream.purchase_receipt = receipts.get(stream.claim_id)
         return paginated
 
-    async def file_set_status(self, status, **kwargs):
+    async def file_set_status(
+        self,
+        status: str,  # one of "start" or "stop"
+        **file_filter_kwargs
+    ) -> str:  # confirmation message
         """
         Start or stop downloading a file
 
         Usage:
-            file_set_status (<status> | --status=<status>) [--sd_hash=<sd_hash>]
-                      [--file_name=<file_name>] [--stream_hash=<stream_hash>] [--rowid=<rowid>]
+            file set_status (<status> | --status=<status>)
+                            {kwargs}
 
-        Options:
-            --status=<status>            : (str) one of "start" or "stop"
-            --sd_hash=<sd_hash>          : (str) set status of file with matching sd hash
-            --file_name=<file_name>      : (str) set status of file with matching file name in the
-                                           downloads folder
-            --stream_hash=<stream_hash>  : (str) set status of file with matching stream hash
-            --rowid=<rowid>              : (int) set status of file with matching row id
-
-        Returns:
-            (str) Confirmation message
         """
-
         if status not in ['start', 'stop']:
             raise Exception('Status must be "start" or "stop".')
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.stream_manager.get_filtered_streams(**file_filter_kwargs)
         if not streams:
-            raise Exception(f'Unable to find a file for {kwargs}')
+            raise Exception(f'Unable to find a file for {file_filter_kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
             await stream.save_file(node=self.stream_manager.node)
@@ -1234,38 +1381,23 @@ class API:
             )
         return msg
 
-    async def file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
+    async def file_delete(
+        self,
+        delete_from_download_dir=False,  # delete file from download directory, instead of just deleting blobs
+        delete_all=False,                # if there are multiple matching files, allow the deletion of multiple files.
+                                         # otherwise do not delete anything.
+        **file_filter_kwargs
+    ) -> bool:  # true if deletion was successful
         """
         Delete a LBRY file
 
         Usage:
-            file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                        [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
-                        [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
-                        [--channel_name=<channel_name>]
+            file delete [--delete_from_download_dir] [--delete_all]
+                        {kwargs}
 
-        Options:
-            --delete_from_download_dir             : (bool) delete file from download directory,
-                                                    instead of just deleting blobs
-            --delete_all                           : (bool) if there are multiple matching files,
-                                                     allow the deletion of multiple files.
-                                                     Otherwise do not delete anything.
-            --sd_hash=<sd_hash>                    : (str) delete by file sd hash
-            --file_name=<file_name>                 : (str) delete by file name in downloads folder
-            --stream_hash=<stream_hash>            : (str) delete by file stream hash
-            --rowid=<rowid>                        : (int) delete by file row id
-            --claim_id=<claim_id>                  : (str) delete by file claim id
-            --txid=<txid>                          : (str) delete by file claim txid
-            --nout=<nout>                          : (int) delete by file claim nout
-            --claim_name=<claim_name>              : (str) delete by file claim name
-            --channel_claim_id=<channel_claim_id>  : (str) delete by file channel claim id
-            --channel_name=<channel_name>                 : (str) delete by file channel claim name
-
-        Returns:
-            (bool) true if deletion was successful
         """
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.stream_manager.get_filtered_streams(**file_filter_kwargs)
 
         if len(streams) > 1:
             if not delete_all:
@@ -1287,42 +1419,30 @@ class API:
             result = True
         return result
 
-    async def file_save(self, file_name=None, download_directory=None, **kwargs):
+    async def file_save(
+        self,
+        download_directory: str = None,
+        **file_filter_kwargs
+    ) -> ManagedStream:  # file being saved to disk
         """
         Start saving a file to disk.
 
         Usage:
-            file_save [--file_name=<file_name>] [--download_directory=<download_directory>] [--sd_hash=<sd_hash>]
-                      [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
-                      [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
-                      [--channel_name=<channel_name>]
+            file save [--download_directory=<download_directory>]
+                      {kwargs}
 
-        Options:
-            --file_name=<file_name>                      : (str) file name to save to
-            --download_directory=<download_directory>    : (str) directory to save into
-            --sd_hash=<sd_hash>                          : (str) save file with matching sd hash
-            --stream_hash=<stream_hash>                  : (str) save file with matching stream hash
-            --rowid=<rowid>                              : (int) save file with matching row id
-            --claim_id=<claim_id>                        : (str) save file with matching claim id
-            --txid=<txid>                                : (str) save file with matching claim txid
-            --nout=<nout>                                : (int) save file with matching claim nout
-            --claim_name=<claim_name>                    : (str) save file with matching claim name
-            --channel_claim_id=<channel_claim_id>        : (str) save file with matching channel claim id
-            --channel_name=<channel_name>                : (str) save file with matching channel claim name
-
-        Returns: {File}
         """
 
-        streams = self.stream_manager.get_filtered_streams(**kwargs)
+        streams = self.stream_manager.get_filtered_streams(**file_filter_kwargs)
 
         if len(streams) > 1:
             log.warning("There are %i matching files, use narrower filters to select one", len(streams))
-            return False
+            return
         if not streams:
             log.warning("There is no file to save")
-            return False
+            return
         stream = streams[0]
-        await stream.save_file(file_name, download_directory)
+        await stream.save_file(file_filter_kwargs.get('file_name'), download_directory)
         return stream
 
     PURCHASE_DOC = """
@@ -1330,24 +1450,21 @@ class API:
     """
 
     async def purchase_list(
-            self, claim_id=None, resolve=False, account_id=None, wallet_id=None, page=None, page_size=None):
+        self,
+        claim_id: str = None,    # purchases for specific claim
+        resolve=False,           # include resolved claim information
+        account_id: str = None,  # restrict operation to specific account, otherwise all accounts in wallet
+        wallet_id: str = None,   # restrict operation to specific wallet
+        **pagination_kwargs
+    ) -> Paginated[Output]:  # purchase outputs
         """
         List my claim purchases.
 
         Usage:
-            purchase_list [<claim_id> | --claim_id=<claim_id>] [--resolve]
+            purchase list [<claim_id> | --claim_id=<claim_id>] [--resolve]
                           [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                          [--page=<page>] [--page_size=<page_size>]
+                          {kwargs}
 
-        Options:
-            --claim_id=<claim_id>      : (str) purchases for specific claim
-            --resolve                  : (str) include resolved claim information
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns: {Paginated[Output]}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         constraints = {
@@ -1357,38 +1474,31 @@ class API:
         }
         if claim_id:
             constraints["purchased_claim_id"] = claim_id
-        return paginate_rows(
+        return await paginate_rows(
             self.ledger.get_purchases,
-            self.ledger.get_purchase_count,
             page, page_size, **constraints
         )
 
     async def purchase_create(
-            self, claim_id=None, url=None, wallet_id=None, funding_account_ids=None,
-            allow_duplicate_purchase=False, override_max_key_fee=False, preview=False, blocking=False):
+        self,
+        claim_id: str = None,            # claim id of claim to purchase
+        url: str = None,                 # lookup claim to purchase by url
+        allow_duplicate_purchase=False,  # allow purchasing claim_id you already own
+        override_max_key_fee=False,      # ignore max key fee for this purchase
+        **tx_kwargs
+    ) -> Transaction:  # purchase transaction
         """
         Purchase a claim.
 
         Usage:
-            purchase_create (--claim_id=<claim_id> | --url=<url>) [--wallet_id=<wallet_id>]
-                    [--funding_account_ids=<funding_account_ids>...]
-                    [--allow_duplicate_purchase] [--override_max_key_fee] [--preview] [--blocking]
+            purchase create (--claim_id=<claim_id> | --url=<url>)
+                            [--allow_duplicate_purchase] [--override_max_key_fee]
+                            {kwargs}
 
-        Options:
-            --claim_id=<claim_id>          : (str) claim id of claim to purchase
-            --url=<url>                    : (str) lookup claim to purchase by url
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --allow_duplicate_purchase     : (bool) allow purchasing claim_id you already own
-            --override_max_key_fee         : (bool) ignore max key fee for this purchase
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        accounts = wallet.accounts.get_or_all(funding_account_ids)
+        accounts = wallet.accounts.get_or_all(fund_account_id)
         txo = None
         if claim_id:
             txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
@@ -1411,50 +1521,77 @@ class API:
         tx = await self.wallets.create_purchase_transaction(
             accounts, txo, self.exchange_rate_manager, override_max_key_fee
         )
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-        else:
-            await self.ledger.release_tx(tx)
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
     CLAIM_DOC = """
     List and search all types of claims.
     """
 
-    async def claim_list(self, claim_type=None, **kwargs):
+    async def claim_list(
+        self,
+        claim_type: str = None,       # claim type: channel, stream, repost, collection
+        account_id: str = None,       # restrict operation to specific account, otherwise all accounts in wallet
+        wallet_id: str = None,        # restrict operation to specific wallet
+        is_spent=False,               # shows previous claim updates and abandons
+        resolve=False,                # resolves each claim to provide additional metadata
+        include_received_tips=False,  # calculate the amount of tips recieved for claim outputs
+        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:  # streams and channels in wallet
         """
         List my stream and channel claims.
 
         Usage:
-            claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
-                       [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                       [--page=<page>] [--page_size=<page_size>]
-                       [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
+            claim list [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                       [--is_spent] [--resolve] [--include_received_tips]
+                       {kwargs}
 
-        Options:
-            --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
-            --claim_id=<claim_id>      : (str or list) claim id
-            --channel_id=<channel_id>  : (str or list) streams in this channel
-            --name=<name>              : (str or list) claim name
-            --is_spent                 : (bool) shows previous claim updates and abandons
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-            --resolve                  : (bool) resolves each claim to provide additional metadata
-            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
-            --no_totals                : (bool) do not calculate the total number of pages and items in result set
-                                                (significant performance boost)
-            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
-
-        Returns: {Paginated[Output]}
         """
+        kwargs = claim_filter_and_and_signed_filter_and_stream_filter_and_channel_filter_and_pagination_kwargs
         kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
         if 'is_spent' not in kwargs:
             kwargs['is_not_spent'] = True
-        return self.txo_list(**kwargs)
+        return await self.txo_list(**kwargs)
 
-    async def claim_search(self, **kwargs):
+    async def claim_search(
+        self,
+        wallet_id: str = None,           # wallet to check for claim purchase reciepts
+        claim_type: str = None,          # claim type: channel, stream, repost, collection
+        include_purchase_receipt=False,  # lookup and include a receipt if this wallet has purchased the claim
+        include_is_my_output=False,      # lookup and include a boolean indicating if claim being resolved is yours
+        is_controlling=False,            # winning claims of their respective name
+        activation_height: int = None,   # height at which claim starts competing for name
+                                         # (supports equality constraints)
+        expiration_height: int = None,   # height at which claim will expire (supports equality constraints)
+        support_amount: str = None,      # limit by supports and tips received (supports equality constraints)
+        effective_amount: str = None,    # limit by total value (initial claim value plus all tips and supports
+                                         # received), this amount is blank until claim has reached activation
+                                         # height (supports equality constraints)
+        trending_group: int = None,      # group numbers 1 through 4 representing the trending groups of the
+                                         # content: 4 means content is trending globally and independently,
+                                         # 3 means content is not trending globally but is trending
+                                         # independently (locally), 2 means it is trending globally but not
+                                         # independently and 1 means it's not trending globally or locally (supports
+                                         # equality constraints)
+        trending_mixed: int = None,      # trending amount taken from the global or local value depending on the
+                                         # trending group: 4 - global value, 3 - local value, 2 - global value,
+                                         # 1 - local value (supports equality constraints)
+        trending_local: int = None,      # trending value calculated relative only to the individual contents past
+                                         # history (supports equality constraints)
+        trending_global: int = None,     # trending value calculated relative to all trending content globally
+                                         # (supports equality constraints)
+        public_key_id: str = None,       # only return channels having this public key id, this is the same key
+                                         # as used in the wallet file to map channel certificate private keys:
+                                         # {'public_key_id': 'private key'}
+        reposted_claim_id: str = None,   # all reposts of the specified original claim id
+        reposted: int = None,            # claims reposted this many times (supports equality constraints)
+        order_by: StrOrList = None,      # field to order by, default is descending order, to do an ascending order
+                                         # prepend ^ to the field name, eg. '^amount' available fields: 'name',
+                                         # 'height', 'release_time', 'publish_time', 'amount', 'effective_amount',
+                                         # 'support_amount', 'trending_group', 'trending_mixed', 'trending_local',
+                                         # 'trending_global', 'activation_height'
+        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:  # search results
         """
         Search for stream and channel claims on the blockchain.
 
@@ -1463,137 +1600,19 @@ class API:
         eg. --height=">400000" would limit results to only claims above 400k block height.
 
         Usage:
-            claim_search [<name> | --name=<name>] [--text=<text>] [--txid=<txid>] [--nout=<nout>]
-                         [--claim_id=<claim_id> | --claim_ids=<claim_ids>...]
-                         [--channel=<channel> |
-                             [[--channel_ids=<channel_ids>...] [--not_channel_ids=<not_channel_ids>...]]]
-                         [--has_channel_signature] [--valid_channel_signature | --invalid_channel_signature]
-                         [--is_controlling] [--release_time=<release_time>] [--public_key_id=<public_key_id>]
-                         [--timestamp=<timestamp>] [--creation_timestamp=<creation_timestamp>]
-                         [--height=<height>] [--creation_height=<creation_height>]
+            claim search
+                         [--is_controlling] [--public_key_id=<public_key_id>]
+                         [--creation_height=<creation_height>]
                          [--activation_height=<activation_height>] [--expiration_height=<expiration_height>]
-                         [--amount=<amount>] [--effective_amount=<effective_amount>]
+                         [--effective_amount=<effective_amount>]
                          [--support_amount=<support_amount>] [--trending_group=<trending_group>]
                          [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
                          [--trending_global=<trending_global]
                          [--reposted_claim_id=<reposted_claim_id>] [--reposted=<reposted>]
-                         [--claim_type=<claim_type>] [--stream_types=<stream_types>...] [--media_types=<media_types>...]
-                         [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
-                         [--duration=<duration>]
-                         [--any_tags=<any_tags>...] [--all_tags=<all_tags>...] [--not_tags=<not_tags>...]
-                         [--any_languages=<any_languages>...] [--all_languages=<all_languages>...]
-                         [--not_languages=<not_languages>...]
-                         [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
-                         [--not_locations=<not_locations>...]
-                         [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
+                         [--claim_type=<claim_type>] [--order_by=<order_by>...]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
+                         {kwargs}
 
-        Options:
-            --name=<name>                   : (str) claim name (normalized)
-            --text=<text>                   : (str) full text search
-            --claim_id=<claim_id>           : (str) full or partial claim id
-            --claim_ids=<claim_ids>         : (list) list of full claim ids
-            --txid=<txid>                   : (str) transaction id
-            --nout=<nout>                   : (str) position in the transaction
-            --channel=<channel>             : (str) claims signed by this channel (argument is
-                                                    a URL which automatically gets resolved),
-                                                    see --channel_ids if you need to filter by
-                                                    multiple channels at the same time,
-                                                    includes claims with invalid signatures,
-                                                    use in conjunction with --valid_channel_signature
-            --channel_ids=<channel_ids>     : (list) claims signed by any of these channels
-                                                    (arguments must be claim ids of the channels),
-                                                    includes claims with invalid signatures,
-                                                    implies --has_channel_signature,
-                                                    use in conjunction with --valid_channel_signature
-            --not_channel_ids=<not_channel_ids>: (list) exclude claims signed by any of these channels
-                                                    (arguments must be claim ids of the channels)
-            --has_channel_signature         : (bool) claims with a channel signature (valid or invalid)
-            --valid_channel_signature       : (bool) claims with a valid channel signature or no signature,
-                                                     use in conjunction with --has_channel_signature to
-                                                     only get claims with valid signatures
-            --invalid_channel_signature     : (bool) claims with invalid channel signature or no signature,
-                                                     use in conjunction with --has_channel_signature to
-                                                     only get claims with invalid signatures
-            --is_controlling                : (bool) winning claims of their respective name
-            --public_key_id=<public_key_id> : (str) only return channels having this public key id, this is
-                                                    the same key as used in the wallet file to map
-                                                    channel certificate private keys: {'public_key_id': 'private key'}
-            --height=<height>               : (int) last updated block height (supports equality constraints)
-            --timestamp=<timestamp>         : (int) last updated timestamp (supports equality constraints)
-            --creation_height=<creation_height>      : (int) created at block height (supports equality constraints)
-            --creation_timestamp=<creation_timestamp>: (int) created at timestamp (supports equality constraints)
-            --activation_height=<activation_height>  : (int) height at which claim starts competing for name
-                                                             (supports equality constraints)
-            --expiration_height=<expiration_height>  : (int) height at which claim will expire
-                                                             (supports equality constraints)
-            --release_time=<release_time>   : (int) limit to claims self-described as having been
-                                                    released to the public on or after this UTC
-                                                    timestamp, when claim does not provide
-                                                    a release time the publish time is used instead
-                                                    (supports equality constraints)
-            --amount=<amount>               : (int) limit by claim value (supports equality constraints)
-            --support_amount=<support_amount>: (int) limit by supports and tips received (supports
-                                                    equality constraints)
-            --effective_amount=<effective_amount>: (int) limit by total value (initial claim value plus
-                                                     all tips and supports received), this amount is
-                                                     blank until claim has reached activation height
-                                                     (supports equality constraints)
-            --trending_group=<trending_group>: (int) group numbers 1 through 4 representing the
-                                                    trending groups of the content: 4 means
-                                                    content is trending globally and independently,
-                                                    3 means content is not trending globally but is
-                                                    trending independently (locally), 2 means it is
-                                                    trending globally but not independently and 1
-                                                    means it's not trending globally or locally
-                                                    (supports equality constraints)
-            --trending_mixed=<trending_mixed>: (int) trending amount taken from the global or local
-                                                    value depending on the trending group:
-                                                    4 - global value, 3 - local value, 2 - global
-                                                    value, 1 - local value (supports equality
-                                                    constraints)
-            --trending_local=<trending_local>: (int) trending value calculated relative only to
-                                                    the individual contents past history (supports
-                                                    equality constraints)
-            --trending_global=<trending_global>: (int) trending value calculated relative to all
-                                                    trending content globally (supports
-                                                    equality constraints)
-            --reposted_claim_id=<reposted_claim_id>: (str) all reposts of the specified original claim id
-            --reposted=<reposted>           : (int) claims reposted this many times (supports
-                                                    equality constraints)
-            --claim_type=<claim_type>       : (str) filter by 'channel', 'stream' or 'unknown'
-            --stream_types=<stream_types>   : (list) filter by 'video', 'image', 'document', etc
-            --media_types=<media_types>     : (list) filter by 'video/mp4', 'image/png', etc
-            --fee_currency=<fee_currency>   : (string) specify fee currency: LBC, BTC, USD
-            --fee_amount=<fee_amount>       : (decimal) content download fee (supports equality constraints)
-            --duration=<duration>           : (int) duration of video or audio in seconds
-                                                     (supports equality constraints)
-            --any_tags=<any_tags>           : (list) find claims containing any of the tags
-            --all_tags=<all_tags>           : (list) find claims containing every tag
-            --not_tags=<not_tags>           : (list) find claims not containing any of these tags
-            --any_languages=<any_languages> : (list) find claims containing any of the languages
-            --all_languages=<all_languages> : (list) find claims containing every language
-            --not_languages=<not_languages> : (list) find claims not containing any of these languages
-            --any_locations=<any_locations> : (list) find claims containing any of the locations
-            --all_locations=<all_locations> : (list) find claims containing every location
-            --not_locations=<not_locations> : (list) find claims not containing any of these locations
-            --page=<page>                   : (int) page to return during paginating
-            --page_size=<page_size>         : (int) number of items on page during pagination
-            --order_by=<order_by>           : (list) field to order by, default is descending order, to do an
-                                                    ascending order prepend ^ to the field name, eg. '^amount'
-                                                    available fields: 'name', 'height', 'release_time',
-                                                    'publish_time', 'amount', 'effective_amount',
-                                                    'support_amount', 'trending_group', 'trending_mixed',
-                                                    'trending_local', 'trending_global', 'activation_height'
-            --no_totals                     : (bool) do not calculate the total number of pages and items in result set
-                                                     (significant performance boost)
-            --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
-            --include_purchase_receipt      : (bool) lookup and include a receipt if this wallet
-                                                     has purchased the claim
-            --include_is_my_output          : (bool) lookup and include a boolean indicating
-                                                     if claim being resolved is yours
-
-        Returns: {Paginated[Output]}
         """
         wallet = self.wallets.get_or_default(kwargs.pop('wallet_id', None))
         if {'claim_id', 'claim_ids'}.issubset(kwargs):
@@ -1621,287 +1640,90 @@ class API:
     """
 
     async def channel_create(
-            self, name, bid, allow_duplicate_name=False, account_id=None, wallet_id=None,
-            claim_address=None, funding_account_ids=None, preview=False, blocking=False, **kwargs):
+        self,
+        name: str,                   # name of the channel prefixed with '@'
+        bid: str,                    # amount to back the channel
+        allow_duplicate_name=False,  # create new channel even if one already exists with given name
+        **channel_and_tx_kwargs
+    ) -> Transaction:  # new channel transaction
         """
         Create a new channel by generating a channel private key and establishing an '@' prefixed claim.
 
         Usage:
-            channel_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                           [--allow_duplicate_name=<allow_duplicate_name>]
-                           [--title=<title>] [--description=<description>] [--email=<email>]
-                           [--website_url=<website_url>] [--featured=<featured>...]
-                           [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                           [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                           [--preview] [--blocking]
+            channel create (<name>) (<bid> | --bid=<bid>) [--allow_duplicate_name]
+                           {kwargs}
 
-        Options:
-            --name=<name>                  : (str) name of the channel prefixed with '@'
-            --bid=<bid>                    : (decimal) amount to back the claim
-        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new channel even if one already exists with
-                                              given name. default: false.
-            --title=<title>                : (str) title of the publication
-            --description=<description>    : (str) description of the publication
-            --email=<email>                : (str) email of channel owner
-            --website_url=<website_url>    : (str) website url
-            --featured=<featured>          : (list) claim_ids of featured content in channel
-            --tags=<tags>                  : (list) content tags
-            --languages=<languages>        : (list) languages used by the channel,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --cover_url=<cover_url>        : (str) url of cover image
-            --account_id=<account_id>      : (str) account to use for holding the transaction
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the channel is sent to, if not specified
-                                                   it will be determined automatically from the account
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
-        self.service.ledger.valid_channel_name_or_error(name)
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        channel_dict, kwargs = pop_kwargs('channel', channel_kwargs(**channel_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        self.ledger.valid_channel_name_or_error(name)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
-        claim_address = await account.get_valid_receiving_address(claim_address)
-
-        existing_channels, _ = await wallet.channels.list(claim_name=name)
-        if len(existing_channels) > 0:
-            if not allow_duplicate_name:
-                raise Exception(
-                    f"You already have a channel under the name '{name}'. "
-                    f"Use --allow-duplicate-name flag to override."
-                )
-
+        holding_account = wallet.accounts.get_or_default(channel_dict.pop('account_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        await wallet.verify_duplicate(name, allow_duplicate_name)
         tx = await wallet.channels.create(
-            name, amount, account, funding_accounts, claim_address, preview, **kwargs
+            name=name, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
+            save_key=not tx_dict['preview'], **remove_nulls(channel_dict)
         )
-
-        if not preview:
-            await self.service.broadcast_or_release(tx, blocking)
-        else:
-            await self.service.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['blocking'], tx_dict['preview'])
         return tx
 
     async def channel_update(
-            self, claim_id, bid=None, account_id=None, wallet_id=None, claim_address=None,
-            funding_account_ids=None, new_signing_key=False, preview=False,
-            blocking=False, replace=False, **kwargs):
+        self,
+        claim_id: str,            # claim_id of the channel to update
+        bid: str = None,          # update amount backing the channel
+        **channel_edit_and_tx_kwargs
+    ) -> Transaction:  # transaction updating the channel
         """
         Update an existing channel claim.
 
         Usage:
-            channel_update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
-                           [--title=<title>] [--description=<description>] [--email=<email>]
-                           [--website_url=<website_url>]
-                           [--featured=<featured>...] [--clear_featured]
-                           [--tags=<tags>...] [--clear_tags]
-                           [--languages=<languages>...] [--clear_languages]
-                           [--locations=<locations>...] [--clear_locations]
-                           [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--claim_address=<claim_address>] [--new_signing_key]
-                           [--funding_account_ids=<funding_account_ids>...]
-                           [--preview] [--blocking] [--replace]
+            channel update (<claim_id> | --claim_id=<claim_id>) [<bid> | --bid=<bid>]
+                           [--new_signing_key] [--clear_featured]
+                           {kwargs}
 
-        Options:
-            --claim_id=<claim_id>          : (str) claim_id of the channel to update
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --title=<title>                : (str) title of the publication
-            --description=<description>    : (str) description of the publication
-            --email=<email>                : (str) email of channel owner
-            --website_url=<website_url>    : (str) website url
-            --featured=<featured>          : (list) claim_ids of featured content in channel
-            --clear_featured               : (bool) clear existing featured content (prior to adding new ones)
-            --tags=<tags>                  : (list) add content tags
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
-            --languages=<languages>        : (list) languages used by the channel,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
-            --locations=<locations>        : (list) locations of the channel, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --cover_url=<cover_url>        : (str) url of cover image
-            --account_id=<account_id>      : (str) account in which to look for channel (default: all)
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the channel is sent
-            --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-            --replace                      : (bool) instead of modifying specific values on
-                                                    the channel, this will clear all existing values
-                                                    and only save passed in values, useful for form
-                                                    submissions where all values are always set
-
-        Returns: {Transaction}
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            accounts = [account]
-        else:
-            account = wallet.default_account
-            accounts = wallet.accounts
+        channel_edit_dict, kwargs = pop_kwargs(
+            'channel_edit', channel_edit_kwargs(**channel_edit_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        holding_account = wallet.accounts.get_or_none(channel_edit_dict.pop('account_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
 
-        existing_channels = await self.ledger.get_claims(
-            wallet=wallet, accounts=accounts, claim_hash=unhexlify(claim_id)[::-1]
-        )
-        if len(existing_channels) != 1:
-            account_ids = ', '.join(f"'{account.id}'" for account in accounts)
+        old = await wallet.claims.get(claim_id=claim_id)
+        if not old.claim.is_channel:
             raise Exception(
-                f"Can't find the channel '{claim_id}' in account(s) {account_ids}."
-            )
-        old_txo = existing_channels[0]
-        if not old_txo.claim.is_channel:
-            raise Exception(
-                f"A claim with id '{claim_id}' was found but it is not a channel."
+                f"A claim with id '{claim_id}' was found but "
+                f"it is not a channel."
             )
 
         if bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+            amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         else:
-            amount = old_txo.amount
+            amount = old.amount
 
-        if claim_address is not None:
-            self.valid_address_or_error(claim_address)
-        else:
-            claim_address = old_txo.get_address(account.ledger)
-
-        if replace:
-            claim = Claim()
-            claim.channel.public_key_bytes = old_txo.claim.channel.public_key_bytes
-        else:
-            claim = Claim.from_bytes(old_txo.claim.to_bytes())
-        claim.channel.update(**kwargs)
-        tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0]
+        tx = await wallet.channels.update(
+            old=old, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
+            save_key=not tx_dict['preview'], **remove_nulls(channel_edit_dict)
         )
-        new_txo = tx.outputs[0]
 
-        if new_signing_key:
-            new_txo.generate_channel_private_key()
-        else:
-            new_txo.private_key = old_txo.private_key
-
-        new_txo.script.generate()
-
-        await tx.sign(funding_accounts)
-
-        if not preview:
-            account.add_channel_private_key(new_txo.private_key)
-            wallet.save()
-            await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
-            )])
-            self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
-        else:
-            await account.ledger.release_tx(tx)
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['blocking'], tx_dict['preview'])
 
         return tx
 
     async def channel_abandon(
-            self, claim_id=None, txid=None, nout=None, account_id=None, wallet_id=None,
-            preview=False, blocking=True):
+        self, **abandon_and_tx_kwargs
+    ) -> Transaction:  # transaction abandoning the channel
         """
         Abandon one of my channel claims.
 
         Usage:
-            channel_abandon [<claim_id> | --claim_id=<claim_id>]
-                            [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                            [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                            [--preview] [--blocking]
+            channel abandon
+                            {kwargs}
 
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
@@ -1929,66 +1751,52 @@ class API:
         tx = await Transaction.create(
             [Input.spend(txo) for txo in claims], [], [account], account
         )
-
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
-    async def channel_list(self, *args, **kwargs):
+    async def channel_list(
+        self,
+        account_id: str = None,  # restrict operation to specific account
+        wallet_id: str = None,   # restrict operation to specific wallet
+        is_spent=False,          # shows previous channel updates and abandons
+        resolve=False,           # resolves each channel to provide additional metadata
+        **claim_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:
         """
         List my channel claims.
 
         Usage:
-            channel_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
-                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
+            channel list [--account_id=<account_id>] [--wallet_id=<wallet_id>] [--is_spent] [--resolve]
+                         {kwargs}
 
-        Options:
-            --name=<name>              : (str or list) channel name
-            --claim_id=<claim_id>      : (str or list) channel id
-            --is_spent                 : (bool) shows previous channel updates and abandons
-            --account_id=<account_id>  : (str) id of the account to use
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-            --resolve                  : (bool) resolves each channel to provide additional metadata
-            --no_totals                : (bool) do not calculate the total number of pages and items in result set
-                                                (significant performance boost)
-
-        Returns: {Paginated[Output]}
         """
-        kwargs['type'] = 'channel'
-        if 'is_spent' not in kwargs:
-            kwargs['is_not_spent'] = True
-        return await self.txo_list(*args, **kwargs)
+        claim_filter_and_pagination_kwargs['type'] = 'channel'
+        if 'is_spent' not in claim_filter_and_pagination_kwargs:
+            claim_filter_and_pagination_kwargs['is_not_spent'] = True
+        return await self.txo_list(
+            account_id=account_id, wallet_id=wallet_id,
+            is_spent=is_spent, resolve=resolve,
+            **claim_filter_and_pagination_kwargs
+        )
 
-    async def channel_export(self, channel_id=None, channel_name=None, account_id=None, wallet_id=None):
+    async def channel_export(
+        self,
+        channel_id: str = None,    # claim id of channel to export
+        channel_name: str = None,  # name of channel to export
+        wallet_id: str = None,     # restrict operation to specific wallet
+    ) -> str:  # serialized channel private key
         """
         Export channel private key.
 
         Usage:
-            channel_export (<channel_id> | --channel_id=<channel_id> | --channel_name=<channel_name>)
-                           [--account_id=<account_id>...] [--wallet_id=<wallet_id>]
+            channel export (<channel_id> | --channel_id=<channel_id> | --channel_name=<channel_name>)
+                           [--wallet_id=<wallet_id>]
 
-        Options:
-            --channel_id=<channel_id>     : (str) claim id of channel to export
-            --channel_name=<channel_name> : (str) name of channel to export
-            --account_id=<account_id>     : (str) one or more account ids for accounts
-                                                  to look in for channels, defaults to
-                                                  all accounts.
-            --wallet_id=<wallet_id>       : (str) restrict operation to specific wallet
-
-        Returns:
-            (str) serialized channel private key
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        channel = await self.get_channel_or_error(wallet, account_id, channel_id, channel_name, for_signing=True)
+        channel = await wallet.channels.get_for_signing(channel_id, channel_name)
         address = channel.get_address(self.ledger)
-        public_key = await self.ledger.get_public_key_for_address(wallet, address)
+        public_key = await wallet.get_public_key_for_address(address)
         if not public_key:
             raise Exception("Can't find public key for address holding the channel.")
         export = {
@@ -2000,19 +1808,17 @@ class API:
         }
         return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
-    async def channel_import(self, channel_data, wallet_id=None):
+    async def channel_import(
+        self,
+        channel_data: str,     # serialized channel, as exported by channel export
+        wallet_id: str = None  # import into specific wallet
+    ) -> str:  # result message
         """
         Import serialized channel private key (to allow signing new streams to the channel)
 
         Usage:
-            channel_import (<channel_data> | --channel_data=<channel_data>) [--wallet_id=<wallet_id>]
+            channel import (<channel_data> | --channel_data=<channel_data>) [--wallet_id=<wallet_id>]
 
-        Options:
-            --channel_data=<channel_data> : (str) serialized channel, as exported by channel export
-            --wallet_id=<wallet_id>       : (str) import into specific wallet
-
-        Returns:
-            (dict) Result dictionary
         """
         wallet = self.wallets.get_or_default(wallet_id)
 
@@ -2025,13 +1831,13 @@ class API:
 
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
-        channels, _, _, _ = await self.ledger.claim_search(
+        channels, _, _ = await self.service.search_claims(
             wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:
             holding_address = channels[0].get_address(self.ledger)
 
-        account = await self.ledger.get_account_for_address(wallet, holding_address)
+        account = await wallet.get_account_for_address(holding_address)
         if account:
             # Case 1: channel holding address is in one of the accounts we already have
             #         simply add the certificate to existing account
@@ -2040,14 +1846,15 @@ class API:
             # Case 2: channel holding address hasn't changed and thus is in the bundled read-only account
             #         create a single-address holding account to manage the channel
             if holding_address == data['holding_address']:
-                account = Account.from_dict(self.ledger, wallet, {
+                account = await wallet.accounts.add_from_dict({
                     'name': f"Holding Account For Channel {data['name']}",
                     'public_key': data['holding_public_key'],
                     'address_generator': {'name': 'single-address'}
                 })
-                if self.ledger.sync.network.is_connected:
-                    await self.ledger.subscribe_account(account)
-                    await self.ledger.sync._update_tasks.done.wait()
+                # TODO: fix
+                #if self.ledger.sync.network.is_connected:
+                #    await self.ledger.subscribe_account(account)
+                #    await self.ledger.sync._update_tasks.done.wait()
             # Case 3: the holding address has changed and we can't create or find an account for it
             else:
                 raise Exception(
@@ -2055,110 +1862,26 @@ class API:
                     "it is not an account to which you have access."
                 )
         account.add_channel_private_key(channel_private_key)
-        wallet.save()
+        await wallet.save()
         return f"Added channel signing key for {data['name']}."
 
     STREAM_DOC = """
     Create, update, abandon, list and inspect your stream claims.
     """
 
-    async def publish(self, name, **kwargs):
+    async def publish(
+        self,
+        name: str,  # name for the content (can only consist of a-z A-Z 0-9 and -(dash))
+        bid: str,   # amount to back the stream
+        **stream_edit_and_tx_kwargs
+    ) -> Transaction:  # transaction for the published claim
         """
         Create or replace a stream claim at a given name (use 'stream create/update' for more control).
 
         Usage:
-            publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
-                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
-                    [--title=<title>] [--description=<description>] [--author=<author>]
-                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                    [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                    [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                    [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                    [--preview] [--blocking]
+            publish (<name> | --name=<name>) [--bid=<bid>]
+                    {kwargs}
 
-        Options:
-            --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --file_path=<file_path>        : (str) path to file to be associated with name.
-            --validate_file                : (bool) validate that the video container and encodings match
-                                             common web browser support or that optimization succeeds if specified.
-                                             FFmpeg is required
-            --optimize_file                : (bool) transcode the video & audio if necessary to ensure
-                                             common web browser support. FFmpeg is required
-            --fee_currency=<fee_currency>  : (string) specify fee currency
-            --fee_amount=<fee_amount>      : (decimal) content download fee
-            --fee_address=<fee_address>    : (str) address where to send fee payments, will use
-                                                   value from --claim_address if not provided
-            --title=<title>                : (str) title of the publication
-            --description=<description>    : (str) description of the publication
-            --author=<author>              : (str) author of the publication. The usage for this field is not
-                                             the same as for channels. The author field is used to credit an author
-                                             who is not the publisher and is not represented by the channel. For
-                                             example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
-                                             by published to a channel such as '@classics', or to no channel at all
-            --tags=<tags>                  : (list) add content tags
-            --languages=<languages>        : (list) languages used by the channel,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --license=<license>            : (str) publication license
-            --license_url=<license_url>    : (str) publication license url
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
-            --width=<width>                : (int) image/video width, automatically calculated from media file
-            --height=<height>              : (int) image/video height, automatically calculated from media file
-            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
-            --channel_id=<channel_id>      : (str) claim id of the publisher channel
-            --channel_name=<channel_name>  : (str) name of publisher channel
-          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
-                                                   for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account to use for holding the transaction
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
-                                                   it will be determined automatically from the account
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
         self.valid_stream_name_or_error(name)
         wallet = self.wallets.get_or_default(kwargs.get('wallet_id'))
@@ -2183,45 +1906,30 @@ class API:
             f"to update a specific stream claim."
         )
 
-    async def stream_repost(self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
-                                    channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
-                                    claim_address=None, funding_account_ids=None, preview=False, blocking=False):
+    async def stream_repost(
+        self,
+        name: str,                   # name of the repost (can only consist of a-z A-Z 0-9 and -(dash))
+        bid: str,                    # amount to back the repost
+        claim_id: str,               # id of the claim being reposted
+        allow_duplicate_name=False,  # create new repost even if one already exists with given name
+        account_id: str = None,      # account to hold the repost
+        claim_address: str = None,   # specific address where the repost is held, if not specified
+                                     # it will be determined automatically from the account
+        ** signed_and_tx_kwargs
+    ) -> Transaction:  # transaction for the repost
         """
-            Creates a claim that references an existing stream by its claim id.
+        Creates a claim that references an existing stream by its claim id.
 
-            Usage:
-                stream_repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)
-                        [--allow_duplicate_name=<allow_duplicate_name>]
-                        [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                        [--channel_account_id=<channel_account_id>...]
-                        [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                        [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                        [--preview] [--blocking]
+        Usage:
+            stream repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)
+                          [--allow_duplicate_name] [--account_id=<account_id>] [--claim_address=<claim_address>]
+                          {kwargs}
 
-            Options:
-                --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-                --bid=<bid>                    : (decimal) amount to back the claim
-                --claim_id=<claim_id>          : (str) id of the claim being reposted
-                --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
-                                                                       given name. default: false.
-                --channel_id=<channel_id>      : (str) claim id of the publisher channel
-                --channel_name=<channel_name>  : (str) name of the publisher channel
-                --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
-                                                                 for channel certificates, defaults to all accounts.
-                --account_id=<account_id>      : (str) account to use for holding the transaction
-                --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-                --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-                --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
-                                                       it will be determined automatically from the account
-                --preview                      : (bool) do not broadcast the transaction
-                --blocking                     : (bool) wait until transaction is in mempool
-
-            Returns: {Transaction}
-            """
+        """
         wallet = self.wallets.get_or_default(wallet_id)
         self.valid_stream_name_or_error(name)
         account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
@@ -2246,136 +1954,34 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
     async def stream_create(
-            self, name, bid, file_path, allow_duplicate_name=False,
-            channel_id=None, channel_name=None, channel_account_id=None,
-            account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, validate_file=False, optimize_file=False, **kwargs):
+        self,
+        name: str,                   # name for the stream (can only consist of a-z A-Z 0-9 and -(dash))
+        bid: str,                    # amount to back the content
+        allow_duplicate_name=False,  # create new stream even if one already exists with given name
+        **stream_and_tx_kwargs
+    ) -> Transaction:
         """
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
-            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) (<file_path> | --file_path=<file_path>)
-                    [--validate_file] [--optimize_file]
-                    [--allow_duplicate_name=<allow_duplicate_name>]
-                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
-                    [--title=<title>] [--description=<description>] [--author=<author>]
-                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                    [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                    [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                    [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                    [--preview] [--blocking]
+            stream create (<name> | --name=<name>) (<bid> | --bid=<bid>) [--allow_duplicate_name]
+                          {kwargs}
 
-        Options:
-            --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --file_path=<file_path>        : (str) path to file to be associated with name.
-            --validate_file                : (bool) validate that the video container and encodings match
-                                             common web browser support or that optimization succeeds if specified.
-                                             FFmpeg is required
-            --optimize_file                : (bool) transcode the video & audio if necessary to ensure
-                                             common web browser support. FFmpeg is required
-        --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
-                                              given name. default: false.
-            --fee_currency=<fee_currency>  : (string) specify fee currency
-            --fee_amount=<fee_amount>      : (decimal) content download fee
-            --fee_address=<fee_address>    : (str) address where to send fee payments, will use
-                                                   value from --claim_address if not provided
-            --title=<title>                : (str) title of the publication
-            --description=<description>    : (str) description of the publication
-            --author=<author>              : (str) author of the publication. The usage for this field is not
-                                             the same as for channels. The author field is used to credit an author
-                                             who is not the publisher and is not represented by the channel. For
-                                             example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
-                                             by published to a channel such as '@classics', or to no channel at all
-            --tags=<tags>                  : (list) add content tags
-            --languages=<languages>        : (list) languages used by the channel,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --license=<license>            : (str) publication license
-            --license_url=<license_url>    : (str) publication license url
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
-            --width=<width>                : (int) image/video width, automatically calculated from media file
-            --height=<height>              : (int) image/video height, automatically calculated from media file
-            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
-            --channel_id=<channel_id>      : (str) claim id of the publisher channel
-            --channel_name=<channel_name>  : (str) name of the publisher channel
-          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
-                                                   for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account to use for holding the transaction
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
-                                                   it will be determined automatically from the account
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
         self.ledger.valid_stream_name_or_error(name)
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
-        channel = await wallet.channels.get_for_signing_or_none(claim_id=channel_id, claim_name=channel_name)
+        wallet = self.wallets.get_or_default_for_spending(wallet_id)
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
-        claim_address = await account.get_valid_receiving_address(claim_address)
+        holding_account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
+        channel = await wallet.channels.get_for_signing_or_none(claim_id=channel_id, claim_name=channel_name)
+        holding_address = await holding_account.get_valid_receiving_address(claim_address)
         kwargs['fee_address'] = self.ledger.get_fee_address(kwargs, claim_address)
 
-        claims = await wallet.streams.list(claim_name=name)
-        if len(claims) > 0:
-            if not allow_duplicate_name:
-                raise Exception(
-                    f"You already have a stream claim published under the name '{name}'. "
-                    f"Use --allow-duplicate-name flag to override."
-                )
+        await wallet.verify_duplicate(name, allow_duplicate_name)
 
         # TODO: fix
         #file_path, spec = await self._video_file_analyzer.verify_or_repair(
@@ -2383,12 +1989,12 @@ class API:
         #)
         #kwargs.update(spec)
 
-        wallet.streams.create(
-
+        tx = await wallet.stream.create(
+            name,
         )
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
-        tx = await Transaction.claim_create(
+        tx = await wallet.streams.create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
@@ -2416,126 +2022,22 @@ class API:
         return tx
 
     async def stream_update(
-            self, claim_id, bid=None, file_path=None,
-            channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
-            account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, replace=False, validate_file=False, optimize_file=False, **kwargs):
+        self,
+        claim_id: str,    # claim_id of the stream to update
+        bid: str = None,  # update amount backing the stream
+        **stream_edit_and_tx_kwargs
+    ) -> Transaction:  # stream update transaction
         """
         Update an existing stream claim and if a new file is provided announce it to lbrynet.
 
         Usage:
-            stream_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
-                    [--file_name=<file_name>] [--file_size=<file_size>] [--file_hash=<file_hash>]
-                    [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
-                    [--fee_address=<fee_address>] [--clear_fee]
-                    [--title=<title>] [--description=<description>] [--author=<author>]
-                    [--tags=<tags>...] [--clear_tags]
-                    [--languages=<languages>...] [--clear_languages]
-                    [--locations=<locations>...] [--clear_locations]
-                    [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
-                    [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
-                    [--channel_account_id=<channel_account_id>...]
-                    [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                    [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                    [--preview] [--blocking] [--replace]
+            stream update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>]
+                          {kwargs}
 
-        Options:
-            --claim_id=<claim_id>          : (str) id of the stream claim to update
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --file_path=<file_path>        : (str) path to file to be associated with name.
-            --validate_file                : (bool) validate that the video container and encodings match
-                                             common web browser support or that optimization succeeds if specified.
-                                             FFmpeg is required and file_path must be specified.
-            --optimize_file                : (bool) transcode the video & audio if necessary to ensure common
-                                             web browser support. FFmpeg is required and file_path must be specified.
-            --file_name=<file_name>        : (str) override file name, defaults to name from file_path.
-            --file_size=<file_size>        : (str) override file size, otherwise automatically computed.
-            --file_hash=<file_hash>        : (str) override file hash, otherwise automatically computed.
-            --fee_currency=<fee_currency>  : (string) specify fee currency
-            --fee_amount=<fee_amount>      : (decimal) content download fee
-            --fee_address=<fee_address>    : (str) address where to send fee payments, will use
-                                                   value from --claim_address if not provided
-            --clear_fee                    : (bool) clear previously set fee
-            --title=<title>                : (str) title of the publication
-            --description=<description>    : (str) description of the publication
-            --author=<author>              : (str) author of the publication. The usage for this field is not
-                                             the same as for channels. The author field is used to credit an author
-                                             who is not the publisher and is not represented by the channel. For
-                                             example, a pdf file of 'The Odyssey' has an author of 'Homer' but may
-                                             by published to a channel such as '@classics', or to no channel at all
-            --tags=<tags>                  : (list) add content tags
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
-            --languages=<languages>        : (list) languages used by the channel,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
-            --locations=<locations>        : (list) locations relevant to the stream, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
-            --license=<license>            : (str) publication license
-            --license_url=<license_url>    : (str) publication license url
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --release_time=<release_time>  : (int) original public release of content, seconds since UNIX epoch
-            --width=<width>                : (int) image/video width, automatically calculated from media file
-            --height=<height>              : (int) image/video height, automatically calculated from media file
-            --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
-            --channel_id=<channel_id>      : (str) claim id of the publisher channel
-            --channel_name=<channel_name>  : (str) name of the publisher channel
-            --clear_channel                : (bool) remove channel signature
-          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
-                                                   for channel certificates, defaults to all accounts.
-            --account_id=<account_id>      : (str) account in which to look for stream (default: all)
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
-                                                   it will be determined automatically from the account
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-            --replace                      : (bool) instead of modifying specific values on
-                                                    the stream, this will clear all existing values
-                                                    and only save passed in values, useful for form
-                                                    submissions where all values are always set
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -2633,27 +2135,15 @@ class API:
         return tx
 
     async def stream_abandon(
-            self, claim_id=None, txid=None, nout=None, account_id=None, wallet_id=None,
-            preview=False, blocking=False):
+        self, **abandon_and_tx_kwargs
+    ) -> Transaction:  # transaction abandoning the stream
         """
         Abandon one of my stream claims.
 
         Usage:
-            stream_abandon [<claim_id> | --claim_id=<claim_id>]
-                           [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                           [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--preview] [--blocking]
+            stream abandon
+                           {kwargs}
 
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
@@ -2682,55 +2172,41 @@ class API:
             [Input.spend(txo) for txo in claims], [], accounts, account
         )
 
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
-        else:
-            await self.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
-    async def stream_list(self, *args, **kwargs):
+    async def stream_list(
+        self,
+        account_id: str = None,  # restrict operation to specific account
+        wallet_id: str = None,   # restrict operation to specific wallet
+        is_spent=False,          # shows previous stream updates and abandons
+        resolve=False,           # resolves each stream to provide additional metadata
+        **claim_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:
         """
         List my stream claims.
 
         Usage:
-            stream_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                        [--name=<name>...] [--claim_id=<claim_id>...] [--is_spent]
-                        [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
+            stream list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+                        [--is_spent] [--resolve]
+                        {kwargs}
 
-        Options:
-            --name=<name>              : (str or list) stream name
-            --claim_id=<claim_id>      : (str or list) stream id
-            --is_spent                 : (bool) shows previous stream updates and abandons
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-            --resolve                  : (bool) resolves each stream to provide additional metadata
-            --no_totals                : (bool) do not calculate the total number of pages and items in result set
-                                                (significant performance boost)
-
-        Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'stream'
         if 'is_spent' not in kwargs:
             kwargs['is_not_spent'] = True
         return await self.txo_list(*args, **kwargs)
 
-    async def stream_cost_estimate(self, uri):
+    async def stream_cost_estimate(
+        self,
+        uri: str  # uri to use
+    ) -> float:  # Estimated cost in lbry credits, returns None if uri is not resolvable
         """
         Get estimated cost for a lbry stream
 
         Usage:
             stream_cost_estimate (<uri> | --uri=<uri>)
 
-        Options:
-            --uri=<uri>      : (str) uri to use
-
-        Returns:
-            (float) Estimated cost in lbry credits, returns None if uri is not
-                resolvable
         """
         return self.get_est_cost_from_uri(uri)
 
@@ -2739,87 +2215,25 @@ class API:
     """
 
     async def collection_create(
-            self, name, bid, claims, allow_duplicate_name=False,
-            channel_id=None, channel_name=None, channel_account_id=None,
-            account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, **kwargs):
+        self,
+        name: str,                   # name for the stream (can only consist of a-z A-Z 0-9 and -(dash))
+        bid: str,                    # amount to back the content
+        claims: StrOrList,           # claim ids to be included in the collection
+        allow_duplicate_name=False,  # create new collection even if one already exists with given name
+        **claim_and_signed_and_tx_kwargs
+    ) -> Transaction:
         """
         Create a new collection.
 
         Usage:
-            collection_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                   (<claims>... | --claims=<claims>...)
-                   [--allow_duplicate_name]
-                   [--title=<title>] [--description=<description>]
-                   [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                   [--thumbnail_url=<thumbnail_url>]
-                   [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                   [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                   [--preview] [--blocking]
+            collection create (<name> | --name=<name>) (<bid> | --bid=<bid>)
+                              (<claims>... | --claims=<claims>...) [--allow_duplicate_name]
+                              {kwargs}
 
-        Options:
-            --name=<name>                  : (str) name of the collection
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --claims=<claims>              : (list) claim ids to be included in the collection
-            --allow_duplicate_name         : (bool) create new collection even if one already exists with
-                                                    given name. default: false.
-            --title=<title>                : (str) title of the collection
-            --description=<description>    : (str) description of the collection
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
-            --tags=<tags>                  : (list) content tags
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
-            --languages=<languages>        : (list) languages used by the collection,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --locations=<locations>        : (list) locations of the collection, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --account_id=<account_id>      : (str) account to use for holding the transaction
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-            --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the collection is sent to, if not specified
-                                                   it will be determined automatically from the account
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
         self.valid_collection_name_or_error(name)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error('bid', bid, positive_value=True)
@@ -2844,101 +2258,28 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
     async def collection_update(
-            self, claim_id, bid=None,
-            channel_id=None, channel_name=None, channel_account_id=None, clear_channel=False,
-            account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, replace=False, **kwargs):
+        self,
+        claim_id: str,       # claim_id of the collection to update
+        bid: str,            # amount to back the collection
+        claims: StrOrList,   # claim ids to be included in the collection
+        clear_claims=False,  # clear existing claims (prior to adding new ones)
+        **claim_and_claim_edit_and_signed_and_tx_kwargs
+    ) -> Transaction:  # updated collection transaction
         """
         Update an existing collection claim.
 
         Usage:
-            collection_update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>]
-                            [--claims=<claims>...] [--clear_claims]
-                           [--title=<title>] [--description=<description>]
-                           [--tags=<tags>...] [--clear_tags]
-                           [--languages=<languages>...] [--clear_languages]
-                           [--locations=<locations>...] [--clear_locations]
-                           [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
-                           [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--claim_address=<claim_address>] [--new_signing_key]
-                           [--funding_account_ids=<funding_account_ids>...]
-                           [--preview] [--blocking] [--replace]
+            collection update (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>]
+                              [--claims=<claims>...] [--clear_claims]
+                              {kwargs}
 
-        Options:
-            --claim_id=<claim_id>          : (str) claim_id of the collection to update
-            --bid=<bid>                    : (decimal) amount to back the claim
-            --claims=<claims>              : (list) claim ids
-            --clear_claims                 : (bool) clear existing claim references (prior to adding new ones)
-            --title=<title>                : (str) title of the collection
-            --description=<description>    : (str) description of the collection
-            --tags=<tags>                  : (list) add content tags
-            --clear_tags                   : (bool) clear existing tags (prior to adding new ones)
-            --languages=<languages>        : (list) languages used by the collection,
-                                                    using RFC 5646 format, eg:
-                                                    for English `--languages=en`
-                                                    for Spanish (Spain) `--languages=es-ES`
-                                                    for Spanish (Mexican) `--languages=es-MX`
-                                                    for Chinese (Simplified) `--languages=zh-Hans`
-                                                    for Chinese (Traditional) `--languages=zh-Hant`
-            --clear_languages              : (bool) clear existing languages (prior to adding new ones)
-            --locations=<locations>        : (list) locations of the collection, consisting of 2 letter
-                                                    `country` code and a `state`, `city` and a postal
-                                                    `code` along with a `latitude` and `longitude`.
-                                                    for JSON RPC: pass a dictionary with aforementioned
-                                                        attributes as keys, eg:
-                                                        ...
-                                                        "locations": [{'country': 'US', 'state': 'NH'}]
-                                                        ...
-                                                    for command line: pass a colon delimited list
-                                                        with values in the following order:
-
-                                                          "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
-
-                                                        making sure to include colon for blank values, for
-                                                        example to provide only the city:
-
-                                                          ... --locations="::Manchester"
-
-                                                        with all values set:
-
-                                                 ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
-
-                                                        optionally, you can just pass the "LATITUDE:LONGITUDE":
-
-                                                          ... --locations="42.990605:-71.460989"
-
-                                                        finally, you can also pass JSON string of dictionary
-                                                        on the command line as you would via JSON RPC
-
-                                                          ... --locations="{'country': 'US', 'state': 'NH'}"
-
-            --clear_locations              : (bool) clear existing locations (prior to adding new ones)
-            --thumbnail_url=<thumbnail_url>: (str) thumbnail url
-            --account_id=<account_id>      : (str) account in which to look for collection (default: all)
-            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --claim_address=<claim_address>: (str) address where the collection is sent
-            --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
-            --preview                      : (bool) do not broadcast the transaction
-            --blocking                     : (bool) wait until transaction is in mempool
-            --replace                      : (bool) instead of modifying specific values on
-                                                    the collection, this will clear all existing values
-                                                    and only save passed in values, useful for form
-                                                    submissions where all values are always set
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             accounts = [account]
@@ -2997,81 +2338,60 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
-    async def collection_abandon(self, *args, **kwargs):
+    async def collection_abandon(
+        self, **abandon_and_tx_kwargs
+    ) -> Transaction:  # transaction abandoning the collection
         """
         Abandon one of my collection claims.
 
         Usage:
-            collection_abandon [<claim_id> | --claim_id=<claim_id>]
-                            [<txid> | --txid=<txid>] [<nout> | --nout=<nout>]
-                            [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                            [--preview] [--blocking]
+            collection abandon
+                               {kwargs}
 
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
-
-        Returns: {Transaction}
         """
-        return await self.stream_abandon(*args, **kwargs)
+        return await self.stream_abandon(**abandon_and_tx_kwargs)
 
-    async def collection_list(self, resolve_claims=0, account_id=None, wallet_id=None, page=None, page_size=None):
+    async def collection_list(
+        self,
+        account_id: str = None,  # restrict operation to specific account
+        wallet_id: str = None,   # restrict operation to specific wallet
+        resolve_claims=0,        # resolve this number of items in the collection
+        **claim_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:
         """
         List my collection claims.
 
         Usage:
-            collection_list [--resolve_claims=<resolve_claims>] [<account_id> | --account_id=<account_id>]
-                [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
+            collection list [--resolve_claims=<resolve_claims>]
+                            [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+                            {kwargs}
 
-        Options:
-            --resolve_claims=<resolve_claims> : (int) resolve every claim
-            --account_id=<account_id>         : (str) id of the account to use
-            --wallet_id=<wallet_id>           : (str) restrict results to specific wallet
-            --page=<page>                     : (int) page to return during paginating
-            --page_size=<page_size>           : (int) number of items on page during pagination
-
-        Returns: {Paginated[Output]}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
             collections = account.get_collections
-            collection_count = account.get_collection_count
         else:
             collections = partial(self.ledger.get_collections, wallet=wallet, accounts=wallet.accounts)
-            collection_count = partial(self.ledger.get_collection_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(collections, collection_count, page, page_size, resolve_claims=resolve_claims)
+        return await paginate_rows(collections, page, page_size, resolve_claims=resolve_claims)
 
     async def collection_resolve(
-            self, claim_id=None, url=None, wallet_id=None, page=1, page_size=DEFAULT_PAGE_SIZE):
+            self,
+            claim_id: str = None,   # claim id of the collection
+            url: str = None,        # url of the collection
+            wallet_id: str = None,  # restrict operation to specific wallet
+            **pagination_kwargs
+    ) -> Paginated[Output]:  # resolved items in the collection
         """
         Resolve claims in the collection.
 
         Usage:
-            collection_resolve (--claim_id=<claim_id> | --url=<url>)
-                [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
+            collection resolve (--claim_id=<claim_id> | --url=<url>) [--wallet_id=<wallet_id>]
+                               {kwargs}
 
-        Options:
-            --claim_id=<claim_id>      : (str) claim id of the collection
-            --url=<url>                : (str) url of the collection
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns: {Paginated[Output]}
         """
         wallet = self.wallets.get_or_default(wallet_id)
 
@@ -3103,31 +2423,25 @@ class API:
     """
 
     async def support_create(
-            self, claim_id, amount, tip=False, account_id=None, wallet_id=None, funding_account_ids=None,
-            preview=False, blocking=False):
+        self,
+        claim_id: str,           # claim_id of the claim to support
+        amount: str,             # amount of support
+        tip=False,               # send support to claim owner
+        account_id: str = None,  # account to use for holding the support
+        **tx_kwargs
+    ) -> Transaction:  # new support transaction
         """
         Create a support or a tip for name claim.
 
         Usage:
-            support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
-                           [--tip] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--preview] [--blocking] [--funding_account_ids=<funding_account_ids>...]
+            support create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
+                           [--tip] [--account_id=<account_id>]
+                           {kwargs}
 
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the claim to support
-            --amount=<amount>         : (decimal) amount of support
-            --tip                     : (bool) send support to claim owner, default: false.
-            --account_id=<account_id> : (str) account to use for holding the transaction
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until transaction is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.accounts.get_or_all(funding_account_ids)
+        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
         amount = self.ledger.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
         claim_address = claim.get_address(self.ledger.ledger)
@@ -3154,31 +2468,27 @@ class API:
 
         return tx
 
-    async def support_list(self, *args, received=False, sent=False, staked=False, **kwargs):
+    async def support_list(
+        self,
+        account_id: str = None,      # restrict operation to specific account
+        wallet_id: str = None,       # restrict operation to specific wallet
+        name: StrOrList = None,      # support for specific claim name(s)
+        claim_id: StrOrList = None,  # support for specific claim id(s)
+        received=False,              # only show received (tips)
+        sent=False,                  # only show sent (tips)
+        staked=False,                # only show my staked supports
+        is_spent=False,              # show abandoned supports
+        **pagination_kwargs
+    ) -> Paginated[Output]:
         """
         List staked supports and sent/received tips.
 
         Usage:
-            support_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+            support list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
                          [--name=<name>...] [--claim_id=<claim_id>...]
                          [--received | --sent | --staked] [--is_spent]
-                         [--page=<page>] [--page_size=<page_size>] [--no_totals]
+                         {kwargs}
 
-        Options:
-            --name=<name>              : (str or list) claim name
-            --claim_id=<claim_id>      : (str or list) claim id
-            --received                 : (bool) only show received (tips)
-            --sent                     : (bool) only show sent (tips)
-            --staked                   : (bool) only show my staked supports
-            --is_spent                 : (bool) show abandoned supports
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-            --no_totals                : (bool) do not calculate the total number of pages and items in result set
-                                                (significant performance boost)
-
-        Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'support'
         if 'is_spent' not in kwargs:
@@ -3198,28 +2508,18 @@ class API:
         return await self.txo_list(*args, **kwargs)
 
     async def support_abandon(
-            self, claim_id=None, txid=None, nout=None, keep=None,
-            account_id=None, wallet_id=None, preview=False, blocking=False):
+        self,
+        keep: str = None,  # amount of lbc to keep as support
+        **abandon_and_tx_kwargs
+    ) -> Transaction:  # transaction abandoning the supports
         """
         Abandon supports, including tips, of a specific claim, optionally
         keeping some amount as supports.
 
         Usage:
-            support_abandon [--claim_id=<claim_id>] [(--txid=<txid> --nout=<nout>)] [--keep=<keep>]
-                            [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                            [--preview] [--blocking]
+            support abandon [--keep=<keep>]
+                            {kwargs}
 
-        Options:
-            --claim_id=<claim_id>     : (str) claim_id of the support to abandon
-            --txid=<txid>             : (str) txid of the claim to abandon
-            --nout=<nout>             : (int) nout of the claim to abandon
-            --keep=<keep>             : (decimal) amount of lbc to keep as support
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-            --preview                 : (bool) do not broadcast the transaction
-            --blocking                : (bool) wait until abandon is in mempool
-
-        Returns: {Transaction}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
@@ -3260,36 +2560,27 @@ class API:
         tx = await Transaction.create(
             [Input.spend(txo) for txo in supports], outputs, accounts, account
         )
-
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('abandon'))
-        else:
-            await self.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
     TRANSACTION_DOC = """
     Transaction management.
     """
 
-    async def transaction_list(self, account_id=None, wallet_id=None, page=None, page_size=None):
+    async def transaction_list(
+        self,
+        account_id: str = None,  # restrict operation to specific account
+        wallet_id: str = None,   # restrict operation to specific wallet
+        **pagination_kwargs
+    ) -> list:  # transactions
         """
         List transactions belonging to wallet
 
         Usage:
             transaction_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                             [--page=<page>] [--page_size=<page_size>]
-
-        Options:
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
+                             {kwargs}
 
         Returns:
-            (list) List of transactions
-
             {
                 "claim_info": (list) claim info if in txn [{
                                                         "address": (str) address of claim,
@@ -3337,25 +2628,21 @@ class API:
         if account_id:
             account = wallet.get_account_or_error(account_id)
             transactions = account.get_transaction_history
-            transaction_count = account.get_transaction_history_count
         else:
             transactions = partial(
                 self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
-            transaction_count = partial(
-                self.ledger.get_transaction_history_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(transactions, transaction_count, page, page_size)
+        return await paginate_rows(transactions, page, page_size)
 
-    async def transaction_search(self, txids):
+    async def transaction_search(
+        self,
+        txids: StrOrList,  # transaction ids to find
+    ) -> List[Transaction]:
         """
         Search for transaction(s) in the entire blockchain.
 
         Usage:
             transaction_search <txid>...
 
-        Options:
-            None
-
-        Returns: {List[Transaction]}
         """
         return await self.service.search_transactions(txids)
 
@@ -3397,68 +2684,31 @@ class API:
         return constraints
 
     async def txo_list(
-            self, account_id=None, wallet_id=None, page=None, page_size=None,
-            resolve=False, order_by=None, no_totals=False, include_received_tips=False, **kwargs):
+        self,
+        include_received_tips=False,  # calculate the amount of tips recieved for claim outputs
+        resolve=False,                # resolves each claim to provide additional metadata
+        order_by: str = None,         # field to order by: 'name', 'height', 'amount' and 'none'
+        **txo_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:
         """
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
-                     [--is_spent | --is_not_spent]
-                     [--is_my_input_or_output |
-                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
-                     ]
-                     [--exclude_internal_transfers] [--include_received_tips]
-                     [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
-                     [--resolve] [--order_by=<order_by>][--no_totals]
+            txo list [--include_received_tips] [--resolve] [--order_by]
+                     {kwargs}
 
-        Options:
-            --type=<type>              : (str or list) claim type: stream, channel, support,
-                                         purchase, collection, repost, other
-            --txid=<txid>              : (str or list) transaction id of outputs
-            --claim_id=<claim_id>      : (str or list) claim id
-            --channel_id=<channel_id>  : (str or list) claims in this channel
-            --name=<name>              : (str or list) claim name
-            --is_spent                 : (bool) only show spent txos
-            --is_not_spent             : (bool) only show not spent txos
-            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
-                                                if using this flag the other related flags
-                                                are ignored (--is_my_output, --is_my_input, etc)
-            --is_my_output             : (bool) show outputs controlled by you
-            --is_not_my_output         : (bool) show outputs not controlled by you
-            --is_my_input              : (bool) show outputs created by you
-            --is_not_my_input          : (bool) show outputs not created by you
-           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
-                                                "--is_my_input --is_my_output --type=other"
-                                                this allows to exclude "change" payments, this
-                                                flag can be used in combination with any of the other flags
-            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-            --resolve                  : (bool) resolves each claim to provide additional metadata
-            --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount' and 'none'
-            --no_totals                : (bool) do not calculate the total number of pages and items in result set
-                                                (significant performance boost)
-
-        Returns: {Paginated[Output]}
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            claims = account.get_txos
-            claim_count = account.get_txo_count
-        else:
-            claims = partial(self.service.get_txos, wallet=wallet, accounts=wallet.accounts)
-            claim_count = partial(self.service.get_txo_count, wallet=wallet, accounts=wallet.accounts)
+        txo_dict, kwargs = pop_kwargs('txo_filter', txo_filter_kwargs(**txo_filter_and_pagination_kwargs))
+        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default(txo_dict.pop('wallet_id'))
+        accounts = wallet.accounts.get_or_all(txo_dict.pop('account_id'))
         constraints = {
             'resolve': resolve,
             'include_is_spent': True,
             'include_is_my_input': True,
             'include_is_my_output': True,
-            'include_received_tips': include_received_tips
+            'include_received_tips': include_received_tips,
         }
         if order_by is not None:
             if order_by == 'name':
@@ -3467,43 +2717,26 @@ class API:
                 constraints['order_by'] = order_by
             else:
                 raise ValueError(f"'{order_by}' is not a valid --order_by value.")
-        self._constrain_txo_from_kwargs(constraints, **kwargs)
-        return await paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
+        self._constrain_txo_from_kwargs(constraints, **txo_dict)
+        return await paginate_rows(
+            self.service.get_txos,
+            wallet=wallet, accounts=accounts,
+            **pagination, **constraints
+        )
 
     async def txo_spend(
-            self, account_id=None, wallet_id=None, batch_size=500,
-            include_full_tx=False, preview=False, blocking=False, **kwargs):
+            self,
+            batch_size=500,         # number of txos to spend per transactions
+            include_full_tx=False,  # include entire tx in output and not just the txid
+            **txo_filter_and_tx_kwargs
+    ) -> List[Transaction]:
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
 
         Usage:
-            txo_spend [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
-                      [--is_my_input | --is_not_my_input]
-                      [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
-                      [--preview] [--blocking] [--batch_size=<batch_size>] [--include_full_tx]
+            txo spend [--batch_size=<batch_size>] [--include_full_tx]
+                      {kwargs}
 
-        Options:
-            --type=<type>              : (str or list) claim type: stream, channel, support,
-                                         purchase, collection, repost, other
-            --txid=<txid>              : (str or list) transaction id of outputs
-            --claim_id=<claim_id>      : (str or list) claim id
-            --channel_id=<channel_id>  : (str or list) claims in this channel
-            --name=<name>              : (str or list) claim name
-            --is_my_input              : (bool) show outputs created by you
-            --is_not_my_input          : (bool) show outputs not created by you
-           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
-                                                "--is_my_input --is_my_output --type=other"
-                                                this allows to exclude "change" payments, this
-                                                flag can be used in combination with any of the other flags
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --preview                  : (bool) do not broadcast the transaction
-            --blocking                 : (bool) wait until abandon is in mempool
-            --batch_size=<batch_size>  : (int) number of txos to spend per transactions
-            --include_full_tx          : (bool) include entire tx in output and not just the txid
-
-        Returns: {List[Transaction]}
         """
         wallet = self.wallets.get_or_default(wallet_id)
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
@@ -3526,97 +2759,39 @@ class API:
             return txs
         return [{'txid': tx.id} for tx in txs]
 
-    async def txo_sum(self, account_id=None, wallet_id=None, **kwargs):
+    async def txo_sum(self, **txo_filter_and_tx_kwargs) -> int:  # sum of filtered outputs
         """
         Sum of transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...]
-                     [--is_spent] [--is_not_spent]
-                     [--is_my_input_or_output |
-                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
-                     ]
-                     [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
+            txo sum
+                    {kwargs}
 
-        Options:
-            --type=<type>              : (str or list) claim type: stream, channel, support,
-                                         purchase, collection, repost, other
-            --txid=<txid>              : (str or list) transaction id of outputs
-            --claim_id=<claim_id>      : (str or list) claim id
-            --name=<name>              : (str or list) claim name
-            --is_spent                 : (bool) only show spent txos
-            --is_not_spent             : (bool) only show not spent txos
-            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
-                                                if using this flag the other related flags
-                                                are ignored (--is_my_output, --is_my_input, etc)
-            --is_my_output             : (bool) show outputs controlled by you
-            --is_not_my_output         : (bool) show outputs not controlled by you
-            --is_my_input              : (bool) show outputs created by you
-            --is_not_my_input          : (bool) show outputs not created by you
-           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
-                                                "--is_my_input --is_my_output --type=other"
-                                                this allows to exclude "change" payments, this
-                                                flag can be used in combination with any of the other flags
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-
-        Returns: int
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        return self.ledger.get_txo_sum(
+        return await self.ledger.get_txo_sum(
             wallet=wallet, accounts=[wallet.get_account_or_error(account_id)] if account_id else wallet.accounts,
             **self._constrain_txo_from_kwargs({}, **kwargs)
         )
 
     async def txo_plot(
-            self, account_id=None, wallet_id=None,
-            days_back=0, start_day=None, days_after=None, end_day=None, **kwargs):
+        self,
+        days_back=0,             # number of days back from today
+                                 # (not compatible with --start_day, --days_after, --end_day)
+        start_day: str = None,   # start on specific date (YYYY-MM-DD) (instead of --days_back)
+        days_after: int = None,  # end number of days after --start_day (instead of --end_day)
+        end_day: str = None,     # end on specific date (YYYY-MM-DD) (instead of --days_after)
+        **txo_filter_and_pagination_kwargs
+    ) -> list:
         """
         Plot transaction output sum over days.
 
         Usage:
-            txo_plot [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent] [--is_not_spent]
-                     [--is_my_input_or_output |
-                         [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
-                     ]
-                     [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
-                     [--days_back=<days_back> |
+            txo_plot [--days_back=<days_back> |
                         [--start_day=<start_day> [--days_after=<days_after> | --end_day=<end_day>]]
                      ]
+                     {kwargs}
 
-        Options:
-            --type=<type>              : (str or list) claim type: stream, channel, support,
-                                         purchase, collection, repost, other
-            --txid=<txid>              : (str or list) transaction id of outputs
-            --claim_id=<claim_id>      : (str or list) claim id
-            --name=<name>              : (str or list) claim name
-            --is_spent                 : (bool) only show spent txos
-            --is_not_spent             : (bool) only show not spent txos
-            --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
-                                                if using this flag the other related flags
-                                                are ignored (--is_my_output, --is_my_input, etc)
-            --is_my_output             : (bool) show outputs controlled by you
-            --is_not_my_output         : (bool) show outputs not controlled by you
-            --is_my_input              : (bool) show outputs created by you
-            --is_not_my_input          : (bool) show outputs not created by you
-           --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
-                                                "--is_my_input --is_my_output --type=other"
-                                                this allows to exclude "change" payments, this
-                                                flag can be used in combination with any of the other flags
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --days_back=<days_back>    : (int) number of days back from today
-                                               (not compatible with --start_day, --days_after, --end_day)
-            --start_day=<start_day>    : (date) start on specific date (YYYY-MM-DD)
-                                               (instead of --days_back)
-            --days_after=<days_after>  : (int) end number of days after --start_day
-                                               (instead of --end_day)
-            --end_day=<end_day>        : (date) end on specific date (YYYY-MM-DD)
-                                               (instead of --days_after)
-
-        Returns: List[Dict]
         """
         wallet = self.wallets.get_or_default(wallet_id)
         plot = await self.ledger.get_txo_plot(
@@ -3632,27 +2807,24 @@ class API:
     Unspent transaction management.
     """
 
-    async def utxo_list(self, *args, **kwargs):
+    async def utxo_list(self, **txo_filter_and_pagination_kwargs) -> Paginated[Output]:  # unspent outputs
         """
         List unspent transaction outputs
 
         Usage:
-            utxo_list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-                      [--page=<page>] [--page_size=<page_size>]
+            utxo_list
+                      {kwargs}
 
-        Options:
-            --account_id=<account_id>  : (str) id of the account to query
-            --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns: {Paginated[Output]}
         """
         kwargs['type'] = ['other', 'purchase']
         kwargs['is_not_spent'] = True
-        return self.txo_list(*args, **kwargs)
+        return await self.txo_list(*args, **kwargs)
 
-    async def utxo_release(self, account_id=None, wallet_id=None):
+    async def utxo_release(
+        self,
+        account_id: str = None,  # restrict operation to specific account
+        wallet_id: str = None,   # restrict operation to specific wallet
+    ):
         """
         When spending a UTXO it is locally locked to prevent double spends;
         occasionally this can result in a UTXO being locked which ultimately
@@ -3663,12 +2835,6 @@ class API:
         Usage:
             utxo_release [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
 
-        Options:
-            --account_id=<account_id> : (str) id of the account to query
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns:
-            None
         """
         wallet = self.wallets.get_or_default(wallet_id)
         if account_id is not None:
@@ -3681,19 +2847,18 @@ class API:
     Blob management.
     """
 
-    async def blob_get(self, blob_hash, timeout=None, read=False):
+    async def blob_get(
+        self,
+        blob_hash: str,       # blob hash of the blob to get
+        timeout: int = None,  # timeout in number of seconds
+        read=False
+    ) -> str:  # Success/Fail message or (dict) decoded data
         """
         Download and return a blob
 
         Usage:
-            blob_get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>] [--read]
+            blob get (<blob_hash> | --blob_hash=<blob_hash>) [--timeout=<timeout>] [--read]
 
-        Options:
-        --blob_hash=<blob_hash>                        : (str) blob hash of the blob to get
-        --timeout=<timeout>                            : (int) timeout in number of seconds
-
-        Returns:
-            (str) Success/Fail message or (dict) decoded data
         """
 
         blob = await download_blob(asyncio.get_event_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
@@ -3705,18 +2870,16 @@ class API:
             blob.delete()
         return "Downloaded blob %s" % blob_hash
 
-    async def blob_delete(self, blob_hash):
+    async def blob_delete(
+        self,
+        blob_hash: str,  # blob hash of the blob to delete
+    ) -> str:  # Success/fail message
         """
         Delete a blob
 
         Usage:
             blob_delete (<blob_hash> | --blob_hash=<blob_hash>)
 
-        Options:
-            --blob_hash=<blob_hash>  : (str) blob hash of the blob to delete
-
-        Returns:
-            (str) Success/fail message
         """
         if not blob_hash or not is_valid_blobhash(blob_hash):
             return f"Invalid blob hash to delete '{blob_hash}'"
@@ -3731,26 +2894,25 @@ class API:
     DHT / Blob Exchange peer commands.
     """
 
-    async def peer_list(self, blob_hash, search_bottom_out_limit=None, page=None, page_size=None):
+    async def peer_list(
+        self,
+        blob_hash: str,                       # find available peers for this blob hash
+        search_bottom_out_limit: int = None,  # the number of search probes in a row
+                                              # that don't find any new peers
+                                              # before giving up and returning
+        page: int = None,                     # page to return during paginating
+        page_size: int = None,                # number of items on page during pagination
+    ) -> list:  # List of contact dictionaries
         """
         Get peers for blob hash
 
         Usage:
-            peer_list (<blob_hash> | --blob_hash=<blob_hash>)
+            peer list (<blob_hash> | --blob_hash=<blob_hash>)
                 [<search_bottom_out_limit> | --search_bottom_out_limit=<search_bottom_out_limit>]
                 [--page=<page>] [--page_size=<page_size>]
 
-        Options:
-            --blob_hash=<blob_hash>                                  : (str) find available peers for this blob hash
-            --search_bottom_out_limit=<search_bottom_out_limit>      : (int) the number of search probes in a row
-                                                                             that don't find any new peers
-                                                                             before giving up and returning
-            --page=<page>                                            : (int) page to return during paginating
-            --page_size=<page_size>                                  : (int) number of items on page during pagination
-
         Returns:
-            (list) List of contact dictionaries {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>,
-             'node_id': <peer node id>}
+            {'address': <peer ip>, 'udp_port': <dht port>, 'tcp_port': <peer port>, 'node_id': <peer node id>}
         """
 
         if not is_valid_blobhash(blob_hash):
@@ -3777,23 +2939,19 @@ class API:
         ]
         return paginate_list(results, page, page_size)
 
-    async def blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):
+    async def blob_announce(
+        self,
+        blob_hash: str = None,    # announce a blob, specified by blob_hash
+        stream_hash: str = None,  # announce all blobs associated with stream_hash
+        sd_hash: str = None       # announce all blobs associated with sd_hash and the sd_hash itself
+    ) -> bool:  # true if successful
         """
         Announce blobs to the DHT
 
         Usage:
-            blob_announce (<blob_hash> | --blob_hash=<blob_hash>
+            blob announce (<blob_hash> | --blob_hash=<blob_hash>
                           | --stream_hash=<stream_hash> | --sd_hash=<sd_hash>)
 
-        Options:
-            --blob_hash=<blob_hash>        : (str) announce a blob, specified by blob_hash
-            --stream_hash=<stream_hash>    : (str) announce all blobs associated with
-                                             stream_hash
-            --sd_hash=<sd_hash>            : (str) announce all blobs associated with
-                                             sd_hash and the sd_hash itself
-
-        Returns:
-            (bool) true if successful
         """
         blob_hashes = []
         if blob_hash:
@@ -3810,28 +2968,25 @@ class API:
         await self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         return True
 
-    async def blob_list(self, uri=None, stream_hash=None, sd_hash=None, needed=None,
-                                finished=None, page=None, page_size=None):
+    async def blob_list(
+        self,
+        uri: str = None,          # filter blobs by stream in a uri
+        stream_hash: str = None,  # filter blobs by stream hash
+        sd_hash: str = None,      # filter blobs by sd hash
+        needed=False,             # only return needed blobs
+        finished=False,           # only return finished blobs
+        page: int = None,         # page to return during paginating
+        page_size: int = None,    # number of items on page during pagination
+    ) -> list:  # List of blob hashes
         """
         Returns blob hashes. If not given filters, returns all blobs known by the blob manager
 
         Usage:
-            blob_list [--needed] [--finished] [<uri> | --uri=<uri>]
+            blob list [--needed] [--finished] [<uri> | --uri=<uri>]
                       [<stream_hash> | --stream_hash=<stream_hash>]
                       [<sd_hash> | --sd_hash=<sd_hash>]
                       [--page=<page>] [--page_size=<page_size>]
 
-        Options:
-            --needed                     : (bool) only return needed blobs
-            --finished                   : (bool) only return finished blobs
-            --uri=<uri>                  : (str) filter blobs by stream in a uri
-            --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
-            --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
-            --page=<page>                : (int) page to return during paginating
-            --page_size=<page_size>      : (int) number of items on page during pagination
-
-        Returns:
-            (list) List of blob hashes
         """
 
         if uri or stream_hash or sd_hash:
@@ -3858,26 +3013,18 @@ class API:
             blobs = [blob_hash for blob_hash in blobs if self.blob_manager.is_blob_verified(blob_hash)]
         return paginate_list(blobs, page, page_size)
 
-    async def file_reflect(self, **kwargs):
+    async def file_reflect(
+        self,
+        reflector: str = None,  # reflector server, ip address or url, by default choose a server from the config
+        **file_filter_kwargs
+    ) -> list:  # list of blobs reflected
         """
         Reflect all the blobs in a file matching the filter criteria
 
         Usage:
-            file_reflect [--sd_hash=<sd_hash>] [--file_name=<file_name>]
-                         [--stream_hash=<stream_hash>] [--rowid=<rowid>]
-                         [--reflector=<reflector>]
+            file reflect [--reflector=<reflector>]
+                         {kwargs}
 
-        Options:
-            --sd_hash=<sd_hash>          : (str) get file with matching sd hash
-            --file_name=<file_name>      : (str) get file with matching file name in the
-                                           downloads folder
-            --stream_hash=<stream_hash>  : (str) get file with matching stream hash
-            --rowid=<rowid>              : (int) get file with matching row id
-            --reflector=<reflector>      : (str) reflector server, ip address or url
-                                           by default choose a server from the config
-
-        Returns:
-            (list) list of blobs reflected
         """
 
         server, port = kwargs.get('server'), kwargs.get('port')
@@ -3894,19 +3041,19 @@ class API:
             total.extend(reflected_for_stream)
         return total
 
-    async def peer_ping(self, node_id, address, port):
+    async def peer_ping(
+        self,
+        node_id: str,  # node id
+        address: str,  # ip address
+        port: int      # ip port
+    ) -> str:  # pong, or {'error': <error message>} if an error is encountered
         """
         Send a kademlia ping to the specified peer. If address and port are provided the peer is directly pinged,
         if not provided the peer is located first.
 
         Usage:
-            peer_ping (<node_id> | --node_id=<node_id>) (<address> | --address=<address>) (<port> | --port=<port>)
+            peer ping (<node_id> | --node_id=<node_id>) (<address> | --address=<address>) (<port> | --port=<port>)
 
-        Options:
-            None
-
-        Returns:
-            (str) pong, or {'error': <error message>} if an error is encountered
         """
         peer = None
         if node_id and address and port:
@@ -3918,18 +3065,11 @@ class API:
         if not peer:
             return {'error': 'peer not found'}
 
-    async def routing_table_get(self):
+    async def routing_table_get(self) -> dict:  # dictionary containing routing and peer information
         """
         Get DHT routing information
 
-        Usage:
-            routing_table_get
-
-        Options:
-            None
-
         Returns:
-            (dict) dictionary containing routing and peer information
             {
                 "buckets": {
                     <bucket index>: [
@@ -3966,50 +3106,27 @@ class API:
     Controls and queries tracemalloc memory tracing tools for troubleshooting.
     """
 
-    async def tracemalloc_enable(self):
-        """
-        Enable tracemalloc memory tracing
-
-        Usage:
-            tracemalloc_enable
-
-        Options:
-            None
-
-        Returns:
-            (bool) is it tracing?
-        """
+    async def tracemalloc_enable(self) -> bool:  # is it tracing?
+        """ Enable tracemalloc memory tracing """
         tracemalloc.start()
         return tracemalloc.is_tracing()
 
-    async def tracemalloc_disable(self):
-        """
-        Disable tracemalloc memory tracing
-
-        Usage:
-            tracemalloc_disable
-
-        Options:
-            None
-
-        Returns:
-            (bool) is it tracing?
-        """
+    async def tracemalloc_disable(self) -> bool:  # is it tracing?
+        """ Disable tracemalloc memory tracing """
         tracemalloc.stop()
         return tracemalloc.is_tracing()
 
-    async def tracemalloc_top(self, items: int = 10):
+    async def tracemalloc_top(
+        self,
+        items=10  # maximum items to return, from the most common
+    ) -> dict:  # dictionary containing most common objects in memory
         """
         Show most common objects, the place that created them and their size.
 
         Usage:
-            tracemalloc_top [(<items> | --items=<items>)]
-
-        Options:
-            --items=<items>               : (int) maximum items to return, from the most common
+            tracemalloc top [(<items> | --items=<items>)]
 
         Returns:
-            (dict) dictionary containing most common objects in memory
             {
                 "line": (str) filename and line number where it was created,
                 "code": (str) code that created it,
@@ -4045,33 +3162,28 @@ class API:
     View, create and abandon comments.
     """
 
-    async def comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
-                                   include_replies=True, is_channel_signature_valid=False,
-                                   hidden=False, visible=False):
+    async def comment_list(
+        self,
+        claim_id: str,                      # The claim on which the comment will be made on
+        parent_id: str = None,              # CommentId of a specific thread you'd like to see
+        include_replies=True,               # Whether or not you want to include replies in list
+        is_channel_signature_valid=False,   # Only include comments with valid signatures.
+                                            # [Warning: Paginated total size will not change, even if list reduces]
+        hidden=False,                       # Select only Hidden Comments
+        visible=False,                      # Select only Visible Comments
+        page=1, page_size=50
+    ) -> dict:  # Containing the list, and information about the paginated content
         """
         List comments associated with a claim.
 
         Usage:
-            comment_list    (<claim_id> | --claim_id=<claim_id>)
-                            [(--page=<page> --page_size=<page_size>)]
-                            [--parent_id=<parent_id>] [--include_replies]
-                            [--is_channel_signature_valid]
-                            [--visible | --hidden]
-
-        Options:
-            --claim_id=<claim_id>           : (str) The claim on which the comment will be made on
-            --parent_id=<parent_id>         : (str) CommentId of a specific thread you'd like to see
-            --page=<page>                   : (int) The page you'd like to see in the comment list.
-            --page_size=<page_size>         : (int) The amount of comments that you'd like to retrieve
-            --include_replies               : (bool) Whether or not you want to include replies in list
-            --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
-                                              [Warning: Paginated total size will not change, even
-                                               if list reduces]
-            --visible                       : (bool) Select only Visible Comments
-            --hidden                        : (bool) Select only Hidden Comments
+            comment list (<claim_id> | --claim_id=<claim_id>)
+                         [(--page=<page> --page_size=<page_size>)]
+                         [--parent_id=<parent_id>] [--include_replies]
+                         [--is_channel_signature_valid]
+                         [--visible | --hidden]
 
         Returns:
-            (dict)  Containing the list, and information about the paginated content:
             {
                 "page": "Page number of the current items.",
                 "page_size": "Number of items to show on a page.",
@@ -4129,29 +3241,24 @@ class API:
             ]
         return result
 
-    async def comment_create(self, comment, claim_id=None, parent_id=None, channel_account_id=None,
-                                     channel_name=None, channel_id=None, wallet_id=None):
+    async def comment_create(
+        self,
+        comment: str,           # Comment to be made, should be at most 2000 characters.
+        claim_id: str = None,   # The ID of the claim to comment on
+        parent_id: str = None,  # The ID of a comment to make a response to
+        wallet_id: str = None,  # restrict operation to specific wallet
+        **signed_kwargs
+    ) -> dict:  # Comment object if successfully made, (None) otherwise
         """
         Create and associate a comment with a claim using your channel identity.
 
         Usage:
-            comment_create  (<comment> | --comment=<comment>)
+            comment create  (<comment> | --comment=<comment>)
                             (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)
-                            (--channel_id=<channel_id> | --channel_name=<channel_name>)
-                            [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
-
-        Options:
-            --comment=<comment>                         : (str) Comment to be made, should be at most 2000 characters.
-            --claim_id=<claim_id>                       : (str) The ID of the claim to comment on
-            --parent_id=<parent_id>                     : (str) The ID of a comment to make a response to
-            --channel_id=<channel_id>                   : (str) The ID of the channel you want to post under
-            --channel_name=<channel_name>               : (str) The channel you want to post as, prepend with a '@'
-            --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
-                                                          for channel certificates, defaults to all accounts
-            --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
+                            [--wallet_id=<wallet_id>]
+                            {kwargs}
 
         Returns:
-            (dict) Comment object if successfully made, (None) otherwise
             {
                 "comment":      (str) The actual string as inputted by the user,
                 "comment_id":   (str) The Comment's unique identifier,
@@ -4184,22 +3291,21 @@ class API:
         })
         return response
 
-    async def comment_update(self, comment, comment_id, wallet_id=None):
+    async def comment_update(
+        self,
+        comment: str,           # New comment replacing the old one
+        comment_id: str,        # Hash identifying the comment to edit
+        wallet_id: str = None,  # restrict operation to specific wallet
+    ) -> dict:  # Comment object if edit was successful, (None) otherwise
         """
         Edit a comment published as one of your channels.
 
         Usage:
-            comment_update (<comment> | --comment=<comment>)
+            comment update (<comment> | --comment=<comment>)
                          (<comment_id> | --comment_id=<comment_id>)
                          [--wallet_id=<wallet_id>]
 
-        Options:
-            --comment=<comment>         : (str) New comment replacing the old one
-            --comment_id=<comment_id>   : (str) Hash identifying the comment to edit
-            --wallet_id=<wallet_id      : (str) restrict operation to specific wallet
-
         Returns:
-            (dict) Comment object if edit was successful, (None) otherwise
             {
                 "comment":      (str) The actual string as inputted by the user,
                 "comment_id":   (str) The Comment's unique identifier,
@@ -4234,19 +3340,18 @@ class API:
             self.conf.comment_server, 'edit_comment', edited_comment
         )
 
-    async def comment_abandon(self, comment_id, wallet_id=None):
+    async def comment_abandon(
+        self,
+        comment_id: str,        # The ID of the comment to be abandoned.
+        wallet_id: str = None,  # restrict operation to specific wallet
+    ) -> dict:  # Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned
         """
         Abandon a comment published under your channel identity.
 
         Usage:
-            comment_abandon  (<comment_id> | --comment_id=<comment_id>) [--wallet_id=<wallet_id>]
-
-        Options:
-            --comment_id=<comment_id>   : (str) The ID of the comment to be abandoned.
-            --wallet_id=<wallet_id      : (str) restrict operation to specific wallet
+            comment abandon  (<comment_id> | --comment_id=<comment_id>) [--wallet_id=<wallet_id>]
 
         Returns:
-            (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned
             {
                 <comment_id> (str): {
                     "abandoned": (bool)
@@ -4268,19 +3373,18 @@ class API:
         comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
         return await comment_client.post(self.conf.comment_server, 'abandon_comment', abandon_comment_body)
 
-    async def comment_hide(self, comment_ids: Union[str, list], wallet_id=None):
+    async def comment_hide(
+        self,
+        comment_ids: StrOrList,  # one or more comment_id to hide.
+        wallet_id: str = None,   # restrict operation to specific wallet
+    ) -> dict:  # keyed by comment_id, containing success info
         """
         Hide a comment published to a claim you control.
 
         Usage:
-            comment_hide  <comment_ids>... [--wallet_id=<wallet_id>]
-
-        Options:
-            --comment_ids=<comment_ids>  : (str, list) one or more comment_id to hide.
-            --wallet_id=<wallet_id>      : (str) restrict operation to specific wallet
+            comment hide  <comment_ids>... [--wallet_id=<wallet_id>]
 
         Returns:
-            (dict) keyed by comment_id, containing success info
             '<comment_id>': {
                 "hidden": (bool)  flag indicating if comment_id was hidden
             }

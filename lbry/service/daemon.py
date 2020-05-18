@@ -64,6 +64,7 @@ class Daemon:
 
     def __init__(self, service: Service):
         self.service = service
+        self.conf = service.conf
         self.api = API(service)
         self.app = Application()
         self.app['websockets'] = WeakSet()
@@ -81,8 +82,7 @@ class Daemon:
 
     async def start(self):
         await self.runner.setup()
-        port = self.service.ledger.conf.api.split(':')[1]
-        site = TCPSite(self.runner, 'localhost', port)
+        site = TCPSite(self.runner, 'localhost', self.conf.api_port)
         await site.start()
         await self.service.start()
 

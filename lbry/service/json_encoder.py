@@ -47,7 +47,7 @@ output_doc = {
 transaction_doc = {
     'txid': "hash of transaction in hex",
     'height': "block where transaction was recorded",
-    'inputs': [output_doc],
+    'inputs': ['spent outputs...'],
     'outputs': [output_doc],
     'total_input': "sum of inputs as a decimal",
     'total_output': "sum of outputs, sans fee, as a decimal",
@@ -109,7 +109,7 @@ managedstream_doc = {
 
 
 address_doc = {
-
+    "address": "(str)"
 }
 
 

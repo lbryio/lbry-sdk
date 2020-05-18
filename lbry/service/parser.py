@@ -10,6 +10,9 @@ from lbry.service import api
 from lbry.service import json_encoder
 
 
+LINE_WIDTH = 90
+
+
 def parse_description(desc) -> dict:
     lines = iter(desc.splitlines())
     parts = {'text': []}
@@ -19,7 +22,10 @@ def parse_description(desc) -> dict:
             current = parts.setdefault(line.strip().lower()[:-1], [])
         else:
             if line.strip():
-                current.append(line)
+                if line.strip() == '{kwargs}':
+                    parts['kwargs'] = line.find('{kwargs}')
+                else:
+                    current.append(line)
     return parts
 
 
@@ -36,20 +42,9 @@ def parse_type(tokens: List) -> Tuple[str, str]:
         json_ = json_encoder.encode_pagination_doc(
             getattr(json_encoder, f'{type_[2].lower()}_doc')
         )
+    elif len(type_) == 1 and hasattr(json_encoder, f'{type_[0].lower()}_doc'):
+        json_ = getattr(json_encoder, f'{type_[0].lower()}_doc')
     return ''.join(type_), json_
-    #    obj_type = result[1:-1]
-    #    if '[' in obj_type:
-    #        sub_type = obj_type[obj_type.index('[') + 1:-1]
-    #        obj_type = obj_type[:obj_type.index('[')]
-    #        if obj_type == 'Paginated':
-    #            obj_def = encode_pagination_doc(RETURN_DOCS[sub_type])
-    #        elif obj_type == 'List':
-    #            obj_def = [RETURN_DOCS[sub_type]]
-    #        else:
-    #            raise NameError(f'Unknown return type: {obj_type}')
-    #    else:
-    #        obj_def = RETURN_DOCS[obj_type]
-    #    return indent(json.dumps(obj_def, indent=4), ' ' * 12)
 
 
 def parse_argument(tokens, method_name='') -> dict:
@@ -59,6 +54,10 @@ def parse_argument(tokens, method_name='') -> dict:
     }
     if arg['name'] == 'self':
         return {}
+    try:
+        tokens[0]
+    except:
+        a = 9
     if tokens[0].string == ':':
         tokens.pop(0)
         type_tokens = []
@@ -100,18 +99,20 @@ def produce_argument_tokens(src: str):
             if not in_comment and t.string == ',':
                 in_comment = True
             elif in_comment and (t.type == token.NAME or t.string == '**'):
-                yield parsed
+                if not parsed[0].string.startswith('_'):
+                    yield parsed
                 in_comment = False
                 parsed = []
             if t.type in (token.NAME, token.OP, token.COMMENT, token.STRING, token.NUMBER):
                 parsed.append(t)
             if t.string == ')':
-                yield parsed
+                if not parsed[0].string.startswith('_'):
+                    yield parsed
                 break
 
 
 def parse_return(tokens) -> dict:
-    d = {'desc': []}
+    d = {'desc': [], 'type': None}
     if tokens[0].string == '->':
         tokens.pop(0)
         type_tokens = []
@@ -144,7 +145,7 @@ def produce_return_tokens(src: str):
 def parse_method(method, expanders: dict) -> dict:
     d = {
         'name': method.__name__,
-        'desc': parse_description(textwrap.dedent(method.__doc__)) if method.__doc__ else '',
+        'desc': parse_description(textwrap.dedent(method.__doc__)) if method.__doc__ else {},
         'method': method,
         'arguments': [],
         'returns': None
@@ -153,11 +154,15 @@ def parse_method(method, expanders: dict) -> dict:
     for tokens in produce_argument_tokens(src):
         if tokens[0].string == '**':
             tokens.pop(0)
-            expander_name = tokens.pop(0).string[:-7]
-            if expander_name not in expanders:
-                raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
-            expander = expanders[expander_name]
-            d['arguments'].extend(expander)
+            d['kwargs'] = []
+            expander_names = tokens.pop(0).string[:-7]
+            if expander_names.startswith('_'):
+                continue
+            for expander_name in expander_names.split('_and_'):
+                if expander_name not in expanders:
+                    raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
+                d['arguments'].extend(expanders[expander_name])
+                d['kwargs'].extend(expanders[expander_name])
         else:
             arg = parse_argument(tokens, d['name'])
             if arg:
@@ -168,8 +173,9 @@ def parse_method(method, expanders: dict) -> dict:
 
 def get_expanders():
     expanders = {}
-    for e in api.kwarg_expanders:
-        expanders[e.__name__] = parse_method(e, expanders)['arguments']
+    for name, func in api.kwarg_expanders.items():
+        if name.endswith('_original'):
+            expanders[name[:-len('_original')]] = parse_method(func, expanders)['arguments']
     return expanders
 
 
@@ -188,7 +194,9 @@ def get_methods(cls):
     }
 
 
-def generate_options(method, indent):
+def generate_options(method, indent) -> List[str]:
+    if not method['arguments']:
+        return []
     flags = []
     for arg in method['arguments']:
         if arg['type'] == 'bool':
@@ -199,16 +207,69 @@ def generate_options(method, indent):
     flags = [f.ljust(max_len) for f in flags]
     options = []
     for flag, arg in zip(flags, method['arguments']):
-        line = [f"{indent}{flag}: ({arg['type']}) {' '.join(arg['desc'])}"]
+        left = f"{indent}{flag}: "
+        text = f"({arg['type']}) {' '.join(arg['desc'])}"
         if 'default' in arg:
-            line.append(f" [default: {arg['default']}]")
-        options.append(''.join(line))
+            if arg['type'] != 'bool':
+                text += f" [default: {arg['default']}]"
+        wrapped = textwrap.wrap(text, LINE_WIDTH-len(left))
+        lines = [f"{left}{wrapped.pop(0)}"]
+        for line in wrapped:
+            lines.append(f"{' '*len(left)} {line}")
+        options.extend(lines)
     return options
 
 
-def augment_description(command):
-    pass
+def generate_help(command):
+    indent = 4
+    text = []
+    desc = command['desc']
 
+    for line in desc.get('text', []):
+        text.append(line)
+    text.append('')
+
+    usage, kwargs_offset = desc.get('usage', []), desc.get('kwargs', False)
+    text.append('Usage:')
+    if usage:
+        for line in usage:
+            text.append(line)
+    else:
+        text.append(f"{' '*indent}{command['cli']}")
+    if kwargs_offset:
+        flags = []
+        for arg in command['kwargs']:
+            if arg['type'] == 'bool':
+                flags.append(f"[--{arg['name']}]")
+            elif 'list' in arg['type']:
+                flags.append(f"[--{arg['name']}=<{arg['name']}>...]")
+            else:
+                flags.append(f"[--{arg['name']}=<{arg['name']}>]")
+        wrapped = textwrap.wrap(' '.join(flags), LINE_WIDTH-kwargs_offset)
+        for line in wrapped:
+            text.append(f"{' '*kwargs_offset}{line}")
+    text.append('')
+
+    options = desc.get('options', [])
+    if options or command['arguments']:
+        text.append('Options:')
+        for line in options:
+            text.append(line)
+        text.extend(generate_options(command, ' '*indent))
+        text.append('')
+
+    returns = desc.get('returns', [])
+    if returns or command['returns']['type']:
+        text.append('Returns:')
+        if command['returns']['type']:
+            return_comment = ' '.join(command['returns']['desc'])
+            text.append(f"{' '*indent}({command['returns']['type']}) {return_comment}")
+        text.extend(returns)
+        if 'json' in command['returns']:
+            dump = json.dumps(command['returns']['json'], indent=4)
+            text.extend(textwrap.indent(dump, ' '*indent).splitlines())
+
+    return '\n'.join(text)
 
 
 def get_api_definitions(cls):
@@ -219,7 +280,10 @@ def get_api_definitions(cls):
         if parts[0] in groups:
             command['name'] = '_'.join(parts[1:])
             command['group'] = parts[0]
-            #command['desc'] =
+            command['cli'] = f"{command['group']} {command['name']}"
+        else:
+            command['cli'] = command['name']
+        command['help'] = generate_help(command)
     return {'groups': groups, 'commands': commands}
 
 
