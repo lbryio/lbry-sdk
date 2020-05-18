@@ -694,14 +694,26 @@ class Ledger(metaclass=LedgerRegistry):
                 self.cache_transaction(*tx) for tx in outputs.txs
             ))
 
-        txos, blocked = outputs.inflate(txs)
+        _txos, blocked = outputs.inflate(txs)
+
+        txos = []
+        for txo in _txos:
+            if isinstance(txo, Output):
+                # transactions and outputs are cached and shared between wallets
+                # we don't want to leak informaion between wallet so we add the
+                # wallet specific metadata on throw away copies of the txos
+                txo = copy.copy(txo)
+                channel = txo.channel
+                txo.purchase_receipt = None
+                txo.update_annotations(None)
+                txo.channel = channel
+            txos.append(txo)
 
         includes = (
             include_purchase_receipt, include_is_my_output,
             include_sent_supports, include_sent_tips
         )
         if accounts and any(includes):
-            copies = []
             receipts = {}
             if include_purchase_receipt:
                 priced_claims = []
@@ -718,46 +730,38 @@ class Ledger(metaclass=LedgerRegistry):
                     }
             for txo in txos:
                 if isinstance(txo, Output) and txo.can_decode_claim:
-                    # transactions and outputs are cached and shared between wallets
-                    # we don't want to leak informaion between wallet so we add the
-                    # wallet specific metadata on throw away copies of the txos
-                    txo_copy = copy.copy(txo)
-                    copies.append(txo_copy)
                     if include_purchase_receipt:
-                        txo_copy.purchase_receipt = receipts.get(txo.claim_id)
+                        txo.purchase_receipt = receipts.get(txo.claim_id)
                     if include_is_my_output:
                         mine = await self.db.get_txo_count(
                             claim_id=txo.claim_id, txo_type__in=CLAIM_TYPES, is_my_output=True,
                             is_spent=False, accounts=accounts
                         )
                         if mine:
-                            txo_copy.is_my_output = True
+                            txo.is_my_output = True
                         else:
-                            txo_copy.is_my_output = False
+                            txo.is_my_output = False
                     if include_sent_supports:
                         supports = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=True,
                             is_spent=False, accounts=accounts
                         )
-                        txo_copy.sent_supports = supports
+                        txo.sent_supports = supports
                     if include_sent_tips:
                         tips = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=True, is_my_output=False,
                             accounts=accounts
                         )
-                        txo_copy.sent_tips = tips
+                        txo.sent_tips = tips
                     if include_received_tips:
                         tips = await self.db.get_txo_sum(
                             claim_id=txo.claim_id, txo_type=TXO_TYPES['support'],
                             is_my_input=False, is_my_output=True,
                             accounts=accounts
                         )
-                        txo_copy.received_tips = tips
-                else:
-                    copies.append(txo)
-            txos = copies
+                        txo.received_tips = tips
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
