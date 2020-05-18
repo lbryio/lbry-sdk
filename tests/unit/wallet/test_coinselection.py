@@ -1,10 +1,10 @@
 from unittest import TestCase
 from types import GeneratorType
 
-from lbry.blockchain.ledger import RegTestLedger
-from lbry.wallet.coinselection import CoinSelector, OutputEffectiveAmountEstimator, MAXIMUM_TRIES
+from lbry.blockchain import Ledger
 from lbry.constants import CENT
 from lbry.testcase import get_output as utxo
+from lbry.wallet.coinselection import CoinSelector, OutputEffectiveAmountEstimator, MAXIMUM_TRIES
 
 
 def search(*args, **kwargs):
@@ -15,7 +15,7 @@ def search(*args, **kwargs):
 class BaseSelectionTestCase(TestCase):
 
     def setUp(self):
-        self.ledger = RegTestLedger()
+        self.ledger = Ledger()
 
     def estimates(self, *args):
         txos = args[0] if isinstance(args[0], (GeneratorType, list)) else args

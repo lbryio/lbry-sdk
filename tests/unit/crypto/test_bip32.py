@@ -1,10 +1,10 @@
 from unittest import TestCase
 from binascii import unhexlify, hexlify
 
-from lbry.blockchain.ledger import Ledger
+from lbry import Ledger
 from lbry.crypto.bip32 import PubKey, PrivateKey, from_extended_key_string
 
-from tests.unit.wallet.key_fixtures import (
+from tests.unit.crypto.key_fixtures import (
     expected_ids, expected_privkeys, expected_hardened_privkeys
 )
 

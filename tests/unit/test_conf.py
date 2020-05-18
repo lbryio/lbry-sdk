@@ -4,9 +4,11 @@ import types
 import tempfile
 import unittest
 import argparse
-import lbry.wallet
-from lbry.conf import Config, BaseConfig, String, Integer, Toggle, Servers, Strings, StringChoice, NOT_SET
 from lbry.error import InvalidCurrencyError
+from lbry.conf import (
+    Config, BaseConfig, String, Integer, Toggle,
+    Servers, Strings, StringChoice, NOT_SET
+)
 
 
 class TestConfig(BaseConfig):

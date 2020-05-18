@@ -3,9 +3,9 @@ from binascii import hexlify
 
 from lbry.wallet import words
 from lbry.wallet.mnemonic import (
-    get_languages, is_valid,
-    sync_generate as generate,
-    sync_to_seed as to_seed
+    get_languages, is_phrase_valid as is_valid,
+    sync_generate_phrase as generate,
+    sync_derive_key_from_phrase as derive
 )
 
 
@@ -17,7 +17,7 @@ class TestMnemonic(TestCase):
         for lang in languages:
             self.assertEqual(len(getattr(words, lang)), 2048)
 
-    def test_is_valid(self):
+    def test_is_phrase_valid(self):
         self.assertFalse(is_valid('en', ''))
         self.assertFalse(is_valid('en', 'foo'))
         self.assertFalse(is_valid('en', 'awesomeball'))
@@ -27,13 +27,13 @@ class TestMnemonic(TestCase):
         self.assertTrue(is_valid('ja', 'るいじ りんご'))
         self.assertTrue(is_valid('ja', 'るいじ りんご'))
 
-    def test_generate(self):
+    def test_generate_phrase(self):
         self.assertGreaterEqual(len(generate('en').split()), 11)
         self.assertGreaterEqual(len(generate('ja').split()), 11)
 
-    def test_to_seed(self):
+    def test_phrase_to_key(self):
         self.assertEqual(
-            hexlify(to_seed(
+            hexlify(derive(
                 "carbon smart garage balance margin twelve che"
                 "st sword toast envelope bottom stomach absent"
             )),

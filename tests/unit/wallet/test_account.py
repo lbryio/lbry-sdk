@@ -1,8 +1,7 @@
 from lbry.testcase import AsyncioTestCase
-
-from lbry.blockchain.ledger import Ledger
-from lbry.wallet.account import Account, SingleKey, HierarchicalDeterministic
-from lbry.db import Database, PubkeyAddress
+from lbry.blockchain import Ledger
+from lbry.db import Database, tables
+from lbry.wallet import Account, SingleKey, HierarchicalDeterministic
 
 
 class AccountTestCase(AsyncioTestCase):
@@ -15,43 +14,35 @@ class AccountTestCase(AsyncioTestCase):
 
     async def update_addressed_used(self, address, used):
         await self.db.execute(
-            PubkeyAddress.update()
-                .where(PubkeyAddress.c.address == address)
-                .values(used_times=used)
+            tables.PubkeyAddress.update()
+            .where(tables.PubkeyAddress.c.address == address)
+            .values(used_times=used)
         )
 
 
-class TestAccount(AccountTestCase):
+class TestHierarchicalDeterministicAccount(AccountTestCase):
 
     async def test_generate_account(self):
-        account = Account.generate(self.ledger, self.db, 'lbryum')
-        self.assertIsNotNone(account.seed)
+        account = await Account.generate(self.ledger, self.db)
+        self.assertEqual(account.ledger, self.ledger)
+        self.assertEqual(account.db, self.db)
+        self.assertEqual(account.name, f'Account #{account.public_key.address}')
+        self.assertEqual(len(account.phrase.split()), 12)
+        self.assertEqual(account.language, 'en')
+        self.assertEqual(account.private_key_string, '')
+        self.assertEqual(account.encrypted, False)
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
-
-        addresses = await account.receiving.get_addresses()
-        self.assertEqual(len(addresses), 0)
-        addresses = await account.change.get_addresses()
-        self.assertEqual(len(addresses), 0)
-
-        await account.ensure_address_gap()
-
-        addresses = await account.receiving.get_addresses()
-        self.assertEqual(len(addresses), 20)
-        addresses = await account.change.get_addresses()
-        self.assertEqual(len(addresses), 6)
-
-    async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
-        account = Account.generate(self.ledger, self.db, 'lbryum')
-        async with account.receiving.address_generator_lock:
-            await account.receiving._generate_keys(0, 200)
-        records = await account.receiving.get_address_records()
-        self.assertEqual(len(records), 201)
+        self.assertIsInstance(account.receiving, HierarchicalDeterministic)
+        self.assertIsInstance(account.change, HierarchicalDeterministic)
 
     async def test_ensure_address_gap(self):
-        account = Account.generate(self.ledger, self.db, 'lbryum')
-
-        self.assertIsInstance(account.receiving, HierarchicalDeterministic)
+        account = await Account.generate(self.ledger, self.db, 'lbryum')
+        self.assertEqual(len(await account.receiving.get_addresses()), 0)
+        self.assertEqual(len(await account.change.get_addresses()), 0)
+        await account.ensure_address_gap()
+        self.assertEqual(len(await account.receiving.get_addresses()), 20)
+        self.assertEqual(len(await account.change.get_addresses()), 6)
 
         async with account.receiving.address_generator_lock:
             await account.receiving._generate_keys(4, 7)
@@ -87,6 +78,13 @@ class TestAccount(AccountTestCase):
         new_keys = await account.receiving.ensure_address_gap()
         self.assertEqual(len(new_keys), 20)
 
+    async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
+        account = Account.generate(self.ledger, self.db, 'lbryum')
+        async with account.receiving.address_generator_lock:
+            await account.receiving._generate_keys(0, 200)
+        records = await account.receiving.get_address_records()
+        self.assertEqual(len(records), 201)
+
     async def test_get_or_create_usable_address(self):
         account = Account.generate(self.ledger, self.db, 'lbryum')
 
@@ -100,7 +98,7 @@ class TestAccount(AccountTestCase):
         self.assertEqual(len(keys), 20)
 
     async def test_generate_account_from_seed(self):
-        account = Account.from_dict(
+        account = await Account.from_dict(
             self.ledger, self.db, {
                 "seed":
                     "carbon smart garage balance margin twelve chest sword toas"
@@ -382,8 +380,8 @@ class AccountEncryptionTests(AccountTestCase):
 
         self.assertFalse(account.encrypted)
 
-    def test_decrypt_wallet(self):
-        account = Account.from_dict(self.ledger, self.db, self.encrypted_account)
+    async def test_decrypt_wallet(self):
+        account = await Account.from_dict(self.ledger, self.db, self.encrypted_account)
 
         self.assertTrue(account.encrypted)
         account.decrypt(self.password)
