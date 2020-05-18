@@ -7,7 +7,6 @@ from collections import defaultdict
 from binascii import hexlify, unhexlify
 from typing import List, Optional, DefaultDict, NamedTuple
 
-import pylru
 from lbry.crypto.hash import double_sha256, sha256
 
 from lbry.service.api import Client
@@ -80,7 +79,7 @@ class SPVSync(Sync):
         self._on_ready_controller = EventController()
         self.on_ready = self._on_ready_controller.stream
 
-        self._tx_cache = pylru.lrucache(100000)
+        #self._tx_cache = pylru.lrucache(100000)
         self._update_tasks = TaskGroup()
         self._other_tasks = TaskGroup()  # that we dont need to start
         self._header_processing_lock = asyncio.Lock()

@@ -29,10 +29,19 @@ class WalletManager:
         for wallet in self.wallets.values():
             return wallet
 
-    def get_or_default(self, wallet_id: Optional[str]) -> Optional[Wallet]:
+    def get_or_default(self, wallet_id: Optional[str]) -> Wallet:
         if wallet_id:
             return self[wallet_id]
-        return self.default
+        wallet = self.default
+        if not wallet:
+            raise ValueError("No wallets available.")
+        return wallet
+
+    def get_or_default_for_spending(self, wallet_id: Optional[str]) -> Wallet:
+        wallet = self.get_or_default(wallet_id)
+        if wallet.is_locked:
+            raise ValueError("Cannot spend funds with locked wallet, unlock first.")
+        return wallet
 
     @property
     def path(self):
@@ -72,7 +81,7 @@ class WalletManager:
                     create_account=self.ledger.conf.create_default_account
                 )
         elif not default_wallet.has_accounts and self.ledger.conf.create_default_account:
-            default_wallet.accounts.generate()
+            await default_wallet.accounts.generate()
 
     def add(self, wallet: Wallet) -> Wallet:
         self.wallets[wallet.id] = wallet
@@ -92,11 +101,16 @@ class WalletManager:
         wallet = await Wallet.from_path(self.ledger, self.db, wallet_path)
         return self.add(wallet)
 
-    async def create(self, wallet_id: str, name: str, create_account=False, single_key=False) -> Wallet:
+    async def create(
+            self, wallet_id: str, name: str,
+            create_account=False, language='en', single_key=False) -> Wallet:
         if wallet_id in self.wallets:
             raise Exception(f"Wallet with id '{wallet_id}' is already loaded and cannot be created.")
         wallet_path = os.path.join(self.path, wallet_id)
         if os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' already exists, use 'wallet_add' to load wallet.")
-        wallet = await Wallet.create(self.ledger, self.db, wallet_path, name, create_account, single_key)
+        wallet = await Wallet.create(
+            self.ledger, self.db, wallet_path, name,
+            create_account, language, single_key
+        )
         return self.add(wallet)

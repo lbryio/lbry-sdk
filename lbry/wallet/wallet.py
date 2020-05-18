@@ -3,7 +3,7 @@ import json
 import zlib
 import asyncio
 import logging
-from typing import List, Sequence, Tuple, Optional, Iterable
+from typing import Awaitable, Callable, List, Tuple, Optional, Iterable, Union
 from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
@@ -19,6 +19,7 @@ from lbry.crypto.bip32 import PubKey, PrivateKey
 from lbry.schema.claim import Claim
 from lbry.schema.purchase import Purchase
 from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowedError
+from lbry.stream.managed_stream import ManagedStream
 
 from .account import Account, SingleKey, HierarchicalDeterministic
 from .coinselection import CoinSelector, OutputEffectiveAmountEstimator
@@ -61,10 +62,12 @@ class Wallet:
         return os.path.basename(self.storage.path) if self.storage.path else self.name
 
     @classmethod
-    async def create(cls, ledger: Ledger, db: Database, path: str, name: str, create_account=False, single_key=False):
+    async def create(
+            cls, ledger: Ledger, db: Database, path: str, name: str,
+            create_account=False, language='en', single_key=False):
         wallet = cls(ledger, db, name, WalletStorage(path), {})
         if create_account:
-            wallet.accounts.generate(address_generator={
+            await wallet.accounts.generate(language=language, address_generator={
                 'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             })
         await wallet.save()
@@ -88,7 +91,7 @@ class Wallet:
             preferences=json_dict.get('preferences', {}),
         )
         for account_dict in json_dict.get('accounts', []):
-            wallet.accounts.add_from_dict(account_dict)
+            await wallet.accounts.add_from_dict(account_dict)
         return wallet
 
     def to_dict(self, encrypt_password: str = None):
@@ -135,13 +138,13 @@ class Wallet:
         decompressed = zlib.decompress(decrypted)
         return json.loads(decompressed)
 
-    def merge(self, password: str, data: str) -> List[Account]:
+    async def merge(self, password: str, data: str) -> List[Account]:
         assert not self.is_locked, "Cannot sync apply on a locked wallet."
         added_accounts = []
         decrypted_data = self.unpack(password, data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
         for account_dict in decrypted_data['accounts']:
-            _, _, pubkey = Account.keys_from_dict(self.ledger, account_dict)
+            _, _, pubkey = await Account.keys_from_dict(self.ledger, account_dict)
             account_id = pubkey.address
             local_match = None
             for local_account in self.accounts:
@@ -182,18 +185,18 @@ class Wallet:
     def is_encrypted(self) -> bool:
         return self.is_locked or self.preferences.get(ENCRYPT_ON_DISK, False)
 
-    def decrypt(self):
+    async def decrypt(self):
         assert not self.is_locked, "Cannot decrypt a locked wallet, unlock first."
         self.preferences[ENCRYPT_ON_DISK] = False
-        self.save()
+        await self.save()
         return True
 
-    def encrypt(self, password):
+    async def encrypt(self, password):
         assert not self.is_locked, "Cannot re-encrypt a locked wallet, unlock first."
         assert password, "Cannot encrypt with blank password."
         self.encryption_password = password
         self.preferences[ENCRYPT_ON_DISK] = True
-        self.save()
+        await self.save()
         return True
 
     @property
@@ -232,7 +235,7 @@ class Wallet:
             if await account.save_max_gap():
                 gap_changed = True
         if gap_changed:
-            self.save()
+            await self.save()
 
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[Account]):
         estimators = []
@@ -260,9 +263,9 @@ class Wallet:
             **constraints
         ), self.ledger)
 
-    async def create_transaction(self, inputs: Iterable[Input], outputs: Iterable[Output],
-                     funding_accounts: Iterable[Account], change_account: Account,
-                     sign: bool = True):
+    async def create_transaction(
+            self, inputs: Iterable[Input], outputs: Iterable[Output],
+            funding_accounts: Iterable[Account], change_account: Account):
         """ Find optimal set of inputs when only outputs are provided; add change
             outputs if only inputs are provided or if inputs are greater than outputs. """
 
@@ -318,11 +321,7 @@ class Wallet:
                 # less than the fee, after 5 attempts we give up and go home
                 cost += cost_of_change + 1
 
-            if sign:
-                await self.sign(tx)
-
         except Exception as e:
-            log.exception('Failed to create transaction:')
             await self.db.release_tx(tx)
             raise e
 
@@ -374,6 +373,15 @@ class Wallet:
                 'Failed to display wallet state, please file issue '
                 'for this bug along with the traceback you see below:')
 
+    async def verify_duplicate(self, name: str, allow_duplicate: bool):
+        if not allow_duplicate:
+            claims, _ = await self.claims.list(claim_name=name)
+            if len(claims) > 0:
+                raise Exception(
+                    f"You already have a claim published under the name '{name}'. "
+                    f"Use --allow-duplicate-name flag to override."
+                )
+
 
 class AccountListManager:
     __slots__ = 'wallet', '_accounts'
@@ -399,13 +407,15 @@ class AccountListManager:
         for account in self:
             return account
 
-    def generate(self, name: str = None, address_generator: dict = None) -> Account:
-        account = Account.generate(self.wallet.ledger, self.wallet.db, name, address_generator)
+    async def generate(self, name: str = None, language: str = 'en', address_generator: dict = None) -> Account:
+        account = await Account.generate(
+            self.wallet.ledger, self.wallet.db, name, language, address_generator
+        )
         self._accounts.append(account)
         return account
 
-    def add_from_dict(self, account_dict: dict) -> Account:
-        account = Account.from_dict(self.wallet.ledger, self.wallet.db, account_dict)
+    async def add_from_dict(self, account_dict: dict) -> Account:
+        account = await Account.from_dict(self.wallet.ledger, self.wallet.db, account_dict)
         self._accounts.append(account)
         return account
 
@@ -424,7 +434,9 @@ class AccountListManager:
             return self.default
         return self[account_id]
 
-    def get_or_all(self, account_ids: List[str]) -> List[Account]:
+    def get_or_all(self, account_ids: Union[List[str], str]) -> List[Account]:
+        if account_ids and isinstance(account_ids, str):
+            account_ids = [account_ids]
         return [self[account_id] for account_id in account_ids] if account_ids else self._accounts
 
     async def get_account_details(self, **kwargs):
@@ -437,16 +449,15 @@ class AccountListManager:
 
 
 class BaseListManager:
-    __slots__ = 'wallet', 'db'
+    __slots__ = 'wallet',
 
     def __init__(self, wallet: Wallet):
         self.wallet = wallet
-        self.db = wallet.db
 
     async def create(self, **kwargs) -> Transaction:
         raise NotImplementedError
 
-    async def delete(self, **constraints):
+    async def delete(self, **constraints) -> Transaction:
         raise NotImplementedError
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
@@ -463,21 +474,39 @@ class ClaimListManager(BaseListManager):
     name = 'claim'
     __slots__ = ()
 
-    async def create(
+    async def _create(
             self, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
-        claim_output = Output.pay_claim_name_pubkey_hash(
+            funding_accounts: List[Account], change_account: Account,
+            signing_channel: Output = None) -> Transaction:
+        txo = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, self.wallet.ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
-            claim_output.sign(signing_channel, b'placeholder txid:nout')
-        return await self.wallet.create_transaction(
-            [], [claim_output], funding_accounts, change_account, sign=False
+            txo.sign(signing_channel, b'placeholder txid:nout')
+        tx = await self.wallet.create_transaction(
+            [], [txo], funding_accounts, change_account
         )
+        return tx
+
+    async def create(
+            self, name: str, claim: Claim, amount: int, holding_address: str,
+            funding_accounts: List[Account], change_account: Account,
+            signing_channel: Output = None) -> Transaction:
+        tx = await self._create(
+            name, claim, amount, holding_address,
+            funding_accounts, change_account,
+            signing_channel
+        )
+        txo = tx.outputs[0]
+        if signing_channel is not None:
+            txo.sign(signing_channel)
+        await self.wallet.sign(tx)
+        return tx
 
     async def update(
             self, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
+            funding_accounts: List[Account], change_account: Account,
+            signing_channel: Output = None) -> Transaction:
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
             claim, self.wallet.ledger.address_to_hash160(holding_address)
@@ -497,7 +526,7 @@ class ClaimListManager(BaseListManager):
         )
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_claims(wallet=self.wallet, **constraints)
+        return await self.wallet.db.get_claims(wallet=self.wallet, **constraints)
 
     async def get(self, claim_id=None, claim_name=None, txid=None, nout=None) -> Output:
         if txid is not None and nout is not None:
@@ -523,59 +552,157 @@ class ClaimListManager(BaseListManager):
             return await self.get(claim_id, claim_name, txid, nout)
 
 
+class ChannelListManager(ClaimListManager):
+    name = 'channel'
+    __slots__ = ()
+
+    async def create(
+            self, name: str, amount: int, holding_account: Account,
+            funding_accounts: List[Account], save_key=True, **kwargs) -> Transaction:
+
+        holding_address = await holding_account.receiving.get_or_create_usable_address()
+
+        claim = Claim()
+        claim.channel.update(**kwargs)
+        txo = Output.pay_claim_name_pubkey_hash(
+            amount, name, claim, self.wallet.ledger.address_to_hash160(holding_address)
+        )
+
+        await txo.generate_channel_private_key()
+
+        tx = await self.wallet.create_transaction(
+            [], [txo], funding_accounts, funding_accounts[0]
+        )
+
+        await self.wallet.sign(tx)
+
+        if save_key:
+            holding_account.add_channel_private_key(txo.private_key)
+            await self.wallet.save()
+
+        return tx
+
+    async def update(
+            self, old: Output, amount: int, new_signing_key: bool, replace: bool,
+            holding_account: Account, funding_accounts: List[Account],
+            save_key=True, **kwargs) -> Transaction:
+
+        moving_accounts = False
+        holding_address = old.get_address(self.wallet.ledger)
+        if holding_account:
+            old_account = await self.wallet.get_account_for_address(holding_address)
+            if holding_account.id != old_account.id:
+                holding_address = await holding_account.receiving.get_or_create_usable_address()
+                moving_accounts = True
+        elif new_signing_key:
+            holding_account = await self.wallet.get_account_for_address(holding_address)
+
+        if replace:
+            claim = Claim()
+            claim.channel.public_key_bytes = old.claim.channel.public_key_bytes
+        else:
+            claim = Claim.from_bytes(old.claim.to_bytes())
+        claim.channel.update(**kwargs)
+
+        txo = Output.pay_update_claim_pubkey_hash(
+            amount, old.claim_name, old.claim_id, claim,
+            self.wallet.ledger.address_to_hash160(holding_address)
+        )
+
+        if new_signing_key:
+            await txo.generate_channel_private_key()
+        else:
+            txo.private_key = old.private_key
+
+        tx = await self.wallet.create_transaction(
+            [Input.spend(old)], [txo], funding_accounts, funding_accounts[0]
+        )
+
+        await self.wallet.sign(tx)
+
+        if any((new_signing_key, moving_accounts)) and save_key:
+            holding_account.add_channel_private_key(txo.private_key)
+            await self.wallet.save()
+
+        return tx
+
+    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+        return await self.wallet.db.get_channels(wallet=self.wallet, **constraints)
+
+    async def get_for_signing(self, channel_id=None, channel_name=None) -> Output:
+        channel = await self.get(claim_id=channel_id, claim_name=channel_name)
+        if not channel.has_private_key:
+            raise Exception(
+                f"Couldn't find private key for channel '{channel.claim_name}', "
+                f"can't use channel for signing. "
+            )
+        return channel
+
+    async def get_for_signing_or_none(self, channel_id=None, channel_name=None) -> Optional[Output]:
+        if channel_id or channel_name:
+            return await self.get_for_signing(channel_id, channel_name)
+
+
 class StreamListManager(ClaimListManager):
     __slots__ = ()
 
-    async def create(self, *args, **kwargs):
-        return await super().create(*args, **kwargs)
+    async def create(
+            self, name: str, amount: int, file_path: str,
+            create_file_stream: Callable[[str], Awaitable[ManagedStream]],
+            holding_address: str, funding_accounts: List[Account],
+            signing_channel: Optional[Output] = None,
+            preview=False, **kwargs) -> Tuple[Transaction, ManagedStream]:
+
+        claim = Claim()
+        claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
+
+        # before creating file stream, create TX to ensure we have enough LBC
+        tx = await self._create(
+            name, claim, amount, holding_address,
+            funding_accounts, funding_accounts[0],
+            signing_channel
+        )
+        txo = tx.outputs[0]
+
+        file_stream = None
+        try:
+
+            # we have enough LBC to create TX, now try create the file stream
+            if not preview:
+                file_stream = await create_file_stream(file_path)
+                claim.stream.source.sd_hash = file_stream.sd_hash
+                txo.script.generate()
+
+            # creating TX and file stream was successful, now sign all the things
+            if signing_channel is not None:
+                txo.sign(signing_channel)
+            await self.wallet.sign(tx)
+
+        except Exception as e:
+            # creating file stream or something else went wrong, release txos
+            await self.wallet.db.release_tx(tx)
+            raise e
+
+        return tx, file_stream
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_streams(wallet=self.wallet, **constraints)
+        return await self.wallet.db.get_streams(wallet=self.wallet, **constraints)
 
 
 class CollectionListManager(ClaimListManager):
     __slots__ = ()
 
-    async def create(self, *args, **kwargs):
-        return await super().create(*args, **kwargs)
-
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_collections(wallet=self.wallet, **constraints)
-
-
-class ChannelListManager(ClaimListManager):
-    name = 'channel'
-    __slots__ = ()
-
-    async def create(self, name: str, amount: int, account: Account, funding_accounts: List[Account],
-                     claim_address: str, preview=False, **kwargs):
+    async def create(
+            self, name: str, amount: int, holding_address: str, funding_accounts: List[Account],
+            channel: Optional[Output] = None, **kwargs) -> Transaction:
         claim = Claim()
-        claim.channel.update(**kwargs)
-        tx = await super().create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
+        claim.collection.update(**kwargs)
+        return await super().create(
+            name, claim, amount, holding_address, funding_accounts, funding_accounts[0], channel
         )
-        txo = tx.outputs[0]
-        txo.generate_channel_private_key()
-        await self.wallet.sign(tx)
-        if not preview:
-            account.add_channel_private_key(txo.private_key)
-            await self.wallet.save()
-        return tx
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_channels(wallet=self.wallet, **constraints)
-
-    async def get_for_signing(self, **kwargs) -> Output:
-        channel = await self.get(**kwargs)
-        if not channel.has_private_key:
-            raise Exception(
-                f"Couldn't find private key for channel '{channel.claim_name}', can't use channel for signing. "
-            )
-        return channel
-
-    async def get_for_signing_or_none(self, **kwargs) -> Optional[Output]:
-        if any(kwargs.values()):
-            return await self.get_for_signing(**kwargs)
+        return await self.wallet.db.get_collections(wallet=self.wallet, **constraints)
 
 
 class SupportListManager(BaseListManager):
@@ -591,7 +718,7 @@ class SupportListManager(BaseListManager):
         )
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_supports(**constraints)
+        return await self.wallet.db.get_supports(**constraints)
 
     async def get(self, **constraints) -> Output:
         raise NotImplementedError
@@ -645,7 +772,7 @@ class PurchaseListManager(BaseListManager):
         )
 
     async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.db.get_purchases(**constraints)
+        return await self.wallet.db.get_purchases(**constraints)
 
     async def get(self, **constraints) -> Output:
         raise NotImplementedError

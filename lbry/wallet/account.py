@@ -6,33 +6,21 @@ import asyncio
 import random
 from functools import partial
 from hashlib import sha256
-from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
 
 import ecdsa
 
+from lbry.constants import COIN
+from lbry.db import Database, CLAIM_TYPE_CODES, TXO_TYPES
+from lbry.blockchain import Ledger, Transaction, Input, Output
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 from lbry.crypto.bip32 import PrivateKey, PubKey, from_extended_key_string
-from lbry.constants import COIN
-from lbry.blockchain.transaction import Transaction, Input, Output
-from lbry.blockchain.ledger import Ledger
-from lbry.db import Database
-from lbry.db.constants import CLAIM_TYPE_CODES, TXO_TYPES
 
-from .mnemonic import Mnemonic
+from . import mnemonic
 
 
 log = logging.getLogger(__name__)
-
-
-def validate_claim_id(claim_id):
-    if not len(claim_id) == 40:
-        raise Exception("Incorrect claimid length: %i" % len(claim_id))
-    if isinstance(claim_id, bytes):
-        claim_id = claim_id.decode('utf-8')
-    if set(claim_id).difference(hexdigits):
-        raise Exception("Claim id is not hex encoded")
 
 
 class AddressManager:
@@ -48,8 +36,7 @@ class AddressManager:
         self.address_generator_lock = asyncio.Lock()
 
     @classmethod
-    def from_dict(cls, account: 'Account', d: dict) \
-            -> Tuple['AddressManager', 'AddressManager']:
+    def from_dict(cls, account: 'Account', d: dict) -> Tuple['AddressManager', 'AddressManager']:
         raise NotImplementedError
 
     @classmethod
@@ -222,24 +209,21 @@ class SingleKey(AddressManager):
 
 
 class Account:
-
-    mnemonic_class = Mnemonic
-    private_key_class = PrivateKey
-    public_key_class = PubKey
     address_generators: Dict[str, Type[AddressManager]] = {
         SingleKey.name: SingleKey,
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: 'Ledger', db: 'Database', name: str,
-                 seed: str, private_key_string: str, encrypted: bool,
-                 private_key: Optional[PrivateKey], public_key: PubKey,
+    def __init__(self, ledger: Ledger, db: Database, name: str,
+                 phrase: str, language: str, private_key_string: str,
+                 encrypted: bool, private_key: Optional[PrivateKey], public_key: PubKey,
                  address_generator: dict, modified_on: float, channel_keys: dict) -> None:
         self.ledger = ledger
         self.db = db
         self.id = public_key.address
         self.name = name
-        self.seed = seed
+        self.phrase = phrase
+        self.language = language
         self.modified_on = modified_on
         self.private_key_string = private_key_string
         self.init_vectors: Dict[str, bytes] = {}
@@ -251,6 +235,7 @@ class Account:
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {am.chain_number: am for am in {self.receiving, self.change}}
         self.channel_keys = channel_keys
+        self._channel_keys_deserialized = {}
 
     def get_init_vector(self, key) -> Optional[bytes]:
         init_vector = self.init_vectors.get(key, None)
@@ -259,42 +244,40 @@ class Account:
         return init_vector
 
     @classmethod
-    def generate(cls, ledger: 'Ledger', db: 'Database',
-                 name: str = None, address_generator: dict = None):
-        return cls.from_dict(ledger, db, {
+    async def generate(
+            cls, ledger: Ledger, db: Database,
+            name: str = None, language: str = 'en',
+            address_generator: dict = None):
+        return await cls.from_dict(ledger, db, {
             'name': name,
-            'seed': cls.mnemonic_class().make_seed(),
+            'seed': await mnemonic.generate_phrase(language),
+            'language': language,
             'address_generator': address_generator or {}
         })
 
     @classmethod
-    def get_private_key_from_seed(cls, ledger: 'Ledger', seed: str, password: str):
-        return cls.private_key_class.from_seed(
-            ledger, cls.mnemonic_class.mnemonic_to_seed(seed, password or 'lbryum')
-        )
-
-    @classmethod
-    def keys_from_dict(cls, ledger: 'Ledger', d: dict) \
-            -> Tuple[str, Optional[PrivateKey], PubKey]:
-        seed = d.get('seed', '')
+    async def keys_from_dict(cls, ledger: Ledger, d: dict) -> Tuple[str, Optional[PrivateKey], PubKey]:
+        phrase = d.get('seed', '')
         private_key_string = d.get('private_key', '')
         private_key = None
         public_key = None
         encrypted = d.get('encrypted', False)
         if not encrypted:
-            if seed:
-                private_key = cls.get_private_key_from_seed(ledger, seed, '')
+            if phrase:
+                private_key = PrivateKey.from_seed(
+                    ledger, await mnemonic.derive_key_from_phrase(phrase)
+                )
                 public_key = private_key.public_key
             elif private_key_string:
                 private_key = from_extended_key_string(ledger, private_key_string)
                 public_key = private_key.public_key
         if public_key is None:
             public_key = from_extended_key_string(ledger, d['public_key'])
-        return seed, private_key, public_key
+        return phrase, private_key, public_key
 
     @classmethod
-    def from_dict(cls, ledger: 'Ledger', db: 'Database', d: dict):
-        seed, private_key, public_key = cls.keys_from_dict(ledger, d)
+    async def from_dict(cls, ledger: Ledger, db: Database, d: dict):
+        phrase, private_key, public_key = await cls.keys_from_dict(ledger, d)
         name = d.get('name')
         if not name:
             name = f'Account #{public_key.address}'
@@ -302,7 +285,8 @@ class Account:
             ledger=ledger,
             db=db,
             name=name,
-            seed=seed,
+            phrase=phrase,
+            language=d.get('lang', 'en'),
             private_key_string=d.get('private_key', ''),
             encrypted=d.get('encrypted', False),
             private_key=private_key,
@@ -313,7 +297,7 @@ class Account:
         )
 
     def to_dict(self, encrypt_password: str = None, include_channel_keys: bool = True):
-        private_key_string, seed = self.private_key_string, self.seed
+        private_key_string, phrase = self.private_key_string, self.phrase
         if not self.encrypted and self.private_key:
             private_key_string = self.private_key.extended_key_string()
         if not self.encrypted and encrypt_password:
@@ -321,11 +305,12 @@ class Account:
                 private_key_string = aes_encrypt(
                     encrypt_password, private_key_string, self.get_init_vector('private_key')
                 )
-            if seed:
-                seed = aes_encrypt(encrypt_password, self.seed, self.get_init_vector('seed'))
+            if phrase:
+                phrase = aes_encrypt(encrypt_password, self.phrase, self.get_init_vector('phrase'))
         d = {
             'name': self.name,
-            'seed': seed,
+            'seed': phrase,
+            'lang': self.language,
             'encrypted': bool(self.encrypted or encrypt_password),
             'private_key': private_key_string,
             'public_key': self.public_key.extended_key_string(),
@@ -367,21 +352,21 @@ class Account:
             'address_generator': self.address_generator.to_dict(self.receiving, self.change)
         }
         if show_seed:
-            details['seed'] = self.seed
+            details['seed'] = self.phrase
         details['certificates'] = len(self.channel_keys)
         return details
 
     def decrypt(self, password: str) -> bool:
         assert self.encrypted, "Key is not encrypted."
         try:
-            seed = self._decrypt_seed(password)
+            phrase = self._decrypt_phrase(password)
         except (ValueError, InvalidPasswordError):
             return False
         try:
             private_key = self._decrypt_private_key_string(password)
         except (TypeError, ValueError, InvalidPasswordError):
             return False
-        self.seed = seed
+        self.phrase = phrase
         self.private_key = private_key
         self.private_key_string = ""
         self.encrypted = False
@@ -397,24 +382,20 @@ class Account:
             self.ledger, private_key_string
         )
 
-    def _decrypt_seed(self, password: str) -> str:
-        if not self.seed:
+    def _decrypt_phrase(self, password: str) -> str:
+        if not self.phrase:
             return ""
-        seed, self.init_vectors['seed'] = aes_decrypt(password, self.seed)
-        if not seed:
+        phrase, self.init_vectors['phrase'] = aes_decrypt(password, self.phrase)
+        if not phrase:
             return ""
-        try:
-            Mnemonic().mnemonic_decode(seed)
-        except IndexError:
-            # failed to decode the seed, this either means it decrypted and is invalid
-            # or that we hit an edge case where an incorrect password gave valid padding
-            raise ValueError("Failed to decode seed.")
-        return seed
+        if not mnemonic.is_phrase_valid(self.language, phrase):
+            raise ValueError("Failed to decode seed phrase.")
+        return phrase
 
     def encrypt(self, password: str) -> bool:
         assert not self.encrypted, "Key is already encrypted."
-        if self.seed:
-            self.seed = aes_encrypt(password, self.seed, self.get_init_vector('seed'))
+        if self.phrase:
+            self.phrase = aes_encrypt(password, self.phrase, self.get_init_vector('phrase'))
         if isinstance(self.private_key, PrivateKey):
             self.private_key_string = aes_encrypt(
                 password, self.private_key.extended_key_string(), self.get_init_vector('private_key')
@@ -504,12 +485,20 @@ class Account:
         public_key_bytes = private_key.get_verifying_key().to_der()
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
+        self._channel_keys_deserialized[channel_pubkey_hash] = private_key
 
-    def get_channel_private_key(self, public_key_bytes):
+    async def get_channel_private_key(self, public_key_bytes):
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
+        private_key = self._channel_keys_deserialized.get(channel_pubkey_hash)
+        if private_key:
+            return private_key
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
         if private_key_pem:
-            return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256)
+            private_key = await asyncio.get_running_loop().run_in_executor(
+                None, ecdsa.SigningKey.from_pem, private_key_pem, sha256
+            )
+            self._channel_keys_deserialized[channel_pubkey_hash] = private_key
+            return private_key
 
     async def maybe_migrate_certificates(self):
         def to_der(private_key_pem):

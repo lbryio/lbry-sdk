@@ -12,19 +12,19 @@ def get_languages():
     return words.languages
 
 
-def normalize(mnemonic: str) -> str:
-    return ' '.join(unicodedata.normalize('NFKD', mnemonic).lower().split())
+def normalize(phrase: str) -> str:
+    return ' '.join(unicodedata.normalize('NFKD', phrase).lower().split())
 
 
-def is_valid(language, mnemonic):
+def is_phrase_valid(language, phrase):
     local_words = getattr(words, language)
-    for word in normalize(mnemonic).split():
+    for word in normalize(phrase).split():
         if word not in local_words:
             return False
-    return bool(mnemonic)
+    return bool(phrase)
 
 
-def sync_generate(language: str) -> str:
+def sync_generate_phrase(language: str) -> str:
     local_words = getattr(words, language)
     entropy = randbits(132)
     nonce = 0
@@ -41,17 +41,17 @@ def sync_generate(language: str) -> str:
     return seed
 
 
-def sync_to_seed(mnemonic: str) -> bytes:
-    return hashlib.pbkdf2_hmac('sha512', normalize(mnemonic).encode(), b'lbryum', 2048)
+def sync_derive_key_from_phrase(phrase: str) -> bytes:
+    return hashlib.pbkdf2_hmac('sha512', normalize(phrase).encode(), b'lbryum', 2048)
 
 
-async def generate(language: str) -> str:
+async def generate_phrase(language: str) -> str:
     return await asyncio.get_running_loop().run_in_executor(
-        None, sync_generate, language
+        None, sync_generate_phrase, language
     )
 
 
-async def to_seed(mnemonic: str) -> bytes:
+async def derive_key_from_phrase(phrase: str) -> bytes:
     return await asyncio.get_running_loop().run_in_executor(
-        None, sync_to_seed, mnemonic
+        None, sync_derive_key_from_phrase, phrase
     )
