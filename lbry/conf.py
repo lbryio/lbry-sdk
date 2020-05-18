@@ -504,6 +504,8 @@ class CLIConfig(TranscodeConfig):
 
 
 class Config(CLIConfig):
+    db_url = String("Database connection URL, uses a local file based SQLite by default.")
+
     # directories
     data_dir = Path("Directory path to store blobs.", metavar='DIR')
     download_dir = Path(
@@ -619,10 +621,7 @@ class Config(CLIConfig):
         True
     )
 
-    lbrycrd_dir = Path(
-        "Directory containing lbrycrd data.",
-        previous_names=['lbrycrd_dir'], metavar='DIR'
-    )
+    lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
 
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
@@ -687,6 +686,14 @@ class Config(CLIConfig):
     @property
     def log_file_path(self):
         return os.path.join(self.data_dir, 'lbrynet.log')
+
+    @property
+    def db_url_or_default(self):
+        if self.db_url:
+            return self.db_url
+        return 'sqlite://'+os.path.join(
+            self.data_dir, self.blockchain_name, 'blockchain.db'
+        )
 
 
 def get_windows_directories() -> typing.Tuple[str, str, str]:
