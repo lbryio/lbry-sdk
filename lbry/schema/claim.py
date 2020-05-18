@@ -139,7 +139,10 @@ class BaseClaim:
             field = getattr(self, l)
             if kwargs.pop(f'clear_{l}', False):
                 del field[:]
-            items = kwargs.pop(l, None)
+            if l in ('tags', 'languages', 'locations'):
+                items = kwargs.pop(l[:-1], None)
+            else:
+                items = kwargs.pop(l, None)
             if items is not None:
                 if isinstance(items, str):
                     field.append(items)
