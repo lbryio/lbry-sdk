@@ -15,13 +15,12 @@ from binascii import unhexlify
 from functools import partial
 
 from lbry.wallet import WalletManager, Wallet, Account
-from lbry.blockchain.ledger import Ledger
-from lbry.blockchain.transaction import Transaction, Input, Output
-from lbry.blockchain.util import satoshis_to_coins
+from lbry.blockchain import (
+    RegTestLedger, Transaction, Input, Output, dewies_to_lbc
+)
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.constants import CENT, NULL_HASH32
-from lbry.service.full_node import FullNode
-from lbry.service.daemon import Daemon
+from lbry.service import Daemon, FullNode
 from lbry.conf import Config
 
 from lbry.extras.daemon.daemon import jsonrpc_dumps_pretty
@@ -241,7 +240,7 @@ class IntegrationTestCase(AsyncioTestCase):
         self.blockchain: Optional[BlockchainNode] = None
         self.wallet_node: Optional[WalletNode] = None
         self.manager: Optional[WalletManager] = None
-        self.ledger: Optional[Ledger] = None
+        self.ledger: Optional['Ledger'] = None
         self.wallet: Optional[Wallet] = None
         self.account: Optional[Account] = None
 
@@ -262,7 +261,7 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
-        self.assertEqual(satoshis_to_coins(balance), expected_balance)
+        self.assertEqual(dewies_to_lbc(balance), expected_balance)
 
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)
@@ -342,6 +341,7 @@ class CommandTestCase(IntegrationTestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.daemon_port = 5252
         self.daemon = None
         self.daemons = []
         self.server_config = None
@@ -354,7 +354,6 @@ class CommandTestCase(IntegrationTestCase):
 
     async def asyncSetUp(self):
         self.chain = Lbrycrd.temp_regtest()
-        self.ledger = self.chain.ledger
         await self.chain.ensure()
         self.addCleanup(self.chain.stop)
         await self.chain.start('-rpcworkqueue=128')
@@ -362,14 +361,10 @@ class CommandTestCase(IntegrationTestCase):
         self.block_expected = 0
         await self.generate(200, wait=False)
 
-        self.ledger.conf.spv_address_filters = False
-        self.service = FullNode(
-            self.ledger, f'sqlite:///{self.chain.data_dir}/full_node.db', Lbrycrd(self.ledger)
-        )
-        self.daemon = Daemon(self.service)
+        self.daemon = await self.add_daemon()
+        self.service = self.daemon.service
+        self.ledger = self.service.ledger
         self.api = self.daemon.api
-        self.addCleanup(self.daemon.stop)
-        await self.daemon.start()
 
         self.wallet = self.service.wallets.default
         self.account = self.wallet.accounts.default
@@ -380,6 +375,21 @@ class CommandTestCase(IntegrationTestCase):
 
         await self.chain.send_to_address(addresses[0], '10.0')
         await self.generate(5)
+
+    async def add_daemon(self):
+        self.daemon_port += 1
+        path = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, path, True)
+        ledger = RegTestLedger(Config.with_same_dir(path).set(
+            api=f'localhost:{self.daemon_port}',
+            spv_address_filters=False
+        ))
+        db_url = f"sqlite:///{os.path.join(path,'full_node.db')}"
+        service = FullNode(ledger, db_url, Lbrycrd(self.chain.ledger))
+        daemon = Daemon(service)
+        self.addCleanup(daemon.stop)
+        await daemon.start()
+        return daemon
 
     async def XasyncSetUp(self):
         await super().asyncSetUp()
@@ -421,7 +431,7 @@ class CommandTestCase(IntegrationTestCase):
             daemon.component_manager.get_component('wallet')._running = False
             await daemon.stop()
 
-    async def add_daemon(self, wallet_node=None, seed=None):
+    async def Xadd_daemon(self, wallet_node=None, seed=None):
         if wallet_node is None:
             wallet_node = WalletNode(
                 self.wallet_node.manager_class,
@@ -689,3 +699,7 @@ class CommandTestCase(IntegrationTestCase):
     @staticmethod
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']
+
+    @staticmethod
+    def get_address(tx):
+        return tx['outputs'][0]['address']
