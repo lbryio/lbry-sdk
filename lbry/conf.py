@@ -279,7 +279,7 @@ class EnvironmentAccess:
 
     def __init__(self, config: 'BaseConfig', environ: dict):
         self.configuration = config
-        self.environ = {}
+        self.data = {}
         if environ:
             self.load(environ)
 
@@ -287,13 +287,13 @@ class EnvironmentAccess:
         for setting in self.configuration.get_settings():
             value = environ.get(f'{self.PREFIX}{setting.name.upper()}', NOT_SET)
             if value != NOT_SET and not (isinstance(setting, ListSetting) and value is None):
-                self.environ[f'{self.PREFIX}{setting.name.upper()}'] = setting.deserialize(value)
+                self.data[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):
-        return f'{self.PREFIX}{item.upper()}' in self.environ
+        return item in self.data
 
     def __getitem__(self, item: str):
-        return self.environ[f'{self.PREFIX}{item.upper()}']
+        return self.data[item]
 
 
 class ArgumentAccess:
@@ -452,7 +452,7 @@ class BaseConfig:
         self.arguments = ArgumentAccess(self, args)
 
     def set_environment(self, environ=None):
-        self.environment = EnvironmentAccess(self, dict(environ or os.environ))
+        self.environment = EnvironmentAccess(self, environ or os.environ)
 
     def set_persisted(self, config_file_path=None):
         if config_file_path is None:
