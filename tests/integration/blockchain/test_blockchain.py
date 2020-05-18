@@ -63,13 +63,15 @@ class TestBlockchainSync(BlockchainTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.service = FullNode(
-            self.chain.ledger, f'sqlite:///{self.chain.data_dir}/lbry.db', self.chain
+            self.ledger, f'sqlite:///{self.chain.data_dir}/lbry.db', Lbrycrd(self.ledger)
         )
-        self.service.conf.spv_address_filters = False
+        #self.service.conf.spv_address_filters = False
         self.sync = self.service.sync
         self.db = self.service.db
         await self.db.open()
         self.addCleanup(self.db.close)
+        await self.sync.chain.open()
+        self.addCleanup(self.sync.chain.close)
 
     async def test_multi_block_file_sync(self):
         names = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
@@ -98,11 +100,13 @@ class TestBlockchainSync(BlockchainTestCase):
         self.assertEqual(
             [(0, 191, 280), (1, 89, 178), (2, 12, 24)],
             [(file['file_number'], file['blocks'], file['txs'])
-             for file in await self.chain.get_block_files()]
+             for file in await self.chain.db.get_block_files()]
         )
-        self.assertEqual(191, len(await self.chain.get_file_details(0)))
+        self.assertEqual(191, len(await self.chain.db.get_file_details(0)))
 
         await self.sync.advance()
+
+        print('here')
 
 
 class FullNodeTestCase(BlockchainTestCase):

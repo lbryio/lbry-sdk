@@ -1,5 +1,5 @@
 from lbry.testcase import CommandTestCase
-from lbry.wallet.dewies import dewies_to_lbc
+from lbry.blockchain import dewies_to_lbc
 
 
 def extract(d, keys):
