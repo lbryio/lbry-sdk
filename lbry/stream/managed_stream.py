@@ -120,6 +120,10 @@ class ManagedStream(ManagedDownloadSource):
     def mime_type(self):
         return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
 
+    @property
+    def download_path(self):
+        return f"{self.download_directory}/{self._file_name}" if self.download_directory and self._file_name else None
+
     # @classmethod
     # async def create(cls, loop: asyncio.AbstractEventLoop, config: 'Config',
     #                  file_path: str, key: Optional[bytes] = None,

@@ -27,6 +27,7 @@ class SourceManager:
         'status',
         'file_name',
         'added_on',
+        'download_path',
         'claim_name',
         'claim_height',
         'claim_id',
