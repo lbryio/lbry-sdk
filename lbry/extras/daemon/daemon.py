@@ -1965,10 +1965,11 @@ class Daemon(metaclass=JSONRPCServerType):
                       [--outpoint=<outpoint>] [--txid=<txid>] [--nout=<nout>]
                       [--channel_claim_id=<channel_claim_id>] [--channel_name=<channel_name>]
                       [--claim_name=<claim_name>] [--blobs_in_stream=<blobs_in_stream>]
-                      [--blobs_remaining=<blobs_remaining>] [--uploading_to_reflector=<uploading_to_reflector>]
-                      [--is_fully_reflected=<is_fully_reflected>] [--status=<status>] [--completed=<completed>]
-                      [--sort=<sort_by>] [--comparison=<comparison>] [--full_status=<full_status>] [--reverse]
-                      [--page=<page>] [--page_size=<page_size>] [--wallet_id=<wallet_id>]
+                      [--download_path=<download_path>] [--blobs_remaining=<blobs_remaining>]
+                      [--uploading_to_reflector=<uploading_to_reflector>] [--is_fully_reflected=<is_fully_reflected>]
+                      [--status=<status>] [--completed=<completed>] [--sort=<sort_by>] [--comparison=<comparison>]
+                      [--full_status=<full_status>] [--reverse] [--page=<page>] [--page_size=<page_size>]
+                      [--wallet_id=<wallet_id>]
 
         Options:
             --sd_hash=<sd_hash>                    : (str) get file with matching sd hash
@@ -1985,6 +1986,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
             --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
+            --download_path=<download_path>        : (str) get file with matching download path
             --uploading_to_reflector=<uploading_to_reflector> : (bool) get files currently uploading to reflector
             --is_fully_reflected=<is_fully_reflected>         : (bool) get files that have been uploaded to reflector
             --status=<status>                      : (str) match by status, ( running | finished | stopped )
