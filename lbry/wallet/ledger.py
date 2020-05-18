@@ -703,8 +703,10 @@ class Ledger(metaclass=LedgerRegistry):
                 # we don't want to leak informaion between wallet so we add the
                 # wallet specific metadata on throw away copies of the txos
                 txo = copy.copy(txo)
+                channel = txo.channel
                 txo.purchase_receipt = None
                 txo.update_annotations(None)
+                txo.channel = channel
             txos.append(txo)
 
         includes = (
