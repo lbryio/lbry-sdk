@@ -365,6 +365,10 @@ def process_claims_and_supports(block_range=None):
     rows.save()
 
 
+def execute(sql):
+    return ctx().execute(text(sql))
+
+
 def execute_fetchall(sql):
     return ctx().fetchall(text(sql))
 

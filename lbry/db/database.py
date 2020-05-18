@@ -106,6 +106,9 @@ class Database:
             self.executor, partial(func, *args, **kwargs)
         )
 
+    async def execute(self, sql):
+        return await self.run_in_executor(q.execute, sql)
+
     async def execute_fetchall(self, sql):
         return await self.run_in_executor(q.execute_fetchall, sql)
 
