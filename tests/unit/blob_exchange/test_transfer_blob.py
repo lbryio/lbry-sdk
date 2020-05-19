@@ -28,9 +28,10 @@ def mock_config():
 class BlobExchangeTestBase(AsyncioTestCase):
     async def asyncSetUp(self):
         self.loop = asyncio.get_event_loop()
-
+        self.client_wallet_dir = tempfile.mkdtemp()
         self.client_dir = tempfile.mkdtemp()
         self.server_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.client_wallet_dir)
         self.addCleanup(shutil.rmtree, self.client_dir)
         self.addCleanup(shutil.rmtree, self.server_dir)
         self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
@@ -39,8 +40,8 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
-        self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir, wallet=self.client_dir,
-                                    fixed_peers=[])
+        self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir,
+                                    wallet=self.client_wallet_dir, fixed_peers=[])
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
         self.client_peer_manager = PeerManager(self.loop)

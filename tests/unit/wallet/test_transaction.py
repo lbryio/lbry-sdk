@@ -1,4 +1,7 @@
+import os
 import unittest
+import tempfile
+import shutil
 from binascii import hexlify, unhexlify
 from itertools import cycle
 
@@ -302,9 +305,11 @@ class TestTransactionSigning(AsyncioTestCase):
 class TransactionIOBalancing(AsyncioTestCase):
 
     async def asyncSetUp(self):
+        wallet_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, wallet_dir)
         self.ledger = Ledger({
-            'db': Database(':memory:'),
-            'headers': Headers(':memory:')
+            'db': Database(os.path.join(wallet_dir, 'blockchain.db')),
+            'headers': Headers(':memory:'),
         })
         await self.ledger.db.open()
         self.account = Account.from_dict(
