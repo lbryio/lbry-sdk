@@ -634,7 +634,7 @@ class Config(CLIConfig):
 
     coin_selection_strategy = StringChoice(
         "Strategy to use when selecting UTXOs for a transaction",
-        STRATEGIES, "standard")
+        STRATEGIES, "sqlite")
 
     transaction_cache_size = Integer("Transaction cache size", 100_000)
     save_resolved_claims = Toggle(

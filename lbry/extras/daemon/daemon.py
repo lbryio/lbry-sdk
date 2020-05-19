@@ -3269,7 +3269,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
-
+        log.info("successful publish %s", tx.id)
         return tx
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
