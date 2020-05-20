@@ -1,14 +1,16 @@
 import json
 import asyncio
 import logging
+import signal
 from weakref import WeakSet
-
+from aiohttp.web import GracefulExit
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.service.base import Service
 from lbry.service.api import API
+from lbry.console import Console
 
 
 def jsonrpc_dumps_pretty(obj, **kwargs):
@@ -62,9 +64,10 @@ class WebSocketManager(WebSocketResponse):
 
 class Daemon:
 
-    def __init__(self, service: Service):
+    def __init__(self, service: Service, console: Console):
         self.service = service
         self.conf = service.conf
+        self.console = console
         self.api = API(service)
         self.app = Application()
         self.app['websockets'] = WeakSet()
@@ -80,7 +83,32 @@ class Daemon:
         self.app.on_shutdown.append(self.on_shutdown)
         self.runner = AppRunner(self.app)
 
+    def run(self):
+        loop = asyncio.get_event_loop()
+
+        def exit():
+            raise GracefulExit()
+
+        try:
+            loop.add_signal_handler(signal.SIGINT, exit)
+            loop.add_signal_handler(signal.SIGTERM, exit)
+        except NotImplementedError:
+            pass  # Not implemented on Windows
+
+        try:
+            loop.run_until_complete(self.start())
+            loop.run_forever()
+        except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
+            loop.run_until_complete(self.stop())
+            logging.shutdown()
+
+        if hasattr(loop, 'shutdown_asyncgens'):
+            loop.run_until_complete(loop.shutdown_asyncgens())
+
     async def start(self):
+        self.console.starting()
         await self.runner.setup()
         site = TCPSite(self.runner, 'localhost', self.conf.api_port)
         await site.start()

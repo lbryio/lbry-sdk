@@ -19,7 +19,7 @@ class FullNode(Service):
     def __init__(self, ledger: Ledger, db_url: str, chain: Lbrycrd = None):
         super().__init__(ledger, db_url)
         self.chain = chain or Lbrycrd(ledger)
-        self.sync = BlockchainSync(self, self.chain)
+        self.sync = BlockchainSync(self.chain, self.db, self.conf.processes)
 
     async def start(self):
         await self.chain.open()

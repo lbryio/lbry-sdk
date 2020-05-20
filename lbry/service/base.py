@@ -1,11 +1,10 @@
 import os
 import asyncio
 import logging
-import signal
 from typing import List, Optional, Tuple, NamedTuple
 
-from aiohttp.web import GracefulExit
 
+from lbry.conf import Config
 from lbry.db import Database
 from lbry.db.constants import TXO_TYPES
 from lbry.schema.result import Censor
@@ -23,8 +22,10 @@ class BlockEvent(NamedTuple):
 
 class Sync:
 
-    def __init__(self, service: 'Service'):
-        self.service = service
+    def __init__(self, ledger: Ledger, db: Database):
+        self.ledger = ledger
+        self.conf = ledger.conf
+        self.db = db
 
         self._on_block_controller = EventController()
         self.on_block = self._on_block_controller.stream
@@ -73,30 +74,6 @@ class Service:
         # for full service this is lbrycrd (or sync service) and for light this is full node
         self._on_connected_controller = EventController()
         self.on_connected = self._on_connected_controller.stream
-
-    def run(self):
-        loop = asyncio.get_event_loop()
-
-        def exit():
-            raise GracefulExit()
-
-        try:
-            loop.add_signal_handler(signal.SIGINT, exit)
-            loop.add_signal_handler(signal.SIGTERM, exit)
-        except NotImplementedError:
-            pass  # Not implemented on Windows
-
-        try:
-            loop.run_until_complete(self.start())
-            loop.run_forever()
-        except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
-            pass
-        finally:
-            loop.run_until_complete(self.stop())
-            logging.shutdown()
-
-        if hasattr(loop, 'shutdown_asyncgens'):
-            loop.run_until_complete(loop.shutdown_asyncgens())
 
     async def start(self):
         await self.db.open()

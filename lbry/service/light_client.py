@@ -1,12 +1,12 @@
 import logging
 
 from lbry.conf import Config
-from lbry.service.api import Client
 from lbry.blockchain.ledger import Ledger
 from lbry.db import Database
 from lbry.wallet.sync import SPVSync
 
 from .base import Service
+from .api import Client
 
 log = logging.getLogger(__name__)
 
