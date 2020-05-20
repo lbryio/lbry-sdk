@@ -37,6 +37,23 @@ class StreamControllerTestCase(AsyncioTestCase):
         with self.assertRaises(ValueError):
             await controller.add("yo")
 
+    async def test_first_event(self):
+        controller = EventController()
+        first = controller.stream.first
+        await controller.add("one")
+        second = controller.stream.first
+        await controller.add("two")
+        self.assertEqual("one", await first)
+        self.assertEqual("two", await second)
+
+    async def test_last_event(self):
+        controller = EventController()
+        last = controller.stream.last
+        await controller.add("one")
+        await controller.add("two")
+        await controller.close()
+        self.assertEqual("two", await last)
+
 
 class TaskGroupTestCase(AsyncioTestCase):
 
