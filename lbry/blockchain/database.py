@@ -60,29 +60,33 @@ class BlockchainDB:
     async def execute_fetchall(self, sql: str, *args):
         return await self.run_in_executor(self.sync_execute_fetchall, sql, *args)
 
-    def sync_get_block_files(self):
+    def sync_get_block_files(self, above_height=-1):
         return self.sync_execute_fetchall(
             """
-            SELECT file as file_number, COUNT(hash) as blocks, SUM(txcount) as txs
-            FROM block_info GROUP BY file ORDER BY file ASC;
-            """
+            SELECT
+                file as file_number,
+                COUNT(hash) as blocks,
+                SUM(txcount) as txs,
+                MAX(height) as max_height
+            FROM block_info WHERE height > ? GROUP BY file ORDER BY file ASC;
+            """, (above_height,)
         )
 
-    async def get_block_files(self):
-        return await self.run_in_executor(self.sync_get_block_files)
+    async def get_block_files(self, above_height=-1):
+        return await self.run_in_executor(self.sync_get_block_files, above_height)
 
-    def sync_get_file_details(self, block_file):
+    def sync_get_blocks_in_file(self, block_file, above_height=-1):
         return self.sync_execute_fetchall(
             """
             SELECT datapos as data_offset, height, hash as block_hash, txCount as txs
             FROM block_info
-            WHERE file = ? and status&1 > 0
+            WHERE file = ? AND height > ? AND status&1 > 0
             ORDER BY datapos ASC;
-            """, (block_file,)
+            """, (block_file, above_height)
         )
 
-    async def get_file_details(self, block_file):
-        return await self.run_in_executor(self.sync_get_file_details, block_file)
+    async def get_blocks_in_file(self, block_file, above_height=-1):
+        return await self.run_in_executor(self.sync_get_blocks_in_file, block_file, above_height)
 
     def sync_get_claimtrie(self):
         return self.sync_execute_fetchall(
