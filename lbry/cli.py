@@ -1,15 +1,14 @@
 import os
 import sys
-import shutil
 import pathlib
 import argparse
 
-
 from lbry.conf import Config, CLIConfig
-from lbry.service import API
+from lbry.service import API, Daemon
 from lbry.service.metadata import interface
 from lbry.service.full_node import FullNode
 from lbry.blockchain.ledger import Ledger
+from lbry.console import Advanced as AdvancedConsole, Basic as BasicConsole
 
 # TODO: switch to pre-generated metadata interface
 from lbry.service.parser import get_api_definitions
@@ -181,8 +180,12 @@ def main(argv=None):
         if args.help:
             args.start_parser.print_help()
         elif args.full_node:
-            node = FullNode(Ledger(conf), conf.db_url_or_default)
-            node.run()
+            service = FullNode(Ledger(conf), conf.db_url_or_default)
+            if conf.console == "advanced":
+                console = AdvancedConsole(service)
+            else:
+                console = BasicConsole(service)
+            return Daemon(service, console).run()
         else:
             print('Only `start --full-node` is currently supported.')
     elif args.command is not None:
