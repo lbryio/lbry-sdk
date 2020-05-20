@@ -54,16 +54,13 @@ def initialize(url: str, ledger: Ledger, track_metrics=False, block_and_filter=N
 
 def check_version_and_create_tables():
     context = ctx()
-    if SCHEMA_VERSION:
-        if context.has_table('version'):
-            version = context.fetchone(select(Version.c.version).limit(1))
-            if version and version['version'] == SCHEMA_VERSION:
-                return
-        metadata.drop_all(context.engine)
-        metadata.create_all(context.engine)
-        context.execute(Version.insert().values(version=SCHEMA_VERSION))
-    else:
-        metadata.create_all(context.engine)
+    if context.has_table('version'):
+        version = context.fetchone(select(Version.c.version).limit(1))
+        if version and version['version'] == SCHEMA_VERSION:
+            return
+    metadata.drop_all(context.engine)
+    metadata.create_all(context.engine)
+    context.execute(Version.insert().values(version=SCHEMA_VERSION))
 
 
 class QueryContext(NamedTuple):
@@ -375,7 +372,7 @@ def execute_fetchall(sql):
 
 def get_best_height():
     return ctx().fetchone(
-        select(func.coalesce(func.max(TX.c.height), 0).label('total')).select_from(TX)
+        select(func.coalesce(func.max(TX.c.height), -1).label('total')).select_from(TX)
     )['total']
 
 

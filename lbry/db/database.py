@@ -1,5 +1,6 @@
 import os
 import asyncio
+import tempfile
 from typing import List, Optional, Tuple, Iterable, TYPE_CHECKING
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
@@ -55,6 +56,14 @@ class Database:
         self.ledger = ledger
         self.multiprocess = multiprocess
         self.executor: Optional[Executor] = None
+
+    @classmethod
+    def temp_sqlite_regtest(cls):
+        from lbry import Config, RegTestLedger
+        directory = tempfile.mkdtemp()
+        conf = Config.with_same_dir(directory)
+        ledger = RegTestLedger(conf)
+        return cls(ledger, conf.db_url_or_default)
 
     @classmethod
     def from_memory(cls, ledger):
