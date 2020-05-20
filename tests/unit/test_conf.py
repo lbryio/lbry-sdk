@@ -26,12 +26,31 @@ class ConfigurationTests(unittest.TestCase):
     @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
     def test_linux_defaults(self):
         c = Config()
-        self.assertEqual(c.data_dir, os.path.expanduser('~/.local/share/lbry/lbrynet'))
-        self.assertEqual(c.wallet_dir, os.path.expanduser('~/.local/share/lbry/lbryum'))
-        self.assertEqual(c.download_dir, os.path.expanduser('~/Downloads'))
-        self.assertEqual(c.config, os.path.expanduser('~/.local/share/lbry/lbrynet/daemon_settings.yml'))
+        self.assertEqual(c.data_dir,      os.path.expanduser('~/.local/share/lbrynet'))
+        self.assertEqual(c.blob_dir,      os.path.expanduser('~/.local/share/lbrynet/blobs'))
+        self.assertEqual(c.wallet_dir,    os.path.expanduser('~/.local/share/lbrynet/wallets'))
+        self.assertEqual(c.config,        os.path.expanduser('~/.local/share/lbrynet/settings.yml'))
+        self.assertEqual(c.log_file_path, os.path.expanduser('~/.local/share/lbrynet/daemon.log'))
+        self.assertEqual(c.download_dir,  os.path.expanduser('~/Downloads'))
         self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
-        self.assertEqual(c.log_file_path, os.path.expanduser('~/.local/share/lbry/lbrynet/lbrynet.log'))
+
+        # changes the root for all defaults
+        c = Config(data_dir='/foo/bar')
+        self.assertEqual(c.data_dir,      '/foo/bar')
+        self.assertEqual(c.blob_dir,      '/foo/bar/blobs')
+        self.assertEqual(c.wallet_dir,    '/foo/bar/wallets')
+        self.assertEqual(c.config,        '/foo/bar/settings.yml')
+        self.assertEqual(c.log_file_path, '/foo/bar/daemon.log')
+
+        # overwriting default blob_dir
+        c = Config(data_dir='/foo/bar', blob_dir='/stuff')
+        self.assertEqual(c.blob_dir,   '/stuff')
+        self.assertEqual(c.wallet_dir, '/foo/bar/wallets')
+
+        # overwriting default wallet_dir
+        c = Config(data_dir='/foo/bar', wallet_dir='/secrets')
+        self.assertEqual(c.blob_dir,   '/foo/bar/blobs')
+        self.assertEqual(c.wallet_dir, '/secrets')
 
     def test_search_order(self):
         c = TestConfig()
