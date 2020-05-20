@@ -1,13 +1,13 @@
 import os
-import re
 import sys
 import typing
 import logging
 from argparse import ArgumentParser
 from contextlib import contextmanager
+from typing import Tuple
 
 import yaml
-from appdirs import user_data_dir, user_config_dir
+from appdirs import user_data_dir, user_download_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
 from lbry.wallet.coinselection import COIN_SELECTION_STRATEGIES
@@ -505,20 +505,22 @@ class CLIConfig(TranscodeConfig):
 
 class Config(CLIConfig):
     db_url = String("Database connection URL, uses a local file based SQLite by default.")
+    processes = Integer(
+        "Multiprocessing, specify number of processes lbrynet can start (including main process)."
+        " (-1: threads only, 0: equal to number of CPUs, >1: specific number of processes)", -1
+    )
+    console = StringChoice(
+        "Basic text console output or advanced colored output with progress bars.",
+        ["basic", "advanced"], "advanced"
+    )
 
     # directories
-    data_dir = Path("Directory path to store blobs.", metavar='DIR')
-    download_dir = Path(
-        "Directory path to place assembled files downloaded from LBRY.",
-        previous_names=['download_directory'], metavar='DIR'
-    )
-    wallet_dir = Path(
-        "Directory containing a 'wallets' subdirectory with 'default_wallet' file.",
-        previous_names=['lbryum_wallet_dir'], metavar='DIR'
-    )
+    download_dir = Path("Directory to store downloaded files.", metavar='DIR')
+    data_dir = Path("Main directory containing blobs, wallets and blockchain data.", metavar='DIR')
+    blob_dir = Path("Directory to store blobs (default: 'data_dir'/blobs).", metavar='DIR')
+    wallet_dir = Path("Directory to store wallets (default: 'data_dir'/wallets).", metavar='DIR')
     wallets = Strings(
-        "Wallet files in 'wallet_dir' to load at startup.",
-        ['default_wallet']
+        "Wallet files in 'wallet_dir' to load at startup.", ['default_wallet']
     )
     create_default_wallet = Toggle(
         "Create an initial wallet if it does not exist on startup.", True
@@ -613,15 +615,13 @@ class Config(CLIConfig):
     comment_server = String("Comment server API URL", "https://comments.lbry.com/api")
 
     # blockchain
+    lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
-
     spv_address_filters = Toggle(
         "Generate Golomb-Rice coding filters for blocks and transactions. Enables "
         "light client to synchronize with a full node.",
         True
     )
-
-    lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
 
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
@@ -678,69 +678,76 @@ class Config(CLIConfig):
         else:
             return
         cls = type(self)
-        cls.data_dir.default, cls.wallet_dir.default, cls.download_dir.default = get_directories()
-        cls.config.default = os.path.join(
-            self.data_dir, 'daemon_settings.yml'
-        )
+        cls.data_dir.default, cls.wallet_dir.default,\
+            cls.blob_dir.default, cls.download_dir.default = get_directories()
+        old_settings_file = os.path.join(self.data_dir, 'daemon_settings.yml')
+        if os.path.exists(old_settings_file):
+            cls.config.default = old_settings_file
+        else:
+            cls.config.default = os.path.join(self.data_dir, 'settings.yml')
+        if self.data_dir != cls.data_dir.default:
+            cls.blob_dir.default = os.path.join(self.data_dir, 'blobs')
+            cls.wallet_dir.default = os.path.join(self.data_dir, 'wallets')
 
     @property
     def log_file_path(self):
-        return os.path.join(self.data_dir, 'lbrynet.log')
+        return os.path.join(self.data_dir, 'daemon.log')
 
     @property
     def db_url_or_default(self):
         if self.db_url:
             return self.db_url
-        return 'sqlite://'+os.path.join(
-            self.data_dir, self.blockchain_name, 'blockchain.db'
-        )
+        return 'sqlite:///'+os.path.join(self.data_dir, f'{self.blockchain_name}.db')
 
 
-def get_windows_directories() -> typing.Tuple[str, str, str]:
-    from lbry.winpaths import get_path, FOLDERID, UserHandle, \
-        PathNotFoundException  # pylint: disable=import-outside-toplevel
-
-    try:
-        download_dir = get_path(FOLDERID.Downloads, UserHandle.current)
-    except PathNotFoundException:
-        download_dir = os.getcwd()
-
+def get_windows_directories() -> Tuple[str, str, str, str]:
+    # very old
+    data_dir = user_data_dir('lbrynet', roaming=True)
+    blob_dir = os.path.join(data_dir, 'blobfiles')
+    wallet_dir = os.path.join(user_data_dir('lbryum', roaming=True), 'wallets')
+    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+        return data_dir, wallet_dir, blob_dir, user_download_dir()
     # old
-    appdata = get_path(FOLDERID.RoamingAppData, UserHandle.current)
-    data_dir = os.path.join(appdata, 'lbrynet')
-    lbryum_dir = os.path.join(appdata, 'lbryum')
-    if os.path.isdir(data_dir) or os.path.isdir(lbryum_dir):
-        return data_dir, lbryum_dir, download_dir
-
-    # new
     data_dir = user_data_dir('lbrynet', 'lbry')
-    lbryum_dir = user_data_dir('lbryum', 'lbry')
-    return data_dir, lbryum_dir, download_dir
-
-
-def get_darwin_directories() -> typing.Tuple[str, str, str]:
-    data_dir = user_data_dir('LBRY')
-    lbryum_dir = os.path.expanduser('~/.lbryum')
-    download_dir = os.path.expanduser('~/Downloads')
-    return data_dir, lbryum_dir, download_dir
-
-
-def get_linux_directories() -> typing.Tuple[str, str, str]:
-    try:
-        with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
-            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-        down_dir = re.sub(r'\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
-        download_dir = re.sub('\"', '', down_dir)
-    except OSError:
-        download_dir = os.getenv('XDG_DOWNLOAD_DIR')
-    if not download_dir:
-        download_dir = os.path.expanduser('~/Downloads')
-
-    # old
-    data_dir = os.path.expanduser('~/.lbrynet')
-    lbryum_dir = os.path.expanduser('~/.lbryum')
-    if os.path.isdir(data_dir) or os.path.isdir(lbryum_dir):
-        return data_dir, lbryum_dir, download_dir
-
+    blob_dir = os.path.join(data_dir, 'blobfiles')
+    wallet_dir = os.path.join(user_data_dir('lbryum', 'lbry'), 'wallets')
+    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+        return data_dir, wallet_dir, blob_dir, user_download_dir()
     # new
-    return user_data_dir('lbry/lbrynet'), user_data_dir('lbry/lbryum'), download_dir
+    return get_universal_directories()
+
+
+def get_darwin_directories() -> Tuple[str, str, str, str]:
+    data_dir = user_data_dir('LBRY')
+    blob_dir = os.path.join(data_dir, 'blobfiles')
+    wallet_dir = os.path.expanduser('~/.lbryum/wallets')
+    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+        return data_dir, wallet_dir, blob_dir, user_download_dir()
+    return get_universal_directories()
+
+
+def get_linux_directories() -> Tuple[str, str, str, str]:
+    # very old
+    data_dir = os.path.expanduser('~/.lbrynet')
+    blob_dir = os.path.join(data_dir, 'blobfiles')
+    wallet_dir = os.path.join(os.path.expanduser('~/.lbryum'), 'wallets')
+    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+        return data_dir, wallet_dir, blob_dir, user_download_dir()
+    # old
+    data_dir = user_data_dir('lbry/lbrynet')
+    blob_dir = os.path.join(data_dir, 'blobfiles')
+    wallet_dir = user_data_dir('lbry/lbryum/wallets')
+    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+        return data_dir, wallet_dir, blob_dir, user_download_dir()
+    # new
+    return get_universal_directories()
+
+
+def get_universal_directories() -> Tuple[str, str, str, str]:
+    lbrynet_dir = user_data_dir('lbrynet')
+    return (
+        lbrynet_dir,
+        os.path.join(lbrynet_dir, 'wallets'),
+        os.path.join(lbrynet_dir, 'blobs'),
+        user_download_dir()
+    )
