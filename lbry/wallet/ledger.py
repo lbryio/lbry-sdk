@@ -640,6 +640,7 @@ class Ledger(metaclass=LedgerRegistry):
         return self.network.broadcast(hexlify(tx.raw).decode())
 
     async def wait(self, tx: Transaction, height=-1, timeout=1):
+        log.info("waiting for tx %s with timeout %s seconds", tx.id, timeout)
         timeout = timeout or 600  # after 10 minutes there is almost 0 hope
         addresses = set()
         for txi in tx.inputs:
@@ -653,6 +654,7 @@ class Ledger(metaclass=LedgerRegistry):
         start = int(time.perf_counter())
         while timeout and (int(time.perf_counter()) - start) <= timeout:
             if await self._wait_round(tx, height, addresses):
+                log.info("got reply for tx %s with timeout %s seconds", tx.id, timeout)
                 return
         raise asyncio.TimeoutError('Timed out waiting for transaction.')
 
@@ -675,7 +677,7 @@ class Ledger(metaclass=LedgerRegistry):
                     if txid == tx.id and local_height >= height:
                         found = True
                 if not found:
-                    log.debug("timeout: %s, %s, %s", record['history'], addresses, tx.id)
+                    log.info("timeout: %s, %s, %s", record['history'], addresses, tx.id)
                     return False
         return True
 
