@@ -1,7 +1,9 @@
+import time
 import asyncio
 import threading
-import multiprocessing
 import logging
+from queue import Empty
+from multiprocessing import Queue
 
 
 log = logging.getLogger(__name__)
@@ -85,6 +87,10 @@ class EventController:
         self._last_event = event
         for subscription in self._iterate_subscriptions:
             await self._notify(subscription._add, event)
+
+    async def add_all(self, events):
+        for event in events:
+            await self.add(event)
 
     async def add_error(self, exception):
         for subscription in self._iterate_subscriptions:
@@ -183,7 +189,7 @@ class EventQueuePublisher(threading.Thread):
 
     STOP = 'STOP'
 
-    def __init__(self, queue: multiprocessing.Queue, event_controller: EventController):
+    def __init__(self, queue: Queue, event_controller: EventController):
         super().__init__()
         self.queue = queue
         self.event_controller = event_controller
@@ -197,13 +203,37 @@ class EventQueuePublisher(threading.Thread):
         super().start()
 
     def run(self):
+        queue_get_timeout = 0.2
+        buffer_drain_size = 100
+        buffer_drain_timeout = 0.1
+
+        buffer = []
+        last_drained_ms_ago = time.perf_counter()
         while True:
-            msg = self.queue.get()
+
+            try:
+                msg = self.queue.get(timeout=queue_get_timeout)
+                if msg != self.STOP:
+                    buffer.append(msg)
+            except Empty:
+                msg = None
+
+            drain = any((
+                len(buffer) >= buffer_drain_size,
+                (time.perf_counter() - last_drained_ms_ago) >= buffer_drain_timeout,
+                msg == self.STOP
+            ))
+            if drain and buffer:
+                asyncio.run_coroutine_threadsafe(
+                    self.event_controller.add_all([
+                        self.message_to_event(msg) for msg in buffer
+                    ]), self.loop
+                )
+                buffer.clear()
+                last_drained_ms_ago = time.perf_counter()
+
             if msg == self.STOP:
                 return
-            asyncio.run_coroutine_threadsafe(
-                self.event_controller.add(self.message_to_event(msg)), self.loop
-            )
 
     def stop(self):
         self.queue.put(self.STOP)
