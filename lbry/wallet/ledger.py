@@ -483,6 +483,7 @@ class Ledger(metaclass=LedgerRegistry):
 
     def process_status_update(self, update):
         address, remote_status = update
+        log.info("Server sent update for %s, processing.", address)
         self._update_tasks.add(self.update_history(address, remote_status))
 
     async def update_history(self, address, remote_status, address_manager: AddressManager = None):
