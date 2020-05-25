@@ -566,6 +566,11 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("finished shutting down")
 
     async def handle_old_jsonrpc(self, request):
+        origin = request.headers.get('Origin', 'null')
+        origin = None if origin == 'null' else origin
+        if origin != self.conf.allowed_origin != '*':
+            log.warning("API request from origin '%s' is not allowed", origin)
+            raise web.HTTPForbidden()
         data = await request.json()
         params = data.get('params', {})
         include_protobuf = params.pop('include_protobuf', False) if isinstance(params, dict) else False
