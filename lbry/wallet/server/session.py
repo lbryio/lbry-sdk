@@ -1220,7 +1220,10 @@ class LBRYElectrumX(SessionBase):
         return await self.address_status(hashX)
 
     async def hashX_unsubscribe(self, hashX, alias):
-        del self.hashX_subs[hashX]
+        try:
+            del self.hashX_subs[hashX]
+        except ValueError:
+            pass
 
     def address_to_hashX(self, address):
         try:
