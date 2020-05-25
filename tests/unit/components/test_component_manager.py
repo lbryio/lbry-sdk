@@ -120,6 +120,8 @@ class FakeComponent:
 class FakeDelayedWallet(FakeComponent):
     component_name = "wallet"
     depends_on = []
+    ledger = None
+    default_wallet = None
 
     async def stop(self):
         await asyncio.sleep(1)
