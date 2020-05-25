@@ -10,6 +10,7 @@ from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
 from lbry.dht import constants
+from lbry.dht.serialization.bencoding import DecodeError
 from lbry.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
 from lbry.dht.serialization.datagram import RESPONSE_TYPE, ERROR_TYPE, PAGE_KEY
 from lbry.dht.error import RemoteException, TransportNotConnected
@@ -554,7 +555,7 @@ class KademliaProtocol(DatagramProtocol):
     def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:  # pylint: disable=arguments-differ
         try:
             message = decode_datagram(datagram)
-        except (ValueError, TypeError):
+        except (ValueError, TypeError, DecodeError):
             self.peer_manager.report_failure(address[0], address[1])
             log.warning("Couldn't decode dht datagram from %s: %s", address, binascii.hexlify(datagram).decode())
             return
