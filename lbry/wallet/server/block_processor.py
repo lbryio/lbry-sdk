@@ -130,6 +130,9 @@ class ChainError(Exception):
 
 
 NAMESPACE = "wallet_server"
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
 
 
 class BlockProcessor:
@@ -142,7 +145,9 @@ class BlockProcessor:
     block_count_metric = Gauge(
         "block_count", "Number of processed blocks", namespace=NAMESPACE
     )
-    block_update_time_metric = Histogram("block_time", "Block update times", namespace=NAMESPACE)
+    block_update_time_metric = Histogram(
+        "block_time", "Block update times", namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+    )
     reorg_count_metric = Gauge(
         "reorg_count", "Number of reorgs", namespace=NAMESPACE
     )

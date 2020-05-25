@@ -40,6 +40,10 @@ from .jsonrpc import Request, JSONRPCConnection, JSONRPCv2, JSONRPC, Batch, Noti
 from .jsonrpc import RPCError, ProtocolError
 from .framing import BadMagicError, BadChecksumError, OversizedPayloadError, BitcoinFramer, NewlineFramer
 
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
 
 class Connector:
 
@@ -379,7 +383,7 @@ class RPCSession(SessionBase):
     for example JSON RPC."""
 
     RESPONSE_TIMES = Histogram("response_time", "Response times", namespace=NAMESPACE,
-                               labelnames=("method", "version"))
+                               labelnames=("method", "version"), buckets=HISTOGRAM_BUCKETS)
     NOTIFICATION_COUNT = Counter("notification", "Number of notifications sent (for subscriptions)",
                                  namespace=NAMESPACE, labelnames=("method", "version"))
     REQUEST_ERRORS_COUNT = Counter(

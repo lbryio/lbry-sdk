@@ -119,7 +119,9 @@ class SessionGroup:
 
 
 NAMESPACE = "wallet_server"
-
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
 
 class SessionManager:
     """Holds global state about all sessions."""
@@ -147,7 +149,9 @@ class SessionManager:
     db_error_metric = Counter(
         "internal_error", "Number of queries raising unexpected errors", namespace=NAMESPACE
     )
-    executor_time_metric = Histogram("executor_time", "SQLite executor times", namespace=NAMESPACE)
+    executor_time_metric = Histogram(
+        "executor_time", "SQLite executor times", namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+    )
     pending_query_metric = Gauge(
         "pending_queries_count", "Number of pending and running sqlite queries", namespace=NAMESPACE
     )
@@ -990,7 +994,7 @@ class LBRYElectrumX(SessionBase):
         except reader.SQLiteInterruptedError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_interrupt(start, error.metrics)
-            self.session_mgr.self.session_mgr.SQLITE_INTERRUPT_COUNT.inc()
+            self.session_mgr.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
         except reader.SQLiteOperationalError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
