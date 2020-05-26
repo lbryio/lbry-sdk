@@ -2569,9 +2569,9 @@ class Daemon(metaclass=JSONRPCServerType):
             account.add_channel_private_key(txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
+            self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
-            )])
+            )]))
             self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
             await account.ledger.release_tx(tx)
@@ -2725,9 +2725,9 @@ class Daemon(metaclass=JSONRPCServerType):
             account.add_channel_private_key(new_txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
+            self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
                 tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
-            )])
+            )]))
             self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
             await account.ledger.release_tx(tx)
@@ -3262,10 +3262,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
-            )])
-            await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
+
+            async def save_claims():
+                await self.storage.save_claims([self._old_get_temp_claim_info(
+                    tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
+                )])
+                await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
+
+            self.component_manager.loop.create_task(save_claims())
             self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
@@ -3480,11 +3484,15 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if not preview:
             await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
-            )])
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
+
+            async def save_claims():
+                await self.storage.save_claims([self._old_get_temp_claim_info(
+                    tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
+                )])
+                if stream_hash:
+                    await self.storage.save_content_claim(stream_hash, new_txo.id)
+
+            self.component_manager.loop.create_task(save_claims())
             self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
         else:
             await account.ledger.release_tx(tx)
