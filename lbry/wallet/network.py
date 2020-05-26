@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import time
 from time import perf_counter
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
@@ -54,8 +55,8 @@ class ClientSession(BaseClientSession):
         return result
 
     async def send_request(self, method, args=()):
+        log.info("%i in flight, send %s%s to %s:%i ", self.pending_amount, method, tuple(args), *self.server)
         self.pending_amount += 1
-        log.debug("send %s%s to %s:%i", method, tuple(args), *self.server)
         try:
             if method == 'server.version':
                 return await self.send_timed_server_version_request(args, self.timeout)
@@ -63,11 +64,11 @@ class ClientSession(BaseClientSession):
             while not request.done():
                 done, pending = await asyncio.wait([request], timeout=self.timeout)
                 if pending:
-                    log.debug("Time since last packet: %s", perf_counter() - self.last_packet_received)
+                    log.info("Time since last packet: %s", perf_counter() - self.last_packet_received)
                     if (perf_counter() - self.last_packet_received) < self.timeout:
                         continue
-                    log.info("timeout sending %s to %s:%i", method, *self.server)
-                    raise asyncio.TimeoutError
+                    log.warning("timeout sending %s(%s) to %s:%i", method, str(args), *self.server)
+                    raise asyncio.TimeoutError()
                 if done:
                     try:
                         return request.result()
@@ -91,6 +92,7 @@ class ClientSession(BaseClientSession):
             raise
         finally:
             self.pending_amount -= 1
+            log.info("%i in flight, finished %s%s ", self.pending_amount, method, tuple(args))
 
     async def ensure_session(self):
         # Handles reconnecting and maintaining a session alive
@@ -144,12 +146,12 @@ class ClientSession(BaseClientSession):
         controller.add(request.args)
 
     def connection_lost(self, exc):
-        log.debug("Connection lost: %s:%d", *self.server)
+        log.warning("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
         self.connection_latency = None
         self._response_samples = 0
-        self.pending_amount = 0
+        # self.pending_amount = 0
         self._on_disconnect_controller.add(True)
 
 
@@ -274,8 +276,13 @@ class Network:
         return self.rpc('blockchain.block.headers', [height, count, 0, b64], restricted)
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
-    def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address], True)
+    async def get_history(self, address):
+        log.info("get history %s", address)
+        start = time.perf_counter()
+        try:
+            return await self.rpc('blockchain.address.get_history', [address], True)
+        finally:
+            log.info("%s history took %s", address, time.perf_counter() - start)
 
     def broadcast(self, raw_transaction):
         return self.rpc('blockchain.transaction.broadcast', [raw_transaction], True)
@@ -296,6 +303,7 @@ class Network:
             # abort and cancel, we can't lose a subscription, it will happen again on reconnect
             if self.client:
                 self.client.abort()
+            log.warning("raise cancelled")
             raise asyncio.CancelledError()
 
     def unsubscribe_address(self, address):
