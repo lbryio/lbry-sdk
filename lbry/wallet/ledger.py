@@ -678,6 +678,8 @@ class Ledger(metaclass=LedgerRegistry):
                     if txid == tx.id and local_height >= height:
                         found = True
                 if not found:
+                    log.info('forcing update on %s', record['address'])
+                    self._update_tasks.add(self.update_history(record['address'], 'force'))
                     log.info("timeout: %s, %s, %s", record['history'], addresses, tx.id)
                     return False
         return True
