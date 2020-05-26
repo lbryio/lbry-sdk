@@ -481,7 +481,7 @@ def get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, reserve
         INNER JOIN account_address USING (address)
         LEFT JOIN txi USING (txoid)
         INNER JOIN tx USING (txid)
-        WHERE txo.txo_type=0 AND txi.txoid IS NULL AND tx.txid IS NOT NULL AND NOT txo.is_reserved
+        WHERE txo.txo_type=0 AND txi.txoid IS NULL AND tx.txid IS NOT NULL AND tx.is_verified AND NOT txo.is_reserved
         AND txo.amount BETWEEN ? AND ?
     """
     if accounts:
