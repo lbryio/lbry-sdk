@@ -135,7 +135,7 @@ class SessionManager:
         "docker_tag": DOCKER_TAG,
         'version': lbry.__version__,
         "min_version": util.version_string(VERSION.PROTOCOL_MIN),
-        "cpu_count": os.cpu_count()
+        "cpu_count": str(os.cpu_count())
     })
     session_count_metric = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE,
                                       labelnames=("version",))
