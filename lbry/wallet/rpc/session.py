@@ -480,6 +480,7 @@ class RPCSession(SessionBase):
         await event.wait()
         result = event.result
         if isinstance(result, Exception):
+            self.logger.error("%s sending %s(%s)", result, method, "" if not args else ",".join([str(a) for a in args]))
             raise result
         return result
 
