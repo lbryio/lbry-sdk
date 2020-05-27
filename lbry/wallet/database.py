@@ -491,11 +491,26 @@ def get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, reserve
     reserved = []
     while accumulated < reserve_amount:
         found_txs = False
+        # prefer confirmed, but save unconfirmed utxos from this selection in case they are needed
+        unconfirmed = []
         for row in transaction.execute(txo_query, (floor, floor * multiplier, *accounts)):
             (txid, txoid, raw, height, nout, verified, amount) = row.values()
             found_txs = True
             if txid not in decoded_transactions:
                 decoded_transactions[txid] = Transaction(raw)
+            decoded_tx = decoded_transactions[txid]
+            if not verified:
+                unconfirmed.append((txid, txoid, raw, height, nout, verified, amount))
+                continue
+            accumulated += amount
+            accumulated -= Input.spend(decoded_tx.outputs[nout]).size * fee_per_byte
+            txs[(raw, height, verified)].append(nout)
+            reserved.append(txoid)
+            if accumulated >= reserve_amount:
+                break
+        unconfirmed.reverse()
+        while unconfirmed:
+            (txid, txoid, raw, height, nout, verified, amount) = unconfirmed.pop()
             decoded_tx = decoded_transactions[txid]
             accumulated += amount
             accumulated -= Input.spend(decoded_tx.outputs[nout]).size * fee_per_byte
