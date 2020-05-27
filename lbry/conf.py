@@ -636,6 +636,7 @@ class Config(CLIConfig):
         "Strategy to use when selecting UTXOs for a transaction",
         STRATEGIES, "standard")
 
+    transaction_cache_size = Integer("Transaction cache size", 100_000)
     save_resolved_claims = Toggle(
         "Save content claims to the database when they are resolved to keep file_list up to date, "
         "only disable this if file_x commands are not needed", True
