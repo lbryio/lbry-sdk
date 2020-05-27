@@ -177,7 +177,7 @@ class SessionManager:
         self.cur_group = SessionGroup(0)
         self.txs_sent = 0
         self.start_time = time.time()
-        self.history_cache = pylru.lrucache(256)
+        self.history_cache = self.bp.history_cache
         self.notified_height: typing.Optional[int] = None
         # Cache some idea of room to avoid recounting on each subscription
         self.subs_room = 0
@@ -623,11 +623,6 @@ class SessionManager:
         height_changed = height != self.notified_height
         if height_changed:
             await self._refresh_hsub_results(height)
-            # Invalidate our history cache for touched hashXs
-            hc = self.history_cache
-            for hashX in set(hc).intersection(touched):
-                del hc[hashX]
-
         if self.sessions:
             await asyncio.wait([
                 session.notify(touched, height_changed) for session in self.sessions
