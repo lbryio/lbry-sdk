@@ -608,15 +608,14 @@ class SessionManager:
 
     async def limited_history(self, hashX):
         """A caching layer."""
-        hc = self.history_cache
-        if hashX not in hc:
+        if hashX not in self.history_cache:
             # History DoS limit.  Each element of history is about 99
             # bytes when encoded as JSON.  This limits resource usage
             # on bloated history requests, and uses a smaller divisor
             # so large requests are logged before refusing them.
             limit = self.env.max_send // 97
-            hc[hashX] = await self.db.limited_history(hashX, limit=limit)
-        return hc[hashX]
+            self.history_cache[hashX] = await self.db.limited_history(hashX, limit=limit)
+        return self.history_cache[hashX]
 
     async def _notify_sessions(self, height, touched):
         """Notify sessions about height changes and touched addresses."""
@@ -955,13 +954,9 @@ class LBRYElectrumX(SessionBase):
                     method = 'blockchain.scripthash.subscribe'
                 else:
                     method = 'blockchain.address.subscribe'
-
-                try:
-                    await self.send_notification(method, (alias, status))
-                except asyncio.TimeoutError:
-                    self.logger.info("timeout sending address notification to %s", self.peer_address_str(for_log=True))
-                    self.abort()
-                    return
+                start = time.perf_counter()
+                t = asyncio.create_task(self.send_notification(method, (alias, status)))
+                t.add_done_callback(lambda _: self.logger.info("sent notification to %s in %s", alias, time.perf_counter() - start))
 
             if changed:
                 es = '' if len(changed) == 1 else 'es'
@@ -1175,6 +1170,7 @@ class LBRYElectrumX(SessionBase):
         """
         # Note history is ordered and mempool unordered in electrum-server
         # For mempool, height is -1 if it has unconfirmed inputs, otherwise 0
+
         db_history = await self.session_mgr.limited_history(hashX)
         mempool = await self.mempool.transaction_summaries(hashX)
 
