@@ -213,10 +213,18 @@ class MemPool:
                 continue
             hashes = {hex_str_to_hash(hh) for hh in hex_hashes}
             async with self.lock:
+                start = time.perf_counter()
                 touched = await self._process_mempool(hashes)
+                duration = time.perf_counter() - start
+                if duration >= 1:
+                    self.logger.info("processed mempool in %s", duration)
             synchronized_event.set()
             synchronized_event.clear()
+            start = time.perf_counter()
             await self.api.on_mempool(touched, height)
+            duration = time.perf_counter() - start
+            if duration >= 1:
+                self.logger.info("sent history notifications in %s", duration)
             try:
                 # we wait up to `refresh_secs` but go early if a broadcast happens (which triggers wakeup event)
                 await asyncio.wait_for(self.wakeup.wait(), timeout=self.refresh_secs)
