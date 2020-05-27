@@ -579,8 +579,14 @@ class Ledger(metaclass=LedgerRegistry):
                 remote_set = set(remote_history)
                 local_set = set(local_history)
                 log.warning(
-                    "%s is out of sync after syncing. Remote: %s with %d items (%i unique), local: %s with %d items (%i unique). "
-                    "Histories are mismatched on %i items.\nLocal is missing\n%s\nRemote is missing\n%s\n******",
+                    "%s is out of sync after syncing.\n"
+                    "Remote: %s with %d items (%i unique), local: %s with %d items (%i unique).\n"
+                    "Histories are mismatched on %i items.\n"
+                    "Local is missing\n"
+                    "%s\n"
+                    "Remote is missing\n"
+                    "%s\n"
+                    "******",
                     address, remote_status, len(remote_history), len(remote_set),
                     local_status, len(local_history), len(local_set), len(remote_set.symmetric_difference(local_set)),
                     "\n".join([f"{txid} - {height}" for txid, height in local_set.difference(remote_set)]),
