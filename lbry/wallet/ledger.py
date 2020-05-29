@@ -167,6 +167,7 @@ class Ledger(metaclass=LedgerRegistry):
 
         self.coin_selection_strategy = None
         self._known_addresses_out_of_sync = set()
+        self.went_out_of_sync = asyncio.Queue()
 
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
         self._balance_cache = pylru.lrucache(100000)
@@ -589,11 +590,12 @@ class Ledger(metaclass=LedgerRegistry):
                     "******",
                     address, remote_status, len(remote_history), len(remote_set),
                     local_status, len(local_history), len(local_set), len(remote_set.symmetric_difference(local_set)),
-                    "\n".join([f"{txid} - {height}" for txid, height in local_set.difference(remote_set)]),
-                    "\n".join([f"{txid} - {height}" for txid, height in remote_set.difference(local_set)])
+                    "\n".join([f"{txid} - {height}" for txid, height in remote_set.difference(local_set)]),
+                    "\n".join([f"{txid} - {height}" for txid, height in local_set.difference(remote_set)])
                 )
                 # log.warning("local: %s", local_history)
                 # log.warning("remote: %s", remote_history)
+                self.went_out_of_sync.put_nowait(address)
                 self._known_addresses_out_of_sync.add(address)
                 return False
             else:

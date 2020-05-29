@@ -915,10 +915,15 @@ class LBRYElectrumX(SessionBase):
     def sub_count(self):
         return len(self.hashX_subs)
 
+    UGLY_COUNT = 0
+
     async def notify(self, touched, height_changed):
         """Notify the client about changes to touched addresses (from mempool
         updates or new blocks) and height.
         """
+
+        self.UGLY_COUNT += 1
+
         if height_changed and self.subscribe_headers:
             args = (await self.subscribe_headers_result(), )
             try:
@@ -934,6 +939,11 @@ class LBRYElectrumX(SessionBase):
 
             for hashX in touched:
                 alias = self.hashX_subs[hashX]
+                if self.UGLY_COUNT == 25:
+                    print('sleeping for ', hashX)
+                    if not self.bp.block_notify.is_set():
+                        await self.bp.block_notify.wait()
+                    await asyncio.sleep(3)
                 status = await self.address_status(hashX)
                 changed[alias] = status
 
@@ -955,8 +965,10 @@ class LBRYElectrumX(SessionBase):
                 else:
                     method = 'blockchain.address.subscribe'
                 start = time.perf_counter()
+                if not self.bp.block_notify.is_set():
+                    await self.bp.block_notify.wait()
                 t = asyncio.create_task(self.send_notification(method, (alias, status)))
-                t.add_done_callback(lambda _: self.logger.info("sent notification to %s in %s", alias, time.perf_counter() - start))
+                t.add_done_callback(lambda _: self.logger.warning("sent notification to %s in %s", alias, time.perf_counter() - start))
 
             if changed:
                 es = '' if len(changed) == 1 else 'es'

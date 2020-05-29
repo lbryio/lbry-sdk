@@ -40,6 +40,8 @@ class ClaimTestCase(CommandTestCase):
 
 class ClaimSearchCommand(ClaimTestCase):
 
+    VERBOSITY = logging.WARNING
+
     async def create_channel(self):
         self.channel = await self.channel_create('@abc', '1.0')
         self.channel_id = self.get_claim_id(self.channel)
@@ -156,6 +158,60 @@ class ClaimSearchCommand(ClaimTestCase):
         # abandoned stream won't show up for streams in channel search
         await self.stream_abandon(txid=signed2['txid'], nout=0)
         await self.assertFindsClaims([], channel_ids=[channel_id2])
+
+    async def test_break_it(self):
+        await self.generate(5)
+        address = await self.account.receiving.get_or_create_usable_address()
+        sendtxid = await self.blockchain.send_to_address(address, 1)
+        await self.confirm_tx(sendtxid)
+        address = await self.account.receiving.get_or_create_usable_address()
+        sendtxid = await self.blockchain.send_to_address(address, 1)
+        await self.confirm_tx(sendtxid)
+        address = await self.account.receiving.get_or_create_usable_address()
+        sendtxid = await self.blockchain.send_to_address(address, 1)
+        await self.confirm_tx(sendtxid)
+        address = await self.account.receiving.get_or_create_usable_address()
+        sendtxid = await self.blockchain.send_to_address(address, 1)
+        await self.confirm_tx(sendtxid)
+        await self.generate(7)
+
+        async def _doit(n):
+            try:
+                await self.daemon.jsonrpc_channel_create(
+                    name=f'@arena{n}', bid='0.1', blocking=True
+                )
+            except InsufficientFundsError:
+                pass
+
+        def doit(n):
+            asyncio.create_task(_doit(n))
+
+        async def break_it():
+            count = 0
+            for _ in range(4):
+                for _ in range(10):
+                    count += 1
+                    if not count % 7:
+                        asyncio.create_task(self.generate(1))
+                    doit(count)
+                if self.ledger._known_addresses_out_of_sync:
+                    print('out of sync', self.ledger._known_addresses_out_of_sync)
+                await asyncio.sleep(1)
+                await self.generate(1)
+
+        bp = self.conductor.spv_node.server.bp
+        break_task = asyncio.create_task(break_it())
+        address = await self.ledger.went_out_of_sync.get()
+        bp.block_notify.clear()
+        print('%s is out of sync' % address)
+        with self.assertRaises(InsufficientFundsError):
+            await self.daemon.jsonrpc_channel_create(
+                name=f'@derp', bid='0.1', blocking=True
+            )
+            self.assertTrue(False)
+        print("woohoo")
+        if not break_task.done():
+            break_task.cancel()
 
     async def test_pagination(self):
         await self.create_channel()

@@ -756,6 +756,8 @@ class LBRYBlockProcessor(BlockProcessor):
         self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
         self.sql: SQLDB = self.db.sql
         self.timer = Timer('BlockProcessor')
+        self.block_notify = asyncio.Event()
+        self.block_notify.set()
 
     def advance_blocks(self, blocks):
         self.sql.begin()
