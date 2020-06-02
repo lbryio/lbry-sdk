@@ -48,6 +48,8 @@ class LedgerTestCase(AsyncioTestCase):
             'db': Database(':memory:'),
             'headers': Headers(':memory:')
         })
+        self.ledger.headers.checkpoints = {}
+        await self.ledger.headers.open()
         self.account = Account.generate(self.ledger, Wallet(), "lbryum")
         await self.ledger.db.open()
 

@@ -34,13 +34,13 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.addCleanup(shutil.rmtree, self.client_dir)
         self.addCleanup(shutil.rmtree, self.server_dir)
         self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
-                                    reflector_servers=[])
+                                    fixed_peers=[])
         self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
         self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir, wallet=self.client_dir,
-                                    reflector_servers=[])
+                                    fixed_peers=[])
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
         self.client_peer_manager = PeerManager(self.loop)
@@ -130,10 +130,14 @@ class TestBlobExchange(BlobExchangeTestBase):
         write_blob = blob._write_blob
         write_called_count = 0
 
-        def wrap_write_blob(blob_bytes):
+        async def _wrap_write_blob(blob_bytes):
             nonlocal write_called_count
             write_called_count += 1
-            write_blob(blob_bytes)
+            await write_blob(blob_bytes)
+
+        def wrap_write_blob(blob_bytes):
+            return asyncio.create_task(_wrap_write_blob(blob_bytes))
+
         blob._write_blob = wrap_write_blob
 
         writer1 = blob.get_blob_writer(peer_port=1)
@@ -166,6 +170,7 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         self.assertDictEqual({1: mock_blob_bytes, 2: mock_blob_bytes}, results)
         self.assertEqual(1, write_called_count)
+        await blob.verified.wait()
         self.assertTrue(blob.get_is_verified())
         self.assertDictEqual({}, blob.writers)
 

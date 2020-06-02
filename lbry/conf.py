@@ -277,14 +277,23 @@ class Strings(ListSetting):
 class EnvironmentAccess:
     PREFIX = 'LBRY_'
 
-    def __init__(self, environ: dict):
-        self.environ = environ
+    def __init__(self, config: 'BaseConfig', environ: dict):
+        self.configuration = config
+        self.data = {}
+        if environ:
+            self.load(environ)
+
+    def load(self, environ):
+        for setting in self.configuration.get_settings():
+            value = environ.get(f'{self.PREFIX}{setting.name.upper()}', NOT_SET)
+            if value != NOT_SET and not (isinstance(setting, ListSetting) and value is None):
+                self.data[setting.name] = setting.deserialize(value)
 
     def __contains__(self, item: str):
-        return f'{self.PREFIX}{item.upper()}' in self.environ
+        return item in self.data
 
     def __getitem__(self, item: str):
-        return self.environ[f'{self.PREFIX}{item.upper()}']
+        return self.data[item]
 
 
 class ArgumentAccess:
@@ -443,7 +452,7 @@ class BaseConfig:
         self.arguments = ArgumentAccess(self, args)
 
     def set_environment(self, environ=None):
-        self.environment = EnvironmentAccess(environ or os.environ)
+        self.environment = EnvironmentAccess(self, environ or os.environ)
 
     def set_persisted(self, config_file_path=None):
         if config_file_path is None:
@@ -469,12 +478,12 @@ class TranscodeConfig(BaseConfig):
                          '', previous_names=['ffmpeg_folder'])
     video_encoder = String('FFmpeg codec and parameters for the video encoding. '
                            'Example: libaom-av1 -crf 25 -b:v 0 -strict experimental',
-                           'libx264 -crf 21 -preset faster -pix_fmt yuv420p')
+                           'libx264 -crf 24 -preset faster -pix_fmt yuv420p')
     video_bitrate_maximum = Integer('Maximum bits per second allowed for video streams (0 to disable).', 8400000)
     video_scaler = String('FFmpeg scaling parameters for reducing bitrate. '
                           'Example: -vf "scale=-2:720,fps=24" -maxrate 5M -bufsize 3M',
                           r'-vf "scale=if(gte(iw\,ih)\,min(1920\,iw)\,-2):if(lt(iw\,ih)\,min(1920\,ih)\,-2)" '
-                          r'-maxrate 8400K -bufsize 5000K')
+                          r'-maxrate 5500K -bufsize 5000K')
     audio_encoder = String('FFmpeg codec and parameters for the audio encoding. '
                            'Example: libopus -b:a 128k',
                            'aac -b:a 160k')
@@ -577,9 +586,14 @@ class Config(CLIConfig):
     )
 
     # servers
-    reflector_servers = Servers("Reflector re-hosting servers", [
+    reflector_servers = Servers("Reflector re-hosting servers for mirroring publishes", [
         ('reflector.lbry.com', 5566)
     ])
+
+    fixed_peers = Servers("Fixed peers to fall back to if none are found on P2P for a blob", [
+        ('cdn.reflector.lbry.com', 5567)
+    ])
+
     lbryum_servers = Servers("SPV wallet servers", [
         ('spv11.lbry.com', 50001),
         ('spv12.lbry.com', 50001),
@@ -622,6 +636,7 @@ class Config(CLIConfig):
         "Strategy to use when selecting UTXOs for a transaction",
         STRATEGIES, "standard")
 
+    transaction_cache_size = Integer("Transaction cache size", 100_000)
     save_resolved_claims = Toggle(
         "Save content claims to the database when they are resolved to keep file_list up to date, "
         "only disable this if file_x commands are not needed", True
@@ -691,9 +706,10 @@ def get_darwin_directories() -> typing.Tuple[str, str, str]:
 def get_linux_directories() -> typing.Tuple[str, str, str]:
     try:
         with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
-            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read()).group(1)
-        down_dir = re.sub(r'\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir)
-        download_dir = re.sub('\"', '', down_dir)
+            down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read())
+        if down_dir:
+            down_dir = re.sub(r'\$HOME', os.getenv('HOME') or os.path.expanduser("~/"), down_dir.group(1))
+            download_dir = re.sub('\"', '', down_dir)
     except OSError:
         download_dir = os.getenv('XDG_DOWNLOAD_DIR')
     if not download_dir:

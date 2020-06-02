@@ -17,11 +17,17 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob_exchange.server import BlobServer
 from lbry.stream.stream_manager import StreamManager
+from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
 from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
+try:
+    from lbry.torrent.session import TorrentSession
+except ImportError:
+    TorrentSession = None
 
 log = logging.getLogger(__name__)
 
@@ -33,10 +39,11 @@ WALLET_COMPONENT = "wallet"
 WALLET_SERVER_PAYMENTS_COMPONENT = "wallet_server_payments"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
-STREAM_MANAGER_COMPONENT = "stream_manager"
+FILE_MANAGER_COMPONENT = "file_manager"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
+LIBTORRENT_COMPONENT = "libtorrent_component"
 
 
 class DatabaseComponent(Component):
@@ -319,23 +326,23 @@ class HashAnnouncerComponent(Component):
         }
 
 
-class StreamManagerComponent(Component):
-    component_name = STREAM_MANAGER_COMPONENT
-    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
+class FileManagerComponent(Component):
+    component_name = FILE_MANAGER_COMPONENT
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, LIBTORRENT_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.stream_manager: typing.Optional[StreamManager] = None
+        self.file_manager: typing.Optional[FileManager] = None
 
     @property
-    def component(self) -> typing.Optional[StreamManager]:
-        return self.stream_manager
+    def component(self) -> typing.Optional[FileManager]:
+        return self.file_manager
 
     async def get_status(self):
-        if not self.stream_manager:
+        if not self.file_manager:
             return
         return {
-            'managed_files': len(self.stream_manager.streams),
+            'managed_files': len(self.file_manager.get_filtered()),
         }
 
     async def start(self):
@@ -344,16 +351,52 @@ class StreamManagerComponent(Component):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
+        torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
-        self.stream_manager = StreamManager(
-            loop, self.conf, blob_manager, wallet, storage, node, self.component_manager.analytics_manager
+        self.file_manager = FileManager(
+            loop, self.conf, wallet, storage, self.component_manager.analytics_manager
         )
-        await self.stream_manager.start()
+        self.file_manager.source_managers['stream'] = StreamManager(
+            loop, self.conf, blob_manager, wallet, storage, node,
+        )
+        if TorrentSession:
+            self.file_manager.source_managers['torrent'] = TorrentManager(
+                loop, self.conf, torrent, storage, self.component_manager.analytics_manager
+            )
+        await self.file_manager.start()
         log.info('Done setting up file manager')
 
     async def stop(self):
-        self.stream_manager.stop()
+        self.file_manager.stop()
+
+
+class TorrentComponent(Component):
+    component_name = LIBTORRENT_COMPONENT
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.torrent_session = None
+
+    @property
+    def component(self) -> typing.Optional[TorrentSession]:
+        return self.torrent_session
+
+    async def get_status(self):
+        if not self.torrent_session:
+            return
+        return {
+            'running': True,  # TODO: what to return here?
+        }
+
+    async def start(self):
+        if TorrentSession:
+            self.torrent_session = TorrentSession(asyncio.get_event_loop(), None)
+            await self.torrent_session.bind()  # TODO: specify host/port
+
+    async def stop(self):
+        if self.torrent_session:
+            await self.torrent_session.pause()
 
 
 class PeerProtocolServerComponent(Component):

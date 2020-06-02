@@ -39,7 +39,7 @@ class TestStreamAssembler(AsyncioTestCase):
         with open(file_path, 'wb') as f:
             f.write(self.cleartext)
 
-        self.stream = await self.stream_manager.create_stream(file_path)
+        self.stream = await self.stream_manager.create(file_path)
 
     async def _test_reflect_stream(self, response_chunk_size):
         reflector = ReflectorServer(self.server_blob_manager, response_chunk_size=response_chunk_size)

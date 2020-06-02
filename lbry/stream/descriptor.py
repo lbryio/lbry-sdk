@@ -44,18 +44,25 @@ def random_iv_generator() -> typing.Generator[bytes, None, None]:
         yield os.urandom(AES.block_size // 8)
 
 
-def file_reader(file_path: str):
+def read_bytes(file_path: str, offset: int, to_read: int):
+    with open(file_path, 'rb') as f:
+        f.seek(offset)
+        return f.read(to_read)
+
+
+async def file_reader(file_path: str):
     length = int(os.stat(file_path).st_size)
     offset = 0
 
-    with open(file_path, 'rb') as stream_file:
-        while offset < length:
-            bytes_to_read = min((length - offset), MAX_BLOB_SIZE - 1)
-            if not bytes_to_read:
-                break
-            blob_bytes = stream_file.read(bytes_to_read)
-            yield blob_bytes
-            offset += bytes_to_read
+    while offset < length:
+        bytes_to_read = min((length - offset), MAX_BLOB_SIZE - 1)
+        if not bytes_to_read:
+            break
+        blob_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, read_bytes, file_path, offset, bytes_to_read
+        )
+        yield blob_bytes
+        offset += bytes_to_read
 
 
 def sanitize_file_name(dirty_name: str, default_file_name: str = 'lbry_download'):
@@ -245,7 +252,7 @@ class StreamDescriptor:
         iv_generator = iv_generator or random_iv_generator()
         key = key or os.urandom(AES.block_size // 8)
         blob_num = -1
-        for blob_bytes in file_reader(file_path):
+        async for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
                 loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback

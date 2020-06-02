@@ -21,8 +21,8 @@ class TestHeaders(AsyncioTestCase):
     async def test_deserialize(self):
         self.maxDiff = None
         h = Headers(':memory:')
-        h.io.write(HEADERS)
         await h.open()
+        await h.connect(0, HEADERS)
         self.assertEqual(await h.get(0), {
             'bits': 520159231,
             'block_height': 0,
@@ -52,8 +52,11 @@ class TestHeaders(AsyncioTestCase):
         self.assertEqual(headers.height, 19)
 
     async def test_connect_from_middle(self):
-        h = Headers(':memory:')
-        h.io.write(HEADERS[:block_bytes(10)])
+        headers_temporary_file = tempfile.mktemp()
+        self.addCleanup(os.remove, headers_temporary_file)
+        with open(headers_temporary_file, 'w+b') as headers_file:
+            headers_file.write(HEADERS[:block_bytes(10)])
+        h = Headers(headers_temporary_file)
         await h.open()
         self.assertEqual(h.height, 9)
         await h.connect(len(h), HEADERS[block_bytes(10):block_bytes(20)])
@@ -115,6 +118,7 @@ class TestHeaders(AsyncioTestCase):
 
     async def test_bounds(self):
         headers = Headers(':memory:')
+        await headers.open()
         await headers.connect(0, HEADERS)
         self.assertEqual(19, headers.height)
         with self.assertRaises(IndexError):
@@ -126,6 +130,7 @@ class TestHeaders(AsyncioTestCase):
 
     async def test_repair(self):
         headers = Headers(':memory:')
+        await headers.open()
         await headers.connect(0, HEADERS[:block_bytes(11)])
         self.assertEqual(10, headers.height)
         await headers.repair()
@@ -147,24 +152,39 @@ class TestHeaders(AsyncioTestCase):
         await headers.repair(start_height=10)
         self.assertEqual(19, headers.height)
 
-    def test_do_not_estimate_unconfirmed(self):
+    async def test_do_not_estimate_unconfirmed(self):
         headers = Headers(':memory:')
+        await headers.open()
         self.assertIsNone(headers.estimated_timestamp(-1))
         self.assertIsNone(headers.estimated_timestamp(0))
         self.assertIsNotNone(headers.estimated_timestamp(1))
 
-    async def test_misalignment_triggers_repair_on_open(self):
+    async def test_dont_estimate_whats_there(self):
         headers = Headers(':memory:')
-        headers.io.seek(0)
-        headers.io.write(HEADERS)
+        await headers.open()
+        estimated = headers.estimated_timestamp(10)
+        await headers.connect(0, HEADERS)
+        real_time = (await headers.get(10))['timestamp']
+        after_downloading_header_estimated = headers.estimated_timestamp(10)
+        self.assertNotEqual(estimated, after_downloading_header_estimated)
+        self.assertEqual(after_downloading_header_estimated, real_time)
+
+    async def test_misalignment_triggers_repair_on_open(self):
+        headers_temporary_file = tempfile.mktemp()
+        self.addCleanup(os.remove, headers_temporary_file)
+        with open(headers_temporary_file, 'w+b') as headers_file:
+            headers_file.write(HEADERS)
+        headers = Headers(headers_temporary_file)
         with self.assertLogs(level='WARN') as cm:
             await headers.open()
+            await headers.close()
             self.assertEqual(cm.output, [])
-            headers.io.seek(0)
-            headers.io.truncate()
-            headers.io.write(HEADERS[:block_bytes(10)])
-            headers.io.write(b'ops')
-            headers.io.write(HEADERS[block_bytes(10):])
+            with open(headers_temporary_file, 'w+b') as headers_file:
+                headers_file.seek(0)
+                headers_file.truncate()
+                headers_file.write(HEADERS[:block_bytes(10)])
+                headers_file.write(b'ops')
+                headers_file.write(HEADERS[block_bytes(10):])
             await headers.open()
             self.assertEqual(
                 cm.output, [
@@ -192,6 +212,7 @@ class TestHeaders(AsyncioTestCase):
         reader_task = asyncio.create_task(reader())
         await writer()
         await reader_task
+        await headers.close()
 
 
 HEADERS = unhexlify(

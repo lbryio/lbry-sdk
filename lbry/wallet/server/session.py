@@ -20,16 +20,15 @@ from functools import partial
 from binascii import hexlify
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
+from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
-from lbry.wallet.server.prometheus import REQUESTS_COUNT, SQLITE_INTERRUPT_COUNT, SQLITE_INTERNAL_ERROR_COUNT
-from lbry.wallet.server.prometheus import SQLITE_OPERATIONAL_ERROR_COUNT, SQLITE_EXECUTOR_TIMES, SESSIONS_COUNT
-from lbry.wallet.server.prometheus import SQLITE_PENDING_COUNT, CLIENT_VERSIONS
 from lbry.wallet.rpc.framing import NewlineFramer
 import lbry.wallet.server.version as VERSION
 
@@ -119,8 +118,48 @@ class SessionGroup:
         self.semaphore = asyncio.Semaphore(20)
 
 
+NAMESPACE = "wallet_server"
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
 class SessionManager:
     """Holds global state about all sessions."""
+
+    version_info_metric = Info(
+        'build', 'Wallet server build info (e.g. version, commit hash)', namespace=NAMESPACE
+    )
+    version_info_metric.info({
+        'build': BUILD,
+        "commit": COMMIT_HASH,
+        "docker_tag": DOCKER_TAG,
+        'version': lbry.__version__,
+        "min_version": util.version_string(VERSION.PROTOCOL_MIN),
+        "cpu_count": os.cpu_count()
+    })
+    session_count_metric = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE,
+                                      labelnames=("version",))
+    request_count_metric = Counter("requests_count", "Number of requests received", namespace=NAMESPACE,
+                                        labelnames=("method", "version"))
+
+    interrupt_count_metric = Counter("interrupt", "Number of interrupted queries", namespace=NAMESPACE)
+    db_operational_error_metric = Counter(
+        "operational_error", "Number of queries that raised operational errors", namespace=NAMESPACE
+    )
+    db_error_metric = Counter(
+        "internal_error", "Number of queries raising unexpected errors", namespace=NAMESPACE
+    )
+    executor_time_metric = Histogram(
+        "executor_time", "SQLite executor times", namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+    )
+    pending_query_metric = Gauge(
+        "pending_queries_count", "Number of pending and running sqlite queries", namespace=NAMESPACE
+    )
+
+    client_version_metric = Counter(
+        "clients", "Number of connections received per client version",
+        namespace=NAMESPACE, labelnames=("version",)
+    )
 
     def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
                  shutdown_event: asyncio.Event):
@@ -677,7 +716,7 @@ class SessionBase(RPCSession):
         context = {'conn_id': f'{self.session_id}'}
         self.logger = util.ConnectionLogger(self.logger, context)
         self.group = self.session_mgr.add_session(self)
-        SESSIONS_COUNT.labels(version=self.client_version).inc()
+        self.session_mgr.session_count_metric.labels(version=self.client_version).inc()
         peer_addr_str = self.peer_address_str()
         self.logger.info(f'{self.kind} {peer_addr_str}, '
                          f'{self.session_mgr.session_count():,d} total')
@@ -686,7 +725,7 @@ class SessionBase(RPCSession):
         """Handle client disconnection."""
         super().connection_lost(exc)
         self.session_mgr.remove_session(self)
-        SESSIONS_COUNT.labels(version=self.client_version).dec()
+        self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
         msg = ''
         if not self._can_send.is_set():
             msg += ' whilst paused'
@@ -710,7 +749,7 @@ class SessionBase(RPCSession):
         """Handle an incoming request.  ElectrumX doesn't receive
         notifications from client sessions.
         """
-        REQUESTS_COUNT.labels(method=request.method, version=self.client_version).inc()
+        self.session_mgr.request_count_metric.labels(method=request.method, version=self.client_version).inc()
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
             handler = partial(handler, self)
@@ -946,7 +985,7 @@ class LBRYElectrumX(SessionBase):
     async def run_in_executor(self, query_name, func, kwargs):
         start = time.perf_counter()
         try:
-            SQLITE_PENDING_COUNT.inc()
+            self.session_mgr.pending_query_metric.inc()
             result = await asyncio.get_running_loop().run_in_executor(
                 self.session_mgr.query_executor, func, kwargs
             )
@@ -955,18 +994,18 @@ class LBRYElectrumX(SessionBase):
         except reader.SQLiteInterruptedError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_interrupt(start, error.metrics)
-            SQLITE_INTERRUPT_COUNT.inc()
+            self.session_mgr.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
         except reader.SQLiteOperationalError as error:
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, error.metrics)
-            SQLITE_OPERATIONAL_ERROR_COUNT.inc()
+            self.session_mgr.db_operational_error_metric.inc()
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except Exception:
             log.exception("dear devs, please handle this exception better")
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
             metrics.query_error(start, {})
-            SQLITE_INTERNAL_ERROR_COUNT.inc()
+            self.session_mgr.db_error_metric.inc()
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
         else:
             if self.env.track_metrics:
@@ -975,8 +1014,8 @@ class LBRYElectrumX(SessionBase):
                 metrics.query_response(start, metrics_data)
             return base64.b64encode(result).decode()
         finally:
-            SQLITE_PENDING_COUNT.dec()
-            SQLITE_EXECUTOR_TIMES.observe(time.perf_counter() - start)
+            self.session_mgr.pending_query_metric.dec()
+            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def run_and_cache_query(self, query_name, function, kwargs):
         metrics = self.get_metrics_or_placeholder_for_api(query_name)
@@ -1181,7 +1220,10 @@ class LBRYElectrumX(SessionBase):
         return await self.address_status(hashX)
 
     async def hashX_unsubscribe(self, hashX, alias):
-        del self.hashX_subs[hashX]
+        try:
+            del self.hashX_subs[hashX]
+        except ValueError:
+            pass
 
     def address_to_hashX(self, address):
         try:
@@ -1443,10 +1485,10 @@ class LBRYElectrumX(SessionBase):
                 raise RPCError(BAD_REQUEST,
                                f'unsupported client: {client_name}')
             if self.client_version != client_name[:17]:
-                SESSIONS_COUNT.labels(version=self.client_version).dec()
+                self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
                 self.client_version = client_name[:17]
-                SESSIONS_COUNT.labels(version=self.client_version).inc()
-        CLIENT_VERSIONS.labels(version=self.client_version).inc()
+                self.session_mgr.session_count_metric.labels(version=self.client_version).inc()
+        self.session_mgr.client_version_metric.labels(version=self.client_version).inc()
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.

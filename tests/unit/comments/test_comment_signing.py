@@ -18,31 +18,31 @@ class TestSigningComments(AsyncioTestCase):
             'comment_id': hashlib.sha256(comment.encode()).hexdigest()
         }
 
-    def test01_successful_create_sign_and_validate_comment(self):
-        channel = get_channel('@BusterBluth')
+    async def test01_successful_create_sign_and_validate_comment(self):
+        channel = await get_channel('@BusterBluth')
         stream = get_stream('pop secret')
         comment = self.create_claim_comment_body('Cool stream', stream, channel)
         sign_comment(comment, channel)
         self.assertTrue(is_comment_signed_by_channel(comment, channel))
 
-    def test02_fail_to_validate_spoofed_channel(self):
-        pdiddy = get_channel('@PDitty')
-        channel2 = get_channel('@TomHaverford')
+    async def test02_fail_to_validate_spoofed_channel(self):
+        pdiddy = await get_channel('@PDitty')
+        channel2 = await get_channel('@TomHaverford')
         stream = get_stream()
         comment = self.create_claim_comment_body('Woahh This is Sick!! Shout out 2 my boy Tommy H', stream, pdiddy)
         sign_comment(comment, channel2)
         self.assertFalse(is_comment_signed_by_channel(comment, pdiddy))
 
-    def test03_successful_sign_abandon_comment(self):
-        rswanson = get_channel('@RonSwanson')
+    async def test03_successful_sign_abandon_comment(self):
+        rswanson = await get_channel('@RonSwanson')
         dsilver = get_stream('Welcome to the Pawnee, and give a big round for Ron Swanson, AKA Duke Silver')
         comment_body = self.create_claim_comment_body('COMPUTER, DELETE ALL VIDEOS OF RON.', dsilver, rswanson)
         sign_comment(comment_body, rswanson, abandon=True)
         self.assertTrue(is_comment_signed_by_channel(comment_body, rswanson, abandon=True))
 
-    def test04_invalid_signature(self):
-        rswanson = get_channel('@RonSwanson')
-        jeanralphio = get_channel('@JeanRalphio')
+    async def test04_invalid_signature(self):
+        rswanson = await get_channel('@RonSwanson')
+        jeanralphio = await get_channel('@JeanRalphio')
         chair = get_stream('This is a nice chair. I made it with Mahogany wood and this electric saw')
         chair_comment = self.create_claim_comment_body(
             'Hah. You use an electric saw? Us swansons have been making chairs with handsaws just three after birth.',

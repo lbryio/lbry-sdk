@@ -21,9 +21,9 @@ def get_tx():
     return Transaction().add_inputs([get_input()])
 
 
-def get_channel(claim_name='@foo'):
+async def get_channel(claim_name='@foo'):
     channel_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
-    channel_txo.generate_channel_private_key()
+    await channel_txo.generate_channel_private_key()
     get_tx().add_outputs([channel_txo])
     return channel_txo
 
@@ -36,32 +36,32 @@ def get_stream(claim_name='foo'):
 
 class TestSigningAndValidatingClaim(AsyncioTestCase):
 
-    def test_successful_create_sign_and_validate(self):
-        channel = get_channel()
+    async def test_successful_create_sign_and_validate(self):
+        channel = await get_channel()
         stream = get_stream()
         stream.sign(channel)
         self.assertTrue(stream.is_signed_by(channel))
 
-    def test_fail_to_validate_on_wrong_channel(self):
+    async def test_fail_to_validate_on_wrong_channel(self):
         stream = get_stream()
-        stream.sign(get_channel())
-        self.assertFalse(stream.is_signed_by(get_channel()))
+        stream.sign(await get_channel())
+        self.assertFalse(stream.is_signed_by(await get_channel()))
 
-    def test_fail_to_validate_altered_claim(self):
-        channel = get_channel()
+    async def test_fail_to_validate_altered_claim(self):
+        channel = await get_channel()
         stream = get_stream()
         stream.sign(channel)
         self.assertTrue(stream.is_signed_by(channel))
         stream.claim.stream.title = 'hello'
         self.assertFalse(stream.is_signed_by(channel))
 
-    def test_valid_private_key_for_cert(self):
-        channel = get_channel()
+    async def test_valid_private_key_for_cert(self):
+        channel = await get_channel()
         self.assertTrue(channel.is_channel_private_key(channel.private_key))
 
-    def test_fail_to_load_wrong_private_key_for_cert(self):
-        channel = get_channel()
-        self.assertFalse(channel.is_channel_private_key(get_channel().private_key))
+    async def test_fail_to_load_wrong_private_key_for_cert(self):
+        channel = await get_channel()
+        self.assertFalse(channel.is_channel_private_key((await get_channel()).private_key))
 
 
 class TestValidatingOldSignatures(AsyncioTestCase):
