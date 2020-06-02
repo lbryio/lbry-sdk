@@ -1,7 +1,7 @@
 import asyncio
 import unittest
 from lbry.utils import generate_id
-from lbry.dht.peer import PeerManager, make_kademlia_peer
+from lbry.dht.peer import PeerManager, make_kademlia_peer, is_valid_public_ipv4
 from lbry.testcase import AsyncioTestCase
 
 
@@ -50,6 +50,31 @@ class PeerTest(AsyncioTestCase):
         for i in range(32):
             self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], f"{224 + i}.0.0.0", 1000)
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '255.255.255.255', 1000)
+        self.assertRaises(
+            ValueError, make_kademlia_peer, self.node_ids[1], 'beee:eeee:eeee:eeee:eeee:eeee:eeee:eeef', 1000
+        )
+        self.assertRaises(
+            ValueError, make_kademlia_peer, self.node_ids[1], '2001:db8::ff00:42:8329', 1000
+        )
+
+    def test_is_valid_ipv4(self):
+        self.assertFalse(is_valid_public_ipv4('beee:eeee:eeee:eeee:eeee:eeee:eeee:eeef'))
+        self.assertFalse(is_valid_public_ipv4('beee:eeee:eeee:eeee:eeee:eeee:eeee:eeef', True))
+
+        self.assertFalse(is_valid_public_ipv4('2001:db8::ff00:42:8329'))
+        self.assertFalse(is_valid_public_ipv4('2001:db8::ff00:42:8329', True))
+
+        self.assertFalse(is_valid_public_ipv4('127.0.0.1'))
+        self.assertTrue(is_valid_public_ipv4('127.0.0.1', True))
+
+        self.assertFalse(is_valid_public_ipv4('172.16.0.1'))
+        self.assertFalse(is_valid_public_ipv4('172.16.0.1', True))
+
+        self.assertTrue(is_valid_public_ipv4('1.2.3.4'))
+        self.assertTrue(is_valid_public_ipv4('1.2.3.4', True))
+
+        self.assertFalse(is_valid_public_ipv4('derp'))
+        self.assertFalse(is_valid_public_ipv4('derp', True))
 
     def test_boolean(self):
         self.assertNotEqual(self.first_contact, self.second_contact)
