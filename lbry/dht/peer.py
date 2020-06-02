@@ -40,7 +40,7 @@ def is_valid_public_ipv4(address, allow_localhost: bool = False):
         else:
             return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
                             IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
-    except ipaddress.AddressValueError:
+    except (ipaddress.AddressValueError, ValueError):
         return False
 
 
