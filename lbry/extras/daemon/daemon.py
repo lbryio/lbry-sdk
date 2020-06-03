@@ -47,6 +47,7 @@ from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
+from lbry.extras.daemon.security import is_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
@@ -566,10 +567,8 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("finished shutting down")
 
     async def handle_old_jsonrpc(self, request):
-        origin = request.headers.get('Origin', 'null')
-        origin = None if origin == 'null' else origin
-        if origin != self.conf.allowed_origin != '*':
-            log.warning("API request from origin '%s' is not allowed", origin)
+        if is_request_allowed(request, self.conf):
+            log.warning("API request from origin '%s' is not allowed", request.headers.get('Origin'))
             raise web.HTTPForbidden()
         data = await request.json()
         params = data.get('params', {})

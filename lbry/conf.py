@@ -625,7 +625,9 @@ class Config(CLIConfig):
         previous_names=['upload_log', 'upload_log', 'share_debug_info']
     )
     track_bandwidth = Toggle("Track bandwidth usage", True)
-    allowed_origin = String("Allowed origin header for api calls, use * to allow all", 'null')
+    allowed_origin = String(
+        "Allowed `Origin` header value for API request (sent by browser), use * to allow "
+        "all hosts; default is to only allow API requests with no `Origin` value.", "")
 
     # media server
     streaming_server = String('Host name and port to serve streaming media over range requests',
