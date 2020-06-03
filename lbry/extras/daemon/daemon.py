@@ -47,6 +47,7 @@ from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
+from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
@@ -566,6 +567,7 @@ class Daemon(metaclass=JSONRPCServerType):
         log.info("finished shutting down")
 
     async def handle_old_jsonrpc(self, request):
+        ensure_request_allowed(request, self.conf)
         data = await request.json()
         params = data.get('params', {})
         include_protobuf = params.pop('include_protobuf', False) if isinstance(params, dict) else False
