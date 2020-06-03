@@ -39,7 +39,6 @@ setup(
     install_requires=[
         'aiohttp==3.5.4',
         'aioupnp==0.0.17',
-        'appdirs==1.4.3',
         'certifi>=2018.11.29',
         'colorama==0.3.7',
         'distro==1.4.0',
@@ -62,7 +61,9 @@ setup(
     ],
     extras_require={
         'ui': ['pyside2'],
-        'postgresql': ['psycopg2']
+        'postgresql': ['psycopg2'],
+        'lint': ['mypy', 'pylint'],
+        'test': ['coverage'],
     },
     classifiers=[
         'Framework :: AsyncIO',

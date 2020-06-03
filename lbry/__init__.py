@@ -1,4 +1,4 @@
-__version__ = "0.68.0"
+__version__ = "1.0.0"
 from lbry.wallet import Account, Wallet, WalletManager
 from lbry.blockchain import (
     Ledger, RegTestLedger, TestNetLedger,

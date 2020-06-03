@@ -7,7 +7,7 @@ from contextlib import contextmanager
 from typing import Tuple
 
 import yaml
-from appdirs import user_data_dir, user_download_dir
+from lbry.utils.dirs import user_data_dir, user_download_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
 from lbry.wallet.coinselection import COIN_SELECTION_STRATEGIES

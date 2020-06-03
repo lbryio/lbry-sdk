@@ -10,62 +10,11 @@ jobs:
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
-      - run: make install tools
+      - run: pip install -e .[lint]
       - run: make lint
 
   tests-unit:
     name: "tests / unit"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - run: make install tools
-      - working-directory: lbry
-        env:
-          HOME: /tmp
-        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
-
-  tests-integration:
-    name: "tests / integration"
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        test:
-          - datanetwork
-          - blockchain
-          - other
-        db:
-          - postgres
-          - sqlite
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-        - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - if: matrix.test == 'other'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: pip install tox-travis
-      - env:
-          TEST_DB: ${{ matrix.db }}
-        run: tox -e ${{ matrix.test }}
-
-  build:
-    needs: ["lint", "tests-unit", "tests-integration"]
-    name: "build"
     strategy:
       matrix:
         os:
@@ -78,19 +27,77 @@ jobs:
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
-      - name: Setup
-        run: |
-          pip install pyinstaller
-          pip install -e .
-      - if: startsWith(matrix.os, 'windows') == false
-        name: Build & Run (Unix)
-        run: |
-          pyinstaller --onefile --name lbrynet lbry/extras/cli.py
-          chmod +x dist/lbrynet
-          dist/lbrynet --version
-      - if: startsWith(matrix.os, 'windows')
-        name: Build & Run (Windows)
-        run: |
-          pip install pywin32
-          pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/extras/cli.py
-          dist/lbrynet.exe --version
+      - run: pip install -e .[test]
+      - working-directory: lbry
+        env:
+          HOME: /tmp
+        run: coverage run -p --source=lbry -m unittest -vv tests.unit.test_conf
+        #run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+
+#  tests-integration:
+#    name: "tests / integration"
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        test:
+#          - datanetwork
+#          - blockchain
+#          - other
+#        db:
+#          - postgres
+#          - sqlite
+#    services:
+#      postgres:
+#        image: postgres:12
+#        env:
+#          POSTGRES_USER: postgres
+#          POSTGRES_PASSWORD: postgres
+#          POSTGRES_DB: postgres
+#        ports:
+#        - 5432:5432
+#        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - if: matrix.test == 'other'
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y --no-install-recommends ffmpeg
+#      - run: pip install tox-travis
+#      - env:
+#          TEST_DB: ${{ matrix.db }}
+#        run: tox -e ${{ matrix.test }}
+#
+#  build:
+#    needs: ["lint", "tests-unit", "tests-integration"]
+#    name: "build"
+#    strategy:
+#      matrix:
+#        os:
+#          - ubuntu-latest
+#          - macos-latest
+#          - windows-latest
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: Setup
+#        run: |
+#          pip install pyinstaller
+#          pip install -e .
+#      - if: startsWith(matrix.os, 'windows') == false
+#        name: Build & Run (Unix)
+#        run: |
+#          pyinstaller --onefile --name lbrynet lbry/extras/cli.py
+#          chmod +x dist/lbrynet
+#          dist/lbrynet --version
+#      - if: startsWith(matrix.os, 'windows')
+#        name: Build & Run (Windows)
+#        run: |
+#          pip install pywin32
+#          pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/extras/cli.py
+#          dist/lbrynet.exe --version
