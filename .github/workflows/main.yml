@@ -1,5 +1,4 @@
 name: ci
-#on: pull_request
 on: push
 jobs:
 
@@ -13,7 +12,7 @@ jobs:
 #          python-version: '3.7'
 #      - run: pip install -e .[lint]
 #      - run: make lint
-
+#
 #  tests-unit:
 #    name: "tests / unit"
 #    strategy:
@@ -44,9 +43,8 @@ jobs:
 #        env:
 #          HOME: /tmp
 #        run: coverage run -p --source=lbry -m unittest -vv tests.unit.test_conf
-
-#- run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
-
+#        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+#
 #  tests-integration:
 #    name: "tests / integration"
 #    runs-on: ubuntu-latest
@@ -85,7 +83,6 @@ jobs:
 #
   build:
     #needs: ["lint", "tests-unit", "tests-integration"]
-    #needs: ["tests-unit"]
     name: "build"
     strategy:
       matrix:
@@ -131,5 +128,5 @@ jobs:
           dist/lbrynet.exe --version
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ runner.os }}
+          name: lbrynet-${{ matrix.os }}
           path: dist/
