@@ -921,13 +921,8 @@ class LBRYElectrumX(SessionBase):
         """
         if height_changed and self.subscribe_headers:
             args = (await self.subscribe_headers_result(), )
-            try:
-                await self.send_notification('blockchain.headers.subscribe', args)
-            except asyncio.TimeoutError:
-                self.logger.info("timeout sending headers notification to %s", self.peer_address_str(for_log=True))
-                self.abort()
+            if not (await self.send_notification('blockchain.headers.subscribe', args)):
                 return
-
         touched = touched.intersection(self.hashX_subs)
         if touched or (height_changed and self.mempool_statuses):
             changed = {}
@@ -954,14 +949,7 @@ class LBRYElectrumX(SessionBase):
                     method = 'blockchain.scripthash.subscribe'
                 else:
                     method = 'blockchain.address.subscribe'
-
-                try:
-                    await self.send_notification(method, (alias, status))
-                except asyncio.TimeoutError:
-                    self.logger.info("timeout sending address notification to %s", self.peer_address_str(for_log=True))
-                    self.abort()
-                    return
-
+                asyncio.create_task(self.send_notification(method, (alias, status)))
             if changed:
                 es = '' if len(changed) == 1 else 'es'
                 self.logger.info(f'notified of {len(changed):,d} address{es}')
@@ -1174,6 +1162,7 @@ class LBRYElectrumX(SessionBase):
         """
         # Note history is ordered and mempool unordered in electrum-server
         # For mempool, height is -1 if it has unconfirmed inputs, otherwise 0
+
         db_history = await self.session_mgr.limited_history(hashX)
         mempool = await self.mempool.transaction_summaries(hashX)
 
