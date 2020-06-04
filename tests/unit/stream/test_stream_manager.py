@@ -65,7 +65,7 @@ def get_claim_transaction(claim_name, claim=b''):
     )
 
 
-async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
+async def get_mock_wallet(sd_hash, storage, wallet_dir, balance=10.0, fee=None):
     claim = Claim()
     if fee:
         if fee['currency'] == 'LBC':
@@ -97,7 +97,7 @@ async def get_mock_wallet(sd_hash, storage, balance=10.0, fee=None):
 
     wallet = Wallet()
     ledger = Ledger({
-        'db': Database(':memory:'),
+        'db': Database(os.path.join(wallet_dir, 'blockchain.db')),
         'headers': FakeHeaders(514082)
     })
     await ledger.db.open()
@@ -136,7 +136,8 @@ class TestStreamManager(BlobExchangeTestBase):
             self.loop, self.server_blob_manager.blob_dir, file_path, old_sort=old_sort
         )
         self.sd_hash = descriptor.sd_hash
-        self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, balance, fee)
+        self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, self.client_wallet_dir,
+                                                           balance, fee)
         analytics_manager = AnalyticsManager(
             self.client_config,
             binascii.hexlify(generate_id()).decode(),
