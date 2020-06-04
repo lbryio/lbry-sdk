@@ -149,7 +149,6 @@ class ClientSession(BaseClientSession):
         self.response_time = None
         self.connection_latency = None
         self._response_samples = 0
-        self.pending_amount = 0
         self._on_disconnect_controller.add(True)
 
 
