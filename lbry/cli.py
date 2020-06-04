@@ -10,10 +10,6 @@ from lbry.service.full_node import FullNode
 from lbry.blockchain.ledger import Ledger
 from lbry.console import Advanced as AdvancedConsole, Basic as BasicConsole
 
-# TODO: switch to pre-generated metadata interface
-from lbry.service.parser import get_api_definitions
-interface = get_api_definitions(API)
-
 
 def split_subparser_argument(parent, original, name, condition):
     new_sub_parser = argparse._SubParsersAction(
