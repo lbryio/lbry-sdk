@@ -5,7 +5,7 @@ from lbry.wallet.transaction import OutputEffectiveAmountEstimator
 
 MAXIMUM_TRIES = 100000
 
-STRATEGIES = []
+STRATEGIES = ['sqlite']  # sqlite coin chooser is in database.py
 
 
 def strategy(method):

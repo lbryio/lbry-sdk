@@ -244,11 +244,16 @@ class Ledger(metaclass=LedgerRegistry):
     def get_address_count(self, **constraints):
         return self.db.get_address_count(**constraints)
 
-    async def get_spendable_utxos(self, amount: int, funding_accounts):
+    async def get_spendable_utxos(self, amount: int, funding_accounts: Optional[Iterable['Account']],
+                                  min_amount=100000):
+        min_amount = min(amount // 10, min_amount)
+        fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
+        selector = CoinSelector(amount, fee)
         async with self._utxo_reservation_lock:
+            if self.coin_selection_strategy == 'sqlite':
+                return await self.db.get_spendable_utxos(self, amount + fee, funding_accounts, min_amount=min_amount,
+                                                         fee_per_byte=self.fee_per_byte)
             txos = await self.get_effective_amount_estimators(funding_accounts)
-            fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
-            selector = CoinSelector(amount, fee)
             spendables = selector.select(txos, self.coin_selection_strategy)
             if spendables:
                 await self.reserve_outputs(s.txo for s in spendables)
