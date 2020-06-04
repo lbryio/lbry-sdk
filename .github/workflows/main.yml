@@ -114,6 +114,8 @@ jobs:
           pip install --user --upgrade pip wheel
           pip install sqlalchemy@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
           pip install -e .
+      - if: startsWith(runner.os, 'linux')
+        run: pip install psycopg2
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
         name: Build & Run (Unix)
         run: |
