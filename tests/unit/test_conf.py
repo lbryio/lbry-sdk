@@ -44,7 +44,6 @@ class ConfigurationTests(unittest.TestCase):
         self.assertEqual(c.config,        os.path.join(prefix, "settings.yml"))
         self.assertEqual(c.log_file_path, os.path.join(prefix, "daemon.log"))
         self.assertEqual(c.download_dir,  os.path.join(r"C:\Users", os.getlogin(), "Downloads"))
-        self.assertEqual(c.api_connection_url, "http://localhost:5279/lbryapi")
 
     @unittest.skipIf("linux" not in sys.platform, "skipping linux only test")
     def test_linux_defaults(self):
