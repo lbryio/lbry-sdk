@@ -183,6 +183,7 @@ class BlockProcessor:
         self.state_lock = asyncio.Lock()
 
         self.search_cache = {}
+        self.history_cache = {}
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -213,6 +214,7 @@ class BlockProcessor:
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             for cache in self.search_cache.values():
                 cache.clear()
+            self.history_cache.clear()
             await self._maybe_flush()
             processed_time = time.perf_counter() - start
             self.block_count_metric.set(self.height)
