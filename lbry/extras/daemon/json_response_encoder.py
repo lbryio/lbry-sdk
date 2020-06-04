@@ -7,9 +7,11 @@ from json import JSONEncoder
 from google.protobuf.message import DecodeError
 
 from lbry.schema.claim import Claim
-from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
-from lbry.wallet.bip32 import PubKey
-from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.wallet import Wallet, Account
+from lbry.blockchain.ledger import Ledger
+from lbry.blockchain.transaction import Transaction, Output
+from lbry.crypto.bip32 import PubKey
+from lbry.blockchain.dewies import dewies_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 
 
@@ -114,9 +116,9 @@ def encode_file_doc():
 
 class JSONResponseEncoder(JSONEncoder):
 
-    def __init__(self, *args, ledger: Ledger, include_protobuf=False, **kwargs):
+    def __init__(self, *args, service, include_protobuf=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ledger = ledger
+        self.service = service
         self.include_protobuf = include_protobuf
 
     def default(self, obj):  # pylint: disable=method-hidden,arguments-differ,too-many-return-statements
@@ -160,15 +162,15 @@ class JSONResponseEncoder(JSONEncoder):
         if not txo:
             return
         tx_height = txo.tx_ref.height
-        best_height = self.ledger.headers.height
+        best_height = 0#self.ledger.headers.height
         output = {
             'txid': txo.tx_ref.id,
             'nout': txo.position,
             'height': tx_height,
             'amount': dewies_to_lbc(txo.amount),
-            'address': txo.get_address(self.ledger) if txo.has_address else None,
+            'address': txo.get_address(self.service.ledger) if txo.has_address else None,
             'confirmations': (best_height+1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers.estimated_timestamp(tx_height)
+            'timestamp': 0 #self.ledger.headers.estimated_timestamp(tx_height)
         }
         if txo.is_spent is not None:
             output['is_spent'] = txo.is_spent
@@ -232,7 +234,7 @@ class JSONResponseEncoder(JSONEncoder):
                     if check_signature and txo.claim.is_signed:
                         if txo.channel is not None:
                             output['signing_channel'] = self.encode_output(txo.channel)
-                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
+                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.service.ledger)
                         else:
                             output['signing_channel'] = {'channel_id': txo.claim.signing_channel_id}
                             output['is_channel_signature_valid'] = False
@@ -245,7 +247,7 @@ class JSONResponseEncoder(JSONEncoder):
             if key.endswith('_amount'):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
-        if 0 < meta.get('creation_height', 0) <= self.ledger.headers.height:
+        if 0 < meta.get('creation_height', 0) <= 0: #self.ledger.headers.height:
             meta['creation_timestamp'] = self.ledger.headers.estimated_timestamp(meta['creation_height'])
         return meta
 
@@ -259,7 +261,7 @@ class JSONResponseEncoder(JSONEncoder):
         result = account.to_dict()
         result['id'] = account.id
         result.pop('certificates', None)
-        result['is_default'] = self.ledger.accounts[0] == account
+        #result['is_default'] = self.ledger.accounts[0] == account
         return result
 
     @staticmethod
@@ -272,7 +274,7 @@ class JSONResponseEncoder(JSONEncoder):
     def encode_file(self, managed_stream):
         output_exists = managed_stream.output_file_exists
         tx_height = managed_stream.stream_claim_info.height
-        best_height = self.ledger.headers.height
+        best_height = 0 #self.ledger.headers.height
         return {
             'streaming_url': managed_stream.stream_url,
             'completed': managed_stream.completed,
@@ -308,14 +310,14 @@ class JSONResponseEncoder(JSONEncoder):
             'added_on': managed_stream.added_on,
             'height': tx_height,
             'confirmations': (best_height + 1) - tx_height if tx_height > 0 else tx_height,
-            'timestamp': self.ledger.headers.estimated_timestamp(tx_height),
+            'timestamp': 0, #self.ledger.headers.estimated_timestamp(tx_height),
             'is_fully_reflected': managed_stream.is_fully_reflected
         }
 
     def encode_claim(self, claim):
         encoded = getattr(claim, claim.claim_type).to_dict()
         if 'public_key' in encoded:
-            encoded['public_key_id'] = self.ledger.public_key_to_address(
+            encoded['public_key_id'] = self.service.ledger.public_key_to_address(
                 unhexlify(encoded['public_key'])
             )
         return encoded
