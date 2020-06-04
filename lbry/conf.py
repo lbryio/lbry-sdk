@@ -711,7 +711,7 @@ def get_windows_directories() -> Tuple[str, str, str, str]:
     data_dir = user_data_dir('lbrynet', 'lbry')
     blob_dir = os.path.join(data_dir, 'blobfiles')
     wallet_dir = os.path.join(user_data_dir('lbryum', 'lbry'), 'wallets')
-    if os.path.isdir(blob_dir) or os.path.isdir(wallet_dir):
+    if os.path.isdir(blob_dir) and os.path.isdir(wallet_dir):
         return data_dir, wallet_dir, blob_dir, user_download_dir()
     # new
     return get_universal_directories()
