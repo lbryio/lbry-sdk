@@ -744,7 +744,7 @@ def get_linux_directories() -> Tuple[str, str, str, str]:
 
 
 def get_universal_directories() -> Tuple[str, str, str, str]:
-    lbrynet_dir = user_data_dir('lbrynet')
+    lbrynet_dir = user_data_dir('lbrynet', 'LBRY')
     return (
         lbrynet_dir,
         os.path.join(lbrynet_dir, 'wallets'),

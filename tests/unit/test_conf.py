@@ -23,16 +23,39 @@ class TestConfig(BaseConfig):
 
 class ConfigurationTests(unittest.TestCase):
 
-    @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
+    @unittest.skipIf("darwin" not in sys.platform, "skipping mac only test")
+    def test_mac_defaults(self):
+        c = Config()
+        prefix = os.path.expanduser("~/Library/Application Support/lbrynet")
+        self.assertEqual(c.data_dir,      prefix)
+        self.assertEqual(c.blob_dir,      os.path.join(prefix, "blobs"))
+        self.assertEqual(c.wallet_dir,    os.path.join(prefix, "wallets"))
+        self.assertEqual(c.config,        os.path.join(prefix, "settings.yml"))
+        self.assertEqual(c.log_file_path, os.path.join(prefix, "daemon.log"))
+        self.assertEqual(c.download_dir,  os.path.expanduser("~/Downloads"))
+
+    @unittest.skipIf("win32" not in sys.platform, "skipping windows only test")
+    def test_windows_defaults(self):
+        c = Config()
+        prefix = os.path.join(r"C:\Users", os.getlogin(), r"AppData\Local\LBRY\lbrynet")
+        self.assertEqual(c.data_dir,      prefix)
+        self.assertEqual(c.blob_dir,      os.path.join(prefix, "blobs"))
+        self.assertEqual(c.wallet_dir,    os.path.join(prefix, "wallets"))
+        self.assertEqual(c.config,        os.path.join(prefix, "settings.yml"))
+        self.assertEqual(c.log_file_path, os.path.join(prefix, "daemon.log"))
+        self.assertEqual(c.download_dir,  os.path.join(r"C:\Users", os.getlogin(), "Downloads"))
+        self.assertEqual(c.api_connection_url, "http://localhost:5279/lbryapi")
+
+    @unittest.skipIf("linux" not in sys.platform, "skipping linux only test")
     def test_linux_defaults(self):
         c = Config()
-        self.assertEqual(c.data_dir,      os.path.expanduser('~/.local/share/lbrynet'))
-        self.assertEqual(c.blob_dir,      os.path.expanduser('~/.local/share/lbrynet/blobs'))
-        self.assertEqual(c.wallet_dir,    os.path.expanduser('~/.local/share/lbrynet/wallets'))
-        self.assertEqual(c.config,        os.path.expanduser('~/.local/share/lbrynet/settings.yml'))
-        self.assertEqual(c.log_file_path, os.path.expanduser('~/.local/share/lbrynet/daemon.log'))
-        self.assertEqual(c.download_dir,  os.path.expanduser('~/Downloads'))
-        self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
+        self.assertEqual(c.data_dir,      os.path.expanduser("~/.local/share/lbrynet"))
+        self.assertEqual(c.blob_dir,      os.path.expanduser("~/.local/share/lbrynet/blobs"))
+        self.assertEqual(c.wallet_dir,    os.path.expanduser("~/.local/share/lbrynet/wallets"))
+        self.assertEqual(c.config,        os.path.expanduser("~/.local/share/lbrynet/settings.yml"))
+        self.assertEqual(c.log_file_path, os.path.expanduser("~/.local/share/lbrynet/daemon.log"))
+        self.assertEqual(c.download_dir,  os.path.expanduser("~/Downloads"))
+        self.assertEqual(c.api_connection_url, "http://localhost:5279/lbryapi")
 
         # changes the root for all defaults
         c = Config(data_dir='/foo/bar')
