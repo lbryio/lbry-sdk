@@ -30,13 +30,9 @@ class Claim(Signable):
     COLLECTION = 'collection'
     REPOST = 'repost'
 
-    __slots__ = 'version',
+    __slots__ = ()
 
     message_class = ClaimMessage
-
-    def __init__(self, message=None):
-        super().__init__(message)
-        self.version = 2
 
     @property
     def claim_type(self) -> str:

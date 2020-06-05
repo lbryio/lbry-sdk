@@ -1828,7 +1828,8 @@ class SupportCommands(CommandTestCase):
         # send a tip to the claim using account2
         tip = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '1.0', True, account2.id, 'wallet2', funding_account_ids=[account2.id])
+                claim_id, '1.0', True, account_id=account2.id, wallet_id='wallet2',
+                funding_account_ids=[account2.id])
         )
         await self.confirm_tx(tip['txid'])
 
@@ -1859,7 +1860,8 @@ class SupportCommands(CommandTestCase):
         # send a support to the claim using account2
         support = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '2.0', False, account2.id, 'wallet2', funding_account_ids=[account2.id])
+                claim_id, '2.0', False, account_id=account2.id, wallet_id='wallet2',
+                funding_account_ids=[account2.id])
         )
         await self.confirm_tx(support['txid'])
 
@@ -1885,6 +1887,12 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(len(txs[1]['support_info']), 1)
         self.assertTrue(txs[1]['support_info'][0]['is_tip'])
         self.assertTrue(txs[1]['support_info'][0]['is_spent'])
+
+    async def test_signed_supports(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        stream_id = self.get_claim_id(await self.stream_create())
+        tx = await self.support_create(stream_id, '0.3', channel_id=channel_id)
+        self.assertTrue(tx['outputs'][0]['is_channel_signature_valid'])
 
 
 class CollectionCommands(CommandTestCase):

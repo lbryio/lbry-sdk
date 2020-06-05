@@ -7,6 +7,7 @@ from json import JSONEncoder
 from google.protobuf.message import DecodeError
 
 from lbry.schema.claim import Claim
+from lbry.schema.support import Support
 from lbry.torrent.torrent_manager import TorrentSource
 from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
 from lbry.wallet.bip32 import PubKey
@@ -135,6 +136,8 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_output(obj)
         if isinstance(obj, Claim):
             return self.encode_claim(obj)
+        if isinstance(obj, Support):
+            return obj.to_dict()
         if isinstance(obj, PubKey):
             return obj.extended_key_string()
         if isinstance(obj, datetime):
@@ -220,25 +223,28 @@ class JSONResponseEncoder(JSONEncoder):
                 output['claims'] = [self.encode_output(o) for o in txo.claims]
             if txo.reposted_claim is not None:
                 output['reposted_claim'] = self.encode_output(txo.reposted_claim)
-            if txo.script.is_claim_name or txo.script.is_update_claim:
-                try:
-                    output['value'] = txo.claim
+        if txo.script.is_claim_name or txo.script.is_update_claim or txo.script.is_support_claim_data:
+            try:
+                output['value'] = txo.signable
+                if self.include_protobuf:
+                    output['protobuf'] = hexlify(txo.signable.to_bytes())
+                if txo.purchase_receipt is not None:
+                    output['purchase_receipt'] = self.encode_output(txo.purchase_receipt)
+                if txo.script.is_claim_name or txo.script.is_update_claim:
                     output['value_type'] = txo.claim.claim_type
-                    if self.include_protobuf:
-                        output['protobuf'] = hexlify(txo.claim.to_bytes())
-                    if txo.purchase_receipt is not None:
-                        output['purchase_receipt'] = self.encode_output(txo.purchase_receipt)
                     if txo.claim.is_channel:
                         output['has_signing_key'] = txo.has_private_key
-                    if check_signature and txo.claim.is_signed:
-                        if txo.channel is not None:
-                            output['signing_channel'] = self.encode_output(txo.channel)
-                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
-                        else:
-                            output['signing_channel'] = {'channel_id': txo.claim.signing_channel_id}
-                            output['is_channel_signature_valid'] = False
-                except DecodeError:
-                    pass
+                elif txo.script.is_support_claim_data:
+                    output['value_type'] = 'emoji'
+                if check_signature and txo.signable.is_signed:
+                    if txo.channel is not None:
+                        output['signing_channel'] = self.encode_output(txo.channel)
+                        output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.ledger)
+                    else:
+                        output['signing_channel'] = {'channel_id': txo.signable.signing_channel_id}
+                        output['is_channel_signature_valid'] = False
+            except DecodeError:
+                pass
         return output
 
     def encode_claim_meta(self, meta):
