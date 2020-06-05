@@ -443,10 +443,10 @@ class OutputScript(Script):
         OP_2DROP, OP_2DROP
     )
     SUPPORT_CLAIM_DATA_PUBKEY = Template('support_claim+data+pay_pubkey_hash', (
-            SUPPORT_CLAIM_DATA_OPCODES + PAY_PUBKEY_HASH.opcodes
+        SUPPORT_CLAIM_DATA_OPCODES + PAY_PUBKEY_HASH.opcodes
     ))
     SUPPORT_CLAIM_DATA_SCRIPT = Template('support_claim+data+pay_script_hash', (
-            SUPPORT_CLAIM_DATA_OPCODES + PAY_SCRIPT_HASH.opcodes
+        SUPPORT_CLAIM_DATA_OPCODES + PAY_SCRIPT_HASH.opcodes
     ))
 
     UPDATE_CLAIM_OPCODES = (
