@@ -1,10 +1,14 @@
 import os
 import sys
+import asyncio
 import pathlib
 import argparse
 
+from docopt import docopt
+
+from lbry import __version__
 from lbry.conf import Config, CLIConfig
-from lbry.service import API, Daemon
+from lbry.service import Daemon
 from lbry.service.metadata import interface
 from lbry.service.full_node import FullNode
 from lbry.blockchain.ledger import Ledger
@@ -160,6 +164,44 @@ def ensure_directory_exists(path: str):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
 
 
+async def execute_command(conf, method, params):
+    pass
+
+
+def normalize_value(x, key=None):
+    if not isinstance(x, str):
+        return x
+    if key in ('uri', 'channel_name', 'name', 'file_name', 'claim_name', 'download_directory'):
+        return x
+    if x.lower() == 'true':
+        return True
+    if x.lower() == 'false':
+        return False
+    if x.isdigit():
+        return int(x)
+    return x
+
+
+def remove_brackets(key):
+    if key.startswith("<") and key.endswith(">"):
+        return str(key[1:-1])
+    return key
+
+
+def set_kwargs(parsed_args):
+    kwargs = {}
+    for key, arg in parsed_args.items():
+        if arg is None:
+            continue
+        k = None
+        if key.startswith("--") and remove_brackets(key[2:]) not in kwargs:
+            k = remove_brackets(key[2:])
+        elif remove_brackets(key) not in kwargs:
+            k = remove_brackets(key)
+        kwargs[k] = normalize_value(arg, k)
+    return kwargs
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
@@ -170,13 +212,12 @@ def main(argv=None):
         ensure_directory_exists(directory)
 
     if args.cli_version:
-        from lbry import __version__
         print(f"lbrynet {__version__}")
     elif args.command == 'start':
         if args.help:
             args.start_parser.print_help()
         elif args.full_node:
-            service = FullNode(Ledger(conf), conf.db_url_or_default)
+            service = FullNode(Ledger(conf))
             if conf.console == "advanced":
                 console = AdvancedConsole(service)
             else:

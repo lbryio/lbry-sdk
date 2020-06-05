@@ -16,10 +16,10 @@ class FullNode(Service):
 
     sync: BlockchainSync
 
-    def __init__(self, ledger: Ledger, db_url: str, chain: Lbrycrd = None):
-        super().__init__(ledger, db_url)
+    def __init__(self, ledger: Ledger, chain: Lbrycrd = None):
+        super().__init__(ledger)
         self.chain = chain or Lbrycrd(ledger)
-        self.sync = BlockchainSync(self.chain, self.db, self.conf.processes)
+        self.sync = BlockchainSync(self.chain, self.db)
 
     async def start(self):
         await self.chain.open()
@@ -39,7 +39,7 @@ class FullNode(Service):
         tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
         return {
             hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
-            for tx in await self.db.get_raw_transactions(tx_hashes)
+            for tx in await self.db.get_transactions(tx_hashes=tx_hashes)
         }
 
     async def search_claims(self, accounts, **kwargs):

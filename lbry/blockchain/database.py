@@ -60,27 +60,33 @@ class BlockchainDB:
     async def execute_fetchall(self, sql: str, *args):
         return await self.run_in_executor(self.sync_execute_fetchall, sql, *args)
 
-    def sync_get_block_files(self, above_height=-1):
-        return self.sync_execute_fetchall(
-            """
+    def sync_get_block_files(self, file_number=None, above_height=None):
+        sql = """
             SELECT
                 file as file_number,
                 COUNT(hash) as blocks,
                 SUM(txcount) as txs,
                 MAX(height) as max_height
-            FROM block_info WHERE height > ? GROUP BY file ORDER BY file ASC;
-            """, (above_height,)
-        )
+            FROM block_info
+            WHERE status&1 AND status&4
+        """
+        args = ()
+        if file_number is not None and above_height is not None:
+            sql += "AND file = ? AND height > ?"
+            args = (file_number, above_height)
+        return self.sync_execute_fetchall(sql + " GROUP BY file ORDER BY file ASC;", args)
 
-    async def get_block_files(self, above_height=-1):
-        return await self.run_in_executor(self.sync_get_block_files, above_height)
+    async def get_block_files(self, file_number=None, above_height=None):
+        return await self.run_in_executor(
+            self.sync_get_block_files, file_number, above_height
+        )
 
     def sync_get_blocks_in_file(self, block_file, above_height=-1):
         return self.sync_execute_fetchall(
             """
             SELECT datapos as data_offset, height, hash as block_hash, txCount as txs
             FROM block_info
-            WHERE file = ? AND height > ? AND status&1 > 0
+            WHERE file = ? AND height > ? AND status&1 AND status&4
             ORDER BY datapos ASC;
             """, (block_file, above_height)
         )

@@ -12,7 +12,7 @@ import ecdsa
 
 from lbry.constants import COIN
 from lbry.db import Database, CLAIM_TYPE_CODES, TXO_TYPES
-from lbry.blockchain import Ledger, Transaction, Input, Output
+from lbry.blockchain import Ledger
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 from lbry.crypto.bip32 import PrivateKey, PubKey, from_extended_key_string
@@ -29,7 +29,7 @@ class AddressManager:
 
     __slots__ = 'account', 'public_key', 'chain_number', 'address_generator_lock'
 
-    def __init__(self, account, public_key, chain_number):
+    def __init__(self, account: 'Account', public_key, chain_number):
         self.account = account
         self.public_key = public_key
         self.chain_number = chain_number
@@ -57,11 +57,11 @@ class AddressManager:
         raise NotImplementedError
 
     async def _query_addresses(self, **constraints):
-        return (await self.account.db.get_addresses(
+        return await self.account.db.get_addresses(
             account=self.account,
             chain=self.chain_number,
             **constraints
-        ))[0]
+        )
 
     def get_private_key(self, index: int) -> PrivateKey:
         raise NotImplementedError
@@ -415,7 +415,7 @@ class Account:
         return await self.db.get_addresses(account=self, **constraints)
 
     async def get_addresses(self, **constraints) -> List[str]:
-        rows, _ = await self.get_address_records(cols=['account_address.address'], **constraints)
+        rows = await self.get_address_records(cols=['account_address.address'], **constraints)
         return [r['address'] for r in rows]
 
     async def get_valid_receiving_address(self, default_address: str) -> str:
@@ -446,40 +446,6 @@ class Account:
             'max_change_gap': change_gap,
             'max_receiving_gap': receiving_gap,
         }
-
-    async def fund(self, to_account, amount=None, everything=False,
-                   outputs=1, broadcast=False, **constraints):
-        assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
-        if everything:
-            utxos = await self.get_utxos(**constraints)
-            await self.ledger.reserve_outputs(utxos)
-            tx = await Transaction.create(
-                inputs=[Input.spend(txo) for txo in utxos],
-                outputs=[],
-                funding_accounts=[self],
-                change_account=to_account
-            )
-        elif amount > 0:
-            to_address = await to_account.change.get_or_create_usable_address()
-            to_hash160 = to_account.ledger.address_to_hash160(to_address)
-            tx = await Transaction.create(
-                inputs=[],
-                outputs=[
-                    Output.pay_pubkey_hash(amount//outputs, to_hash160)
-                    for _ in range(outputs)
-                ],
-                funding_accounts=[self],
-                change_account=self
-            )
-        else:
-            raise ValueError('An amount is required.')
-
-        if broadcast:
-            await self.ledger.broadcast(tx)
-        else:
-            await self.ledger.release_tx(tx)
-
-        return tx
 
     def add_channel_private_key(self, private_key):
         public_key_bytes = private_key.get_verifying_key().to_der()
@@ -516,7 +482,6 @@ class Account:
             channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
         if self.channel_keys != channel_keys:
             self.channel_keys = channel_keys
-            self.wallet.save()
 
     async def save_max_gap(self):
         gap_changed = False

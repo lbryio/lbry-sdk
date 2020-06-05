@@ -30,7 +30,8 @@ async def add_block_to_lbrycrd(chain: Lbrycrd, block: Block, takeovers: List[str
 
 
 async def insert_claim(chain, block, tx, txo):
-    await chain.db.execute("""
+    await chain.db.execute(
+        """
         INSERT OR REPLACE INTO claim (
             claimID, name, nodeName, txID, txN, originalHeight, updateHeight, validHeight,
             activationHeight, expirationHeight, amount

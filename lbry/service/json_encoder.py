@@ -1,8 +1,10 @@
+# pylint: disable=invalid-name
 import logging
 from decimal import Decimal
 from binascii import hexlify, unhexlify
 from datetime import datetime, date
 from json import JSONEncoder
+from typing import Iterator, Generic
 
 from google.protobuf.message import DecodeError
 
@@ -12,6 +14,7 @@ from lbry.blockchain.transaction import Transaction, Output
 from lbry.crypto.bip32 import PubKey
 from lbry.blockchain.dewies import dewies_to_lbc
 from lbry.stream.managed_stream import ManagedStream
+from lbry.db.database import Result, ResultType
 
 
 log = logging.getLogger(__name__)
@@ -123,6 +126,36 @@ def encode_pagination_doc(items):
     }
 
 
+class Paginated(Generic[ResultType]):
+
+    __slots__ = 'result', 'page', 'page_size'
+
+    def __init__(self, result: Result, page: int, page_size: int):
+        self.result = result
+        self.page = page
+        self.page_size = page_size
+
+    def __getitem__(self, item: int) -> ResultType:
+        return self.result[item]
+
+    def __iter__(self) -> Iterator[ResultType]:
+        return iter(self.result)
+
+    def __len__(self):
+        return len(self.result)
+
+    def __repr__(self):
+        return repr(self.to_dict())
+
+    def to_dict(self):
+        d = {"items": self.result.rows, "page": self.page, "page_size": self.page_size}
+        if self.result.total is not None:
+            count = self.result.total
+            d["total_pages"] = int((count + (self.page_size - 1)) / self.page_size)
+            d["total_items"] = count
+        return d
+
+
 class JSONResponseEncoder(JSONEncoder):
 
     def __init__(self, *args, service, include_protobuf=False, **kwargs):
@@ -131,6 +164,8 @@ class JSONResponseEncoder(JSONEncoder):
         self.include_protobuf = include_protobuf
 
     def default(self, obj):  # pylint: disable=method-hidden,arguments-differ,too-many-return-statements
+        if isinstance(obj, Paginated):
+            return obj.to_dict()
         if isinstance(obj, Account):
             return self.encode_account(obj)
         if isinstance(obj, Wallet):
@@ -257,7 +292,7 @@ class JSONResponseEncoder(JSONEncoder):
                 if isinstance(value, int):
                     meta[key] = dewies_to_lbc(value)
         if 0 < meta.get('creation_height', 0) <= 0: #self.ledger.headers.height:
-            meta['creation_timestamp'] = self.ledger.headers.estimated_timestamp(meta['creation_height'])
+            meta['creation_timestamp'] = self.service.ledger.headers.estimated_timestamp(meta['creation_height'])
         return meta
 
     def encode_input(self, txi):
@@ -266,7 +301,8 @@ class JSONResponseEncoder(JSONEncoder):
             'nout': txi.txo_ref.position
         }
 
-    def encode_account(self, account):
+    @staticmethod
+    def encode_account(account):
         result = account.to_dict()
         result['id'] = account.id
         result.pop('certificates', None)

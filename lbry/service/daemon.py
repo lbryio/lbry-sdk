@@ -7,17 +7,17 @@ from aiohttp.web import GracefulExit
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
-from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
+from lbry.service.json_encoder import JSONResponseEncoder
 from lbry.service.base import Service
 from lbry.service.api import API
 from lbry.console import Console
 
 
 def jsonrpc_dumps_pretty(obj, **kwargs):
-    if not isinstance(obj, dict):
-        data = {"jsonrpc": "2.0", "error": obj.to_dict()}
-    else:
-        data = {"jsonrpc": "2.0", "result": obj}
+    #if not isinstance(obj, dict):
+    #    data = {"jsonrpc": "2.0", "error": obj.to_dict()}
+    #else:
+    data = {"jsonrpc": "2.0", "result": obj}
     return json.dumps(data, cls=JSONResponseEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
@@ -34,7 +34,7 @@ class WebSocketLogHandler(logging.Handler):
                 'name': record.name,
                 'message': self.format(record)
             })
-        except:
+        except Exception:
             self.handleError(record)
 
 
@@ -44,16 +44,16 @@ class WebSocketManager(WebSocketResponse):
         super().__init__(*args, **kwargs)
 
     def subscribe(self, requested: list, subscriptions):
-        for component in requested:
-            if component == '*':
+        for request in requested:
+            if request == '*':
                 for _, component in subscriptions.items():
                     for _, sockets in component.items():
                         sockets.add(self)
-            elif '.' not in component:
-                for _, sockets in subscriptions[component].items():
+            elif '.' not in request:
+                for _, sockets in subscriptions[request].items():
                     sockets.add(self)
-            elif component.count('.') == 1:
-                component, stream = component.split('.')
+            elif request.count('.') == 1:
+                component, stream = request.split('.')
                 subscriptions[component][stream].add(self)
 
     def unsubscribe(self, subscriptions):
@@ -72,6 +72,7 @@ class Daemon:
         self.app = Application()
         self.app['websockets'] = WeakSet()
         self.app['subscriptions'] = {}
+        self.components = {}
         #for component in components:
         #    streams = self.app['subscriptions'][component.name] = {}
         #    for event_name, event_stream in component.event_streams.items():
@@ -86,12 +87,12 @@ class Daemon:
     def run(self):
         loop = asyncio.get_event_loop()
 
-        def exit():
+        def graceful_exit():
             raise GracefulExit()
 
         try:
-            loop.add_signal_handler(signal.SIGINT, exit)
-            loop.add_signal_handler(signal.SIGTERM, exit)
+            loop.add_signal_handler(signal.SIGINT, graceful_exit)
+            loop.add_signal_handler(signal.SIGTERM, graceful_exit)
         except NotImplementedError:
             pass  # Not implemented on Windows
 

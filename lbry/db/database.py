@@ -1,17 +1,20 @@
 import os
 import asyncio
 import tempfile
-from typing import List, Optional, Tuple, Iterable, TYPE_CHECKING
+import multiprocessing as mp
+from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 
 from sqlalchemy import create_engine, text
 
+from lbry.event import EventController
 from lbry.crypto.bip32 import PubKey
-from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Transaction, Output
 from .constants import TXO_TYPES
+from .query_context import initialize, ProgressPublisher
 from . import queries as q
+from . import sync
 
 
 if TYPE_CHECKING:
@@ -48,26 +51,70 @@ async def add_channel_keys_to_txo_results(accounts: List, txos: Iterable[Output]
     if sub_channels:
         await add_channel_keys_to_txo_results(accounts, sub_channels)
 
+ResultType = TypeVar('ResultType')
+
+
+class Result(Generic[ResultType]):
+
+    __slots__ = 'rows', 'total', 'censor'
+
+    def __init__(self, rows: List[ResultType], total, censor=None):
+        self.rows = rows
+        self.total = total
+        self.censor = censor
+
+    def __getitem__(self, item: int) -> ResultType:
+        return self.rows[item]
+
+    def __iter__(self) -> Iterator[ResultType]:
+        return iter(self.rows)
+
+    def __len__(self):
+        return len(self.rows)
+
+    def __repr__(self):
+        return repr(self.rows)
+
 
 class Database:
 
-    def __init__(self, ledger: 'Ledger', url: str, multiprocess=False):
-        self.url = url
+    def __init__(self, ledger: 'Ledger', processes=-1):
+        self.url = ledger.conf.db_url_or_default
         self.ledger = ledger
-        self.multiprocess = multiprocess
+        self.processes = self._normalize_processes(processes)
         self.executor: Optional[Executor] = None
+        self.message_queue = mp.Queue()
+        self.stop_event = mp.Event()
+        self._on_progress_controller = EventController()
+        self.on_progress = self._on_progress_controller.stream
+        self.progress_publisher = ProgressPublisher(
+            self.message_queue, self._on_progress_controller
+        )
+
+    @staticmethod
+    def _normalize_processes(processes):
+        if processes == 0:
+            return os.cpu_count()
+        elif processes > 0:
+            return processes
+        return 1
 
     @classmethod
-    def temp_sqlite_regtest(cls):
-        from lbry import Config, RegTestLedger
+    def temp_sqlite_regtest(cls, lbrycrd_dir=None):
+        from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
         directory = tempfile.mkdtemp()
         conf = Config.with_same_dir(directory)
+        if lbrycrd_dir is not None:
+            conf.lbrycrd_dir = lbrycrd_dir
         ledger = RegTestLedger(conf)
-        return cls(ledger, conf.db_url_or_default)
+        return cls(ledger)
 
     @classmethod
-    def from_memory(cls, ledger):
-        return cls(ledger, 'sqlite:///:memory:')
+    def in_memory(cls):
+        from lbry import Config, Ledger  # pylint: disable=import-outside-toplevel
+        conf = Config.with_same_dir('/dev/null')
+        conf.db_url = 'sqlite:///:memory:'
+        return cls(Ledger(conf))
 
     def sync_create(self, name):
         engine = create_engine(self.url)
@@ -89,21 +136,22 @@ class Database:
 
     async def open(self):
         assert self.executor is None, "Database already open."
-        kwargs = dict(
-            initializer=q.initialize,
-            initargs=(self.url, self.ledger)
-        )
-        if self.multiprocess:
-            self.executor = ProcessPoolExecutor(
-                max_workers=max(os.cpu_count()-1, 4), **kwargs
+        self.progress_publisher.start()
+        kwargs = {
+            "initializer": initialize,
+            "initargs": (
+                self.ledger,
+                self.message_queue, self.stop_event
             )
+        }
+        if self.processes > 1:
+            self.executor = ProcessPoolExecutor(max_workers=self.processes, **kwargs)
         else:
-            self.executor = ThreadPoolExecutor(
-                max_workers=1, **kwargs
-            )
+            self.executor = ThreadPoolExecutor(max_workers=1, **kwargs)
         return await self.run_in_executor(q.check_version_and_create_tables)
 
     async def close(self):
+        self.progress_publisher.stop()
         if self.executor is not None:
             self.executor.shutdown()
             self.executor = None
@@ -115,14 +163,30 @@ class Database:
             self.executor, partial(func, *args, **kwargs)
         )
 
+    async def fetch_result(self, func, *args, **kwargs) -> Result:
+        rows, total = await self.run_in_executor(func, *args, **kwargs)
+        return Result(rows, total)
+
     async def execute(self, sql):
         return await self.run_in_executor(q.execute, sql)
 
     async def execute_fetchall(self, sql):
         return await self.run_in_executor(q.execute_fetchall, sql)
 
-    async def get_best_height(self):
+    async def process_inputs(self, heights):
+        return await self.run_in_executor(sync.process_inputs, heights)
+
+    async def process_claims(self, heights):
+        return await self.run_in_executor(sync.process_claims, heights)
+
+    async def process_supports(self, heights):
+        return await self.run_in_executor(sync.process_supports, heights)
+
+    async def get_best_height(self) -> int:
         return await self.run_in_executor(q.get_best_height)
+
+    async def get_best_height_for_file(self, file_number) -> int:
+        return await self.run_in_executor(q.get_best_height_for_file, file_number)
 
     async def get_blocks_without_filters(self):
         return await self.run_in_executor(q.get_blocks_without_filters)
@@ -139,8 +203,8 @@ class Database:
     async def get_transaction_address_filters(self, block_hash):
         return await self.run_in_executor(q.get_transaction_address_filters, block_hash)
 
-    async def insert_transaction(self, tx):
-        return await self.run_in_executor(q.insert_transaction, tx)
+    async def insert_transaction(self, block_hash, tx):
+        return await self.run_in_executor(q.insert_transaction, block_hash, tx)
 
     async def update_address_used_times(self, addresses):
         return await self.run_in_executor(q.update_address_used_times, addresses)
@@ -167,73 +231,70 @@ class Database:
     async def get_report(self, accounts):
         return await self.run_in_executor(q.get_report, accounts=accounts)
 
-    async def get_addresses(self, **constraints) -> Tuple[List[dict], Optional[int]]:
-        addresses, count = await self.run_in_executor(q.get_addresses, **constraints)
+    async def get_addresses(self, **constraints) -> Result[dict]:
+        addresses = await self.fetch_result(q.get_addresses, **constraints)
         if addresses and 'pubkey' in addresses[0]:
             for address in addresses:
                 address['pubkey'] = PubKey(
                     self.ledger, bytes(address.pop('pubkey')), bytes(address.pop('chain_code')),
                     address.pop('n'), address.pop('depth')
                 )
-        return addresses, count
+        return addresses
 
     async def get_all_addresses(self):
         return await self.run_in_executor(q.get_all_addresses)
 
     async def get_address(self, **constraints):
-        addresses, _ = await self.get_addresses(limit=1, **constraints)
-        if addresses:
-            return addresses[0]
+        for address in await self.get_addresses(limit=1, **constraints):
+            return address
 
     async def add_keys(self, account, chain, pubkeys):
         return await self.run_in_executor(q.add_keys, account, chain, pubkeys)
 
-    async def get_raw_transactions(self, tx_hashes):
-        return await self.run_in_executor(q.get_raw_transactions, tx_hashes)
-
-    async def get_transactions(self, **constraints) -> Tuple[List[Transaction], Optional[int]]:
-        return await self.run_in_executor(q.get_transactions, **constraints)
+    async def get_transactions(self, **constraints) -> Result[Transaction]:
+        return await self.fetch_result(q.get_transactions, **constraints)
 
     async def get_transaction(self, **constraints) -> Optional[Transaction]:
-        txs, _ = await self.get_transactions(limit=1, **constraints)
+        txs = await self.get_transactions(limit=1, **constraints)
         if txs:
             return txs[0]
 
-    async def get_purchases(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        return await self.run_in_executor(q.get_purchases, **constraints)
+    async def get_purchases(self, **constraints) -> Result[Output]:
+        return await self.fetch_result(q.get_purchases, **constraints)
 
-    async def search_claims(self, **constraints) -> Tuple[List[Output], Optional[int], Censor]:
-        return await self.run_in_executor(q.search, **constraints)
+    async def search_claims(self, **constraints) -> Result[Output]:
+        claims, total, censor = await self.run_in_executor(q.search, **constraints)
+        return Result(claims, total, censor)
 
-    async def get_txo_sum(self, **constraints):
+    async def get_txo_sum(self, **constraints) -> int:
         return await self.run_in_executor(q.get_txo_sum, **constraints)
 
-    async def get_txo_plot(self, **constraints):
+    async def get_txo_plot(self, **constraints) -> List[dict]:
         return await self.run_in_executor(q.get_txo_plot, **constraints)
 
-    async def get_txos(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        txos, count = await self.run_in_executor(q.get_txos, **constraints)
+    async def get_txos(self, **constraints) -> Result[Output]:
+        txos = await self.fetch_result(q.get_txos, **constraints)
         if 'wallet' in constraints:
             await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
-        return txos, count
+        return txos
 
-    async def get_utxos(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def get_utxos(self, **constraints) -> Result[Output]:
         return await self.get_txos(is_spent=False, **constraints)
 
-    async def get_supports(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def get_supports(self, **constraints) -> Result[Output]:
         return await self.get_utxos(txo_type=TXO_TYPES['support'], **constraints)
 
-    async def get_claims(self, **constraints) -> Tuple[List[Output], Optional[int]]:
-        txos, count = await self.run_in_executor(q.get_claims, **constraints)
+    async def get_claims(self, **constraints) -> Result[Output]:
+        txos = await self.fetch_result(q.get_claims, **constraints)
         if 'wallet' in constraints:
             await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
-        return txos, count
+        return txos
 
-    async def get_streams(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def get_streams(self, **constraints) -> Result[Output]:
         return await self.get_claims(txo_type=TXO_TYPES['stream'], **constraints)
 
-    async def get_channels(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def get_channels(self, **constraints) -> Result[Output]:
         return await self.get_claims(txo_type=TXO_TYPES['channel'], **constraints)
 
-    async def get_collections(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def get_collections(self, **constraints) -> Result[Output]:
         return await self.get_claims(txo_type=TXO_TYPES['collection'], **constraints)

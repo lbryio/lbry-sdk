@@ -4,7 +4,7 @@ from typing import List, Union
 from sqlalchemy import text, and_
 from sqlalchemy.sql.expression import Select
 try:
-    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.postgresql import insert as pg_insert  # pylint: disable=unused-import
 except ImportError:
     pg_insert = None
 

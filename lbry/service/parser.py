@@ -54,10 +54,6 @@ def parse_argument(tokens, method_name='') -> dict:
     }
     if arg['name'] == 'self':
         return {}
-    try:
-        tokens[0]
-    except:
-        a = 9
     if tokens[0].string == ':':
         tokens.pop(0)
         type_tokens = []
@@ -68,7 +64,7 @@ def parse_argument(tokens, method_name='') -> dict:
         tokens.pop(0)
         default = tokens.pop(0)
         if default.type == token.NAME:
-            default_value = eval(default.string)
+            default_value = eval(default.string)  # pylint: disable=eval-used
             if default_value is not None:
                 arg['default'] = default_value
         elif default.type == token.NUMBER:
@@ -137,8 +133,7 @@ def produce_return_tokens(src: str):
         elif in_return:
             if t.type == token.INDENT:
                 break
-            else:
-                parsed.append(t)
+            parsed.append(t)
     return parsed
 
 
@@ -288,6 +283,7 @@ def get_api_definitions(cls):
 
 
 def write(fp):
+    fp.write('# pylint: skip-file\n')
     fp.write('# DO NOT EDIT: GENERATED FILE\n')
     fp.write(f'interface = ')
     defs = get_api_definitions(api.API)

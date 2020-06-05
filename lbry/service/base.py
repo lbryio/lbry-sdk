@@ -3,9 +3,7 @@ import asyncio
 import logging
 from typing import List, Optional, Tuple, NamedTuple
 
-
-from lbry.conf import Config
-from lbry.db import Database
+from lbry.db import Database, Result
 from lbry.db.constants import TXO_TYPES
 from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Transaction, Output
@@ -30,14 +28,11 @@ class Sync:
         self._on_block_controller = EventController()
         self.on_block = self._on_block_controller.stream
 
-        self._on_progress_controller = EventController()
-        self.on_progress = self._on_progress_controller.stream
+        self._on_progress_controller = db._on_progress_controller
+        self.on_progress = db.on_progress
 
         self._on_ready_controller = EventController()
         self.on_ready = self._on_ready_controller.stream
-
-    def on_bulk_started(self):
-        return self.on_progress.where()  # filter for bulk started event
 
     def on_bulk_started(self):
         return self.on_progress.where()  # filter for bulk started event
@@ -59,9 +54,9 @@ class Service:
 
     sync: Sync
 
-    def __init__(self, ledger: Ledger, db_url: str):
+    def __init__(self, ledger: Ledger):
         self.ledger, self.conf = ledger, ledger.conf
-        self.db = Database(ledger, db_url)
+        self.db = Database(ledger)
         self.wallets = WalletManager(ledger, self.db)
 
         #self.on_address = sync.on_address
@@ -105,7 +100,7 @@ class Service:
 
     def create_wallet(self, file_name):
         path = os.path.join(self.conf.wallet_dir, file_name)
-        return self.wallet_manager.import_wallet(path)
+        return self.wallets.add_from_path(path)
 
     async def get_addresses(self, **constraints):
         return await self.db.get_addresses(**constraints)
@@ -123,11 +118,11 @@ class Service:
         self.constraint_spending_utxos(constraints)
         return self.db.get_utxos(**constraints)
 
-    async def get_txos(self, resolve=False, **constraints) -> Tuple[List[Output], Optional[int]]:
-        txos, count = await self.db.get_txos(**constraints)
+    async def get_txos(self, resolve=False, **constraints) -> Result[Output]:
+        txos = await self.db.get_txos(**constraints)
         if resolve:
-            return await self._resolve_for_local_results(constraints.get('accounts', []), txos), count
-        return txos, count
+            return await self._resolve_for_local_results(constraints.get('accounts', []), txos)
+        return txos
 
     def get_txo_sum(self, **constraints):
         return self.db.get_txo_sum(**constraints)
@@ -142,17 +137,17 @@ class Service:
         tx = await self.db.get_transaction(tx_hash=tx_hash)
         if tx:
             return tx
-        try:
-            raw, merkle = await self.ledger.network.get_transaction_and_merkle(tx_hash)
-        except CodeMessageError as e:
-            if 'No such mempool or blockchain transaction.' in e.message:
-                return {'success': False, 'code': 404, 'message': 'transaction not found'}
-            return {'success': False, 'code': e.code, 'message': e.message}
-        height = merkle.get('block_height')
-        tx = Transaction(unhexlify(raw), height=height)
-        if height and height > 0:
-            await self.ledger.maybe_verify_transaction(tx, height, merkle)
-        return tx
+        # try:
+        #     raw, merkle = await self.ledger.network.get_transaction_and_merkle(tx_hash)
+        # except CodeMessageError as e:
+        #     if 'No such mempool or blockchain transaction.' in e.message:
+        #         return {'success': False, 'code': 404, 'message': 'transaction not found'}
+        #     return {'success': False, 'code': e.code, 'message': e.message}
+        # height = merkle.get('block_height')
+        # tx = Transaction(unhexlify(raw), height=height)
+        # if height and height > 0:
+        #     await self.ledger.maybe_verify_transaction(tx, height, merkle)
+        # return tx
 
     async def search_transactions(self, txids):
         raise NotImplementedError
@@ -162,16 +157,17 @@ class Service:
 
     async def get_address_manager_for_address(self, address):
         details = await self.db.get_address(address=address)
-        for account in self.accounts:
-            if account.id == details['account']:
-                return account.address_managers[details['chain']]
+        for wallet in self.wallets:
+            for account in wallet.accounts:
+                if account.id == details['account']:
+                    return account.address_managers[details['chain']]
         return None
 
     async def reset(self):
-        self.ledger.config = {
+        self.ledger.conf = {
             'auto_connect': True,
-            'default_servers': self.config.lbryum_servers,
-            'data_path': self.config.wallet_dir,
+            'default_servers': self.conf.lbryum_servers,
+            'data_path': self.conf.wallet_dir,
         }
         await self.ledger.stop()
         await self.ledger.start()
@@ -181,13 +177,13 @@ class Service:
             return self.ledger.genesis_hash
         return (await self.ledger.headers.hash(self.ledger.headers.height)).decode()
 
-    async def maybe_broadcast_or_release(self, tx, blocking=False, preview=False):
+    async def maybe_broadcast_or_release(self, tx, preview=False, no_wait=False):
         if preview:
             return await self.release_tx(tx)
         try:
             await self.broadcast(tx)
-            if blocking:
-                await self.wait(tx, timeout=None)
+            if not no_wait:
+                await self.wait(tx)
         except Exception:
             await self.release_tx(tx)
             raise
@@ -217,7 +213,7 @@ class Service:
         if resolve:
             claim_ids = [p.purchased_claim_id for p in purchases]
             try:
-                resolved, _, _, _ = await self.claim_search([], claim_ids=claim_ids)
+                resolved, _, _ = await self.search_claims([], claim_ids=claim_ids)
             except Exception as err:
                 if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                     raise
@@ -228,7 +224,7 @@ class Service:
                 purchase.purchased_claim = lookup.get(purchase.purchased_claim_id)
         return purchases
 
-    async def _resolve_for_local_results(self, accounts, txos):
+    async def _resolve_for_local_results(self, accounts, txos: Result) -> Result:
         results = []
         response = await self.resolve(
             accounts, [txo.permanent_url for txo in txos if txo.can_decode_claim]
@@ -242,12 +238,13 @@ class Service:
                 if isinstance(resolved, dict) and 'error' in resolved:
                     txo.meta['error'] = resolved['error']
                 results.append(txo)
-        return results
+        txos.rows = results
+        return txos
 
     async def resolve_collection(self, collection, offset=0, page_size=1):
         claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
         try:
-            resolve_results, _, _, _ = await self.claim_search([], claim_ids=claim_ids)
+            resolve_results, _, _ = await self.search_claims([], claim_ids=claim_ids)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                 raise

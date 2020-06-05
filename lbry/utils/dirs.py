@@ -52,12 +52,10 @@ def user_data_dir(appname=None, appauthor=None, version=None, roaming=False):
             for a discussion of issues.
 
     Typical user data directories are:
-        Mac OS X:               ~/Library/Application Support/<AppName>
-        Unix:                   ~/.local/share/<AppName>    # or in $XDG_DATA_HOME, if defined
-        Win XP (not roaming):   C:\Documents and Settings\<username>\Application Data\<AppAuthor>\<AppName>
-        Win XP (roaming):       C:\Documents and Settings\<username>\Local Settings\Application Data\<AppAuthor>\<AppName>
-        Win 7  (not roaming):   C:\Users\<username>\AppData\Local\<AppAuthor>\<AppName>
-        Win 7  (roaming):       C:\Users\<username>\AppData\Roaming\<AppAuthor>\<AppName>
+        Mac OS X: ~/Library/Application Support/<AppName>
+        Unix:     ~/.local/share/<AppName>    # or in $XDG_DATA_HOME, if defined
+        Win XP:   C:\Documents and Settings\<username>\Application Data\<AppAuthor>\<AppName>
+        Win 7:    C:\Users\<username>\AppData\Local\<AppAuthor>\<AppName>
 
     For Unix, we follow the XDG spec and support $XDG_DATA_HOME.
     That means, by default "~/.local/share/<AppName>".
@@ -65,7 +63,7 @@ def user_data_dir(appname=None, appauthor=None, version=None, roaming=False):
     if sys.platform == "win32":
         if appauthor is None:
             appauthor = appname
-        const = roaming and "CSIDL_APPDATA" or "CSIDL_LOCAL_APPDATA"
+        const = "CSIDL_APPDATA" if roaming else "CSIDL_LOCAL_APPDATA"
         path = os.path.normpath(_get_win_folder(const))
         if appname:
             if appauthor is not False:
@@ -130,7 +128,7 @@ def user_config_dir(appname=None, appauthor=None, version=None, roaming=False):
 
 
 def _get_win_folder(csidl_name):
-    import ctypes
+    import ctypes  # pylint: disable=import-outside-toplevel
 
     csidl_const = {
         "CSIDL_APPDATA": 26,
@@ -157,9 +155,9 @@ def _get_win_folder(csidl_name):
 
 
 def _get_win_download_folder():
-    import ctypes
-    from ctypes import windll, wintypes
-    from uuid import UUID
+    import ctypes  # pylint: disable=import-outside-toplevel
+    from ctypes import windll, wintypes  # pylint: disable=import-outside-toplevel
+    from uuid import UUID  # pylint: disable=import-outside-toplevel
 
     class GUID(ctypes.Structure):
         _fields_ = [
@@ -177,12 +175,12 @@ def _get_win_download_folder():
             for i in range(2, 8):
                 self.data4[i] = rest >> (8-i-1)*8 & 0xff
 
-    SHGetKnownFolderPath = windll.shell32.SHGetKnownFolderPath
+    SHGetKnownFolderPath = windll.shell32.SHGetKnownFolderPath  # pylint: disable=invalid-name
     SHGetKnownFolderPath.argtypes = [
         ctypes.POINTER(GUID), wintypes.DWORD, wintypes.HANDLE, ctypes.POINTER(ctypes.c_wchar_p)
     ]
 
-    FOLDERID_Downloads = '{374DE290-123F-4565-9164-39C4925E467B}'
+    FOLDERID_Downloads = '{374DE290-123F-4565-9164-39C4925E467B}'  # pylint: disable=invalid-name
     guid = GUID(FOLDERID_Downloads)
     pathptr = ctypes.c_wchar_p()
 

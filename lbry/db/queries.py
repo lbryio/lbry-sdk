@@ -1,383 +1,91 @@
 # pylint: disable=singleton-comparison
 import struct
+import logging
+import itertools
 from datetime import date
 from decimal import Decimal
 from binascii import unhexlify
 from operator import itemgetter
-from contextvars import ContextVar
-from itertools import chain
-from typing import NamedTuple, Tuple, Dict, Callable, Optional
+from typing import Tuple, List, Dict, Optional, Union
 
-from sqlalchemy import create_engine, union, func, inspect
-from sqlalchemy.engine import Engine, Connection
-from sqlalchemy.future import select
+from sqlalchemy import union, func, text
+from sqlalchemy.future import select, Select
 
 from lbry.schema.tags import clean_tags
 from lbry.schema.result import Censor, Outputs
 from lbry.schema.url import URL, normalize_name
-from lbry.schema.mime_types import guess_stream_type
 from lbry.error import ResolveCensoredError
-from lbry.blockchain.ledger import Ledger
-from lbry.blockchain.transaction import Transaction, Output, Input, OutputScript, TXRefImmutable
+from lbry.blockchain.transaction import Transaction, Output, OutputScript, TXRefImmutable
 
-from .utils import *
-from .tables import *
-from .constants import *
+from .utils import query, in_account_ids
+from .query_context import context
+from .constants import (
+    TXO_TYPES, CLAIM_TYPE_CODES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
+    SEARCH_PARAMS, SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
+)
+from .tables import (
+    metadata,
+    SCHEMA_VERSION, Version,
+    Block, TX, TXO, TXI, txi_join_account, txo_join_account,
+    Claim, Claimtrie,
+    PubkeyAddress, AccountAddress
+)
 
 
 MAX_QUERY_VARIABLES = 900
 
 
-_context: ContextVar['QueryContext'] = ContextVar('_context')
-
-
-def ctx():
-    return _context.get()
-
-
-def initialize(url: str, ledger: Ledger, track_metrics=False, block_and_filter=None):
-    engine = create_engine(url)
-    connection = engine.connect()
-    if block_and_filter is not None:
-        blocked_streams, blocked_channels, filtered_streams, filtered_channels = block_and_filter
-    else:
-        blocked_streams = blocked_channels = filtered_streams = filtered_channels = {}
-    _context.set(
-        QueryContext(
-            engine=engine, connection=connection, ledger=ledger,
-            stack=[], metrics={}, is_tracking_metrics=track_metrics,
-            blocked_streams=blocked_streams, blocked_channels=blocked_channels,
-            filtered_streams=filtered_streams, filtered_channels=filtered_channels,
-        )
-    )
+log = logging.getLogger(__name__)
 
 
 def check_version_and_create_tables():
-    context = ctx()
-    if context.has_table('version'):
-        version = context.fetchone(select(Version.c.version).limit(1))
-        if version and version['version'] == SCHEMA_VERSION:
-            return
-    metadata.drop_all(context.engine)
-    metadata.create_all(context.engine)
-    context.execute(Version.insert().values(version=SCHEMA_VERSION))
-
-
-class QueryContext(NamedTuple):
-    engine: Engine
-    connection: Connection
-    ledger: Ledger
-    stack: List[List]
-    metrics: Dict
-    is_tracking_metrics: bool
-    blocked_streams: Dict
-    blocked_channels: Dict
-    filtered_streams: Dict
-    filtered_channels: Dict
-
-    @property
-    def is_postgres(self):
-        return self.connection.dialect.name == 'postgresql'
-
-    @property
-    def is_sqlite(self):
-        return self.connection.dialect.name == 'sqlite'
-
-    def raise_unsupported_dialect(self):
-        raise RuntimeError(f'Unsupported database dialect: {self.connection.dialect.name}.')
-
-    def reset_metrics(self):
-        self.stack = []
-        self.metrics = {}
-
-    def get_resolve_censor(self) -> Censor:
-        return Censor(self.blocked_streams, self.blocked_channels)
-
-    def get_search_censor(self) -> Censor:
-        return Censor(self.filtered_streams, self.filtered_channels)
-
-    def execute(self, sql, *args):
-        return self.connection.execute(sql, *args)
-
-    def fetchone(self, sql, *args):
-        row = self.connection.execute(sql, *args).fetchone()
-        return dict(row._mapping) if row else row
-
-    def fetchall(self, sql, *args):
-        rows = self.connection.execute(sql, *args).fetchall()
-        return [dict(row._mapping) for row in rows]
-
-    def insert_or_ignore(self, table):
-        if self.is_sqlite:
-            return table.insert().prefix_with("OR IGNORE")
-        elif self.is_postgres:
-            return pg_insert(table).on_conflict_do_nothing()
-        else:
-            self.raise_unsupported_dialect()
-
-    def insert_or_replace(self, table, replace):
-        if self.is_sqlite:
-            return table.insert().prefix_with("OR REPLACE")
-        elif self.is_postgres:
-            insert = pg_insert(table)
-            return insert.on_conflict_do_update(
-                table.primary_key, set_={col: getattr(insert.excluded, col) for col in replace}
-            )
-        else:
-            self.raise_unsupported_dialect()
-
-    def has_table(self, table):
-        return inspect(self.engine).has_table(table)
-
-
-class RowCollector:
-
-    def __init__(self, context: QueryContext):
-        self.context = context
-        self.ledger = context.ledger
-        self.blocks = []
-        self.txs = []
-        self.txos = []
-        self.txis = []
-        self.claims = []
-        self.tags = []
-
-    @staticmethod
-    def block_to_row(block):
-        return {
-            'block_hash': block.block_hash,
-            'previous_hash': block.prev_block_hash,
-            'file_number': block.file_number,
-            'height': 0 if block.is_first_block else None,
-        }
-
-    @staticmethod
-    def tx_to_row(block_hash: bytes, tx: Transaction):
-        row = {
-            'tx_hash': tx.hash,
-            'block_hash': block_hash,
-            'raw': tx.raw,
-            'height': tx.height,
-            'position': tx.position,
-            'is_verified': tx.is_verified,
-            # TODO: fix
-            # 'day': tx.get_ordinal_day(self.db.ledger),
-            'purchased_claim_hash': None,
-        }
-        txos = tx.outputs
-        if len(txos) >= 2 and txos[1].can_decode_purchase_data:
-            txos[0].purchase = txos[1]
-            row['purchased_claim_hash'] = txos[1].purchase_data.claim_hash
-        return row
-
-    @staticmethod
-    def txi_to_row(tx: Transaction, txi: Input):
-        return {
-            'tx_hash': tx.hash,
-            'txo_hash': txi.txo_ref.hash,
-            'position': txi.position,
-        }
-
-    def txo_to_row(self, tx: Transaction, txo: Output):
-        row = {
-            'tx_hash': tx.hash,
-            'txo_hash': txo.hash,
-            'address': txo.get_address(self.ledger) if txo.has_address else None,
-            'position': txo.position,
-            'amount': txo.amount,
-            'script_offset': txo.script.offset,
-            'script_length': txo.script.length,
-            'txo_type': 0,
-            'claim_id': None,
-            'claim_hash': None,
-            'claim_name': None,
-            'reposted_claim_hash': None,
-            'channel_hash': None,
-        }
-        if txo.is_claim:
-            if txo.can_decode_claim:
-                claim = txo.claim
-                row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
-                if claim.is_repost:
-                    row['reposted_claim_hash'] = claim.repost.reference.claim_hash
-                if claim.is_signed:
-                    row['channel_hash'] = claim.signing_channel_hash
-            else:
-                row['txo_type'] = TXO_TYPES['stream']
-        elif txo.is_support:
-            row['txo_type'] = TXO_TYPES['support']
-        elif txo.purchase is not None:
-            row['txo_type'] = TXO_TYPES['purchase']
-            row['claim_id'] = txo.purchased_claim_id
-            row['claim_hash'] = txo.purchased_claim_hash
-        if txo.script.is_claim_involved:
-            row['claim_id'] = txo.claim_id
-            row['claim_hash'] = txo.claim_hash
-            row['claim_name'] = txo.claim_name
-        return row
-
-    def add_block(self, block):
-        self.blocks.append(self.block_to_row(block))
-        for tx in block.txs:
-            self.add_transaction(block.block_hash, tx)
-        return self
-
-    def add_transaction(self, block_hash: bytes, tx: Transaction):
-        self.txs.append(self.tx_to_row(block_hash, tx))
-        for txi in tx.inputs:
-            if txi.coinbase is None:
-                self.txis.append(self.txi_to_row(tx, txi))
-        for txo in tx.outputs:
-            self.txos.append(self.txo_to_row(tx, txo))
-        return self
-
-    def add_claim(self, txo):
-        try:
-            assert txo.claim_name
-            assert txo.normalized_name
-        except:
-            #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
-            return
-        tx = txo.tx_ref.tx
-        claim_hash = txo.claim_hash
-        claim_record = {
-            'claim_hash': claim_hash,
-            'claim_id': txo.claim_id,
-            'claim_name': txo.claim_name,
-            'normalized': txo.normalized_name,
-            'address': txo.get_address(self.ledger),
-            'txo_hash': txo.ref.hash,
-            'tx_position': tx.position,
-            'amount': txo.amount,
-            'timestamp': 0, # TODO: fix
-            'creation_timestamp': 0, # TODO: fix
-            'height': tx.height,
-            'creation_height': tx.height,
-            'release_time': None,
-            'title': None,
-            'author': None,
-            'description': None,
-            'claim_type': None,
-            # streams
-            'stream_type': None,
-            'media_type': None,
-            'fee_currency': None,
-            'fee_amount': 0,
-            'duration': None,
-            # reposts
-            'reposted_claim_hash': None,
-            # claims which are channels
-            'public_key_bytes': None,
-            'public_key_hash': None,
-        }
-        self.claims.append(claim_record)
-
-        try:
-            claim = txo.claim
-        except:
-            #self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
-            return
-
-        if claim.is_stream:
-            claim_record['claim_type'] = TXO_TYPES['stream']
-            claim_record['media_type'] = claim.stream.source.media_type
-            claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
-            claim_record['title'] = claim.stream.title
-            claim_record['description'] = claim.stream.description
-            claim_record['author'] = claim.stream.author
-            if claim.stream.video and claim.stream.video.duration:
-                claim_record['duration'] = claim.stream.video.duration
-            if claim.stream.audio and claim.stream.audio.duration:
-                claim_record['duration'] = claim.stream.audio.duration
-            if claim.stream.release_time:
-                claim_record['release_time'] = claim.stream.release_time
-            if claim.stream.has_fee:
-                fee = claim.stream.fee
-                if isinstance(fee.currency, str):
-                    claim_record['fee_currency'] = fee.currency.lower()
-                if isinstance(fee.amount, Decimal):
-                    claim_record['fee_amount'] = int(fee.amount*1000)
-        elif claim.is_repost:
-            claim_record['claim_type'] = TXO_TYPES['repost']
-            claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
-        elif claim.is_channel:
-            claim_record['claim_type'] = TXO_TYPES['channel']
-            claim_record['public_key_bytes'] = txo.claim.channel.public_key_bytes
-            claim_record['public_key_hash'] = self.ledger.address_to_hash160(
-                self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)
-            )
-
-        for tag in clean_tags(claim.message.tags):
-            self.tags.append({'claim_hash': claim_hash, 'tag': tag})
-
-        return self
-
-    def save(self, progress: Callable = None):
-        queries = (
-            (Block.insert(), self.blocks),
-            (TX.insert(), self.txs),
-            (TXO.insert(), self.txos),
-            (TXI.insert(), self.txis),
-            (Claim.insert(), self.claims),
-            (Tag.insert(), self.tags),
-        )
-        total_rows = sum(len(query[1]) for query in queries)
-        inserted_rows = 0
-        if progress is not None:
-            progress(inserted_rows, total_rows)
-        execute = self.context.connection.execute
-        for sql, rows in queries:
-            for chunk_size, chunk_rows in chunk(rows, 10000):
-                execute(sql, list(chunk_rows))
-                inserted_rows += chunk_size
-                if progress is not None:
-                    progress(inserted_rows, total_rows)
+    with context("db.connecting") as ctx:
+        if ctx.is_sqlite:
+            ctx.execute(text("PRAGMA journal_mode=WAL;"))
+        if ctx.has_table('version'):
+            version = ctx.fetchone(select(Version.c.version).limit(1))
+            if version and version['version'] == SCHEMA_VERSION:
+                return
+        metadata.drop_all(ctx.engine)
+        metadata.create_all(ctx.engine)
+        ctx.execute(Version.insert().values(version=SCHEMA_VERSION))
+        if ctx.is_postgres:
+            ctx.execute(text("ALTER TABLE txi DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE txo DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE tx DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE claim DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE claimtrie DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE block DISABLE TRIGGER ALL;"))
 
 
 def insert_transaction(block_hash, tx):
-    RowCollector(ctx()).add_transaction(block_hash, tx).save()
-
-
-def process_claims_and_supports(block_range=None):
-    context = ctx()
-    if context.is_sqlite:
-        address_query = select(TXO.c.address).where(TXI.c.txo_hash == TXO.c.txo_hash)
-        sql = (
-            TXI.update()
-            .values(address=address_query.scalar_subquery())
-            .where(TXI.c.address == None)
-        )
-    else:
-        sql = (
-            TXI.update()
-            .values({TXI.c.address: TXO.c.address})
-            .where((TXI.c.address == None) & (TXI.c.txo_hash == TXO.c.txo_hash))
-        )
-    context.execute(sql)
-
-    context.execute(Claim.delete())
-    rows = RowCollector(ctx())
-    for claim in get_txos(txo_type__in=CLAIM_TYPE_CODES, is_spent=False)[0]:
-        rows.add_claim(claim)
-    rows.save()
+    context().get_bulk_loader().add_transaction(block_hash, tx).save()
 
 
 def execute(sql):
-    return ctx().execute(text(sql))
+    return context().execute(text(sql))
 
 
 def execute_fetchall(sql):
-    return ctx().fetchall(text(sql))
+    return context().fetchall(text(sql))
 
 
 def get_best_height():
-    return ctx().fetchone(
+    return context().fetchone(
         select(func.coalesce(func.max(TX.c.height), -1).label('total')).select_from(TX)
     )['total']
 
 
+def get_best_height_for_file(file_number):
+    return context().fetchone(
+        select(func.coalesce(func.max(Block.c.height), -1).label('height'))
+        .select_from(Block)
+        .where(Block.c.file_number == file_number)
+    )['height']
+
+
 def get_blocks_without_filters():
-    return ctx().fetchall(
+    return context().fetchall(
         select(Block.c.block_hash)
         .select_from(Block)
         .where(Block.c.block_filter == None)
@@ -385,7 +93,7 @@ def get_blocks_without_filters():
 
 
 def get_transactions_without_filters():
-    return ctx().fetchall(
+    return context().fetchall(
         select(TX.c.tx_hash)
         .select_from(TX)
         .where(TX.c.tx_filter == None)
@@ -399,7 +107,7 @@ def get_block_tx_addresses(block_hash=None, tx_hash=None):
         constraint = (TX.c.tx_hash == tx_hash)
     else:
         raise ValueError('block_hash or tx_hash must be provided.')
-    return ctx().fetchall(
+    return context().fetchall(
         union(
             select(TXO.c.address).select_from(TXO.join(TX)).where((TXO.c.address != None) & constraint),
             select(TXI.c.address).select_from(TXI.join(TX)).where((TXI.c.address != None) & constraint),
@@ -408,13 +116,13 @@ def get_block_tx_addresses(block_hash=None, tx_hash=None):
 
 
 def get_block_address_filters():
-    return ctx().fetchall(
+    return context().fetchall(
         select(Block.c.block_hash, Block.c.block_filter).select_from(Block)
     )
 
 
 def get_transaction_address_filters(block_hash):
-    return ctx().fetchall(
+    return context().fetchall(
         select(TX.c.tx_hash, TX.c.tx_filter)
         .select_from(TX)
         .where(TX.c.block_hash == block_hash)
@@ -422,7 +130,7 @@ def get_transaction_address_filters(block_hash):
 
 
 def update_address_used_times(addresses):
-    ctx().execute(
+    context().execute(
         PubkeyAddress.update()
         .values(used_times=(
             select(func.count(TXO.c.address)).where((TXO.c.address == PubkeyAddress.c.address)),
@@ -432,13 +140,13 @@ def update_address_used_times(addresses):
 
 
 def reserve_outputs(txo_hashes, is_reserved=True):
-    ctx().execute(
+    context().execute(
         TXO.update().values(is_reserved=is_reserved).where(TXO.c.txo_hash.in_(txo_hashes))
     )
 
 
 def release_all_outputs(account_id):
-    ctx().execute(
+    context().execute(
         TXO.update().values(is_reserved=False).where(
             (TXO.c.is_reserved == True) &
             (TXO.c.address.in_(select(AccountAddress.c.address).where(in_account_ids(account_id))))
@@ -456,19 +164,28 @@ def select_transactions(cols, account_ids=None, **constraints):
             select(TXI.c.tx_hash).select_from(txi_join_account).where(where)
         )
         s = s.where(TX.c.tx_hash.in_(tx_hashes))
-    return ctx().fetchall(query([TX], s, **constraints))
+    return context().fetchall(query([TX], s, **constraints))
 
 
 TXO_NOT_MINE = Output(None, None, is_my_output=False)
 
 
 def get_raw_transactions(tx_hashes):
-    return ctx().fetchall(
+    return context().fetchall(
         select(TX.c.tx_hash, TX.c.raw).where(TX.c.tx_hash.in_(tx_hashes))
     )
 
 
-def get_transactions(wallet=None, include_total=False, **constraints) -> Tuple[List[Transaction], Optional[int]]:
+def get_transactions(**constraints) -> Tuple[List[Transaction], Optional[int]]:
+    txs = []
+    sql = select(TX.c.raw, TX.c.height, TX.c.position).select_from(TX)
+    rows = context().fetchall(query([TX], sql, **constraints))
+    for row in rows:
+        txs.append(Transaction(row['raw'], height=row['height'], position=row['position']))
+    return txs, 0
+
+
+def _get_transactions(wallet=None, include_total=False, **constraints) -> Tuple[List[Transaction], Optional[int]]:
     include_is_spent = constraints.pop('include_is_spent', False)
     include_is_my_input = constraints.pop('include_is_my_input', False)
     include_is_my_output = constraints.pop('include_is_my_output', False)
@@ -599,7 +316,7 @@ def select_txos(
         tables.append(Claim)
         joins = joins.join(Claim)
     s = s.select_from(joins)
-    return ctx().fetchall(query(tables, s, **constraints))
+    return context().fetchall(query(tables, s, **constraints))
 
 
 def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Output], Optional[int]]:
@@ -750,8 +467,7 @@ def get_txo_plot(start_day=None, days_back=0, end_day=None, days_after=None, **c
     _clean_txo_constraints_for_aggregation(constraints)
     if start_day is None:
         # TODO: Fix
-        raise NotImplementedError
-        current_ordinal = 0 # self.ledger.headers.estimated_date(self.ledger.headers.height).toordinal()
+        current_ordinal = 0  # self.ledger.headers.estimated_date(self.ledger.headers.height).toordinal()
         constraints['day__gte'] = current_ordinal - days_back
     else:
         constraints['day__gte'] = date.fromisoformat(start_day).toordinal()
@@ -774,14 +490,14 @@ def get_purchases(**constraints) -> Tuple[List[Output], Optional[int]]:
     if not {'purchased_claim_hash', 'purchased_claim_hash__in'}.intersection(constraints):
         constraints['purchased_claim_hash__is_not_null'] = True
     constraints['tx_hash__in'] = (
-        select(TXI.c.tx_hash).select_from(txi_join_account).where(in_account(accounts))
+        select(TXI.c.tx_hash).select_from(txi_join_account).where(in_account_ids(accounts))
     )
     txs, count = get_transactions(**constraints)
     return [tx.outputs[0] for tx in txs], count
 
 
 def select_addresses(cols, **constraints):
-    return ctx().fetchall(query(
+    return context().fetchall(query(
         [AccountAddress, PubkeyAddress],
         select(*cols).select_from(PubkeyAddress.join(AccountAddress)),
         **constraints
@@ -812,11 +528,11 @@ def get_address_count(**constraints):
 
 
 def get_all_addresses(self):
-    return ctx().execute(select(PubkeyAddress.c.address))
+    return context().execute(select(PubkeyAddress.c.address))
 
 
 def add_keys(account, chain, pubkeys):
-    c = ctx()
+    c = context()
     c.execute(
         c.insert_or_ignore(PubkeyAddress)
         .values([{'address': k.address} for k in pubkeys])
@@ -846,7 +562,7 @@ def get_supports_summary(self, **constraints):
 
 
 def search_to_bytes(constraints) -> Union[bytes, Tuple[bytes, Dict]]:
-    return Outputs.to_bytes(*search(constraints))
+    return Outputs.to_bytes(*search(**constraints))
 
 
 def resolve_to_bytes(urls) -> Union[bytes, Tuple[bytes, Dict]]:
@@ -854,26 +570,26 @@ def resolve_to_bytes(urls) -> Union[bytes, Tuple[bytes, Dict]]:
 
 
 def execute_censored(sql, row_offset: int, row_limit: int, censor: Censor) -> List:
-    context = ctx()
-    return ctx().fetchall(sql)
-    c = context.db.cursor()
-    def row_filter(cursor, row):
-        nonlocal row_offset
-        #row = row_factory(cursor, row)
-        if len(row) > 1 and censor.censor(row):
-            return
-        if row_offset:
-            row_offset -= 1
-            return
-        return row
-    c.setrowtrace(row_filter)
-    i, rows = 0, []
-    for row in c.execute(sql):
-        i += 1
-        rows.append(row)
-        if i >= row_limit:
-            break
-    return rows
+    ctx = context()
+    return ctx.fetchall(sql)
+    # c = ctx.db.cursor()
+    # def row_filter(cursor, row):
+    #     nonlocal row_offset
+    #     #row = row_factory(cursor, row)
+    #     if len(row) > 1 and censor.censor(row):
+    #         return
+    #     if row_offset:
+    #         row_offset -= 1
+    #         return
+    #     return row
+    # c.setrowtrace(row_filter)
+    # i, rows = 0, []
+    # for row in c.execute(sql):
+    #     i += 1
+    #     rows.append(row)
+    #     if i >= row_limit:
+    #         break
+    # return rows
 
 
 def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
@@ -938,7 +654,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
 
     if 'public_key_id' in constraints:
         constraints['public_key_hash'] = (
-            ctx().ledger.address_to_hash160(constraints.pop('public_key_id')))
+            context().ledger.address_to_hash160(constraints.pop('public_key_id')))
     if 'channel_hash' in constraints:
         constraints['channel_hash'] = constraints.pop('channel_hash')
     if 'channel_ids' in constraints:
@@ -984,7 +700,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
             claim_types = [claim_types]
         if claim_types:
             constraints['claim_type__in'] = {
-                CLAIM_TYPES[claim_type] for claim_type in claim_types
+                CLAIM_TYPE_CODES[claim_type] for claim_type in claim_types
             }
     if 'stream_types' in constraints:
         stream_types = constraints.pop('stream_types')
@@ -1053,23 +769,23 @@ def search_claims(censor: Censor, **constraints) -> List:
             TXO.c.position.label('txo_position'),
             Claim.c.claim_hash,
             Claim.c.txo_hash,
-#            Claim.c.claims_in_channel,
-#            Claim.c.reposted,
-#            Claim.c.height,
-#            Claim.c.creation_height,
-#            Claim.c.activation_height,
-#            Claim.c.expiration_height,
-#            Claim.c.effective_amount,
-#            Claim.c.support_amount,
-#            Claim.c.trending_group,
-#            Claim.c.trending_mixed,
-#            Claim.c.trending_local,
-#            Claim.c.trending_global,
-#            Claim.c.short_url,
-#            Claim.c.canonical_url,
+            # Claim.c.claims_in_channel,
+            # Claim.c.reposted,
+            # Claim.c.height,
+            # Claim.c.creation_height,
+            # Claim.c.activation_height,
+            # Claim.c.expiration_height,
+            # Claim.c.effective_amount,
+            # Claim.c.support_amount,
+            # Claim.c.trending_group,
+            # Claim.c.trending_mixed,
+            # Claim.c.trending_local,
+            # Claim.c.trending_global,
+            # Claim.c.short_url,
+            # Claim.c.canonical_url,
             Claim.c.channel_hash,
             Claim.c.reposted_claim_hash,
-#            Claim.c.signature_valid
+            # Claim.c.signature_valid
         ], **constraints
     )
 
@@ -1079,9 +795,9 @@ def get_claims(**constraints) -> Tuple[List[Output], Optional[int]]:
 
 
 def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
-    censor = ctx().get_resolve_censor()
+    censor = context().get_resolve_censor()
     repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
-    channel_hashes = set(chain(
+    channel_hashes = set(itertools.chain(
         filter(None, map(itemgetter('channel_hash'), txo_rows)),
         censor_channels
     ))
@@ -1107,8 +823,8 @@ def old_search(**constraints) -> Tuple[List, List, int, int, Censor]:
         total = count_claims(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    context = ctx()
-    search_censor = context.get_search_censor()
+    ctx = context()
+    search_censor = ctx.get_search_censor()
     txo_rows = search_claims(search_censor, **constraints)
     extra_txo_rows = _get_referenced_rows(txo_rows, search_censor.censored.keys())
     return txo_rows, extra_txo_rows, constraints['offset'], total, search_censor
@@ -1122,8 +838,8 @@ def search(**constraints) -> Tuple[List, int, Censor]:
         total = count_claims(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    context = ctx()
-    search_censor = context.get_search_censor()
+    ctx = context()
+    search_censor = ctx.get_search_censor()
     txos = []
     for row in search_claims(search_censor, **constraints):
         source = row['raw'][row['script_offset']:row['script_offset']+row['script_length']]
@@ -1148,7 +864,7 @@ def resolve(urls) -> Tuple[List, List]:
 
 
 def resolve_url(raw_url):
-    censor = ctx().get_resolve_censor()
+    censor = context().get_resolve_censor()
 
     try:
         url = URL.parse(raw_url)
@@ -1158,12 +874,12 @@ def resolve_url(raw_url):
     channel = None
 
     if url.has_channel:
-        query = url.channel.to_dict()
-        if set(query) == {'name'}:
-            query['is_controlling'] = True
+        q = url.channel.to_dict()
+        if set(q) == {'name'}:
+            q['is_controlling'] = True
         else:
-            query['order_by'] = ['^creation_height']
-        matches = search_claims(censor, **query, limit=1)
+            q['order_by'] = ['^creation_height']
+        matches = search_claims(censor, **q, limit=1)
         if matches:
             channel = matches[0]
         elif censor.censored:
@@ -1172,18 +888,18 @@ def resolve_url(raw_url):
             return LookupError(f'Could not find channel in "{raw_url}".')
 
     if url.has_stream:
-        query = url.stream.to_dict()
+        q = url.stream.to_dict()
         if channel is not None:
-            if set(query) == {'name'}:
+            if set(q) == {'name'}:
                 # temporarily emulate is_controlling for claims in channel
-                query['order_by'] = ['effective_amount', '^height']
+                q['order_by'] = ['effective_amount', '^height']
             else:
-                query['order_by'] = ['^channel_join']
-            query['channel_hash'] = channel['claim_hash']
-            query['signature_valid'] = 1
-        elif set(query) == {'name'}:
-            query['is_controlling'] = 1
-        matches = search_claims(censor, **query, limit=1)
+                q['order_by'] = ['^channel_join']
+            q['channel_hash'] = channel['claim_hash']
+            q['signature_valid'] = 1
+        elif set(q) == {'name'}:
+            q['is_controlling'] = 1
+        matches = search_claims(censor, **q, limit=1)
         if matches:
             return matches[0]
         elif censor.censored:

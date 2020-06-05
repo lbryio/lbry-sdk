@@ -22,7 +22,7 @@ if typing.TYPE_CHECKING:
     from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
-    from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
+    from lbry.service.exchange_rate_manager import ExchangeRateManager
     from lbry.service.base import Service
 
 log = logging.getLogger(__name__)

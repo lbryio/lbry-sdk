@@ -20,6 +20,7 @@ from lbry.stream.managed_stream import ManagedStream
 from lbry.event import EventController, EventStream
 
 from .base import Service
+from .json_encoder import Paginated
 
 
 DEFAULT_PAGE_SIZE = 20
@@ -32,12 +33,7 @@ async def paginate_rows(get_records: Callable, page: Optional[int], page_size: O
         "offset": page_size * (page - 1),
         "limit": page_size
     })
-    items, count = await get_records(**constraints)
-    result = {"items": items, "page": page, "page_size": page_size}
-    if count is not None:
-        result["total_pages"] = int((count + (page_size - 1)) / page_size)
-        result["total_items"] = count
-    return result
+    return Paginated(await get_records(**constraints), page, page_size)
 
 
 def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
@@ -57,7 +53,6 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 StrOrList = Union[str, list]
-Paginated = List
 Address = Dict
 
 
@@ -128,7 +123,7 @@ def tx_kwargs(
     change_account_id: str = None,      # account to send excess change (LBC)
     fund_account_id: StrOrList = None,  # accounts to fund the transaction
     preview=False,                      # do not broadcast the transaction
-    blocking=False,                     # wait until transaction is in mempool
+    no_wait=False,                      # do not wait for mempool confirmation
 ):
     pass
 
@@ -1668,7 +1663,7 @@ class API:
             name=name, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
             save_key=not tx_dict['preview'], **remove_nulls(channel_dict)
         )
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['blocking'], tx_dict['preview'])
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
         return tx
 
     async def channel_update(
@@ -2783,7 +2778,7 @@ class API:
         days_after: int = None,  # end number of days after --start_day (instead of --end_day)
         end_day: str = None,     # end on specific date (YYYY-MM-DD) (instead of --days_after)
         **txo_filter_and_pagination_kwargs
-    ) -> list:
+    ) -> List:
         """
         Plot transaction output sum over days.
 

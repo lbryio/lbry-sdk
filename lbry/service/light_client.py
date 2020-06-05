@@ -1,8 +1,7 @@
 import logging
 
 from lbry.conf import Config
-from lbry.blockchain.ledger import Ledger
-from lbry.db import Database
+from lbry.blockchain import Ledger, Transaction
 from lbry.wallet.sync import SPVSync
 
 from .base import Service
@@ -13,9 +12,9 @@ log = logging.getLogger(__name__)
 
 class LightClient(Service):
 
-    def __init__(self, ledger: Ledger, db_url: str):
-        super().__init__(ledger, db_url)
-        self.client = Client(self, Config().api_connection_url)#ledger.conf)
+    def __init__(self, ledger: Ledger):
+        super().__init__(ledger)
+        self.client = Client(Config().api_connection_url)
         self.sync = SPVSync(self)
 
     async def search_transactions(self, txids):
@@ -26,3 +25,15 @@ class LightClient(Service):
 
     async def get_transaction_address_filters(self, block_hash):
         return await self.client.address_transaction_filters(block_hash=block_hash)
+
+    async def broadcast(self, tx):
+        pass
+
+    async def wait(self, tx: Transaction, height=-1, timeout=1):
+        pass
+
+    async def resolve(self, accounts, urls, **kwargs):
+        pass
+
+    async def search_claims(self, accounts, **kwargs):
+        pass

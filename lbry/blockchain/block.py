@@ -1,9 +1,8 @@
 import struct
 from typing import Set
-from binascii import unhexlify
 from typing import NamedTuple, List
 
-from chiabip158 import PyBIP158
+from chiabip158 import PyBIP158  # pylint: disable=no-name-in-module
 
 from lbry.crypto.hash import double_sha256
 from lbry.blockchain.transaction import Transaction

@@ -70,6 +70,7 @@ TXO = Table(
     Column('amount', BigInteger),
     Column('script_offset', Integer),
     Column('script_length', Integer),
+    Column('is_spent', Boolean, server_default='0'),
     Column('is_reserved', Boolean, server_default='0'),
     Column('txo_type', SmallInteger, server_default='0'),
     Column('claim_id', Text, nullable=True),
@@ -156,6 +157,13 @@ Tag = Table(
     'tag', metadata,
     Column('claim_hash', LargeBinary),
     Column('tag', Text),
+)
+
+
+Support = Table(
+    'support', metadata,
+    Column('normalized', Text, primary_key=True),
+    Column('claim_hash', LargeBinary, ForeignKey(Claim.columns.claim_hash)),
 )
 
 

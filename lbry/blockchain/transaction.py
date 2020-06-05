@@ -122,6 +122,7 @@ class Input(InputOutput):
 
     NULL_SIGNATURE = b'\x00'*72
     NULL_PUBLIC_KEY = b'\x00'*33
+    NULL_HASH32 = b'\x00'*32
 
     __slots__ = 'txo_ref', 'sequence', 'coinbase', 'script'
 
@@ -143,6 +144,12 @@ class Input(InputOutput):
         assert txo.script.is_pay_pubkey_hash, 'Attempting to spend unsupported output.'
         script = InputScript.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
         return cls(txo.ref, script)
+
+    @classmethod
+    def create_coinbase(cls) -> 'Input':
+        tx_ref = TXRefImmutable.from_hash(cls.NULL_HASH32, 0)
+        txo_ref = TXORef(tx_ref, 0)
+        return cls(txo_ref, b'beef')
 
     @property
     def amount(self) -> int:
@@ -512,6 +519,9 @@ class Transaction:
         self._day = julian_day
         if raw is not None:
             self.deserialize()
+
+    def __repr__(self):
+        return f"TX({self.id[:10]}...{self.id[-10:]})"
 
     @property
     def is_broadcast(self):

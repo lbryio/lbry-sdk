@@ -12,31 +12,20 @@ import unittest
 from unittest.case import _Outcome
 from typing import Optional
 from binascii import unhexlify
-from functools import partial
 
-from lbry.wallet import WalletManager, Wallet, Account
 from lbry.blockchain import (
     RegTestLedger, Transaction, Input, Output, dewies_to_lbc
 )
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.constants import CENT, NULL_HASH32
-from lbry.service import Daemon, FullNode
+from lbry.service import Daemon, FullNode, jsonrpc_dumps_pretty
 from lbry.conf import Config
+from lbry.console import Console
+from lbry.wallet import Wallet, Account
 
-from lbry.extras.daemon.daemon import jsonrpc_dumps_pretty
-from lbry.extras.daemon.components import Component, WalletComponent
-from lbry.extras.daemon.components import (
-    DHT_COMPONENT, HASH_ANNOUNCER_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT,
-    UPNP_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
-)
-from lbry.extras.daemon.componentmanager import ComponentManager
-from lbry.extras.daemon.exchange_rate_manager import (
+from lbry.service.exchange_rate_manager import (
     ExchangeRateManager, ExchangeRate, LBRYFeed, LBRYBTCFeed
 )
-from lbry.extras.daemon.storage import SQLiteStorage
-from lbry.blob.blob_manager import BlobManager
-from lbry.stream.reflector.server import ReflectorServer
-from lbry.blob_exchange.server import BlobServer
 
 
 def get_output(amount=CENT, pubkey_hash=NULL_HASH32, height=-2):
@@ -236,28 +225,13 @@ class IntegrationTestCase(AsyncioTestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.conductor: Optional[Conductor] = None
-        self.blockchain: Optional[BlockchainNode] = None
-        self.wallet_node: Optional[WalletNode] = None
-        self.manager: Optional[WalletManager] = None
-        self.ledger: Optional['Ledger'] = None
+        self.ledger: Optional[RegTestLedger] = None
+        self.chain: Optional[Lbrycrd] = None
+        self.block_expected = 0
+        self.service = None
+        self.api = None
         self.wallet: Optional[Wallet] = None
         self.account: Optional[Account] = None
-
-    async def asyncSetUp(self):
-        self.conductor = Conductor(seed=self.SEED)
-        await self.conductor.start_blockchain()
-        self.addCleanup(self.conductor.stop_blockchain)
-        await self.conductor.start_spv()
-        self.addCleanup(self.conductor.stop_spv)
-        await self.conductor.start_wallet()
-        self.addCleanup(self.conductor.stop_wallet)
-        self.blockchain = self.conductor.blockchain_node
-        self.wallet_node = self.conductor.wallet_node
-        self.manager = self.wallet_node.manager
-        self.ledger = self.wallet_node.ledger
-        self.wallet = self.wallet_node.wallet
-        self.account = self.wallet_node.wallet.default_account
 
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
@@ -316,24 +290,6 @@ def get_fake_exchange_rate_manager(rates=None):
     )
 
 
-class ExchangeRateManagerComponent(Component):
-    component_name = EXCHANGE_RATE_MANAGER_COMPONENT
-
-    def __init__(self, component_manager, rates=None):
-        super().__init__(component_manager)
-        self.exchange_rate_manager = get_fake_exchange_rate_manager(rates)
-
-    @property
-    def component(self) -> ExchangeRateManager:
-        return self.exchange_rate_manager
-
-    async def start(self):
-        self.exchange_rate_manager.start()
-
-    async def stop(self):
-        self.exchange_rate_manager.stop()
-
-
 class CommandTestCase(IntegrationTestCase):
 
     VERBOSITY = logging.WARN
@@ -358,7 +314,6 @@ class CommandTestCase(IntegrationTestCase):
         self.addCleanup(self.chain.stop)
         await self.chain.start('-rpcworkqueue=128')
 
-        self.block_expected = 0
         await self.generate(200, wait=False)
 
         self.daemon = await self.add_daemon()
@@ -382,46 +337,15 @@ class CommandTestCase(IntegrationTestCase):
         self.addCleanup(shutil.rmtree, path, True)
         ledger = RegTestLedger(Config.with_same_dir(path).set(
             api=f'localhost:{self.daemon_port}',
+            lbrycrd_dir=self.chain.ledger.conf.lbrycrd_dir,
             spv_address_filters=False
         ))
-        db_url = f"sqlite:///{os.path.join(path,'full_node.db')}"
-        service = FullNode(ledger, db_url, Lbrycrd(self.chain.ledger))
-        daemon = Daemon(service)
+        service = FullNode(ledger)
+        console = Console(service)
+        daemon = Daemon(service, console)
         self.addCleanup(daemon.stop)
         await daemon.start()
         return daemon
-
-    async def XasyncSetUp(self):
-        await super().asyncSetUp()
-
-        logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
-        logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
-        logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
-        logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
-
-        self.daemon = await self.add_daemon(self.wallet_node)
-
-        await self.account.ensure_address_gap()
-        address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        sendtxid = await self.blockchain.send_to_address(address, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(5)
-
-        server_tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, server_tmp_dir)
-        self.server_config = Config()
-        self.server_storage = SQLiteStorage(self.server_config, ':memory:')
-        await self.server_storage.open()
-
-        self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage, self.server_config)
-        self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
-        self.server.start_server(5567, '127.0.0.1')
-        await self.server.started_listening.wait()
-
-        self.reflector = ReflectorServer(self.server_blob_manager)
-        self.reflector.start_server(5566, '127.0.0.1')
-        await self.reflector.started_listening.wait()
-        self.addCleanup(self.reflector.stop_server)
 
     async def asyncTearDown(self):
         await super().asyncTearDown()
@@ -430,56 +354,6 @@ class CommandTestCase(IntegrationTestCase):
         for daemon in self.daemons:
             daemon.component_manager.get_component('wallet')._running = False
             await daemon.stop()
-
-    async def Xadd_daemon(self, wallet_node=None, seed=None):
-        if wallet_node is None:
-            wallet_node = WalletNode(
-                self.wallet_node.manager_class,
-                self.wallet_node.ledger_class,
-                port=self.extra_wallet_node_port
-            )
-            self.extra_wallet_node_port += 1
-            await wallet_node.start(self.conductor.spv_node, seed=seed)
-            self.extra_wallet_nodes.append(wallet_node)
-
-        upload_dir = os.path.join(wallet_node.data_path, 'uploads')
-        os.mkdir(upload_dir)
-
-        conf = Config()
-        conf.data_dir = wallet_node.data_path
-        conf.wallet_dir = wallet_node.data_path
-        conf.download_dir = wallet_node.data_path
-        conf.upload_dir = upload_dir  # not a real conf setting
-        conf.share_usage_data = False
-        conf.use_upnp = False
-        conf.reflect_streams = True
-        conf.blockchain_name = 'lbrycrd_regtest'
-        conf.lbryum_servers = [('127.0.0.1', 50001)]
-        conf.reflector_servers = [('127.0.0.1', 5566)]
-        conf.known_dht_nodes = []
-        conf.blob_lru_cache_size = self.blob_lru_cache_size
-        conf.components_to_skip = [
-            DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
-            PEER_PROTOCOL_SERVER_COMPONENT
-        ]
-        wallet_node.manager.config = conf
-
-        def wallet_maker(component_manager):
-            wallet_component = WalletComponent(component_manager)
-            wallet_component.wallet_manager = wallet_node.manager
-            wallet_component._running = True
-            return wallet_component
-
-        daemon = Daemon(conf, ComponentManager(
-            conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
-            exchange_rate_manager=partial(ExchangeRateManagerComponent, rates={
-                'BTCLBC': 1.0, 'USDBTC': 2.0
-            })
-        ))
-        await daemon.initialize()
-        self.daemons.append(daemon)
-        wallet_node.manager.old_db = daemon.storage
-        return daemon
 
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
@@ -500,8 +374,8 @@ class CommandTestCase(IntegrationTestCase):
             addresses.add(txo['address'])
         return list(addresses)
 
-    def is_expected_block(self, b):
-        return self.block_expected == b.height
+    def is_expected_block(self, event):
+        return self.block_expected == event.height
 
     async def generate(self, blocks, wait=True):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
@@ -509,18 +383,6 @@ class CommandTestCase(IntegrationTestCase):
         self.block_expected += blocks
         if wait:
             await self.service.sync.on_block.where(self.is_expected_block)
-
-    async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
-        txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
-        if confirm:
-            await self.generate(1)
-        return txid
-
-    async def blockchain_update_name(self, txid: str, value: str, amount: str, confirm=True):
-        txid = await self.blockchain._cli_cmnd('updateclaim', txid, value, amount)
-        if confirm:
-            await self.generate(1)
-        return txid
 
     async def out(self, awaitable):
         """ Serializes lbrynet API results to JSON then loads and returns it as dictionary. """
@@ -533,7 +395,6 @@ class CommandTestCase(IntegrationTestCase):
     async def confirm_and_render(self, awaitable, confirm) -> Transaction:
         tx = await awaitable
         if confirm:
-            await self.service.wait(tx)
             await self.generate(1)
             await self.service.wait(tx)
         return self.sout(tx)
@@ -657,7 +518,7 @@ class CommandTestCase(IntegrationTestCase):
         if confirm:
             await asyncio.wait([self.ledger.wait(tx) for tx in txs])
             await self.generate(1)
-            await asyncio.wait([self.ledger.wait(tx, self.blockchain.block_expected) for tx in txs])
+            await asyncio.wait([self.ledger.wait(tx, self.block_expected) for tx in txs])
         return self.sout(txs)
 
     async def resolve(self, uri, **kwargs):

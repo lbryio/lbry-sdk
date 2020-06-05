@@ -60,5 +60,5 @@ SEARCH_PARAMS = {
 } | SEARCH_INTEGER_PARAMS
 
 SEARCH_ORDER_FIELDS = {
-   'name', 'claim_hash'
+    'name', 'claim_hash'
 } | SEARCH_INTEGER_PARAMS

@@ -31,11 +31,11 @@ def sync_generate_phrase(language: str) -> str:
     while True:
         nonce += 1
         i = entropy + nonce
-        w = []
+        word_buffer = []
         while i:
-            w.append(local_words[i % 2048])
+            word_buffer.append(local_words[i % 2048])
             i //= 2048
-        seed = ' '.join(w)
+        seed = ' '.join(word_buffer)
         if hexlify(hmac_sha512(b"Seed version", seed.encode())).startswith(b"01"):
             break
     return seed

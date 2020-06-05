@@ -8,7 +8,6 @@ from lbry.error import (
 )
 from lbry.blockchain.dewies import lbc_to_dewies
 from lbry.event import EventController
-from lbry.blockchain.transaction import Output, Transaction
 
 log = logging.getLogger(__name__)
 
@@ -51,17 +50,17 @@ class WalletServerPayer:
                 )
                 continue
 
-            tx = await Transaction.create(
-                [],
-                [Output.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))],
-                self.wallet.get_accounts_or_all(None),
-                self.wallet.get_account_or_default(None)
-            )
-
-            await self.ledger.broadcast(tx)
-            if self.analytics_manager:
-                await self.analytics_manager.send_credits_sent()
-            self._on_payment_controller.add(tx)
+            # tx = await Transaction.create(
+            #     [],
+            #     [Output.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))],
+            #     self.wallet.get_accounts_or_all(None),
+            #     self.wallet.get_account_or_default(None)
+            # )
+            #
+            # await self.ledger.broadcast(tx)
+            # if self.analytics_manager:
+            #     await self.analytics_manager.send_credits_sent()
+            # self._on_payment_controller.add(tx)
 
     async def start(self, ledger=None, wallet=None):
         if lbc_to_dewies(self.max_fee) < 1:

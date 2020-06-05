@@ -7,7 +7,7 @@ from typing import Optional, Iterable, Type
 from aiohttp.client_exceptions import ContentTypeError
 from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
-from lbry.wallet.dewies import lbc_to_dewies
+from lbry.blockchain.dewies import lbc_to_dewies
 
 log = logging.getLogger(__name__)
 

@@ -60,12 +60,12 @@ class WalletManager:
         wallets_directory = self.path
         for wallet_id in self.ledger.conf.wallets:
             if wallet_id in self.wallets:
-                log.warning(f"Ignoring duplicate wallet_id in config: {wallet_id}")
+                log.warning("Ignoring duplicate wallet_id in config: %s", wallet_id)
                 continue
             wallet_path = os.path.join(wallets_directory, wallet_id)
             if not os.path.exists(wallet_path):
                 if not wallet_id == "default_wallet":  # we'll probably generate this wallet, don't show error
-                    log.error(f"Could not load wallet, file does not exist: {wallet_path}")
+                    log.error("Could not load wallet, file does not exist: %s", wallet_path)
                 continue
             wallet = await Wallet.from_path(self.ledger, self.db, wallet_path)
             self.add(wallet)

@@ -1,15 +1,17 @@
+# pylint: disable=arguments-differ
 import os
 import json
 import zlib
 import asyncio
 import logging
+from datetime import datetime
 from typing import Awaitable, Callable, List, Tuple, Optional, Iterable, Union
 from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
 
 
-from lbry.db import Database, SPENDABLE_TYPE_CODES
+from lbry.db import Database, SPENDABLE_TYPE_CODES, Result
 from lbry.blockchain.ledger import Ledger
 from lbry.constants import COIN, NULL_HASH32
 from lbry.blockchain.transaction import Transaction, Input, Output
@@ -243,7 +245,7 @@ class Wallet:
             accounts=funding_accounts,
             txo_type__in=SPENDABLE_TYPE_CODES
         )
-        for utxo in utxos[0]:
+        for utxo in utxos:
             estimators.append(OutputEffectiveAmountEstimator(self.ledger, utxo))
         return estimators
 
@@ -275,8 +277,8 @@ class Wallet:
 
         # value of the outputs plus associated fees
         cost = (
-                tx.get_base_fee(self.ledger) +
-                tx.get_total_output_sum(self.ledger)
+            tx.get_base_fee(self.ledger) +
+            tx.get_total_output_sum(self.ledger)
         )
         # value of the inputs less the cost to spend those inputs
         payment = tx.get_effective_input_sum(self.ledger)
@@ -294,8 +296,8 @@ class Wallet:
                     tx.add_inputs(s.txi for s in spendables)
 
                 cost_of_change = (
-                        tx.get_base_fee(self.ledger) +
-                        Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self.ledger)
+                    tx.get_base_fee(self.ledger) +
+                    Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self.ledger)
                 )
                 if payment > cost:
                     change = payment - cost
@@ -349,6 +351,35 @@ class Wallet:
         output = Output.pay_pubkey_hash(amount, self.ledger.address_to_hash160(address))
         return await self.create_transaction([], [output], funding_accounts, change_account)
 
+    async def fund(self, from_account, to_account, amount=None, everything=False,
+                   outputs=1, broadcast=False, **constraints):
+        assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
+        if everything:
+            utxos = await self.db.get_utxos(**constraints)
+            await self.db.reserve_outputs(utxos)
+            tx = await self.create_transaction(
+                inputs=[Input.spend(txo) for txo in utxos],
+                outputs=[],
+                funding_accounts=[from_account],
+                change_account=to_account
+            )
+        elif amount > 0:
+            to_address = await to_account.change.get_or_create_usable_address()
+            to_hash160 = to_account.ledger.address_to_hash160(to_address)
+            tx = await self.create_transaction(
+                inputs=[],
+                outputs=[
+                    Output.pay_pubkey_hash(amount//outputs, to_hash160)
+                    for _ in range(outputs)
+                ],
+                funding_accounts=[from_account],
+                change_account=from_account
+            )
+        else:
+            raise ValueError('An amount is required.')
+
+        return tx
+
     async def _report_state(self):
         try:
             for account in self.accounts:
@@ -375,7 +406,7 @@ class Wallet:
 
     async def verify_duplicate(self, name: str, allow_duplicate: bool):
         if not allow_duplicate:
-            claims, _ = await self.claims.list(claim_name=name)
+            claims = await self.claims.list(claim_name=name)
             if len(claims) > 0:
                 raise Exception(
                     f"You already have a claim published under the name '{name}'. "
@@ -454,7 +485,7 @@ class BaseListManager:
     def __init__(self, wallet: Wallet):
         self.wallet = wallet
 
-    async def create(self, **kwargs) -> Transaction:
+    async def create(self, *args, **kwargs) -> Transaction:
         raise NotImplementedError
 
     async def delete(self, **constraints) -> Transaction:
@@ -525,7 +556,7 @@ class ClaimListManager(BaseListManager):
             [Input.spend(claim)], [], self.wallet._accounts, self.wallet._accounts[0]
         )
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_claims(wallet=self.wallet, **constraints)
 
     async def get(self, claim_id=None, claim_name=None, txid=None, nout=None) -> Output:
@@ -537,7 +568,7 @@ class ClaimListManager(BaseListManager):
             key, value, constraints = 'name', claim_name, {'claim_name': claim_name}
         else:
             raise ValueError(f"Couldn't find {self.name} because an {self.name}_id or name was not provided.")
-        claims, _ = await self.list(**constraints)
+        claims = await self.list(**constraints)
         if len(claims) == 1:
             return claims[0]
         elif len(claims) > 1:
@@ -626,7 +657,7 @@ class ChannelListManager(ClaimListManager):
 
         return tx
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_channels(wallet=self.wallet, **constraints)
 
     async def get_for_signing(self, channel_id=None, channel_name=None) -> Output:
@@ -685,7 +716,7 @@ class StreamListManager(ClaimListManager):
 
         return tx, file_stream
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_streams(wallet=self.wallet, **constraints)
 
 
@@ -701,7 +732,7 @@ class CollectionListManager(ClaimListManager):
             name, claim, amount, holding_address, funding_accounts, funding_accounts[0], channel
         )
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_collections(wallet=self.wallet, **constraints)
 
 
@@ -717,7 +748,7 @@ class SupportListManager(BaseListManager):
             [], [support_output], funding_accounts, change_account
         )
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_supports(**constraints)
 
     async def get(self, **constraints) -> Output:
@@ -741,9 +772,9 @@ class PurchaseListManager(BaseListManager):
 
     def purchase(self, claim_id: str, amount: int, merchant_address: bytes,
                  funding_accounts: List['Account'], change_account: 'Account'):
-        payment = Output.pay_pubkey_hash(amount, self.ledger.address_to_hash160(merchant_address))
+        payment = Output.pay_pubkey_hash(amount, self.wallet.ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))
-        return self.create_transaction(
+        return self.wallet.create_transaction(
             [], [payment, data], funding_accounts, change_account
         )
 
@@ -752,8 +783,8 @@ class PurchaseListManager(BaseListManager):
             override_max_key_fee=False):
         fee = txo.claim.stream.fee
         fee_amount = exchange.to_dewies(fee.currency, fee.amount)
-        if not override_max_key_fee and self.ledger.conf.max_key_fee:
-            max_fee = self.ledger.conf.max_key_fee
+        if not override_max_key_fee and self.wallet.ledger.conf.max_key_fee:
+            max_fee = self.wallet.ledger.conf.max_key_fee
             max_fee_amount = exchange.to_dewies(max_fee['currency'], Decimal(max_fee['amount']))
             if max_fee_amount and fee_amount > max_fee_amount:
                 error_fee = f"{dewies_to_lbc(fee_amount)} LBC"
@@ -766,12 +797,12 @@ class PurchaseListManager(BaseListManager):
                     f"Purchase price of {error_fee} exceeds maximum "
                     f"configured price of {error_max_fee}."
                 )
-        fee_address = fee.address or txo.get_address(self.ledger)
+        fee_address = fee.address or txo.get_address(self.wallet.ledger)
         return await self.purchase(
             txo.claim_id, fee_amount, fee_address, accounts, accounts[0]
         )
 
-    async def list(self, **constraints) -> Tuple[List[Output], Optional[int]]:
+    async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_purchases(**constraints)
 
     async def get(self, **constraints) -> Output:
@@ -784,12 +815,12 @@ class PurchaseListManager(BaseListManager):
 def txs_to_dict(txs, ledger):
     history = []
     for tx in txs:  # pylint: disable=too-many-nested-blocks
-        ts = headers.estimated_timestamp(tx.height)
+        ts = ledger.headers.estimated_timestamp(tx.height)
         item = {
             'txid': tx.id,
             'timestamp': ts,
             'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-            'confirmations': (headers.height + 1) - tx.height if tx.height > 0 else 0,
+            'confirmations': (ledger.headers.height + 1) - tx.height if tx.height > 0 else 0,
             'claim_info': [],
             'update_info': [],
             'support_info': [],
@@ -807,7 +838,7 @@ def txs_to_dict(txs, ledger):
             item['fee'] = '0.0'
         for txo in tx.my_claim_outputs:
             item['claim_info'].append({
-                'address': txo.get_address(self.ledger),
+                'address': txo.get_address(ledger),
                 'balance_delta': dewies_to_lbc(-txo.amount),
                 'amount': dewies_to_lbc(txo.amount),
                 'claim_id': txo.claim_id,
@@ -827,7 +858,7 @@ def txs_to_dict(txs, ledger):
                             break
                 if previous is not None:
                     item['update_info'].append({
-                        'address': txo.get_address(self),
+                        'address': txo.get_address(ledger),
                         'balance_delta': dewies_to_lbc(previous.amount - txo.amount),
                         'amount': dewies_to_lbc(txo.amount),
                         'claim_id': txo.claim_id,
@@ -837,7 +868,7 @@ def txs_to_dict(txs, ledger):
                     })
             else:  # someone sent us their claim
                 item['update_info'].append({
-                    'address': txo.get_address(self),
+                    'address': txo.get_address(ledger),
                     'balance_delta': dewies_to_lbc(0),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
@@ -847,7 +878,7 @@ def txs_to_dict(txs, ledger):
                 })
         for txo in tx.my_support_outputs:
             item['support_info'].append({
-                'address': txo.get_address(self.ledger),
+                'address': txo.get_address(ledger),
                 'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
                 'amount': dewies_to_lbc(txo.amount),
                 'claim_id': txo.claim_id,
@@ -859,7 +890,7 @@ def txs_to_dict(txs, ledger):
         if is_my_inputs:
             for txo in tx.other_support_outputs:
                 item['support_info'].append({
-                    'address': txo.get_address(self.ledger),
+                    'address': txo.get_address(ledger),
                     'balance_delta': dewies_to_lbc(-txo.amount),
                     'amount': dewies_to_lbc(txo.amount),
                     'claim_id': txo.claim_id,
@@ -870,7 +901,7 @@ def txs_to_dict(txs, ledger):
                 })
         for txo in tx.my_abandon_outputs:
             item['abandon_info'].append({
-                'address': txo.get_address(self.ledger),
+                'address': txo.get_address(ledger),
                 'balance_delta': dewies_to_lbc(txo.amount),
                 'amount': dewies_to_lbc(txo.amount),
                 'claim_id': txo.claim_id,
@@ -879,7 +910,7 @@ def txs_to_dict(txs, ledger):
             })
         for txo in tx.any_purchase_outputs:
             item['purchase_info'].append({
-                'address': txo.get_address(self.ledger),
+                'address': txo.get_address(ledger),
                 'balance_delta': dewies_to_lbc(txo.amount if not is_my_inputs else -txo.amount),
                 'amount': dewies_to_lbc(txo.amount),
                 'claim_id': txo.purchased_claim_id,

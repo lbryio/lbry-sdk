@@ -162,12 +162,12 @@ class EventStream:
         future = asyncio.get_event_loop().create_future()
         value = None
 
-        def update_value(v):
+        def update_value(_value):
             nonlocal value
-            value = v
+            value = _value
 
         subscription = self.listen(
-            lambda v: update_value(v),
+            update_value,
             lambda exception: not future.done() and self._cancel_and_error(subscription, future, exception),
             lambda: not future.done() and self._cancel_and_callback(subscription, future, value),
         )
@@ -195,7 +195,8 @@ class EventQueuePublisher(threading.Thread):
         self.event_controller = event_controller
         self.loop = None
 
-    def message_to_event(self, message):
+    @staticmethod
+    def message_to_event(message):
         return message
 
     def start(self):
