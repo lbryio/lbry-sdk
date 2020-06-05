@@ -206,7 +206,7 @@ class SessionBase(asyncio.Protocol):
         """
         return self._address
 
-    def peer_address_str(self):
+    def peer_address_str(self, for_log=True):
         """Returns the peer's IP address and port as a human-readable
         string."""
         if not self._address:
@@ -483,11 +483,17 @@ class RPCSession(SessionBase):
             raise result
         return result
 
-    async def send_notification(self, method, args=()):
+    async def send_notification(self, method, args=()) -> bool:
         """Send an RPC notification over the network."""
         message = self.connection.send_notification(Notification(method, args))
         self.NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
-        await self._send_message(message)
+        try:
+            await self._send_message(message)
+            return True
+        except asyncio.TimeoutError:
+            self.logger.info("timeout sending address notification to %s", self.peer_address_str(for_log=True))
+            self.abort()
+            return False
 
     def send_batch(self, raise_errors=False):
         """Return a BatchRequest.  Intended to be used like so:
