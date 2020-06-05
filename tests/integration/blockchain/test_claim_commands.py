@@ -1828,7 +1828,8 @@ class SupportCommands(CommandTestCase):
         # send a tip to the claim using account2
         tip = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '1.0', True, account2.id, 'wallet2', funding_account_ids=[account2.id])
+                claim_id, '1.0', True, account_id=account2.id, wallet_id='wallet2',
+                funding_account_ids=[account2.id])
         )
         await self.confirm_tx(tip['txid'])
 
@@ -1859,7 +1860,8 @@ class SupportCommands(CommandTestCase):
         # send a support to the claim using account2
         support = await self.out(
             self.daemon.jsonrpc_support_create(
-                claim_id, '2.0', False, account2.id, 'wallet2', funding_account_ids=[account2.id])
+                claim_id, '2.0', False, account_id=account2.id, wallet_id='wallet2',
+                funding_account_ids=[account2.id])
         )
         await self.confirm_tx(support['txid'])
 
