@@ -19,7 +19,9 @@ from lbry.crypto.hash import hash160, sha256
 from lbry.crypto.base58 import Base58
 from lbry.schema.url import normalize_name
 from lbry.schema.claim import Claim
+from lbry.schema.base import Signable
 from lbry.schema.purchase import Purchase
+from lbry.schema.support import Support
 
 from .script import InputScript, OutputScript
 from .constants import COIN, NULL_HASH32
@@ -211,7 +213,7 @@ class Output(InputOutput):
         'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
         'channel', 'private_key', 'meta', 'sent_supports', 'sent_tips', 'received_tips',
         'purchase', 'purchased_claim', 'purchase_receipt',
-        'reposted_claim', 'claims',
+        'reposted_claim', 'claims', '_signable'
     )
 
     def __init__(self, amount: int, script: OutputScript,
@@ -239,6 +241,7 @@ class Output(InputOutput):
         self.purchase_receipt: 'Output' = None  # txo representing purchase receipt for this claim
         self.reposted_claim: 'Output' = None  # txo representing claim being reposted
         self.claims: List['Output'] = None  # resolved claims for collection
+        self._signable: Optional[Signable] = None
         self.meta = {}
 
     def update_annotations(self, annotated: 'Output'):
@@ -313,6 +316,10 @@ class Output(InputOutput):
         return self.script.is_support_claim
 
     @property
+    def is_support_data(self) -> bool:
+        return self.script.is_support_claim_data
+
+    @property
     def claim_hash(self) -> bytes:
         if self.script.is_claim_name:
             return hash160(self.tx_ref.hash + struct.pack('>I', self.position))
@@ -347,8 +354,32 @@ class Output(InputOutput):
     def can_decode_claim(self):
         try:
             return self.claim
-        except:  # pylint: disable=bare-except
+        except Exception:
             return False
+
+    @property
+    def support(self) -> Support:
+        if self.is_support_data:
+            if not isinstance(self.script.values['support'], Support):
+                self.script.values['support'] = Support.from_bytes(self.script.values['support'])
+            return self.script.values['support']
+        raise ValueError('Only supports with data can be represented as Supports.')
+
+    @property
+    def can_decode_support(self):
+        try:
+            return self.support
+        except Exception:
+            return False
+
+    @property
+    def signable(self) -> Signable:
+        if self._signable is None:
+            if self.is_claim:
+                self._signable = self.claim
+            elif self.is_support_data:
+                self._signable = self.support
+        return self._signable
 
     @property
     def permanent_url(self) -> str:
@@ -361,22 +392,22 @@ class Output(InputOutput):
         return self.private_key is not None
 
     def get_signature_digest(self, ledger):
-        if self.claim.unsigned_payload:
+        if self.signable.unsigned_payload:
             pieces = [
                 Base58.decode(self.get_address(ledger)),
-                self.claim.unsigned_payload,
-                self.claim.signing_channel_hash[::-1]
+                self.signable.unsigned_payload,
+                self.signable.signing_channel_hash[::-1]
             ]
         else:
             pieces = [
                 self.tx_ref.tx.inputs[0].txo_ref.hash,
-                self.claim.signing_channel_hash,
-                self.claim.to_message_bytes()
+                self.signable.signing_channel_hash,
+                self.signable.to_message_bytes()
             ]
         return sha256(b''.join(pieces))
 
     def get_encoded_signature(self):
-        signature = hexlify(self.claim.signature)
+        signature = hexlify(self.signable.signature)
         r = int(signature[:int(len(signature)/2)], 16)
         s = int(signature[int(len(signature)/2):], 16)
         return ecdsa.util.sigencode_der(r, s, len(signature)*4)
@@ -400,18 +431,18 @@ class Output(InputOutput):
 
     def sign(self, channel: 'Output', first_input_id=None):
         self.channel = channel
-        self.claim.signing_channel_hash = channel.claim_hash
+        self.signable.signing_channel_hash = channel.claim_hash
         digest = sha256(b''.join([
             first_input_id or self.tx_ref.tx.inputs[0].txo_ref.hash,
-            self.claim.signing_channel_hash,
-            self.claim.to_message_bytes()
+            self.signable.signing_channel_hash,
+            self.signable.to_message_bytes()
         ]))
-        self.claim.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        self.signable.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
         self.script.generate()
 
     def clear_signature(self):
         self.channel = None
-        self.claim.clear_signature()
+        self.signable.clear_signature()
 
     async def generate_channel_private_key(self):
         self.private_key = await asyncio.get_event_loop().run_in_executor(
@@ -443,6 +474,14 @@ class Output(InputOutput):
     def pay_support_pubkey_hash(cls, amount: int, claim_name: str, claim_id: str, pubkey_hash: bytes) -> 'Output':
         script = OutputScript.pay_support_pubkey_hash(
             claim_name.encode(), unhexlify(claim_id)[::-1], pubkey_hash
+        )
+        return cls(amount, script)
+
+    @classmethod
+    def pay_support_data_pubkey_hash(
+            cls, amount: int, claim_name: str, claim_id: str, support: Support, pubkey_hash: bytes) -> 'Output':
+        script = OutputScript.pay_support_data_pubkey_hash(
+            claim_name.encode(), unhexlify(claim_id)[::-1], support, pubkey_hash
         )
         return cls(amount, script)
 
@@ -860,12 +899,20 @@ class Transaction:
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List['Account'], change_account: 'Account'):
+                funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        support_output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
-        )
-        return cls.create([], [support_output], funding_accounts, change_account)
+        if signing_channel is not None:
+            support = Support()
+            support.emoji = '👍'
+            support_output = Output.pay_support_data_pubkey_hash(
+                amount, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
+            )
+            support_output.sign(signing_channel, b'placeholder txid:nout')
+        else:
+            support_output = Output.pay_support_pubkey_hash(
+                amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+            )
+        return cls.create([], [support_output], funding_accounts, change_account, sign=False)
 
     @classmethod
     def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,

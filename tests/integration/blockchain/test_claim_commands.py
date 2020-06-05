@@ -1886,6 +1886,12 @@ class SupportCommands(CommandTestCase):
         self.assertTrue(txs[1]['support_info'][0]['is_tip'])
         self.assertTrue(txs[1]['support_info'][0]['is_spent'])
 
+    async def test_signed_supports(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        stream_id = self.get_claim_id(await self.stream_create())
+        tx = await self.support_create(stream_id, '0.3', channel_id=channel_id)
+        self.assertTrue(tx['outputs'][0]['is_channel_signature_valid'])
+
 
 class CollectionCommands(CommandTestCase):
 
