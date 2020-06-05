@@ -69,8 +69,8 @@ class VideoFileAnalyzer:
             version = str(e)
         if code != 0 or not version.startswith("ffmpeg"):
             log.warning("Unable to run ffmpeg, but it was requested. Code: %d; Message: %s", code, version)
-            raise FileNotFoundError(f"Unable to locate or run ffmpeg or ffprobe. Please install FFmpeg "
-                                    f"and ensure that it is callable via PATH or conf.ffmpeg_path")
+            raise FileNotFoundError("Unable to locate or run ffmpeg or ffprobe. Please install FFmpeg "
+                                    "and ensure that it is callable via PATH or conf.ffmpeg_path")
         log.debug("Using %s at %s", version.splitlines()[0].split(" Copyright")[0], self._which_ffmpeg)
         return version
 

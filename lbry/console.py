@@ -35,7 +35,7 @@ class Basic(Console):
         elif isinstance(self.service, LightClient):
             s.append('Light Client')
         if conf.processes == -1:
-            s.append(f'Threads Only')
+            s.append('Threads Only')
         elif conf.processes == 0:
             s.append(f'{os.cpu_count()} Process(es)')
         else:

@@ -372,7 +372,10 @@ class Output(InputOutput):
     def is_signature_valid(encoded_signature, signature_digest, public_key_bytes):
         try:
             public_key = load_der_public_key(public_key_bytes, default_backend())
-            public_key.verify(encoded_signature, signature_digest, ec.ECDSA(Prehashed(hashes.SHA256())))
+            public_key.verify(  # pylint: disable=no-value-for-parameter
+                encoded_signature, signature_digest,
+                ec.ECDSA(Prehashed(hashes.SHA256()))
+            )
             return True
         except (ValueError, InvalidSignature):
             pass

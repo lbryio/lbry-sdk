@@ -75,7 +75,7 @@ class AddressManager:
     async def ensure_address_gap(self):
         raise NotImplementedError
 
-    def get_address_records(self, only_usable: bool = False, **constraints):
+    async def get_address_records(self, only_usable: bool = False, **constraints):
         raise NotImplementedError
 
     async def get_addresses(self, only_usable: bool = False, **constraints) -> List[str]:

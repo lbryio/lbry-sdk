@@ -285,7 +285,7 @@ def get_api_definitions(cls):
 def write(fp):
     fp.write('# pylint: skip-file\n')
     fp.write('# DO NOT EDIT: GENERATED FILE\n')
-    fp.write(f'interface = ')
+    fp.write('interface = ')
     defs = get_api_definitions(api.API)
     for c in defs['commands'].values():
         del c['method']
