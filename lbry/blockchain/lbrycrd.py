@@ -23,7 +23,7 @@ from .ledger import Ledger, RegTestLedger
 log = logging.getLogger(__name__)
 
 DOWNLOAD_URL = (
-    'https://github.com/lbryio/lbrycrd/releases/download/v0.17.4.4/lbrycrd-linux-1744.zip'
+    'https://github.com/lbryio/lbrycrd/releases/download/v0.17.4.5/lbrycrd-linux-1745.zip'
 )
 
 
