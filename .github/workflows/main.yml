@@ -47,11 +47,13 @@ jobs:
       - run: |
           pip install --user --upgrade pip wheel
           pip install -e .[test]
-      - working-directory: lbry
-        env:
+      - env:
           HOME: /tmp
-        run: coverage run -p --source=lbry -m unittest -vv tests.unit.test_conf
-#        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+        run: coverage run -m unittest -vv tests.unit.test_conf
+#        run: coverage run -m unittest discover -vv tests.unit
+    - uses: codecov/codecov-action@v1
+      with:
+        flags: unit-${{ matrix.os }}
 
   tests-integration:
     name: "tests / integration"

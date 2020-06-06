@@ -11,7 +11,6 @@ from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 from lbry.stream.reflector.client import StreamReflectorClient
-from lbry.extras.daemon.storage import StoredContentClaim
 from lbry.blob import MAX_BLOB_SIZE
 
 if typing.TYPE_CHECKING:
@@ -78,7 +77,7 @@ class ManagedStream:
 
     def __init__(self, loop: asyncio.AbstractEventLoop, config: 'Config', blob_manager: 'BlobManager',
                  sd_hash: str, download_directory: typing.Optional[str] = None, file_name: typing.Optional[str] = None,
-                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional[StoredContentClaim] = None,
+                 status: typing.Optional[str] = STATUS_STOPPED, claim: typing.Optional['StoredContentClaim'] = None,
                  download_id: typing.Optional[str] = None, rowid: typing.Optional[int] = None,
                  descriptor: typing.Optional[StreamDescriptor] = None,
                  content_fee: typing.Optional['Transaction'] = None,
