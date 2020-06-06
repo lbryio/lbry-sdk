@@ -49,7 +49,10 @@ jobs:
           pip install -e .[test]
       - env:
           HOME: /tmp
-        run: coverage run -m unittest -vv tests.unit.test_conf
+        run: |
+          ls -la
+          coverage run -m unittest -vv tests.unit.test_conf
+          ls -la
 #        run: coverage run -m unittest discover -vv tests.unit
       - uses: codecov/codecov-action@v1
         with:
