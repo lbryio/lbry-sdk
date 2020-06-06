@@ -49,10 +49,10 @@ jobs:
           pip install -e .[test]
       - env:
           HOME: /tmp
-        run: |
-          coverage run -m unittest -vv tests.unit.test_conf
-          bash <(curl -s https://codecov.io/bash)
+        run: coverage run -m unittest -vv tests.unit.test_conf
 #        run: coverage run -m unittest discover -vv tests.unit
+      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
+        run: bash <(curl -s https://codecov.io/bash) -X gcov -F unit-${{ matrix.os }}
 
   tests-integration:
     name: "tests / integration"
@@ -88,7 +88,9 @@ jobs:
       - run: pip install tox-travis
       - env:
           TEST_DB: ${{ matrix.db }}
-        run: tox -e ${{ matrix.test }}
+        run: |
+          tox -e ${{ matrix.test }}
+          bash <(curl -s https://codecov.io/bash) -X gcov -F integration-${{ matrix.test }}-${{ matrix.db }}
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
