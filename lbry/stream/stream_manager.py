@@ -20,10 +20,21 @@ if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
-    from lbry.extras.daemon.analytics import AnalyticsManager
-    from lbry.extras.daemon.storage import SQLiteStorage, StoredContentClaim
     from lbry.service.exchange_rate_manager import ExchangeRateManager
     from lbry.service.base import Service
+
+
+class AnalyticsManager:
+    pass
+
+
+class SQLiteStorage:
+    pass
+
+
+class StoredContentClaim:
+    pass
+
 
 log = logging.getLogger(__name__)
 

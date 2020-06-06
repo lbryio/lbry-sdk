@@ -3,9 +3,13 @@ import typing
 import logging
 if typing.TYPE_CHECKING:
     from lbry.dht.node import Node
-    from lbry.extras.daemon.storage import SQLiteStorage
+
 
 log = logging.getLogger(__name__)
+
+
+class SQLiteStorage:
+    pass
 
 
 class BlobAnnouncer:

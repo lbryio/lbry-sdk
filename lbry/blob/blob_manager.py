@@ -10,7 +10,11 @@ from lbry.connection_manager import ConnectionManager
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.dht.protocol.data_store import DictDataStore
-    from lbry.extras.daemon.storage import SQLiteStorage
+
+
+class SQLiteStorage:
+    pass
+
 
 log = logging.getLogger(__name__)
 
