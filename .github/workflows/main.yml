@@ -52,7 +52,7 @@ jobs:
         run: coverage run -m unittest -vv tests.unit.test_conf
 #        run: coverage run -m unittest discover -vv tests.unit
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-        run: bash <(curl -s https://codecov.io/bash) -X gcov -F unit-${{ matrix.os }}
+        run: bash <(curl -s https://codecov.io/bash) -X gcov -F unit,${{ matrix.os }}
 
   tests-integration:
     name: "tests / integration"
@@ -92,7 +92,7 @@ jobs:
           tox -e ${{ matrix.test }}
           ls -la
           ls -la tests
-          bash <(curl -s https://codecov.io/bash) -X gcov -F integration-${{ matrix.test }}-${{ matrix.db }}
+          bash <(curl -s https://codecov.io/bash) -X gcov -F integration,${{ matrix.test }},${{ matrix.db }}
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
