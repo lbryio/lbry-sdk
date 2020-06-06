@@ -85,11 +85,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: pip install tox-travis
+      - run: pip install tox coverage
       - env:
           TEST_DB: ${{ matrix.db }}
         run: |
           tox -e ${{ matrix.test }}
+          ls -la
+          ls -la tests
           bash <(curl -s https://codecov.io/bash) -X gcov -F integration-${{ matrix.test }}-${{ matrix.db }}
 
   build:
