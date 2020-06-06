@@ -487,6 +487,9 @@ def _get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, decode
         txo_query += f"""
             AND account_address.account {'= ?' if len(accounts_fmt) == 1 else 'IN (' + accounts_fmt + ')'}
         """
+    txo_query += """
+        ORDER BY txo.amount ASC, tx.height DESC
+    """
     # prefer confirmed, but save unconfirmed utxos from this selection in case they are needed
     unconfirmed = []
     for row in transaction.execute(txo_query, (floor, ceiling, *accounts)):
@@ -526,7 +529,7 @@ def _get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, decode
 
 
 def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: List, amount_to_reserve: int, floor: int,
-                                    fee_per_byte: int, set_reserved: bool):
+                                    fee_per_byte: int, set_reserved: bool, return_insufficient_funds: bool):
     txs = defaultdict(list)
     decoded_transactions = {}
     reserved = []
@@ -550,10 +553,13 @@ def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: L
             multiplier = 10
 
     # reserve the accumulated txos if enough were found
-    if reserved_dewies >= amount_to_reserve and set_reserved:
-        transaction.executemany("UPDATE txo SET is_reserved = ? WHERE txoid = ?",
-                                [(True, txoid) for txoid in reserved]).fetchall()
-    return txs
+    if reserved_dewies >= amount_to_reserve:
+        if set_reserved:
+            transaction.executemany("UPDATE txo SET is_reserved = ? WHERE txoid = ?",
+                                    [(True, txoid) for txoid in reserved]).fetchall()
+        return txs
+    # return_insufficient_funds and set_reserved are used for testing
+    return txs if return_insufficient_funds else {}
 
 
 class Database(SQLiteMixin):
@@ -757,10 +763,11 @@ class Database(SQLiteMixin):
         return True
 
     async def get_spendable_utxos(self, ledger, reserve_amount, accounts: Optional[Iterable], min_amount: int = 100000,
-                                  fee_per_byte: int = 50, set_reserved: bool = True) -> List:
+                                  fee_per_byte: int = 50, set_reserved: bool = True,
+                                  return_insufficient_funds: bool = False) -> List:
         to_spend = await self.db.run(
             get_and_reserve_spendable_utxos, tuple(account.id for account in accounts), reserve_amount, min_amount,
-            fee_per_byte, set_reserved
+            fee_per_byte, set_reserved, return_insufficient_funds
         )
         txos = []
         for (raw, height, verified), positions in to_spend.items():

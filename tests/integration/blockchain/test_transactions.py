@@ -5,6 +5,7 @@ from itertools import chain
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.testcase import IntegrationTestCase
 from lbry.wallet.util import satoshis_to_coins, coins_to_satoshis
+from lbry.wallet.manager import WalletManager
 
 
 class BasicTransactionTests(IntegrationTestCase):
@@ -173,3 +174,128 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertTrue(await self.ledger.update_history(address, remote_status))
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
+
+    def wait_for_txid(self, txid, address):
+        return self.ledger.on_transaction.where(
+            lambda e: e.tx.id == txid and e.address == address
+        )
+
+    async def _test_transaction(self, send_amount, address, inputs, change):
+        tx = await Transaction.create(
+            [], [Output.pay_pubkey_hash(send_amount, self.ledger.address_to_hash160(address))], [self.account],
+            self.account
+        )
+        await self.ledger.broadcast(tx)
+        input_amounts = [txi.amount for txi in tx.inputs]
+        self.assertListEqual(inputs, input_amounts)
+        self.assertEqual(len(inputs), len(tx.inputs))
+        self.assertEqual(2, len(tx.outputs))
+        self.assertEqual(send_amount, tx.outputs[0].amount)
+        self.assertEqual(change, tx.outputs[1].amount)
+        return tx
+
+    async def assertSpendable(self, amounts):
+        spendable = await self.ledger.db.get_spendable_utxos(
+                self.ledger, 2000000000000, [self.account], set_reserved=False, return_insufficient_funds=True
+            )
+        got_amounts = [estimator.effective_amount for estimator in spendable]
+        self.assertListEqual(amounts, got_amounts)
+
+    async def test_sqlite_coin_chooser(self):
+        wallet_manager = WalletManager([self.wallet], {self.ledger.get_id(): self.ledger})
+        await self.blockchain.generate(300)
+        await self.assertBalance(self.account, '0.0')
+        address = await self.account.receiving.get_or_create_usable_address()
+        other_account = self.wallet.generate_account(self.ledger)
+        other_address = await other_account.receiving.get_or_create_usable_address()
+        self.ledger.coin_selection_strategy = 'sqlite'
+        await self.ledger.subscribe_account(self.account)
+
+        txids = []
+        txids.append(await self.blockchain.send_to_address(address, 1.0))
+        txids.append(await self.blockchain.send_to_address(address, 1.0))
+        txids.append(await self.blockchain.send_to_address(address, 3.0))
+        txids.append(await self.blockchain.send_to_address(address, 5.0))
+        txids.append(await self.blockchain.send_to_address(address, 10.0))
+
+        await asyncio.wait([self.wait_for_txid(txid, address) for txid in txids], timeout=1)
+        await self.assertBalance(self.account, '20.0')
+        await self.assertSpendable([99992600, 99992600, 299992600, 499992600, 999992600])
+
+        # send 1.5 lbc
+
+        first_tx = await Transaction.create(
+            [], [Output.pay_pubkey_hash(150000000, self.ledger.address_to_hash160(other_address))], [self.account],
+            self.account
+        )
+
+        self.assertEqual(2, len(first_tx.inputs))
+        self.assertEqual(2, len(first_tx.outputs))
+        self.assertEqual(100000000, first_tx.inputs[0].amount)
+        self.assertEqual(100000000, first_tx.inputs[1].amount)
+        self.assertEqual(150000000, first_tx.outputs[0].amount)
+        self.assertEqual(49980200, first_tx.outputs[1].amount)
+
+        await self.assertBalance(self.account, '18.0')
+        await self.assertSpendable([299992600, 499992600, 999992600])
+
+        await wallet_manager.broadcast_or_release(first_tx, blocking=True)
+        await self.assertSpendable([49972800, 299992600, 499992600, 999992600])
+        # 0.499, 3.0, 5.0, 10.0
+        await self.assertBalance(self.account, '18.499802')
+
+        # send 1.5lbc again
+
+        second_tx = await self._test_transaction(150000000, other_address, [49980200, 300000000], 199960400)
+        await self.assertSpendable([499992600, 999992600])
+
+        # replicate cancelling the api call after the tx broadcast while ledger.wait'ing it
+        e = asyncio.Event()
+
+        real_broadcast = self.ledger.broadcast
+
+        async def broadcast(tx):
+            try:
+                return await real_broadcast(tx)
+            finally:
+                e.set()
+
+        self.ledger.broadcast = broadcast
+
+        broadcast_task = asyncio.create_task(wallet_manager.broadcast_or_release(second_tx, blocking=True))
+        # wait for the broadcast to finish
+        await e.wait()
+        # cancel the api call
+        broadcast_task.cancel()
+        with self.assertRaises(asyncio.CancelledError):
+            await broadcast_task
+
+        # test if sending another 1.5 lbc will try to double spend the inputs from the cancelled tx
+        tx1 = await self._test_transaction(150000000, other_address, [500000000], 349987600)
+        await self.assertSpendable([199953000, 999992600])
+        await self.ledger.broadcast(tx1)
+
+        # spend deep into the mempool and see what else breaks
+        tx2 = await self._test_transaction(150000000, other_address, [199960400], 49948000)
+        await self.assertSpendable([349980200, 999992600])
+        await self.ledger.broadcast(tx2)
+
+        tx3 = await self._test_transaction(150000000, other_address, [349987600], 199975200)
+        await self.assertSpendable([49940600, 999992600])
+        await self.ledger.broadcast(tx3)
+
+        tx4 = await self._test_transaction(150000000, other_address, [49948000, 1000000000], 899928200)
+        await self.assertSpendable([199967800])
+        await self.ledger.broadcast(tx4)
+        await self.ledger.wait(tx4, timeout=1)
+
+        await self.assertBalance(self.account, '10.999034')
+        # spend more
+        tx5 = await self._test_transaction(100000000, other_address, [199975200], 99962800)
+        await self.assertSpendable([899920800])
+        await self.ledger.broadcast(tx5)
+        await self.assertSpendable([899920800])
+        await self.ledger.wait(tx5, timeout=1)
+
+        await self.assertSpendable([99955400, 899920800])
+        await self.assertBalance(self.account, '9.99891')
