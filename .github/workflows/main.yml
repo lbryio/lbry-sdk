@@ -85,12 +85,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
-      - run: pip install tox coverage
+      - name: extract pip cache
+        uses: actions/cache@v2
+        with:
+          path: ./.tox
+          key: tox-integration-${{ matrix.test }}-${{ matrix.db }}-${{ hashFiles('setup.py') }}
+          restore-keys: txo-integration-${{ matrix.test }}-${{ matrix.db }}-
+      - run: pip install tox
       - env:
           TEST_DB: ${{ matrix.db }}
-        run: |
-          tox -e ${{ matrix.test }}
-          bash <(curl -s https://codecov.io/bash) -X gcov -F integration,${{ matrix.test }},${{ matrix.db }}
+        run: tox -e ${{ matrix.test }}
 
 #  build:
 #    needs: ["lint", "tests-unit", "tests-integration"]
