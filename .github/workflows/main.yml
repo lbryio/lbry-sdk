@@ -92,54 +92,54 @@ jobs:
           tox -e ${{ matrix.test }}
           bash <(curl -s https://codecov.io/bash) -X gcov -F integration,${{ matrix.test }},${{ matrix.db }}
 
-  build:
-    needs: ["lint", "tests-unit", "tests-integration"]
-    name: "build"
-    strategy:
-      matrix:
-        os:
-          - ubuntu-16.04
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - name: set pip cache dir
-        id: pip-cache
-        run: echo "::set-output name=dir::$(pip cache dir)"
-      - name: extract pip cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - if: startsWith(runner.os, 'linux')
-        run: sudo apt-get install libzmq3-dev
-      - if: startsWith(runner.os, 'mac')
-        run: brew install zeromq
-      - name: Setup
-        run: |
-          pip install --user --upgrade pip wheel
-          pip install sqlalchemy@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
-          pip install -e .
-      - if: startsWith(runner.os, 'linux')
-        run: pip install psycopg2
-      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-        name: Build & Run (Unix)
-        run: |
-          pyinstaller --onefile --name lbrynet lbry/cli.py
-          chmod +x dist/lbrynet
-          dist/lbrynet --version
-      - if: startsWith(runner.os, 'windows')
-        name: Build & Run (Windows)
-        run: |
-          pip install pywin32
-          pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/cli.py
-          dist/lbrynet.exe --version
-      - uses: actions/upload-artifact@v2
-        with:
-          name: lbrynet-${{ matrix.os }}
-          path: dist/
+#  build:
+#    needs: ["lint", "tests-unit", "tests-integration"]
+#    name: "build"
+#    strategy:
+#      matrix:
+#        os:
+#          - ubuntu-16.04
+#          - macos-latest
+#          - windows-latest
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: set pip cache dir
+#        id: pip-cache
+#        run: echo "::set-output name=dir::$(pip cache dir)"
+#      - name: extract pip cache
+#        uses: actions/cache@v2
+#        with:
+#          path: ${{ steps.pip-cache.outputs.dir }}
+#          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+#          restore-keys: ${{ runner.os }}-pip-
+#      - if: startsWith(runner.os, 'linux')
+#        run: sudo apt-get install libzmq3-dev
+#      - if: startsWith(runner.os, 'mac')
+#        run: brew install zeromq
+#      - name: Setup
+#        run: |
+#          pip install --user --upgrade pip wheel
+#          pip install sqlalchemy@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
+#          pip install -e .
+#      - if: startsWith(runner.os, 'linux')
+#        run: pip install psycopg2
+#      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
+#        name: Build & Run (Unix)
+#        run: |
+#          pyinstaller --onefile --name lbrynet lbry/cli.py
+#          chmod +x dist/lbrynet
+#          dist/lbrynet --version
+#      - if: startsWith(runner.os, 'windows')
+#        name: Build & Run (Windows)
+#        run: |
+#          pip install pywin32
+#          pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/cli.py
+#          dist/lbrynet.exe --version
+#      - uses: actions/upload-artifact@v2
+#        with:
+#          name: lbrynet-${{ matrix.os }}
+#          path: dist/
