@@ -272,30 +272,32 @@ class BasicTransactionTests(IntegrationTestCase):
 
         # test if sending another 1.5 lbc will try to double spend the inputs from the cancelled tx
         tx1 = await self._test_transaction(150000000, other_address, [500000000], 349987600)
-        await self.assertSpendable([199953000, 999992600])
-        await self.ledger.broadcast(tx1)
+        await self.ledger.wait(tx1, timeout=1)
+        # wait for the cancelled transaction too, so that it's in the database
+        # needed to keep everything deterministic
+        await self.ledger.wait(second_tx, timeout=1)
+        await self.assertSpendable([199953000, 349980200, 999992600])
 
         # spend deep into the mempool and see what else breaks
         tx2 = await self._test_transaction(150000000, other_address, [199960400], 49948000)
         await self.assertSpendable([349980200, 999992600])
-        await self.ledger.broadcast(tx2)
+        await self.ledger.wait(tx2, timeout=1)
+        await self.assertSpendable([49940600, 349980200, 999992600])
 
-        tx3 = await self._test_transaction(150000000, other_address, [349987600], 199975200)
-        await self.assertSpendable([49940600, 999992600])
-        await self.ledger.broadcast(tx3)
+        tx3 = await self._test_transaction(150000000, other_address, [49948000, 349987600], 249915800)
+        await self.assertSpendable([999992600])
+        await self.ledger.wait(tx3, timeout=1)
+        await self.assertSpendable([249908400, 999992600])
 
-        tx4 = await self._test_transaction(150000000, other_address, [49948000, 1000000000], 899928200)
-        await self.assertSpendable([199967800])
-        await self.ledger.broadcast(tx4)
+        tx4 = await self._test_transaction(150000000, other_address, [249915800], 99903400)
+        await self.assertSpendable([999992600])
         await self.ledger.wait(tx4, timeout=1)
-
         await self.assertBalance(self.account, '10.999034')
-        # spend more
-        tx5 = await self._test_transaction(100000000, other_address, [199975200], 99962800)
-        await self.assertSpendable([899920800])
-        await self.ledger.broadcast(tx5)
-        await self.assertSpendable([899920800])
-        await self.ledger.wait(tx5, timeout=1)
+        await self.assertSpendable([99896000, 999992600])
 
-        await self.assertSpendable([99955400, 899920800])
-        await self.assertBalance(self.account, '9.99891')
+        # spend more
+        tx5 = await self._test_transaction(100000000, other_address, [99903400, 1000000000], 999883600)
+        await self.assertSpendable([])
+        await self.ledger.wait(tx5, timeout=1)
+        await self.assertSpendable([999876200])
+        await self.assertBalance(self.account, '9.998836')
