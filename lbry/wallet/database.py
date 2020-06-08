@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 import platform
 from binascii import hexlify
+from collections import defaultdict
 from dataclasses import dataclass
 from contextvars import ContextVar
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -14,7 +15,7 @@ from prometheus_client import Gauge, Counter, Histogram
 from lbry.utils import LockWithMetrics
 
 from .bip32 import PubKey
-from .transaction import Transaction, Output, OutputScript, TXRefImmutable
+from .transaction import Transaction, Output, OutputScript, TXRefImmutable, Input
 from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day
 
@@ -466,6 +467,101 @@ def dict_row_factory(cursor, row):
     return d
 
 
+SQLITE_MAX_INTEGER = 9223372036854775807
+
+
+def _get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, decoded_transactions: Dict[str, Transaction],
+                         result: Dict[Tuple[bytes, int, bool], List[int]], reserved: List[Transaction],
+                         amount_to_reserve: int, reserved_amount: int, floor: int, ceiling: int,
+                         fee_per_byte: int) -> int:
+    accounts_fmt = ",".join(["?"] * len(accounts))
+    txo_query = f"""
+        SELECT tx.txid, txo.txoid, tx.raw, tx.height, txo.position as nout, tx.is_verified, txo.amount FROM txo
+        INNER JOIN account_address USING (address)
+        LEFT JOIN txi USING (txoid)
+        INNER JOIN tx USING (txid)
+        WHERE txo.txo_type=0 AND txi.txoid IS NULL AND tx.txid IS NOT NULL AND NOT txo.is_reserved
+        AND txo.amount >= ? AND txo.amount < ?
+    """
+    if accounts:
+        txo_query += f"""
+            AND account_address.account {'= ?' if len(accounts_fmt) == 1 else 'IN (' + accounts_fmt + ')'}
+        """
+    txo_query += """
+        ORDER BY txo.amount ASC, tx.height DESC
+    """
+    # prefer confirmed, but save unconfirmed utxos from this selection in case they are needed
+    unconfirmed = []
+    for row in transaction.execute(txo_query, (floor, ceiling, *accounts)):
+        (txid, txoid, raw, height, nout, verified, amount) = row.values()
+        # verified or non verified transactions were found- reset the gap count
+        # multiple txos can come from the same tx, only decode it once and cache
+        if txid not in decoded_transactions:
+            # cache the decoded transaction
+            decoded_transactions[txid] = Transaction(raw)
+        decoded_tx = decoded_transactions[txid]
+        # save the unconfirmed txo for possible use later, if still needed
+        if verified:
+            # add the txo to the reservation, minus the fee for including it
+            reserved_amount += amount
+            reserved_amount -= Input.spend(decoded_tx.outputs[nout]).size * fee_per_byte
+            # mark it as reserved
+            result[(raw, height, verified)].append(nout)
+            reserved.append(txoid)
+            # if we've reserved enough, return
+            if reserved_amount >= amount_to_reserve:
+                return reserved_amount
+        else:
+            unconfirmed.append((txid, txoid, raw, height, nout, verified, amount))
+    # we're popping the items, so to get them in the order they were seen they are reversed
+    unconfirmed.reverse()
+    # add available unconfirmed txos if any were previously found
+    while unconfirmed and reserved_amount < amount_to_reserve:
+        (txid, txoid, raw, height, nout, verified, amount) = unconfirmed.pop()
+        # it's already decoded
+        decoded_tx = decoded_transactions[txid]
+        # add to the reserved amount
+        reserved_amount += amount
+        reserved_amount -= Input.spend(decoded_tx.outputs[nout]).size * fee_per_byte
+        result[(raw, height, verified)].append(nout)
+        reserved.append(txoid)
+    return reserved_amount
+
+
+def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: List, amount_to_reserve: int, floor: int,
+                                    fee_per_byte: int, set_reserved: bool, return_insufficient_funds: bool):
+    txs = defaultdict(list)
+    decoded_transactions = {}
+    reserved = []
+
+    reserved_dewies = 0
+    multiplier = 10
+    gap_count = 0
+
+    while reserved_dewies < amount_to_reserve and gap_count < 5 and floor * multiplier < SQLITE_MAX_INTEGER:
+        previous_reserved_dewies = reserved_dewies
+        reserved_dewies = _get_spendable_utxos(
+            transaction, accounts, decoded_transactions, txs, reserved, amount_to_reserve, reserved_dewies,
+            floor, floor * multiplier, fee_per_byte
+        )
+        floor *= multiplier
+        if previous_reserved_dewies == reserved_dewies:
+            gap_count += 1
+            multiplier **= 2
+        else:
+            gap_count = 0
+            multiplier = 10
+
+    # reserve the accumulated txos if enough were found
+    if reserved_dewies >= amount_to_reserve:
+        if set_reserved:
+            transaction.executemany("UPDATE txo SET is_reserved = ? WHERE txoid = ?",
+                                    [(True, txoid) for txoid in reserved]).fetchall()
+        return txs
+    # return_insufficient_funds and set_reserved are used for testing
+    return txs if return_insufficient_funds else {}
+
+
 class Database(SQLiteMixin):
 
     SCHEMA_VERSION = "1.3"
@@ -665,6 +761,20 @@ class Database(SQLiteMixin):
         # 1. delete transactions above_height
         # 2. update address histories removing deleted TXs
         return True
+
+    async def get_spendable_utxos(self, ledger, reserve_amount, accounts: Optional[Iterable], min_amount: int = 100000,
+                                  fee_per_byte: int = 50, set_reserved: bool = True,
+                                  return_insufficient_funds: bool = False) -> List:
+        to_spend = await self.db.run(
+            get_and_reserve_spendable_utxos, tuple(account.id for account in accounts), reserve_amount, min_amount,
+            fee_per_byte, set_reserved, return_insufficient_funds
+        )
+        txos = []
+        for (raw, height, verified), positions in to_spend.items():
+            tx = Transaction(raw, height=height, is_verified=verified)
+            for nout in positions:
+                txos.append(tx.outputs[nout].get_estimator(ledger))
+        return txos
 
     async def select_transactions(self, cols, accounts=None, read_only=False, **constraints):
         if not {'txid', 'txid__in'}.intersection(constraints):

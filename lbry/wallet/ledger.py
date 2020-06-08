@@ -133,7 +133,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
-            lambda e: log.info(
+            lambda e: log.debug(
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
                 self.get_id(), e.address, e.tx.height, e.tx.is_verified, e.tx.id
             )
@@ -244,11 +244,16 @@ class Ledger(metaclass=LedgerRegistry):
     def get_address_count(self, **constraints):
         return self.db.get_address_count(**constraints)
 
-    async def get_spendable_utxos(self, amount: int, funding_accounts):
+    async def get_spendable_utxos(self, amount: int, funding_accounts: Optional[Iterable['Account']],
+                                  min_amount=100000):
+        min_amount = min(amount // 10, min_amount)
+        fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
+        selector = CoinSelector(amount, fee)
         async with self._utxo_reservation_lock:
+            if self.coin_selection_strategy == 'sqlite':
+                return await self.db.get_spendable_utxos(self, amount + fee, funding_accounts, min_amount=min_amount,
+                                                         fee_per_byte=self.fee_per_byte)
             txos = await self.get_effective_amount_estimators(funding_accounts)
-            fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
-            selector = CoinSelector(amount, fee)
             spendables = selector.select(txos, self.coin_selection_strategy)
             if spendables:
                 await self.reserve_outputs(s.txo for s in spendables)
@@ -563,13 +568,26 @@ class Ledger(metaclass=LedgerRegistry):
                 await self.get_local_status_and_history(address, synced_history.getvalue())
             if local_status != remote_status:
                 if local_history == remote_history:
+                    log.warning(
+                        "%s has a synced history but a mismatched status", address
+                    )
                     return True
+                remote_set = set(remote_history)
+                local_set = set(local_history)
                 log.warning(
-                    "Wallet is out of sync after syncing. Remote: %s with %d items, local: %s with %d items",
-                    remote_status, len(remote_history), local_status, len(local_history)
+                    "%s is out of sync after syncing.\n"
+                    "Remote: %s with %d items (%i unique), local: %s with %d items (%i unique).\n"
+                    "Histories are mismatched on %i items.\n"
+                    "Local is missing\n"
+                    "%s\n"
+                    "Remote is missing\n"
+                    "%s\n"
+                    "******",
+                    address, remote_status, len(remote_history), len(remote_set),
+                    local_status, len(local_history), len(local_set), len(remote_set.symmetric_difference(local_set)),
+                    "\n".join([f"{txid} - {height}" for txid, height in local_set.difference(remote_set)]),
+                    "\n".join([f"{txid} - {height}" for txid, height in remote_set.difference(local_set)])
                 )
-                log.warning("local: %s", local_history)
-                log.warning("remote: %s", remote_history)
                 self._known_addresses_out_of_sync.add(address)
                 return False
             else:
