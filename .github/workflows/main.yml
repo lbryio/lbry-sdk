@@ -51,38 +51,25 @@ jobs:
           HOME: /tmp
         run: coverage run -m unittest -vv tests.unit.test_conf
 #        run: coverage run -m unittest discover -vv tests.unit
-#      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-#        env:
-#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          COVERALLS_PARALLEL: true
-#        name: Submit to coveralls
-#        run: |
-#          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
-#          coveralls
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-        uses: AndreMiras/coveralls-python-action@develop
-        with:
-          parallel: true
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_PARALLEL: true
+        name: Submit to coveralls
+        run: |
+          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
+          coveralls
 
-  coveralls_finish:
+  coveralls-finished:
     needs: tests-unit
     runs-on: ubuntu-latest
     steps:
       - name: Coveralls Finished
-        uses: AndreMiras/coveralls-python-action@develop
+        uses: coverallsapp/github-action@master
+        #uses: coverallsapp/github-action@57daa114
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
-
-#  complete_coverals:
-#    needs: tests-unit
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Coveralls Finished
-#        uses: coverallsapp/github-action@master
-#        #uses: coverallsapp/github-action@57daa114
-#        with:
-#          github-token: ${{ secrets.GITHUB_TOKEN }}
-#          parallel-finished: true
 
 #  tests-integration:
 #    name: "tests / integration"
