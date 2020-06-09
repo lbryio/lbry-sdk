@@ -4,6 +4,7 @@ from lbry.testcase import CommandTestCase
 class EpicAdventuresOfChris45(CommandTestCase):
 
     async def test_no_this_is_not_a_test_its_an_adventure(self):
+
         # Chris45 is an avid user of LBRY and this is his story. It's fact and fiction
         # and everything in between; it's also the setting of some record setting
         # integration tests.
@@ -194,3 +195,9 @@ class EpicAdventuresOfChris45(CommandTestCase):
             }},
             await self.resolve(uri)
         )
+
+        # He closes and opens the wallet server databases to see how horribly they break
+        db = self.conductor.spv_node.server.db
+        db.close()
+        await db.open_for_serving()
+        # They didn't! (error would be AssertionError: 276 vs 266 (264 counts) on startup)
