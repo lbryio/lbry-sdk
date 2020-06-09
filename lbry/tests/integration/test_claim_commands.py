@@ -1211,3 +1211,11 @@ class SupportCommands(CommandTestCase):
         self.assertFalse(txs2[0]['support_info'][0]['is_tip'])
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
+
+    async def test_signed_supports(self):
+        channel_id = self.get_claim_id(await self.channel_create())
+        stream_id = self.get_claim_id(await self.stream_create())
+        await self.support_create(stream_id, '0.3', channel_id=channel_id)
+        supports = await self.daemon.jsonrpc_support_list()
+        self.assertEqual(1, len(supports['items']))
+        self.assertEqual(supports['items'][0].script.values['support'], b'beef')

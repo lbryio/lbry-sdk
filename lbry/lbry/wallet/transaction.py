@@ -195,6 +195,14 @@ class Output(BaseOutput):
         return cls(amount, script)
 
     @classmethod
+    def pay_support_data_pubkey_hash(
+            cls, amount: int, claim_name: str, claim_id: str, support: bytes, pubkey_hash: bytes) -> 'Output':
+        script = OutputScript.pay_support_data_pubkey_hash(
+            claim_name.encode(), unhexlify(claim_id)[::-1], support, pubkey_hash
+        )
+        return cls(amount, script)
+
+    @classmethod
     def add_purchase_data(cls, purchase: Purchase) -> 'Output':
         script = cls.script_class.return_data(purchase)
         return cls(0, script)
@@ -287,11 +295,16 @@ class Transaction(BaseTransaction):
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List[Account], change_account: Account):
+                funding_accounts: List[Account], change_account: Account, signing_channel: Output = None):
         ledger, wallet = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        support_output = Output.pay_support_pubkey_hash(
-            amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
-        )
+        if signing_channel:
+            support_output = Output.pay_support_data_pubkey_hash(
+                amount, claim_name, claim_id, b'beef', ledger.address_to_hash160(holding_address)
+            )
+        else:
+            support_output = Output.pay_support_pubkey_hash(
+                amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+            )
         return cls.create([], [support_output], funding_accounts, change_account)
 
     @classmethod

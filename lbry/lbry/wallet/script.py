@@ -42,6 +42,17 @@ class OutputScript(BaseOutputScript):
         SUPPORT_CLAIM_OPCODES + BaseOutputScript.PAY_SCRIPT_HASH.opcodes
     ))
 
+    SUPPORT_CLAIM_DATA_OPCODES = (
+        OP_SUPPORT_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'), PUSH_SINGLE('support'),
+        OP_2DROP, OP_2DROP
+    )
+    SUPPORT_CLAIM_DATA_PUBKEY = Template('support_claim+data+pay_pubkey_hash', (
+        SUPPORT_CLAIM_DATA_OPCODES + BaseOutputScript.PAY_PUBKEY_HASH.opcodes
+    ))
+    SUPPORT_CLAIM_DATA_SCRIPT = Template('support_claim+data+pay_script_hash', (
+        SUPPORT_CLAIM_DATA_OPCODES + BaseOutputScript.PAY_SCRIPT_HASH.opcodes
+    ))
+
     UPDATE_CLAIM_OPCODES = (
         OP_UPDATE_CLAIM, PUSH_SINGLE('claim_name'), PUSH_SINGLE('claim_id'), PUSH_SINGLE('claim'),
         OP_2DROP, OP_2DROP
@@ -73,6 +84,8 @@ class OutputScript(BaseOutputScript):
         CLAIM_NAME_SCRIPT,
         SUPPORT_CLAIM_PUBKEY,
         SUPPORT_CLAIM_SCRIPT,
+        SUPPORT_CLAIM_DATA_PUBKEY,
+        SUPPORT_CLAIM_DATA_SCRIPT,
         UPDATE_CLAIM_PUBKEY,
         UPDATE_CLAIM_SCRIPT,
         SELL_CLAIM, SELL_SCRIPT,
@@ -101,6 +114,16 @@ class OutputScript(BaseOutputScript):
         return cls(template=cls.SUPPORT_CLAIM_PUBKEY, values={
             'claim_name': claim_name,
             'claim_id': claim_id,
+            'pubkey_hash': pubkey_hash
+        })
+
+    @classmethod
+    def pay_support_data_pubkey_hash(
+            cls, claim_name: bytes, claim_id: bytes, support: bytes, pubkey_hash: bytes):
+        return cls(template=cls.SUPPORT_CLAIM_DATA_PUBKEY, values={
+            'claim_name': claim_name,
+            'claim_id': claim_id,
+            'support': support,
             'pubkey_hash': pubkey_hash
         })
 

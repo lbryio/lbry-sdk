@@ -3277,7 +3277,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     async def jsonrpc_support_create(
             self, claim_id, amount, tip=False, account_id=None, wallet_id=None, funding_account_ids=None,
-            preview=False, blocking=False):
+            channel_id=None, preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
 
@@ -3301,6 +3301,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        channel = await self.get_channel_or_none(wallet, None, channel_id, None, for_signing=True)
         amount = self.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
         claim_address = claim.get_address(self.ledger)
@@ -3309,7 +3310,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0]
+            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
 
         if not preview:
