@@ -57,15 +57,15 @@ jobs:
           COVERALLS_PARALLEL: true
         name: Submit to coveralls
         run: |
-          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
-          coveralls
+          pip install coveralls
+          coveralls debug
 
   complete_coverals:
     needs: tests-unit
     runs-on: ubuntu-latest
     steps:
       - name: Coveralls Finished
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@57daa114
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
