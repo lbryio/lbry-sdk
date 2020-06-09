@@ -57,8 +57,7 @@ jobs:
           COVERALLS_PARALLEL: true
         name: Submit to coveralls
         run: |
-          pip install coveralls
-          #pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
+          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
           coveralls
 
   complete_coverals:
