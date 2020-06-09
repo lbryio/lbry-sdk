@@ -60,18 +60,18 @@ jobs:
 #          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
 #          coveralls
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-				uses: AndreMiras/coveralls-python-action@develop
-				with:
-					parallel: true
+        uses: AndreMiras/coveralls-python-action@develop
+        with:
+          parallel: true
 
   coveralls_finish:
     needs: test
     runs-on: ubuntu-latest
     steps:
-    - name: Coveralls Finished
-      uses: AndreMiras/coveralls-python-action@develop
-      with:
-        parallel-finished: true
+      - name: Coveralls Finished
+        uses: AndreMiras/coveralls-python-action@develop
+        with:
+          parallel-finished: true
 
 #  complete_coverals:
 #    needs: tests-unit
