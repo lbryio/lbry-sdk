@@ -52,23 +52,23 @@ jobs:
         run: coverage run -m unittest -vv tests.unit.test_conf
 #        run: coverage run -m unittest discover -vv tests.unit
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-				env:
-					COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-					COVERALLS_PARALLEL: true
-				name: Submit to coveralls
-				run: |
+        env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_PARALLEL: true
+        name: Submit to coveralls
+        run: |
           pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
-					coveralls
+          coveralls
 
   complete_coverals:
     needs: test-unit
     runs-on: ubuntu-latest
     steps:
-    - name: Coveralls Finished
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        parallel-finished: true
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          parallel-finished: true
 
 #  tests-integration:
 #    name: "tests / integration"
