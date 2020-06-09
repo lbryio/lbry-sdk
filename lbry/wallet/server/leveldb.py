@@ -479,11 +479,15 @@ class LevelDB:
     def raw_block_path(self, height):
         return os.path.join(self.env.db_dir, f'{self.raw_block_prefix()}{height:d}')
 
-    def read_raw_block(self, height):
+    async def read_raw_block(self, height):
         """Returns a raw block read from disk.  Raises FileNotFoundError
         if the block isn't on-disk."""
-        with util.open_file(self.raw_block_path(height)) as f:
-            return f.read(-1)
+
+        def read():
+            with util.open_file(self.raw_block_path(height)) as f:
+                return f.read(-1)
+
+        return await asyncio.get_event_loop().run_in_executor(self.executor, read)
 
     def write_raw_block(self, block, height):
         """Write a raw block to disk."""
