@@ -325,7 +325,7 @@ class ConfigFileAccess:
         cls = type(self.configuration)
         with open(self.path, 'r') as config_file:
             raw = config_file.read()
-        serialized = yaml.load(raw) or {}
+        serialized = yaml.full_load(raw) or {}
         for key, value in serialized.items():
             attr = getattr(cls, key, None)
             if attr is None:
