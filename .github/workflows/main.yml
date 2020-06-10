@@ -60,8 +60,58 @@ jobs:
           pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
           coveralls
 
+  tests-integration:
+    name: "tests / integration"
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        test:
+#          - datanetwork
+          - blockchain
+#          - other
+        db:
+          - sqlite
+#          - postgres
+#    services:
+#      postgres:
+#        image: postgres:12
+#        env:
+#          POSTGRES_USER: postgres
+#          POSTGRES_PASSWORD: postgres
+#          POSTGRES_DB: postgres
+#        ports:
+#        - 5432:5432
+#        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: '3.7'
+      - if: matrix.test == 'other'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: extract pip cache
+        uses: actions/cache@v2
+        with:
+          path: ./.tox
+          key: tox-integration-${{ matrix.test }}-${{ matrix.db }}-${{ hashFiles('setup.py') }}
+          restore-keys: txo-integration-${{ matrix.test }}-${{ matrix.db }}-
+      - run: pip install tox
+      - env:
+          TEST_DB: ${{ matrix.db }}
+        run: tox -e ${{ matrix.test }}
+      - env:
+          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_PARALLEL: true
+        name: Submit to coveralls
+        run: |
+          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
+          coverage combine tests
+          coveralls
+
   coveralls-finished:
-    needs: tests-unit
+    needs: ["tests-unit", "tests-integration"]
     runs-on: ubuntu-latest
     steps:
       - name: Coveralls Finished
@@ -69,48 +119,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           parallel-finished: true
-
-#  tests-integration:
-#    name: "tests / integration"
-#    runs-on: ubuntu-latest
-#    strategy:
-#      matrix:
-#        test:
-##          - datanetwork
-#          - blockchain
-##          - other
-#        db:
-#          - sqlite
-##          - postgres
-##    services:
-##      postgres:
-##        image: postgres:12
-##        env:
-##          POSTGRES_USER: postgres
-##          POSTGRES_PASSWORD: postgres
-##          POSTGRES_DB: postgres
-##        ports:
-##        - 5432:5432
-##        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-#    steps:
-#      - uses: actions/checkout@v1
-#      - uses: actions/setup-python@v1
-#        with:
-#          python-version: '3.7'
-#      - if: matrix.test == 'other'
-#        run: |
-#          sudo apt-get update
-#          sudo apt-get install -y --no-install-recommends ffmpeg
-#      - name: extract pip cache
-#        uses: actions/cache@v2
-#        with:
-#          path: ./.tox
-#          key: tox-integration-${{ matrix.test }}-${{ matrix.db }}-${{ hashFiles('setup.py') }}
-#          restore-keys: txo-integration-${{ matrix.test }}-${{ matrix.db }}-
-#      - run: pip install tox
-#      - env:
-#          TEST_DB: ${{ matrix.db }}
-#        run: tox -e ${{ matrix.test }}
 
 #  build:
 #    needs: ["lint", "tests-unit", "tests-integration"]
