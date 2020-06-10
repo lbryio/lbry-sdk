@@ -87,7 +87,7 @@ def process_claimtrie(heights):
             done += chunk_size
             p.step(done)
 
-    with progress(Event.CLAIM_UPDATE, 250) as p, context().connection.begin():
+    with progress(Event.TRIE_UPDATE, 250) as p, context().connection.begin():
         claims = chain.db.sync_get_claims()
         p.start(len(claims))
         done = 0
