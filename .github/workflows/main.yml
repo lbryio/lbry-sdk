@@ -51,8 +51,8 @@ jobs:
           HOME: /tmp
         run: coverage run -m unittest -vv tests.unit.test_conf
 #        run: coverage run -m unittest discover -vv tests.unit
-      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
-        env:
+#      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
+      - env:
           COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_PARALLEL: true
         name: Submit to coveralls
