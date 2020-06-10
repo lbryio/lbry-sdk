@@ -1,26 +1,23 @@
 import os
 import time
 import asyncio
-import shutil
 import tempfile
+import logging
 from binascii import hexlify, unhexlify
 from random import choice
+from distutils.dir_util import copy_tree, remove_tree
 
-from lbry.conf import Config
-from lbry.db import Database
+from lbry import Config, Database, RegTestLedger, Transaction, Output
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream
 from lbry.blockchain.lbrycrd import Lbrycrd
-from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
-from lbry.blockchain.transaction import Transaction, Output
+from lbry.blockchain.sync import BlockchainSync
+from lbry.blockchain.dewies import dewies_to_lbc
 from lbry.constants import CENT
-from lbry.blockchain.ledger import RegTestLedger
 from lbry.testcase import AsyncioTestCase
 
-from lbry.service.full_node import FullNode
-from lbry.service.light_client import LightClient
-from lbry.service.daemon import Daemon
-from lbry.service.api import Client
+
+#logging.getLogger('lbry.blockchain').setLevel(logging.DEBUG)
 
 
 class BlockchainTestCase(AsyncioTestCase):
@@ -28,13 +25,12 @@ class BlockchainTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         self.chain = Lbrycrd.temp_regtest()
-        self.ledger = self.chain.ledger
         await self.chain.ensure()
-        await self.chain.start('-maxblockfilesize=8', '-rpcworkqueue=128')
         self.addCleanup(self.chain.stop)
+        await self.chain.start('-rpcworkqueue=128')
 
 
-class TestEvents(BlockchainTestCase):
+class TestBlockchainEvents(BlockchainTestCase):
 
     async def test_block_event(self):
         msgs = []
@@ -55,28 +51,51 @@ class TestEvents(BlockchainTestCase):
         res = await self.chain.generate(3)
         await self.chain.on_block.where(lambda e: e['msg'] == 9)
         self.assertEqual(3, len(res))
-        self.assertEqual([0, 1, 2, 3, 4, 7, 8, 9], msgs)  # 5, 6 "missed"
+        self.assertEqual([
+            0, 1, 2, 3, 4,
+            # 5, 6 "missed"
+            7, 8, 9
+        ], msgs)
 
 
-class TestBlockchainSync(BlockchainTestCase):
+class TestMultiBlockFileSyncAndEvents(AsyncioTestCase):
+
+    TEST_DATA_CACHE_DIR = os.path.join(tempfile.gettempdir(), 'tmp-lbry-sync-test-data')
+    LBRYCRD_ARGS = '-maxblockfilesize=8', '-rpcworkqueue=128'
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-        self.service = FullNode(
-            self.ledger, f'sqlite:///{self.chain.data_dir}/lbry.db', Lbrycrd(self.ledger)
-        )
-        #self.service.conf.spv_address_filters = False
-        self.sync = self.service.sync
-        self.db = self.service.db
+
+        generate = True
+        if os.path.exists(self.TEST_DATA_CACHE_DIR):
+            generate = False
+            temp_dir = tempfile.mkdtemp()
+            copy_tree(self.TEST_DATA_CACHE_DIR, temp_dir)
+            self.chain = Lbrycrd(RegTestLedger(Config.with_same_dir(temp_dir)))
+        else:
+            self.chain = Lbrycrd.temp_regtest()
+
+        await self.chain.ensure()
+        await self.chain.start(*self.LBRYCRD_ARGS)
+        self.addCleanup(self.chain.stop)
+
+        self.db = Database.temp_sqlite_regtest(self.chain.ledger.conf.lbrycrd_dir)
+        self.addCleanup(remove_tree, self.db.ledger.conf.data_dir)
         await self.db.open()
         self.addCleanup(self.db.close)
-        await self.sync.chain.open()
-        self.addCleanup(self.sync.chain.close)
+        self.chain.ledger.conf.spv_address_filters = False
+        self.sync = BlockchainSync(self.chain, self.db)
 
-    async def test_multi_block_file_sync(self):
-        names = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+        if not generate:
+            return
+
+        print(f'generating sample claims... ', end='', flush=True)
+
         await self.chain.generate(101)
+
+        names = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
         address = Base58.decode(await self.chain.get_new_address())
+
         start = time.perf_counter()
         for _ in range(190):
             tx = Transaction().add_outputs([
@@ -85,7 +104,7 @@ class TestBlockchainSync(BlockchainTestCase):
                     Stream().update(
                         title='a claim title',
                         description='Lorem ipsum '*400,
-                        tags=['crypto', 'health', 'space'],
+                        tag=['crypto', 'health', 'space'],
                     ).claim,
                     address)
                 for i in range(1, 20)
@@ -95,21 +114,115 @@ class TestBlockchainSync(BlockchainTestCase):
             await self.chain.send_raw_transaction(signed['hex'])
             await self.chain.generate(1)
 
-        print(f'generating {190*20} transactions took {time.perf_counter()-start}s')
+        print(f'took {time.perf_counter()-start}s to generate {190*19} claims ', flush=True)
 
+        await self.chain.stop(False)
+        copy_tree(self.chain.ledger.conf.lbrycrd_dir, self.TEST_DATA_CACHE_DIR)
+        await self.chain.start(*self.LBRYCRD_ARGS)
+
+    @staticmethod
+    def extract_events(name, events):
+        return sorted([
+            (p['data'].get('block_file'), p['data']['step'], p['data']['total'])
+            for p in events if p['event'].endswith(name)
+        ])
+
+    async def test_multi_block_file_sync(self):
         self.assertEqual(
             [(0, 191, 280), (1, 89, 178), (2, 12, 24)],
             [(file['file_number'], file['blocks'], file['txs'])
              for file in await self.chain.db.get_block_files()]
         )
-        self.assertEqual(191, len(await self.chain.db.get_file_details(0)))
+        self.assertEqual(191, len(await self.chain.db.get_blocks_in_file(0)))
+
+        events = []
+        self.sync.on_progress.listen(events.append)
 
         await self.sync.advance()
+        self.assertEqual(
+            events[0], {
+                "event": "blockchain.sync.start",
+                "data": {
+                    "starting_height": -1,
+                    "ending_height": 291,
+                    "files": 3,
+                    "blocks": 292,
+                    "txs": 482
+                }
+            }
+        )
+        self.assertEqual(
+            self.extract_events('block.read', events), [
+                (0, 0, 191),
+                (0, 100, 191),
+                (0, 191, 191),
+                (1, 0, 89),
+                (1, 89, 89),
+                (2, 0, 12),
+                (2, 12, 12),
+            ]
+        )
+        self.assertEqual(
+            self.extract_events('block.save', events), [
+                (0, 0, 280),
+                (0, 19, 280),
+                (0, 47, 280),
+                (0, 267, 280),
+                (0, 278, 280),
+                (0, 280, 280),
+                (1, 0, 178),
+                (1, 6, 178),
+                (1, 19, 178),
+                (1, 166, 178),
+                (1, 175, 178),
+                (1, 178, 178),
+                (2, 0, 24),
+                (2, 1, 24),
+                (2, 21, 24),
+                (2, 22, 24),
+                (2, 24, 24)
+            ]
+        )
+        claim_events = self.extract_events('claim.update', events)
+        self.assertEqual((1000, 3610), claim_events[10][1:])
+        self.assertEqual((3610, 3610), claim_events[-1][1:])
 
-        print('here')
+        events.clear()
+        await self.sync.advance()  # should be no-op
+        self.assertListEqual([], events)
+
+        await self.chain.generate(1)
+
+        events.clear()
+
+        await self.sync.advance()
+        self.assertEqual(
+            events[0], {
+                "event": "blockchain.sync.start",
+                "data": {
+                    "starting_height": 291,
+                    "ending_height": 292,
+                    "files": 1,
+                    "blocks": 1,
+                    "txs": 1
+                }
+            }
+        )
+        self.assertEqual(
+            self.extract_events('block.read', events), [
+                (2, 0, 1),
+                (2, 1, 1),
+            ]
+        )
+        self.assertEqual(
+            self.extract_events('block.save', events), [
+                (2, 0, 1),
+                (2, 1, 1),
+            ]
+        )
 
 
-class FullNodeTestCase(BlockchainTestCase):
+class BaseSyncTestCase(BlockchainTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
@@ -117,81 +230,38 @@ class FullNodeTestCase(BlockchainTestCase):
         self.current_height = 0
         await self.generate(101, wait=False)
 
-        self.service = FullNode(self.ledger, f'sqlite:///{self.chain.data_dir}/lbry.db')
-        self.service.conf.spv_address_filters = False
-        self.sync = self.service.sync
-        self.db = self.service.db
+        self.db = Database.temp_sqlite_regtest(self.chain.ledger.conf.lbrycrd_dir)
+        self.addCleanup(remove_tree, self.db.ledger.conf.data_dir)
+        await self.db.open()
+        self.addCleanup(self.db.close)
 
-        self.daemon = Daemon(self.service)
-        self.api = self.daemon.api
-        self.addCleanup(self.daemon.stop)
-        await self.daemon.start()
+        self.chain.ledger.conf.spv_address_filters = False
+        self.sync = BlockchainSync(self.chain, self.db)
+        await self.sync.start()
+        self.addCleanup(self.sync.stop)
 
-        if False: #os.environ.get('TEST_LBRY_API', 'light_client') == 'light_client':
-            light_dir = tempfile.mkdtemp()
-            self.addCleanup(shutil.rmtree, light_dir, True)
-
-            ledger = RegTestLedger(Config(
-                data_dir=light_dir,
-                wallet_dir=light_dir,
-                api='localhost:5389',
-            ))
-
-            self.light_client = self.service = LightClient(
-                ledger, f'sqlite:///{light_dir}/light_client.db'
-            )
-            self.light_api = Daemon(self.service)
-            await self.light_api.start()
-            self.addCleanup(self.light_api.stop)
-        #else:
-        #    self.service = self.full_node
-
-        #self.client = Client(self.service, self.ledger.conf.api_connection_url)
+        self.last_block_hash = None
+        self.address = await self.chain.get_new_address()
 
     async def generate(self, blocks, wait=True):
         block_hashes = await self.chain.generate(blocks)
         self.current_height += blocks
+        self.last_block_hash = block_hashes[-1]
         if wait:
-            await self.service.sync.on_block.where(
-                lambda b: self.current_height == b.height
-            )
+            await self.sync.on_block.where(lambda b: self.current_height == b.height)
         return block_hashes
 
+    async def get_transaction(self, txid):
+        raw = await self.chain.get_raw_transaction(txid)
+        return Transaction(unhexlify(raw))
 
-class TestFullNode(FullNodeTestCase):
-
-    async def test_foo(self):
-        await self.generate(10)
-        wallet = self.service.wallet_manager.default_wallet #create_wallet('test_wallet')
-        account = wallet.accounts[0]
-        addresses = await account.ensure_address_gap()
-        await self.chain.send_to_address(addresses[0], '5.0')
-        await self.generate(1)
-        self.assertEqual(await account.get_balance(), lbc_to_dewies('5.0'))
-        #self.assertEqual((await self.client.account_balance())['total'], '5.0')
-
-        tx = await wallet.create_channel('@foo', lbc_to_dewies('1.0'), account, [account], addresses[0])
-        await self.service.broadcast(tx)
-        await self.generate(1)
-        channels = await wallet.get_channels()
-        print(channels)
-
-
-class TestClaimtrieSync(FullNodeTestCase):
-
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
-        self.last_block_hash = None
-        self.address = await self.chain.get_new_address()
+    async def get_last_block(self):
+        return await self.chain.get_block(self.last_block_hash)
 
     def find_claim_txo(self, tx):
         for txo in tx.outputs:
             if txo.is_claim:
                 return txo
-
-    async def get_transaction(self, txid):
-        raw = await self.chain.get_raw_transaction(txid)
-        return Transaction(unhexlify(raw))
 
     async def claim_name(self, title, amount):
         claim = Stream().update(title=title).claim
@@ -215,6 +285,43 @@ class TestClaimtrieSync(FullNodeTestCase):
         )
         return response['txId']
 
+
+class TestBasicSyncScenarios(BaseSyncTestCase):
+
+    async def test_sync_advances(self):
+        blocks = []
+        self.sync.on_block.listen(blocks.append)
+        await self.generate(1)
+        await self.generate(1)
+        await self.generate(1)
+        self.assertEqual([102, 103, 104], [b.height for b in blocks])
+        self.assertEqual(104, self.current_height)
+        blocks.clear()
+        await self.generate(6)
+        self.assertEqual([110], [b.height for b in blocks])
+        self.assertEqual(110, self.current_height)
+
+    async def test_claim_create_update_and_delete(self):
+        txid = await self.claim_name('foo', '0.01')
+        await self.generate(1)
+        claims, _, _ = await self.db.search_claims()
+        self.assertEqual(1, len(claims))
+        self.assertEqual(claims[0].claim_name, 'foo')
+        self.assertEqual(dewies_to_lbc(claims[0].amount), '0.01')
+        txid = await self.claim_update(await self.get_transaction(txid), '0.02')
+        await self.generate(1)
+        claims, _, _ = await self.db.search_claims()
+        self.assertEqual(1, len(claims))
+        self.assertEqual(claims[0].claim_name, 'foo')
+        self.assertEqual(dewies_to_lbc(claims[0].amount), '0.02')
+        await self.claim_abandon(await self.get_transaction(txid))
+        await self.generate(1)
+        claims, _, _ = await self.db.search_claims()
+        self.assertEqual(0, len(claims))
+
+
+class TestClaimtrieSync(BaseSyncTestCase):
+
     async def advance(self, new_height, ops):
         blocks = (new_height-self.current_height)-1
         if blocks > 0:
@@ -236,12 +343,8 @@ class TestClaimtrieSync(FullNodeTestCase):
             else:
                 raise ValueError(f'"{op_type}" is unknown operation')
             txs.append(await self.get_transaction(txid))
-        self.last_block_hash, = await self.generate(1)
-        self.current_height = new_height
+        await self.generate(1)
         return txs
-
-    async def get_last_block(self):
-        return await self.chain.get_block(self.last_block_hash)
 
     async def get_controlling(self):
         sql = f"""
