@@ -31,7 +31,7 @@ class StreamControllerTestCase(AsyncioTestCase):
             raise ValueError('bad')
         controller = EventController()
         controller.stream.listen(bad_listener)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError), self.assertLogs():
             await controller.add("yo")
 
     async def test_async_listener_errors(self):
@@ -39,7 +39,7 @@ class StreamControllerTestCase(AsyncioTestCase):
             raise ValueError('bad')
         controller = EventController()
         controller.stream.listen(bad_listener)
-        with self.assertRaises(ValueError):
+        with self.assertRaises(ValueError), self.assertLogs():
             await controller.add("yo")
 
     async def test_first_event(self):
