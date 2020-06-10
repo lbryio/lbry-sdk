@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import multiprocessing as mp
+from unittest import skip
 from concurrent.futures import ThreadPoolExecutor
 
 from lbry.testcase import AsyncioTestCase
@@ -60,6 +61,7 @@ class StreamControllerTestCase(AsyncioTestCase):
         self.assertEqual("two", await last)
 
 
+@skip('need to make this test more reliable')
 class TestEventQueuePublisher(AsyncioTestCase):
 
     async def test_event_buffering_avoids_overloading_asyncio(self):
