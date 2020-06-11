@@ -83,7 +83,7 @@ class LevelDB:
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
         path = partial(os.path.join, self.env.db_dir)
-        self.hashes_file = util.LogicalFile(path('meta/hashes'), 4, 16000000)
+        self.hashes_file = util.LogicalFile(path('hashes'), 4, 16000000)
         self.headers_db = None
         self.tx_count_db = None
 
