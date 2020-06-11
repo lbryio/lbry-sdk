@@ -112,6 +112,11 @@ class LevelDB:
     async def _open_dbs(self, for_sync, compacting):
         if self.executor is None:
             self.executor = ThreadPoolExecutor(max(1, os.cpu_count() - 1))
+        coin_path = os.path.join(self.env.db_dir, 'COIN')
+        if not os.path.isfile(coin_path):
+            with util.open_file(coin_path, create=True) as f:
+                f.write(f'ElectrumX databases and metadata for '
+                        f'{self.coin.NAME} {self.coin.NET}'.encode())
 
         assert self.headers_db is None
         self.headers_db = self.db_class('headers', for_sync)
@@ -129,17 +134,14 @@ class LevelDB:
         # First UTXO DB
         self.utxo_db = self.db_class('utxo', for_sync)
         if self.utxo_db.is_new:
-            self.logger.info('created new database')
-            self.logger.info('creating metadata directory')
-            os.mkdir(os.path.join(self.env.db_dir, 'meta'))
             self.logger.info('created new utxo db')
         self.logger.info(f'opened utxo db (for sync: {for_sync})')
         self.read_utxo_state()
 
         # Then history DB
-        self.utxo_flush_count = self.history.open_db(self.db_class, for_sync,
-                                                     self.utxo_flush_count,
-                                                     compacting)
+        self.utxo_flush_count = self.history.open_db(
+            self.db_class, for_sync, self.utxo_flush_count, compacting
+        )
         self.clear_excess_undo_info()
 
         # Read TX counts (requires meta directory)
@@ -163,12 +165,14 @@ class LevelDB:
         synchronization.  When serving clients we want the open files for
         serving network connections.
         """
+        self.logger.info("opened for sync")
         await self._open_dbs(True, False)
 
     async def open_for_serving(self):
         """Open the databases for serving.  If they are already open they are
         closed first.
         """
+        self.logger.info('closing DBs to re-open for serving')
         if self.utxo_db:
             self.logger.info('closing DBs to re-open for serving')
             self.utxo_db.close()
@@ -181,6 +185,7 @@ class LevelDB:
             self.tx_count_db.close()
             self.tx_count_db = None
         await self._open_dbs(False, False)
+        self.logger.info("opened for serving")
 
     # Header merkle cache
 
@@ -471,7 +476,7 @@ class LevelDB:
             batch_put(self.undo_key(height), b''.join(undo_info))
 
     def raw_block_prefix(self):
-        return 'meta/block'
+        return 'block'
 
     def raw_block_path(self, height):
         return os.path.join(self.env.db_dir, f'{self.raw_block_prefix()}{height:d}')
