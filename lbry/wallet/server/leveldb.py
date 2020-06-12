@@ -285,15 +285,13 @@ class LevelDB:
         # Write the headers, tx counts, and tx hashes
         start_time = time.perf_counter()
         height_start = self.fs_height + 1
+        tx_num = prior_tx_count
 
-        for header in flush_data.headers:
+        for header, tx_hashes in zip(flush_data.headers, flush_data.block_tx_hashes):
             tx_count = self.tx_counts[height_start]
             self.headers_db.put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
             self.tx_count_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
             height_start += 1
-
-        tx_num = prior_tx_count
-        for tx_hashes in flush_data.block_tx_hashes:
             offset = 0
             while offset < len(tx_hashes):
                 self.hashes_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
@@ -301,7 +299,6 @@ class LevelDB:
                 offset += 32
 
         flush_data.block_tx_hashes.clear()
-
         self.fs_height = flush_data.height
         self.fs_tx_count = flush_data.tx_count
         flush_data.headers.clear()
