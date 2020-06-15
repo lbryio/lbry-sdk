@@ -104,7 +104,7 @@ class MemPool:
        hashXs: hashX   -> set of all hashes of txs touching the hashX
     """
 
-    def __init__(self, coin, api, refresh_secs=5.0, log_status_secs=120.0):
+    def __init__(self, coin, api, refresh_secs=1.0, log_status_secs=120.0):
         assert isinstance(api, MemPoolAPI)
         self.coin = coin
         self.api = api
@@ -230,16 +230,9 @@ class MemPool:
             synchronized_event.set()
             synchronized_event.clear()
             await self.api.on_mempool(touched, height)
-            timed_out = False
-            try:
-                # we wait up to `refresh_secs` but go early if a broadcast happens (which triggers wakeup event)
-                await asyncio.wait_for(self.wakeup.wait(), timeout=self.refresh_secs)
-            except asyncio.TimeoutError:
-                timed_out = True
-            finally:
-                self.wakeup.clear()
-            duration = time.perf_counter() - start - (0 if not timed_out else self.refresh_secs)
+            duration = time.perf_counter() - start
             self.mempool_process_time_metric.observe(duration)
+            await asyncio.sleep(self.refresh_secs)
 
     async def _process_mempool(self, all_hashes):
         # Re-sync with the new set of hashes

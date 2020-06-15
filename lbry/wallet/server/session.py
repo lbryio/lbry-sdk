@@ -602,7 +602,6 @@ class SessionManager:
 
     async def broadcast_transaction(self, raw_tx):
         hex_hash = await self.daemon.broadcast_transaction(raw_tx)
-        self.mempool.wakeup.set()
         self.txs_sent += 1
         return hex_hash
 
