@@ -84,6 +84,10 @@ NAMESPACE = "wallet_server"
 HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
 )
+mempool_process_time_metric = Histogram(
+    "processed_mempool", "Time to process mempool and notify touched addresses",
+    namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+)
 
 
 class MemPool:
@@ -114,9 +118,7 @@ class MemPool:
         self.lock = asyncio.Lock()
         self.wakeup = asyncio.Event()
         self.executor = ThreadPoolExecutor(max(os.cpu_count() - 1, 1))
-        self.mempool_process_time_metric = Histogram(
-            "processed_mempool", "Time to process mempool and notify touched addresses", namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
-        )
+        self.mempool_process_time_metric = mempool_process_time_metric
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
