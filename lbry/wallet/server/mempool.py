@@ -232,7 +232,13 @@ class MemPool:
             await self.api.on_mempool(touched, height)
             duration = time.perf_counter() - start
             self.mempool_process_time_metric.observe(duration)
-            await asyncio.sleep(self.refresh_secs)
+            try:
+                # we wait up to `refresh_secs` but go early if a broadcast happens (which triggers wakeup event)
+                await asyncio.wait_for(self.wakeup.wait(), timeout=self.refresh_secs)
+            except asyncio.TimeoutError:
+                pass
+            finally:
+                self.wakeup.clear()
 
     async def _process_mempool(self, all_hashes):
         # Re-sync with the new set of hashes
