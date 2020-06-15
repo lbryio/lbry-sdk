@@ -529,13 +529,14 @@ def _get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, decode
 
 
 def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: List, amount_to_reserve: int, floor: int,
-                                    fee_per_byte: int, set_reserved: bool, return_insufficient_funds: bool):
+                                    fee_per_byte: int, set_reserved: bool, return_insufficient_funds: bool,
+                                    base_multiplier: int = 100):
     txs = defaultdict(list)
     decoded_transactions = {}
     reserved = []
 
     reserved_dewies = 0
-    multiplier = 10
+    multiplier = base_multiplier
     gap_count = 0
 
     while reserved_dewies < amount_to_reserve and gap_count < 5 and floor * multiplier < SQLITE_MAX_INTEGER:
@@ -550,7 +551,7 @@ def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: L
             multiplier **= 2
         else:
             gap_count = 0
-            multiplier = 10
+            multiplier = base_multiplier
 
     # reserve the accumulated txos if enough were found
     if reserved_dewies >= amount_to_reserve:
@@ -762,7 +763,7 @@ class Database(SQLiteMixin):
         # 2. update address histories removing deleted TXs
         return True
 
-    async def get_spendable_utxos(self, ledger, reserve_amount, accounts: Optional[Iterable], min_amount: int = 100000,
+    async def get_spendable_utxos(self, ledger, reserve_amount, accounts: Optional[Iterable], min_amount: int = 1,
                                   fee_per_byte: int = 50, set_reserved: bool = True,
                                   return_insufficient_funds: bool = False) -> List:
         to_spend = await self.db.run(
