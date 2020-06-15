@@ -454,9 +454,20 @@ class LevelDB:
         limit to None to get them all.
         """
         def read_history():
-            tx_nums = list(self.history.get_txnums(hashX, limit))
-            fs_tx_hash = self.fs_tx_hash
-            return [fs_tx_hash(tx_num) for tx_num in tx_nums]
+            hashx_history = []
+            for key, hist in self.history.db.iterator(prefix=hashX):
+                a = array.array('I')
+                a.frombytes(hist)
+                for tx_num in a:
+                    tx_height = bisect_right(self.tx_counts, tx_num)
+                    if tx_height > self.db_height:
+                        tx_hash = None
+                    else:
+                        tx_hash = self.hashes_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
+                    hashx_history.append((tx_hash, tx_height))
+                    if limit and len(hashx_history) >= limit:
+                        return hashx_history
+            return hashx_history
 
         while True:
             history = await asyncio.get_event_loop().run_in_executor(self.executor, read_history)
