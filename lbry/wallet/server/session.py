@@ -940,13 +940,21 @@ class LBRYElectrumX(SessionBase):
 
         touched = touched.intersection(self.hashX_subs)
         if touched or (height_changed and self.mempool_statuses):
+            notified = set()
+            mempool_addrs = tuple(self.mempool_statuses.keys())
             for hashX in touched:
                 alias = self.hashX_subs[hashX]
                 asyncio.create_task(send_history_notification(alias, hashX))
+                notified.add(hashX)
+            for hashX in mempool_addrs:
+                if hashX not in notified:
+                    alias = self.hashX_subs[hashX]
+                    asyncio.create_task(send_history_notification(alias, hashX))
+                    notified.add(hashX)
 
             if touched:
                 es = '' if len(touched) == 1 else 'es'
-                self.logger.info(f'notified of {len(touched):,d} address{es}')
+                self.logger.info(f'notified {len(notified)} mempool/{len(touched):,d} touched address{es}')
 
     def get_metrics_or_placeholder_for_api(self, query_name):
         """ Do not hold on to a reference to the metrics
@@ -1175,7 +1183,6 @@ class LBRYElectrumX(SessionBase):
             self.mempool_statuses[hashX] = status
         else:
             self.mempool_statuses.pop(hashX, None)
-
         return status
 
     async def hashX_listunspent(self, hashX):
