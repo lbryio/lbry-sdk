@@ -133,7 +133,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
-            lambda e: log.debug(
+            lambda e: log.info(
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
                 self.get_id(), e.address, e.tx.height, e.tx.is_verified, e.tx.id
             )
@@ -682,20 +682,26 @@ class Ledger(metaclass=LedgerRegistry):
                 address_record['address']
             )) for address_record in records
         ], timeout=1)
-        if pending:
-            records = await self.db.get_addresses(address__in=addresses)
-            for record in records:
-                found = False
-                local_history = (await self.get_local_status_and_history(
-                    record['address'], history=record['history']
-                ))[1] if record['history'] else []
-                for txid, local_height in local_history:
-                    if txid == tx.id and local_height >= height:
-                        found = True
-                if not found:
-                    log.debug("timeout: %s, %s, %s", record['history'], addresses, tx.id)
+        if not pending:
+            return True
+        records = await self.db.get_addresses(address__in=addresses)
+        for record in records:
+            local_history = (await self.get_local_status_and_history(
+                record['address'], history=record['history']
+            ))[1] if record['history'] else []
+            for txid, local_height in local_history:
+                if txid == tx.id:
+                    if local_height >= height:
+                        return True
+                    log.warning(
+                        "local history has higher height than remote for %s (%i vs %i)", txid,
+                        local_height, height
+                    )
                     return False
-        return True
+            log.warning(
+                "local history does not contain %s, requested height %i", tx.id, height
+            )
+        return False
 
     async def _inflate_outputs(
             self, query, accounts,
