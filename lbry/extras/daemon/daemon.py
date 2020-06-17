@@ -1459,7 +1459,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT)
     async def jsonrpc_wallet_send(
             self, amount, addresses, wallet_id=None,
-            change_account_id=None, funding_account_ids=None, preview=False):
+            change_account_id=None, funding_account_ids=None, preview=False, blocking=True):
         """
         Send the same number of credits to multiple addresses using all accounts in wallet to
         fund the transaction and the default account to receive any change.
@@ -1467,12 +1467,14 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             wallet_send <amount> <addresses>... [--wallet_id=<wallet_id>] [--preview]
                         [--change_account_id=None] [--funding_account_ids=<funding_account_ids>...]
+                        [--blocking]
 
         Options:
             --wallet_id=<wallet_id>         : (str) restrict operation to specific wallet
             --change_account_id=<wallet_id> : (str) account where change will go
             --funding_account_ids=<funding_account_ids> : (str) accounts to fund the transaction
-            --preview                  : (bool) do not broadcast the transaction
+            --preview                       : (bool) do not broadcast the transaction
+            --blocking                      : (bool) wait until tx has synced
 
         Returns: {Transaction}
         """
@@ -1498,13 +1500,11 @@ class Daemon(metaclass=JSONRPCServerType):
         tx = await Transaction.create(
             [], outputs, accounts, account
         )
-
         if not preview:
-            await self.ledger.broadcast(tx)
+            await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())
         else:
             await self.ledger.release_tx(tx)
-
         return tx
 
     ACCOUNT_DOC = """
