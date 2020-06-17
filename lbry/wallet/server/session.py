@@ -165,6 +165,10 @@ class SessionManager:
         "address_history", "Time to fetch an address history",
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
+    notifications_in_flight_metric = Gauge(
+        "notifications_in_flight", "Count of notifications in flight",
+        namespace=NAMESPACE
+    )
 
     def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
                  shutdown_event: asyncio.Event):
@@ -934,9 +938,13 @@ class LBRYElectrumX(SessionBase):
                 method = 'blockchain.scripthash.subscribe'
             else:
                 method = 'blockchain.address.subscribe'
-            status = await self.address_status(hashX)
-            self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
-            await self.send_notification(method, (alias, status))
+            try:
+                self.session_mgr.notifications_in_flight_metric.inc()
+                status = await self.address_status(hashX)
+                self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+                await self.send_notification(method, (alias, status))
+            finally:
+                self.session_mgr.notifications_in_flight_metric.dec()
 
         touched = touched.intersection(self.hashX_subs)
         if touched or (height_changed and self.mempool_statuses):
