@@ -169,6 +169,10 @@ class SessionManager:
         "notifications_in_flight", "Count of notifications in flight",
         namespace=NAMESPACE
     )
+    notifications_sent_metric = Histogram(
+        "notifications_sent", "Time to send an address notification",
+        namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+    )
 
     def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
                  shutdown_event: asyncio.Event):
@@ -942,7 +946,9 @@ class LBRYElectrumX(SessionBase):
                 self.session_mgr.notifications_in_flight_metric.inc()
                 status = await self.address_status(hashX)
                 self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+                start = time.perf_counter()
                 await self.send_notification(method, (alias, status))
+                self.session_mgr.notifications_sent_metric.observe(time.perf_counter() - start)
             finally:
                 self.session_mgr.notifications_in_flight_metric.dec()
 
