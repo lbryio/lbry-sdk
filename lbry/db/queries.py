@@ -21,13 +21,13 @@ from .utils import query, in_account_ids
 from .query_context import context
 from .constants import (
     TXO_TYPES, CLAIM_TYPE_CODES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
-    SEARCH_PARAMS, SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
+    SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
 )
 from .tables import (
     metadata,
     SCHEMA_VERSION, Version,
     Block, TX, TXO, TXI, txi_join_account, txo_join_account,
-    Claim, Claimtrie,
+    Claim, Support, Takeover,
     PubkeyAddress, AccountAddress
 )
 
@@ -58,6 +58,10 @@ def check_version_and_create_tables():
             ctx.execute(text("ALTER TABLE block DISABLE TRIGGER ALL;"))
 
 
+def insert_block(block):
+    context().get_bulk_loader().add_block(block).save()
+
+
 def insert_transaction(block_hash, tx):
     context().get_bulk_loader().add_transaction(block_hash, tx).save()
 
@@ -70,13 +74,13 @@ def execute_fetchall(sql):
     return context().fetchall(text(sql))
 
 
-def get_best_height():
+def get_best_tx_height():
     return context().fetchone(
-        select(func.coalesce(func.max(TX.c.height), -1).label('total')).select_from(TX)
-    )['total']
+        select(func.coalesce(func.max(TX.c.height), -1).label('height')).select_from(TX)
+    )['height']
 
 
-def get_best_height_for_file(file_number):
+def get_best_block_height_for_file(file_number):
     return context().fetchone(
         select(func.coalesce(func.max(Block.c.height), -1).label('height'))
         .select_from(Block)
@@ -151,6 +155,33 @@ def release_all_outputs(account_id):
             (TXO.c.is_reserved == True) &
             (TXO.c.address.in_(select(AccountAddress.c.address).where(in_account_ids(account_id))))
         )
+    )
+
+
+def get_takeover_names(above_height, limit_height, offset, limit):
+    return context().fetchall(
+        select(
+            Takeover.c.normalized.label('_name'),
+            func.max(Takeover.c.height).label('_height'),
+
+        )
+        .where((Takeover.c.height < above_height) & (Takeover.c.height >= limit_height))
+        .group_by(Takeover.c.normalized)
+        .limit(limit).offset(offset)
+    )
+
+
+def get_takeovers(above_height, limit_height, offset, limit):
+    return context().fetchall(
+        select(
+            Takeover.c.normalized,
+            Takeover.c.claim_hash,
+            Takeover.c.height,
+        )
+        .select_from(Takeover)
+        .where((Takeover.c.height < above_height) & (Takeover.c.height >= limit_height))
+        .group_by(Takeover.c.normalized)
+        .limit(limit).offset(offset)
     )
 
 
@@ -259,11 +290,22 @@ def get_transaction_count(**constraints):
     return count[0]['total'] or 0
 
 
+BASE_SELECT_TXO_COLUMNS = [
+    TX.c.tx_hash, TX.c.raw, TX.c.height, TX.c.position.label('tx_position'),
+    TX.c.is_verified, TX.c.timestamp,
+    TXO.c.txo_type, TXO.c.position.label('txo_position'), TXO.c.amount, TXO.c.is_spent,
+    TXO.c.script_offset, TXO.c.script_length,
+]
+
+
 def select_txos(
-        cols, account_ids=None, is_my_input=None, is_my_output=True,
-        is_my_input_or_output=None, exclude_internal_transfers=False,
-        include_is_spent=False, include_is_my_input=False,
-        is_spent=None, spent=None, is_claim_list=False, **constraints):
+        cols=None, account_ids=None, is_my_input=None,
+        is_my_output=True, is_my_input_or_output=None, exclude_internal_transfers=False,
+        include_is_my_input=False, claim_id_not_in_claim_table=None,
+        txo_id_not_in_claim_table=None, txo_id_not_in_support_table=None,
+        **constraints) -> Select:
+    if cols is None:
+        cols = BASE_SELECT_TXO_COLUMNS
     s: Select = select(*cols)
     if account_ids:
         my_addresses = select(AccountAddress.c.address).where(in_account_ids(account_ids))
@@ -301,22 +343,61 @@ def select_txos(
                 (TXI.c.address.notin_(my_addresses))
             )
     joins = TXO.join(TX)
-    tables = [TXO, TX]
-    if spent is None:
-        spent = TXI.alias('spent')
-    if is_spent:
-        s = s.where(spent.c.txo_hash != None)
-    elif is_spent is False:
-        s = s.where((spent.c.txo_hash == None) & (TXO.c.is_reserved == False))
-    if include_is_spent or is_spent is not None:
-        joins = joins.join(spent, spent.c.txo_hash == TXO.c.txo_hash, isouter=True)
+    if constraints.get('is_spent', None) is False:
+        s = s.where((TXO.c.is_spent == False) & (TXO.c.is_reserved == False))
     if include_is_my_input:
         joins = joins.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
-    if is_claim_list:
-        tables.append(Claim)
-        joins = joins.join(Claim)
-    s = s.select_from(joins)
-    return context().fetchall(query(tables, s, **constraints))
+    if claim_id_not_in_claim_table:
+        s = s.where(TXO.c.claim_hash.notin_(select(Claim.c.claim_hash)))
+    elif txo_id_not_in_claim_table:
+        s = s.where(TXO.c.txo_hash.notin_(select(Claim.c.txo_hash)))
+    elif txo_id_not_in_support_table:
+        s = s.where(TXO.c.txo_hash.notin_(select(Support.c.txo_hash)))
+    return query([TXO, TX], s.select_from(joins), **constraints)
+
+
+META_ATTRS = (
+    'activation_height', 'takeover_height', 'support_amount', 'creation_height',
+    'short_url', 'canonical_url', 'claims_in_channel_count', 'supports_in_claim_count',
+)
+
+
+def rows_to_txos(rows: List[dict], include_tx=True) -> List[Output]:
+    txos = []
+    tx_cache = {}
+    for row in rows:
+        if include_tx:
+            if row['tx_hash'] not in tx_cache:
+                tx_cache[row['tx_hash']] = Transaction(
+                    row['raw'], height=row['height'], position=row['tx_position'],
+                    is_verified=bool(row['is_verified']),
+                )
+            txo = tx_cache[row['tx_hash']].outputs[row['txo_position']]
+        else:
+            source = row['raw'][row['script_offset']:row['script_offset']+row['script_length']]
+            txo = Output(
+                amount=row['amount'],
+                script=OutputScript(source),
+                tx_ref=TXRefImmutable.from_hash(row['tx_hash'], row['height']),
+                position=row['txo_position'],
+            )
+        txo.is_spent = bool(row['is_spent'])
+        if 'is_my_input' in row:
+            txo.is_my_input = bool(row['is_my_input'])
+        if 'is_my_output' in row:
+            txo.is_my_output = bool(row['is_my_output'])
+        if 'is_my_input' in row and 'is_my_output' in row:
+            if txo.is_my_input and txo.is_my_output and row['txo_type'] == TXO_TYPES['other']:
+                txo.is_internal_transfer = True
+            else:
+                txo.is_internal_transfer = False
+        if 'received_tips' in row:
+            txo.received_tips = row['received_tips']
+        for attr in META_ATTRS:
+            if attr in row:
+                txo.meta[attr] = row[attr]
+        txos.append(txo)
+    return txos
 
 
 def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Output], Optional[int]]:
@@ -326,12 +407,8 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
     include_is_my_output = constraints.pop('include_is_my_output', False)
     include_received_tips = constraints.pop('include_received_tips', False)
 
-    select_columns = [
-        TX.c.tx_hash, TX.c.raw, TX.c.height, TX.c.position.label('tx_position'), TX.c.is_verified,
-        TXO.c.txo_type, TXO.c.position.label('txo_position'), TXO.c.amount,
-        TXO.c.script_offset, TXO.c.script_length,
+    select_columns = BASE_SELECT_TXO_COLUMNS + [
         TXO.c.claim_name
-
     ]
 
     my_accounts = None
@@ -376,40 +453,8 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
     elif constraints.get('order_by', None) == 'none':
         del constraints['order_by']
 
-    rows = select_txos(select_columns, spent=spent, **constraints)
-
-    txs = {}
-    txos = []
-    for row in rows:
-        if no_tx:
-            source = row['raw'][row['script_offset']:row['script_offset']+row['script_length']]
-            txo = Output(
-                amount=row['amount'],
-                script=OutputScript(source),
-                tx_ref=TXRefImmutable.from_hash(row['tx_hash'], row['height']),
-                position=row['txo_position']
-            )
-        else:
-            if row['tx_hash'] not in txs:
-                txs[row['tx_hash']] = Transaction(
-                    row['raw'], height=row['height'], position=row['tx_position'],
-                    is_verified=bool(row['is_verified'])
-                )
-            txo = txs[row['tx_hash']].outputs[row['txo_position']]
-        if include_is_spent:
-            txo.is_spent = bool(row['is_spent'])
-        if include_is_my_input:
-            txo.is_my_input = bool(row['is_my_input'])
-        if include_is_my_output:
-            txo.is_my_output = bool(row['is_my_output'])
-        if include_is_my_input and include_is_my_output:
-            if txo.is_my_input and txo.is_my_output and row['txo_type'] == TXO_TYPES['other']:
-                txo.is_internal_transfer = True
-            else:
-                txo.is_internal_transfer = False
-        if include_received_tips:
-            txo.received_tips = row['received_tips']
-        txos.append(txo)
+    rows = context().fetchall(select_txos(select_columns, spent=spent, **constraints))
+    txos = rows_to_txos(rows, not no_tx)
 
     channel_hashes = set()
     for txo in txos:
@@ -445,13 +490,13 @@ def _clean_txo_constraints_for_aggregation(constraints):
 
 def get_txo_count(**constraints):
     _clean_txo_constraints_for_aggregation(constraints)
-    count = select_txos([func.count().label('total')], **constraints)
+    count = context().fetchall(select_txos([func.count().label('total')], **constraints))
     return count[0]['total'] or 0
 
 
 def get_txo_sum(**constraints):
     _clean_txo_constraints_for_aggregation(constraints)
-    result = select_txos([func.sum(TXO.c.amount).label('total')], **constraints)
+    result = context().fetchall(select_txos([func.sum(TXO.c.amount).label('total')], **constraints))
     return result[0]['total'] or 0
 
 
@@ -475,124 +520,33 @@ def get_txo_plot(start_day=None, days_back=0, end_day=None, days_after=None, **c
             constraints['day__lte'] = date.fromisoformat(end_day).toordinal()
         elif days_after is not None:
             constraints['day__lte'] = constraints['day__gte'] + days_after
-    plot = select_txos(
+    plot = context().fetchall(select_txos(
         [TX.c.day, func.sum(TXO.c.amount).label('total')],
         group_by='day', order_by='day', **constraints
-    )
+    ))
     for row in plot:
         row['day'] = date.fromordinal(row['day'])
     return plot
 
 
-def get_purchases(**constraints) -> Tuple[List[Output], Optional[int]]:
-    accounts = constraints.pop('accounts', None)
-    assert accounts, "'accounts' argument required to find purchases"
-    if not {'purchased_claim_hash', 'purchased_claim_hash__in'}.intersection(constraints):
-        constraints['purchased_claim_hash__is_not_null'] = True
-    constraints['tx_hash__in'] = (
-        select(TXI.c.tx_hash).select_from(txi_join_account).where(in_account_ids(accounts))
-    )
-    txs, count = get_transactions(**constraints)
-    return [tx.outputs[0] for tx in txs], count
+BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
+    Claim.c.activation_height,
+    Claim.c.takeover_height,
+    Claim.c.creation_height,
+    Claim.c.is_controlling,
+    Claim.c.channel_hash,
+    Claim.c.reposted_claim_hash,
+    Claim.c.short_url,
+    Claim.c.canonical_url,
+    Claim.c.claims_in_channel_count,
+    Claim.c.support_amount,
+    Claim.c.supports_in_claim_count,
+]
 
 
-def select_addresses(cols, **constraints):
-    return context().fetchall(query(
-        [AccountAddress, PubkeyAddress],
-        select(*cols).select_from(PubkeyAddress.join(AccountAddress)),
-        **constraints
-    ))
-
-
-def get_addresses(cols=None, include_total=False, **constraints) -> Tuple[List[dict], Optional[int]]:
+def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
     if cols is None:
-        cols = (
-            PubkeyAddress.c.address,
-            PubkeyAddress.c.used_times,
-            AccountAddress.c.account,
-            AccountAddress.c.chain,
-            AccountAddress.c.pubkey,
-            AccountAddress.c.chain_code,
-            AccountAddress.c.n,
-            AccountAddress.c.depth
-        )
-    return (
-        select_addresses(cols, **constraints),
-        get_address_count(**constraints) if include_total else None
-    )
-
-
-def get_address_count(**constraints):
-    count = select_addresses([func.count().label('total')], **constraints)
-    return count[0]['total'] or 0
-
-
-def get_all_addresses(self):
-    return context().execute(select(PubkeyAddress.c.address))
-
-
-def add_keys(account, chain, pubkeys):
-    c = context()
-    c.execute(
-        c.insert_or_ignore(PubkeyAddress)
-        .values([{'address': k.address} for k in pubkeys])
-    )
-    c.execute(
-        c.insert_or_ignore(AccountAddress)
-        .values([{
-            'account': account.id,
-            'address': k.address,
-            'chain': chain,
-            'pubkey': k.pubkey_bytes,
-            'chain_code': k.chain_code,
-            'n': k.n,
-            'depth': k.depth
-        } for k in pubkeys])
-    )
-
-
-def get_supports_summary(self, **constraints):
-    return get_txos(
-        txo_type=TXO_TYPES['support'],
-        is_spent=False, is_my_output=True,
-        include_is_my_input=True,
-        no_tx=True,
-        **constraints
-    )
-
-
-def search_to_bytes(constraints) -> Union[bytes, Tuple[bytes, Dict]]:
-    return Outputs.to_bytes(*search(**constraints))
-
-
-def resolve_to_bytes(urls) -> Union[bytes, Tuple[bytes, Dict]]:
-    return Outputs.to_bytes(*resolve(urls))
-
-
-def execute_censored(sql, row_offset: int, row_limit: int, censor: Censor) -> List:
-    ctx = context()
-    return ctx.fetchall(sql)
-    # c = ctx.db.cursor()
-    # def row_filter(cursor, row):
-    #     nonlocal row_offset
-    #     #row = row_factory(cursor, row)
-    #     if len(row) > 1 and censor.censor(row):
-    #         return
-    #     if row_offset:
-    #         row_offset -= 1
-    #         return
-    #     return row
-    # c.setrowtrace(row_filter)
-    # i, rows = 0, []
-    # for row in c.execute(sql):
-    #     i += 1
-    #     rows.append(row)
-    #     if i >= row_limit:
-    #         break
-    # return rows
-
-
-def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
+        cols = BASE_SELECT_CLAIM_COLUMNS
     if 'order_by' in constraints:
         order_by_parts = constraints['order_by']
         if isinstance(order_by_parts, str):
@@ -624,10 +578,6 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
                 value = Decimal(value)*1000
             constraints[f'{constraint}{postfix}'] = int(value)
 
-    if constraints.pop('is_controlling', False):
-        if {'sequence', 'amount_order'}.isdisjoint(constraints):
-            for_count = False
-            constraints['Claimtrie.claim_hash__is_not_null'] = ''
     if 'sequence' in constraints:
         constraints['order_by'] = 'activation_height ASC'
         constraints['offset'] = int(constraints.pop('sequence')) - 1
@@ -724,74 +674,29 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         # TODO: fix
         constraints["search"] = constraints.pop("text")
 
-    return query(
-        [Claim, Claimtrie],
-        select(*cols).select_from(Claim.join(Claimtrie, isouter=True).join(TXO).join(TX)),
-        **constraints
-    )
+    joins = Claim.join(TXO).join(TX)
+    return query([Claim], select(*cols).select_from(joins), **constraints)
 
 
-def select_claims(censor: Censor, cols: List, for_count=False, **constraints) -> List:
-    if 'channel' in constraints:
-        channel_url = constraints.pop('channel')
-        match = resolve_url(channel_url)
-        if isinstance(match, dict):
-            constraints['channel_hash'] = match['claim_hash']
-        else:
-            return [{'row_count': 0}] if cols == 'count(*) as row_count' else []
-    row_offset = constraints.pop('offset', 0)
-    row_limit = constraints.pop('limit', 20)
-    return execute_censored(
-        claims_query(cols, for_count, **constraints),
-        row_offset, row_limit, censor
-    )
+def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:
+    total = None
+    if not constraints.pop('no_totals', False):
+        total = search_claim_count(**constraints)
+    constraints['offset'] = abs(constraints.get('offset', 0))
+    constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
+    ctx = context()
+    search_censor = ctx.get_search_censor()
+    rows = context().fetchall(select_claims(**constraints))
+    txos = rows_to_txos(rows, include_tx=False)
+    return txos, total, search_censor
 
 
-def count_claims(**constraints) -> int:
+def search_claim_count(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count = select_claims(Censor(), [func.count().label('row_count')], for_count=True, **constraints)
-    return count[0]['row_count']
-
-
-def search_claims(censor: Censor, **constraints) -> List:
-    return select_claims(
-        censor, [
-            Claimtrie.c.claim_hash.label('is_controlling'),
-            Claimtrie.c.last_take_over_height,
-            TX.c.raw,
-            TX.c.height,
-            TX.c.tx_hash,
-            TXO.c.script_offset,
-            TXO.c.script_length,
-            TXO.c.amount,
-            TXO.c.position.label('txo_position'),
-            Claim.c.claim_hash,
-            Claim.c.txo_hash,
-            # Claim.c.claims_in_channel,
-            # Claim.c.reposted,
-            # Claim.c.height,
-            # Claim.c.creation_height,
-            # Claim.c.activation_height,
-            # Claim.c.expiration_height,
-            # Claim.c.effective_amount,
-            # Claim.c.support_amount,
-            # Claim.c.trending_group,
-            # Claim.c.trending_mixed,
-            # Claim.c.trending_local,
-            # Claim.c.trending_global,
-            # Claim.c.short_url,
-            # Claim.c.canonical_url,
-            Claim.c.channel_hash,
-            Claim.c.reposted_claim_hash,
-            # Claim.c.signature_valid
-        ], **constraints
-    )
-
-
-def get_claims(**constraints) -> Tuple[List[Output], Optional[int]]:
-    return get_txos(no_tx=True, is_claim_list=True, **constraints)
+    count = context().fetchall(select_claims([func.count().label('total')], **constraints))
+    return count[0]['total'] or 0
 
 
 def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
@@ -815,43 +720,81 @@ def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
     return channel_txos + reposted_txos
 
 
-def old_search(**constraints) -> Tuple[List, List, int, int, Censor]:
-    assert set(constraints).issubset(SEARCH_PARAMS), \
-        f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
-    total = None
-    if not constraints.pop('no_totals', False):
-        total = count_claims(**constraints)
-    constraints['offset'] = abs(constraints.get('offset', 0))
-    constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    ctx = context()
-    search_censor = ctx.get_search_censor()
-    txo_rows = search_claims(search_censor, **constraints)
-    extra_txo_rows = _get_referenced_rows(txo_rows, search_censor.censored.keys())
-    return txo_rows, extra_txo_rows, constraints['offset'], total, search_censor
+def get_purchases(**constraints) -> Tuple[List[Output], Optional[int]]:
+    accounts = constraints.pop('accounts', None)
+    assert accounts, "'accounts' argument required to find purchases"
+    if not {'purchased_claim_hash', 'purchased_claim_hash__in'}.intersection(constraints):
+        constraints['purchased_claim_hash__is_not_null'] = True
+    constraints['tx_hash__in'] = (
+        select(TXI.c.tx_hash).select_from(txi_join_account).where(in_account_ids(accounts))
+    )
+    txs, count = get_transactions(**constraints)
+    return [tx.outputs[0] for tx in txs], count
 
 
-def search(**constraints) -> Tuple[List, int, Censor]:
-    assert set(constraints).issubset(SEARCH_PARAMS), \
-        f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
-    total = None
-    if not constraints.pop('no_totals', False):
-        total = count_claims(**constraints)
-    constraints['offset'] = abs(constraints.get('offset', 0))
-    constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    ctx = context()
-    search_censor = ctx.get_search_censor()
-    txos = []
-    for row in search_claims(search_censor, **constraints):
-        source = row['raw'][row['script_offset']:row['script_offset']+row['script_length']]
-        txo = Output(
-            amount=row['amount'],
-            script=OutputScript(source),
-            tx_ref=TXRefImmutable.from_hash(row['tx_hash'], row['height']),
-            position=row['txo_position']
+def select_addresses(cols, **constraints):
+    return context().fetchall(query(
+        [AccountAddress, PubkeyAddress],
+        select(*cols).select_from(PubkeyAddress.join(AccountAddress)),
+        **constraints
+    ))
+
+
+def get_addresses(cols=None, include_total=False, **constraints) -> Tuple[List[dict], Optional[int]]:
+    if cols is None:
+        cols = (
+            PubkeyAddress.c.address,
+            PubkeyAddress.c.used_times,
+            AccountAddress.c.account,
+            AccountAddress.c.chain,
+            AccountAddress.c.pubkey,
+            AccountAddress.c.chain_code,
+            AccountAddress.c.n,
+            AccountAddress.c.depth
         )
-        txos.append(txo)
-    #extra_txo_rows = _get_referenced_rows(txo_rows, search_censor.censored.keys())
-    return txos, total, search_censor
+    return (
+        select_addresses(cols, **constraints),
+        get_address_count(**constraints) if include_total else None
+    )
+
+
+def get_address_count(**constraints):
+    count = select_addresses([func.count().label('total')], **constraints)
+    return count[0]['total'] or 0
+
+
+def get_all_addresses(self):
+    return context().execute(select(PubkeyAddress.c.address))
+
+
+def add_keys(account, chain, pubkeys):
+    c = context()
+    c.execute(
+        c.insert_or_ignore(PubkeyAddress)
+        .values([{'address': k.address} for k in pubkeys])
+    )
+    c.execute(
+        c.insert_or_ignore(AccountAddress)
+        .values([{
+            'account': account.id,
+            'address': k.address,
+            'chain': chain,
+            'pubkey': k.pubkey_bytes,
+            'chain_code': k.chain_code,
+            'n': k.n,
+            'depth': k.depth
+        } for k in pubkeys])
+    )
+
+
+def get_supports_summary(self, **constraints):
+    return get_txos(
+        txo_type=TXO_TYPES['support'],
+        is_spent=False, is_my_output=True,
+        include_is_my_input=True,
+        no_tx=True,
+        **constraints
+    )
 
 
 def resolve(urls) -> Tuple[List, List]:

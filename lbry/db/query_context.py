@@ -3,11 +3,11 @@ import time
 import multiprocessing as mp
 from enum import Enum
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, bindparam, case
 from sqlalchemy.engine import Engine, Connection
 
 from lbry.event import EventQueuePublisher
@@ -18,7 +18,7 @@ from lbry.schema.result import Censor
 from lbry.schema.mime_types import guess_stream_type
 
 from .utils import pg_insert, chunk
-from .tables import Block, TX, TXO, TXI, Claim, Tag, Claimtrie, Support
+from .tables import Block, TX, TXO, TXI, Claim, Tag, Takeover, Support
 from .constants import TXO_TYPES, STREAM_TYPES
 
 
@@ -163,7 +163,7 @@ class ProgressUnit(Enum):
     TASKS = "tasks", None
     BLOCKS = "blocks", Block
     TXS = "txs", TX
-    TRIE = "trie", Claimtrie
+    TAKEOVERS = "takeovers", Takeover
     TXIS = "txis", TXI
     CLAIMS = "claims", Claim
     SUPPORTS = "supports", Support
@@ -182,17 +182,22 @@ class Event(Enum):
     BLOCK_READ = "blockchain.sync.block.read", ProgressUnit.BLOCKS
     BLOCK_SAVE = "blockchain.sync.block.save", ProgressUnit.TXS
     BLOCK_DONE = "blockchain.sync.block.done", ProgressUnit.TASKS
-    TRIE_DELETE = "blockchain.sync.trie.delete", ProgressUnit.TRIE
-    TRIE_UPDATE = "blockchain.sync.trie.update", ProgressUnit.TRIE
-    TRIE_INSERT = "blockchain.sync.trie.insert", ProgressUnit.TRIE
+    CLAIM_META = "blockchain.sync.claim.update", ProgressUnit.CLAIMS
+    CLAIM_CALC = "blockchain.sync.claim.totals", ProgressUnit.CLAIMS
+    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.TAKEOVERS
+    CLAIM_SIGN = "blockchain.sync.claim.signatures", ProgressUnit.CLAIMS
+    SUPPORT_META = "blockchain.sync.support.update", ProgressUnit.SUPPORTS
+    SUPPORT_SIGN = "blockchain.sync.support.signatures", ProgressUnit.SUPPORTS
+    CHANNEL_SIGN = "blockchain.sync.channel.signatures", ProgressUnit.CLAIMS
+    TRENDING_CALC = "blockchain.sync.trending", ProgressUnit.BLOCKS
+    TAKEOVER_INSERT = "blockchain.sync.takeover.insert", ProgressUnit.TAKEOVERS
 
     # full node + light client sync events
     INPUT_UPDATE = "db.sync.input", ProgressUnit.TXIS
     CLAIM_DELETE = "db.sync.claim.delete", ProgressUnit.CLAIMS
-    CLAIM_UPDATE = "db.sync.claim.update", ProgressUnit.CLAIMS
     CLAIM_INSERT = "db.sync.claim.insert", ProgressUnit.CLAIMS
+    CLAIM_UPDATE = "db.sync.claim.update", ProgressUnit.CLAIMS
     SUPPORT_DELETE = "db.sync.support.delete", ProgressUnit.SUPPORTS
-    SUPPORT_UPDATE = "db.sync.support.update", ProgressUnit.SUPPORTS
     SUPPORT_INSERT = "db.sync.support.insert", ProgressUnit.SUPPORTS
 
     def __new__(cls, value, unit: ProgressUnit):
@@ -222,6 +227,10 @@ class ProgressPublisher(EventQueuePublisher):
         return d
 
 
+class BreakProgress(Exception):
+    """Break out of progress when total is 0."""
+
+
 class ProgressContext:
 
     def __init__(self, ctx: QueryContext, event: Event, step_size=1):
@@ -237,10 +246,14 @@ class ProgressContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type == BreakProgress:
+            return True
         self.ctx.message_queue.put(self.get_event_args(self.total))
         return self.ctx.__exit__(exc_type, exc_val, exc_tb)
 
     def start(self, total, extra=None):
+        if not total:
+            raise BreakProgress
         self.total = total
         if extra is not None:
             self.extra = extra
@@ -248,6 +261,8 @@ class ProgressContext:
 
     def step(self, done):
         send_condition = (
+            # no-op
+            done != 0 and self.total != 0 and
             # enforce step rate
             (self.step_size == 1 or done % self.step_size == 0) and
             # deduplicate finish event by not sending a step where done == total
@@ -280,20 +295,24 @@ class BulkLoader:
         self.txs = []
         self.txos = []
         self.txis = []
+        self.supports = []
         self.claims = []
         self.tags = []
+        self.update_claims = []
+        self.delete_tags = []
 
     @staticmethod
-    def block_to_row(block):
+    def block_to_row(block: Block) -> dict:
         return {
             'block_hash': block.block_hash,
             'previous_hash': block.prev_block_hash,
             'file_number': block.file_number,
             'height': 0 if block.is_first_block else block.height,
+            'timestamp': block.timestamp,
         }
 
     @staticmethod
-    def tx_to_row(block_hash: bytes, tx: Transaction):
+    def tx_to_row(block_hash: bytes, tx: Transaction) -> dict:
         row = {
             'tx_hash': tx.hash,
             'block_hash': block_hash,
@@ -301,8 +320,8 @@ class BulkLoader:
             'height': tx.height,
             'position': tx.position,
             'is_verified': tx.is_verified,
-            # TODO: fix
-            # 'day': tx.get_ordinal_day(self.db.ledger),
+            'timestamp': tx.timestamp,
+            'day': tx.day,
             'purchased_claim_hash': None,
         }
         txos = tx.outputs
@@ -312,14 +331,14 @@ class BulkLoader:
         return row
 
     @staticmethod
-    def txi_to_row(tx: Transaction, txi: Input):
+    def txi_to_row(tx: Transaction, txi: Input) -> dict:
         return {
             'tx_hash': tx.hash,
             'txo_hash': txi.txo_ref.hash,
             'position': txi.position,
         }
 
-    def txo_to_row(self, tx: Transaction, txo: Output):
+    def txo_to_row(self, tx: Transaction, txo: Output) -> dict:
         row = {
             'tx_hash': tx.hash,
             'txo_hash': txo.hash,
@@ -345,7 +364,6 @@ class BulkLoader:
                     row['channel_hash'] = claim.signing_channel_hash
             else:
                 row['txo_type'] = TXO_TYPES['stream']
-            #self.add_claim(txo)
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
         elif txo.purchase is not None:
@@ -367,28 +385,13 @@ class BulkLoader:
                 pass
         return row
 
-    def add_block(self, block):
-        self.blocks.append(self.block_to_row(block))
-        for tx in block.txs:
-            self.add_transaction(block.block_hash, tx)
-        return self
-
-    def add_transaction(self, block_hash: bytes, tx: Transaction):
-        self.txs.append(self.tx_to_row(block_hash, tx))
-        for txi in tx.inputs:
-            if txi.coinbase is None:
-                self.txis.append(self.txi_to_row(tx, txi))
-        for txo in tx.outputs:
-            self.txos.append(self.txo_to_row(tx, txo))
-        return self
-
-    def add_claim(self, txo):
+    def claim_to_rows(self, txo: Output) -> Tuple[dict, List]:
         try:
             assert txo.claim_name
             assert txo.normalized_name
         except Exception:
             #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
-            return
+            return {}, []
         tx = txo.tx_ref.tx
         claim_hash = txo.claim_hash
         claim_record = {
@@ -400,10 +403,8 @@ class BulkLoader:
             'txo_hash': txo.ref.hash,
             'tx_position': tx.position,
             'amount': txo.amount,
-            'timestamp': 0, # TODO: fix
-            'creation_timestamp': 0, # TODO: fix
             'height': tx.height,
-            'creation_height': tx.height,
+            'timestamp': tx.timestamp,
             'release_time': None,
             'title': None,
             'author': None,
@@ -418,16 +419,19 @@ class BulkLoader:
             # reposts
             'reposted_claim_hash': None,
             # claims which are channels
-            'public_key_bytes': None,
+            'public_key': None,
             'public_key_hash': None,
+            # signed claims
+            'channel_hash': None,
+            'signature': None,
+            'signature_digest': None,
         }
-        self.claims.append(claim_record)
 
         try:
             claim = txo.claim
         except Exception:
             #self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
-            return
+            return claim_record, []
 
         if claim.is_stream:
             claim_record['claim_type'] = TXO_TYPES['stream']
@@ -453,24 +457,96 @@ class BulkLoader:
             claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
         elif claim.is_channel:
             claim_record['claim_type'] = TXO_TYPES['channel']
-            claim_record['public_key_bytes'] = txo.claim.channel.public_key_bytes
+            claim_record['public_key'] = claim.channel.public_key_bytes
             claim_record['public_key_hash'] = self.ledger.address_to_hash160(
-                self.ledger.public_key_to_address(txo.claim.channel.public_key_bytes)
+                self.ledger.public_key_to_address(claim.channel.public_key_bytes)
             )
+        if claim.is_signed:
+            claim_record['channel_hash'] = claim.signing_channel_hash
+            claim_record['signature'] = txo.get_encoded_signature()
+            claim_record['signature_digest'] = txo.get_signature_digest(None)
 
-        for tag in clean_tags(claim.message.tags):
-            self.tags.append({'claim_hash': claim_hash, 'tag': tag})
+        tags = [
+            {'claim_hash': claim_hash, 'tag': tag} for tag in clean_tags(claim.message.tags)
+        ]
 
+        return claim_record, tags
+
+    def add_block(self, block: Block, add_claims_supports: set = None):
+        self.blocks.append(self.block_to_row(block))
+        for tx in block.txs:
+            self.add_transaction(block.block_hash, tx, add_claims_supports)
+        return self
+
+    def add_transaction(self, block_hash: bytes, tx: Transaction, add_claims_supports: set = None):
+        self.txs.append(self.tx_to_row(block_hash, tx))
+        for txi in tx.inputs:
+            if txi.coinbase is None:
+                self.txis.append(self.txi_to_row(tx, txi))
+        for txo in tx.outputs:
+            self.txos.append(self.txo_to_row(tx, txo))
+            if add_claims_supports:
+                if txo.is_support and txo.hash in add_claims_supports:
+                    self.add_support(txo)
+                elif txo.is_claim and txo.hash in add_claims_supports:
+                    self.add_claim(txo)
+        return self
+
+    def add_support(self, txo: Output):
+        tx = txo.tx_ref.tx
+        claim_hash = txo.claim_hash
+        support_record = {
+            'claim_hash': claim_hash,
+            'address': txo.get_address(self.ledger),
+            'txo_hash': txo.ref.hash,
+            'tx_position': tx.position,
+            'amount': txo.amount,
+            'height': tx.height,
+        }
+        self.supports.append(support_record)
+        support = txo.can_decode_support
+        if support:
+            support_record['emoji'] = support.emoji
+            if support.is_signed:
+                support_record['channel_hash'] = support.signing_channel_hash
+
+    def add_claim(self, txo: Output):
+        claim, tags = self.claim_to_rows(txo)
+        if claim:
+            tx = txo.tx_ref.tx
+            claim['public_key_height'] = tx.height
+            if txo.script.is_claim_name:
+                claim['creation_height'] = tx.height
+                claim['creation_timestamp'] = tx.timestamp
+            self.claims.append(claim)
+            self.tags.extend(tags)
+        return self
+
+    def update_claim(self, txo: Output):
+        claim, tags = self.claim_to_rows(txo)
+        if claim:
+            claim['claim_hash_pk'] = claim.pop('claim_hash')
+            self.update_claims.append(claim)
+            self.delete_tags.append({'claim_hash_pk': claim['claim_hash_pk']})
+            self.tags.extend(tags)
         return self
 
     def save(self, batch_size=10000):
         queries = (
-            (Block, self.blocks),
-            (TX, self.txs),
-            (TXO, self.txos),
-            (TXI, self.txis),
-            (Claim, self.claims),
-            (Tag, self.tags),
+            (Block.insert(), self.blocks),
+            (TX.insert(), self.txs),
+            (TXO.insert(), self.txos),
+            (TXI.insert(), self.txis),
+            (Claim.insert(), self.claims),
+            (Tag.delete().where(Tag.c.claim_hash == bindparam('claim_hash_pk')), self.delete_tags),
+            (Claim.update()
+             .where(Claim.c.claim_hash == bindparam('claim_hash_pk'))
+             .values(public_key_height=case(
+                [(Claim.c.public_key_hash != bindparam('public_key_hash'), bindparam('height'))],
+                else_=Claim.c.public_key_height
+             )), self.update_claims),
+            (Tag.insert(), self.tags),
+            (Support.insert(), self.supports),
         )
 
         p = self.ctx.current_progress
@@ -478,10 +554,9 @@ class BulkLoader:
         if p:
             unit_table = p.event.unit.table
             progress_total, row_total = 0, sum(len(q[1]) for q in queries)
-            for table, rows in queries:
-                if table == unit_table:
-                    progress_total = len(rows)
-                    break
+            for sql, rows in queries:
+                if sql.table == unit_table:
+                    progress_total += len(rows)
             if not progress_total:
                 assert row_total == 0, "Rows used for progress are empty but other rows present."
                 return
@@ -489,10 +564,9 @@ class BulkLoader:
             p.start(progress_total)
 
         execute = self.ctx.connection.execute
-        for table, rows in queries:
-            sql = table.insert()
-            for chunk_size, chunk_rows in chunk(rows, batch_size):
-                execute(sql, list(chunk_rows))
+        for sql, rows in queries:
+            for chunk_rows in chunk(rows, batch_size):
+                execute(sql, chunk_rows)
                 if p:
-                    done += int(chunk_size/row_scale)
+                    done += int(len(chunk_rows)/row_scale)
                     p.step(done)

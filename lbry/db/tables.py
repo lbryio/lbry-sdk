@@ -43,6 +43,7 @@ Block = Table(
     Column('previous_hash', LargeBinary),
     Column('file_number', SmallInteger),
     Column('height', Integer),
+    Column('timestamp', Integer),
     Column('block_filter', LargeBinary, nullable=True)
 )
 
@@ -54,9 +55,10 @@ TX = Table(
     Column('raw', LargeBinary),
     Column('height', Integer),
     Column('position', SmallInteger),
+    Column('timestamp', Integer, nullable=True),
+    Column('day', Integer, nullable=True),
     Column('is_verified', Boolean, server_default='FALSE'),
     Column('purchased_claim_hash', LargeBinary, nullable=True),
-    Column('day', Integer, nullable=True),
     Column('tx_filter', LargeBinary, nullable=True)
 )
 
@@ -107,11 +109,13 @@ Claim = Table(
     Column('height', Integer),  # last updated height
     Column('creation_height', Integer),
     Column('activation_height', Integer, nullable=True),
-    Column('expiration_height', Integer),
+    Column('expiration_height', Integer, nullable=True),
+    Column('takeover_height', Integer, nullable=True),
+    Column('is_controlling', Boolean, server_default='0'),
     Column('release_time', Integer, nullable=True),
 
     # normalized#shortest-unique-claim_id
-    Column('short_url', Text),
+    Column('short_url', Text, nullable=True),
     # channel's-short_url/normalized#shortest-unique-claim_id-within-channel
     Column('canonical_url', Text, nullable=True),
 
@@ -120,7 +124,8 @@ Claim = Table(
     Column('description', Text, nullable=True),
 
     Column('claim_type', SmallInteger),
-    Column('reposted', Integer, server_default='0'),
+    Column('claim_reposted_count', Integer, server_default='0'),
+    Column('supports_in_claim_count', Integer, server_default='0'),
 
     # streams
     Column('stream_type', Text, nullable=True),
@@ -133,18 +138,17 @@ Claim = Table(
     Column('reposted_claim_hash', LargeBinary, nullable=True),
 
     # claims which are channels
-    Column('public_key_bytes', LargeBinary, nullable=True),
+    Column('public_key', LargeBinary, nullable=True),
     Column('public_key_hash', LargeBinary, nullable=True),
-    Column('claims_in_channel', Integer, server_default='0'),
+    Column('public_key_height', Integer, server_default='0'),  # height at which public key was last changed
+    Column('claims_in_channel_count', Integer, server_default='0'),
 
     # claims which are inside channels
     Column('channel_hash', LargeBinary, nullable=True),
-    Column('channel_join', Integer, nullable=True),  # height at which claim got valid signature / joined channel
     Column('signature', LargeBinary, nullable=True),
     Column('signature_digest', LargeBinary, nullable=True),
-    Column('signature_valid', Boolean, nullable=True),
+    Column('is_signature_valid', Boolean, server_default='0'),
 
-    Column('effective_amount', BigInteger, server_default='0'),
     Column('support_amount', BigInteger, server_default='0'),
     Column('trending_group', BigInteger, server_default='0'),
     Column('trending_mixed', BigInteger, server_default='0'),
@@ -162,14 +166,30 @@ Tag = Table(
 
 Support = Table(
     'support', metadata,
-    Column('normalized', Text, primary_key=True),
-    Column('claim_hash', LargeBinary, ForeignKey(Claim.columns.claim_hash)),
+
+    Column('txo_hash', LargeBinary, ForeignKey(TXO.columns.txo_hash), primary_key=True),
+    Column('claim_hash', LargeBinary, ForeignKey(TXO.columns.claim_hash)),
+    Column('address', Text),
+    Column('tx_position', SmallInteger),
+    Column('activation_height', Integer, nullable=True),
+    Column('expiration_height', Integer, nullable=True),
+    Column('amount', BigInteger),
+    Column('height', Integer),
+
+    # support metadata
+    Column('emoji', Text),
+
+    # signed supports
+    Column('channel_hash', LargeBinary, nullable=True),
+    Column('signature', LargeBinary, nullable=True),
+    Column('signature_digest', LargeBinary, nullable=True),
+    Column('is_signature_valid', Boolean, server_default='0'),
 )
 
 
-Claimtrie = Table(
-    'claimtrie', metadata,
-    Column('normalized', Text, primary_key=True),
-    Column('claim_hash', LargeBinary, ForeignKey(Claim.columns.claim_hash)),
-    Column('last_take_over_height', Integer),
+Takeover = Table(
+    'takeover', metadata,
+    Column('normalized', Text),
+    Column('claim_hash', LargeBinary, ForeignKey(TXO.columns.claim_hash)),
+    Column('height', Integer),
 )

@@ -50,7 +50,10 @@ class Block(NamedTuple):
             timestamp=timestamp,
             bits=bits,
             nonce=nonce,
-            txs=[Transaction(height=height, position=i).deserialize(stream) for i in range(tx_count)]
+            txs=[
+                Transaction(height=height, position=i, timestamp=timestamp).deserialize(stream)
+                for i in range(tx_count)
+            ]
         )
 
     @property

@@ -14,7 +14,7 @@ from .tables import AccountAddress
 def chunk(rows, step):
     it, total = iter(rows), len(rows)
     for _ in range(0, total, step):
-        yield min(step, total), islice(it, step)
+        yield list(islice(it, step))
         total -= step
 
 

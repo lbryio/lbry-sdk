@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import shutil
+import hashlib
 import logging
 import tempfile
 import functools
@@ -10,18 +11,25 @@ import time
 from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
 from unittest.case import _Outcome
-from typing import Optional
-from binascii import unhexlify
+from typing import Optional, List, Union
+from binascii import unhexlify, hexlify
 
+import ecdsa
+
+from lbry.db import Database
 from lbry.blockchain import (
     RegTestLedger, Transaction, Input, Output, dewies_to_lbc
 )
+from lbry.blockchain.block import Block
+from lbry.blockchain.bcd_data_stream import BCDataStream
 from lbry.blockchain.lbrycrd import Lbrycrd
-from lbry.constants import CENT, NULL_HASH32
+from lbry.blockchain.dewies import lbc_to_dewies
+from lbry.constants import COIN, CENT, NULL_HASH32
 from lbry.service import Daemon, FullNode, jsonrpc_dumps_pretty
 from lbry.conf import Config
 from lbry.console import Console
 from lbry.wallet import Wallet, Account
+from lbry.schema.claim import Claim
 
 from lbry.service.exchange_rate_manager import (
     ExchangeRateManager, ExchangeRate, LBRYFeed, LBRYBTCFeed
@@ -217,6 +225,173 @@ class AdvanceTimeTestCase(AsyncioTestCase):
         await asyncio.sleep(0)
         while self.loop._ready:
             await asyncio.sleep(0)
+
+
+class UnitDBTestCase(AsyncioTestCase):
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+
+        self.db = Database.temp_sqlite()
+        self.addCleanup(self.db.close)
+        await self.db.open()
+
+        self.ledger = self.db.ledger
+        self.conf = self.ledger.conf
+        self.outputs: List[Output] = []
+        self.current_height = 0
+
+    async def add(self, block_or_tx: Union[Block, Transaction], block_hash: Optional[bytes] = None):
+        if isinstance(block_or_tx, Block):
+            await self.db.insert_block(block_or_tx)
+            for tx in block_or_tx.txs:
+                self.outputs.extend(tx.outputs)
+            return block_or_tx
+        elif isinstance(block_or_tx, Transaction):
+            await self.db.insert_transaction(block_hash, block_or_tx)
+            self.outputs.extend(block_or_tx.outputs)
+            return block_or_tx.outputs[0]
+        else:
+            raise NotImplementedError(f"Can't add {type(block_or_tx)}.")
+
+    def block(self, height: int, txs: List[Transaction]):
+        self.current_height = height
+        for tx in txs:
+            tx.height = height
+        return Block(
+            height=height, version=1, file_number=0,
+            block_hash=f'beef{height}'.encode(), prev_block_hash=f'beef{height-1}'.encode(),
+            merkle_root=b'beef', claim_trie_root=b'beef',
+            timestamp=99, bits=1, nonce=1, txs=txs
+        )
+
+    def coinbase(self):
+        return (
+            Transaction(height=0)
+            .add_inputs([Input.create_coinbase()])
+            .add_outputs([Output.pay_pubkey_hash(1000*COIN, (0).to_bytes(32, 'little'))])
+        )
+
+    def tx(self, amount='1.0', height=None, txi=None, txo=None):
+        counter = len(self.outputs)
+        self.current_height = height or (self.current_height+1)
+        txis = [Input.spend(self.outputs[-1])]
+        if txi is not None:
+            txis.insert(0, txi)
+        txo = txo or Output.pay_pubkey_hash(lbc_to_dewies(amount), counter.to_bytes(32, 'little'))
+        change = (sum(txi.txo_ref.txo.amount for txi in txis) - txo.amount) - CENT
+        assert change > 0
+        return (
+            Transaction(height=self.current_height)
+            .add_inputs(txis)
+            .add_outputs([
+                txo,
+                Output.pay_pubkey_hash(change, (counter + 1).to_bytes(32, 'little'))
+            ])
+        )
+
+    def create_claim(self, claim_name='foo', claim=b'', amount='1.0', height=None):
+        return self.tx(
+            height=height,
+            txo=Output.pay_claim_name_pubkey_hash(
+                lbc_to_dewies(amount), claim_name, claim,
+                len(self.outputs).to_bytes(32, 'little')
+            )
+        )
+
+    def update_claim(self, txo, amount='1.0', height=None):
+        return self.tx(
+            height=height,
+            txo=Output.pay_update_claim_pubkey_hash(
+                lbc_to_dewies(amount), txo.claim_name, txo.claim_id, txo.claim,
+                len(self.outputs).to_bytes(32, 'little')
+            )
+        )
+
+    def support_claim(self, txo, amount='1.0', height=None):
+        return self.tx(
+            height=height,
+            txo=Output.pay_support_pubkey_hash(
+                lbc_to_dewies(amount), txo.claim_name, txo.claim_id,
+                len(self.outputs).to_bytes(32, 'little')
+            )
+        )
+
+    def repost_claim(self, claim_id, amount, channel):
+        claim = Claim()
+        claim.repost.reference.claim_id = claim_id
+        result = self.create_claim('repost', claim, amount)
+        if channel:
+            result.outputs[0].sign(channel)
+            result._reset()
+        return result
+
+    def abandon_claim(self, txo):
+        return self.tx(amount='0.01', txi=Input.spend(txo))
+
+    def _set_channel_key(self, channel, key):
+        private_key = ecdsa.SigningKey.from_string(key*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
+        channel.private_key = private_key
+        channel.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        channel.script.generate()
+
+    def create_channel(self, title, amount, name='@foo', key=b'a', **kwargs):
+        claim = Claim()
+        claim.stream.update(title=title, **kwargs)
+        tx = self.create_claim(name, claim, amount)
+        self._set_channel_key(tx.outputs[0], key)
+        return tx
+
+    def update_channel(self, channel, amount, key=b'a'):
+        self._set_channel_key(channel, key)
+        return self.update_claim(channel, amount)
+
+    def create_stream(self, title, amount, name='foo', channel=None, **kwargs):
+        claim = Claim()
+        claim.stream.update(title=title, **kwargs)
+        result = self.create_claim(name, claim, amount)
+        if channel:
+            result.outputs[0].sign(channel)
+            result._reset()
+        return result
+
+    def update_stream(self, stream, amount, channel=None):
+        result = self.update_claim(stream, amount)
+        if channel:
+            result.outputs[0].sign(channel)
+            result._reset()
+        return result
+
+    async def get_txis(self):
+        txis = []
+        for txi in await self.db.execute_fetchall("select txo_hash, address from txi"):
+            txoid = hexlify(txi["txo_hash"][:32][::-1]).decode()
+            position, = BCDataStream.uint32.unpack(txi['txo_hash'][32:])
+            txis.append((f'{txoid}:{position}', txi['address']))
+        return txis
+
+    async def get_txos(self):
+        txos = []
+        sql = (
+            "select txo_hash, txo.position, is_spent from txo join tx using (tx_hash) "
+            "order by tx.height, tx.position, txo.position"
+        )
+        for txo in await self.db.execute_fetchall(sql):
+            txoid = hexlify(txo["txo_hash"][:32][::-1]).decode()
+            txos.append((
+                f"{txoid}:{txo['position']}",
+                bool(txo['is_spent'])
+            ))
+        return txos
+
+    async def get_claims(self):
+        claims = []
+        sql = (
+            "select claim_id from claim order by height, tx_position"
+        )
+        for claim in await self.db.execute_fetchall(sql):
+            claims.append(claim['claim_id'])
+        return claims
 
 
 class IntegrationTestCase(AsyncioTestCase):

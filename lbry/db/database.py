@@ -110,6 +110,12 @@ class Database:
         return cls(ledger)
 
     @classmethod
+    def temp_sqlite(cls):
+        from lbry import Config, Ledger  # pylint: disable=import-outside-toplevel
+        conf = Config.with_same_dir(tempfile.mkdtemp())
+        return cls(Ledger(conf))
+
+    @classmethod
     def in_memory(cls):
         from lbry import Config, Ledger  # pylint: disable=import-outside-toplevel
         conf = Config.with_same_dir('/dev/null')
@@ -173,20 +179,20 @@ class Database:
     async def execute_fetchall(self, sql):
         return await self.run_in_executor(q.execute_fetchall, sql)
 
-    async def process_inputs(self, heights):
-        return await self.run_in_executor(sync.process_inputs, heights)
+    async def process_inputs_outputs(self):
+        return await self.run_in_executor(sync.process_inputs_outputs)
 
-    async def process_claims(self, heights):
-        return await self.run_in_executor(sync.process_claims, heights)
+    async def process_all_things_after_sync(self):
+        return await self.run_in_executor(sync.process_all_things_after_sync)
 
-    async def process_supports(self, heights):
-        return await self.run_in_executor(sync.process_supports, heights)
+    async def needs_initial_sync(self) -> bool:
+        return (await self.get_best_tx_height()) == -1
 
-    async def get_best_height(self) -> int:
-        return await self.run_in_executor(q.get_best_height)
+    async def get_best_tx_height(self) -> int:
+        return await self.run_in_executor(q.get_best_tx_height)
 
-    async def get_best_height_for_file(self, file_number) -> int:
-        return await self.run_in_executor(q.get_best_height_for_file, file_number)
+    async def get_best_block_height_for_file(self, file_number) -> int:
+        return await self.run_in_executor(q.get_best_block_height_for_file, file_number)
 
     async def get_blocks_without_filters(self):
         return await self.run_in_executor(q.get_blocks_without_filters)
@@ -202,6 +208,9 @@ class Database:
 
     async def get_transaction_address_filters(self, block_hash):
         return await self.run_in_executor(q.get_transaction_address_filters, block_hash)
+
+    async def insert_block(self, block):
+        return await self.run_in_executor(q.insert_block, block)
 
     async def insert_transaction(self, block_hash, tx):
         return await self.run_in_executor(q.insert_transaction, block_hash, tx)
@@ -263,7 +272,9 @@ class Database:
         return await self.fetch_result(q.get_purchases, **constraints)
 
     async def search_claims(self, **constraints) -> Result[Output]:
-        claims, total, censor = await self.run_in_executor(q.search, **constraints)
+        #assert set(constraints).issubset(SEARCH_PARAMS), \
+        #    f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
+        claims, total, censor = await self.run_in_executor(q.search_claims, **constraints)
         return Result(claims, total, censor)
 
     async def get_txo_sum(self, **constraints) -> int:
@@ -285,7 +296,9 @@ class Database:
         return await self.get_utxos(txo_type=TXO_TYPES['support'], **constraints)
 
     async def get_claims(self, **constraints) -> Result[Output]:
-        txos = await self.fetch_result(q.get_claims, **constraints)
+        if 'txo_type' not in constraints:
+            constraints['txo_type'] = CLAIM_TYPES
+        txos = await self.fetch_result(q.get_txos, **constraints)
         if 'wallet' in constraints:
             await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)
         return txos
