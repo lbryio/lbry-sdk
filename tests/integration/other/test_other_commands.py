@@ -1,4 +1,3 @@
-from lbry.extras.daemon.loggly_handler import get_loggly_handler
 from lbry.testcase import CommandTestCase
 
 
@@ -29,14 +28,9 @@ class SettingsManagement(CommandTestCase):
         # test_privacy_settings (merged for reducing test time, unmerge when its fast)
         # tests that changing share_usage_data propagates to the relevant properties
         self.assertFalse(self.daemon.jsonrpc_settings_get()['share_usage_data'])
-        loggly = get_loggly_handler(self.daemon.conf)
-        self.addCleanup(loggly.close)
-        self.assertFalse(self.daemon.analytics_manager.enabled)
-        self.assertFalse(loggly.enabled)
         self.daemon.jsonrpc_settings_set('share_usage_data', True)
         self.assertTrue(self.daemon.jsonrpc_settings_get()['share_usage_data'])
         self.assertTrue(self.daemon.analytics_manager.enabled)
-        self.assertTrue(loggly.enabled)
         self.daemon.jsonrpc_settings_set('share_usage_data', False)
 
 

@@ -14,7 +14,6 @@ from aiohttp.web import GracefulExit
 from docopt import docopt
 
 from lbry import __version__ as lbrynet_version
-from lbry.extras.daemon.loggly_handler import get_loggly_handler
 from lbry.extras.daemon.daemon import Daemon
 from lbry.conf import Config, CLIConfig
 
@@ -254,10 +253,6 @@ def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config
                 logger.getChild(module).setLevel(logging.DEBUG)
         else:
             logger.getChild('lbry').setLevel(logging.DEBUG)
-
-    loggly_handler = get_loggly_handler(conf)
-    loggly_handler.setLevel(logging.ERROR)
-    logger.getChild('lbry').addHandler(loggly_handler)
 
 
 def run_daemon(args: argparse.Namespace, conf: Config):
