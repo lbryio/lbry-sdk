@@ -15,7 +15,6 @@ from lbry.testcase import AsyncioTestCase
 from lbry.extras.cli import normalize_value, main, setup_logging
 from lbry.extras.system_info import get_platform
 from lbry.extras.daemon.daemon import Daemon
-from lbry.extras.daemon.loggly_handler import HTTPSLogglyHandler
 from lbry.conf import Config
 from lbry.extras import cli
 
@@ -79,24 +78,6 @@ class CLILoggingTest(AsyncioTestCase):
             self.assertTrue(log.getChild("torba.client").isEnabledFor(logging.DEBUG))
             self.assertFalse(log.getChild("lbry").isEnabledFor(logging.DEBUG))
             self.assertFalse(log.getChild("torba").isEnabledFor(logging.DEBUG))
-
-    async def test_loggly(self):
-        async with get_logger(["start"]) as log:  # default share_usage_data=False
-            log = log.getChild("lbry")
-            self.assertIsInstance(log.handlers[0], logging.StreamHandler)
-            self.assertIsInstance(log.handlers[1], logging.StreamHandler)
-            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
-            self.assertFalse(log.handlers[2].enabled)
-        async with get_logger(["start"], share_usage_data=True) as log:
-            log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 3)
-            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
-            self.assertTrue(log.handlers[2].enabled)
-        async with get_logger(["start"], share_usage_data=False) as log:  # explicit share_usage_data=False
-            log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 3)
-            self.assertIsInstance(log.handlers[2], HTTPSLogglyHandler)
-            self.assertFalse(log.handlers[2].enabled)
 
     async def test_quiet(self):
         async with get_logger(["start"]) as log:  # default is loud
