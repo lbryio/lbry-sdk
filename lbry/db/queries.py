@@ -217,7 +217,6 @@ def get_transactions(**constraints) -> Tuple[List[Transaction], Optional[int]]:
 
 
 def _get_transactions(wallet=None, include_total=False, **constraints) -> Tuple[List[Transaction], Optional[int]]:
-    include_is_spent = constraints.pop('include_is_spent', False)
     include_is_my_input = constraints.pop('include_is_my_input', False)
     include_is_my_output = constraints.pop('include_is_my_output', False)
 
@@ -244,7 +243,6 @@ def _get_transactions(wallet=None, include_total=False, **constraints) -> Tuple[
             get_txos(
                 wallet=wallet,
                 tx_hash__in=txids[offset:offset + MAX_QUERY_VARIABLES], order_by='txo.tx_hash',
-                include_is_spent=include_is_spent,
                 include_is_my_input=include_is_my_input,
                 include_is_my_output=include_is_my_output,
             )[0]
@@ -403,7 +401,6 @@ def rows_to_txos(rows: List[dict], include_tx=True) -> List[Output]:
 
 def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Output], Optional[int]]:
     wallet_account_ids = constraints.pop('wallet_account_ids', [])
-    include_is_spent = constraints.get('include_is_spent', False)
     include_is_my_input = constraints.get('include_is_my_input', False)
     include_is_my_output = constraints.pop('include_is_my_output', False)
     include_received_tips = constraints.pop('include_received_tips', False)
@@ -475,7 +472,6 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
 
 
 def _clean_txo_constraints_for_aggregation(constraints):
-    constraints.pop('include_is_spent', None)
     constraints.pop('include_is_my_input', None)
     constraints.pop('include_is_my_output', None)
     constraints.pop('include_received_tips', None)

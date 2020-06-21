@@ -261,8 +261,7 @@ class Wallet:
 
     async def list_transactions(self, **constraints):
         return txs_to_dict(await self.db.get_transactions(
-            include_is_my_output=True, include_is_spent=True,
-            **constraints
+            include_is_my_output=True, **constraints
         ), self.ledger)
 
     async def create_transaction(

@@ -387,7 +387,7 @@ class UnitDBTestCase(AsyncioTestCase):
     async def get_claims(self):
         claims = []
         sql = (
-            "select claim_id from claim order by height, tx_position"
+            "select claim_id from claim order by height"
         )
         for claim in await self.db.execute_fetchall(sql):
             claims.append(claim['claim_id'])

@@ -2701,7 +2701,6 @@ class API:
         accounts = wallet.accounts.get_or_all(txo_dict.pop('account_id'))
         constraints = {
             'resolve': resolve,
-            'include_is_spent': True,
             'include_is_my_input': True,
             'include_is_my_output': True,
             'include_received_tips': include_received_tips,
