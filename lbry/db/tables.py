@@ -70,14 +70,22 @@ TXO = Table(
     Column('address', Text),
     Column('position', SmallInteger),
     Column('amount', BigInteger),
+    Column('height', Integer),
     Column('script_offset', Integer),
     Column('script_length', Integer),
     Column('is_spent', Boolean, server_default='0'),
     Column('is_reserved', Boolean, server_default='0'),
+
+    # claims
     Column('txo_type', SmallInteger, server_default='0'),
     Column('claim_id', Text, nullable=True),
     Column('claim_hash', LargeBinary, nullable=True),
     Column('claim_name', Text, nullable=True),
+    Column('channel_hash', LargeBinary, nullable=True),  # claims in channel
+
+    # channels
+    Column('public_key', LargeBinary, nullable=True),
+    Column('public_key_hash', LargeBinary, nullable=True),
 )
 
 txo_join_account = TXO.join(AccountAddress, TXO.columns.address == AccountAddress.columns.address)
@@ -102,17 +110,17 @@ Claim = Table(
     Column('normalized', Text),
     Column('address', Text),
     Column('txo_hash', LargeBinary, ForeignKey(TXO.columns.txo_hash)),
-    Column('tx_position', SmallInteger),
     Column('amount', BigInteger),
+    Column('staked_amount', BigInteger, server_default='0'),
     Column('timestamp', Integer),  # last updated timestamp
     Column('creation_timestamp', Integer),
+    Column('release_time', Integer, nullable=True),
     Column('height', Integer),  # last updated height
     Column('creation_height', Integer),
     Column('activation_height', Integer, nullable=True),
     Column('expiration_height', Integer, nullable=True),
     Column('takeover_height', Integer, nullable=True),
     Column('is_controlling', Boolean, server_default='0'),
-    Column('release_time', Integer, nullable=True),
 
     # normalized#shortest-unique-claim_id
     Column('short_url', Text, nullable=True),
@@ -125,7 +133,8 @@ Claim = Table(
 
     Column('claim_type', SmallInteger),
     Column('claim_reposted_count', Integer, server_default='0'),
-    Column('supports_in_claim_count', Integer, server_default='0'),
+    Column('staked_support_count', Integer, server_default='0'),
+    Column('staked_support_amount', BigInteger, server_default='0'),
 
     # streams
     Column('stream_type', Text, nullable=True),
@@ -138,18 +147,15 @@ Claim = Table(
     Column('reposted_claim_hash', LargeBinary, nullable=True),
 
     # claims which are channels
-    Column('public_key', LargeBinary, nullable=True),
-    Column('public_key_hash', LargeBinary, nullable=True),
-    Column('public_key_height', Integer, server_default='0'),  # height at which public key was last changed
-    Column('claims_in_channel_count', Integer, server_default='0'),
+    Column('signed_claim_count', Integer, server_default='0'),
+    Column('signed_support_count', Integer, server_default='0'),
 
     # claims which are inside channels
     Column('channel_hash', LargeBinary, nullable=True),
     Column('signature', LargeBinary, nullable=True),
     Column('signature_digest', LargeBinary, nullable=True),
-    Column('is_signature_valid', Boolean, server_default='0'),
+    Column('is_signature_valid', Boolean, nullable=True),
 
-    Column('support_amount', BigInteger, server_default='0'),
     Column('trending_group', BigInteger, server_default='0'),
     Column('trending_mixed', BigInteger, server_default='0'),
     Column('trending_local', BigInteger, server_default='0'),
@@ -168,13 +174,12 @@ Support = Table(
     'support', metadata,
 
     Column('txo_hash', LargeBinary, ForeignKey(TXO.columns.txo_hash), primary_key=True),
-    Column('claim_hash', LargeBinary, ForeignKey(TXO.columns.claim_hash)),
+    Column('claim_hash', LargeBinary),
     Column('address', Text),
-    Column('tx_position', SmallInteger),
-    Column('activation_height', Integer, nullable=True),
-    Column('expiration_height', Integer, nullable=True),
     Column('amount', BigInteger),
     Column('height', Integer),
+    Column('activation_height', Integer, nullable=True),
+    Column('expiration_height', Integer, nullable=True),
 
     # support metadata
     Column('emoji', Text),
@@ -183,7 +188,7 @@ Support = Table(
     Column('channel_hash', LargeBinary, nullable=True),
     Column('signature', LargeBinary, nullable=True),
     Column('signature_digest', LargeBinary, nullable=True),
-    Column('is_signature_valid', Boolean, server_default='0'),
+    Column('is_signature_valid', Boolean, nullable=True),
 )
 
 

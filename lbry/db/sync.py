@@ -12,7 +12,8 @@ from lbry.db.tables import (
 def process_all_things_after_sync():
     process_inputs_outputs()
     process_supports()
-    process_claims()
+    process_claim_deletes()
+    process_claim_changes()
 
 
 def process_inputs_outputs():
@@ -109,12 +110,14 @@ def process_supports():
         loader.save()
 
 
-def process_claims():
+def process_claim_deletes():
     with progress(Event.CLAIM_DELETE) as p:
         p.start(1)
         sql = Claim.delete().where(condition_spent_claims())
         p.ctx.execute(sql)
 
+
+def process_claim_changes():
     with progress(Event.CLAIM_INSERT) as p:
         loader = p.ctx.get_bulk_loader()
         for claim in rows_to_txos(p.ctx.fetchall(select_missing_claims)):

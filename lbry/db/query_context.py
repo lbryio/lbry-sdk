@@ -182,13 +182,12 @@ class Event(Enum):
     BLOCK_READ = "blockchain.sync.block.read", ProgressUnit.BLOCKS
     BLOCK_SAVE = "blockchain.sync.block.save", ProgressUnit.TXS
     BLOCK_DONE = "blockchain.sync.block.done", ProgressUnit.TASKS
+    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.TAKEOVERS
     CLAIM_META = "blockchain.sync.claim.update", ProgressUnit.CLAIMS
     CLAIM_CALC = "blockchain.sync.claim.totals", ProgressUnit.CLAIMS
-    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.TAKEOVERS
     CLAIM_SIGN = "blockchain.sync.claim.signatures", ProgressUnit.CLAIMS
     SUPPORT_META = "blockchain.sync.support.update", ProgressUnit.SUPPORTS
     SUPPORT_SIGN = "blockchain.sync.support.signatures", ProgressUnit.SUPPORTS
-    CHANNEL_SIGN = "blockchain.sync.channel.signatures", ProgressUnit.CLAIMS
     TRENDING_CALC = "blockchain.sync.trending", ProgressUnit.BLOCKS
     TAKEOVER_INSERT = "blockchain.sync.takeover.insert", ProgressUnit.TAKEOVERS
 
@@ -261,8 +260,6 @@ class ProgressContext:
 
     def step(self, done):
         send_condition = (
-            # no-op
-            done != 0 and self.total != 0 and
             # enforce step rate
             (self.step_size == 1 or done % self.step_size == 0) and
             # deduplicate finish event by not sending a step where done == total
@@ -345,27 +342,36 @@ class BulkLoader:
             'address': txo.get_address(self.ledger) if txo.has_address else None,
             'position': txo.position,
             'amount': txo.amount,
+            'height': tx.height,
             'script_offset': txo.script.offset,
             'script_length': txo.script.length,
             'txo_type': 0,
             'claim_id': None,
             'claim_hash': None,
             'claim_name': None,
-            'reposted_claim_hash': None,
             'channel_hash': None,
+            'public_key': None,
+            'public_key_hash': None
         }
         if txo.is_claim:
             if txo.can_decode_claim:
                 claim = txo.claim
                 row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
-                if claim.is_repost:
-                    row['reposted_claim_hash'] = claim.repost.reference.claim_hash
                 if claim.is_signed:
                     row['channel_hash'] = claim.signing_channel_hash
+                if claim.is_channel:
+                    row['public_key'] = claim.channel.public_key_bytes
+                    row['public_key_hash'] = self.ledger.address_to_hash160(
+                        self.ledger.public_key_to_address(claim.channel.public_key_bytes)
+                    )
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
+            if txo.can_decode_support:
+                claim = txo.support
+                if claim.is_signed:
+                    row['channel_hash'] = claim.signing_channel_hash
         elif txo.purchase is not None:
             row['txo_type'] = TXO_TYPES['purchase']
             row['claim_id'] = txo.purchased_claim_id
@@ -401,11 +407,10 @@ class BulkLoader:
             'normalized': txo.normalized_name,
             'address': txo.get_address(self.ledger),
             'txo_hash': txo.ref.hash,
-            'tx_position': tx.position,
             'amount': txo.amount,
-            'height': tx.height,
             'timestamp': tx.timestamp,
             'release_time': None,
+            'height': tx.height,
             'title': None,
             'author': None,
             'description': None,
@@ -413,18 +418,16 @@ class BulkLoader:
             # streams
             'stream_type': None,
             'media_type': None,
-            'fee_currency': None,
             'fee_amount': 0,
+            'fee_currency': None,
             'duration': None,
             # reposts
             'reposted_claim_hash': None,
-            # claims which are channels
-            'public_key': None,
-            'public_key_hash': None,
             # signed claims
             'channel_hash': None,
             'signature': None,
             'signature_digest': None,
+            'is_signature_valid': None,
         }
 
         try:
@@ -435,8 +438,8 @@ class BulkLoader:
 
         if claim.is_stream:
             claim_record['claim_type'] = TXO_TYPES['stream']
-            claim_record['media_type'] = claim.stream.source.media_type
             claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
+            claim_record['media_type'] = claim.stream.source.media_type
             claim_record['title'] = claim.stream.title
             claim_record['description'] = claim.stream.description
             claim_record['author'] = claim.stream.author
@@ -457,10 +460,6 @@ class BulkLoader:
             claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
         elif claim.is_channel:
             claim_record['claim_type'] = TXO_TYPES['channel']
-            claim_record['public_key'] = claim.channel.public_key_bytes
-            claim_record['public_key_hash'] = self.ledger.address_to_hash160(
-                self.ledger.public_key_to_address(claim.channel.public_key_bytes)
-            )
         if claim.is_signed:
             claim_record['channel_hash'] = claim.signing_channel_hash
             claim_record['signature'] = txo.get_encoded_signature()
@@ -496,12 +495,15 @@ class BulkLoader:
         tx = txo.tx_ref.tx
         claim_hash = txo.claim_hash
         support_record = {
+            'txo_hash': txo.ref.hash,
             'claim_hash': claim_hash,
             'address': txo.get_address(self.ledger),
-            'txo_hash': txo.ref.hash,
-            'tx_position': tx.position,
             'amount': txo.amount,
             'height': tx.height,
+            'emoji': None,
+            'channel_hash': None,
+            'signature': None,
+            'signature_digest': None,
         }
         self.supports.append(support_record)
         support = txo.can_decode_support
@@ -509,12 +511,13 @@ class BulkLoader:
             support_record['emoji'] = support.emoji
             if support.is_signed:
                 support_record['channel_hash'] = support.signing_channel_hash
+                support_record['signature'] = txo.get_encoded_signature()
+                support_record['signature_digest'] = txo.get_signature_digest(None)
 
     def add_claim(self, txo: Output):
         claim, tags = self.claim_to_rows(txo)
         if claim:
             tx = txo.tx_ref.tx
-            claim['public_key_height'] = tx.height
             if txo.script.is_claim_name:
                 claim['creation_height'] = tx.height
                 claim['creation_timestamp'] = tx.timestamp
@@ -525,9 +528,9 @@ class BulkLoader:
     def update_claim(self, txo: Output):
         claim, tags = self.claim_to_rows(txo)
         if claim:
-            claim['claim_hash_pk'] = claim.pop('claim_hash')
+            claim['claim_hash_'] = claim.pop('claim_hash')
             self.update_claims.append(claim)
-            self.delete_tags.append({'claim_hash_pk': claim['claim_hash_pk']})
+            self.delete_tags.append({'claim_hash_': claim['claim_hash_']})
             self.tags.extend(tags)
         return self
 
@@ -538,13 +541,8 @@ class BulkLoader:
             (TXO.insert(), self.txos),
             (TXI.insert(), self.txis),
             (Claim.insert(), self.claims),
-            (Tag.delete().where(Tag.c.claim_hash == bindparam('claim_hash_pk')), self.delete_tags),
-            (Claim.update()
-             .where(Claim.c.claim_hash == bindparam('claim_hash_pk'))
-             .values(public_key_height=case(
-                [(Claim.c.public_key_hash != bindparam('public_key_hash'), bindparam('height'))],
-                else_=Claim.c.public_key_height
-             )), self.update_claims),
+            (Tag.delete().where(Tag.c.claim_hash == bindparam('claim_hash_')), self.delete_tags),
+            (Claim.update().where(Claim.c.claim_hash == bindparam('claim_hash_')), self.update_claims),
             (Tag.insert(), self.tags),
             (Support.insert(), self.supports),
         )

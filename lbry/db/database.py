@@ -2,7 +2,7 @@ import os
 import asyncio
 import tempfile
 import multiprocessing as mp
-from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING
+from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING, Dict
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 
@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 from lbry.event import EventController
 from lbry.crypto.bip32 import PubKey
 from lbry.blockchain.transaction import Transaction, Output
-from .constants import TXO_TYPES
+from .constants import TXO_TYPES, CLAIM_TYPE_CODES
 from .query_context import initialize, ProgressPublisher
 from . import queries as q
 from . import sync
@@ -277,6 +277,12 @@ class Database:
         claims, total, censor = await self.run_in_executor(q.search_claims, **constraints)
         return Result(claims, total, censor)
 
+    async def search_supports(self, **constraints) -> Result[Output]:
+        return await self.fetch_result(q.search_supports, **constraints)
+
+    async def resolve(self, *urls) -> Dict[str, Output]:
+        return await self.run_in_executor(q.resolve, *urls)
+
     async def get_txo_sum(self, **constraints) -> int:
         return await self.run_in_executor(q.get_txo_sum, **constraints)
 
@@ -297,7 +303,7 @@ class Database:
 
     async def get_claims(self, **constraints) -> Result[Output]:
         if 'txo_type' not in constraints:
-            constraints['txo_type'] = CLAIM_TYPES
+            constraints['txo_type__in'] = CLAIM_TYPE_CODES
         txos = await self.fetch_result(q.get_txos, **constraints)
         if 'wallet' in constraints:
             await add_channel_keys_to_txo_results(constraints['wallet'].accounts, txos)

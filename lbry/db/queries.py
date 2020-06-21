@@ -357,8 +357,9 @@ def select_txos(
 
 
 META_ATTRS = (
-    'activation_height', 'takeover_height', 'support_amount', 'creation_height',
-    'short_url', 'canonical_url', 'claims_in_channel_count', 'supports_in_claim_count',
+    'activation_height', 'takeover_height', 'creation_height', 'staked_amount',
+    'short_url', 'canonical_url', 'staked_support_amount', 'staked_support_count',
+    'signed_claim_count', 'signed_support_count', 'is_signature_valid',
 )
 
 
@@ -430,10 +431,6 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
                 (TXI.c.address.in_(my_accounts))
             ).label('is_my_input'))
 
-    spent = TXI.alias('spent')
-    if include_is_spent:
-        select_columns.append((spent.c.txo_hash != None).label('is_spent'))
-
     if include_received_tips:
         support = TXO.alias('support')
         select_columns.append(
@@ -453,7 +450,7 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
     elif constraints.get('order_by', None) == 'none':
         del constraints['order_by']
 
-    rows = context().fetchall(select_txos(select_columns, spent=spent, **constraints))
+    rows = context().fetchall(select_txos(select_columns, **constraints))
     txos = rows_to_txos(rows, not no_tx)
 
     channel_hashes = set()
@@ -529,6 +526,36 @@ def get_txo_plot(start_day=None, days_back=0, end_day=None, days_after=None, **c
     return plot
 
 
+BASE_SELECT_SUPPORT_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
+    Support.c.channel_hash,
+    Support.c.is_signature_valid,
+]
+
+
+def select_supports(cols: List = None, **constraints) -> Select:
+    if cols is None:
+        cols = BASE_SELECT_SUPPORT_COLUMNS
+    joins = Support.join(TXO, ).join(TX)
+    return query([Support], select(*cols).select_from(joins), **constraints)
+
+
+def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
+    total = None
+    if not constraints.pop('no_totals', False):
+        total = search_support_count(**constraints)
+    rows = context().fetchall(select_supports(**constraints))
+    txos = rows_to_txos(rows, include_tx=False)
+    return txos, total
+
+
+def search_support_count(**constraints) -> int:
+    constraints.pop('offset', None)
+    constraints.pop('limit', None)
+    constraints.pop('order_by', None)
+    count = context().fetchall(select_supports([func.count().label('total')], **constraints))
+    return count[0]['total'] or 0
+
+
 BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
@@ -538,9 +565,12 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.reposted_claim_hash,
     Claim.c.short_url,
     Claim.c.canonical_url,
-    Claim.c.claims_in_channel_count,
-    Claim.c.support_amount,
-    Claim.c.supports_in_claim_count,
+    Claim.c.signed_claim_count,
+    Claim.c.signed_support_count,
+    (Claim.c.amount + Claim.c.staked_support_amount).label('staked_amount'),
+    Claim.c.staked_support_amount,
+    Claim.c.staked_support_count,
+    Claim.c.is_signature_valid,
 ]
 
 
@@ -650,7 +680,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
             claim_types = [claim_types]
         if claim_types:
             constraints['claim_type__in'] = {
-                CLAIM_TYPE_CODES[claim_type] for claim_type in claim_types
+                TXO_TYPES[claim_type] for claim_type in claim_types
             }
     if 'stream_types' in constraints:
         stream_types = constraints.pop('stream_types')
@@ -797,13 +827,14 @@ def get_supports_summary(self, **constraints):
     )
 
 
-def resolve(urls) -> Tuple[List, List]:
-    txo_rows = [resolve_url(raw_url) for raw_url in urls]
-    extra_txo_rows = _get_referenced_rows(
-        [txo for txo in txo_rows if isinstance(txo, dict)],
-        [txo.censor_hash for txo in txo_rows if isinstance(txo, ResolveCensoredError)]
-    )
-    return txo_rows, extra_txo_rows
+def resolve(*urls) -> Dict[str, Output]:
+    return {url: resolve_url(url) for url in urls}
+    #txo_rows = [resolve_url(raw_url) for raw_url in urls]
+    #extra_txo_rows = _get_referenced_rows(
+    #    [txo for txo in txo_rows if isinstance(txo, dict)],
+    #    [txo.censor_hash for txo in txo_rows if isinstance(txo, ResolveCensoredError)]
+    #)
+    #return txo_rows, extra_txo_rows
 
 
 def resolve_url(raw_url):
@@ -822,7 +853,8 @@ def resolve_url(raw_url):
             q['is_controlling'] = True
         else:
             q['order_by'] = ['^creation_height']
-        matches = search_claims(censor, **q, limit=1)
+        #matches = search_claims(censor, **q, limit=1)
+        matches = search_claims(**q, limit=1)[0]
         if matches:
             channel = matches[0]
         elif censor.censored:
@@ -833,16 +865,13 @@ def resolve_url(raw_url):
     if url.has_stream:
         q = url.stream.to_dict()
         if channel is not None:
-            if set(q) == {'name'}:
-                # temporarily emulate is_controlling for claims in channel
-                q['order_by'] = ['effective_amount', '^height']
-            else:
-                q['order_by'] = ['^channel_join']
-            q['channel_hash'] = channel['claim_hash']
-            q['signature_valid'] = 1
+            q['order_by'] = ['^creation_height']
+            q['channel_hash'] = channel.claim_hash
+            q['is_signature_valid'] = 1
         elif set(q) == {'name'}:
             q['is_controlling'] = 1
-        matches = search_claims(censor, **q, limit=1)
+        # matches = search_claims(censor, **q, limit=1)
+        matches = search_claims(**q, limit=1)[0]
         if matches:
             return matches[0]
         elif censor.censored:
