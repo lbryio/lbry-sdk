@@ -2,17 +2,19 @@ import os
 import time
 import asyncio
 import tempfile
+from unittest import skip
 from binascii import hexlify, unhexlify
+from typing import List, Optional
 from distutils.dir_util import copy_tree, remove_tree
 
-from lbry import Config, Database, RegTestLedger, Transaction, Output
+from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
-from lbry.blockchain.dewies import dewies_to_lbc
-from lbry.constants import CENT
+from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
+from lbry.constants import CENT, COIN
 from lbry.testcase import AsyncioTestCase
 
 import logging
@@ -61,7 +63,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
 
         self.channel_keys = {}
 
-    async def generate(self, blocks, wait=True):
+    async def generate(self, blocks, wait=True) -> List[str]:
         block_hashes = await self.chain.generate(blocks)
         self.current_height += blocks
         self.last_block_hash = block_hashes[-1]
@@ -69,23 +71,37 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
             await self.sync.on_block.where(lambda b: self.current_height == b.height)
         return block_hashes
 
-    async def get_transaction(self, txid: str) -> Transaction:
+    async def get_last_block(self):
+        return await self.chain.get_block(self.last_block_hash)
+
+    @staticmethod
+    def find_claim_txo(tx) -> Optional[Output]:
+        for txo in tx.outputs:
+            if txo.is_claim:
+                return txo
+
+    async def get_claim(self, txid: str) -> Output:
         raw = await self.chain.get_raw_transaction(txid)
         tx = Transaction(unhexlify(raw))
         txo = self.find_claim_txo(tx)
         if txo and txo.is_claim and txo.claim.is_channel:
             txo.private_key = self.channel_keys.get(txo.claim_hash)
-        return tx
+        return txo
 
-    async def get_last_block(self):
-        return await self.chain.get_block(self.last_block_hash)
-
-    def find_claim_txo(self, tx):
+    @staticmethod
+    def find_support_txo(tx) -> Optional[Output]:
         for txo in tx.outputs:
-            if txo.is_claim or txo.is_support:
+            if txo.is_support:
                 return txo
 
-    async def create_claim(self, title='', amount=CENT, name='foo', claim_id_startswith='', sign=None, is_channel=False):
+    async def get_support(self, txid: str) -> Output:
+        raw = await self.chain.get_raw_transaction(txid)
+        return self.find_support_txo(Transaction(unhexlify(raw)))
+
+    async def create_claim(
+            self, title='', amount='0.01', name=None,
+            claim_id_startswith='', sign=None, is_channel=False) -> str:
+        name = name or ('@foo' if is_channel else 'foo')
         if not claim_id_startswith and sign is None and not is_channel:
             claim = Stream().update(title=title).claim
             return await self.chain.claim_name(
@@ -94,8 +110,9 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         meta_class = Channel if is_channel else Stream
         tx = Transaction().add_outputs([
             Output.pay_claim_name_pubkey_hash(
-                CENT, name, meta_class().update(title='claim #001').claim,
-                Base58.decode(self.address)
+                lbc_to_dewies(amount), name,
+                meta_class().update(title='claim #001').claim,
+                self.chain.ledger.address_to_hash160(self.address)
             )
         ])
         private_key = None
@@ -104,11 +121,6 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         funded = await self.chain.fund_raw_transaction(hexlify(tx.raw).decode())
         tx = Transaction(unhexlify(funded['hex']))
         i = 1
-        if '!' in claim_id_startswith:
-            claim_id_startswith, not_after_startswith = claim_id_startswith.split('!')
-            not_after_startswith = tuple(not_after_startswith)
-        else:
-            claim_id_startswith, not_after_startswith = claim_id_startswith, ()
         while True:
             if sign:
                 self.find_claim_txo(tx).sign(sign)
@@ -118,8 +130,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
             txo = self.find_claim_txo(tx)
             claim = txo.claim.channel if is_channel else txo.claim.stream
             if txo.claim_id.startswith(claim_id_startswith):
-                if txo.claim_id[len(claim_id_startswith)] not in not_after_startswith:
-                    break
+                break
             i += 1
             claim.update(title=f'claim #{i:03}')
             txo.script.generate()
@@ -127,19 +138,58 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
             self.channel_keys[self.find_claim_txo(tx).claim_hash] = private_key
         return await self.chain.send_raw_transaction(hexlify(tx.raw).decode())
 
-    async def update_claim(self, txo, amount):
-        return await self.chain.update_claim(
-            txo.tx_ref.id, hexlify(txo.claim.to_bytes()).decode(), amount
+    async def update_claim(self, txo: Output, amount='0.01', reset_channel_key=False, sign=None) -> str:
+        if reset_channel_key:
+            self.channel_keys[txo.claim_hash] = await txo.generate_channel_private_key()
+        if sign is None:
+            return await self.chain.update_claim(
+                txo.tx_ref.id, hexlify(txo.claim.to_bytes()).decode(), amount
+            )
+        tx = (
+            Transaction()
+            .add_inputs([Input.spend(txo)])
+            .add_outputs([
+                Output.pay_update_claim_pubkey_hash(
+                    lbc_to_dewies(amount), txo.claim_name, txo.claim_id, txo.claim,
+                    self.chain.ledger.address_to_hash160(self.address)
+                )
+            ])
         )
+        funded = await self.chain.fund_raw_transaction(hexlify(tx.raw).decode())
+        tx = Transaction(unhexlify(funded['hex']))
+        self.find_claim_txo(tx).sign(sign)
+        tx._reset()
+        signed = await self.chain.sign_raw_transaction_with_wallet(hexlify(tx.raw).decode())
+        tx = Transaction(unhexlify(signed['hex']))
+        return await self.chain.send_raw_transaction(signed['hex'])
 
-    async def abandon_claim(self, txid):
+    async def abandon_claim(self, txid: str) -> str:
         return await self.chain.abandon_claim(txid, self.address)
 
-    async def support_claim(self, txo, amount):
-        response = await self.chain.support_claim(
-            txo.claim_name, txo.claim_id, amount
+    async def support_claim(self, txo: Output, amount='0.01', sign=None) -> str:
+        if not sign:
+            response = await self.chain.support_claim(
+                txo.claim_name, txo.claim_id, amount
+            )
+            return response['txId']
+        tx = (
+            Transaction()
+            .add_outputs([
+                Output.pay_support_data_pubkey_hash(
+                    lbc_to_dewies(amount), txo.claim_name, txo.claim_id, Support(),
+                    self.chain.ledger.address_to_hash160(self.address)
+                )
+            ])
         )
-        return response['txId']
+        funded = await self.chain.fund_raw_transaction(hexlify(tx.raw).decode())
+        tx = Transaction(unhexlify(funded['hex']))
+        self.find_support_txo(tx).sign(sign)
+        tx._reset()
+        signed = await self.chain.sign_raw_transaction_with_wallet(hexlify(tx.raw).decode())
+        return await self.chain.send_raw_transaction(signed['hex'])
+
+    async def abandon_support(self, txid: str) -> str:
+        return await self.chain.abandon_support(txid, self.address)
 
     async def get_takeovers(self):
         takeovers = []
@@ -155,7 +205,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         blocks = (new_height-self.current_height)-1
         if blocks > 0:
             await self.generate(blocks)
-        txs = []
+        claims = []
         for op in ops:
             if len(op) == 3:
                 op_type, value, amount = op
@@ -171,15 +221,15 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
                 txid = await self.support_claim(value, amount)
             else:
                 raise ValueError(f'"{op_type}" is unknown operation')
-            txs.append(await self.get_transaction(txid))
+            claims.append(await self.get_claim(txid))
         await self.generate(1)
-        return [self.find_claim_txo(tx) for tx in txs]
+        return claims
 
     async def get_controlling(self):
         for txo in await self.db.search_claims(is_controlling=True):
             return (
                 txo.claim.stream.title, dewies_to_lbc(txo.amount),
-                dewies_to_lbc(txo.meta['effective_amount']), txo.meta['takeover_height']
+                dewies_to_lbc(txo.meta['staked_amount']), txo.meta['takeover_height']
             )
 
     async def get_active(self):
@@ -192,7 +242,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
                 continue
             active.append((
                 txo.claim.stream.title, dewies_to_lbc(txo.amount),
-                dewies_to_lbc(txo.meta['effective_amount']), txo.meta['activation_height']
+                dewies_to_lbc(txo.meta['staked_amount']), txo.meta['activation_height']
             ))
         return active
 
@@ -203,7 +253,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
                 expiration_height__gt=self.current_height):
             accepted.append((
                 txo.claim.stream.title, dewies_to_lbc(txo.amount),
-                dewies_to_lbc(txo.meta['effective_amount']), txo.meta['activation_height']
+                dewies_to_lbc(txo.meta['staked_amount']), txo.meta['activation_height']
             ))
         return accepted
 
@@ -213,7 +263,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         self.assertEqual(accepted or [], await self.get_accepted())
 
 
-class TestBlockchainEvents(BasicBlockchainTestCase):
+class TestLbrycrdEvents(BasicBlockchainTestCase):
 
     async def test_block_event(self):
         msgs = []
@@ -269,7 +319,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
         await self.chain.generate(101)
 
-        address = Base58.decode(self.chain.get_new_address())
+        address = Base58.decode(await self.chain.get_new_address())
 
         start = time.perf_counter()
         for _ in range(190):
@@ -339,18 +389,18 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEqual(
             [(1, 29, 58)],
             [(file['file_number'], file['blocks'], file['txs'])
-             for file in await db.get_block_files(1, 250)]
+             for file in await db.get_block_files(1, 251)]
         )
 
         # get_blocks_in_file
         self.assertEqual(279, (await db.get_blocks_in_file(1))[88]['height'])
-        self.assertEqual(279, (await db.get_blocks_in_file(1, 250))[28]['height'])
+        self.assertEqual(279, (await db.get_blocks_in_file(1, 251))[28]['height'])
 
         # get_takeover_count
         self.assertEqual(0, await db.get_takeover_count(0, 101))
         self.assertEqual(2, await db.get_takeover_count(101, 102))
-        self.assertEqual(1, await db.get_takeover_count(102, 250))
-        self.assertEqual(0, await db.get_takeover_count(250, 291))
+        self.assertEqual(1, await db.get_takeover_count(103, 251))
+        self.assertEqual(0, await db.get_takeover_count(252, 291))
 
         # get_takeovers
         self.assertEqual(
@@ -359,7 +409,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 {'height': 102, 'name': b'two'},
                 {'height': 250, 'name': b''}  # normalization on regtest kicks-in
             ],
-            [{'name': takeover['normalized'], 'height': takeover['height']}
+            [{'name': takeover['name'], 'height': takeover['height']}
              for takeover in await db.get_takeovers(0, 291)]
         )
 
@@ -370,15 +420,13 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         # get_claim_metadata
         self.assertEqual(
             [
-                {'name': b'two', 'activation_height': 102, 'takeover_height': 102, 'is_controlling': True},
                 {'name': b'one', 'activation_height': 102, 'takeover_height': 102, 'is_controlling': True},
-                {'name': b'two', 'activation_height': 102, 'takeover_height': None, 'is_controlling': False},
-                {'name': b'one', 'activation_height': 102, 'takeover_height': None, 'is_controlling': False},
+                {'name': b'two', 'activation_height': 102, 'takeover_height': 102, 'is_controlling': True},
             ],
             [{
-                'name': c['name'], 'is_controlling': bool(c['is_controlling']),
-                'activation_height': c['activation_height'], 'takeover_height': c['takeover_height'],
-            } for c in (await db.get_claim_metadata(0, 103))[:4]]
+                'name': r['name'], 'is_controlling': bool(r['is_controlling']),
+                'activation_height': r['activation_height'], 'takeover_height': r['takeover_height'],
+            } for r in sorted(await db.get_claim_metadata(102, 102), key=lambda r: r['name']) if r['is_controlling']]
         )
 
         # get_support_metadata_count
@@ -405,7 +453,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             events[0], {
                 "event": "blockchain.sync.start",
                 "data": {
-                    "starting_height": -1,
+                    "starting_height": 0,
                     "ending_height": 292,
                     "files": 3,
                     "blocks": 293,
@@ -465,7 +513,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             events[0], {
                 "event": "blockchain.sync.start",
                 "data": {
-                    "starting_height": 292,
+                    "starting_height": 293,
                     "ending_height": 293,
                     "files": 1,
                     "blocks": 1,
@@ -487,7 +535,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
 
 
-class TestBasicBlockchainSync(SyncingBlockchainTestCase):
+class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
 
     async def test_sync_advances(self):
         blocks = []
@@ -503,24 +551,235 @@ class TestBasicBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(110, self.current_height)
 
     async def test_claim_create_update_and_delete(self):
+        search = self.db.search_claims
         await self.create_claim('foo', '0.01')
         await self.generate(1)
-        claims = await self.db.search_claims()
+        claims = await search()
         self.assertEqual(1, len(claims))
         self.assertEqual(claims[0].claim_name, 'foo')
         self.assertEqual(dewies_to_lbc(claims[0].amount), '0.01')
         await self.support_claim(claims[0], '0.08')
+        await self.support_claim(claims[0], '0.03')
         await self.update_claim(claims[0], '0.02')
         await self.generate(1)
-        claims = await self.db.search_claims()
+        claims = await search()
         self.assertEqual(1, len(claims))
         self.assertEqual(claims[0].claim_name, 'foo')
         self.assertEqual(dewies_to_lbc(claims[0].amount), '0.02')
-        self.assertEqual(dewies_to_lbc(claims[0].meta['effective_amount']), '0.1')
+        self.assertEqual(dewies_to_lbc(claims[0].meta['staked_amount']), '0.13')
+        self.assertEqual(dewies_to_lbc(claims[0].meta['staked_support_amount']), '0.11')
         await self.abandon_claim(claims[0].tx_ref.id)
         await self.generate(1)
-        claims = await self.db.search_claims()
+        claims = await search()
         self.assertEqual(0, len(claims))
+
+    async def test_short_and_canonical_urls(self):
+        search = self.db.search_claims
+
+        # same block (no claim gets preference, therefore both end up with short hash of len 2)
+        await self.create_claim(claim_id_startswith='a1')
+        await self.create_claim(claim_id_startswith='a2')
+        await self.generate(1)
+        a2, a1 = await search(order_by=['claim_id'], limit=2)
+        self.assertEqual("foo#a1", a1.meta['short_url'])
+        self.assertEqual("foo#a2", a2.meta['short_url'])
+        self.assertIsNone(a1.meta['canonical_url'])
+        self.assertIsNone(a2.meta['canonical_url'])
+
+        # separate blocks (first claim had no competition, so it got very short url, second got longer)
+        await self.create_claim(claim_id_startswith='b1')
+        await self.generate(1)
+        await self.create_claim(claim_id_startswith='b2')
+        await self.generate(1)
+        b2, b1 = await search(order_by=['claim_id'], limit=2)
+        self.assertEqual("foo#b", b1.meta['short_url'])
+        self.assertEqual("foo#b2", b2.meta['short_url'])
+        self.assertIsNone(b1.meta['canonical_url'])
+        self.assertIsNone(b2.meta['canonical_url'])
+
+        # channels also have urls
+        channel_a1 = await self.get_claim(
+            await self.create_claim(claim_id_startswith='a1', is_channel=True))
+        await self.generate(1)
+        channel_a2 = await self.get_claim(
+            await self.create_claim(claim_id_startswith='a2', is_channel=True))
+        await self.generate(1)
+        chan_a2, chan_a1 = await search(order_by=['claim_id'], claim_type="channel", limit=2)
+        self.assertEqual("@foo#a", chan_a1.meta['short_url'])
+        self.assertEqual("@foo#a2", chan_a2.meta['short_url'])
+        self.assertIsNone(chan_a1.meta['canonical_url'])
+        self.assertIsNone(chan_a2.meta['canonical_url'])
+
+        # signing a new claim and signing as an update
+        await self.create_claim(claim_id_startswith='c', sign=channel_a1)
+        await self.update_claim(b2, sign=channel_a2)
+        await self.generate(1)
+        c, b2 = await search(order_by=['claim_id'], claim_type='stream', limit=2)
+        self.assertEqual("@foo#a/foo#c", c.meta['canonical_url'])
+        self.assertEqual("@foo#a2/foo#b2", b2.meta['canonical_url'])
+
+        # changing previously set channel
+        await self.update_claim(c, sign=channel_a2)
+        await self.generate(1)
+        c, = await search(order_by=['claim_id'], claim_type='stream', limit=1)
+        self.assertEqual("@foo#a2/foo#c", c.meta['canonical_url'])
+
+    async def assert_channel_stream1_stream2_support(
+            self,
+            signed_claim_count=0,
+            signed_support_count=0,
+            stream1_valid=False,
+            stream1_channel=None,
+            stream2_valid=False,
+            stream2_channel=None,
+            support_valid=False,
+            support_channel=None):
+        search = self.db.search_claims
+
+        r, = await search(claim_id=self.stream1.claim_id)
+        self.assertEqual(r.meta['is_signature_valid'], stream1_valid)
+        if stream1_channel is None:
+            self.assertIsNone(r.claim.signing_channel_id)
+        else:
+            self.assertEqual(r.claim.signing_channel_id, stream1_channel.claim_id)
+
+        r, = await search(claim_id=self.stream2.claim_id)
+        self.assertEqual(r.meta['is_signature_valid'], stream2_valid)
+        if stream2_channel is None:
+            self.assertIsNone(r.claim.signing_channel_id)
+        else:
+            self.assertEqual(r.claim.signing_channel_id, stream2_channel.claim_id)
+
+        r, = await search(claim_id=self.channel.claim_id)
+        self.assertEqual(signed_claim_count, r.meta['signed_claim_count'])
+        self.assertEqual(signed_support_count, r.meta['signed_support_count'])
+
+        if support_channel is not None:
+            r, = await self.db.search_supports()
+            self.assertEqual(r.meta['is_signature_valid'], support_valid)
+            self.assertEqual(r.support.signing_channel_id, support_channel.claim_id)
+
+    async def test_claim_and_support_signing(self):
+        search = self.db.search_claims
+
+        # create a stream not in channel, should not have signature
+        self.stream1 = await self.get_claim(
+            await self.create_claim())
+        await self.generate(1)
+        r, = await search(claim_type='stream')
+        self.assertFalse(r.claim.is_signed)
+        self.assertFalse(r.meta['is_signature_valid'])
+        self.assertIsNone(r.claim.signing_channel_id)
+
+        # create a new channel, should not have claims or supports
+        self.channel = await self.get_claim(
+            await self.create_claim(is_channel=True))
+        await self.generate(1)
+        r, = await search(claim_type='channel')
+        self.assertEqual(0, r.meta['signed_claim_count'])
+        self.assertEqual(0, r.meta['signed_support_count'])
+
+        # create a signed claim, update unsigned claim to have signature and create a signed support
+        self.stream2 = await self.get_claim(
+            await self.create_claim(sign=self.channel))
+        await self.update_claim(self.stream1, sign=self.channel)
+        self.support = await self.get_support(
+            await self.support_claim(self.stream1, sign=self.channel))
+        await self.generate(1)
+
+        await self.assert_channel_stream1_stream2_support(
+            signed_claim_count=2, signed_support_count=1,
+            stream1_valid=True, stream1_channel=self.channel,
+            stream2_valid=True, stream2_channel=self.channel,
+            support_valid=True, support_channel=self.channel
+        )
+
+        # resetting channel key doesn't invalidate previously published streams
+        await self.update_claim(self.channel, reset_channel_key=True)
+        await self.generate(1)
+
+        await self.assert_channel_stream1_stream2_support(
+            signed_claim_count=2, signed_support_count=1,
+            stream1_valid=True, stream1_channel=self.channel,
+            stream2_valid=True, stream2_channel=self.channel,
+            support_valid=True, support_channel=self.channel
+        )
+
+        # updating a claim with an invalid signature marks signature invalid
+        await self.channel.generate_channel_private_key()  # new key but no broadcast of change
+        self.stream2 = await self.get_claim(
+            await self.update_claim(self.stream2, sign=self.channel))
+        await self.generate(1)
+
+        await self.assert_channel_stream1_stream2_support(
+            signed_claim_count=1, signed_support_count=1,  # channel lost one signed claim
+            stream1_valid=True, stream1_channel=self.channel,
+            stream2_valid=False, stream2_channel=self.channel,  # sig invalid
+            support_valid=True, support_channel=self.channel
+        )
+
+        # updating it again with correct signature fixes it
+        self.channel = await self.get_claim(self.channel.tx_ref.id)  # get original channel
+        self.stream2 = await self.get_claim(
+            await self.update_claim(self.stream2, sign=self.channel))
+        await self.generate(1)
+
+        await self.assert_channel_stream1_stream2_support(
+            signed_claim_count=2, signed_support_count=1,  # channel re-gained claim
+            stream1_valid=True, stream1_channel=self.channel,
+            stream2_valid=True, stream2_channel=self.channel,  # sig valid now
+            support_valid=True, support_channel=self.channel
+        )
+
+        # sign stream with a different channel
+        self.channel2 = await self.get_claim(
+            await self.create_claim(is_channel=True))
+        self.stream2 = await self.get_claim(
+            await self.update_claim(self.stream2, sign=self.channel2))
+        await self.generate(1)
+
+        await self.assert_channel_stream1_stream2_support(
+            signed_claim_count=1, signed_support_count=1,  # channel1 lost a claim
+            stream1_valid=True, stream1_channel=self.channel,
+            stream2_valid=True, stream2_channel=self.channel2,  # new channel is the valid signer
+            support_valid=True, support_channel=self.channel
+        )
+        r, = await search(claim_id=self.channel2.claim_id)
+        self.assertEqual(1, r.meta['signed_claim_count'])  # channel2 gained a claim
+        self.assertEqual(0, r.meta['signed_support_count'])
+
+        # deleting claim and support
+        await self.abandon_claim(self.stream2.tx_ref.id)
+        await self.abandon_support(self.support.tx_ref.id)
+        await self.generate(1)
+        r, = await search(claim_id=self.channel.claim_id)
+        self.assertEqual(1, r.meta['signed_claim_count'])
+        self.assertEqual(0, r.meta['signed_support_count'])  # channel1 lost abandoned support
+        r, = await search(claim_id=self.channel2.claim_id)
+        self.assertEqual(0, r.meta['signed_claim_count'])  # channel2 lost abandoned claim
+        self.assertEqual(0, r.meta['signed_support_count'])
+
+    async def resolve_to_claim_id(self, url):
+        return (await self.db.resolve(url))[url].claim_id
+
+    async def test_resolve(self):
+        chan_a = await self.get_claim(
+            await self.create_claim(claim_id_startswith='a', is_channel=True))
+        await self.generate(1)
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.generate(1)
+        self.assertEqual(chan_a.claim_id, await self.resolve_to_claim_id("@foo#a"))
+        self.assertEqual(chan_ab.claim_id, await self.resolve_to_claim_id("@foo#ab"))
+
+        stream_c = await self.get_claim(
+            await self.create_claim(claim_id_startswith='c', sign=chan_a))
+        await self.generate(1)
+        stream_cd = await self.get_claim(
+            await self.create_claim(claim_id_startswith='cd', sign=chan_ab))
+        await self.generate(1)
+        self.assertEqual(stream_c.claim_id, await self.resolve_to_claim_id("@foo#a/foo#c"))
+        self.assertEqual(stream_cd.claim_id, await self.resolve_to_claim_id("@foo#ab/foo#cd"))
 
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
@@ -538,35 +797,35 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
         await state(
             controlling=('Claim A', '10.0', '10.0', 113),
             active=[],
-            accepted=[('Claim B', '20.0', '0.0', 513)]
+            accepted=[('Claim B', '20.0', '20.0', 513)]
         )
         await advance(510, [('support', stream, '14.0')])
         await state(
             controlling=('Claim A', '10.0', '24.0', 113),
             active=[],
-            accepted=[('Claim B', '20.0', '0.0', 513)]
+            accepted=[('Claim B', '20.0', '20.0', 513)]
         )
         await advance(512, [('claim', 'Claim C', '50.0')])
         await state(
             controlling=('Claim A', '10.0', '24.0', 113),
             active=[],
             accepted=[
-                ('Claim B', '20.0', '0.0', 513),
-                ('Claim C', '50.0', '0.0', 524)]
+                ('Claim B', '20.0', '20.0', 513),
+                ('Claim C', '50.0', '50.0', 524)]
         )
         await advance(513, [])
         await state(
             controlling=('Claim A', '10.0', '24.0', 113),
             active=[('Claim B', '20.0', '20.0', 513)],
-            accepted=[('Claim C', '50.0', '0.0', 524)]
+            accepted=[('Claim C', '50.0', '50.0', 524)]
         )
         await advance(520, [('claim', 'Claim D', '60.0')])
         await state(
             controlling=('Claim A', '10.0', '24.0', 113),
             active=[('Claim B', '20.0', '20.0', 513)],
             accepted=[
-                ('Claim C', '50.0', '0.0', 524),
-                ('Claim D', '60.0', '0.0', 532)]
+                ('Claim C', '50.0', '50.0', 524),
+                ('Claim D', '60.0', '60.0', 532)]
         )
         await advance(524, [])
         await state(
@@ -702,8 +961,8 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
     async def test_create_and_multiple_updates_in_same_block(self):
         await self.generate(10)
         txid = await self.create_claim('Claim A', '1.0')
-        txid = await self.update_claim(self.find_claim_txo(await self.get_transaction(txid)), '2.0')
-        await self.update_claim(self.find_claim_txo(await self.get_transaction(txid)), '3.0')
+        txid = await self.update_claim(await self.get_claim(txid), '2.0')
+        await self.update_claim(await self.get_claim(txid), '3.0')
         await self.generate(1)
         await self.sync.advance()
         await self.state(
@@ -725,134 +984,7 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
         )
 
 
-class TestResolve(SyncingBlockchainTestCase):
-
-    async def create_claim_txo(self, title='', amount=CENT, name=None, claim_id_startswith=None, sign=None, is_channel=False):
-        tx = await self.get_transaction(await self.create_claim(
-            title=title, amount=amount, name=name or ('@foo' if is_channel else 'foo'),
-            claim_id_startswith=claim_id_startswith, sign=sign, is_channel=is_channel
-        ))
-        return self.find_claim_txo(tx)
-
-    async def test_canonical_url_and_channel_validation(self):
-        advance, search = self.advance, self.db.search_claims
-
-        txo_chan_a = await self.create_claim_txo(claim_id_startswith='a!b', is_channel=True)
-        await self.generate(1)
-        txo_chan_ab = await self.create_claim_txo(claim_id_startswith='ab', is_channel=True)
-        await self.generate(1)
-        (r_ab, r_a) = await search(order_by=['creation_height'], limit=2)
-        self.assertEqual("@foo#a", r_a.meta['short_url'])
-        self.assertEqual("@foo#ab", r_ab.meta['short_url'])
-        self.assertIsNone(r_a.meta['canonical_url'])
-        self.assertIsNone(r_ab.meta['canonical_url'])
-        self.assertEqual(0, r_a.meta['claims_in_channel_count'])
-        self.assertEqual(0, r_ab.meta['claims_in_channel_count'])
-
-        await self.create_claim_txo(claim_id_startswith='a!b')
-        await self.generate(1)
-        await self.create_claim_txo(claim_id_startswith='ab!c')
-        await self.generate(1)
-        await self.create_claim_txo(claim_id_startswith='abc')
-        await self.generate(1)
-        (r_abc, r_ab, r_a) = await search(order_by=['creation_height'], limit=3)
-        self.assertEqual("foo#a", r_a.meta['short_url'])
-        self.assertEqual("foo#ab", r_ab.meta['short_url'])
-        self.assertEqual("foo#abc", r_abc.meta['short_url'])
-        self.assertIsNone(r_a.meta['canonical_url'])
-        self.assertIsNone(r_ab.meta['canonical_url'])
-        self.assertIsNone(r_abc.meta['canonical_url'])
-
-        a2_claim = await self.create_claim_txo(claim_id_startswith='a!b'+r_a.claim_id[1], sign=txo_chan_a)
-        await self.generate(1)
-        ab2_claim = await self.create_claim_txo(claim_id_startswith='ab!c'+r_ab.claim_id[2], sign=txo_chan_a)
-        await self.generate(1)
-        r_ab2, r_a2 = await search(order_by=['creation_height'], limit=2)
-        r_a2url, r_ab2url = f"foo#{a2_claim.claim_id[:2]}", f"foo#{ab2_claim.claim_id[:3]}"
-        self.assertEqual(r_a2url, r_a2.meta['short_url'])
-        self.assertEqual(r_ab2url, r_ab2.meta['short_url'])
-        self.assertEqual(f"@foo#a/{r_a2url}", r_a2.meta['canonical_url'])
-        self.assertEqual(f"@foo#a/{r_ab2url}", r_ab2.meta['canonical_url'])
-        self.assertEqual(2, (await search(claim_id=txo_chan_a.claim_id, limit=1))[0].meta['claims_in_channel_count'])
-
-        # change channel public key, invaliding stream claim signatures
-        await advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
-        (r_ab2, r_a2) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
-        self.assertIsNone(r_a2['canonical_url'])
-        self.assertIsNone(r_ab2['canonical_url'])
-        self.assertEqual(0, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-
-        # reinstate previous channel public key (previous stream claim signatures become valid again)
-        channel_update = self.get_channel_update(txo_chan_a, COIN, key=b'c')
-        await advance(9, [channel_update])
-        (r_ab2, r_a2) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
-        self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
-        self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
-        self.assertEqual(2, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-        self.assertEqual(0, search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
-
-        # change channel of stream
-        self.assertEqual("@foo#a/foo#ab", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
-        tx_ab2 = self.get_stream_update(tx_ab2, COIN, txo_chan_ab)
-        await advance(10, [tx_ab2])
-        self.assertEqual("@foo#ab/foo#a", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
-        # TODO: currently there is a bug where stream leaving a channel does not update that channels claims count
-        self.assertEqual(2, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-        # TODO: after bug is fixed remove test above and add test below
-        #self.assertEqual(1, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
-        self.assertEqual(1, search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
-
-        # claim abandon updates claims_in_channel
-        await advance(11, [self.get_abandon(tx_ab2)])
-        self.assertEqual(0, search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
-
-        # delete channel, invaliding stream claim signatures
-        await advance(12, [self.get_abandon(channel_update)])
-        (r_a2,) = search(order_by=['creation_height'], limit=1)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertIsNone(r_a2['canonical_url'])
-
-    def test_resolve_issue_2448(self):
-        advance = self.advance
-
-        tx_chan_a = self.get_channel_with_claim_id_prefix('a', 1, key=b'c')
-        tx_chan_ab = self.get_channel_with_claim_id_prefix('ab', 72, key=b'c')
-        txo_chan_a = tx_chan_a[0].outputs[0]
-        txo_chan_ab = tx_chan_ab[0].outputs[0]
-        advance(1, [tx_chan_a])
-        advance(2, [tx_chan_ab])
-
-        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
-        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
-
-        # update increase last height change of channel
-        advance(9, [self.get_channel_update(txo_chan_a, COIN, key=b'c')])
-
-        # make sure that activation_height is used instead of height (issue #2448)
-        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
-        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
-
-    def test_canonical_find_shortest_id(self):
-        new_hash = 'abcdef0123456789beef'
-        other0 = '1bcdef0123456789beef'
-        other1 = 'ab1def0123456789beef'
-        other2 = 'abc1ef0123456789beef'
-        other3 = 'abcdef0123456789bee1'
-        f = FindShortestID()
-        f.step(other0, new_hash)
-        self.assertEqual('#a', f.finalize())
-        f.step(other1, new_hash)
-        self.assertEqual('#abc', f.finalize())
-        f.step(other2, new_hash)
-        self.assertEqual('#abcd', f.finalize())
-        f.step(other3, new_hash)
-        self.assertEqual('#abcdef0123456789beef', f.finalize())
-
-
+@skip
 class TestTrending(SyncingBlockchainTestCase):
 
     def test_trending(self):
@@ -884,6 +1016,7 @@ class TestTrending(SyncingBlockchainTestCase):
         self.advance(zscore.TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
 
 
+@skip
 class TestContentBlocking(SyncingBlockchainTestCase):
 
     def test_blocking_and_filtering(self):
