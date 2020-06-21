@@ -56,7 +56,7 @@ class BlockchainDB:
             )
         self.connection.create_aggregate("find_shortest_id", 2, FindShortestID)
         #self.connection.execute(
-        #    "CREATE INDEX IF NOT EXISTS claim_originalheight ON claim (originalheight);"
+        #    "CREATE INDEX IF NOT EXISTS claim_originalheight_claimid ON claim (originalheight, claimid);"
         #)
         self.connection.row_factory = sqlite3.Row
 
@@ -205,7 +205,7 @@ class BlockchainDB:
                 ) AS shortestID
             FROM claim
             WHERE originalHeight BETWEEN ? AND ?
-            ORDER BY originalHeight
+            ORDER BY originalHeight, claimid
             """, (start_height, end_height)
         )]
 
