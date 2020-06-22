@@ -2,13 +2,30 @@ from itertools import islice
 from typing import List, Union
 
 from sqlalchemy import text, and_
-from sqlalchemy.sql.expression import Select
+from sqlalchemy.sql.expression import Select, FunctionElement
+from sqlalchemy.types import Numeric
+from sqlalchemy.ext.compiler import compiles
 try:
     from sqlalchemy.dialects.postgresql import insert as pg_insert  # pylint: disable=unused-import
 except ImportError:
     pg_insert = None
 
 from .tables import AccountAddress
+
+
+class greatest(FunctionElement):
+    type = Numeric()
+    name = 'greatest'
+
+
+@compiles(greatest)
+def default_greatest(element, compiler, **kw):
+    return "greatest(%s)" % compiler.process(element.clauses, **kw)
+
+
+@compiles(greatest, 'sqlite')
+def sqlite_greatest(element, compiler, **kw):
+    return "max(%s)" % compiler.process(element.clauses, **kw)
 
 
 def chunk(rows, step):

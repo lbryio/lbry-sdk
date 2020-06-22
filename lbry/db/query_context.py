@@ -463,7 +463,7 @@ class BulkLoader:
         if claim.is_signed:
             claim_record['channel_hash'] = claim.signing_channel_hash
             claim_record['signature'] = txo.get_encoded_signature()
-            claim_record['signature_digest'] = txo.get_signature_digest(None)
+            claim_record['signature_digest'] = txo.get_signature_digest(self.ledger)
 
         tags = [
             {'claim_hash': claim_hash, 'tag': tag} for tag in clean_tags(claim.message.tags)

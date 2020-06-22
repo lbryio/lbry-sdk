@@ -100,6 +100,11 @@ class Advanced(Basic):
         if event == "save" and d['step'] == d['total']:
             bar.close()
 
+    def update_other_bars(self, e, d):
+        bar = self.get_or_create_bar(e, e, d['unit'], d['total'], leave=True)
+        diff = d['step']-bar.last_print_n
+        bar.update(diff)
+
     def on_sync_progress(self, event):
         e, d = event['event'], event.get('data', {})
         if e.endswith("start"):
@@ -110,3 +115,5 @@ class Advanced(Basic):
             self.update_sync_block_bars("read", d)
         elif e.endswith("block.save"):
             self.update_sync_block_bars("save", d)
+        else:
+            self.update_other_bars(e, d)
