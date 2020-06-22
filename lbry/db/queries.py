@@ -6,13 +6,13 @@ from datetime import date
 from decimal import Decimal
 from binascii import unhexlify
 from operator import itemgetter
-from typing import Tuple, List, Dict, Optional, Union
+from typing import Tuple, List, Dict, Optional
 
 from sqlalchemy import union, func, text
 from sqlalchemy.future import select, Select
 
 from lbry.schema.tags import clean_tags
-from lbry.schema.result import Censor, Outputs
+from lbry.schema.result import Censor
 from lbry.schema.url import URL, normalize_name
 from lbry.error import ResolveCensoredError
 from lbry.blockchain.transaction import Transaction, Output, OutputScript, TXRefImmutable
@@ -20,7 +20,7 @@ from lbry.blockchain.transaction import Transaction, Output, OutputScript, TXRef
 from .utils import query, in_account_ids
 from .query_context import context
 from .constants import (
-    TXO_TYPES, CLAIM_TYPE_CODES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
+    TXO_TYPES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
     SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
 )
 from .tables import (
@@ -726,7 +726,7 @@ def search_claim_count(**constraints) -> int:
 
 
 def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
-    censor = context().get_resolve_censor()
+    # censor = context().get_resolve_censor()
     repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
     channel_hashes = set(itertools.chain(
         filter(None, map(itemgetter('channel_hash'), txo_rows)),
@@ -735,12 +735,12 @@ def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
 
     reposted_txos = []
     if repost_hashes:
-        reposted_txos = search_claims(censor, **{'claim.claim_hash__in': repost_hashes})
+        reposted_txos = search_claims(**{'claim.claim_hash__in': repost_hashes})
         channel_hashes |= set(filter(None, map(itemgetter('channel_hash'), reposted_txos)))
 
     channel_txos = []
     if channel_hashes:
-        channel_txos = search_claims(censor, **{'claim.claim_hash__in': channel_hashes})
+        channel_txos = search_claims(**{'claim.claim_hash__in': channel_hashes})
 
     # channels must come first for client side inflation to work properly
     return channel_txos + reposted_txos

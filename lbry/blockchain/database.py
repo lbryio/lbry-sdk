@@ -175,6 +175,28 @@ class BlockchainDB:
         return await self.run_in_executor(self.sync_get_claim_metadata_count, start_height, end_height)
 
     def sync_get_claim_metadata(self, start_height: int, end_height: int) -> List[dict]:
+        sql = """
+        SELECT
+            name, claimID, activationHeight, expirationHeight,
+            (SELECT
+                CASE WHEN takeover.claimID = claim.claimID THEN takeover.height END
+                FROM takeover WHERE takeover.name = claim.name
+                ORDER BY height DESC LIMIT 1
+            ) AS takeoverHeight,
+            (SELECT CASE WHEN takeover.claimID = claim.claimID THEN 1 ELSE 0 END
+             FROM takeover WHERE takeover.name = claim.name
+             ORDER BY height DESC LIMIT 1
+            ) AS isControlling,
+            (SELECT find_shortest_id(c.claimid, claim.claimid) FROM claim AS c
+             WHERE
+                c.nodename = claim.nodename AND
+                c.originalheight <= claim.originalheight AND
+                c.claimid != claim.claimid
+            ) AS shortestID
+        FROM claim
+        WHERE originalHeight BETWEEN ? AND ?
+        ORDER BY originalHeight, claimid
+        """, (start_height, end_height)
         return [{
             "name": r["name"],
             "claim_hash_": r["claimID"],
@@ -184,30 +206,7 @@ class BlockchainDB:
             "is_controlling": r["isControlling"],
             "short_url": f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}',
             "short_url_": f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}',
-            } for r in self.sync_execute_fetchall(
-            """
-            SELECT
-                name, claimID, activationHeight, expirationHeight,
-                (SELECT
-                    CASE WHEN takeover.claimID = claim.claimID THEN takeover.height END
-                    FROM takeover WHERE takeover.name = claim.name
-                    ORDER BY height DESC LIMIT 1
-                ) AS takeoverHeight,
-                (SELECT CASE WHEN takeover.claimID = claim.claimID THEN 1 ELSE 0 END
-                 FROM takeover WHERE takeover.name = claim.name
-                 ORDER BY height DESC LIMIT 1
-                ) AS isControlling,
-                (SELECT find_shortest_id(c.claimid, claim.claimid) FROM claim AS c
-                 WHERE
-                    c.nodename = claim.nodename AND
-                    c.originalheight <= claim.originalheight AND
-                    c.claimid != claim.claimid
-                ) AS shortestID
-            FROM claim
-            WHERE originalHeight BETWEEN ? AND ?
-            ORDER BY originalHeight, claimid
-            """, (start_height, end_height)
-        )]
+        } for r in self.sync_execute_fetchall(*sql)]
 
     async def get_claim_metadata(self, start_height: int, end_height: int) -> List[dict]:
         return await self.run_in_executor(self.sync_get_claim_metadata, start_height, end_height)
@@ -220,18 +219,16 @@ class BlockchainDB:
         return await self.run_in_executor(self.sync_get_support_metadata_count, start_height, end_height)
 
     def sync_get_support_metadata(self, start_height: int, end_height: int) -> List[dict]:
+        sql = """
+        SELECT name, txid, txn, activationHeight, expirationHeight
+        FROM support WHERE blockHeight BETWEEN ? AND ?
+        """, (start_height, end_height)
         return [{
             "name": r['name'],
             "txo_hash_pk": r['txID'] + BCDataStream.uint32.pack(r['txN']),
             "activation_height": r['activationHeight'],
             "expiration_height": r['expirationHeight'],
-            } for r in self.sync_execute_fetchall(
-            """
-            SELECT name, txid, txn, activationHeight, expirationHeight
-            FROM support WHERE blockHeight BETWEEN ? AND ?
-            """, (start_height, end_height)
-            )
-        ]
+        } for r in self.sync_execute_fetchall(*sql)]
 
     async def get_support_metadata(self, start_height: int, end_height: int) -> List[dict]:
         return await self.run_in_executor(self.sync_get_support_metadata, start_height, end_height)

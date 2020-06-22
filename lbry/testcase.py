@@ -1,3 +1,4 @@
+# pylint: disable=attribute-defined-outside-init
 import os
 import sys
 import json
@@ -265,7 +266,8 @@ class UnitDBTestCase(AsyncioTestCase):
             timestamp=99, bits=1, nonce=1, txs=txs
         )
 
-    def coinbase(self):
+    @staticmethod
+    def coinbase():
         return (
             Transaction(height=0)
             .add_inputs([Input.create_coinbase()])
@@ -329,7 +331,8 @@ class UnitDBTestCase(AsyncioTestCase):
     def abandon_claim(self, txo):
         return self.tx(amount='0.01', txi=Input.spend(txo))
 
-    def _set_channel_key(self, channel, key):
+    @staticmethod
+    def _set_channel_key(channel, key):
         private_key = ecdsa.SigningKey.from_string(key*32, curve=ecdsa.SECP256k1, hashfunc=hashlib.sha256)
         channel.private_key = private_key
         channel.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()

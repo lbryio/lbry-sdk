@@ -7,7 +7,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam, case
+from sqlalchemy import create_engine, inspect, bindparam
 from sqlalchemy.engine import Engine, Connection
 
 from lbry.event import EventQueuePublisher

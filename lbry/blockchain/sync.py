@@ -1,3 +1,4 @@
+# pylint: disable=singleton-comparison
 import os
 import asyncio
 import logging
@@ -10,7 +11,7 @@ from sqlalchemy.future import select
 from lbry.event import BroadcastSubscription
 from lbry.service.base import Sync, BlockEvent
 from lbry.db import Database, queries, TXO_TYPES, CLAIM_TYPE_CODES
-from lbry.db.tables import Claim, Takeover, Support, TXO, TX, TXI, Block as BlockTable
+from lbry.db.tables import Claim, Takeover, Support, TXO, Block as BlockTable
 from lbry.db.query_context import progress, context, Event
 from lbry.db.queries import rows_to_txos
 from lbry.db.sync import (
