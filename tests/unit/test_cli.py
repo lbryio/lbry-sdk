@@ -62,10 +62,8 @@ class CLILoggingTest(AsyncioTestCase):
             log = log.getChild("lbry")
             self.assertTrue(log.isEnabledFor(logging.INFO))
             self.assertFalse(log.isEnabledFor(logging.DEBUG))
-            self.assertFalse(log.isEnabledFor(logging.DEBUG))
-            self.assertEqual(len(log.handlers), 2)
+            self.assertEqual(len(log.handlers), 1)
             self.assertIsInstance(log.handlers[0], logging.handlers.RotatingFileHandler)
-            self.assertFalse(log.handlers[1].enabled)
 
         async with get_logger(["start", "--verbose"]) as log:
             self.assertTrue(log.getChild("lbry").isEnabledFor(logging.DEBUG))
@@ -82,11 +80,11 @@ class CLILoggingTest(AsyncioTestCase):
     async def test_quiet(self):
         async with get_logger(["start"]) as log:  # default is loud
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 3)
+            self.assertEqual(len(log.handlers), 2)
             self.assertIs(type(log.handlers[1]), logging.StreamHandler)
         async with get_logger(["start", "--quiet"]) as log:
             log = log.getChild("lbry")
-            self.assertEqual(len(log.handlers), 2)
+            self.assertEqual(len(log.handlers), 1)
             self.assertIsNot(type(log.handlers[0]), logging.StreamHandler)
 
 
