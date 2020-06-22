@@ -13,7 +13,7 @@ except ImportError:
 from .tables import AccountAddress
 
 
-class greatest(FunctionElement):
+class greatest(FunctionElement):  # pylint: disable=invalid-name
     type = Numeric()
     name = 'greatest'
 
