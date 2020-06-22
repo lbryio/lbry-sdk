@@ -9,8 +9,8 @@ from .bcd_data_stream import BCDataStream
 
 
 FILES = [
+    'claims',
     'block_index',
-    'claims'
 ]
 
 
@@ -55,9 +55,9 @@ class BlockchainDB:
                 f"ATTACH DATABASE '{os.path.join(self.directory, file+'.sqlite')}' AS {file}"
             )
         self.connection.create_aggregate("find_shortest_id", 2, FindShortestID)
-        #self.connection.execute(
-        #    "CREATE INDEX IF NOT EXISTS claim_originalheight_claimid ON claim (originalheight, claimid);"
-        #)
+        self.connection.execute("CREATE INDEX IF NOT EXISTS claim_originalheight ON claim (originalheight);")
+        self.connection.execute("CREATE INDEX IF NOT EXISTS claim_updateheight ON claim (updateheight);")
+        self.connection.execute("create index IF NOT EXISTS support_blockheight on support (blockheight);")
         self.connection.row_factory = sqlite3.Row
 
     async def open(self):
@@ -195,7 +195,7 @@ class BlockchainDB:
             ) AS shortestID
         FROM claim
         WHERE originalHeight BETWEEN ? AND ?
-        ORDER BY originalHeight, claimid
+        ORDER BY originalHeight
         """, (start_height, end_height)
         return [{
             "name": r["name"],

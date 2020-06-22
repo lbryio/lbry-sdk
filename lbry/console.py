@@ -71,11 +71,11 @@ class Advanced(Basic):
 
     def start_sync_block_bars(self, d):
         self.bars.clear()
-        self.get_or_create_bar("parse", "total parsing", "blocks", d['blocks'], True)
+        self.get_or_create_bar("read", "total reading", "blocks", d['blocks'], True)
         self.get_or_create_bar("save", "total  saving", "txs", d['txs'], True)
 
     def close_sync_block_bars(self):
-        self.bars.pop("parse").close()
+        self.bars.pop("read").close()
         self.bars.pop("save").close()
 
     def update_sync_block_bars(self, event, d):
@@ -106,7 +106,7 @@ class Advanced(Basic):
             self.start_sync_block_bars(d)
         elif e.endswith("block.done"):
             self.close_sync_block_bars()
-        elif e.endswith("block.parse"):
-            self.update_sync_block_bars("parse", d)
+        elif e.endswith("block.read"):
+            self.update_sync_block_bars("read", d)
         elif e.endswith("block.save"):
             self.update_sync_block_bars("save", d)

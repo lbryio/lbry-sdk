@@ -447,7 +447,8 @@ class BlockchainSync(Sync):
         if self.on_block_subscription is not None:
             self.on_block_subscription.cancel()
         self.db.stop_event.set()
-        self.advance_loop_task.cancel()
+        if self.advance_loop_task is not None:
+            self.advance_loop_task.cancel()
 
     async def run(self, f, *args):
         return await asyncio.get_running_loop().run_in_executor(
@@ -498,6 +499,8 @@ class BlockchainSync(Sync):
             self.db.stop_event.set()
             for future in pending:
                 future.cancel()
+            for future in done:
+                future.result()
             return
         best_height_processed = max(f.result() for f in done)
         # putting event in queue instead of add to progress_controller because

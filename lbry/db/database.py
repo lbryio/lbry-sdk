@@ -78,10 +78,10 @@ class Result(Generic[ResultType]):
 
 class Database:
 
-    def __init__(self, ledger: 'Ledger', processes=-1):
+    def __init__(self, ledger: 'Ledger'):
         self.url = ledger.conf.db_url_or_default
         self.ledger = ledger
-        self.processes = self._normalize_processes(processes)
+        self.processes = self._normalize_processes(ledger.conf.processes)
         self.executor: Optional[Executor] = None
         self.message_queue = mp.Queue()
         self.stop_event = mp.Event()

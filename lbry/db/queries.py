@@ -54,7 +54,7 @@ def check_version_and_create_tables():
             ctx.execute(text("ALTER TABLE txo DISABLE TRIGGER ALL;"))
             ctx.execute(text("ALTER TABLE tx DISABLE TRIGGER ALL;"))
             ctx.execute(text("ALTER TABLE claim DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE claimtrie DISABLE TRIGGER ALL;"))
+            ctx.execute(text("ALTER TABLE support DISABLE TRIGGER ALL;"))
             ctx.execute(text("ALTER TABLE block DISABLE TRIGGER ALL;"))
 
 

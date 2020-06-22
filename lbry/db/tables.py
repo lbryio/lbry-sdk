@@ -195,6 +195,6 @@ Support = Table(
 Takeover = Table(
     'takeover', metadata,
     Column('normalized', Text),
-    Column('claim_hash', LargeBinary, ForeignKey(TXO.columns.claim_hash)),
+    Column('claim_hash', LargeBinary),
     Column('height', Integer),
 )

@@ -521,6 +521,9 @@ class BulkLoader:
             if txo.script.is_claim_name:
                 claim['creation_height'] = tx.height
                 claim['creation_timestamp'] = tx.timestamp
+            else:
+                claim['creation_height'] = None
+                claim['creation_timestamp'] = None
             self.claims.append(claim)
             self.tags.extend(tags)
         return self
