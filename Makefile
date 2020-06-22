@@ -12,8 +12,8 @@ idea:
 	cp -r scripts/idea/* .idea
 
 start:
-	dropdb lbry2
-	createdb lbry2
+	dropdb lbry
+	createdb lbry
 	lbrynet start --full-node \
-		--db-url=postgresql:///lbry2 --processes=-1 --console=advanced \
+		--db-url=postgresql:///lbry --processes=2 --console=advanced --no-spv-address-filters \
 		--lbrycrd-dir=${HOME}/.lbrycrd --data-dir=/tmp/tmp-lbrynet
