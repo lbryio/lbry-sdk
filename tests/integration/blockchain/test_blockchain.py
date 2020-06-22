@@ -933,7 +933,7 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
         ])
         await self.state(
             controlling=('Claim C', '3.0', '3.0', 115),
-            active=[('Claim A', '1.0', '1.0', 113)],
+            active=[('Claim A', '1.0', '1.0', 115)],
             accepted=[]
         )
 
