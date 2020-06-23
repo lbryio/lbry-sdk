@@ -36,12 +36,18 @@ class Simulator:
                 "txs": self.txs
             }
         })
+        blocks_synced = txs_synced = 0
         for starting_file in range(self.starting_file, self.ending_file, self.processes):
             tasks = []
             for b in range(starting_file, min(self.ending_file, starting_file+self.processes)):
-                blocks = int(self.blocks / self.files)
-                txs = int(self.txs / self.files)
-                tasks.append(self.sync_block_file(b, blocks, txs))
+                if b == (self.ending_file-1):
+                    tasks.append(self.sync_block_file(b, self.blocks-blocks_synced, self.txs-txs_synced))
+                else:
+                    blocks = int(self.blocks / self.files)
+                    blocks_synced += blocks
+                    txs = int(self.txs / self.files)
+                    txs_synced += txs
+                    tasks.append(self.sync_block_file(b, blocks, txs))
             await asyncio.wait(tasks)
         await self.progress.add({
             "event": "blockchain.sync.block.done",
@@ -64,7 +70,7 @@ class Simulator:
             "event": "blockchain.sync.block.read",
             "data": {"step": blocks, "total": blocks, "unit": "blocks", "block_file": block_file}
         })
-
+        await asyncio.sleep(0.5)
         for i in range(0, txs, 10000):
             await self.progress.add({
                 "event": "blockchain.sync.block.save",
@@ -82,12 +88,14 @@ class Simulator:
                 "event": "db.sync.input",
                 "data": {"step": i, "total": 2, "unit": "txis"}
             })
+            await asyncio.sleep(1)
         claims = int(self.txs/4)
-        for i in range(claims+1):
+        for i in range(0, claims+1, 10_000):
             await self.progress.add({
                 "event": "blockchain.sync.claim.update",
                 "data": {"step": i, "total": claims, "unit": "claims"}
             })
+            await asyncio.sleep(0.1)
 
 
 async def main():

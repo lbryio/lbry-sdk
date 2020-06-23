@@ -428,7 +428,7 @@ class BlockchainSync(Sync):
         self.advance_loop_event = asyncio.Event()
 
     async def start(self):
-        for _ in range(2):
+        for _ in range(1):  # range(2):
             # initial sync can take a long time, new blocks may have been
             # created while sync was running; therefore, run a second sync
             # after first one finishes to possibly sync those new blocks.

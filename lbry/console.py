@@ -54,7 +54,7 @@ class Basic(Console):
 
 class Advanced(Basic):
 
-    FORMAT = '{l_bar}{bar}| {n_fmt:>8}/{total_fmt:>8} [{elapsed:>7}<{remaining:>8}, {rate_fmt:>15}]'
+    FORMAT = '{l_bar}{bar}| {n_fmt:>8}/{total_fmt:>8} [{elapsed:>7}<{remaining:>8}, {rate_fmt:>16}]'
 
     def __init__(self, service: Service):
         super().__init__(service)
@@ -101,9 +101,11 @@ class Advanced(Basic):
             bar.close()
 
     def update_other_bars(self, e, d):
-        bar = self.get_or_create_bar(e, e, d['unit'], d['total'], leave=True)
+        bar = self.get_or_create_bar(e, e[-13:], d['unit'], d['total'], leave=True)
         diff = d['step']-bar.last_print_n
         bar.update(diff)
+        if d['step'] == d['total']:
+            bar.close()
 
     def on_sync_progress(self, event):
         e, d = event['event'], event.get('data', {})
