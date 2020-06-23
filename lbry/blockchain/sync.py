@@ -18,7 +18,7 @@ from lbry.db.sync import (
     condition_spent_claims, condition_spent_supports,
     select_missing_supports, process_claim_changes
 )
-from lbry.db.utils import greatest
+from lbry.db.utils import least
 from lbry.schema.url import normalize_name
 
 from .lbrycrd import Lbrycrd
@@ -369,7 +369,7 @@ def process_metadata(starting_height: int, ending_height: int, initial_sync: boo
                                 [(Claim.c.claim_hash == takeover['claim_hash'], takeover['height'])],
                                 else_=None
                             ),
-                            activation_height=greatest(Claim.c.activation_height, takeover['height']),
+                            activation_height=least(Claim.c.activation_height, takeover['height']),
                         )
                     )
                     p.ctx.execute(update_claims)

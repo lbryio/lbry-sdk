@@ -28,6 +28,21 @@ def sqlite_greatest(element, compiler, **kw):
     return "max(%s)" % compiler.process(element.clauses, **kw)
 
 
+class least(FunctionElement):  # pylint: disable=invalid-name
+    type = Numeric()
+    name = 'least'
+
+
+@compiles(least)
+def default_least(element, compiler, **kw):
+    return "least(%s)" % compiler.process(element.clauses, **kw)
+
+
+@compiles(least, 'sqlite')
+def sqlite_least(element, compiler, **kw):
+    return "min(%s)" % compiler.process(element.clauses, **kw)
+
+
 def chunk(rows, step):
     it, total = iter(rows), len(rows)
     for _ in range(0, total, step):
