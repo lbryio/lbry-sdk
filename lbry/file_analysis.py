@@ -195,10 +195,13 @@ class VideoFileAnalyzer:
             if stream["codec_type"] != "audio":
                 continue
             codec = stream["codec_name"]
+            sample_rate = stream['sample_rate']
             log.debug("   Detected audio codec is %s", codec)
             if not {"aac", "mp3", "flac", "vorbis", "opus"}.intersection(codec.split(",")):
                 return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
+            if sample_rate > "48000":
+                return "Sample rate out of range"
 
         return ""
 
@@ -410,7 +413,7 @@ class VideoFileAnalyzer:
         # the plan for transcoding:
         # we have to re-encode the video if it is in a nonstandard format
         # we also re-encode if we are h264 but not yuv420p (both errors caught in video_msg)
-        # we also re-encode if our bitrate is too high
+        # we also re-encode if our bitrate or sample rate is too high
 
         try:
             transcode_command = [f'-i "{file_path}" -y -c:s copy -c:d copy -c:v']
@@ -433,6 +436,8 @@ class VideoFileAnalyzer:
                 if volume_msg:
                     volume_filter = await self._get_volume_filter()
                     transcode_command.append(volume_filter)
+                if audio_msg == "Sample rate out of range":
+                    transcode_command.append(" -ar 48000 ")
             else:
                 transcode_command.append("copy")
 
