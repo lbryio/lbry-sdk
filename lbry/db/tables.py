@@ -178,8 +178,6 @@ Support = Table(
     Column('address', Text),
     Column('amount', BigInteger),
     Column('height', Integer),
-    Column('activation_height', Integer, nullable=True),
-    Column('expiration_height', Integer, nullable=True),
 
     # support metadata
     Column('emoji', Text),
@@ -189,12 +187,4 @@ Support = Table(
     Column('signature', LargeBinary, nullable=True),
     Column('signature_digest', LargeBinary, nullable=True),
     Column('is_signature_valid', Boolean, nullable=True),
-)
-
-
-Takeover = Table(
-    'takeover', metadata,
-    Column('normalized', Text),
-    Column('claim_hash', LargeBinary),
-    Column('height', Integer),
 )

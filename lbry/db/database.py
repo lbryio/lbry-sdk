@@ -179,9 +179,6 @@ class Database:
     async def execute_fetchall(self, sql):
         return await self.run_in_executor(q.execute_fetchall, sql)
 
-    async def process_inputs_outputs(self):
-        return await self.run_in_executor(sync.process_inputs_outputs)
-
     async def process_all_things_after_sync(self):
         return await self.run_in_executor(sync.process_all_things_after_sync)
 

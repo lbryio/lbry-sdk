@@ -18,7 +18,7 @@ from lbry.schema.result import Censor
 from lbry.schema.mime_types import guess_stream_type
 
 from .utils import pg_insert, chunk
-from .tables import Block, TX, TXO, TXI, Claim, Tag, Takeover, Support
+from .tables import Block, TX, TXO, TXI, Claim, Tag, Support
 from .constants import TXO_TYPES, STREAM_TYPES
 
 
@@ -163,7 +163,6 @@ class ProgressUnit(Enum):
     TASKS = "tasks", None
     BLOCKS = "blocks", Block
     TXS = "txs", TX
-    TAKEOVERS = "takeovers", Takeover
     TXIS = "txis", TXI
     CLAIMS = "claims", Claim
     SUPPORTS = "supports", Support
@@ -178,18 +177,20 @@ class ProgressUnit(Enum):
 
 
 class Event(Enum):
+    START = "blockchain.sync.start", ProgressUnit.BLOCKS
+    COMPLETE = "blockchain.sync.complete", ProgressUnit.BLOCKS
+
     # full node specific sync events
     BLOCK_READ = "blockchain.sync.block.read", ProgressUnit.BLOCKS
     BLOCK_SAVE = "blockchain.sync.block.save", ProgressUnit.TXS
-    BLOCK_DONE = "blockchain.sync.block.done", ProgressUnit.TASKS
-    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.TAKEOVERS
+    BLOCK_FILTER = "blockchain.sync.block.filter", ProgressUnit.BLOCKS
     CLAIM_META = "blockchain.sync.claim.update", ProgressUnit.CLAIMS
-    CLAIM_CALC = "blockchain.sync.claim.totals", ProgressUnit.CLAIMS
+    CLAIM_TRIE = "blockchain.sync.claim.takeovers", ProgressUnit.CLAIMS
+    STAKE_CALC = "blockchain.sync.claim.stakes", ProgressUnit.CLAIMS
+    CLAIM_CHAN = "blockchain.sync.claim.channels", ProgressUnit.CLAIMS
     CLAIM_SIGN = "blockchain.sync.claim.signatures", ProgressUnit.CLAIMS
-    SUPPORT_META = "blockchain.sync.support.update", ProgressUnit.SUPPORTS
     SUPPORT_SIGN = "blockchain.sync.support.signatures", ProgressUnit.SUPPORTS
     TRENDING_CALC = "blockchain.sync.trending", ProgressUnit.BLOCKS
-    TAKEOVER_INSERT = "blockchain.sync.takeover.insert", ProgressUnit.TAKEOVERS
 
     # full node + light client sync events
     INPUT_UPDATE = "db.sync.input", ProgressUnit.TXIS
@@ -245,10 +246,10 @@ class ProgressContext:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.ctx.message_queue.put(self.get_event_args(self.total))
+        self.ctx.__exit__(exc_type, exc_val, exc_tb)
         if exc_type == BreakProgress:
             return True
-        self.ctx.message_queue.put(self.get_event_args(self.total))
-        return self.ctx.__exit__(exc_type, exc_val, exc_tb)
 
     def start(self, total, extra=None):
         if not total:

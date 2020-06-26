@@ -10,46 +10,67 @@ from lbry.db.tables import (
 
 
 def process_all_things_after_sync():
-    process_inputs_outputs()
-    process_supports()
-    process_claim_deletes()
-    process_claim_changes()
-
-
-def process_inputs_outputs():
-
     with progress(Event.INPUT_UPDATE) as p:
         p.start(2)
-
-        if p.ctx.is_sqlite:
-            address_query = select(TXO.c.address).where(TXI.c.txo_hash == TXO.c.txo_hash)
-            set_addresses = (
-                TXI.update()
-                .values(address=address_query.scalar_subquery())
-                .where(TXI.c.address == None)
-            )
-        else:
-            set_addresses = (
-                TXI.update()
-                .values({TXI.c.address: TXO.c.address})
-                .where((TXI.c.address == None) & (TXI.c.txo_hash == TXO.c.txo_hash))
-            )
-
-        # 1. Update TXIs to have the address of TXO they are spending.
-        p.ctx.execute(set_addresses)
+        set_input_addresses(p.ctx)
         p.step(1)
-
-        # 2. Update spent TXOs setting is_spent = True
-        set_is_spent = (
-            TXO.update()
-            .values({TXO.c.is_spent: True})
-            .where(
-                (TXO.c.is_spent == False) &
-                (TXO.c.txo_hash.in_(select(TXI.c.txo_hash)))
-            )
-        )
-        p.ctx.execute(set_is_spent)
+        update_spent_outputs(p.ctx)
         p.step(2)
+    with progress(Event.SUPPORT_DELETE) as p:
+        p.start(1)
+        sql = Support.delete().where(condition_spent_supports)
+        p.ctx.execute(sql)
+    with progress(Event.SUPPORT_INSERT) as p:
+        loader = p.ctx.get_bulk_loader()
+        for support in rows_to_txos(p.ctx.fetchall(select_missing_supports)):
+            loader.add_support(support)
+        loader.save()
+    with progress(Event.CLAIM_DELETE) as p:
+        p.start(1)
+        sql = Claim.delete().where(condition_spent_claims())
+        p.ctx.execute(sql)
+    with progress(Event.CLAIM_INSERT) as p:
+        loader = p.ctx.get_bulk_loader()
+        for claim in rows_to_txos(p.ctx.fetchall(select_missing_claims)):
+            loader.add_claim(claim)
+        loader.save()
+    with progress(Event.CLAIM_UPDATE) as p:
+        loader = p.ctx.get_bulk_loader()
+        for claim in rows_to_txos(p.ctx.fetchall(select_stale_claims)):
+            loader.update_claim(claim)
+        loader.save()
+
+
+def set_input_addresses(ctx):
+    # Update TXIs to have the address of TXO they are spending.
+    if ctx.is_sqlite:
+        address_query = select(TXO.c.address).where(TXI.c.txo_hash == TXO.c.txo_hash)
+        set_addresses = (
+            TXI.update()
+            .values(address=address_query.scalar_subquery())
+            .where(TXI.c.address == None)
+        )
+    else:
+        set_addresses = (
+            TXI.update()
+            .values({TXI.c.address: TXO.c.address})
+            .where((TXI.c.address == None) & (TXI.c.txo_hash == TXO.c.txo_hash))
+        )
+
+    ctx.execute(set_addresses)
+
+
+def update_spent_outputs(ctx):
+    # Update spent TXOs setting is_spent = True
+    set_is_spent = (
+        TXO.update()
+        .values({TXO.c.is_spent: True})
+        .where(
+            (TXO.c.is_spent == False) &
+            (TXO.c.txo_hash.in_(select(TXI.c.txo_hash)))
+        )
+    )
+    ctx.execute(set_is_spent)
 
 
 def condition_spent_claims(claim_type: list = None):
@@ -96,36 +117,3 @@ condition_spent_supports = (
 select_missing_supports = (
     select_txos(txo_type=TXO_TYPES['support'], is_spent=False, txo_id_not_in_support_table=True)
 )
-
-
-def process_supports():
-    with progress(Event.SUPPORT_DELETE) as p:
-        p.start(1)
-        sql = Support.delete().where(condition_spent_supports)
-        p.ctx.execute(sql)
-    with progress(Event.SUPPORT_INSERT) as p:
-        loader = p.ctx.get_bulk_loader()
-        for support in rows_to_txos(p.ctx.fetchall(select_missing_supports)):
-            loader.add_support(support)
-        loader.save()
-
-
-def process_claim_deletes():
-    with progress(Event.CLAIM_DELETE) as p:
-        p.start(1)
-        sql = Claim.delete().where(condition_spent_claims())
-        p.ctx.execute(sql)
-
-
-def process_claim_changes():
-    with progress(Event.CLAIM_INSERT) as p:
-        loader = p.ctx.get_bulk_loader()
-        for claim in rows_to_txos(p.ctx.fetchall(select_missing_claims)):
-            loader.add_claim(claim)
-        loader.save()
-
-    with progress(Event.CLAIM_UPDATE) as p:
-        loader = p.ctx.get_bulk_loader()
-        for claim in rows_to_txos(p.ctx.fetchall(select_stale_claims)):
-            loader.update_claim(claim)
-        loader.save()

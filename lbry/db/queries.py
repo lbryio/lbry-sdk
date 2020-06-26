@@ -27,8 +27,7 @@ from .tables import (
     metadata,
     SCHEMA_VERSION, Version,
     Block, TX, TXO, TXI, txi_join_account, txo_join_account,
-    Claim, Support, Takeover,
-    PubkeyAddress, AccountAddress
+    Claim, Support, PubkeyAddress, AccountAddress
 )
 
 
@@ -155,33 +154,6 @@ def release_all_outputs(account_id):
             (TXO.c.is_reserved == True) &
             (TXO.c.address.in_(select(AccountAddress.c.address).where(in_account_ids(account_id))))
         )
-    )
-
-
-def get_takeover_names(above_height, limit_height, offset, limit):
-    return context().fetchall(
-        select(
-            Takeover.c.normalized.label('_name'),
-            func.max(Takeover.c.height).label('_height'),
-
-        )
-        .where((Takeover.c.height < above_height) & (Takeover.c.height >= limit_height))
-        .group_by(Takeover.c.normalized)
-        .limit(limit).offset(offset)
-    )
-
-
-def get_takeovers(above_height, limit_height, offset, limit):
-    return context().fetchall(
-        select(
-            Takeover.c.normalized,
-            Takeover.c.claim_hash,
-            Takeover.c.height,
-        )
-        .select_from(Takeover)
-        .where((Takeover.c.height < above_height) & (Takeover.c.height >= limit_height))
-        .group_by(Takeover.c.normalized)
-        .limit(limit).offset(offset)
     )
 
 
