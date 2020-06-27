@@ -86,7 +86,7 @@ class BlockchainSync(Sync):
         if not tasks:
             return
         await self._on_progress_controller.add({
-            "event": Event.START.label,
+            "event": Event.START.label,  # pylint: disable=no-member
             "data": {
                 "starting_height": starting_height,
                 "ending_height": ending_height,
@@ -111,17 +111,17 @@ class BlockchainSync(Sync):
         best_height_processed = max(f.result() for f in done)
         return starting_height, best_height_processed
 
-    def count_steps(self, initial_sync: bool):
+    def get_steps(self, initial_sync: bool):
         if initial_sync:
-            sync_steps = SYNC_STEPS['initial_sync']
+            sync_steps = SYNC_STEPS['initial_sync'].copy()
         else:
-            sync_steps = SYNC_STEPS['ongoing_sync']
+            sync_steps = SYNC_STEPS['ongoing_sync'].copy()
         if not self.conf.spv_address_filters:
-            sync_steps -= 1
+            sync_steps.remove(Event.BLOCK_FILTER.label)  # pylint: disable=no-member
         return sync_steps
 
     async def advance(self, initial_sync=False):
-        sync_steps = self.count_steps(initial_sync)
+        sync_steps = self.get_steps(initial_sync)
         heights = await self.load_blocks(sync_steps, initial_sync)
         if heights:
             starting_height, ending_height = heights
@@ -129,7 +129,9 @@ class BlockchainSync(Sync):
             if self.conf.spv_address_filters:
                 await self.run(process_block_filters)
             await self._on_block_controller.add(BlockEvent(ending_height))
-            self.db.message_queue.put((Event.COMPLETE.value, os.getpid(), sync_steps, sync_steps))
+            self.db.message_queue.put((
+                Event.COMPLETE.value, os.getpid(), len(sync_steps), len(sync_steps)
+            ))
 
     async def advance_loop(self):
         while True:

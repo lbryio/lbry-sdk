@@ -466,7 +466,13 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 "data": {
                     "starting_height": 0,
                     "ending_height": 352,
-                    "sync_steps": 6,
+                    "sync_steps": [
+                        "blockchain.sync.block.read",
+                        "blockchain.sync.block.save",
+                        "db.sync.input",
+                        "blockchain.sync.claim.meta",
+                        "blockchain.sync.claim.signatures",
+                        "blockchain.sync.support.signatures"],
                     "files": 3,
                     "blocks": 353,
                     "txs": 544,
@@ -523,10 +529,10 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 [2, 2],
             ]
         )
-        # 4 - blockchain.sync.claim.update
+        # 4 - blockchain.sync.claim.meta
         self.assertEqual(
             [[0, 3610], [3610, 3610]],
-            self.extract_events('blockchain.sync.claim.update', events)
+            self.extract_events('blockchain.sync.claim.meta', events)
         )
         # 5 - blockchain.sync.claim.signatures
         self.assertEqual(
@@ -562,7 +568,21 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 "data": {
                     "starting_height": 353,
                     "ending_height": 354,
-                    "sync_steps": 14,
+                    "sync_steps": [
+                        "blockchain.sync.block.read",
+                        "blockchain.sync.block.save",
+                        "db.sync.input",
+                        "db.sync.claim.delete",
+                        "db.sync.claim.insert",
+                        "db.sync.claim.update",
+                        "db.sync.support.delete",
+                        "db.sync.support.insert",
+                        "blockchain.sync.claim.trie",
+                        "blockchain.sync.claim.meta",
+                        "blockchain.sync.claim.signatures",
+                        "blockchain.sync.support.signatures",
+                        "blockchain.sync.claim.stakes",
+                        "blockchain.sync.claim.channels"],
                     "files": 1,
                     "blocks": 2,
                     "txs": 4,
@@ -605,10 +625,10 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.support.delete', events))
         # 8 - db.sync.support.insert
         self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.support.insert', events))
-        # 9 - blockchain.sync.claim.takeovers
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.takeovers', events))
-        # 10 - blockchain.sync.claim.update
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.update', events))
+        # 9 - blockchain.sync.claim.trie
+        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.trie', events))
+        # 10 - blockchain.sync.claim.meta
+        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.meta', events))
         # 11 - blockchain.sync.claim.signatures
         self.assertEqual([[0, 0]], self.extract_events("blockchain.sync.claim.signatures", events))
         # 12 - blockchain.sync.support.signatures

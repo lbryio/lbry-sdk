@@ -24,7 +24,13 @@ from lbry.blockchain.block import Block, create_block_filter
 from lbry.blockchain.bcd_data_stream import BCDataStream
 from lbry.blockchain.transaction import Output
 
-from .queries import *
+from .queries import (
+    select, Claim, Support,
+    TXO_TYPES, CLAIM_TYPE_CODES,
+    channel_content_count_calc,
+    staked_support_amount_calc, staked_support_count_calc,
+    select_unvalidated_signables, get_unvalidated_signable_count
+)
 
 
 log = logging.getLogger(__name__)
@@ -32,19 +38,20 @@ _chain: ContextVar[Lbrycrd] = ContextVar('chain')
 
 
 SYNC_STEPS = {
-    "initial_sync": 0,
-    "ongoing_sync": 0,
+    "initial_sync": [],
+    "ongoing_sync": [],
     "events": [],
 }
 
 
 def sync_step(event: Event, step_size=1, initial_sync=False, ongoing_sync=False):
-    assert event not in SYNC_STEPS['events'], f"Event {event} used more than once."
+    assert event.label not in SYNC_STEPS['events'], f"Event {event.label} used more than once."
     assert initial_sync or ongoing_sync, "At least one of initial_sync or ongoing_sync must be true."
+    SYNC_STEPS['events'].append(event.label)
     if initial_sync:
-        SYNC_STEPS['initial_sync'] += 1
+        SYNC_STEPS['initial_sync'].append(event.label)
     if ongoing_sync:
-        SYNC_STEPS['ongoing_sync'] += 1
+        SYNC_STEPS['ongoing_sync'].append(event.label)
 
     def wrapper(f):
         @functools.wraps(f)
@@ -138,6 +145,17 @@ def process_block_save(block_file_number: int, loader, p=None):
     loader.save()
 
 
+@sync_step(Event.INPUT_UPDATE, initial_sync=True, ongoing_sync=True)
+def process_inputs_outputs(p=None):
+    p.start(2)
+    # 1. Update TXIs to have the address of TXO they are spending.
+    set_input_addresses(p.ctx)
+    p.step(1)
+    # 2. Update spent TXOs setting is_spent = True
+    update_spent_outputs(p.ctx)
+    p.step(2)
+
+
 @sync_step(Event.BLOCK_FILTER, initial_sync=True, ongoing_sync=True)
 def process_block_filters(p=None):
     blocks = []
@@ -162,160 +180,6 @@ def process_block_filters(p=None):
 #        )
 #        txs.append({'pk': tx['tx_hash'], 'tx_filter': tx_filter})
 #    execute(TX.update().where(TX.c.tx_hash == bindparam('pk')), txs)
-
-
-def signature_validation(d: dict, row: dict, public_key) -> dict:
-    d['is_signature_valid'] = False
-    if Output.is_signature_valid(bytes(row['signature']), bytes(row['signature_digest']), public_key):
-        d['is_signature_valid'] = True
-    return d
-
-
-@sync_step(Event.CLAIM_SIGN, initial_sync=True, ongoing_sync=True)
-def process_claim_signatures(changes: ClaimChanges, p=None):
-    p.start(get_unvalidated_signable_count(p.ctx, Claim))
-    claim_updates = []
-    sql = select_unvalidated_signables(
-        Claim, Claim.c.claim_hash, include_urls=True, include_previous=changes is not None
-    )
-    steps = 0
-    for claim in p.ctx.execute(sql):
-        claim_updates.append(
-            signature_validation({
-                'pk': claim['claim_hash'],
-                'canonical_url': claim['channel_url'] + '/' + claim['claim_url']
-            }, claim, claim['public_key'])
-        )
-        if changes is not None:
-            changes.channels_with_changed_content.add(claim['channel_hash'])
-            if claim['previous_channel_hash']:
-                changes.channels_with_changed_content.add(claim['previous_channel_hash'])
-        if len(claim_updates) > 500:
-            p.ctx.execute(Claim.update().where(Claim.c.claim_hash == bindparam('pk')), claim_updates)
-            steps += len(claim_updates)
-            p.step(steps)
-            claim_updates.clear()
-    if claim_updates:
-        p.ctx.execute(Claim.update().where(Claim.c.claim_hash == bindparam('pk')), claim_updates)
-
-
-@sync_step(Event.SUPPORT_SIGN, initial_sync=True, ongoing_sync=True)
-def process_support_signatures(changes: ClaimChanges, p=None):
-    p.start(get_unvalidated_signable_count(p.ctx, Support))
-    support_updates = []
-    for support in p.ctx.execute(select_unvalidated_signables(Support, Support.c.txo_hash)):
-        support_updates.append(
-            signature_validation({'pk': support['txo_hash']}, support, support['public_key'])
-        )
-        if changes is not None:
-            changes.channels_with_changed_content.add(support['channel_hash'])
-        if len(support_updates) > 500:
-            p.ctx.execute(Support.update().where(Support.c.txo_hash == bindparam('pk')), support_updates)
-            p.step(len(support_updates))
-            support_updates.clear()
-    if support_updates:
-        p.ctx.execute(Support.update().where(Support.c.txo_hash == bindparam('pk')), support_updates)
-
-
-@sync_step(Event.INPUT_UPDATE, initial_sync=True, ongoing_sync=True)
-def process_inputs_outputs(p=None):
-    p.start(2)
-    # 1. Update TXIs to have the address of TXO they are spending.
-    set_input_addresses(p.ctx)
-    p.step(1)
-    # 2. Update spent TXOs setting is_spent = True
-    update_spent_outputs(p.ctx)
-    p.step(2)
-
-
-@sync_step(Event.CLAIM_META, initial_sync=True, ongoing_sync=True)
-def process_claim_metadata(starting_height: int, ending_height: int, chain, p=None):
-    channel = Claim.alias('channel')
-    stream = Claim.alias('stream')
-    p.start(chain.db.sync_get_claim_metadata_count(start_height=starting_height, end_height=ending_height))
-    claim_update_sql = (
-        Claim.update().where(Claim.c.claim_hash == bindparam('claim_hash_'))
-        .values(
-            canonical_url=case([(
-                ((Claim.c.canonical_url == None) & (Claim.c.channel_hash != None)),
-                select(channel.c.short_url).select_from(channel)
-                .where(channel.c.claim_hash == Claim.c.channel_hash)
-                .scalar_subquery() + '/' + bindparam('short_url_')
-            )], else_=Claim.c.canonical_url),
-            staked_support_amount=staked_support_amount_calc,
-            staked_support_count=staked_support_count_calc,
-            signed_claim_count=case([(
-                (Claim.c.claim_type == TXO_TYPES['channel']),
-                channel_content_count_calc(stream)
-            )], else_=0),
-            signed_support_count=case([(
-                (Claim.c.claim_type == TXO_TYPES['channel']),
-                channel_content_count_calc(Support)
-            )], else_=0),
-        )
-    )
-    done, step_size = 0, 500
-    for offset in range(starting_height, ending_height + 1, step_size):
-        claims = chain.db.sync_get_claim_metadata(
-            start_height=offset, end_height=min(offset + step_size, ending_height)
-        )
-        if claims:
-            p.ctx.execute(claim_update_sql, claims)
-            done += len(claims)
-            p.step(done)
-
-
-@sync_step(Event.STAKE_CALC, ongoing_sync=True)
-def process_stake_calc(changes: ClaimChanges, p=None):
-    p.start(len(changes.claims_with_changed_supports))
-    sql = (
-        Claim.update()
-        .where((Claim.c.claim_hash.in_(changes.claims_with_changed_supports)))
-        .values(
-            staked_support_amount=staked_support_amount_calc,
-            staked_support_count=staked_support_count_calc,
-        )
-    )
-    p.ctx.execute(sql)
-
-
-@sync_step(Event.CLAIM_CHAN, ongoing_sync=True)
-def process_channel_content(changes: ClaimChanges, p=None):
-    p.start(len(changes.channels_with_changed_content))
-    stream = Claim.alias('stream')
-    sql = (
-        Claim.update()
-        .where((Claim.c.claim_hash.in_(changes.channels_with_changed_content)))
-        .values(
-            signed_claim_count=channel_content_count_calc(stream),
-            signed_support_count=channel_content_count_calc(Support),
-        )
-    )
-    p.ctx.execute(sql)
-
-
-@sync_step(Event.CLAIM_TRIE, step_size=100, ongoing_sync=True)
-def process_takeovers(starting_height: int, ending_height: int, chain, p=None):
-    p.start(chain.db.sync_get_takeover_count(start_height=starting_height, end_height=ending_height))
-    for offset in range(starting_height, ending_height + 1):
-        for takeover in chain.db.sync_get_takeovers(start_height=offset, end_height=offset):
-            update_claims = (
-                Claim.update()
-                .where(Claim.c.normalized == normalize_name(takeover['name'].decode()))
-                .values(
-                    is_controlling=case(
-                        [(Claim.c.claim_hash == takeover['claim_hash'], True)],
-                        else_=False
-                    ),
-                    takeover_height=case(
-                        [(Claim.c.claim_hash == takeover['claim_hash'], takeover['height'])],
-                        else_=None
-                    ),
-                    activation_height=least(Claim.c.activation_height, takeover['height']),
-                )
-            )
-            p.ctx.execute(update_claims)
-            p.step(1)
 
 
 @sync_step(Event.CLAIM_DELETE, ongoing_sync=True)
@@ -381,3 +245,146 @@ def process_support_insert(changes: ClaimChanges, p=None):
         loader.add_support(txo)
         changes.claims_with_changed_supports.add(txo.claim_hash)
     loader.save()
+
+
+@sync_step(Event.CLAIM_TRIE, step_size=100, ongoing_sync=True)
+def process_takeovers(starting_height: int, ending_height: int, chain, p=None):
+    p.start(chain.db.sync_get_takeover_count(start_height=starting_height, end_height=ending_height))
+    for offset in range(starting_height, ending_height + 1):
+        for takeover in chain.db.sync_get_takeovers(start_height=offset, end_height=offset):
+            update_claims = (
+                Claim.update()
+                .where(Claim.c.normalized == normalize_name(takeover['name'].decode()))
+                .values(
+                    is_controlling=case(
+                        [(Claim.c.claim_hash == takeover['claim_hash'], True)],
+                        else_=False
+                    ),
+                    takeover_height=case(
+                        [(Claim.c.claim_hash == takeover['claim_hash'], takeover['height'])],
+                        else_=None
+                    ),
+                    activation_height=least(Claim.c.activation_height, takeover['height']),
+                )
+            )
+            p.ctx.execute(update_claims)
+            p.step(1)
+
+
+@sync_step(Event.CLAIM_META, initial_sync=True, ongoing_sync=True)
+def process_claim_metadata(starting_height: int, ending_height: int, chain, p=None):
+    channel = Claim.alias('channel')
+    stream = Claim.alias('stream')
+    p.start(chain.db.sync_get_claim_metadata_count(start_height=starting_height, end_height=ending_height))
+    claim_update_sql = (
+        Claim.update().where(Claim.c.claim_hash == bindparam('claim_hash_'))
+        .values(
+            canonical_url=case([(
+                ((Claim.c.canonical_url == None) & (Claim.c.channel_hash != None)),
+                select(channel.c.short_url).select_from(channel)
+                .where(channel.c.claim_hash == Claim.c.channel_hash)
+                .scalar_subquery() + '/' + bindparam('short_url_')
+            )], else_=Claim.c.canonical_url),
+            staked_support_amount=staked_support_amount_calc,
+            staked_support_count=staked_support_count_calc,
+            signed_claim_count=case([(
+                (Claim.c.claim_type == TXO_TYPES['channel']),
+                channel_content_count_calc(stream)
+            )], else_=0),
+            signed_support_count=case([(
+                (Claim.c.claim_type == TXO_TYPES['channel']),
+                channel_content_count_calc(Support)
+            )], else_=0),
+        )
+    )
+    done, step_size = 0, 500
+    for offset in range(starting_height, ending_height + 1, step_size):
+        claims = chain.db.sync_get_claim_metadata(
+            start_height=offset, end_height=min(offset + step_size, ending_height)
+        )
+        if claims:
+            p.ctx.execute(claim_update_sql, claims)
+            done += len(claims)
+            p.step(done)
+
+
+def signature_validation(d: dict, row: dict, public_key) -> dict:
+    d['is_signature_valid'] = False
+    if Output.is_signature_valid(bytes(row['signature']), bytes(row['signature_digest']), public_key):
+        d['is_signature_valid'] = True
+    return d
+
+
+@sync_step(Event.CLAIM_SIGN, initial_sync=True, ongoing_sync=True)
+def process_claim_signatures(changes: ClaimChanges, p=None):
+    p.start(get_unvalidated_signable_count(p.ctx, Claim))
+    claim_updates = []
+    sql = select_unvalidated_signables(
+        Claim, Claim.c.claim_hash, include_urls=True, include_previous=changes is not None
+    )
+    steps = 0
+    for claim in p.ctx.execute(sql):
+        claim_updates.append(
+            signature_validation({
+                'pk': claim['claim_hash'],
+                'canonical_url': claim['channel_url'] + '/' + claim['claim_url']
+            }, claim, claim['public_key'])
+        )
+        if changes is not None:
+            changes.channels_with_changed_content.add(claim['channel_hash'])
+            if claim['previous_channel_hash']:
+                changes.channels_with_changed_content.add(claim['previous_channel_hash'])
+        if len(claim_updates) > 500:
+            p.ctx.execute(Claim.update().where(Claim.c.claim_hash == bindparam('pk')), claim_updates)
+            steps += len(claim_updates)
+            p.step(steps)
+            claim_updates.clear()
+    if claim_updates:
+        p.ctx.execute(Claim.update().where(Claim.c.claim_hash == bindparam('pk')), claim_updates)
+
+
+@sync_step(Event.SUPPORT_SIGN, initial_sync=True, ongoing_sync=True)
+def process_support_signatures(changes: ClaimChanges, p=None):
+    p.start(get_unvalidated_signable_count(p.ctx, Support))
+    support_updates = []
+    for support in p.ctx.execute(select_unvalidated_signables(Support, Support.c.txo_hash)):
+        support_updates.append(
+            signature_validation({'pk': support['txo_hash']}, support, support['public_key'])
+        )
+        if changes is not None:
+            changes.channels_with_changed_content.add(support['channel_hash'])
+        if len(support_updates) > 500:
+            p.ctx.execute(Support.update().where(Support.c.txo_hash == bindparam('pk')), support_updates)
+            p.step(len(support_updates))
+            support_updates.clear()
+    if support_updates:
+        p.ctx.execute(Support.update().where(Support.c.txo_hash == bindparam('pk')), support_updates)
+
+
+@sync_step(Event.STAKE_CALC, ongoing_sync=True)
+def process_stake_calc(changes: ClaimChanges, p=None):
+    p.start(len(changes.claims_with_changed_supports))
+    sql = (
+        Claim.update()
+        .where((Claim.c.claim_hash.in_(changes.claims_with_changed_supports)))
+        .values(
+            staked_support_amount=staked_support_amount_calc,
+            staked_support_count=staked_support_count_calc,
+        )
+    )
+    p.ctx.execute(sql)
+
+
+@sync_step(Event.CLAIM_CHAN, ongoing_sync=True)
+def process_channel_content(changes: ClaimChanges, p=None):
+    p.start(len(changes.channels_with_changed_content))
+    stream = Claim.alias('stream')
+    sql = (
+        Claim.update()
+        .where((Claim.c.claim_hash.in_(changes.channels_with_changed_content)))
+        .values(
+            signed_claim_count=channel_content_count_calc(stream),
+            signed_support_count=channel_content_count_calc(Support),
+        )
+    )
+    p.ctx.execute(sql)

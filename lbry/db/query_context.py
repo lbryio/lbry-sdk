@@ -178,14 +178,14 @@ class ProgressUnit(Enum):
 
 class Event(Enum):
     START = "blockchain.sync.start", ProgressUnit.BLOCKS
-    COMPLETE = "blockchain.sync.complete", ProgressUnit.BLOCKS
+    COMPLETE = "blockchain.sync.complete", ProgressUnit.TASKS
 
     # full node specific sync events
     BLOCK_READ = "blockchain.sync.block.read", ProgressUnit.BLOCKS
     BLOCK_SAVE = "blockchain.sync.block.save", ProgressUnit.TXS
     BLOCK_FILTER = "blockchain.sync.block.filter", ProgressUnit.BLOCKS
-    CLAIM_META = "blockchain.sync.claim.update", ProgressUnit.CLAIMS
-    CLAIM_TRIE = "blockchain.sync.claim.takeovers", ProgressUnit.CLAIMS
+    CLAIM_META = "blockchain.sync.claim.meta", ProgressUnit.CLAIMS
+    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.CLAIMS
     STAKE_CALC = "blockchain.sync.claim.stakes", ProgressUnit.CLAIMS
     CLAIM_CHAN = "blockchain.sync.claim.channels", ProgressUnit.CLAIMS
     CLAIM_SIGN = "blockchain.sync.claim.signatures", ProgressUnit.CLAIMS
