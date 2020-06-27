@@ -570,19 +570,21 @@ class BulkLoader:
             for chunk_rows in chunk(rows, batch_size):
                 try:
                     execute(sql, chunk_rows)
-                except:
+                except Exception:
                     for row in chunk_rows:
                         try:
                             execute(sql, [row])
-                        except:
-                            print(sql)
-                            print(row)
-                            with open('badrow', 'wb') as badrow:
-                                badrow.write(str(sql).encode())
-                                badrow.write(repr(row).encode())
+                        except Exception:
                             p.ctx.message_queue.put_nowait(
                                 (Event.COMPLETE.value, os.getpid(), 1, 1)
                             )
+                            with open('badrow', 'a') as badrow:
+                                badrow.write(repr(sql))
+                                badrow.write('\n')
+                                badrow.write(repr(row))
+                                badrow.write('\n')
+                            print(sql)
+                            print(row)
                             raise
                 if p:
                     done += int(len(chunk_rows)/row_scale)
