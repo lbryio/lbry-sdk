@@ -63,6 +63,8 @@ class Advanced(Basic):
         self.single_bar_relative_steps = 0
         self.last_stats = ""
         self.sync_steps = []
+        self.block_savers = 0
+        self.block_readers = 0
 
     def get_or_create_bar(self, name, desc, unit, total, leave=False, bar_format=None, postfix=None, position=None):
         bar = self.bars.get(name)
@@ -104,15 +106,25 @@ class Advanced(Basic):
             sync_bar.update(sync_done)
 
     def update_block_bars(self, event, d):
+        total_bar = self.bars[event[-4:]]
+        if event.endswith("read") and self.block_readers == 0:
+            total_bar.unpause()
+        if event.endswith("read") and d['step'] == d['total']:
+            self.block_readers -= 1
+
         bar_name = f"block-{d['block_file']}"
         bar = self.bars.get(bar_name)
         if bar is None:
+            self.block_readers += 1
             return self.get_or_create_bar(
                 bar_name,
                 f"  ├─ blk{d['block_file']:05}.dat reading", 'blocks', d['total']
             )
 
         if event.endswith("save") and bar.unit == "blocks":
+            if self.block_savers == 0:
+                total_bar.unpause()
+            self.block_savers += 1
             bar.desc = f"  ├─ blk{d['block_file']:05}.dat  saving"
             bar.unit = "txs"
             bar.reset(d['total'])
@@ -121,9 +133,9 @@ class Advanced(Basic):
         diff = d['step']-bar.last_print_n
         bar.update(diff)
         if event.endswith("save") and d['step'] == d['total']:
+            self.block_savers -= 1
             bar.close()
 
-        total_bar = self.bars[event[-4:]]
         total_bar.update(diff)
         if total_bar.total == total_bar.last_print_n:
             self.update_steps_bar(event, {'step': 1, 'total': 1})
