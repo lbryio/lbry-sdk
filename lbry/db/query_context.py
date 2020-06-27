@@ -568,7 +568,22 @@ class BulkLoader:
         execute = self.ctx.connection.execute
         for sql, rows in queries:
             for chunk_rows in chunk(rows, batch_size):
-                execute(sql, chunk_rows)
+                try:
+                    execute(sql, chunk_rows)
+                except:
+                    for row in chunk_rows:
+                        try:
+                            execute(sql, [row])
+                        except:
+                            print(sql)
+                            print(row)
+                            with open('badrow', 'wb') as badrow:
+                                badrow.write(str(sql).encode())
+                                badrow.write(repr(row).encode())
+                            p.ctx.message_queue.put_nowait(
+                                (Event.COMPLETE.value, os.getpid(), 1, 1)
+                            )
+                            raise
                 if p:
                     done += int(len(chunk_rows)/row_scale)
                     p.step(done)
