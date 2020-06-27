@@ -107,7 +107,6 @@ class BlockchainDB:
                 MAX(height) as best_height
             FROM block_info
             WHERE status&1 AND status&4
-            ORDER BY file
         """
         args = ()
         if file_number is not None and start_height is not None:
