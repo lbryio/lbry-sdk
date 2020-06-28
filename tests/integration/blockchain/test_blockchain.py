@@ -37,7 +37,17 @@ class BasicBlockchainTestCase(AsyncioTestCase):
         return Lbrycrd.temp_regtest()
 
     async def make_db(self, chain):
-        db = Database.temp_sqlite_regtest(chain.ledger.conf.lbrycrd_dir)
+        db_driver = os.environ.get('TEST_DB', 'sqlite')
+        if db_driver == 'sqlite':
+            db = Database.temp_sqlite_regtest(chain.ledger.conf.lbrycrd_dir)
+        elif db_driver.startswith('postgres') or db_driver.startswith('psycopg'):
+            db_name = f'lbry_test_chain'
+            meta_db = Database.from_url(f'postgresql:///postgres')
+            await meta_db.drop(db_name)
+            await meta_db.create(db_name)
+            db = Database.temp_from_url_regtest(f'postgresql:///{db_name}', chain.ledger.conf.lbrycrd_dir)
+        else:
+            raise RuntimeError(f"Unsupported database driver: {db_driver}")
         self.addCleanup(remove_tree, db.ledger.conf.data_dir)
         await db.open()
         self.addCleanup(db.close)

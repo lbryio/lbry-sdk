@@ -835,9 +835,9 @@ def resolve_url(raw_url):
         if channel is not None:
             q['order_by'] = ['^creation_height']
             q['channel_hash'] = channel.claim_hash
-            q['is_signature_valid'] = 1
+            q['is_signature_valid'] = True
         elif set(q) == {'name'}:
-            q['is_controlling'] = 1
+            q['is_controlling'] = True
         # matches = search_claims(censor, **q, limit=1)
         matches = search_claims(**q, limit=1)[0]
         if matches:

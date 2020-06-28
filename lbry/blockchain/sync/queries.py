@@ -33,6 +33,7 @@ def select_unvalidated_signables(signable, pk, include_urls=False, include_previ
                     (TXO.c.height <= signable.c.height)
                 )
                 .order_by(desc(TXO.c.height))
+                .limit(1)
                 .scalar_subquery().label('public_key')
             ),
         )
@@ -47,7 +48,7 @@ def select_unvalidated_signables(signable, pk, include_urls=False, include_previ
                 (TXO.c.txo_type.in_(CLAIM_TYPE_CODES)) &
                 (TXO.c.height <= signable.c.height)
             )
-            .order_by(desc(TXO.c.height)).offset(1)
+            .order_by(desc(TXO.c.height)).offset(1).limit(1)
             .scalar_subquery().label('previous_channel_hash')
         )
     if include_urls:

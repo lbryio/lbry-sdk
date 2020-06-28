@@ -155,6 +155,8 @@ def uninitialize():
     if ctx is not None:
         if ctx.connection:
             ctx.connection.close()
+        if ctx.engine:
+            ctx.engine.dispose()
         _context.set(None)
 
 

@@ -12,7 +12,7 @@ from lbry.event import EventController
 from lbry.crypto.bip32 import PubKey
 from lbry.blockchain.transaction import Transaction, Output
 from .constants import TXO_TYPES, CLAIM_TYPE_CODES
-from .query_context import initialize, ProgressPublisher
+from .query_context import initialize, uninitialize, ProgressPublisher
 from . import queries as q
 from . import sync
 
@@ -100,6 +100,16 @@ class Database:
         return 1
 
     @classmethod
+    def temp_from_url_regtest(cls, db_url, lbrycrd_dir=None):
+        from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
+        directory = tempfile.mkdtemp()
+        conf = Config.with_same_dir(directory).set(db_url=db_url)
+        if lbrycrd_dir is not None:
+            conf.lbrycrd_dir = lbrycrd_dir
+        ledger = RegTestLedger(conf)
+        return cls(ledger)
+
+    @classmethod
     def temp_sqlite_regtest(cls, lbrycrd_dir=None):
         from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
         directory = tempfile.mkdtemp()
@@ -116,11 +126,13 @@ class Database:
         return cls(Ledger(conf))
 
     @classmethod
-    def in_memory(cls):
+    def from_url(cls, db_url):
         from lbry import Config, Ledger  # pylint: disable=import-outside-toplevel
-        conf = Config.with_same_dir('/dev/null')
-        conf.db_url = 'sqlite:///:memory:'
-        return cls(Ledger(conf))
+        return cls(Ledger(Config.with_same_dir('/dev/null').set(db_url=db_url)))
+
+    @classmethod
+    def in_memory(cls):
+        return cls.from_url('sqlite:///:memory:')
 
     def sync_create(self, name):
         engine = create_engine(self.url)
@@ -159,6 +171,8 @@ class Database:
     async def close(self):
         self.progress_publisher.stop()
         if self.executor is not None:
+            if isinstance(self.executor, ThreadPoolExecutor):
+                await self.run_in_executor(uninitialize)
             self.executor.shutdown()
             self.executor = None
 
