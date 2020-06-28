@@ -111,11 +111,11 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         return self.find_support_txo(Transaction(unhexlify(raw)))
 
     async def create_claim(
-            self, title='', amount='0.01', name=None,
+            self, title='', amount='0.01', name=None, author='', desc='',
             claim_id_startswith='', sign=None, is_channel=False) -> str:
         name = name or ('@foo' if is_channel else 'foo')
         if not claim_id_startswith and sign is None and not is_channel:
-            claim = Stream().update(title=title).claim
+            claim = Stream().update(title=title, author=author, description=desc).claim
             return await self.chain.claim_name(
                 name, hexlify(claim.to_bytes()).decode(), amount
             )
@@ -691,8 +691,8 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         claims = await search()
         self.assertEqual(0, len(claims))
 
-    async def test_null_claim_name(self):
-        await self.create_claim(name='\x00')
+    async def test_nulls(self):
+        await self.create_claim(name='\x00', title='\x00', author='\x00', desc='\x00')
         await self.generate(1)
         empty_name, = await self.db.search_claims()
         self.assertEqual('', empty_name.normalized_name)
