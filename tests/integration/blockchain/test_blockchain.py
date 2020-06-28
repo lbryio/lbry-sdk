@@ -11,6 +11,7 @@ from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
+from lbry.blockchain.script import OutputScript
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
@@ -689,6 +690,12 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await self.generate(1)
         claims = await search()
         self.assertEqual(0, len(claims))
+
+    async def test_null_claim_name(self):
+        await self.create_claim(name='\x00')
+        await self.generate(1)
+        empty_name, = await self.db.search_claims()
+        self.assertEqual('', empty_name.normalized_name)
 
     async def test_short_and_canonical_urls(self):
         search = self.db.search_claims

@@ -44,7 +44,7 @@ URL_REGEX = _create_url_regex()
 
 
 def normalize_name(name):
-    return unicodedata.normalize('NFD', name).casefold()
+    return unicodedata.normalize('NFD', name).casefold().replace('\x00', '')
 
 
 class PathSegment(NamedTuple):

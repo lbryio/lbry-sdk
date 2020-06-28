@@ -383,31 +383,24 @@ class BulkLoader:
             row['claim_id'] = txo.claim_id
             row['claim_hash'] = txo.claim_hash
             try:
-                claim_name = txo.claim_name
-                if '\x00' in claim_name:
-                    # log.error(f"Name for claim {txo.claim_id} contains a NULL (\\x00) character, skipping.")
-                    pass
-                else:
-                    row['claim_name'] = claim_name
+                row['claim_name'] = txo.claim_name.replace('\x00', '')
             except UnicodeDecodeError:
-                # log.error(f"Name for claim {txo.claim_id} contains invalid unicode, skipping.")
                 pass
         return row
 
     def claim_to_rows(self, txo: Output) -> Tuple[dict, List]:
         try:
-            assert txo.claim_name
-            assert txo.normalized_name
-        except Exception:
-            #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
+            claim_name = txo.claim_name.replace('\x00', '')
+            normalized_name = txo.normalized_name
+        except UnicodeDecodeError:
             return {}, []
         tx = txo.tx_ref.tx
         claim_hash = txo.claim_hash
         claim_record = {
             'claim_hash': claim_hash,
             'claim_id': txo.claim_id,
-            'claim_name': txo.claim_name,
-            'normalized': txo.normalized_name,
+            'claim_name': claim_name,
+            'normalized': normalized_name,
             'address': txo.get_address(self.ledger),
             'txo_hash': txo.ref.hash,
             'amount': txo.amount,
