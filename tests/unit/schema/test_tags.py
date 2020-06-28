@@ -14,6 +14,7 @@ class TestTagNormalization(unittest.TestCase):
         tag('tag', 'T\'ag')
         tag('t ag', '\tT  \nAG   ')
         tag('tag hash', '#tag~#hash!')
+        tag('foobar', 'foo\x00bar')
 
     def test_clean_tags(self):
         self.assertEqual(['tag'], clean_tags([' \t #!~', '!taG', '\t']))

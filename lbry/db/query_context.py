@@ -436,9 +436,9 @@ class BulkLoader:
             claim_record['claim_type'] = TXO_TYPES['stream']
             claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
             claim_record['media_type'] = claim.stream.source.media_type
-            claim_record['title'] = claim.stream.title
-            claim_record['description'] = claim.stream.description
-            claim_record['author'] = claim.stream.author
+            claim_record['title'] = claim.stream.title.replace('\x00', '')
+            claim_record['description'] = claim.stream.description.replace('\x00', '')
+            claim_record['author'] = claim.stream.author.replace('\x00', '')
             if claim.stream.video and claim.stream.video.duration:
                 claim_record['duration'] = claim.stream.video.duration
             if claim.stream.audio and claim.stream.audio.duration:
