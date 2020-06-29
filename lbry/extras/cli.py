@@ -224,8 +224,15 @@ def get_argument_parser():
 
 
 def ensure_directory_exists(path: str):
-    if not os.path.isdir(path):
-        pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+    pathObj = pathlib.Path(path)
+    try:
+        if pathObj.is_dir():
+            pathObj.chmod(0o777)
+        else:
+            pathObj.mkdir(parents=True, exist_ok=True)
+    except:
+        print("Could not access", path)
+        sys.exit(1)
 
 
 LOG_MODULES = 'lbry', 'aioupnp'
