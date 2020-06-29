@@ -69,13 +69,13 @@ class EventController:
         next_sub = self._first_subscription
         while next_sub is not None:
             subscription = next_sub
-            next_sub = next_sub._next
             yield subscription
+            next_sub = next_sub._next
 
     async def _notify(self, notify, *args):
         try:
             maybe_coroutine = notify(*args)
-            if asyncio.iscoroutine(maybe_coroutine):
+            if maybe_coroutine is not None and asyncio.iscoroutine(maybe_coroutine):
                 await maybe_coroutine
         except Exception as e:
             log.exception(e)
@@ -111,7 +111,6 @@ class EventController:
             self._last_subscription = previous
         else:
             next_sub._previous = previous
-        subscription._next = subscription._previous = subscription
 
     def _listen(self, on_data, on_error, on_done):
         subscription = BroadcastSubscription(self, on_data, on_error, on_done)
@@ -128,7 +127,7 @@ class EventController:
 
 class EventStream:
 
-    def __init__(self, controller):
+    def __init__(self, controller: EventController):
         self._controller = controller
 
     def listen(self, on_data, on_error=None, on_done=None) -> BroadcastSubscription:

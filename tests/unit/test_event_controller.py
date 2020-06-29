@@ -60,12 +60,39 @@ class StreamControllerTestCase(AsyncioTestCase):
         await controller.close()
         self.assertEqual("two", await last)
 
+    async def test_race_condition_during_subscription_iteration(self):
+        controller = EventController()
+        sub1 = controller.stream.listen(print)
+        sub2 = controller.stream.listen(print)
+        sub3 = controller.stream.listen(print)
 
-@skip('need to make this test more reliable')
+        # normal iteration
+        i = iter(controller._iterate_subscriptions)
+        self.assertEqual(next(i, None), sub1)
+        self.assertEqual(next(i, None), sub2)
+        self.assertEqual(next(i, None), sub3)
+        self.assertEqual(next(i, None), None)
+
+        # subscription canceled immediately after it's iterated over
+        i = iter(controller._iterate_subscriptions)
+        self.assertEqual(next(i, None), sub1)
+        self.assertEqual(next(i, None), sub2)
+        sub2.cancel()
+        self.assertEqual(next(i, None), sub3)
+        self.assertEqual(next(i, None), None)
+
+        # subscription canceled immediately before it's iterated over
+        self.assertEqual(list(controller._iterate_subscriptions), [sub1, sub3])  # precondition
+        i = iter(controller._iterate_subscriptions)
+        self.assertEqual(next(i, None), sub1)
+        sub3.cancel()
+        self.assertEqual(next(i, None), None)
+
+
 class TestEventQueuePublisher(AsyncioTestCase):
 
     async def test_event_buffering_avoids_overloading_asyncio(self):
-        threads = 3
+        threads = 4
         generate_events = 3000
         expected_event_count = (threads * generate_events)-1
 
