@@ -224,12 +224,12 @@ def get_argument_parser():
 
 
 def ensure_directory_exists(path: str):
-    pathObj = pathlib.Path(path)
+    path_obj = pathlib.Path(path)
     try:
-        if pathObj.is_dir():
-            pathObj.chmod(0o777)
+        if path_obj.is_dir():
+            path_obj.chmod(0o777)
         else:
-            pathObj.mkdir(parents=True, exist_ok=True)
+            path_obj.mkdir(parents=True, exist_ok=True)
     except:
         print("Could not access", path)
         sys.exit(1)
