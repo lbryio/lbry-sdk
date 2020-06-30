@@ -150,25 +150,36 @@ def process_inputs_outputs(initial_sync=False, p=None):
 
     step = 1
     if initial_sync and p.ctx.is_postgres:
-        p.start(4)
+        p.start(6)
     else:
         p.start(2)
 
-    # 1. Update TXIs to have the address of TXO they are spending.
-    set_input_addresses(p.ctx)
-    p.step(step)
-    step += 1
+    # 0. Vacuum
     if initial_sync and p.ctx.is_postgres:
-        p.ctx.execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
-        p.step(step)
-        step += 1
+        with p.ctx.engine.connect() as c:
+            c.execute(text("COMMIT;"))
+            c.execute(text("VACUUM FULL ANALYZE txo;"))
+            p.step(step)
+            step += 1
+            c.execute(text("VACUUM FULL ANALYZE txi;"))
+            p.step(step)
+            step += 1
 
-    # 2. Update spent TXOs setting is_spent = True
+    # 1. Update spent TXOs setting is_spent = True
     update_spent_outputs(p.ctx)
     p.step(step)
     step += 1
     if initial_sync and p.ctx.is_postgres:
         p.ctx.execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+        p.step(step)
+        step += 1
+
+    # 2. Update TXIs to have the address of TXO they are spending.
+    set_input_addresses(p.ctx)
+    p.step(step)
+    step += 1
+    if initial_sync and p.ctx.is_postgres:
+        p.ctx.execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
         p.step(step)
         step += 1
 
