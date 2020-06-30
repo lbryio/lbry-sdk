@@ -143,17 +143,18 @@ jobs:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
-      - if: startsWith(runner.os, 'linux')
-        run: sudo apt-get install libzmq3-dev
-      - if: startsWith(runner.os, 'mac')
-        run: brew install zeromq
       - name: Setup
         run: |
           pip install --user --upgrade pip wheel
           pip install sqlalchemy@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
-          pip install -e .
       - if: startsWith(runner.os, 'linux')
-        run: pip install psycopg2
+        run: |
+          sudo apt-get install libzmq3-dev
+          pip install -e .[postgres]
+      - if: startsWith(runner.os, 'mac')
+        run: |
+          brew install zeromq
+          pip install -e .
       - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
         name: Build & Run (Unix)
         run: |
@@ -164,6 +165,7 @@ jobs:
         name: Build & Run (Windows)
         run: |
           pip install pywin32
+          pip install -e .
           pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/cli.py
           dist/lbrynet.exe --version
       - uses: actions/upload-artifact@v2
