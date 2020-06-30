@@ -1,14 +1,20 @@
 import os
 import time
+from io import BytesIO
 import multiprocessing as mp
 from enum import Enum
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from contextvars import ContextVar
 
 from sqlalchemy import create_engine, inspect, bindparam
 from sqlalchemy.engine import Engine, Connection
+from sqlalchemy.sql import Insert
+try:
+    from pgcopy import CopyManager
+except ImportError:
+    CopyManager = None
 
 from lbry.event import EventQueuePublisher
 from lbry.blockchain.ledger import Ledger
@@ -47,6 +53,8 @@ class QueryContext:
     current_timer_time: float = 0
     current_progress: Optional['ProgressContext'] = None
 
+    copy_managers: Dict[str, CopyManager] = field(default_factory=dict)
+
     @property
     def is_postgres(self):
         return self.connection.dialect.name == 'postgresql'
@@ -63,6 +71,16 @@ class QueryContext:
 
     def get_search_censor(self) -> Censor:
         return Censor(self.filtered_streams, self.filtered_channels)
+
+    def pg_copy(self, table, rows):
+        connection = self.connection.connection
+        copy_manager = self.copy_managers.get(table.name)
+        if copy_manager is None:
+            self.copy_managers[table.name] = copy_manager = CopyManager(
+                self.connection.connection, table.name, rows[0].keys()
+            )
+        copy_manager.copy(map(dict.values, rows), BytesIO)
+        connection.commit()
 
     def execute(self, sql, *args):
         return self.connection.execute(sql, *args)
@@ -562,25 +580,33 @@ class BulkLoader:
 
         execute = self.ctx.connection.execute
         for sql, rows in queries:
-            for chunk_rows in chunk(rows, batch_size):
-                try:
-                    execute(sql, chunk_rows)
-                except Exception:
-                    for row in chunk_rows:
-                        try:
-                            execute(sql, [row])
-                        except Exception:
-                            p.ctx.message_queue.put_nowait(
-                                (Event.COMPLETE.value, os.getpid(), 1, 1)
-                            )
-                            with open('badrow', 'a') as badrow:
-                                badrow.write(repr(sql))
-                                badrow.write('\n')
-                                badrow.write(repr(row))
-                                badrow.write('\n')
-                            print(sql)
-                            print(row)
-                            raise
+            if not rows:
+                continue
+            if self.ctx.is_postgres and isinstance(sql, Insert):
+                self.ctx.pg_copy(sql.table, rows)
                 if p:
-                    done += int(len(chunk_rows)/row_scale)
+                    done += int(len(rows) / row_scale)
                     p.step(done)
+            else:
+                for chunk_rows in chunk(rows, batch_size):
+                    try:
+                        execute(sql, chunk_rows)
+                    except Exception:
+                        for row in chunk_rows:
+                            try:
+                                execute(sql, [row])
+                            except Exception:
+                                p.ctx.message_queue.put_nowait(
+                                    (Event.COMPLETE.value, os.getpid(), 1, 1)
+                                )
+                                with open('badrow', 'a') as badrow:
+                                    badrow.write(repr(sql))
+                                    badrow.write('\n')
+                                    badrow.write(repr(row))
+                                    badrow.write('\n')
+                                print(sql)
+                                print(row)
+                        raise
+                    if p:
+                        done += int(len(chunk_rows)/row_scale)
+                        p.step(done)

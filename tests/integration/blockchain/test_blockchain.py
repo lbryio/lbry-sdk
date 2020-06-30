@@ -42,6 +42,7 @@ class BasicBlockchainTestCase(AsyncioTestCase):
         if db_driver == 'sqlite':
             db = Database.temp_sqlite_regtest(chain.ledger.conf.lbrycrd_dir)
         elif db_driver.startswith('postgres') or db_driver.startswith('psycopg'):
+            db_driver = 'postgresql'
             db_name = f'lbry_test_chain'
             db_connection = 'postgres:postgres@localhost:5432'
             meta_db = Database.from_url(f'postgresql://{db_connection}/postgres')
@@ -53,6 +54,7 @@ class BasicBlockchainTestCase(AsyncioTestCase):
         self.addCleanup(remove_tree, db.ledger.conf.data_dir)
         await db.open()
         self.addCleanup(db.close)
+        self.db_driver = db_driver
         return db
 
     @staticmethod
@@ -454,9 +456,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEqual(2, await db.get_support_metadata_count(0, 500))
         self.assertEqual(0, await db.get_support_metadata_count(500, 1000))
 
-        def foo(c):
-            return
-
         # get_support_metadata
         self.assertEqual(
             [{'name': b'two', 'activation_height': 359, 'expiration_height': 852},
@@ -536,6 +535,12 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         # 3 - db.sync.input
         self.assertEventsAlmostEqual(
             self.extract_events('db.sync.input', events), [
+                [0, 4],
+                [1, 4],
+                [2, 4],
+                [3, 4],
+                [4, 4],
+            ] if self.db_driver == 'postgresql' else [
                 [0, 2],
                 [1, 2],
                 [2, 2],

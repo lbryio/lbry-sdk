@@ -49,12 +49,16 @@ def check_version_and_create_tables():
         metadata.create_all(ctx.engine)
         ctx.execute(Version.insert().values(version=SCHEMA_VERSION))
         if ctx.is_postgres:
-            ctx.execute(text("ALTER TABLE txi DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE txo DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE tx DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE claim DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE support DISABLE TRIGGER ALL;"))
-            ctx.execute(text("ALTER TABLE block DISABLE TRIGGER ALL;"))
+            disable_indexes_and_integrity_enforcement()
+
+
+def disable_indexes_and_integrity_enforcement():
+    with context('disable indexes and integrity enforcement (triggers, primary keys, etc)') as ctx:
+        for table in metadata.sorted_tables:
+            ctx.execute(text(f"ALTER TABLE {table.name} DISABLE TRIGGER ALL;"))
+            if table.name == 'tag':
+                continue
+            ctx.execute(text(f"ALTER TABLE {table.name} DROP CONSTRAINT {table.name}_pkey CASCADE;"))
 
 
 def insert_block(block):
@@ -313,8 +317,8 @@ def select_txos(
                 (TXI.c.address.notin_(my_addresses))
             )
     joins = TXO.join(TX)
-    if constraints.get('is_spent', None) is False:
-        s = s.where((TXO.c.is_spent == False) & (TXO.c.is_reserved == False))
+    #if constraints.get('is_spent', None) is False:
+    #    s = s.where((TXO.c.is_spent == False) & (TXO.c.is_reserved == False))
     if include_is_my_input:
         joins = joins.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
     if claim_id_not_in_claim_table:

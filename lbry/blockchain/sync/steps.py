@@ -4,7 +4,7 @@ import functools
 from contextvars import ContextVar
 from typing import Set
 
-from sqlalchemy import bindparam, case, distinct
+from sqlalchemy import bindparam, case, distinct, text
 
 from lbry.db import queries
 from lbry.db.tables import Block as BlockTable
@@ -94,7 +94,7 @@ def process_block_file(block_file_number: int, starting_height: int, initial_syn
 
 def process_metadata(starting_height: int, ending_height: int, initial_sync: bool):
     chain = get_or_initialize_lbrycrd()
-    process_inputs_outputs()
+    process_inputs_outputs(initial_sync)
     changes = None
     if not initial_sync:
         changes = ClaimChanges()
@@ -146,14 +146,31 @@ def process_block_save(block_file_number: int, loader, p=None):
 
 
 @sync_step(Event.INPUT_UPDATE, initial_sync=True, ongoing_sync=True)
-def process_inputs_outputs(p=None):
-    p.start(2)
+def process_inputs_outputs(initial_sync=False, p=None):
+
+    step = 1
+    if initial_sync and p.ctx.is_postgres:
+        p.start(4)
+    else:
+        p.start(2)
+
     # 1. Update TXIs to have the address of TXO they are spending.
     set_input_addresses(p.ctx)
-    p.step(1)
+    p.step(step)
+    step += 1
+    if initial_sync and p.ctx.is_postgres:
+        p.ctx.execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
+        p.step(step)
+        step += 1
+
     # 2. Update spent TXOs setting is_spent = True
     update_spent_outputs(p.ctx)
-    p.step(2)
+    p.step(step)
+    step += 1
+    if initial_sync and p.ctx.is_postgres:
+        p.ctx.execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+        p.step(step)
+        step += 1
 
 
 @sync_step(Event.BLOCK_FILTER, initial_sync=True, ongoing_sync=True)
@@ -334,7 +351,7 @@ def process_claim_signatures(changes: ClaimChanges, p=None):
             changes.channels_with_changed_content.add(claim['channel_hash'])
             if claim['previous_channel_hash']:
                 changes.channels_with_changed_content.add(claim['previous_channel_hash'])
-        if len(claim_updates) > 500:
+        if len(claim_updates) > 1000:
             p.ctx.execute(Claim.update().where(Claim.c.claim_hash == bindparam('pk')), claim_updates)
             steps += len(claim_updates)
             p.step(steps)
@@ -353,7 +370,7 @@ def process_support_signatures(changes: ClaimChanges, p=None):
         )
         if changes is not None:
             changes.channels_with_changed_content.add(support['channel_hash'])
-        if len(support_updates) > 500:
+        if len(support_updates) > 1000:
             p.ctx.execute(Support.update().where(Support.c.txo_hash == bindparam('pk')), support_updates)
             p.step(len(support_updates))
             support_updates.clear()

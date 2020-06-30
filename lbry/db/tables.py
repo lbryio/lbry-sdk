@@ -137,7 +137,7 @@ Claim = Table(
     Column('staked_support_amount', BigInteger, server_default='0'),
 
     # streams
-    Column('stream_type', Text, nullable=True),
+    Column('stream_type', SmallInteger, nullable=True),
     Column('media_type', Text, nullable=True),
     Column('fee_amount', BigInteger, server_default='0'),
     Column('fee_currency', Text, nullable=True),
