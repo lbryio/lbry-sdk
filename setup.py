@@ -62,7 +62,7 @@ setup(
     ],
     extras_require={
         'ui': ['pyside2'],
-        'postgres': ['psycopg2'],
+        'postgres': ['psycopg2', 'pgcopy'],
         'lint': ['mypy', 'pylint'],
         'test': ['coverage'],
     },
