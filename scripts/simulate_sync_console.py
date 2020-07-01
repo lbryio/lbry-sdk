@@ -1,11 +1,25 @@
 import asyncio
 from random import randrange
 from typing import List
+from binascii import unhexlify
+from google.protobuf.message import DecodeError
+
+from lbry.schema.claim import Claim
 from lbry.blockchain import Ledger
 from lbry.service import FullNode
 from lbry.console import Advanced, Basic
 from lbry.conf import Config
 from lbry.db.utils import chunk
+
+
+def cause_protobuf_stderr():
+    try:
+        Claim.from_bytes(unhexlify(
+            '005a3c63779597cba4c0e6ee45c3074fc389bd564ccc5d4a90eb4baacb0b028f2f4930'
+            '0db003d6a27f0cac8be8b45fdda597303208b81845534e4543494c07123e0a420a'
+        ))
+    except DecodeError:
+        pass
 
 
 class Simulator:
@@ -54,7 +68,9 @@ class Simulator:
             tasks = []
             for file in file_group:
                 if file == files[-1]:
+                    cause_protobuf_stderr()
                     tasks.append(self.sync_block_file(file, self.blocks-blocks_synced, self.txs-txs_synced))
+                    cause_protobuf_stderr()
                 else:
                     blocks = int(self.blocks / len(files))
                     blocks_synced += blocks

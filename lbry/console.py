@@ -1,5 +1,8 @@
 import os
+import sys
+import time
 from typing import Dict, Any
+from tempfile import TemporaryFile
 
 import tqdm
 
@@ -7,6 +10,53 @@ from lbry import __version__
 from lbry.service.base import Service
 from lbry.service.full_node import FullNode
 from lbry.service.light_client import LightClient
+
+
+class RedirectOutput:
+
+    silence_lines = [
+        b'libprotobuf ERROR google/protobuf/wire_format_lite.cc:626',
+    ]
+
+    def __init__(self, stream_type: str):
+        assert stream_type in ('stderr', 'stdout')
+        self.stream_type = stream_type
+        self.stream_no = getattr(sys, stream_type).fileno()
+        self.last_flush = time.time()
+        self.last_read = 0
+
+    def __enter__(self):
+        self.backup = os.dup(self.stream_no)
+        setattr(sys, self.stream_type, os.fdopen(self.backup, 'w'))
+        self.file = TemporaryFile()
+        self.backup = os.dup2(self.file.fileno(), self.stream_no)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.file.close()
+        os.dup2(self.backup, self.stream_no)
+        os.close(self.backup)
+        setattr(sys, self.stream_type, os.fdopen(self.stream_no, 'w'))
+
+    def capture(self):
+        self.__enter__()
+
+    def release(self):
+        self.__exit__(None, None, None)
+
+    def flush(self, writer, last=False):
+        if not last and (time.time() - self.last_flush) < 5:
+            return
+        self.file.seek(self.last_read)
+        for line in self.file.readlines():
+            silence = False
+            for bad_line in self.silence_lines:
+                if bad_line in line:
+                    silence = True
+                    break
+            if not silence:
+                writer(line.decode().rstrip())
+        self.last_read = self.file.tell()
+        self.last_flush = time.time()
 
 
 class Console:
@@ -65,6 +115,7 @@ class Advanced(Basic):
         self.sync_steps = []
         self.block_savers = 0
         self.block_readers = 0
+        self.stderr = RedirectOutput('stderr')
 
     def get_or_create_bar(self, name, desc, unit, total, leave=False, bar_format=None, postfix=None, position=None):
         bar = self.bars.get(name)
@@ -168,8 +219,13 @@ class Advanced(Basic):
     def on_sync_progress(self, event):
         e, d = event['event'], event.get('data', {})
         if e.endswith("sync.start"):
+            self.stderr.capture()
             self.sync_start(d)
+            self.stderr.flush(self.bars['sync'].write)
         elif e.endswith("sync.complete"):
+            self.stderr.flush(self.bars['sync'].write, True)
             self.sync_complete()
+            self.stderr.release()
         else:
+            self.stderr.flush(self.bars['sync'].write)
             self.update_progress(e, d)
