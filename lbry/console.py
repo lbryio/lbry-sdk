@@ -43,8 +43,8 @@ class RedirectOutput:
     def release(self):
         self.__exit__(None, None, None)
 
-    def flush(self, writer, last=False):
-        if not last and (time.time() - self.last_flush) < 5:
+    def flush(self, writer, force=False):
+        if not force and (time.time() - self.last_flush) < 5:
             return
         self.file.seek(self.last_read)
         for line in self.file.readlines():
@@ -116,6 +116,15 @@ class Advanced(Basic):
         self.block_savers = 0
         self.block_readers = 0
         self.stderr = RedirectOutput('stderr')
+
+    def starting(self):
+        self.stderr.capture()
+        super().starting()
+
+    def stopping(self):
+        super().stopping()
+        self.stderr.flush(self.bars['sync'].write, True)
+        self.stderr.release()
 
     def get_or_create_bar(self, name, desc, unit, total, leave=False, bar_format=None, postfix=None, position=None):
         bar = self.bars.get(name)
@@ -219,13 +228,11 @@ class Advanced(Basic):
     def on_sync_progress(self, event):
         e, d = event['event'], event.get('data', {})
         if e.endswith("sync.start"):
-            self.stderr.capture()
             self.sync_start(d)
             self.stderr.flush(self.bars['sync'].write)
         elif e.endswith("sync.complete"):
             self.stderr.flush(self.bars['sync'].write, True)
             self.sync_complete()
-            self.stderr.release()
         else:
             self.stderr.flush(self.bars['sync'].write)
             self.update_progress(e, d)
