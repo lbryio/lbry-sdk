@@ -1782,24 +1782,26 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False):
+    def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False, blocking=False):
         """
         Send the same number of credits to multiple addresses from a specific account (or default account).
 
         Usage:
             account_send <amount> <addresses>... [--account_id=<account_id>] [--wallet_id=<wallet_id>] [--preview]
+                                                 [--blocking]
 
         Options:
             --account_id=<account_id>  : (str) account to fund the transaction
             --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
             --preview                  : (bool) do not broadcast the transaction
+            --blocking                 : (bool) wait until tx has synced
 
         Returns: {Transaction}
         """
         return self.jsonrpc_wallet_send(
             amount=amount, addresses=addresses, wallet_id=wallet_id,
             change_account_id=account_id, funding_account_ids=[account_id] if account_id else [],
-            preview=preview
+            preview=preview, blocking=blocking
         )
 
     SYNC_DOC = """
