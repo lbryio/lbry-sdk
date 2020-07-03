@@ -535,17 +535,16 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         # 3 - db.sync.input
         self.assertEventsAlmostEqual(
             self.extract_events('db.sync.input', events), [
-                [0, 6],
-                [1, 6],
-                [2, 6],
-                [3, 6],
-                [4, 6],
-                [5, 6],
-                [6, 6],
-            ] if self.db_driver == 'postgresql' else [
-                [0, 2],
-                [1, 2],
-                [2, 2],
+                [0, 9],
+                [1, 9],
+                [2, 9],
+                [3, 9],
+                [4, 9],
+                [5, 9],
+                [6, 9],
+                [7, 9],
+                [8, 9],
+                [9, 9],
             ]
         )
         # 4 - blockchain.sync.claim.meta

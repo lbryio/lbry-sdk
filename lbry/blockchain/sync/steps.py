@@ -5,9 +5,10 @@ from contextvars import ContextVar
 from typing import Set
 
 from sqlalchemy import bindparam, case, distinct, text
+from sqlalchemy.schema import CreateTable
 
 from lbry.db import queries
-from lbry.db.tables import Block as BlockTable
+from lbry.db.tables import Block as BlockTable, TXO, TXI
 from lbry.db.query_context import progress, context, Event
 from lbry.db.queries import rows_to_txos
 from lbry.db.sync import (
@@ -148,40 +149,82 @@ def process_block_save(block_file_number: int, loader, p=None):
 @sync_step(Event.INPUT_UPDATE, initial_sync=True, ongoing_sync=True)
 def process_inputs_outputs(initial_sync=False, p=None):
 
-    step = 1
-    if initial_sync and p.ctx.is_postgres:
-        p.start(6)
+    step = 0
+
+    def next_step():
+        nonlocal step
+        step += 1
+        return step
+
+    if initial_sync:
+        p.start(9)
     else:
         p.start(2)
 
-    # 0. Vacuum
-    if initial_sync and p.ctx.is_postgres:
-        with p.ctx.engine.connect() as c:
-            c.execute(text("COMMIT;"))
-            c.execute(text("VACUUM FULL ANALYZE txo;"))
-            p.step(step)
-            step += 1
-            c.execute(text("VACUUM FULL ANALYZE txi;"))
-            p.step(step)
-            step += 1
+    if initial_sync:
+        # A. add tx constraints
+        if p.ctx.is_postgres:
+            p.ctx.execute(text("ALTER TABLE tx ADD PRIMARY KEY (tx_hash);"))
+        p.step(next_step())
 
-    # 1. Update spent TXOs setting is_spent = True
-    update_spent_outputs(p.ctx)
-    p.step(step)
-    step += 1
-    if initial_sync and p.ctx.is_postgres:
-        p.ctx.execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
-        p.step(step)
-        step += 1
+    # 1. Update TXIs to have the address of TXO they are spending.
+    if initial_sync:
+        # B. txi table reshuffling
+        p.ctx.execute(text("ALTER TABLE txi RENAME TO old_txi;"))
+        p.ctx.execute(CreateTable(TXI, include_foreign_key_constraints=[]))
+        if p.ctx.is_postgres:
+            p.ctx.execute(text("ALTER TABLE txi DROP CONSTRAINT txi_pkey;"))
+        p.step(next_step())
+        # C. insert
+        old_txi = TXI.alias('old_txi')
+        columns = [c for c in old_txi.columns if c.name != 'address'] + [TXO.c.address]
+        select_txis = select(*columns).select_from(old_txi.join(TXO))
+        insert_txis = TXI.insert().from_select(columns, select_txis)
+        p.ctx.execute(text(
+            str(insert_txis.compile(p.ctx.engine)).replace('txi AS old_txi', 'old_txi')
+        ))
+        p.step(next_step())
+        # D. drop old txi
+        p.ctx.execute(text("DROP TABLE old_txi;"))
+        p.step(next_step())
+        # E. restore integrity constraint
+        if p.ctx.is_postgres:
+            p.ctx.execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
+        p.step(next_step())
+    else:
+        set_input_addresses(p.ctx)
+        p.step(next_step())
 
-    # 2. Update TXIs to have the address of TXO they are spending.
-    set_input_addresses(p.ctx)
-    p.step(step)
-    step += 1
-    if initial_sync and p.ctx.is_postgres:
-        p.ctx.execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
-        p.step(step)
-        step += 1
+    # 2. Update spent TXOs setting is_spent = True
+    if initial_sync:
+        # F. txo table reshuffling
+        p.ctx.execute(text("ALTER TABLE txo RENAME TO old_txo;"))
+        p.ctx.execute(CreateTable(TXO, include_foreign_key_constraints=[]))
+        if p.ctx.is_postgres:
+            p.ctx.execute(text("ALTER TABLE txo DROP CONSTRAINT txo_pkey;"))
+        p.step(next_step())
+        # G. insert
+        old_txo = TXO.alias('old_txo')
+        columns = (
+            [c for c in old_txo.columns if c.name != 'is_spent'] +
+            [(TXI.c.txo_hash != None).label('is_spent')]
+        )
+        select_txos = select(*columns).select_from(old_txo.join(TXI, isouter=True))
+        insert_txos = TXO.insert().from_select(columns, select_txos)
+        p.ctx.execute(text(
+            str(insert_txos.compile(p.ctx.engine)).replace('txo AS old_txo', 'old_txo')
+        ))
+        p.step(next_step())
+        # H. drop old txo
+        p.ctx.execute(text("DROP TABLE old_txo;"))
+        p.step(next_step())
+        # I. restore integrity constraint
+        if p.ctx.is_postgres:
+            p.ctx.execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+        p.step(next_step())
+    else:
+        update_spent_outputs(p.ctx)
+        p.step(next_step())
 
 
 @sync_step(Event.BLOCK_FILTER, initial_sync=True, ongoing_sync=True)
