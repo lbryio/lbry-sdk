@@ -9,12 +9,7 @@ from lbry.event import BroadcastSubscription
 from lbry.service.base import Sync, BlockEvent
 from lbry.blockchain.lbrycrd import Lbrycrd
 
-from .steps import (
-    SYNC_STEPS,
-    process_block_file,
-    process_block_filters,
-    process_metadata,
-)
+from . import steps
 
 
 log = logging.getLogger(__name__)
@@ -35,9 +30,7 @@ class BlockchainSync(Sync):
             # created while sync was running; therefore, run a second sync
             # after first one finishes to possibly sync those new blocks.
             # run advance as a task so that it can be stop()'ed if necessary.
-            self.advance_loop_task = asyncio.create_task(
-                self.advance(await self.db.needs_initial_sync())
-            )
+            self.advance_loop_task = asyncio.create_task(self.advance())
             await self.advance_loop_task
         self.chain.subscribe()
         self.advance_loop_task = asyncio.create_task(self.advance_loop())
@@ -58,7 +51,7 @@ class BlockchainSync(Sync):
             self.db.executor, f, *args
         )
 
-    async def load_blocks(self, sync_steps: int, initial_sync: bool) -> Optional[Tuple[int, int]]:
+    async def load_blocks(self) -> Optional[Tuple[int, int]]:
         tasks = []
         starting_height, ending_height = None, await self.chain.db.get_best_height()
         tx_count = block_count = 0
@@ -81,16 +74,15 @@ class BlockchainSync(Sync):
                 our_best_file_height+1 if starting_height is None else starting_height, our_best_file_height+1
             )
             tasks.append(self.run(
-                process_block_file, chain_file['file_number'], our_best_file_height+1, initial_sync
+                steps.process_block_file, chain_file['file_number'], our_best_file_height+1
             ))
         if not tasks:
             return
         await self._on_progress_controller.add({
-            "event": Event.START.label,  # pylint: disable=no-member
+            "event": "blockchain.sync.start",
             "data": {
                 "starting_height": starting_height,
                 "ending_height": ending_height,
-                "sync_steps": sync_steps,
                 "files": len(tasks),
                 "blocks": block_count,
                 "txs": tx_count,
@@ -111,27 +103,22 @@ class BlockchainSync(Sync):
         best_height_processed = max(f.result() for f in done)
         return starting_height, best_height_processed
 
-    def get_steps(self, initial_sync: bool):
-        if initial_sync:
-            sync_steps = SYNC_STEPS['initial_sync'].copy()
-        else:
-            sync_steps = SYNC_STEPS['ongoing_sync'].copy()
-        if not self.conf.spv_address_filters:
-            sync_steps.remove(Event.BLOCK_FILTER.label)  # pylint: disable=no-member
-        return sync_steps
-
-    async def advance(self, initial_sync=False):
-        sync_steps = self.get_steps(initial_sync)
-        heights = await self.load_blocks(sync_steps, initial_sync)
-        if heights:
-            starting_height, ending_height = heights
-            await self.run(process_metadata, starting_height, ending_height, initial_sync)
-            if self.conf.spv_address_filters:
-                await self.run(process_block_filters)
-            await self._on_block_controller.add(BlockEvent(ending_height))
-            self.db.message_queue.put((
-                Event.COMPLETE.value, os.getpid(), len(sync_steps), len(sync_steps)
-            ))
+    async def advance(self):
+        starting_height = await self.db.get_best_block_height()
+        blocks_added = await self.load_blocks()
+        process_block_filters = (
+            self.run(steps.process_block_filters)
+            if blocks_added and self.conf.spv_address_filters else asyncio.sleep(0)
+        )
+        if blocks_added:
+            await self.run(steps.process_spends, blocks_added[0] == 0)
+        await asyncio.wait([
+            process_block_filters,
+            self.run(steps.process_claims, starting_height, blocks_added),
+            self.run(steps.process_supports, starting_height, blocks_added),
+        ])
+        if blocks_added:
+            await self._on_block_controller.add(BlockEvent(blocks_added[-1]))
 
     async def advance_loop(self):
         while True:

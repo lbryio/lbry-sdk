@@ -86,7 +86,7 @@ class BlockchainDB:
         return await self.run_in_executor(self.sync_execute, sql, *args)
 
     def sync_execute_fetchall(self, sql: str, *args) -> List[dict]:
-        return [dict(r) for r in self.connection.execute(sql, *args).fetchall()]
+        return self.connection.execute(sql, *args).fetchall()
 
     async def execute_fetchall(self, sql: str, *args) -> List[dict]:
         return await self.run_in_executor(self.sync_execute_fetchall, sql, *args)
@@ -112,7 +112,7 @@ class BlockchainDB:
         if file_number is not None and start_height is not None:
             sql += "AND file = ? AND height >= ?"
             args = (file_number, start_height)
-        return self.sync_execute_fetchall(sql + " GROUP BY file ORDER BY file ASC;", args)
+        return [dict(r) for r in self.sync_execute_fetchall(sql + " GROUP BY file ORDER BY file ASC;", args)]
 
     async def get_block_files(self, file_number: int = None, start_height: int = None) -> List[dict]:
         return await self.run_in_executor(
@@ -120,14 +120,14 @@ class BlockchainDB:
         )
 
     def sync_get_blocks_in_file(self, block_file: int, start_height=0) -> List[dict]:
-        return self.sync_execute_fetchall(
+        return [dict(r) for r in self.sync_execute_fetchall(
             """
             SELECT datapos as data_offset, height, hash as block_hash, txCount as txs
             FROM block_info
             WHERE file = ? AND height >= ? AND status&1 AND status&4
             ORDER BY datapos ASC;
             """, (block_file, start_height)
-        )
+        )]
 
     async def get_blocks_in_file(self, block_file: int, start_height=0) -> List[dict]:
         return await self.run_in_executor(self.sync_get_blocks_in_file, block_file, start_height)
@@ -145,24 +145,27 @@ class BlockchainDB:
         }
 
     def sync_get_takeover_count(self, start_height: int, end_height: int) -> int:
-        sql = "SELECT COUNT(*) FROM takeover WHERE height BETWEEN ? AND ?"
-        return self.connection.execute(sql, (start_height, end_height)).fetchone()[0]
+        sql = """
+        SELECT COUNT(*) FROM claim WHERE name IN (
+            SELECT name FROM takeover WHERE claimID IS NOT NULL AND height BETWEEN ? AND ?
+        )
+        """, (start_height, end_height)
+        return self.connection.execute(*sql).fetchone()[0]
 
     async def get_takeover_count(self, start_height: int, end_height: int) -> int:
         return await self.run_in_executor(self.sync_get_takeover_count, start_height, end_height)
 
     def sync_get_takeovers(self, start_height: int, end_height: int) -> List[dict]:
-        return self.sync_execute_fetchall(
-            """
-            SELECT
-                takeover.name,
-                takeover.claimID AS claim_hash,
-                takeover.height
-            FROM takeover
-            WHERE height BETWEEN ? AND ?
-            ORDER BY height, name
-            """, (start_height, end_height)
-        )
+        sql = """
+        SELECT name, claimID, MAX(height) AS height FROM takeover
+        WHERE claimID IS NOT NULL AND height BETWEEN ? AND ?
+        GROUP BY name
+        """, (start_height, end_height)
+        return [{
+            'normalized': normalize_name(r['name'].decode()),
+            'claim_hash': r['claimID'],
+            'height': r['height']
+        } for r in self.sync_execute_fetchall(*sql)]
 
     async def get_takeovers(self, start_height: int, end_height: int) -> List[dict]:
         return await self.run_in_executor(self.sync_get_takeovers, start_height, end_height)
@@ -174,19 +177,15 @@ class BlockchainDB:
     async def get_claim_metadata_count(self, start_height: int, end_height: int) -> int:
         return await self.run_in_executor(self.sync_get_claim_metadata_count, start_height, end_height)
 
-    def sync_get_claim_metadata(self, start_height: int, end_height: int) -> List[dict]:
-        sql = """
+    def sync_get_claim_metadata(self, claim_hashes) -> List[dict]:
+        sql = f"""
         SELECT
-            name, claimID, activationHeight, expirationHeight,
+            name, claimID, activationHeight, expirationHeight, originalHeight,
             (SELECT
                 CASE WHEN takeover.claimID = claim.claimID THEN takeover.height END
                 FROM takeover WHERE takeover.name = claim.name
                 ORDER BY height DESC LIMIT 1
             ) AS takeoverHeight,
-            (SELECT CASE WHEN takeover.claimID = claim.claimID THEN 1 ELSE 0 END
-             FROM takeover WHERE takeover.name = claim.name
-             ORDER BY height DESC LIMIT 1
-            ) AS isControlling,
             (SELECT find_shortest_id(c.claimid, claim.claimid) FROM claim AS c
              WHERE
                 c.nodename = claim.nodename AND
@@ -194,18 +193,17 @@ class BlockchainDB:
                 c.claimid != claim.claimid
             ) AS shortestID
         FROM claim
-        WHERE originalHeight BETWEEN ? AND ?
-        ORDER BY originalHeight
-        """, (start_height, end_height)
+        WHERE claimID IN ({','.join(['?' for _ in claim_hashes])})
+        ORDER BY claimID
+        """, claim_hashes
         return [{
             "name": r["name"],
-            "claim_hash_": r["claimID"],
+            "claim_hash": r["claimID"],
             "activation_height": r["activationHeight"],
             "expiration_height": r["expirationHeight"],
             "takeover_height": r["takeoverHeight"],
-            "is_controlling": r["isControlling"],
+            "creation_height": r["originalHeight"],
             "short_url": f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}',
-            "short_url_": f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}',
         } for r in self.sync_execute_fetchall(*sql)]
 
     async def get_claim_metadata(self, start_height: int, end_height: int) -> List[dict]:

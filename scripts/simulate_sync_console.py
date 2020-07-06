@@ -10,6 +10,7 @@ from lbry.service import FullNode
 from lbry.console import Advanced, Basic
 from lbry.conf import Config
 from lbry.db.utils import chunk
+from lbry.db.query_context import Event
 
 
 def cause_protobuf_stderr():
@@ -33,7 +34,6 @@ class Simulator:
         self.starting_file = 0
         self.processes = console.service.db.processes
 
-        self.steps = []
         self.txs = 0
         self.claims = 0
         self.supports = 0
@@ -46,7 +46,6 @@ class Simulator:
 
     async def advance(self, initial_sync: bool, ending_height: int, files: List[int], txs: int):
         self.ending_height = ending_height
-        self.steps = self.sync.get_steps(initial_sync)
         self.txs = txs
         self.claims = int(txs/4)
         self.supports = int(txs/2)
@@ -57,7 +56,6 @@ class Simulator:
                 "ending_height": ending_height,
                 "files": len(files),
                 "blocks": self.blocks,
-                "sync_steps": self.steps,
                 "txs": self.txs,
                 "claims": self.claims,
                 "supports": self.supports,
@@ -78,14 +76,14 @@ class Simulator:
                     txs_synced += txs
                     tasks.append(self.sync_block_file(file, blocks, txs))
             await asyncio.wait(tasks)
-        for step in self.steps:
-            if step in ("blockchain.sync.block.read", "blockchain.sync.block.save"):
+        for step in Event._events:
+            if step.name in ("blockchain.sync.block.read", "blockchain.sync.block.save"):
                 continue
-            await getattr(self, step.replace('.', '_'))()
-        await self.progress.add({
-            "event": "blockchain.sync.complete",
-            "data": {"step": len(self.steps), "total": len(self.steps), "unit": "tasks"}
-        })
+            await getattr(self, step.name.replace('.', '_'))()
+        #await self.progress.add({
+        #    "event": "blockchain.sync.complete",
+        #    "data": {"step": len(self.steps), "total": len(self.steps), "unit": "tasks"}
+        #})
         self.ending_height = ending_height+1
         self.starting_height = self.ending_height
 
@@ -123,50 +121,26 @@ class Simulator:
             await asyncio.sleep(delay)
             await self.progress.add({"event": event, "data": {"step": steps, "total": steps, "unit": unit}})
 
-    async def db_sync_input(self):
-        await self.generate_steps("db.sync.input", 2, "txis")
+    async def blockchain_sync_block_filters(self):
+        await self.generate_steps("blockchain.sync.block.filters", 5, "blocks")
 
-    async def db_sync_claim_delete(self):
-        await self.generate_steps("db.sync.claim.delete", 1, "claims")
+    async def blockchain_sync_spends(self):
+        await self.generate_steps("blockchain.sync.spends", 5, "steps")
 
-    async def db_sync_claim_insert(self):
-        await self.generate_steps("db.sync.claim.insert", 1, "claims")
-
-    async def db_sync_claim_update(self):
-        await self.generate_steps("db.sync.claim.update", 0, "claims")
-
-    async def db_sync_support_delete(self):
-        await self.generate_steps("db.sync.support.delete", 1, "supports")
-
-    async def db_sync_support_insert(self):
-        await self.generate_steps("db.sync.support.insert", 1, "supports")
-
-    async def blockchain_sync_claim_trie(self):
-        await self.generate_steps("blockchain.sync.claim.trie", 1, "claims")
-
-    async def blockchain_sync_claim_meta(self):
+    async def blockchain_sync_claims(self):
         for i in range(0, self.claims, 1_000):
             await self.progress.add({
-                "event": "blockchain.sync.claim.meta",
+                "event": "blockchain.sync.claims",
                 "data": {"step": i, "total": self.claims, "unit": "claims"}
             })
             await asyncio.sleep(0.1)
         await self.progress.add({
-            "event": "blockchain.sync.claim.meta",
+            "event": "blockchain.sync.claims",
             "data": {"step": self.claims, "total": self.claims, "unit": "claims"}
         })
 
-    async def blockchain_sync_claim_signatures(self):
-        await self.generate_steps("blockchain.sync.claim.signatures", self.claims, "claims", 0.5, 1000)
-
-    async def blockchain_sync_support_signatures(self):
-        await self.generate_steps("blockchain.sync.support.signatures", self.supports, "supports", 0.5, 1000)
-
-    async def blockchain_sync_claim_stakes(self):
-        await self.generate_steps("blockchain.sync.claim.stakes", 1, "claims", 0.5)
-
-    async def blockchain_sync_claim_channels(self):
-        await self.generate_steps("blockchain.sync.claim.channels", 0, "supports", 0.5)
+    async def blockchain_sync_supports(self):
+        await self.generate_steps("blockchain.sync.supports", 5, "supports")
 
 
 async def main():

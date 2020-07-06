@@ -112,7 +112,6 @@ class Advanced(Basic):
         self.is_single_sync_bar = False
         self.single_bar_relative_steps = 0
         self.last_stats = ""
-        self.sync_steps = []
         self.block_savers = 0
         self.block_readers = 0
         self.stderr = RedirectOutput('stderr')
@@ -123,7 +122,7 @@ class Advanced(Basic):
 
     def stopping(self):
         super().stopping()
-        self.stderr.flush(self.bars['sync'].write, True)
+        self.stderr.flush(self.bars['read'].write, True)
         self.stderr.release()
 
     def get_or_create_bar(self, name, desc, unit, total, leave=False, bar_format=None, postfix=None, position=None):
@@ -138,16 +137,12 @@ class Advanced(Basic):
 
     def sync_start(self, d):
         self.bars.clear()
-        self.sync_steps = d['sync_steps']
         if d['ending_height']-d['starting_height'] > 0:
             label = f"sync {d['starting_height']:,d}-{d['ending_height']:,d}"
         else:
             label = f"sync {d['ending_height']:,d}"
+        print(label)
         self.last_stats = f"{d['txs']:,d} txs, {d['claims']:,d} claims and {d['supports']:,d} supports"
-        self.get_or_create_bar(
-            "sync", label, "tasks", len(d['sync_steps']), True,
-            "{l_bar}{bar}| {postfix[0]:<55}", (self.last_stats,)
-        )
         self.get_or_create_bar("read", "├─  blocks read", "blocks", d['blocks'], True)
         self.get_or_create_bar("save", "└─┬   txs saved", "txs", d['txs'], True)
 
@@ -155,15 +150,7 @@ class Advanced(Basic):
         if e in ('blockchain.sync.block.read', 'blockchain.sync.block.save'):
             self.update_block_bars(e, d)
         else:
-            self.update_steps_bar(e, d)
             self.update_other_bars(e, d)
-
-    def update_steps_bar(self, e, d):
-        sync_bar = self.bars['sync']
-        if d['step'] == d['total']:
-            sync_done = (self.sync_steps.index(e)+1)-sync_bar.last_print_n
-            sync_bar.postfix = (f'finished: {e}',)
-            sync_bar.update(sync_done)
 
     def update_block_bars(self, event, d):
         total_bar = self.bars[event[-4:]]
@@ -198,7 +185,6 @@ class Advanced(Basic):
 
         total_bar.update(diff)
         if total_bar.total == total_bar.last_print_n:
-            self.update_steps_bar(event, {'step': 1, 'total': 1})
             if total_bar.desc.endswith('txs saved'):
                 total_bar.desc = "├─    txs saved"
                 total_bar.refresh()
@@ -221,7 +207,7 @@ class Advanced(Basic):
             #bar.close()
 
     def sync_complete(self):
-        self.bars['sync'].postfix = (self.last_stats,)
+        self.bars['read'].postfix = (self.last_stats,)
         for bar in self.bars.values():
             bar.close()
 
@@ -229,10 +215,10 @@ class Advanced(Basic):
         e, d = event['event'], event.get('data', {})
         if e.endswith("sync.start"):
             self.sync_start(d)
-            self.stderr.flush(self.bars['sync'].write)
+            self.stderr.flush(self.bars['read'].write)
         elif e.endswith("sync.complete"):
-            self.stderr.flush(self.bars['sync'].write, True)
+            self.stderr.flush(self.bars['read'].write, True)
             self.sync_complete()
         else:
-            self.stderr.flush(self.bars['sync'].write)
+            self.stderr.flush(self.bars['read'].write)
             self.update_progress(e, d)

@@ -78,16 +78,15 @@ def execute_fetchall(sql):
     return context().fetchall(text(sql))
 
 
-def get_best_tx_height():
+def get_best_block_height():
     return context().fetchone(
-        select(func.coalesce(func.max(TX.c.height), -1).label('height')).select_from(TX)
+        select(func.coalesce(func.max(Block.c.height), -1).label('height'))
     )['height']
 
 
 def get_best_block_height_for_file(file_number):
     return context().fetchone(
         select(func.coalesce(func.max(Block.c.height), -1).label('height'))
-        .select_from(Block)
         .where(Block.c.file_number == file_number)
     )['height']
 
@@ -268,7 +267,7 @@ def get_transaction_count(**constraints):
 BASE_SELECT_TXO_COLUMNS = [
     TX.c.tx_hash, TX.c.raw, TX.c.height, TX.c.position.label('tx_position'),
     TX.c.is_verified, TX.c.timestamp,
-    TXO.c.txo_type, TXO.c.position.label('txo_position'), TXO.c.amount, TXO.c.is_spent,
+    TXO.c.txo_type, TXO.c.position.label('txo_position'), TXO.c.amount, TXO.c.spent_height,
     TXO.c.script_offset, TXO.c.script_length,
 ]
 
@@ -357,7 +356,7 @@ def rows_to_txos(rows: List[dict], include_tx=True) -> List[Output]:
                 tx_ref=TXRefImmutable.from_hash(row['tx_hash'], row['height']),
                 position=row['txo_position'],
             )
-        txo.is_spent = bool(row['is_spent'])
+        txo.spent_height = bool(row['spent_height'])
         if 'is_my_input' in row:
             txo.is_my_input = bool(row['is_my_input'])
         if 'is_my_output' in row:
@@ -437,7 +436,7 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
         channels = {
             txo.claim_hash: txo for txo in
             get_txos(
-                txo_type=TXO_TYPES['channel'], is_spent=False,
+                txo_type=TXO_TYPES['channel'], spent_height=0,
                 wallet_account_ids=wallet_account_ids, claim_hash__in=channel_hashes
             )[0]
         }
@@ -471,7 +470,7 @@ def get_txo_sum(**constraints):
 
 
 def get_balance(**constraints):
-    return get_txo_sum(is_spent=False, **constraints)
+    return get_txo_sum(spent_height=0, **constraints)
 
 
 def get_report(account_ids):
@@ -793,7 +792,7 @@ def add_keys(account, chain, pubkeys):
 def get_supports_summary(self, **constraints):
     return get_txos(
         txo_type=TXO_TYPES['support'],
-        is_spent=False, is_my_output=True,
+        spent_height=0, is_my_output=True,
         include_is_my_input=True,
         no_tx=True,
         **constraints

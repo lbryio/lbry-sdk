@@ -1,14 +1,15 @@
 import os
 import time
+import functools
 from io import BytesIO
 import multiprocessing as mp
-from enum import Enum
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam
+from sqlalchemy import create_engine, inspect, bindparam, func, exists, case
+from sqlalchemy.future import select
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.sql import Insert
 try:
@@ -92,6 +93,18 @@ class QueryContext:
     def fetchall(self, sql, *args):
         rows = self.connection.execute(sql, *args).fetchall()
         return [dict(row._mapping) for row in rows]
+
+    def fetchtotal(self, condition):
+        sql = select(func.count('*').label('total')).where(condition)
+        return self.fetchone(sql)['total']
+
+    def fetchmax(self, column):
+        sql = select(func.max(column).label('max_result'))
+        return self.fetchone(sql)['max_result']
+
+    def has_records(self, table):
+        sql = select(exists([1], from_obj=table).label('result'))
+        return self.fetchone(sql)['result']
 
     def insert_or_ignore(self, table):
         if self.is_sqlite:
@@ -178,68 +191,58 @@ def uninitialize():
         _context.set(None)
 
 
-class ProgressUnit(Enum):
-    NONE = "", None
-    TASKS = "tasks", None
-    BLOCKS = "blocks", Block
-    TXS = "txs", TX
-    TXIS = "txis", TXI
-    CLAIMS = "claims", Claim
-    SUPPORTS = "supports", Support
+class Event:
+    _events: List['Event'] = []
+    __slots__ = 'id', 'name', 'unit', 'step_size'
 
-    def __new__(cls, value, table):
-        next_id = len(cls.__members__) + 1
-        obj = object.__new__(cls)
-        obj._value_ = next_id
-        obj.label = value
-        obj.table = table
-        return obj
+    def __init__(self, name: str, unit: str, step_size: int):
+        self.name = name
+        self.unit = unit
+        self.step_size = step_size
+
+    @classmethod
+    def get_by_id(cls, event_id) -> 'Event':
+        return cls._events[event_id]
+
+    @classmethod
+    def get_by_name(cls, name) -> 'Event':
+        for event in cls._events:
+            if event.name == name:
+                return event
+
+    @classmethod
+    def add(cls, name: str, unit: str, step_size: int) -> 'Event':
+        assert cls.get_by_name(name) is None, f"Event {name} already exists."
+        event = cls(name, unit, step_size)
+        cls._events.append(event)
+        event.id = cls._events.index(event)
+        return event
 
 
-class Event(Enum):
-    START = "blockchain.sync.start", ProgressUnit.BLOCKS
-    COMPLETE = "blockchain.sync.complete", ProgressUnit.TASKS
+def event_emitter(name: str, unit: str, step_size=1):
+    event = Event.add(name, unit, step_size)
 
-    # full node specific sync events
-    BLOCK_READ = "blockchain.sync.block.read", ProgressUnit.BLOCKS
-    BLOCK_SAVE = "blockchain.sync.block.save", ProgressUnit.TXS
-    BLOCK_FILTER = "blockchain.sync.block.filter", ProgressUnit.BLOCKS
-    CLAIM_META = "blockchain.sync.claim.meta", ProgressUnit.CLAIMS
-    CLAIM_TRIE = "blockchain.sync.claim.trie", ProgressUnit.CLAIMS
-    STAKE_CALC = "blockchain.sync.claim.stakes", ProgressUnit.CLAIMS
-    CLAIM_CHAN = "blockchain.sync.claim.channels", ProgressUnit.CLAIMS
-    CLAIM_SIGN = "blockchain.sync.claim.signatures", ProgressUnit.CLAIMS
-    SUPPORT_SIGN = "blockchain.sync.support.signatures", ProgressUnit.SUPPORTS
-    TRENDING_CALC = "blockchain.sync.trending", ProgressUnit.BLOCKS
+    def wrapper(f):
+        @functools.wraps(f)
+        def with_progress(*args, **kwargs):
+            with progress(event, step_size=step_size) as p:
+                return f(*args, **kwargs, p=p)
+        return with_progress
 
-    # full node + light client sync events
-    INPUT_UPDATE = "db.sync.input", ProgressUnit.TXIS
-    CLAIM_DELETE = "db.sync.claim.delete", ProgressUnit.CLAIMS
-    CLAIM_INSERT = "db.sync.claim.insert", ProgressUnit.CLAIMS
-    CLAIM_UPDATE = "db.sync.claim.update", ProgressUnit.CLAIMS
-    SUPPORT_DELETE = "db.sync.support.delete", ProgressUnit.SUPPORTS
-    SUPPORT_INSERT = "db.sync.support.insert", ProgressUnit.SUPPORTS
-
-    def __new__(cls, value, unit: ProgressUnit):
-        next_id = len(cls.__members__) + 1
-        obj = object.__new__(cls)
-        obj._value_ = next_id
-        obj.label = value
-        obj.unit = unit
-        return obj
+    return wrapper
 
 
 class ProgressPublisher(EventQueuePublisher):
 
     def message_to_event(self, message):
-        event = Event(message[0])  # pylint: disable=no-value-for-parameter
+        event = Event.get_by_id(message[0])
         d = {
-            "event": event.label,
+            "event": event.name,
             "data": {
                 "pid": message[1],
                 "step": message[2],
                 "total": message[3],
-                "unit": event.unit.label
+                "unit": event.unit
             }
         }
         if len(message) > 4 and isinstance(message[4], dict):
@@ -294,12 +297,12 @@ class ProgressContext:
 
     def get_event_args(self, done):
         if self.extra is not None:
-            return self.event.value, self.ctx.pid, done, self.total, self.extra
-        return self.event.value, self.ctx.pid, done, self.total
+            return self.event.id, self.ctx.pid, done, self.total, self.extra
+        return self.event.id, self.ctx.pid, done, self.total
 
 
 def progress(e: Event, step_size=1) -> ProgressContext:
-    ctx = context(e.label)
+    ctx = context(e.name)
     ctx.current_progress = ProgressContext(ctx, e, step_size=step_size)
     return ctx.current_progress
 
@@ -354,6 +357,7 @@ class BulkLoader:
             'tx_hash': tx.hash,
             'txo_hash': txi.txo_ref.hash,
             'position': txi.position,
+            'height': tx.height,
         }
 
     def txo_to_row(self, tx: Transaction, txo: Output) -> dict:
@@ -371,6 +375,8 @@ class BulkLoader:
             'claim_hash': None,
             'claim_name': None,
             'channel_hash': None,
+            'signature': None,
+            'signature_digest': None,
             'public_key': None,
             'public_key_hash': None
         }
@@ -380,6 +386,8 @@ class BulkLoader:
                 row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
                 if claim.is_signed:
                     row['channel_hash'] = claim.signing_channel_hash
+                    row['signature'] = txo.get_encoded_signature()
+                    row['signature_digest'] = txo.get_signature_digest(self.ledger)
                 if claim.is_channel:
                     row['public_key'] = claim.channel.public_key_bytes
                     row['public_key_hash'] = self.ledger.address_to_hash160(
@@ -406,111 +414,89 @@ class BulkLoader:
                 pass
         return row
 
-    def claim_to_rows(self, txo: Output) -> Tuple[dict, List]:
-        try:
-            claim_name = txo.claim_name.replace('\x00', '')
-            normalized_name = txo.normalized_name
-        except UnicodeDecodeError:
-            return {}, []
-        tx = txo.tx_ref.tx
-        claim_hash = txo.claim_hash
-        claim_record = {
-            'claim_hash': claim_hash,
-            'claim_id': txo.claim_id,
-            'claim_name': claim_name,
-            'normalized': normalized_name,
-            'address': txo.get_address(self.ledger),
-            'txo_hash': txo.ref.hash,
-            'amount': txo.amount,
-            'timestamp': tx.timestamp,
-            'release_time': None,
-            'height': tx.height,
-            'title': None,
-            'author': None,
-            'description': None,
+    def claim_to_rows(
+            self, txo: Output, timestamp: int, staked_support_amount: int, staked_support_count: int,
+            signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
+            ) -> Tuple[dict, List]:
+
+        d = {
             'claim_type': None,
+            'address': txo.get_address(self.ledger),
+            'txo_hash': txo.hash,
+            'amount': txo.amount,
+            'height': txo.tx_ref.height,
+            'timestamp': timestamp,
+            # support
+            'staked_amount': txo.amount + staked_support_amount,
+            'staked_support_amount': staked_support_amount,
+            'staked_support_count': staked_support_count,
+            # basic metadata
+            'title': None,
+            'description': None,
+            'author': None,
             # streams
             'stream_type': None,
             'media_type': None,
+            'duration': None,
+            'release_time': None,
             'fee_amount': 0,
             'fee_currency': None,
-            'duration': None,
             # reposts
             'reposted_claim_hash': None,
             # signed claims
             'channel_hash': None,
-            'signature': None,
-            'signature_digest': None,
             'is_signature_valid': None,
         }
 
-        try:
-            claim = txo.claim
-        except Exception:
-            #self.logger.exception(f"Could not parse claim protobuf for {tx.id}:{txo.position}.")
-            return claim_record, []
+        claim = txo.can_decode_claim
+        if not claim:
+            return d, []
 
         if claim.is_stream:
-            claim_record['claim_type'] = TXO_TYPES['stream']
-            claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
-            claim_record['media_type'] = claim.stream.source.media_type
-            claim_record['title'] = claim.stream.title.replace('\x00', '')
-            claim_record['description'] = claim.stream.description.replace('\x00', '')
-            claim_record['author'] = claim.stream.author.replace('\x00', '')
+            d['claim_type'] = TXO_TYPES['stream']
+            d['stream_type'] = STREAM_TYPES[guess_stream_type(d['media_type'])]
+            d['media_type'] = claim.stream.source.media_type
+            d['title'] = claim.stream.title.replace('\x00', '')
+            d['description'] = claim.stream.description.replace('\x00', '')
+            d['author'] = claim.stream.author.replace('\x00', '')
             if claim.stream.video and claim.stream.video.duration:
-                claim_record['duration'] = claim.stream.video.duration
+                d['duration'] = claim.stream.video.duration
             if claim.stream.audio and claim.stream.audio.duration:
-                claim_record['duration'] = claim.stream.audio.duration
+                d['duration'] = claim.stream.audio.duration
             if claim.stream.release_time:
-                claim_record['release_time'] = claim.stream.release_time
+                d['release_time'] = claim.stream.release_time
             if claim.stream.has_fee:
                 fee = claim.stream.fee
-                if isinstance(fee.currency, str):
-                    claim_record['fee_currency'] = fee.currency.lower()
                 if isinstance(fee.amount, Decimal):
-                    claim_record['fee_amount'] = int(fee.amount*1000)
+                    d['fee_amount'] = int(fee.amount*1000)
+                if isinstance(fee.currency, str):
+                    d['fee_currency'] = fee.currency.lower()
         elif claim.is_repost:
-            claim_record['claim_type'] = TXO_TYPES['repost']
-            claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
+            d['claim_type'] = TXO_TYPES['repost']
+            d['reposted_claim_hash'] = claim.repost.reference.claim_hash
         elif claim.is_channel:
-            claim_record['claim_type'] = TXO_TYPES['channel']
+            d['claim_type'] = TXO_TYPES['channel']
         if claim.is_signed:
-            claim_record['channel_hash'] = claim.signing_channel_hash
-            claim_record['signature'] = txo.get_encoded_signature()
-            claim_record['signature_digest'] = txo.get_signature_digest(self.ledger)
+            d['channel_hash'] = claim.signing_channel_hash
+            d['is_signature_valid'] = Output.is_signature_valid(
+                signature, signature_digest, channel_public_key
+            )
 
-        tags = [
-            {'claim_hash': claim_hash, 'tag': tag} for tag in clean_tags(claim.message.tags)
-        ]
+        tags = []
+        if claim.message.tags:
+            claim_hash = txo.claim_hash
+            tags = [
+                {'claim_hash': claim_hash, 'tag': tag}
+                for tag in clean_tags(claim.message.tags)
+            ]
 
-        return claim_record, tags
+        return d, tags
 
-    def add_block(self, block: Block, add_claims_supports: set = None):
-        self.blocks.append(self.block_to_row(block))
-        for tx in block.txs:
-            self.add_transaction(block.block_hash, tx, add_claims_supports)
-        return self
-
-    def add_transaction(self, block_hash: bytes, tx: Transaction, add_claims_supports: set = None):
-        self.txs.append(self.tx_to_row(block_hash, tx))
-        for txi in tx.inputs:
-            if txi.coinbase is None:
-                self.txis.append(self.txi_to_row(tx, txi))
-        for txo in tx.outputs:
-            self.txos.append(self.txo_to_row(tx, txo))
-            if add_claims_supports:
-                if txo.is_support and txo.hash in add_claims_supports:
-                    self.add_support(txo)
-                elif txo.is_claim and txo.hash in add_claims_supports:
-                    self.add_claim(txo)
-        return self
-
-    def add_support(self, txo: Output):
+    def support_to_row(self, txo):
         tx = txo.tx_ref.tx
-        claim_hash = txo.claim_hash
-        support_record = {
+        d = {
             'txo_hash': txo.ref.hash,
-            'claim_hash': claim_hash,
+            'claim_hash': txo.claim_hash,
             'address': txo.get_address(self.ledger),
             'amount': txo.amount,
             'height': tx.height,
@@ -519,55 +505,94 @@ class BulkLoader:
             'signature': None,
             'signature_digest': None,
         }
-        self.supports.append(support_record)
         support = txo.can_decode_support
         if support:
-            support_record['emoji'] = support.emoji
+            d['emoji'] = support.emoji
             if support.is_signed:
-                support_record['channel_hash'] = support.signing_channel_hash
-                support_record['signature'] = txo.get_encoded_signature()
-                support_record['signature_digest'] = txo.get_signature_digest(None)
+                d['channel_hash'] = support.signing_channel_hash
+                d['signature'] = txo.get_encoded_signature()
+                d['signature_digest'] = txo.get_signature_digest(None)
+        return d
 
-    def add_claim(self, txo: Output):
-        claim, tags = self.claim_to_rows(txo)
-        if claim:
-            tx = txo.tx_ref.tx
-            if txo.script.is_claim_name:
-                claim['creation_height'] = tx.height
-                claim['creation_timestamp'] = tx.timestamp
-            else:
-                claim['creation_height'] = None
-                claim['creation_timestamp'] = None
-            self.claims.append(claim)
-            self.tags.extend(tags)
+    def add_block(self, block: Block):
+        self.blocks.append(self.block_to_row(block))
+        for tx in block.txs:
+            self.add_transaction(block.block_hash, tx)
         return self
 
-    def update_claim(self, txo: Output):
-        claim, tags = self.claim_to_rows(txo)
-        if claim:
-            claim['claim_hash_'] = claim.pop('claim_hash')
-            self.update_claims.append(claim)
-            self.delete_tags.append({'claim_hash_': claim['claim_hash_']})
-            self.tags.extend(tags)
+    def add_transaction(self, block_hash: bytes, tx: Transaction):
+        self.txs.append(self.tx_to_row(block_hash, tx))
+        for txi in tx.inputs:
+            if txi.coinbase is None:
+                self.txis.append(self.txi_to_row(tx, txi))
+        for txo in tx.outputs:
+            self.txos.append(self.txo_to_row(tx, txo))
         return self
 
-    def save(self, batch_size=10000):
-        queries = (
+    def add_support(self, txo: Output):
+        self.supports.append(self.support_to_row(txo))
+
+    def add_claim(
+            self, txo: Output, short_url: str,
+            creation_height: int, activation_height: int, expiration_height: int,
+            takeover_height: int = None, channel_url: str = None, **extra):
+        try:
+            claim_name = txo.claim_name.replace('\x00', '')
+            normalized_name = txo.normalized_name
+        except UnicodeDecodeError:
+            return self
+        d, tags = self.claim_to_rows(txo, **extra)
+        d['claim_hash'] = txo.claim_hash
+        d['claim_id'] = txo.claim_id
+        d['claim_name'] = claim_name
+        d['normalized'] = normalized_name
+        d['short_url'] = short_url
+        d['creation_height'] = creation_height
+        d['activation_height'] = activation_height
+        d['expiration_height'] = expiration_height
+        d['takeover_height'] = takeover_height
+        d['is_controlling'] = takeover_height is not None
+        if d['is_signature_valid']:
+            d['canonical_url'] = channel_url + '/' + short_url
+        else:
+            d['canonical_url'] = None
+        self.claims.append(d)
+        self.tags.extend(tags)
+        return self
+
+    def update_claim(self, txo: Output, channel_url: Optional[str], **extra):
+        d, tags = self.claim_to_rows(txo, **extra)
+        d['pk'] = txo.claim_hash
+        d['channel_url'] = channel_url
+        d['set_canonical_url'] = d['is_signature_valid']
+        self.update_claims.append(d)
+        self.delete_tags.append({'pk': txo.claim_hash})
+        self.tags.extend(tags)
+        return self
+
+    def get_queries(self):
+        return (
             (Block.insert(), self.blocks),
             (TX.insert(), self.txs),
             (TXO.insert(), self.txos),
             (TXI.insert(), self.txis),
             (Claim.insert(), self.claims),
-            (Tag.delete().where(Tag.c.claim_hash == bindparam('claim_hash_')), self.delete_tags),
-            (Claim.update().where(Claim.c.claim_hash == bindparam('claim_hash_')), self.update_claims),
+            (Tag.delete().where(Tag.c.claim_hash == bindparam('pk')), self.delete_tags),
+            (Claim.update().where(Claim.c.claim_hash == bindparam('pk')).values(
+                canonical_url=case([
+                    (bindparam('set_canonical_url'), bindparam('channel_url') + '/' + Claim.c.short_url)
+                ], else_=None)
+            ), self.update_claims),
             (Tag.insert(), self.tags),
             (Support.insert(), self.supports),
         )
 
+    def save(self, unit_table, batch_size=10000):
+        queries = self.get_queries()
+
         p = self.ctx.current_progress
         done = row_scale = 0
         if p:
-            unit_table = p.event.unit.table
             progress_total, row_total = 0, sum(len(q[1]) for q in queries)
             for sql, rows in queries:
                 if sql.table == unit_table:
@@ -610,3 +635,18 @@ class BulkLoader:
                     if p:
                         done += int(len(chunk_rows)/row_scale)
                         p.step(done)
+
+    def flush(self, done_counter_table) -> int:
+        execute = self.ctx.connection.execute
+        done = 0
+        for sql, rows in self.get_queries():
+            if not rows:
+                continue
+            if self.ctx.is_postgres and isinstance(sql, Insert):
+                self.ctx.pg_copy(sql.table, rows)
+            else:
+                execute(sql, rows)
+            if sql.table == done_counter_table:
+                done += len(rows)
+            rows.clear()
+        return done

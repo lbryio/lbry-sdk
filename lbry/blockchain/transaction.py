@@ -196,7 +196,7 @@ class Input(InputOutput):
 class Output(InputOutput):
 
     __slots__ = (
-        'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
+        'amount', 'script', 'is_internal_transfer', 'spent_height', 'is_my_output', 'is_my_input',
         'channel', 'private_key', 'meta', 'sent_supports', 'sent_tips', 'received_tips',
         'purchase', 'purchased_claim', 'purchase_receipt',
         'reposted_claim', 'claims', '_signable'
@@ -204,7 +204,7 @@ class Output(InputOutput):
 
     def __init__(self, amount: int, script: OutputScript,
                  tx_ref: TXRef = None, position: int = None,
-                 is_internal_transfer: Optional[bool] = None, is_spent: Optional[bool] = None,
+                 is_internal_transfer: Optional[bool] = None, spent_height: Optional[bool] = None,
                  is_my_output: Optional[bool] = None, is_my_input: Optional[bool] = None,
                  sent_supports: Optional[int] = None, sent_tips: Optional[int] = None,
                  received_tips: Optional[int] = None,
@@ -214,7 +214,7 @@ class Output(InputOutput):
         self.amount = amount
         self.script = script
         self.is_internal_transfer = is_internal_transfer
-        self.is_spent = is_spent
+        self.spent_height = spent_height
         self.is_my_output = is_my_output
         self.is_my_input = is_my_input
         self.sent_supports = sent_supports
@@ -233,7 +233,7 @@ class Output(InputOutput):
     def update_annotations(self, annotated: 'Output'):
         if annotated is None:
             self.is_internal_transfer = None
-            self.is_spent = None
+            self.spent_height = None
             self.is_my_output = None
             self.is_my_input = None
             self.sent_supports = None
@@ -241,7 +241,7 @@ class Output(InputOutput):
             self.received_tips = None
         else:
             self.is_internal_transfer = annotated.is_internal_transfer
-            self.is_spent = annotated.is_spent
+            self.spent_height = annotated.spent_height
             self.is_my_output = annotated.is_my_output
             self.is_my_input = annotated.is_my_input
             self.sent_supports = annotated.sent_supports
@@ -261,6 +261,11 @@ class Output(InputOutput):
     @property
     def hash(self):
         return self.ref.hash
+
+    @property
+    def is_spent(self):
+        if self.spent_height is not None:
+            return self.spent_height > 0
 
     @property
     def pubkey_hash(self):

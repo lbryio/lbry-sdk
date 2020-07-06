@@ -469,7 +469,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.sync.on_progress.listen(events.append)
 
         # initial_sync = True
-        await self.sync.advance(True)
+        await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
         self.assertEqual(
             events[0], {
@@ -477,13 +477,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 "data": {
                     "starting_height": 0,
                     "ending_height": 352,
-                    "sync_steps": [
-                        "blockchain.sync.block.read",
-                        "blockchain.sync.block.save",
-                        "db.sync.input",
-                        "blockchain.sync.claim.meta",
-                        "blockchain.sync.claim.signatures",
-                        "blockchain.sync.support.signatures"],
                     "files": 3,
                     "blocks": 353,
                     "txs": 544,
@@ -508,33 +501,28 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEventsAlmostEqual(
             self.extract_block_events('blockchain.sync.block.save', events), [
                 [0, 0, 280],
-                [0, 5, 280],
-                [0, 13, 280],
-                [0, 76, 280],
-                [0, 79, 280],
-                [0, 128, 280],
-                [0, 277, 280],
+                [0, 19, 280],
+                [0, 47, 280],
+                [0, 267, 280],
+                [0, 278, 280],
                 [0, 280, 280],
                 [1, 0, 178],
-                [1, 1, 178],
-                [1, 4, 178],
-                [1, 42, 178],
-                [1, 44, 178],
-                [1, 77, 178],
-                [1, 176, 178],
+                [1, 6, 178],
+                [1, 19, 178],
+                [1, 167, 178],
+                [1, 175, 178],
                 [1, 178, 178],
                 [2, 0, 86],
-                [2, 5, 86],
-                [2, 9, 86],
-                [2, 31, 86],
-                [2, 44, 86],
+                [2, 11, 86],
+                [2, 24, 86],
                 [2, 83, 86],
+                [2, 85, 86],
                 [2, 86, 86],
             ]
         )
-        # 3 - db.sync.input
+        # 3 - blockchain.sync.spends
         self.assertEventsAlmostEqual(
-            self.extract_events('db.sync.input', events), [
+            self.extract_events('blockchain.sync.spends', events), [
                 [0, 9],
                 [1, 9],
                 [2, 9],
@@ -547,31 +535,26 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 [9, 9],
             ]
         )
-        # 4 - blockchain.sync.claim.meta
+        # 4 - blockchain.sync.claims
         self.assertEqual(
             [[0, 3610], [3610, 3610]],
-            self.extract_events('blockchain.sync.claim.meta', events)
+            self.extract_events('blockchain.sync.claims', events)
         )
-        # 5 - blockchain.sync.claim.signatures
+        # 4 - blockchain.sync.supports
         self.assertEqual(
-            [[0, 0]], self.extract_events('blockchain.sync.claim.signatures', events)
-        )
-        # 6 - blockchain.sync.support.signatures
-        self.assertEqual(
-            [[0, 0]], self.extract_events('blockchain.sync.support.signatures', events)
-        )
-        # Complete
-        self.assertEqual(
-            [[6, 6]], self.extract_events('blockchain.sync.complete', events)
+            [[0, 2], [2, 2]],
+            self.extract_events('blockchain.sync.supports', events)
         )
 
         # initial_sync = False & no new blocks
         events.clear()
         await self.sync.advance()  # should be no-op
         await asyncio.sleep(1)  # give it time to collect events
-        self.assertListEqual([], events)
+        self.assertEqual([[0, 0]], self.extract_events('blockchain.sync.claims', events))
+        self.assertEqual([[0, 0]], self.extract_events('blockchain.sync.supports', events))
 
         # initial_sync = False
+        events.clear()
         txid = await self.chain.claim_name('foo', 'beef', '0.01')
         await self.chain.generate(1)
         tx = Transaction(unhexlify(await self.chain.get_raw_transaction(txid)))
@@ -586,21 +569,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 "data": {
                     "starting_height": 353,
                     "ending_height": 354,
-                    "sync_steps": [
-                        "blockchain.sync.block.read",
-                        "blockchain.sync.block.save",
-                        "db.sync.input",
-                        "db.sync.claim.delete",
-                        "db.sync.claim.insert",
-                        "db.sync.claim.update",
-                        "db.sync.support.delete",
-                        "db.sync.support.insert",
-                        "blockchain.sync.claim.trie",
-                        "blockchain.sync.claim.meta",
-                        "blockchain.sync.claim.signatures",
-                        "blockchain.sync.support.signatures",
-                        "blockchain.sync.claim.stakes",
-                        "blockchain.sync.claim.channels"],
                     "files": 1,
                     "blocks": 2,
                     "txs": 4,
@@ -625,38 +593,22 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 [2, 4, 4],
             ]
         )
-        # 3 - db.sync.input
+        # 3 - blockchain.sync.spends
         self.assertEqual(
-            self.extract_events('db.sync.input', events), [
-                [0, 2],  # started
-                [1, 2],  # updating addresses on inputs
-                [2, 2],  # connect spent outputs to their inputs
+            self.extract_events('blockchain.sync.spends', events), [
+                [0, 2],
+                [1, 2],
+                [2, 2],
             ]
         )
-        # 4 - db.sync.claim.delete
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.claim.delete', events))
-        # 5 - db.sync.claim.insert
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.claim.insert', events))
-        # 6 - db.sync.claim.update
-        self.assertEqual([[0, 0]], self.extract_events('db.sync.claim.update', events))
-        # 7 - db.sync.support.delete
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.support.delete', events))
-        # 8 - db.sync.support.insert
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('db.sync.support.insert', events))
-        # 9 - blockchain.sync.claim.trie
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.trie', events))
-        # 10 - blockchain.sync.claim.meta
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.claim.meta', events))
-        # 11 - blockchain.sync.claim.signatures
-        self.assertEqual([[0, 0]], self.extract_events("blockchain.sync.claim.signatures", events))
-        # 12 - blockchain.sync.support.signatures
-        self.assertEqual([[0, 0]], self.extract_events("blockchain.sync.support.signatures", events))
-        # 13 - blockchain.sync.claim.stakes
-        self.assertEqual([[0, 1], [1, 1]], self.extract_events("blockchain.sync.claim.stakes", events))
-        # 14 - blockchain.sync.claim.channels
-        self.assertEqual([[0, 0]], self.extract_events("blockchain.sync.claim.channels", events))
-        # Complete
-        self.assertEqual([[14, 14]], self.extract_events('blockchain.sync.complete', events))
+        # 4 - blockchain.sync.claims
+        self.assertEqual(
+            self.extract_events('blockchain.sync.claims', events), [
+               [0, 3], [1, 3], [2, 3], [3, 3]
+            ]
+        )
+        # 5 - blockchain.sync.supports
+        self.assertEqual([[0, 1], [1, 1]], self.extract_events('blockchain.sync.supports', events))
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):

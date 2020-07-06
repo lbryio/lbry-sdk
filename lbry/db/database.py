@@ -196,11 +196,8 @@ class Database:
     async def process_all_things_after_sync(self):
         return await self.run_in_executor(sync.process_all_things_after_sync)
 
-    async def needs_initial_sync(self) -> bool:
-        return (await self.get_best_tx_height()) == -1
-
-    async def get_best_tx_height(self) -> int:
-        return await self.run_in_executor(q.get_best_tx_height)
+    async def get_best_block_height(self) -> int:
+        return await self.run_in_executor(q.get_best_block_height)
 
     async def get_best_block_height_for_file(self, file_number) -> int:
         return await self.run_in_executor(q.get_best_block_height_for_file, file_number)
@@ -307,7 +304,7 @@ class Database:
         return txos
 
     async def get_utxos(self, **constraints) -> Result[Output]:
-        return await self.get_txos(is_spent=False, **constraints)
+        return await self.get_txos(spent_height=0, **constraints)
 
     async def get_supports(self, **constraints) -> Result[Output]:
         return await self.get_utxos(txo_type=TXO_TYPES['support'], **constraints)

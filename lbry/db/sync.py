@@ -61,16 +61,20 @@ def set_input_addresses(ctx):
 
 
 def update_spent_outputs(ctx):
-    # Update spent TXOs setting is_spent = True
-    set_is_spent = (
+    # Update spent TXOs setting spent_height
+    set_spent_height = (
         TXO.update()
-        .values({TXO.c.is_spent: True})
-        .where(
-            (TXO.c.is_spent == False) &
+        .values({
+            TXO.c.spent_height: (
+                select(TXI.c.height)
+                .where(TXI.c.txo_hash == TXO.c.txo_hash)
+            )
+        }).where(
+            (TXO.c.spent_height == 0) &
             (TXO.c.txo_hash.in_(select(TXI.c.txo_hash)))
         )
     )
-    ctx.execute(set_is_spent)
+    ctx.execute(set_spent_height)
 
 
 def condition_spent_claims(claim_type: list = None):
@@ -84,14 +88,14 @@ def condition_spent_claims(claim_type: list = None):
     else:
         type_filter = TXO.c.txo_type.in_(CLAIM_TYPE_CODES)
     return Claim.c.claim_hash.notin_(
-        select(TXO.c.claim_hash).where(type_filter & (TXO.c.is_spent == False))
+        select(TXO.c.claim_hash).where(type_filter & (TXO.c.spent_height == 0))
     )
 
 
 # find UTXOs that are claims and their claim_id is not in claim table,
 # this means they need to be inserted
 select_missing_claims = (
-    select_txos(txo_type__in=CLAIM_TYPE_CODES, is_spent=False, claim_id_not_in_claim_table=True)
+    select_txos(txo_type__in=CLAIM_TYPE_CODES, spent_height=0, claim_id_not_in_claim_table=True)
 )
 
 
@@ -100,7 +104,7 @@ select_missing_claims = (
 # all claims_ids should match between TXO and Claim table but txo_hashes will not match for
 # claims that are not up-to-date
 select_stale_claims = (
-    select_txos(txo_type__in=CLAIM_TYPE_CODES, is_spent=False, txo_id_not_in_claim_table=True)
+    select_txos(txo_type__in=CLAIM_TYPE_CODES, spent_height=0, txo_id_not_in_claim_table=True)
 )
 
 
@@ -108,12 +112,19 @@ condition_spent_supports = (
     Support.c.txo_hash.notin_(
         select(TXO.c.txo_hash).where(
             (TXO.c.txo_type == TXO_TYPES['support']) &
-            (TXO.c.is_spent == False)
+            (TXO.c.spent_height == 0)
         )
     )
 )
 
 
+condition_missing_supports = (
+    (TXO.c.txo_type == TXO_TYPES['support']) &
+    (TXO.c.spent_height == 0) &
+    (TXO.c.txo_hash.notin_(select(Support.c.txo_hash)))
+)
+
+
 select_missing_supports = (
-    select_txos(txo_type=TXO_TYPES['support'], is_spent=False, txo_id_not_in_support_table=True)
+    select_txos(txo_type=TXO_TYPES['support'], spent_height=0, txo_id_not_in_support_table=True)
 )

@@ -1,9 +1,11 @@
 # pylint: skip-file
 
 from sqlalchemy import (
-    MetaData, Table, Column, ForeignKey,
-    LargeBinary, Text, SmallInteger, Integer, BigInteger, Boolean
+    MetaData, Table, Column, ForeignKey, PrimaryKeyConstraint,
+    LargeBinary, Text, SmallInteger, Integer, BigInteger, Boolean,
+    text
 )
+from .constants import TXO_TYPES
 
 
 SCHEMA_VERSION = '1.4'
@@ -71,9 +73,9 @@ TXO = Table(
     Column('position', SmallInteger),
     Column('amount', BigInteger),
     Column('height', Integer),
+    Column('spent_height', Integer, server_default='0'),
     Column('script_offset', Integer),
     Column('script_length', Integer),
-    Column('is_spent', Boolean, server_default='0'),
     Column('is_reserved', Boolean, server_default='0'),
 
     # claims
@@ -82,6 +84,8 @@ TXO = Table(
     Column('claim_hash', LargeBinary, nullable=True),
     Column('claim_name', Text, nullable=True),
     Column('channel_hash', LargeBinary, nullable=True),  # claims in channel
+    Column('signature', LargeBinary, nullable=True),
+    Column('signature_digest', LargeBinary, nullable=True),
 
     # channels
     Column('public_key', LargeBinary, nullable=True),
@@ -91,15 +95,34 @@ TXO = Table(
 txo_join_account = TXO.join(AccountAddress, TXO.columns.address == AccountAddress.columns.address)
 
 
+def pg_add_txo_constraints_and_indexes(execute):
+    execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+    execute(text(f"""
+        CREATE INDEX txo_channel_hash_w_height_desc_and_pub_key
+        ON txo (claim_hash, height desc) INCLUDE (public_key)
+        WHERE txo_type={TXO_TYPES['channel']};
+    """))
+    execute(text(f"""
+        CREATE INDEX txo_unspent_supports
+        ON txo (claim_hash) INCLUDE (amount)
+        WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};
+    """))
+
+
 TXI = Table(
     'txi', metadata,
     Column('tx_hash', LargeBinary, ForeignKey(TX.columns.tx_hash)),
     Column('txo_hash', LargeBinary, ForeignKey(TXO.columns.txo_hash), primary_key=True),
     Column('address', Text, nullable=True),
     Column('position', SmallInteger),
+    Column('height', Integer),
 )
 
 txi_join_account = TXI.join(AccountAddress, TXI.columns.address == AccountAddress.columns.address)
+
+
+def pg_add_txi_constraints_and_indexes(execute):
+    execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
 
 
 Claim = Table(
@@ -111,19 +134,20 @@ Claim = Table(
     Column('address', Text),
     Column('txo_hash', LargeBinary, ForeignKey(TXO.columns.txo_hash)),
     Column('amount', BigInteger),
-    Column('staked_amount', BigInteger, server_default='0'),
+    Column('staked_amount', BigInteger),
     Column('timestamp', Integer),  # last updated timestamp
     Column('creation_timestamp', Integer),
     Column('release_time', Integer, nullable=True),
     Column('height', Integer),  # last updated height
     Column('creation_height', Integer),
-    Column('activation_height', Integer, nullable=True),
-    Column('expiration_height', Integer, nullable=True),
+    Column('activation_height', Integer),
+    Column('expiration_height', Integer),
     Column('takeover_height', Integer, nullable=True),
-    Column('is_controlling', Boolean, server_default='0'),
+    Column('sync_height', Integer),  # claim dynamic values up-to-date as of this height (eg. staked_amount)
+    Column('is_controlling', Boolean),
 
     # normalized#shortest-unique-claim_id
-    Column('short_url', Text, nullable=True),
+    Column('short_url', Text),
     # channel's-short_url/normalized#shortest-unique-claim_id-within-channel
     Column('canonical_url', Text, nullable=True),
 
@@ -152,8 +176,6 @@ Claim = Table(
 
     # claims which are inside channels
     Column('channel_hash', LargeBinary, nullable=True),
-    Column('signature', LargeBinary, nullable=True),
-    Column('signature_digest', LargeBinary, nullable=True),
     Column('is_signature_valid', Boolean, nullable=True),
 
     Column('trending_group', BigInteger, server_default='0'),
