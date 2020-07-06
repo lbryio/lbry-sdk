@@ -341,19 +341,18 @@ def process_claims(starting_height: int, blocks_added: Optional[Tuple[int, int]]
         ).order_by(TXO.c.claim_hash)
     )
 
-    streaming_connection = p.ctx.connection.execution_options(stream_results=True)
-
-    # all channels need to be inserted first because channel short_url will needed to
-    # set the contained claims canonical_urls when those are inserted next
-    done = insert_claims_with_lbrycrd(
-        done, chain, p, streaming_connection.execute(
-            select_claims.select_from(TXO.join(TX)).where(
-                (TXO.c.txo_type == TXO_TYPES['channel']) &
-                (TXO.c.spent_height == 0) &
-                (TXO.c.claim_hash.notin_(select(Claim.c.claim_hash)))
+    with p.ctx.engine.connect().execution_options(stream_results=True) as c:
+        # all channels need to be inserted first because channel short_url will needed to
+        # set the contained claims canonical_urls when those are inserted next
+        done = insert_claims_with_lbrycrd(
+            done, chain, p, c.execute(
+                select_claims.select_from(TXO.join(TX)).where(
+                    (TXO.c.txo_type == TXO_TYPES['channel']) &
+                    (TXO.c.spent_height == 0) &
+                    (TXO.c.claim_hash.notin_(select(Claim.c.claim_hash)))
+                )
             )
         )
-    )
 
     channel_txo = TXO.alias('channel_txo')
     channel_claim = Claim.alias('channel_claim')
@@ -376,15 +375,16 @@ def process_claims(starting_height: int, blocks_added: Optional[Tuple[int, int]]
         )
     )
 
-    done = insert_claims_with_lbrycrd(
-        done, chain, p, streaming_connection.execute(
-            select_claims.where(
-                (TXO.c.txo_type.in_(list(set(CLAIM_TYPE_CODES) - {TXO_TYPES['channel']}))) &
-                (TXO.c.spent_height == 0) &
-                (TXO.c.claim_hash.notin_(select(Claim.c.claim_hash)))
+    with p.ctx.engine.connect().execution_options(stream_results=True) as c:
+        done = insert_claims_with_lbrycrd(
+            done, chain, p, c.execute(
+                select_claims.where(
+                    (TXO.c.txo_type.in_(list(set(CLAIM_TYPE_CODES) - {TXO_TYPES['channel']}))) &
+                    (TXO.c.spent_height == 0) &
+                    (TXO.c.claim_hash.notin_(select(Claim.c.claim_hash)))
+                )
             )
         )
-    )
 
     if initial_sync:
         channel_update_member_count_sql = (
