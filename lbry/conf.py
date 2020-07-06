@@ -487,7 +487,7 @@ class TranscodeConfig(BaseConfig):
     audio_encoder = String('FFmpeg codec and parameters for the audio encoding. '
                            'Example: libopus -b:a 128k',
                            'aac -b:a 160k')
-    volume_filter = String('FFmpeg filter for audio normalization.', '-af loudnorm')
+    volume_filter = String('FFmpeg filter for audio normalization. Exmple: -af loudnorm', '')
     volume_analysis_time = Integer('Maximum seconds into the file that we examine audio volume (0 to disable).', 240)
 
 

@@ -195,12 +195,11 @@ class VideoFileAnalyzer:
             if stream["codec_type"] != "audio":
                 continue
             codec = stream["codec_name"]
-            sample_rate = stream['sample_rate']
             log.debug("   Detected audio codec is %s", codec)
             if not {"aac", "mp3", "flac", "vorbis", "opus"}.intersection(codec.split(",")):
                 return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
-            if sample_rate > "48000":
+            if int(stream['sample_rate']) > 48000:
                 return "Sample rate out of range"
 
         return ""
@@ -306,9 +305,6 @@ class VideoFileAnalyzer:
             return "aac -b:a 192k"
 
         raise Exception(f"The audio encoder is not available. Requested: {encoder or 'aac'}")
-
-    async def _get_volume_filter(self):
-        return self._conf.volume_filter if self._conf.volume_filter else "-af loudnorm"
 
     @staticmethod
     def _get_best_container_extension(scan_data, video_encoder):
@@ -433,9 +429,8 @@ class VideoFileAnalyzer:
             if audio_msg or volume_msg:
                 audio_encoder = await self._get_audio_encoder(extension)
                 transcode_command.append(audio_encoder)
-                if volume_msg:
-                    volume_filter = await self._get_volume_filter()
-                    transcode_command.append(volume_filter)
+                if volume_msg and self._conf.volume_filter:
+                    transcode_command.append(self._conf.volume_filter)
                 if audio_msg == "Sample rate out of range":
                     transcode_command.append(" -ar 48000 ")
             else:
