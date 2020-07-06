@@ -1539,35 +1539,25 @@ class LBRYElectrumX(SessionBase):
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
         batch_result = {}
-        height = None
-        block_hash = None
-        block = None
         for tx_hash in tx_hashes:
             tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
             raw_tx = tx_info['hex']
-            if height is None:
-                if 'blockhash' in tx_info:
-                    block_hash = tx_info['blockhash']
-                    block = await self.daemon_request('deserialised_block', block_hash)
-                    height = block['height']
-                else:
-                    height = -1
-            if block_hash != tx_info.get('blockhash'):
-                raise RPCError(BAD_REQUEST, f'request contains a mix of transaction heights')
+            block_hash = tx_info.get('blockhash')
+            merkle = {}
+            if block_hash:
+                block = await self.daemon.deserialised_block(block_hash)
+                height = block['height']
+                try:
+                    pos = block['tx'].index(tx_hash)
+                except ValueError:
+                    raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
+                                                f'block {block_hash} at height {height:,d}')
+                merkle["merkle"] = self._get_merkle_branch(block['tx'], pos)
+                merkle["pos"] = pos
             else:
-                if not block_hash:
-                    merkle = {'block_height': -1}
-                else:
-                    try:
-                        pos = block['tx'].index(tx_hash)
-                    except ValueError:
-                        raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
-                                                    f'block {block_hash} at height {height:,d}')
-                    merkle = {
-                        "merkle": self._get_merkle_branch(block['tx'], pos),
-                        "pos": pos
-                    }
-                batch_result[tx_hash] = [raw_tx, merkle]
+                height = -1
+            merkle['block_height'] = height
+            batch_result[tx_hash] = [raw_tx, merkle]
         return batch_result
 
     async def transaction_get(self, tx_hash, verbose=False):

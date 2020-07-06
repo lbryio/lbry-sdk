@@ -389,3 +389,17 @@ class MemPool:
                 if hX == hashX:
                     utxos.append(UTXO(-1, pos, tx_hash, 0, value))
         return utxos
+
+    def get_mempool_height(self, tx_hash):
+        # Height Progression
+        #   -2: not broadcast
+        #   -1: in mempool but has unconfirmed inputs
+        #    0: in mempool and all inputs confirmed
+        # +num: confirmed in a specific block (height)
+        if tx_hash not in self.txs:
+            return -2
+        tx = self.txs[tx_hash]
+        unspent_inputs = sum(1 if hash in self.txs else 0 for hash, idx in tx.prevouts)
+        if unspent_inputs:
+            return -1
+        return 0
