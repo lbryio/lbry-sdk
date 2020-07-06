@@ -11,6 +11,7 @@
 lbry.egg-info
 __pycache__
 _trial_temp/
+trending*.log
 
 /tests/integration/blockchain/files
 /tests/.coverage.*
