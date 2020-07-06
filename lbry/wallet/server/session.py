@@ -1529,7 +1529,7 @@ class LBRYElectrumX(SessionBase):
         block_hash = tx_info.get('blockhash')
         if not block_hash:
             return raw_tx, {'block_height': -1}
-        merkle_height = (await self.daemon_request('deserialised_block', block_hash))['height']
+        merkle_height = (await self.daemon.deserialised_block(block_hash))['height']
         merkle = await self.transaction_merkle(tx_hash, merkle_height)
         return raw_tx, merkle
 
@@ -1592,7 +1592,7 @@ class LBRYElectrumX(SessionBase):
         height = non_negative_integer(height)
         hex_hashes = await self.daemon_request('block_hex_hashes', height, 1)
         block_hash = hex_hashes[0]
-        block = await self.daemon_request('deserialised_block', block_hash)
+        block = await self.daemon.deserialised_block(block_hash)
         return block_hash, block['tx']
 
     def _get_merkle_branch(self, tx_hashes, tx_pos):
