@@ -123,6 +123,7 @@ HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
 )
 
+
 class SessionManager:
     """Holds global state about all sessions."""
 
@@ -159,6 +160,18 @@ class SessionManager:
     client_version_metric = Counter(
         "clients", "Number of connections received per client version",
         namespace=NAMESPACE, labelnames=("version",)
+    )
+    address_history_metric = Histogram(
+        "address_history", "Time to fetch an address history",
+        namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+    )
+    notifications_in_flight_metric = Gauge(
+        "notifications_in_flight", "Count of notifications in flight",
+        namespace=NAMESPACE
+    )
+    notifications_sent_metric = Histogram(
+        "notifications_sent", "Time to send an address notification",
+        namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
     def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
@@ -602,7 +615,6 @@ class SessionManager:
 
     async def broadcast_transaction(self, raw_tx):
         hex_hash = await self.daemon.broadcast_transaction(raw_tx)
-        self.mempool.wakeup.set()
         self.txs_sent += 1
         return hex_hash
 
@@ -923,36 +935,40 @@ class LBRYElectrumX(SessionBase):
             args = (await self.subscribe_headers_result(), )
             if not (await self.send_notification('blockchain.headers.subscribe', args)):
                 return
+
+        async def send_history_notification(alias, hashX):
+            start = time.perf_counter()
+            if len(alias) == 64:
+                method = 'blockchain.scripthash.subscribe'
+            else:
+                method = 'blockchain.address.subscribe'
+            try:
+                self.session_mgr.notifications_in_flight_metric.inc()
+                status = await self.address_status(hashX)
+                self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+                start = time.perf_counter()
+                await self.send_notification(method, (alias, status))
+                self.session_mgr.notifications_sent_metric.observe(time.perf_counter() - start)
+            finally:
+                self.session_mgr.notifications_in_flight_metric.dec()
+
         touched = touched.intersection(self.hashX_subs)
         if touched or (height_changed and self.mempool_statuses):
-            changed = {}
-
+            notified = set()
+            mempool_addrs = tuple(self.mempool_statuses.keys())
             for hashX in touched:
                 alias = self.hashX_subs[hashX]
-                status = await self.address_status(hashX)
-                changed[alias] = status
-
-            # Check mempool hashXs - the status is a function of the
-            # confirmed state of other transactions.  Note: we cannot
-            # iterate over mempool_statuses as it changes size.
-            for hashX in tuple(self.mempool_statuses):
-                # Items can be evicted whilst await-ing status; False
-                # ensures such hashXs are notified
-                old_status = self.mempool_statuses.get(hashX, False)
-                status = await self.address_status(hashX)
-                if status != old_status:
+                asyncio.create_task(send_history_notification(alias, hashX))
+                notified.add(hashX)
+            for hashX in mempool_addrs:
+                if hashX not in notified:
                     alias = self.hashX_subs[hashX]
-                    changed[alias] = status
+                    asyncio.create_task(send_history_notification(alias, hashX))
+                    notified.add(hashX)
 
-            for alias, status in changed.items():
-                if len(alias) == 64:
-                    method = 'blockchain.scripthash.subscribe'
-                else:
-                    method = 'blockchain.address.subscribe'
-                asyncio.create_task(self.send_notification(method, (alias, status)))
-            if changed:
-                es = '' if len(changed) == 1 else 'es'
-                self.logger.info(f'notified of {len(changed):,d} address{es}')
+            if touched:
+                es = '' if len(touched) == 1 else 'es'
+                self.logger.info(f'notified {len(notified)} mempool/{len(touched):,d} touched address{es}')
 
     def get_metrics_or_placeholder_for_api(self, query_name):
         """ Do not hold on to a reference to the metrics
@@ -1181,7 +1197,6 @@ class LBRYElectrumX(SessionBase):
             self.mempool_statuses[hashX] = status
         else:
             self.mempool_statuses.pop(hashX, None)
-
         return status
 
     async def hashX_listunspent(self, hashX):
@@ -1497,6 +1512,7 @@ class LBRYElectrumX(SessionBase):
         try:
             hex_hash = await self.session_mgr.broadcast_transaction(raw_tx)
             self.txs_sent += 1
+            self.mempool.wakeup.set()
             self.logger.info(f'sent tx: {hex_hash}')
             return hex_hash
         except DaemonError as e:

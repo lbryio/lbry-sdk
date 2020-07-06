@@ -244,8 +244,7 @@ class Ledger(metaclass=LedgerRegistry):
     def get_address_count(self, **constraints):
         return self.db.get_address_count(**constraints)
 
-    async def get_spendable_utxos(self, amount: int, funding_accounts: Optional[Iterable['Account']],
-                                  min_amount=100000):
+    async def get_spendable_utxos(self, amount: int, funding_accounts: Optional[Iterable['Account']], min_amount=1):
         min_amount = min(amount // 10, min_amount)
         fee = Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(self)
         selector = CoinSelector(amount, fee)
@@ -698,7 +697,7 @@ class Ledger(metaclass=LedgerRegistry):
                         local_height, height
                     )
                     return False
-            log.warning(
+            log.debug(
                 "local history does not contain %s, requested height %i", tx.id, height
             )
         return False

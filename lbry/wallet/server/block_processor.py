@@ -251,7 +251,7 @@ class BlockProcessor:
         async def get_raw_blocks(last_height, hex_hashes):
             heights = range(last_height, last_height - len(hex_hashes), -1)
             try:
-                blocks = [self.db.read_raw_block(height) for height in heights]
+                blocks = [await self.db.read_raw_block(height) for height in heights]
                 self.logger.info(f'read {len(blocks)} blocks from disk')
                 return blocks
             except FileNotFoundError:
@@ -351,11 +351,9 @@ class BlockProcessor:
         # performed on the DB.
         if self._caught_up_event.is_set():
             await self.flush(True)
-        elif time.time() > self.next_cache_check:
-            flush_arg = self.check_cache_size()
-            if flush_arg is not None:
-                await self.flush(flush_arg)
-            self.next_cache_check = time.time() + 30
+        elif time.perf_counter() > self.next_cache_check:
+            await self.flush(True)
+            self.next_cache_check = time.perf_counter() + 30
 
     def check_cache_size(self):
         """Flush a cache if it gets too big."""

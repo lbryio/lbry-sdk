@@ -32,6 +32,9 @@ from lbry.wallet.server.history import History
 
 
 UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
+HEADER_PREFIX = b'H'
+TX_COUNT_PREFIX = b'T'
+TX_HASH_PREFIX = b'X'
 
 
 @attr.s(slots=True)
@@ -63,15 +66,7 @@ class LevelDB:
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.env = env
         self.coin = env.coin
-        self.executor = ThreadPoolExecutor(max(1, os.cpu_count() - 1))
-
-        # Setup block header size handlers
-        if self.coin.STATIC_BLOCK_HEADERS:
-            self.header_offset = self.coin.static_header_offset
-            self.header_len = self.coin.static_header_len
-        else:
-            self.header_offset = self.dynamic_header_offset
-            self.header_len = self.dynamic_header_len
+        self.executor = None
 
         self.logger.info(f'switching current directory to {env.db_dir}')
 
@@ -87,51 +82,71 @@ class LevelDB:
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
-        path = partial(os.path.join, self.env.db_dir)
-        self.headers_file = util.LogicalFile(path('meta/headers'), 2, 16000000)
-        self.tx_counts_file = util.LogicalFile(path('meta/txcounts'), 2, 2000000)
-        self.hashes_file = util.LogicalFile(path('meta/hashes'), 4, 16000000)
-        if not self.coin.STATIC_BLOCK_HEADERS:
-            self.headers_offsets_file = util.LogicalFile(
-                path('meta/headers_offsets'), 2, 16000000)
+        self.hashes_db = None
+        self.headers_db = None
+        self.tx_count_db = None
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
             return
         # tx_counts[N] has the cumulative number of txs at the end of
         # height N.  So tx_counts[0] is 1 - the genesis coinbase
-        size = (self.db_height + 1) * 4
-        tx_counts = self.tx_counts_file.read(0, size)
-        assert len(tx_counts) == size
+
+        def get_counts():
+            return tuple(
+                util.unpack_be_uint64(tx_count)
+                for tx_count in self.tx_count_db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)
+            )
+
+        tx_counts = await asyncio.get_event_loop().run_in_executor(self.executor, get_counts)
+        assert len(tx_counts) == self.db_height + 1, f"{len(tx_counts)} vs {self.db_height + 1}"
         self.tx_counts = array.array('I', tx_counts)
+
         if self.tx_counts:
-            assert self.db_tx_count == self.tx_counts[-1]
+            assert self.db_tx_count == self.tx_counts[-1], \
+                f"{self.db_tx_count} vs {self.tx_counts[-1]} ({len(self.tx_counts)} counts)"
         else:
             assert self.db_tx_count == 0
 
     async def _open_dbs(self, for_sync, compacting):
-        assert self.utxo_db is None
-
-        # First UTXO DB
-        self.utxo_db = self.db_class('utxo', for_sync)
-        if self.utxo_db.is_new:
-            self.logger.info('created new database')
-            self.logger.info('creating metadata directory')
-            os.mkdir(os.path.join(self.env.db_dir, 'meta'))
-            coin_path = os.path.join(self.env.db_dir, 'meta', 'COIN')
+        if self.executor is None:
+            self.executor = ThreadPoolExecutor(max(1, os.cpu_count() - 1))
+        coin_path = os.path.join(self.env.db_dir, 'COIN')
+        if not os.path.isfile(coin_path):
             with util.open_file(coin_path, create=True) as f:
                 f.write(f'ElectrumX databases and metadata for '
                         f'{self.coin.NAME} {self.coin.NET}'.encode())
-            if not self.coin.STATIC_BLOCK_HEADERS:
-                self.headers_offsets_file.write(0, bytes(8))
-        else:
-            self.logger.info(f'opened UTXO DB (for sync: {for_sync})')
+
+        assert self.headers_db is None
+        self.headers_db = self.db_class('headers', for_sync)
+        if self.headers_db.is_new:
+            self.logger.info('created new headers db')
+        self.logger.info(f'opened headers DB (for sync: {for_sync})')
+
+        assert self.tx_count_db is None
+        self.tx_count_db = self.db_class('tx_count', for_sync)
+        if self.tx_count_db.is_new:
+            self.logger.info('created new tx count db')
+        self.logger.info(f'opened tx count DB (for sync: {for_sync})')
+
+        assert self.hashes_db is None
+        self.hashes_db = self.db_class('hashes', for_sync)
+        if self.hashes_db.is_new:
+            self.logger.info('created new tx hashes db')
+        self.logger.info(f'opened tx hashes DB (for sync: {for_sync})')
+
+        assert self.utxo_db is None
+        # First UTXO DB
+        self.utxo_db = self.db_class('utxo', for_sync)
+        if self.utxo_db.is_new:
+            self.logger.info('created new utxo db')
+        self.logger.info(f'opened utxo db (for sync: {for_sync})')
         self.read_utxo_state()
 
         # Then history DB
-        self.utxo_flush_count = self.history.open_db(self.db_class, for_sync,
-                                                     self.utxo_flush_count,
-                                                     compacting)
+        self.utxo_flush_count = self.history.open_db(
+            self.db_class, for_sync, self.utxo_flush_count, compacting
+        )
         self.clear_excess_undo_info()
 
         # Read TX counts (requires meta directory)
@@ -140,7 +155,11 @@ class LevelDB:
     def close(self):
         self.utxo_db.close()
         self.history.close_db()
+        self.headers_db.close()
+        self.tx_count_db.close()
+        self.hashes_db.close()
         self.executor.shutdown(wait=True)
+        self.executor = None
 
     async def open_for_compacting(self):
         await self._open_dbs(True, True)
@@ -152,18 +171,31 @@ class LevelDB:
         synchronization.  When serving clients we want the open files for
         serving network connections.
         """
+        self.logger.info("opened for sync")
         await self._open_dbs(True, False)
 
     async def open_for_serving(self):
         """Open the databases for serving.  If they are already open they are
         closed first.
         """
+        self.logger.info('closing DBs to re-open for serving')
         if self.utxo_db:
             self.logger.info('closing DBs to re-open for serving')
             self.utxo_db.close()
             self.history.close_db()
             self.utxo_db = None
+        if self.headers_db:
+            self.headers_db.close()
+            self.headers_db = None
+        if self.tx_count_db:
+            self.tx_count_db.close()
+            self.tx_count_db = None
+        if self.hashes_db:
+            self.hashes_db.close()
+            self.hashes_db = None
+
         await self._open_dbs(False, False)
+        self.logger.info("opened for serving")
 
     # Header merkle cache
 
@@ -248,31 +280,30 @@ class LevelDB:
         assert flush_data.tx_count == (self.tx_counts[-1] if self.tx_counts
                                        else 0)
         assert len(self.tx_counts) == flush_data.height + 1
-        hashes = b''.join(flush_data.block_tx_hashes)
-        flush_data.block_tx_hashes.clear()
-        assert len(hashes) % 32 == 0
-        assert len(hashes) // 32 == flush_data.tx_count - prior_tx_count
+        assert len(b''.join(flush_data.block_tx_hashes)) // 32 == flush_data.tx_count - prior_tx_count
 
         # Write the headers, tx counts, and tx hashes
-        start_time = time.time()
+        start_time = time.perf_counter()
         height_start = self.fs_height + 1
-        offset = self.header_offset(height_start)
-        self.headers_file.write(offset, b''.join(flush_data.headers))
-        self.fs_update_header_offsets(offset, height_start, flush_data.headers)
-        flush_data.headers.clear()
+        tx_num = prior_tx_count
 
-        offset = height_start * self.tx_counts.itemsize
-        self.tx_counts_file.write(offset,
-                                  self.tx_counts[height_start:].tobytes())
-        offset = prior_tx_count * 32
-        self.hashes_file.write(offset, hashes)
+        for header, tx_hashes in zip(flush_data.headers, flush_data.block_tx_hashes):
+            tx_count = self.tx_counts[height_start]
+            self.headers_db.put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
+            self.tx_count_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
+            height_start += 1
+            offset = 0
+            while offset < len(tx_hashes):
+                self.hashes_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
+                tx_num += 1
+                offset += 32
 
+        flush_data.block_tx_hashes.clear()
         self.fs_height = flush_data.height
         self.fs_tx_count = flush_data.tx_count
-
-        if self.utxo_db.for_sync:
-            elapsed = time.time() - start_time
-            self.logger.info(f'flushed filesystem data in {elapsed:.2f}s')
+        flush_data.headers.clear()
+        elapsed = time.perf_counter() - start_time
+        self.logger.info(f'flushed filesystem data in {elapsed:.2f}s')
 
     def flush_history(self):
         self.history.flush()
@@ -350,28 +381,6 @@ class LevelDB:
                          f'{elapsed:.1f}s.  Height {flush_data.height:,d} '
                          f'txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
 
-    def fs_update_header_offsets(self, offset_start, height_start, headers):
-        if self.coin.STATIC_BLOCK_HEADERS:
-            return
-        offset = offset_start
-        offsets = []
-        for h in headers:
-            offset += len(h)
-            offsets.append(pack("<Q", offset))
-        # For each header we get the offset of the next header, hence we
-        # start writing from the next height
-        pos = (height_start + 1) * 8
-        self.headers_offsets_file.write(pos, b''.join(offsets))
-
-    def dynamic_header_offset(self, height):
-        assert not self.coin.STATIC_BLOCK_HEADERS
-        offset, = unpack('<Q', self.headers_offsets_file.read(height * 8, 8))
-        return offset
-
-    def dynamic_header_len(self, height):
-        return self.dynamic_header_offset(height + 1)\
-               - self.dynamic_header_offset(height)
-
     def backup_fs(self, height, tx_count):
         """Back up during a reorg.  This just updates our pointers."""
         self.fs_height = height
@@ -403,9 +412,13 @@ class LevelDB:
             # Read some from disk
             disk_count = max(0, min(count, self.db_height + 1 - start_height))
             if disk_count:
-                offset = self.header_offset(start_height)
-                size = self.header_offset(start_height + disk_count) - offset
-                return self.headers_file.read(offset, size), disk_count
+                return b''.join(
+                    self.headers_db.iterator(
+                        start=HEADER_PREFIX + util.pack_be_uint64(start_height),
+                        stop=HEADER_PREFIX + util.pack_be_uint64(start_height + disk_count),
+                        include_key=False
+                    )
+                ), disk_count
             return b'', 0
 
         return await asyncio.get_event_loop().run_in_executor(self.executor, read_headers)
@@ -418,7 +431,7 @@ class LevelDB:
         if tx_height > self.db_height:
             tx_hash = None
         else:
-            tx_hash = self.hashes_file.read(tx_num * 32, 32)
+            tx_hash = self.hashes_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
         return tx_hash, tx_height
 
     async def fs_block_hashes(self, height, count):
@@ -428,9 +441,8 @@ class LevelDB:
         offset = 0
         headers = []
         for n in range(count):
-            hlen = self.header_len(height + n)
-            headers.append(headers_concat[offset:offset + hlen])
-            offset += hlen
+            headers.append(headers_concat[offset:offset + self.coin.BASIC_HEADER_SIZE])
+            offset += self.coin.BASIC_HEADER_SIZE
 
         return [self.coin.header_hash(header) for header in headers]
 
@@ -442,9 +454,20 @@ class LevelDB:
         limit to None to get them all.
         """
         def read_history():
-            tx_nums = list(self.history.get_txnums(hashX, limit))
-            fs_tx_hash = self.fs_tx_hash
-            return [fs_tx_hash(tx_num) for tx_num in tx_nums]
+            hashx_history = []
+            for key, hist in self.history.db.iterator(prefix=hashX):
+                a = array.array('I')
+                a.frombytes(hist)
+                for tx_num in a:
+                    tx_height = bisect_right(self.tx_counts, tx_num)
+                    if tx_height > self.db_height:
+                        tx_hash = None
+                    else:
+                        tx_hash = self.hashes_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
+                    hashx_history.append((tx_hash, tx_height))
+                    if limit and len(hashx_history) >= limit:
+                        return hashx_history
+            return hashx_history
 
         while True:
             history = await asyncio.get_event_loop().run_in_executor(self.executor, read_history)
@@ -474,16 +497,20 @@ class LevelDB:
             batch_put(self.undo_key(height), b''.join(undo_info))
 
     def raw_block_prefix(self):
-        return 'meta/block'
+        return 'block'
 
     def raw_block_path(self, height):
         return os.path.join(self.env.db_dir, f'{self.raw_block_prefix()}{height:d}')
 
-    def read_raw_block(self, height):
+    async def read_raw_block(self, height):
         """Returns a raw block read from disk.  Raises FileNotFoundError
         if the block isn't on-disk."""
-        with util.open_file(self.raw_block_path(height)) as f:
-            return f.read(-1)
+
+        def read():
+            with util.open_file(self.raw_block_path(height)) as f:
+                return f.read(-1)
+
+        return await asyncio.get_event_loop().run_in_executor(self.executor, read)
 
     def write_raw_block(self, block, height):
         """Write a raw block to disk."""

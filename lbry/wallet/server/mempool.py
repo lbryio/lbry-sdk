@@ -13,6 +13,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from concurrent.futures.thread import ThreadPoolExecutor
+from prometheus_client import Histogram
 
 import attr
 
@@ -79,6 +80,16 @@ class MemPoolAPI(ABC):
         daemon's height at the time the mempool was obtained."""
 
 
+NAMESPACE = "wallet_server"
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+mempool_process_time_metric = Histogram(
+    "processed_mempool", "Time to process mempool and notify touched addresses",
+    namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
+)
+
+
 class MemPool:
     """Representation of the daemon's mempool.
 
@@ -93,7 +104,7 @@ class MemPool:
        hashXs: hashX   -> set of all hashes of txs touching the hashX
     """
 
-    def __init__(self, coin, api, refresh_secs=5.0, log_status_secs=120.0):
+    def __init__(self, coin, api, refresh_secs=1.0, log_status_secs=120.0):
         assert isinstance(api, MemPoolAPI)
         self.coin = coin
         self.api = api
@@ -107,6 +118,7 @@ class MemPool:
         self.lock = asyncio.Lock()
         self.wakeup = asyncio.Event()
         self.executor = ThreadPoolExecutor(max(os.cpu_count() - 1, 1))
+        self.mempool_process_time_metric = mempool_process_time_metric
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
@@ -207,6 +219,7 @@ class MemPool:
     async def _refresh_hashes(self, synchronized_event):
         """Refresh our view of the daemon's mempool."""
         while True:
+            start = time.perf_counter()
             height = self.api.cached_height()
             hex_hashes = await self.api.mempool_hashes()
             if height != await self.api.height():
@@ -217,6 +230,8 @@ class MemPool:
             synchronized_event.set()
             synchronized_event.clear()
             await self.api.on_mempool(touched, height)
+            duration = time.perf_counter() - start
+            self.mempool_process_time_metric.observe(duration)
             try:
                 # we wait up to `refresh_secs` but go early if a broadcast happens (which triggers wakeup event)
                 await asyncio.wait_for(self.wakeup.wait(), timeout=self.refresh_secs)
