@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam, func, exists, case
+from sqlalchemy import create_engine, inspect, bindparam, func, exists, case, event
 from sqlalchemy.future import select
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.sql import Insert
@@ -158,11 +158,27 @@ def context(with_timer: str = None) -> 'QueryContext':
     return _context.get()
 
 
+def set_postgres_settings(connection, _):
+    cursor = connection.cursor()
+    cursor.execute('SET work_mem="100MB";')
+    cursor.close()
+
+
+def set_sqlite_settings(connection, _):
+    cursor = connection.cursor()
+    cursor.execute('PRAGMA journal_mode=WAL;')
+    cursor.close()
+
+
 def initialize(
         ledger: Ledger, message_queue: mp.Queue, stop_event: mp.Event,
         track_metrics=False, block_and_filter=None, print_timers=None):
     url = ledger.conf.db_url_or_default
     engine = create_engine(url)
+    if engine.name == "postgresql":
+        event.listen(engine, "connect", set_postgres_settings)
+    elif engine.name == "sqlite":
+        event.listen(engine, "connect", set_sqlite_settings)
     connection = engine.connect()
     if block_and_filter is not None:
         blocked_streams, blocked_channels, filtered_streams, filtered_channels = block_and_filter

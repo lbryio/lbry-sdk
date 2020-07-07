@@ -39,8 +39,6 @@ log = logging.getLogger(__name__)
 
 def check_version_and_create_tables():
     with context("db.connecting") as ctx:
-        if ctx.is_sqlite:
-            ctx.execute(text("PRAGMA journal_mode=WAL;"))
         if ctx.has_table('version'):
             version = ctx.fetchone(select(Version.c.version).limit(1))
             if version and version['version'] == SCHEMA_VERSION:

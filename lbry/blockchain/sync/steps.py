@@ -4,7 +4,7 @@ from contextvars import ContextVar
 from functools import partial
 from typing import Optional, Tuple
 
-from sqlalchemy import bindparam, case, distinct, text, func, between, desc
+from sqlalchemy import table, bindparam, case, distinct, text, func, between, desc
 from sqlalchemy.future import select
 from sqlalchemy.schema import CreateTable
 
@@ -170,17 +170,14 @@ def process_spends(initial_sync: bool, p: ProgressContext):
             p.ctx.execute(text("ALTER TABLE txo DROP CONSTRAINT txo_pkey;"))
         p.step(next_step())
         # G. insert
-        old_txo = TXO.alias('old_txo')
+        old_txo = table('old_txo', *(c.copy() for c in TXO.columns))
         columns = [c for c in old_txo.columns if c.name != 'spent_height']
         select_columns = columns + [func.coalesce(TXI.c.height, 0).label('spent_height')]
         insert_columns = columns + [TXO.c.spent_height]
-        select_txos = select(*select_columns).select_from(old_txo.join(TXI, isouter=True))
+        join_txo_on_txi = old_txo.join(TXI, old_txo.c.txo_hash == TXI.c.txo_hash, isouter=True)
+        select_txos = (select(*select_columns).select_from(join_txo_on_txi))
         insert_txos = TXO.insert().from_select(insert_columns, select_txos)
-        p.ctx.execute(text(
-            str(insert_txos.compile(p.ctx.engine))
-            .replace('txo AS old_txo', 'old_txo')
-            .replace('%(coalesce_1)s', '0')
-        ))
+        p.ctx.execute(insert_txos)
         p.step(next_step())
         # H. drop old txo
         p.ctx.execute(text("DROP TABLE old_txo;"))

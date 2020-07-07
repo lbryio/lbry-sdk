@@ -68,6 +68,7 @@ def update_spent_outputs(ctx):
             TXO.c.spent_height: (
                 select(TXI.c.height)
                 .where(TXI.c.txo_hash == TXO.c.txo_hash)
+                .scalar_subquery()
             )
         }).where(
             (TXO.c.spent_height == 0) &
