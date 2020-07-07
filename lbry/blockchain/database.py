@@ -14,6 +14,14 @@ FILES = [
 ]
 
 
+def make_short_url(r):
+    try:
+        f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
+    except UnicodeDecodeError:
+        print(f'failed making short url due to name parse error for claim_id: {r["claimID"][::-1].hex()}')
+        return ''
+
+
 class FindShortestID:
     __slots__ = 'short_id', 'new_id'
 
@@ -203,7 +211,7 @@ class BlockchainDB:
             "expiration_height": r["expirationHeight"],
             "takeover_height": r["takeoverHeight"],
             "creation_height": r["originalHeight"],
-            "short_url": f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}',
+            "short_url": make_short_url(r),
         } for r in self.sync_execute_fetchall(*sql)]
 
     async def get_claim_metadata(self, start_height: int, end_height: int) -> List[dict]:
