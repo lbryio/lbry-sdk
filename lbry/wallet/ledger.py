@@ -697,7 +697,7 @@ class Ledger(metaclass=LedgerRegistry):
                         local_height, height
                     )
                     return False
-            log.debug(
+            log.warning(
                 "local history does not contain %s, requested height %i", tx.id, height
             )
         return False
