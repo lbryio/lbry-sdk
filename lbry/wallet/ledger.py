@@ -601,32 +601,30 @@ class Ledger(metaclass=LedgerRegistry):
                 (cache_item.tx.is_verified or remote_height < 1):
             return cache_item.tx  # cached tx is already up-to-date
 
+        cache_item.pending_verifications += 1
         try:
-            cache_item.pending_verifications += 1
-            return await self._update_cache_item(cache_item, txid, remote_height, check_local)
+            async with cache_item.lock:
+                tx = cache_item.tx
+                if tx is None and check_local:
+                    # check local db
+                    tx = cache_item.tx = await self.db.get_transaction(txid=txid)
+                merkle = None
+                if tx is None:
+                    # fetch from network
+                    _raw, merkle = await self.network.retriable_call(
+                        self.network.get_transaction_and_merkle, txid, remote_height
+                    )
+                    tx = Transaction(unhexlify(_raw), height=merkle['block_height'])
+                    cache_item.tx = tx  # make sure it's saved before caching it
+                tx.height = remote_height
+                if merkle and 0 < remote_height < len(self.headers):
+                    merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
+                    header = await self.headers.get(remote_height)
+                    tx.position = merkle['pos']
+                    tx.is_verified = merkle_root == header['merkle_root']
+                return tx
         finally:
             cache_item.pending_verifications -= 1
-
-    async def _update_cache_item(self, cache_item, txid, remote_height, check_local=True):
-
-        async with cache_item.lock:
-
-            tx = cache_item.tx
-
-            if tx is None and check_local:
-                # check local db
-                tx = cache_item.tx = await self.db.get_transaction(txid=txid)
-
-            merkle = None
-            if tx is None:
-                # fetch from network
-                _raw, merkle = await self.network.retriable_call(
-                    self.network.get_transaction_and_merkle, txid, remote_height
-                )
-                tx = Transaction(unhexlify(_raw), height=merkle.get('block_height'))
-                cache_item.tx = tx  # make sure it's saved before caching it
-            await self.maybe_verify_transaction(tx, remote_height, merkle)
-            return tx
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
