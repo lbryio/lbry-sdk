@@ -574,7 +574,7 @@ class API:
         if isinstance(urls, str):
             urls = [urls]
         return await self.service.resolve(
-            urls, wallet=self.wallets.get_or_default(wallet_id),
+            urls, wallet=None,#self.wallets.get_or_default(wallet_id),
             include_purchase_receipt=include_purchase_receipt,
             include_is_my_output=include_is_my_output,
             include_sent_supports=include_sent_supports,

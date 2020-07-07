@@ -80,7 +80,7 @@ class Service:
         await self.sync.stop()
         await self.db.close()
 
-    def get_status(self):
+    async def get_status(self):
         pass
 
     def get_version(self):

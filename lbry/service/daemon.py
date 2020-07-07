@@ -147,21 +147,19 @@ class Daemon:
         return web_socket
 
     async def on_message(self, web_socket: WebSocketManager, msg: dict):
-        if msg['type'] == 'subscribe':
+        if msg['method'] == 'subscribe':
             streams = msg['streams']
             if isinstance(streams, str):
                 streams = [streams]
             web_socket.subscribe(streams, self.app['subscriptions'])
-        elif msg['type'] == 'rpc':
-            component, method_name = msg['method'].split('.')
-            method = getattr(self.components[component], method_name)
-            if asyncio.iscoroutinefunction(method):
-                result = await method(**msg['args'])
-            else:
-                result = method(**msg['args'])
+        else:
+            params = msg.get('params', {})
+            method = getattr(self.api, msg['method'])
+            result = await method(**params)
+            encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
             await web_socket.send_json({
-                'type': 'rpc', 'id': msg.get('id', ''),
-                'result': result
+                'id': msg.get('id', ''),
+                'result': encoded_result
             })
 
     @staticmethod

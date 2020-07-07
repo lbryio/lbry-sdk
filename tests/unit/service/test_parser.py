@@ -152,13 +152,13 @@ class TestGenerator(TestCase):
         expanders = get_expanders()
         self.assertEqual(
             generate_options(parse_method(FakeAPI.thing_list, expanders), indent=' '), [
-                ' --value1=<value1>       : (str) the first value',
-                ' --value2=<value2>       : (int) the second value with a very very long description which',
-                '                            needs to be wrapped',
-                ' --value3                : (bool) a bool multi-line',
-                ' --page=<page>           : (int) page to return for paginating',
-                ' --page_size=<page_size> : (int) number of items on page for pagination',
-                ' --include_total         : (bool) calculate total number of items and pages',
+                ' --value1=<value1>        : (str) the first value',
+                ' --value2=<value2>        : (int) the second value with a very very long description which',
+                '                             needs to be wrapped',
+                ' --value3                 : (bool) a bool multi-line',
+                ' --page=<page>            : (int) page to return for paginating',
+                ' --page_size=<page_size>  : (int) number of items on page for pagination',
+                ' --include_total          : (bool) calculate total number of items and pages',
             ]
         )
 
@@ -181,9 +181,9 @@ class TestGenerator(TestCase):
                 thing create
 
             Options:
-                --name=<name>     : (str) the name
-                --value1=<value1> : (str) the first value [default: 'hi']
-                --value2=<value2> : (int) the second value [default: 9]
+                --name=<name>      : (str) the name
+                --value1=<value1>  : (str) the first value [default: 'hi']
+                --value2=<value2>  : (int) the second value [default: 9]
 
             Returns:
                 (str) thing name""")
@@ -196,20 +196,22 @@ class TestGenerator(TestCase):
             Usage:
                 thing delete <value1>
                              [--wallet_id=<wallet_id>] [--change_account_id=<change_account_id>]
-                             [--fund_account_id=<fund_account_id>...] [--preview] [--blocking]
+                             [--fund_account_id=<fund_account_id>...] [--preview] [--no_wait]
                              [--page=<page>] [--page_size=<page_size>] [--include_total]
 
             Options:
-                --value1=<value1>                       : (str)
-                --wallet_id=<wallet_id>                 : (str) restrict operation to specific wallet
-                --change_account_id=<change_account_id> : (str) account to send excess change (LBC)
-                --fund_account_id=<fund_account_id>     : (str, list) accounts to fund the transaction
-                --preview                               : (bool) do not broadcast the transaction
-                --blocking                              : (bool) wait until transaction is in mempool
-                --page=<page>                           : (int) page to return for paginating
-                --page_size=<page_size>                 : (int) number of items on page for pagination
-                --include_total                         : (bool) calculate total number of items and
-                                                           pages
+                --value1=<value1>                        : (str)
+                --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
+                --change_account_id=<change_account_id>  : (str) account to send excess change (LBC)
+                --fund_account_id=<fund_account_id>      : (str, list) accounts to fund the
+                                                            transaction
+                --preview                                : (bool) do not broadcast the transaction
+                --no_wait                                : (bool) do not wait for mempool confirmation
+                --page=<page>                            : (int) page to return for paginating
+                --page_size=<page_size>                  : (int) number of items on page for
+                                                            pagination
+                --include_total                          : (bool) calculate total number of items and
+                                                            pages
 
             Returns:
                 (Wallet) deleted thing
@@ -227,13 +229,13 @@ class TestGenerator(TestCase):
                 thing list
 
             Options:
-                --value1=<value1>       : (str) the first value
-                --value2=<value2>       : (int) the second value with a very very long description
-                                           which needs to be wrapped
-                --value3                : (bool) a bool multi-line
-                --page=<page>           : (int) page to return for paginating
-                --page_size=<page_size> : (int) number of items on page for pagination
-                --include_total         : (bool) calculate total number of items and pages
+                --value1=<value1>        : (str) the first value
+                --value2=<value2>        : (int) the second value with a very very long description
+                                            which needs to be wrapped
+                --value3                 : (bool) a bool multi-line
+                --page=<page>            : (int) page to return for paginating
+                --page_size=<page_size>  : (int) number of items on page for pagination
+                --include_total          : (bool) calculate total number of items and pages
 
             Returns:
                 (Paginated[Wallet]) list of wallets

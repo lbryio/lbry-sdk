@@ -8,7 +8,7 @@ from docopt import docopt
 
 from lbry import __version__
 from lbry.conf import Config, CLIConfig
-from lbry.service import Daemon
+from lbry.service import Daemon, Client
 from lbry.service.metadata import interface
 from lbry.service.full_node import FullNode
 from lbry.blockchain.ledger import Ledger
@@ -165,7 +165,11 @@ def ensure_directory_exists(path: str):
 
 
 async def execute_command(conf, method, params):
-    pass
+    client = Client(f"http://{conf.api}/ws")
+    await client.connect()
+    resp = await client.send(method, **params)
+    print(await resp.first)
+    await client.close()
 
 
 def normalize_value(x, key=None):

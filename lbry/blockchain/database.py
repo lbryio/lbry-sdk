@@ -16,10 +16,10 @@ FILES = [
 
 def make_short_url(r):
     try:
-        f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
+        return f'{normalize_name(r["name"].decode())}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
     except UnicodeDecodeError:
         print(f'failed making short url due to name parse error for claim_id: {r["claimID"][::-1].hex()}')
-        return ''
+        return 'FAILED'
 
 
 class FindShortestID:

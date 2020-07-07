@@ -29,6 +29,9 @@ class FullNode(Service):
         await super().stop()
         await self.chain.close()
 
+    async def get_status(self):
+        return 'everything is wonderful'
+
     async def get_block_address_filters(self):
         return {
             hexlify(f['block_hash']).decode(): hexlify(f['block_filter']).decode()
@@ -57,5 +60,5 @@ class FullNode(Service):
     async def wait(self, tx: Transaction, height=-1, timeout=1):
         pass
 
-    async def resolve(self, accounts, urls, **kwargs):
-        raise NotImplementedError
+    async def resolve(self, urls, **kwargs):
+        return await self.db.resolve(*urls)

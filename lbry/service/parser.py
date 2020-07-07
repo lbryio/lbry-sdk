@@ -198,7 +198,7 @@ def generate_options(method, indent) -> List[str]:
             flags.append(f"--{arg['name']}")
         else:
             flags.append(f"--{arg['name']}=<{arg['name']}>")
-    max_len = max(len(f) for f in flags) + 1
+    max_len = max(len(f) for f in flags) + 2
     flags = [f.ljust(max_len) for f in flags]
     options = []
     for flag, arg in zip(flags, method['arguments']):
