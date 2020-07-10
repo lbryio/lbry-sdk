@@ -67,6 +67,9 @@ jobs:
         run: |
           pip install pyinstaller
           pip install -e .
+          # https://stackoverflow.com/a/61693590
+          # https://github.com/pypa/setuptools/issues/1963
+          pip install --upgrade 'setuptools<45.0.0'
       - if: startsWith(matrix.os, 'windows') == false
         name: Build & Run (Unix)
         run: |
