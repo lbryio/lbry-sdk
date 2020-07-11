@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam, func, exists, case, event
+from sqlalchemy import create_engine, inspect, bindparam, func, exists, case, event as sqlalchemy_event
 from sqlalchemy.future import select
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.sql import Insert
@@ -49,7 +49,6 @@ class QueryContext:
     pid: int
 
     # QueryContext __enter__/__exit__ state
-    print_timers: List
     current_timer_name: Optional[str] = None
     current_timer_time: float = 0
     current_progress: Optional['ProgressContext'] = None
@@ -94,17 +93,17 @@ class QueryContext:
         rows = self.connection.execute(sql, *args).fetchall()
         return [dict(row._mapping) for row in rows]
 
-    def fetchtotal(self, condition):
+    def fetchtotal(self, condition) -> int:
         sql = select(func.count('*').label('total')).where(condition)
         return self.fetchone(sql)['total']
 
-    def fetchmax(self, column):
-        sql = select(func.max(column).label('max_result'))
+    def fetchmax(self, column, default: int) -> int:
+        sql = select(func.coalesce(func.max(column), default).label('max_result'))
         return self.fetchone(sql)['max_result']
 
-    def has_records(self, table):
+    def has_records(self, table) -> bool:
         sql = select(exists([1], from_obj=table).label('result'))
-        return self.fetchone(sql)['result']
+        return bool(self.fetchone(sql)['result'])
 
     def insert_or_ignore(self, table):
         if self.is_sqlite:
@@ -139,14 +138,15 @@ class QueryContext:
         self.current_timer_name = timer_name
         return self
 
+    @property
+    def elapsed(self):
+        return time.perf_counter() - self.current_timer_time
+
     def __enter__(self) -> 'QueryContext':
         self.current_timer_time = time.perf_counter()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.current_timer_name and self.current_timer_name in self.print_timers:
-            elapsed = time.perf_counter() - self.current_timer_time
-            print(f"{self.print_timers} in {elapsed:.6f}s", flush=True)
         self.current_timer_name = None
         self.current_timer_time = 0
         self.current_progress = None
@@ -172,13 +172,13 @@ def set_sqlite_settings(connection, _):
 
 def initialize(
         ledger: Ledger, message_queue: mp.Queue, stop_event: mp.Event,
-        track_metrics=False, block_and_filter=None, print_timers=None):
+        track_metrics=False, block_and_filter=None):
     url = ledger.conf.db_url_or_default
     engine = create_engine(url)
     if engine.name == "postgresql":
-        event.listen(engine, "connect", set_postgres_settings)
+        sqlalchemy_event.listen(engine, "connect", set_postgres_settings)
     elif engine.name == "sqlite":
-        event.listen(engine, "connect", set_sqlite_settings)
+        sqlalchemy_event.listen(engine, "connect", set_sqlite_settings)
     connection = engine.connect()
     if block_and_filter is not None:
         blocked_streams, blocked_channels, filtered_streams, filtered_channels = block_and_filter
@@ -192,7 +192,6 @@ def initialize(
             stack=[], metrics={}, is_tracking_metrics=track_metrics,
             blocked_streams=blocked_streams, blocked_channels=blocked_channels,
             filtered_streams=filtered_streams, filtered_channels=filtered_channels,
-            print_timers=print_timers or []
         )
     )
 
@@ -209,12 +208,11 @@ def uninitialize():
 
 class Event:
     _events: List['Event'] = []
-    __slots__ = 'id', 'name', 'unit', 'step_size'
+    __slots__ = 'id', 'name', 'units'
 
-    def __init__(self, name: str, unit: str, step_size: int):
+    def __init__(self, name: str, units: Tuple[str]):
         self.name = name
-        self.unit = unit
-        self.step_size = step_size
+        self.units = units
 
     @classmethod
     def get_by_id(cls, event_id) -> 'Event':
@@ -227,21 +225,22 @@ class Event:
                 return event
 
     @classmethod
-    def add(cls, name: str, unit: str, step_size: int) -> 'Event':
+    def add(cls, name: str, *units: str) -> 'Event':
         assert cls.get_by_name(name) is None, f"Event {name} already exists."
-        event = cls(name, unit, step_size)
+        assert name.count('.') == 3, f"Event {name} does not follow pattern of: [module].sync.[phase].[task]"
+        event = cls(name, units)
         cls._events.append(event)
         event.id = cls._events.index(event)
         return event
 
 
-def event_emitter(name: str, unit: str, step_size=1):
-    event = Event.add(name, unit, step_size)
+def event_emitter(name: str, *units: str, throttle=1):
+    event = Event.add(name, *units)
 
     def wrapper(f):
         @functools.wraps(f)
         def with_progress(*args, **kwargs):
-            with progress(event, step_size=step_size) as p:
+            with progress(event, throttle=throttle) as p:
                 return f(*args, **kwargs, p=p)
         return with_progress
 
@@ -251,18 +250,23 @@ def event_emitter(name: str, unit: str, step_size=1):
 class ProgressPublisher(EventQueuePublisher):
 
     def message_to_event(self, message):
-        event = Event.get_by_id(message[0])
+        total, extra = None, None
+        if len(message) == 3:
+            event_id, progress_id, done = message
+        elif len(message) == 5:
+            event_id, progress_id, done, total, extra = message
+        else:
+            raise TypeError("progress message must be tuple of 3 or 5 values.")
+        event = Event.get_by_id(event_id)
         d = {
             "event": event.name,
-            "data": {
-                "pid": message[1],
-                "step": message[2],
-                "total": message[3],
-                "unit": event.unit
-            }
+            "data": {"id": progress_id, "done": done}
         }
-        if len(message) > 4 and isinstance(message[4], dict):
-            d['data'].update(message[4])
+        if total is not None:
+            d['data']['total'] = total
+            d['data']['units'] = event.units
+        if isinstance(extra, dict):
+            d['data'].update(extra)
         return d
 
 
@@ -270,56 +274,105 @@ class BreakProgress(Exception):
     """Break out of progress when total is 0."""
 
 
-class ProgressContext:
+class Progress:
 
-    def __init__(self, ctx: QueryContext, event: Event, step_size=1):
-        self.ctx = ctx
+    def __init__(self, message_queue: mp.Queue, event: Event, throttle=1):
+        self.message_queue = message_queue
         self.event = event
-        self.extra = None
-        self.step_size = step_size
-        self.last_step = -1
-        self.total = 0
+        self.progress_id = 0
+        self.throttle = throttle
+        self.last_done = (0,)*len(event.units)
+        self.last_done_queued = (0,)*len(event.units)
+        self.totals = (0,)*len(event.units)
+
+    def __enter__(self) -> 'Progress':
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.last_done != self.last_done_queued:
+            self.message_queue.put((self.event.id, self.progress_id, self.last_done))
+            self.last_done_queued = self.last_done
+        if exc_type == BreakProgress:
+            return True
+        if self.last_done != self.totals:  # or exc_type is not None:
+            # TODO: add exception info into closing message if there is any
+            self.message_queue.put((
+                self.event.id, self.progress_id, (-1,)*len(self.event.units)
+            ))
+
+    def start(self, *totals: int, progress_id=0, label=None, extra=None):
+        assert len(totals) == len(self.event.units), \
+            f"Totals {totals} do not match up with units {self.event.units}."
+        if not any(totals):
+            raise BreakProgress
+        self.totals = totals
+        self.progress_id = progress_id
+        extra = {} if extra is None else extra.copy()
+        if label is not None:
+            extra['label'] = label
+        self.step(*((0,)*len(totals)), force=True, extra=extra)
+
+    def step(self, *done: int, force=False, extra=None):
+        if done == ():
+            assert len(self.totals) == 1, "Incrementing step() only works with one unit progress."
+            done = (self.last_done[0]+1,)
+        assert len(done) == len(self.totals), \
+            f"Done elements {done} don't match total elements {self.totals}."
+        self.last_done = done
+        send_condition = force or extra is not None or (
+            # throttle rate of events being generated (only throttles first unit value)
+            (self.throttle == 1 or done[0] % self.throttle == 0) and
+            # deduplicate finish event by not sending a step where done == total
+            any(i < j for i, j in zip(done, self.totals)) and
+            # deduplicate same event
+            done != self.last_done_queued
+        )
+        if send_condition:
+            if extra is not None:
+                self.message_queue.put_nowait(
+                    (self.event.id, self.progress_id, done, self.totals, extra)
+                )
+            else:
+                self.message_queue.put_nowait(
+                    (self.event.id, self.progress_id, done)
+                )
+            self.last_done_queued = done
+
+    def add(self, *done: int, force=False, extra=None):
+        assert len(done) == len(self.last_done), \
+            f"Done elements {done} don't match total elements {self.last_done}."
+        self.step(
+            *(i+j for i, j in zip(self.last_done, done)),
+            force=force, extra=extra
+        )
+
+    def iter(self, items: List):
+        self.start(len(items))
+        for item in items:
+            yield item
+            self.step()
+
+
+class ProgressContext(Progress):
+
+    def __init__(self, ctx: QueryContext, event: Event, throttle=1):
+        super().__init__(ctx.message_queue, event, throttle)
+        self.ctx = ctx
 
     def __enter__(self) -> 'ProgressContext':
         self.ctx.__enter__()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.ctx.message_queue.put(self.get_event_args(self.total))
-        self.ctx.__exit__(exc_type, exc_val, exc_tb)
-        if exc_type == BreakProgress:
-            return True
-
-    def start(self, total, extra=None):
-        if not total:
-            raise BreakProgress
-        self.total = total
-        if extra is not None:
-            self.extra = extra
-        self.step(0)
-
-    def step(self, done):
-        send_condition = (
-            # enforce step rate
-            (self.step_size == 1 or done % self.step_size == 0) and
-            # deduplicate finish event by not sending a step where done == total
-            done < self.total and
-            # deduplicate same step
-            done != self.last_step
-        )
-        if send_condition:
-            self.ctx.message_queue.put_nowait(self.get_event_args(done))
-            self.last_step = done
-
-    def get_event_args(self, done):
-        if self.extra is not None:
-            return self.event.id, self.ctx.pid, done, self.total, self.extra
-        return self.event.id, self.ctx.pid, done, self.total
+        return any((
+            self.ctx.__exit__(exc_type, exc_val, exc_tb),
+            super().__exit__(exc_type, exc_val, exc_tb)
+        ))
 
 
-def progress(e: Event, step_size=1) -> ProgressContext:
+def progress(e: Event, throttle=1) -> ProgressContext:
     ctx = context(e.name)
-    ctx.current_progress = ProgressContext(ctx, e, step_size=step_size)
+    ctx.current_progress = ProgressContext(ctx, e, throttle=throttle)
     return ctx.current_progress
 
 
@@ -400,10 +453,6 @@ class BulkLoader:
             if txo.can_decode_claim:
                 claim = txo.claim
                 row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
-                if claim.is_signed:
-                    row['channel_hash'] = claim.signing_channel_hash
-                    row['signature'] = txo.get_encoded_signature()
-                    row['signature_digest'] = txo.get_signature_digest(self.ledger)
                 if claim.is_channel:
                     row['public_key'] = claim.channel.public_key_bytes
                     row['public_key_hash'] = self.ledger.address_to_hash160(
@@ -413,15 +462,16 @@ class BulkLoader:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
-            if txo.can_decode_support:
-                claim = txo.support
-                if claim.is_signed:
-                    row['channel_hash'] = claim.signing_channel_hash
         elif txo.purchase is not None:
             row['txo_type'] = TXO_TYPES['purchase']
             row['claim_id'] = txo.purchased_claim_id
             row['claim_hash'] = txo.purchased_claim_hash
         if txo.script.is_claim_involved:
+            signable = txo.can_decode_signable
+            if signable and signable.is_signed:
+                row['channel_hash'] = signable.signing_channel_hash
+                row['signature'] = txo.get_encoded_signature()
+                row['signature_digest'] = txo.get_signature_digest(self.ledger)
             row['claim_id'] = txo.claim_id
             row['claim_hash'] = txo.claim_hash
             try:
@@ -431,17 +481,18 @@ class BulkLoader:
         return row
 
     def claim_to_rows(
-            self, txo: Output, timestamp: int, staked_support_amount: int, staked_support_count: int,
-            signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
-            ) -> Tuple[dict, List]:
+        self, txo: Output, staked_support_amount: int, staked_support_count: int,
+        signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
+    ) -> Tuple[dict, List]:
 
+        tx = txo.tx_ref
         d = {
             'claim_type': None,
             'address': txo.get_address(self.ledger),
             'txo_hash': txo.hash,
             'amount': txo.amount,
-            'height': txo.tx_ref.height,
-            'timestamp': timestamp,
+            'height': tx.height,
+            'timestamp': tx.timestamp,
             # support
             'staked_amount': txo.amount + staked_support_amount,
             'staked_support_amount': staked_support_amount,
@@ -508,26 +559,30 @@ class BulkLoader:
 
         return d, tags
 
-    def support_to_row(self, txo):
-        tx = txo.tx_ref.tx
+    def support_to_row(
+        self, txo: Output, channel_public_key: bytes = None,
+        signature: bytes = None, signature_digest: bytes = None
+    ):
+        tx = txo.tx_ref
         d = {
             'txo_hash': txo.ref.hash,
             'claim_hash': txo.claim_hash,
             'address': txo.get_address(self.ledger),
             'amount': txo.amount,
             'height': tx.height,
+            'timestamp': tx.timestamp,
             'emoji': None,
             'channel_hash': None,
-            'signature': None,
-            'signature_digest': None,
+            'is_signature_valid': None,
         }
         support = txo.can_decode_support
         if support:
             d['emoji'] = support.emoji
             if support.is_signed:
                 d['channel_hash'] = support.signing_channel_hash
-                d['signature'] = txo.get_encoded_signature()
-                d['signature_digest'] = txo.get_signature_digest(None)
+                d['is_signature_valid'] = Output.is_signature_valid(
+                    signature, signature_digest, channel_public_key
+                )
         return d
 
     def add_block(self, block: Block):
@@ -545,13 +600,14 @@ class BulkLoader:
             self.txos.append(self.txo_to_row(tx, txo))
         return self
 
-    def add_support(self, txo: Output):
-        self.supports.append(self.support_to_row(txo))
+    def add_support(self, txo: Output, **extra):
+        self.supports.append(self.support_to_row(txo, **extra))
 
     def add_claim(
-            self, txo: Output, short_url: str,
-            creation_height: int, activation_height: int, expiration_height: int,
-            takeover_height: int = None, channel_url: str = None, **extra):
+        self, txo: Output, short_url: str,
+        creation_height: int, activation_height: int, expiration_height: int,
+        takeover_height: int = None, channel_url: str = None, **extra
+    ):
         try:
             claim_name = txo.claim_name.replace('\x00', '')
             normalized_name = txo.normalized_name
@@ -576,7 +632,7 @@ class BulkLoader:
         self.tags.extend(tags)
         return self
 
-    def update_claim(self, txo: Output, channel_url: Optional[str], **extra):
+    def update_claim(self, txo: Output, channel_url: str = None, **extra):
         d, tags = self.claim_to_rows(txo, **extra)
         d['pk'] = txo.claim_hash
         d['channel_url'] = channel_url
@@ -603,56 +659,7 @@ class BulkLoader:
             (Support.insert(), self.supports),
         )
 
-    def save(self, unit_table, batch_size=10000):
-        queries = self.get_queries()
-
-        p = self.ctx.current_progress
-        done = row_scale = 0
-        if p:
-            progress_total, row_total = 0, sum(len(q[1]) for q in queries)
-            for sql, rows in queries:
-                if sql.table == unit_table:
-                    progress_total += len(rows)
-            if not progress_total:
-                assert row_total == 0, "Rows used for progress are empty but other rows present."
-                return
-            row_scale = row_total / progress_total
-            p.start(progress_total)
-
-        execute = self.ctx.connection.execute
-        for sql, rows in queries:
-            if not rows:
-                continue
-            if self.ctx.is_postgres and isinstance(sql, Insert):
-                self.ctx.pg_copy(sql.table, rows)
-                if p:
-                    done += int(len(rows) / row_scale)
-                    p.step(done)
-            else:
-                for chunk_rows in chunk(rows, batch_size):
-                    try:
-                        execute(sql, chunk_rows)
-                    except Exception:
-                        for row in chunk_rows:
-                            try:
-                                execute(sql, [row])
-                            except Exception:
-                                p.ctx.message_queue.put_nowait(
-                                    (Event.COMPLETE.value, os.getpid(), 1, 1)
-                                )
-                                with open('badrow', 'a') as badrow:
-                                    badrow.write(repr(sql))
-                                    badrow.write('\n')
-                                    badrow.write(repr(row))
-                                    badrow.write('\n')
-                                print(sql)
-                                print(row)
-                        raise
-                    if p:
-                        done += int(len(chunk_rows)/row_scale)
-                        p.step(done)
-
-    def flush(self, done_counter_table) -> int:
+    def flush(self, return_row_count_for_table) -> int:
         execute = self.ctx.connection.execute
         done = 0
         for sql, rows in self.get_queries():
@@ -662,7 +669,7 @@ class BulkLoader:
                 self.ctx.pg_copy(sql.table, rows)
             else:
                 execute(sql, rows)
-            if sql.table == done_counter_table:
+            if sql.table == return_row_count_for_table:
                 done += len(rows)
             rows.clear()
         return done

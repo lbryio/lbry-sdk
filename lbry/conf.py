@@ -660,6 +660,10 @@ class Config(CLIConfig):
         self.set_default_paths()
 
     @classmethod
+    def with_null_dir(cls):
+        return cls.with_same_dir('/dev/null')
+
+    @classmethod
     def with_same_dir(cls, same_dir):
         return cls(
             data_dir=same_dir,

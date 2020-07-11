@@ -1,12 +1,8 @@
-# pylint: disable=singleton-comparison
 from sqlalchemy.future import select
 
-from lbry.db.constants import CLAIM_TYPE_CODES, TXO_TYPES
-from lbry.db.queries import select_txos, rows_to_txos
 from lbry.db.query_context import progress, Event
-from lbry.db.tables import (
-    TXO, TXI, Claim, Support
-)
+from lbry.db.tables import TXI, TXO
+from .queries import rows_to_txos
 
 
 def process_all_things_after_sync():
@@ -48,15 +44,14 @@ def set_input_addresses(ctx):
         set_addresses = (
             TXI.update()
             .values(address=address_query.scalar_subquery())
-            .where(TXI.c.address == None)
+            .where(TXI.c.address.is_(None))
         )
     else:
         set_addresses = (
             TXI.update()
             .values({TXI.c.address: TXO.c.address})
-            .where((TXI.c.address == None) & (TXI.c.txo_hash == TXO.c.txo_hash))
+            .where((TXI.c.address.is_(None)) & (TXI.c.txo_hash == TXO.c.txo_hash))
         )
-
     ctx.execute(set_addresses)
 
 
@@ -76,56 +71,3 @@ def update_spent_outputs(ctx):
         )
     )
     ctx.execute(set_spent_height)
-
-
-def condition_spent_claims(claim_type: list = None):
-    if claim_type is not None:
-        if len(claim_type) == 0:
-            raise ValueError("Missing 'claim_type'.")
-        if len(claim_type) == 1:
-            type_filter = TXO.c.txo_type == claim_type[0]
-        else:
-            type_filter = TXO.c.txo_type.in_(claim_type)
-    else:
-        type_filter = TXO.c.txo_type.in_(CLAIM_TYPE_CODES)
-    return Claim.c.claim_hash.notin_(
-        select(TXO.c.claim_hash).where(type_filter & (TXO.c.spent_height == 0))
-    )
-
-
-# find UTXOs that are claims and their claim_id is not in claim table,
-# this means they need to be inserted
-select_missing_claims = (
-    select_txos(txo_type__in=CLAIM_TYPE_CODES, spent_height=0, claim_id_not_in_claim_table=True)
-)
-
-
-# find UTXOs that are claims and their txo_id is not in claim table,
-# this ONLY works if you first ran select_missing_claims and inserted the missing claims, then
-# all claims_ids should match between TXO and Claim table but txo_hashes will not match for
-# claims that are not up-to-date
-select_stale_claims = (
-    select_txos(txo_type__in=CLAIM_TYPE_CODES, spent_height=0, txo_id_not_in_claim_table=True)
-)
-
-
-condition_spent_supports = (
-    Support.c.txo_hash.notin_(
-        select(TXO.c.txo_hash).where(
-            (TXO.c.txo_type == TXO_TYPES['support']) &
-            (TXO.c.spent_height == 0)
-        )
-    )
-)
-
-
-condition_missing_supports = (
-    (TXO.c.txo_type == TXO_TYPES['support']) &
-    (TXO.c.spent_height == 0) &
-    (TXO.c.txo_hash.notin_(select(Support.c.txo_hash)))
-)
-
-
-select_missing_supports = (
-    select_txos(txo_type=TXO_TYPES['support'], spent_height=0, txo_id_not_in_support_table=True)
-)

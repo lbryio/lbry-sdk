@@ -90,8 +90,15 @@ class Lbrycrd:
     def temp_regtest(cls):
         return cls(RegTestLedger(Config.with_same_dir(tempfile.mkdtemp())))
 
-    def get_block_file_path_from_number(self, block_file_number):
-        return os.path.join(self.actual_data_dir, 'blocks', f'blk{block_file_number:05}.dat')
+    @staticmethod
+    def get_block_file_name(block_file_number):
+        return f'blk{block_file_number:05}.dat'
+
+    def get_block_file_path(self, block_file_number):
+        return os.path.join(
+            self.actual_data_dir, 'blocks',
+            self.get_block_file_name(block_file_number)
+        )
 
     @property
     def is_regtest(self):

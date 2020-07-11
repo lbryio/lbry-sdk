@@ -169,7 +169,7 @@ async def execute_command(conf, method, params):
     await client.connect()
     resp = await client.send(method, **params)
     print(await resp.first)
-    await client.close()
+    await client.disconnect()
 
 
 def normalize_value(x, key=None):

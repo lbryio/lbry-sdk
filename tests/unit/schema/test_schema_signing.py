@@ -1,9 +1,8 @@
 from unittest import TestCase
 from binascii import unhexlify
 
+from lbry import Config, Ledger, Transaction, Output
 from lbry.testcase import get_transaction, AsyncioTestCase
-from lbry.blockchain.ledger import Ledger
-from lbry.blockchain.transaction import Transaction, Output
 from lbry.constants import CENT
 from lbry.schema.claim import Claim
 
@@ -93,4 +92,4 @@ class TestValidatingOldSignatures(TestCase):
         ))
         channel = channel_tx.outputs[0]
 
-        self.assertTrue(stream.is_signed_by(channel, Ledger()))
+        self.assertTrue(stream.is_signed_by(channel, Ledger(Config.with_null_dir())))

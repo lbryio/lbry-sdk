@@ -1,9 +1,8 @@
 from unittest import TestCase
 from binascii import hexlify, unhexlify
 
-from lbry.blockchain.ledger import Ledger
+from lbry import Config, Ledger, Transaction
 from lbry.constants import CENT, NULL_HASH32
-from lbry.blockchain.transaction import Transaction
 from lbry.testcase import (
     get_transaction, get_input, get_output, get_claim_transaction
 )
@@ -15,7 +14,7 @@ FEE_PER_CHAR = 200000
 class TestSizeAndFeeEstimation(TestCase):
 
     def setUp(self):
-        self.ledger = Ledger()
+        self.ledger = Ledger(Config.with_null_dir())
 
     def test_output_size_and_fee(self):
         txo = get_output()

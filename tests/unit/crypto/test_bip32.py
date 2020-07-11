@@ -1,7 +1,7 @@
 from unittest import TestCase
 from binascii import unhexlify, hexlify
 
-from lbry import Ledger
+from lbry import Config, Ledger
 from lbry.crypto.bip32 import PubKey, PrivateKey, from_extended_key_string
 
 from tests.unit.crypto.key_fixtures import (
@@ -48,7 +48,7 @@ class BIP32Tests(TestCase):
         with self.assertRaisesRegex(ValueError, 'private key must be 32 bytes'):
             PrivateKey(None, b'abcd', b'abcd'*8, 0, 255)
         private_key = PrivateKey(
-            Ledger(),
+            Ledger(Config.with_null_dir()),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -66,7 +66,7 @@ class BIP32Tests(TestCase):
 
     def test_private_key_derivation(self):
         private_key = PrivateKey(
-            Ledger(),
+            Ledger(Config.with_null_dir()),
             unhexlify('2423f3dc6087d9683f73a684935abc0ccd8bc26370588f56653128c6a6f0bf7c'),
             b'abcd'*8, 0, 1
         )
@@ -82,14 +82,14 @@ class BIP32Tests(TestCase):
     def test_from_extended_keys(self):
         self.assertIsInstance(
             from_extended_key_string(
-                Ledger(),
+                Ledger(Config.with_null_dir()),
                 'xprv9s21ZrQH143K2dyhK7SevfRG72bYDRNv25yKPWWm6dqApNxm1Zb1m5gGcBWYfbsPjTr2v5joit8Af2Zp5P'
                 '6yz3jMbycrLrRMpeAJxR8qDg8',
             ), PrivateKey
         )
         self.assertIsInstance(
             from_extended_key_string(
-                Ledger(),
+                Ledger(Config.with_null_dir()),
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
             ), PubKey

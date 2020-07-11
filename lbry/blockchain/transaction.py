@@ -170,7 +170,7 @@ class Input(InputOutput):
 
     @classmethod
     def deserialize_from(cls, stream):
-        tx_ref = TXRefImmutable.from_hash(stream.read(32), -1)
+        tx_ref = TXRefImmutable.from_hash(stream.read(32), -1, -1)
         position = stream.read_uint32()
         script = stream.read_string()
         sequence = stream.read_uint32()
@@ -373,6 +373,13 @@ class Output(InputOutput):
             elif self.is_support_data:
                 self._signable = self.support
         return self._signable
+
+    @property
+    def can_decode_signable(self) -> Signable:
+        try:
+            return self.signable
+        except Exception:
+            return False
 
     @property
     def permanent_url(self) -> str:

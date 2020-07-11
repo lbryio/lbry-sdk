@@ -128,7 +128,7 @@ class Database:
     @classmethod
     def from_url(cls, db_url):
         from lbry import Config, Ledger  # pylint: disable=import-outside-toplevel
-        return cls(Ledger(Config.with_same_dir('/dev/null').set(db_url=db_url)))
+        return cls(Ledger(Config.with_null_dir().set(db_url=db_url)))
 
     @classmethod
     def in_memory(cls):
@@ -166,17 +166,17 @@ class Database:
             self.executor = ProcessPoolExecutor(max_workers=self.processes, **kwargs)
         else:
             self.executor = ThreadPoolExecutor(max_workers=1, **kwargs)
-        return await self.run_in_executor(q.check_version_and_create_tables)
+        return await self.run(q.check_version_and_create_tables)
 
     async def close(self):
         self.progress_publisher.stop()
         if self.executor is not None:
             if isinstance(self.executor, ThreadPoolExecutor):
-                await self.run_in_executor(uninitialize)
+                await self.run(uninitialize)
             self.executor.shutdown()
             self.executor = None
 
-    async def run_in_executor(self, func, *args, **kwargs):
+    async def run(self, func, *args, **kwargs):
         if kwargs:
             clean_wallet_account_ids(kwargs)
         return await asyncio.get_event_loop().run_in_executor(
@@ -184,52 +184,40 @@ class Database:
         )
 
     async def fetch_result(self, func, *args, **kwargs) -> Result:
-        rows, total = await self.run_in_executor(func, *args, **kwargs)
+        rows, total = await self.run(func, *args, **kwargs)
         return Result(rows, total)
 
     async def execute(self, sql):
-        return await self.run_in_executor(q.execute, sql)
+        return await self.run(q.execute, sql)
 
     async def execute_fetchall(self, sql):
-        return await self.run_in_executor(q.execute_fetchall, sql)
+        return await self.run(q.execute_fetchall, sql)
 
-    async def process_all_things_after_sync(self):
-        return await self.run_in_executor(sync.process_all_things_after_sync)
+    async def has_claims(self):
+        return await self.run(q.has_claims)
+
+    async def has_supports(self):
+        return await self.run(q.has_claims)
 
     async def get_best_block_height(self) -> int:
-        return await self.run_in_executor(q.get_best_block_height)
+        return await self.run(q.get_best_block_height)
 
-    async def get_best_block_height_for_file(self, file_number) -> int:
-        return await self.run_in_executor(q.get_best_block_height_for_file, file_number)
-
-    async def get_blocks_without_filters(self):
-        return await self.run_in_executor(q.get_blocks_without_filters)
-
-    async def get_transactions_without_filters(self):
-        return await self.run_in_executor(q.get_transactions_without_filters)
-
-    async def get_block_tx_addresses(self, block_hash=None, tx_hash=None):
-        return await self.run_in_executor(q.get_block_tx_addresses, block_hash, tx_hash)
-
-    async def get_block_address_filters(self):
-        return await self.run_in_executor(q.get_block_address_filters)
-
-    async def get_transaction_address_filters(self, block_hash):
-        return await self.run_in_executor(q.get_transaction_address_filters, block_hash)
+    async def process_all_things_after_sync(self):
+        return await self.run(sync.process_all_things_after_sync)
 
     async def insert_block(self, block):
-        return await self.run_in_executor(q.insert_block, block)
+        return await self.run(q.insert_block, block)
 
     async def insert_transaction(self, block_hash, tx):
-        return await self.run_in_executor(q.insert_transaction, block_hash, tx)
+        return await self.run(q.insert_transaction, block_hash, tx)
 
     async def update_address_used_times(self, addresses):
-        return await self.run_in_executor(q.update_address_used_times, addresses)
+        return await self.run(q.update_address_used_times, addresses)
 
     async def reserve_outputs(self, txos, is_reserved=True):
         txo_hashes = [txo.hash for txo in txos]
         if txo_hashes:
-            return await self.run_in_executor(
+            return await self.run(
                 q.reserve_outputs, txo_hashes, is_reserved
             )
 
@@ -240,13 +228,13 @@ class Database:
         return await self.release_outputs([txi.txo_ref.txo for txi in tx.inputs])
 
     async def release_all_outputs(self, account):
-        return await self.run_in_executor(q.release_all_outputs, account.id)
+        return await self.run(q.release_all_outputs, account.id)
 
     async def get_balance(self, **constraints):
-        return await self.run_in_executor(q.get_balance, **constraints)
+        return await self.run(q.get_balance, **constraints)
 
     async def get_report(self, accounts):
-        return await self.run_in_executor(q.get_report, accounts=accounts)
+        return await self.run(q.get_report, accounts=accounts)
 
     async def get_addresses(self, **constraints) -> Result[dict]:
         addresses = await self.fetch_result(q.get_addresses, **constraints)
@@ -259,14 +247,14 @@ class Database:
         return addresses
 
     async def get_all_addresses(self):
-        return await self.run_in_executor(q.get_all_addresses)
+        return await self.run(q.get_all_addresses)
 
     async def get_address(self, **constraints):
         for address in await self.get_addresses(limit=1, **constraints):
             return address
 
     async def add_keys(self, account, chain, pubkeys):
-        return await self.run_in_executor(q.add_keys, account, chain, pubkeys)
+        return await self.run(q.add_keys, account, chain, pubkeys)
 
     async def get_transactions(self, **constraints) -> Result[Transaction]:
         return await self.fetch_result(q.get_transactions, **constraints)
@@ -282,20 +270,20 @@ class Database:
     async def search_claims(self, **constraints) -> Result[Output]:
         #assert set(constraints).issubset(SEARCH_PARAMS), \
         #    f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
-        claims, total, censor = await self.run_in_executor(q.search_claims, **constraints)
+        claims, total, censor = await self.run(q.search_claims, **constraints)
         return Result(claims, total, censor)
 
     async def search_supports(self, **constraints) -> Result[Output]:
         return await self.fetch_result(q.search_supports, **constraints)
 
     async def resolve(self, *urls) -> Dict[str, Output]:
-        return await self.run_in_executor(q.resolve, *urls)
+        return await self.run(q.resolve, *urls)
 
     async def get_txo_sum(self, **constraints) -> int:
-        return await self.run_in_executor(q.get_txo_sum, **constraints)
+        return await self.run(q.get_txo_sum, **constraints)
 
     async def get_txo_plot(self, **constraints) -> List[dict]:
-        return await self.run_in_executor(q.get_txo_plot, **constraints)
+        return await self.run(q.get_txo_plot, **constraints)
 
     async def get_txos(self, **constraints) -> Result[Output]:
         txos = await self.fetch_result(q.get_txos, **constraints)

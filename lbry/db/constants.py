@@ -1,3 +1,5 @@
+MAX_QUERY_VARIABLES = 900
+
 TXO_TYPES = {
     "other": 0,
     "stream": 1,
@@ -15,8 +17,16 @@ CLAIM_TYPE_NAMES = [
     'repost',
 ]
 
+CONTENT_TYPE_NAMES = [
+    name for name in CLAIM_TYPE_NAMES if name != "channel"
+]
+
 CLAIM_TYPE_CODES = [
     TXO_TYPES[name] for name in CLAIM_TYPE_NAMES
+]
+
+CONTENT_TYPE_CODES = [
+    TXO_TYPES[name] for name in CONTENT_TYPE_NAMES
 ]
 
 SPENDABLE_TYPE_CODES = [

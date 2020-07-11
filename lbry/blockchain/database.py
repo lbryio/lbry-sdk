@@ -155,7 +155,8 @@ class BlockchainDB:
     def sync_get_takeover_count(self, start_height: int, end_height: int) -> int:
         sql = """
         SELECT COUNT(*) FROM claim WHERE name IN (
-            SELECT name FROM takeover WHERE claimID IS NOT NULL AND height BETWEEN ? AND ?
+            SELECT name FROM takeover
+            WHERE name IS NOT NULL AND height BETWEEN ? AND ?
         )
         """, (start_height, end_height)
         return self.connection.execute(*sql).fetchone()[0]
@@ -166,7 +167,7 @@ class BlockchainDB:
     def sync_get_takeovers(self, start_height: int, end_height: int) -> List[dict]:
         sql = """
         SELECT name, claimID, MAX(height) AS height FROM takeover
-        WHERE claimID IS NOT NULL AND height BETWEEN ? AND ?
+        WHERE name IS NOT NULL AND height BETWEEN ? AND ?
         GROUP BY name
         """, (start_height, end_height)
         return [{

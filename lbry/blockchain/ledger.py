@@ -1,13 +1,17 @@
+import typing
 from binascii import unhexlify
 from string import hexdigits
 
 from lbry.crypto.hash import hash160, double_sha256
 from lbry.crypto.base58 import Base58
-from lbry.conf import Config
 from lbry.schema.url import URL
 from .header import Headers, UnvalidatedHeaders
 from .checkpoints import HASHES
 from .dewies import lbc_to_dewies
+
+
+if typing.TYPE_CHECKING:
+    from lbry.conf import Config
 
 
 class Ledger:
@@ -33,8 +37,8 @@ class Ledger:
 
     checkpoints = HASHES
 
-    def __init__(self, conf: Config = None):
-        self.conf = conf or Config.with_same_dir('/dev/null')
+    def __init__(self, conf: 'Config'):
+        self.conf = conf
         self.coin_selection_strategy = None
 
     @classmethod
