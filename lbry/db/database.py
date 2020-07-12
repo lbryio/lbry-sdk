@@ -197,7 +197,7 @@ class Database:
         return await self.run(q.has_claims)
 
     async def has_supports(self):
-        return await self.run(q.has_claims)
+        return await self.run(q.has_supports)
 
     async def get_best_block_height(self) -> int:
         return await self.run(q.get_best_block_height)

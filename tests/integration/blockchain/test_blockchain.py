@@ -429,37 +429,24 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEqual(279, (await db.get_blocks_in_file(1, 251))[28]['height'])
 
         # get_takeover_count
-        self.assertEqual(0, await db.get_takeover_count(0, 101))
-        self.assertEqual(2, await db.get_takeover_count(101, 102))
-        self.assertEqual(1, await db.get_takeover_count(103, 251))
-        self.assertEqual(0, await db.get_takeover_count(252, 291))
+        self.assertEqual(0, await db.get_takeover_count(0, 100))
+        self.assertEqual(3610, await db.get_takeover_count(101, 102))
+        self.assertEqual(0, await db.get_takeover_count(103, 1000))
 
         # get_takeovers
         self.assertEqual(
             [
-                {'height': 102, 'name': b'one'},
-                {'height': 102, 'name': b'two'},
-                {'height': 250, 'name': b''}  # normalization on regtest kicks-in
+                {'height': 250, 'name': ''},  # normalization on regtest kicks-in
+                {'height': 102, 'name': 'one'},
+                {'height': 102, 'name': 'two'},
             ],
-            [{'name': takeover['name'], 'height': takeover['height']}
+            [{'name': takeover['normalized'], 'height': takeover['height']}
              for takeover in await db.get_takeovers(0, 291)]
         )
 
         # get_claim_metadata_count
         self.assertEqual(3610, await db.get_claim_metadata_count(0, 500))
         self.assertEqual(0, await db.get_claim_metadata_count(500, 1000))
-
-        # get_claim_metadata
-        self.assertEqual(
-            [
-                {'name': b'one', 'activation_height': 102, 'takeover_height': 102, 'is_controlling': True},
-                {'name': b'two', 'activation_height': 102, 'takeover_height': 102, 'is_controlling': True},
-            ],
-            [{
-                'name': r['name'], 'is_controlling': bool(r['is_controlling']),
-                'activation_height': r['activation_height'], 'takeover_height': r['takeover_height'],
-            } for r in sorted(await db.get_claim_metadata(102, 102), key=lambda r: r['name']) if r['is_controlling']]
-        )
 
         # get_support_metadata_count
         self.assertEqual(2, await db.get_support_metadata_count(0, 500))

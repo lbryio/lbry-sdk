@@ -134,8 +134,11 @@ def distribute_unspent_txos(
     total = 0
     buckets = []
     for bucket in context().fetchall(sql):
-        if len(buckets) > 0 and buckets[-1][-1] == bucket['start_height']:
-            bucket['start_height'] += 1
+        if len(buckets) > 0:
+            if buckets[-1][-1] == bucket['start_height']:
+                if bucket['start_height'] == bucket['end_height']:
+                    continue
+                bucket['start_height'] += 1
         total += bucket['items']
         buckets.append((bucket['start_height'], bucket['end_height']))
     return total, buckets
