@@ -374,11 +374,17 @@ class Advanced(Basic):
             #self.get_or_create_bar("read", "├─  blocks read", "blocks", d['blocks'], True)
             #self.get_or_create_bar("save", "└─┬   txs saved", "txs", d['txs'], True)
         else:
-            base_name = name[:name.rindex('.')]
-            for child_name, child_bar in self.bars.items():
-                if child_name.startswith(base_name):
-                    child_bar.close()
-            bar.close()
+            if d['done'] == (-1,)*len(d['done']):
+                base_name = name[:name.rindex('.')]
+                for child_name, child_bar in self.bars.items():
+                    if child_name.startswith(base_name):
+                        child_bar.close()
+                bar.close()
+            else:
+                if len(d['done']) > 1:
+                    bar.update(d['done'])
+                else:
+                    bar.update(d['done'][0])
 
     def sync_task(self, name, d):
         bar_name = f"{name}#{d['id']}"

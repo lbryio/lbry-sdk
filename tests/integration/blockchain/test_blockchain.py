@@ -741,6 +741,23 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         empty_name, = await self.db.search_claims()
         self.assertEqual('', empty_name.normalized_name)
 
+    async def test_claim_in_abandoned_channel(self):
+        await self.sync.stop()
+        channel_1 = await self.get_claim(await self.create_claim(is_channel=True))
+        channel_2 = await self.get_claim(await self.create_claim(is_channel=True))
+        await self.generate(1, wait=False)
+        await self.create_claim(sign=channel_1)
+        await self.create_claim(sign=channel_2)
+        await self.generate(1, wait=False)
+        await self.abandon_claim(channel_1.tx_ref.id)
+        await self.generate(1, wait=False)
+        await self.sync.start()
+        c1, c2 = await self.db.search_claims(claim_type='stream')
+        self.assertEqual(c1.meta['is_signature_valid'], True)  # valid at time of pubulish
+        self.assertIsNone(c1.meta['canonical_url'], None)  # channel is abandoned
+        self.assertEqual(c2.meta['is_signature_valid'], True)
+        self.assertIsNotNone(c2.meta['canonical_url'])
+
     async def test_short_and_canonical_urls(self):
         search = self.db.search_claims
 

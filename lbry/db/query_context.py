@@ -624,7 +624,7 @@ class BulkLoader:
         d['expiration_height'] = expiration_height
         d['takeover_height'] = takeover_height
         d['is_controlling'] = takeover_height is not None
-        if d['is_signature_valid']:
+        if d['is_signature_valid'] and channel_url is not None:
             d['canonical_url'] = channel_url + '/' + short_url
         else:
             d['canonical_url'] = None

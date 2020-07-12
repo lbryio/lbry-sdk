@@ -27,7 +27,7 @@ def get_best_block_height_for_file(file_number):
     )['height']
 
 
-@event_emitter("blockchain.sync.block.file", "blocks", "txs", throttle=50)
+@event_emitter("blockchain.sync.block.file", "blocks", "txs", throttle=100)
 def sync_block_file(
     file_number: int, start_height: int, txs: int, flush_size: int, p: ProgressContext
 ):
