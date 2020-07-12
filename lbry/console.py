@@ -111,8 +111,8 @@ class Bar2(Bar):
 
     def __format__(self, format_spec):
         width = self.default_len
-        row1 = (1,)*int(self.frac * width * 2)
-        row2 = (2,)*int(self.frac2 * width * 2)
+        row1 = (1,)*int(self.frac2 * width * 2)
+        row2 = (2,)*int(self.frac * width * 2)
         fill = []
         for one, two, _ in itertools.zip_longest(row1, row2, range(width*2)):
             fill.append((one or 0)+(two or 0))
