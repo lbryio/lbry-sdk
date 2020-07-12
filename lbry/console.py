@@ -361,7 +361,7 @@ class Advanced(Basic):
             self.get_or_create_bar(bar_name, label, d['units'], d['total'], True)
         else:
             if d['done'][0] != -1:
-                bar.update(d['done'][0] - bar.last_print_n)
+                bar.update(d['done'][0] - bar.n)
             if d['done'][0] == -1 or d['done'][0] == bar.total:
                 bar.close()
 
@@ -397,9 +397,9 @@ class Advanced(Basic):
             if d['done'][0] != -1:
                 main_bar_name = f"{name[:name.rindex('.')]}.main"
                 if len(d['done']) > 1:
-                    diff = tuple(a-b for a, b in zip(d['done'], (bar.last_print_n, bar.last_print_n2)))
+                    diff = tuple(a-b for a, b in zip(d['done'], (bar.n, bar.n2)))
                 else:
-                    diff = d['done'][0] - bar.last_print_n
+                    diff = d['done'][0] - bar.n
                 if main_bar_name != name:
                     main_bar = self.bars.get(main_bar_name)
                     if main_bar.unit == bar.unit:
@@ -433,14 +433,14 @@ class Advanced(Basic):
             bar.reset(d['total'])
             return
 
-        diff = d['step']-bar.last_print_n
+        diff = d['step']-bar.n
         bar.update(diff)
         if event.endswith("save") and d['step'] == d['total']:
             self.block_savers -= 1
             bar.close()
 
         total_bar.update(diff)
-        if total_bar.total == total_bar.last_print_n:
+        if total_bar.total == total_bar.n:
             if total_bar.desc.endswith('txs saved'):
                 total_bar.desc = "├─    txs saved"
                 total_bar.refresh()
@@ -457,7 +457,7 @@ class Advanced(Basic):
                 .replace('signatures', 'sigs')
             )
             bar = self.get_or_create_bar(e, f"├─ {name:>12}", d['unit'], d['total'], True)
-        diff = d['step']-bar.last_print_n
+        diff = d['step']-bar.n
         bar.update(diff)
         #if d['step'] == d['total']:
             #bar.close()
