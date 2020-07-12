@@ -519,9 +519,9 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.block.file", ("blocks", "txs"), [
-                (0, "blk00000.dat", (191, 280), (50, 0), (100, 0), (150, 0), (191, 280)),
-                (1, "blk00001.dat", (89, 178), (50, 0), (89, 178)),
-                (2, "blk00002.dat", (73, 86), (50, 0), (73, 86)),
+                (0, "blk00000.dat", (191, 280), (100, 0), (191, 280)),
+                (1, "blk00001.dat", (89, 178), (89, 178)),
+                (2, "blk00002.dat", (73, 86), (73, 86)),
             ]
         )
         self.assertEqual(
@@ -566,11 +566,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 "data": {"id": 0, "done": (-1,)}
             }
         )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.init", ("steps",), [
-                (0, None, (2,), (1,), (2,))
-            ]
-        )
         self.assertEqual(
             events.pop(0), {
                 "event": "blockchain.sync.supports.main",
@@ -579,7 +574,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.supports.insert", ("supports",), [
-                (0, "add supports at 0-352", (2,), (2,)),
+                (352, "add supports at 352", (2,), (2,)),
             ]
         )
         self.assertEqual(
@@ -747,12 +742,13 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         channel_2 = await self.get_claim(await self.create_claim(is_channel=True))
         await self.generate(1, wait=False)
         await self.create_claim(sign=channel_1)
+        await self.generate(1, wait=False)
         await self.create_claim(sign=channel_2)
         await self.generate(1, wait=False)
         await self.abandon_claim(channel_1.tx_ref.id)
         await self.generate(1, wait=False)
         await self.sync.start()
-        c1, c2 = await self.db.search_claims(claim_type='stream')
+        c2, c1 = await self.db.search_claims(order_by=['height'], claim_type='stream')
         self.assertEqual(c1.meta['is_signature_valid'], True)  # valid at time of pubulish
         self.assertIsNone(c1.meta['canonical_url'], None)  # channel is abandoned
         self.assertEqual(c2.meta['is_signature_valid'], True)
