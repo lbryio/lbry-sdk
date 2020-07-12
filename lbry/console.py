@@ -382,9 +382,9 @@ class Advanced(Basic):
                 bar.close()
             else:
                 if len(d['done']) > 1:
-                    bar.update(d['done'])
+                    bar.update(d['done']-bar.n)
                 else:
-                    bar.update(d['done'][0])
+                    bar.update(d['done'][0]-bar.n)
 
     def sync_task(self, name, d):
         bar_name = f"{name}#{d['id']}"
