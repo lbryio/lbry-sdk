@@ -31,7 +31,7 @@ TREND_MAIN_EVENT = Event.add("blockchain.sync.trends.main", "blocks")
 
 class BlockchainSync(Sync):
 
-    TX_FLUSH_SIZE = 100_000  # flush to db after processing this many TXs and update progress
+    TX_FLUSH_SIZE = 50_000  # flush to db after processing this many TXs and update progress
     FILTER_CHUNK_SIZE = 100_000  # split filter generation tasks into this size block chunks
     FILTER_FLUSH_SIZE = 10_000  # flush to db after processing this many filters and update progress
     CLAIM_CHUNK_SIZE = 50_000  # split claim sync tasks into this size block chunks
