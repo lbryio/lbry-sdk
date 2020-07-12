@@ -126,11 +126,11 @@ def sync_txoi(initial_sync: bool, p: ProgressContext):
         p.step()
     else:
         p.start(2)
-        # 1. Update TXIs to have the address of TXO they are spending.
-        set_input_addresses(p.ctx)
-        p.step()
-        # 2. Update spent TXOs setting spent_height
+        # 1. Update spent TXOs setting spent_height
         update_spent_outputs(p.ctx)
+        p.step()
+        # 2. Update TXIs to have the address of TXO they are spending.
+        set_input_addresses(p.ctx)
         p.step()
 
 

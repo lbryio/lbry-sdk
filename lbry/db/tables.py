@@ -200,6 +200,7 @@ Support = Table(
     Column('address', Text),
     Column('amount', BigInteger),
     Column('height', Integer),
+    Column('timestamp', Integer),
 
     # support metadata
     Column('emoji', Text),

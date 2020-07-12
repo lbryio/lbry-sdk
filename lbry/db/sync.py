@@ -67,7 +67,7 @@ def update_spent_outputs(ctx):
             )
         }).where(
             (TXO.c.spent_height == 0) &
-            (TXO.c.txo_hash.in_(select(TXI.c.txo_hash)))
+            (TXO.c.txo_hash.in_(select(TXI.c.txo_hash).where(TXI.c.address.is_(None))))
         )
     )
     ctx.execute(set_spent_height)
