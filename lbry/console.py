@@ -390,8 +390,10 @@ class Advanced(Basic):
         else:
             if d['done'][0] != -1:
                 main_bar_name = f"{name[:name.rindex('.')]}.main"
-                last = (bar.last_print_n,) if len(d['done']) == 1 else (bar.last_print_n, bar.last_print_n2)
-                diff = tuple(a-b for a, b in zip(d['done'], last))
+                if len(d['done']) > 1:
+                    diff = tuple(a-b for a, b in zip(d['done'], (bar.last_print_n, bar.last_print_n2)))
+                else:
+                    diff = d['done'][0] - bar.last_print_n
                 if main_bar_name != name:
                     main_bar = self.bars.get(main_bar_name)
                     if main_bar.unit == bar.unit:
