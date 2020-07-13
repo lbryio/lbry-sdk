@@ -357,7 +357,7 @@ class Advanced(Basic):
         bar_name = f"{name}#{d['id']}"
         bar = self.bars.get(bar_name)
         if bar is None:
-            label = d.get('label', name[-10:])
+            label = d.get('label', name[-11:])
             self.get_or_create_bar(bar_name, label, d['units'], d['total'], True)
         else:
             if d['done'][0] != -1:
@@ -368,7 +368,7 @@ class Advanced(Basic):
     def sync_main(self, name, d):
         bar = self.bars.get(name)
         if bar is None:
-            label = d.get('label', name[-10:])
+            label = d.get('label', name[-11:])
             self.get_or_create_bar(name, label, d['units'], d['total'], True)
             #self.last_stats = f"{d['txs']:,d} txs, {d['claims']:,d} claims and {d['supports']:,d} supports"
             #self.get_or_create_bar("read", "├─  blocks read", "blocks", d['blocks'], True)
@@ -391,7 +391,7 @@ class Advanced(Basic):
         bar = self.bars.get(bar_name)
         if bar is None:
             assert d['done'][0] == 0
-            label = d.get('label', name[-10:])
+            label = d.get('label', name[-11:])
             self.get_or_create_bar(f"{name}#{d['id']}", label, d['units'], d['total'])
         else:
             if d['done'][0] != -1:
