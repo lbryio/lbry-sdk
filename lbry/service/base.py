@@ -92,12 +92,6 @@ class Service:
     async def get(self, uri, **kwargs):
         pass
 
-    async def get_block_address_filters(self):
-        raise NotImplementedError
-
-    async def get_transaction_address_filters(self, block_hash):
-        raise NotImplementedError
-
     def create_wallet(self, file_name):
         path = os.path.join(self.conf.wallet_dir, file_name)
         return self.wallets.add_from_path(path)
@@ -194,7 +188,7 @@ class Service:
     async def wait(self, tx: Transaction, height=-1, timeout=1):
         raise NotImplementedError
 
-    async def resolve(self, accounts, urls, **kwargs):
+    async def resolve(self, urls, **kwargs):
         raise NotImplementedError
 
     async def search_claims(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int], Censor]:
@@ -227,7 +221,7 @@ class Service:
     async def _resolve_for_local_results(self, accounts, txos: Result) -> Result:
         results = []
         response = await self.resolve(
-            accounts, [txo.permanent_url for txo in txos if txo.can_decode_claim]
+            [txo.permanent_url for txo in txos if txo.can_decode_claim], accounts=accounts
         )
         for txo in txos:
             resolved = response.get(txo.permanent_url) if txo.can_decode_claim else None

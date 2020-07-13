@@ -32,7 +32,7 @@ class LightClient(Service):
     async def wait(self, tx: Transaction, height=-1, timeout=1):
         pass
 
-    async def resolve(self, accounts, urls, **kwargs):
+    async def resolve(self, urls, **kwargs):
         pass
 
     async def search_claims(self, accounts, **kwargs):

@@ -130,10 +130,9 @@ def claims_insert(
                 metadata = claim_metadata[i] if i < len(claim_metadata) else None
                 if metadata is None:
                     break
-                elif metadata['claim_hash'] != row.claim_hash:
+                if metadata['claim_hash'] != row.claim_hash:
                     continue
-                else:
-                    i += 1
+                i += 1
                 txo, extra = row_to_claim_for_saving(row)
                 extra.update({
                     'short_url': metadata['short_url'],

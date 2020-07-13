@@ -32,11 +32,11 @@ class FullNode(Service):
     async def get_status(self):
         return 'everything is wonderful'
 
-    async def get_block_address_filters(self):
-        return {
-            hexlify(f['block_hash']).decode(): hexlify(f['block_filter']).decode()
-            for f in await self.db.get_block_address_filters()
-        }
+#    async def get_block_address_filters(self):
+#        return {
+#            hexlify(f['block_hash']).decode(): hexlify(f['block_filter']).decode()
+#            for f in await self.db.get_block_address_filters()
+#        }
 
     async def search_transactions(self, txids):
         tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
@@ -47,12 +47,6 @@ class FullNode(Service):
 
     async def search_claims(self, accounts, **kwargs):
         return await self.db.search_claims(**kwargs)
-
-    async def get_transaction_address_filters(self, block_hash):
-        return {
-            hexlify(f['tx_hash'][::-1]).decode(): hexlify(f['tx_filter']).decode()
-            for f in await self.db.get_transaction_address_filters(unhexlify(block_hash))
-        }
 
     async def broadcast(self, tx):
         return await self.chain.send_raw_transaction(hexlify(tx.raw).decode())

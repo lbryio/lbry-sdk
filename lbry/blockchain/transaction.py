@@ -150,7 +150,7 @@ class Input(InputOutput):
 
     @classmethod
     def create_coinbase(cls) -> 'Input':
-        tx_ref = TXRefImmutable.from_hash(cls.NULL_HASH32, 0)
+        tx_ref = TXRefImmutable.from_hash(cls.NULL_HASH32, 0, 0)
         txo_ref = TXORef(tx_ref, 0)
         return cls(txo_ref, b'beef')
 

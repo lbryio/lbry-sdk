@@ -14,9 +14,7 @@ from ..tables import (
 )
 from ..utils import query, in_account_ids
 from ..query_context import context
-from ..constants import (
-    TXO_TYPES, CLAIM_TYPE_CODES, CONTENT_TYPE_CODES, MAX_QUERY_VARIABLES
-)
+from ..constants import TXO_TYPES, CLAIM_TYPE_CODES, MAX_QUERY_VARIABLES
 
 
 log = logging.getLogger(__name__)
@@ -326,8 +324,8 @@ def select_txos(
             include_is_my_input = True
             s = s.where(
                 TXO.c.address.in_(my_addresses) | (
-                        (TXI.c.address != None) &
-                        (TXI.c.address.in_(my_addresses))
+                    (TXI.c.address.isnot(None)) &
+                    (TXI.c.address.in_(my_addresses))
                 )
             )
         else:
@@ -338,13 +336,13 @@ def select_txos(
             if is_my_input:
                 include_is_my_input = True
                 s = s.where(
-                    (TXI.c.address != None) &
+                    (TXI.c.address.isnot(None)) &
                     (TXI.c.address.in_(my_addresses))
                 )
             elif is_my_input is False:
                 include_is_my_input = True
                 s = s.where(
-                    (TXI.c.address == None) |
+                    (TXI.c.address.is_(None)) |
                     (TXI.c.address.notin_(my_addresses))
                 )
         if exclude_internal_transfers:
@@ -352,7 +350,7 @@ def select_txos(
             s = s.where(
                 (TXO.c.txo_type != TXO_TYPES['other']) |
                 (TXO.c.address.notin_(my_addresses))
-                (TXI.c.address == None) |
+                (TXI.c.address.is_(None)) |
                 (TXI.c.address.notin_(my_addresses))
             )
     joins = TXO.join(TX)
@@ -439,15 +437,15 @@ def get_txos(no_tx=False, include_total=False, **constraints) -> Tuple[List[Outp
             select_columns.append(text(f"{1 if constraints['is_my_input'] else 0} AS is_my_input"))
         else:
             select_columns.append((
-                                          (TXI.c.address != None) &
-                                          (TXI.c.address.in_(my_accounts))
-                                  ).label('is_my_input'))
+                (TXI.c.address.isnot(None)) &
+                (TXI.c.address.in_(my_accounts))
+            ).label('is_my_input'))
 
     if include_received_tips:
         support = TXO.alias('support')
         select_columns.append(
             select(func.coalesce(func.sum(support.c.amount), 0))
-                .select_from(support).where(
+            .select_from(support).where(
                 (support.c.claim_hash == TXO.c.claim_hash) &
                 (support.c.txo_type == TXO_TYPES['support']) &
                 (support.c.address.in_(my_accounts)) &
@@ -562,8 +560,8 @@ def get_supports_summary(self, **constraints):
 def reserve_outputs(txo_hashes, is_reserved=True):
     context().execute(
         TXO.update()
-            .values(is_reserved=is_reserved)
-            .where(TXO.c.txo_hash.in_(txo_hashes))
+        .values(is_reserved=is_reserved)
+        .where(TXO.c.txo_hash.in_(txo_hashes))
     )
 
 

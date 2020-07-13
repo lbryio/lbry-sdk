@@ -75,7 +75,7 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
             p.ctx.execute(text("ALTER TABLE txi DROP CONSTRAINT txi_pkey;"))
         p.step()
         # 3. insert
-        old_txi = table("old_txi", *(c.copy() for c in TXI.columns))
+        old_txi = table("old_txi", *(c.copy() for c in TXI.columns))  # pylint: disable=not-an-iterable
         columns = [c for c in old_txi.columns if c.name != "address"] + [TXO.c.address]
         join_txi_on_txo = old_txi.join(TXO, old_txi.c.txo_hash == TXO.c.txo_hash)
         select_txis = select(*columns).select_from(join_txi_on_txo)
@@ -100,7 +100,7 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
             p.ctx.execute(text("ALTER TABLE txo DROP CONSTRAINT txo_pkey;"))
         p.step()
         # 7. insert
-        old_txo = table("old_txo", *(c.copy() for c in TXO.columns))
+        old_txo = table("old_txo", *(c.copy() for c in TXO.columns))  # pylint: disable=not-an-iterable
         columns = [c for c in old_txo.columns if c.name != "spent_height"]
         insert_columns = columns + [TXO.c.spent_height]
         select_columns = columns + [

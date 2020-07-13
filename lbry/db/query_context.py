@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam, func, exists, case, event as sqlalchemy_event
+from sqlalchemy import create_engine, inspect, bindparam, func, exists, event as sqlalchemy_event
 from sqlalchemy.future import select
 from sqlalchemy.engine import Engine, Connection
 from sqlalchemy.sql import Insert
@@ -25,7 +25,7 @@ from lbry.schema.tags import clean_tags
 from lbry.schema.result import Censor
 from lbry.schema.mime_types import guess_stream_type
 
-from .utils import pg_insert, chunk
+from .utils import pg_insert
 from .tables import Block, TX, TXO, TXI, Claim, Tag, Support
 from .constants import TXO_TYPES, STREAM_TYPES
 
@@ -212,6 +212,7 @@ class Event:
     __slots__ = 'id', 'name', 'units'
 
     def __init__(self, name: str, units: Tuple[str]):
+        self.id = None
         self.name = name
         self.units = units
 

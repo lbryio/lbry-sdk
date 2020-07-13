@@ -1,40 +1,57 @@
 from sqlalchemy.future import select
 
 from lbry.db.query_context import progress, Event
-from lbry.db.tables import TXI, TXO
-from .queries import rows_to_txos
+from lbry.db.tables import TXI, TXO, Claim, Support
+from .constants import TXO_TYPES, CLAIM_TYPE_CODES
+from .queries import (
+    rows_to_txos, where_unspent_txos,
+    where_abandoned_supports,
+    where_abandoned_claims
+)
+
+
+SPENDS_UPDATE_EVENT = Event.add("client.sync.spends.update", "steps")
+CLAIMS_INSERT_EVENT = Event.add("client.sync.claims.insert", "claims")
+CLAIMS_UPDATE_EVENT = Event.add("client.sync.claims.update", "claims")
+CLAIMS_DELETE_EVENT = Event.add("client.sync.claims.delete", "claims")
+SUPPORT_INSERT_EVENT = Event.add("client.sync.claims.insert", "supports")
+SUPPORT_UPDATE_EVENT = Event.add("client.sync.claims.update", "supports")
+SUPPORT_DELETE_EVENT = Event.add("client.sync.claims.delete", "supports")
 
 
 def process_all_things_after_sync():
-    with progress(Event.INPUT_UPDATE) as p:
+    with progress(SPENDS_UPDATE_EVENT) as p:
         p.start(2)
         set_input_addresses(p.ctx)
         p.step(1)
         update_spent_outputs(p.ctx)
         p.step(2)
-    with progress(Event.SUPPORT_DELETE) as p:
+    with progress(SUPPORT_DELETE_EVENT) as p:
         p.start(1)
-        sql = Support.delete().where(condition_spent_supports)
+        sql = Support.delete().where(where_abandoned_supports())
         p.ctx.execute(sql)
-    with progress(Event.SUPPORT_INSERT) as p:
+    with progress(SUPPORT_INSERT_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        for support in rows_to_txos(p.ctx.fetchall(select_missing_supports)):
+        sql = where_unspent_txos(TXO_TYPES['support'], missing_in_supports_table=True)
+        for support in rows_to_txos(p.ctx.fetchall(sql)):
             loader.add_support(support)
-        loader.save()
-    with progress(Event.CLAIM_DELETE) as p:
+        loader.flush(Support)
+    with progress(CLAIMS_DELETE_EVENT) as p:
         p.start(1)
-        sql = Claim.delete().where(condition_spent_claims())
+        sql = Claim.delete().where(where_abandoned_claims())
         p.ctx.execute(sql)
-    with progress(Event.CLAIM_INSERT) as p:
+    with progress(CLAIMS_INSERT_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        for claim in rows_to_txos(p.ctx.fetchall(select_missing_claims)):
+        sql = where_unspent_txos(CLAIM_TYPE_CODES, missing_in_claims_table=True)
+        for claim in rows_to_txos(p.ctx.fetchall(sql)):
             loader.add_claim(claim)
-        loader.save()
-    with progress(Event.CLAIM_UPDATE) as p:
+        loader.flush(Claim)
+    with progress(CLAIMS_UPDATE_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        for claim in rows_to_txos(p.ctx.fetchall(select_stale_claims)):
+        sql = where_unspent_txos(CLAIM_TYPE_CODES, missing_or_stale_in_claims_table=True)
+        for claim in rows_to_txos(p.ctx.fetchall(sql)):
             loader.update_claim(claim)
-        loader.save()
+        loader.flush(Claim)
 
 
 def set_input_addresses(ctx):

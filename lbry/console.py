@@ -6,7 +6,7 @@ from typing import Dict, Any
 from tempfile import TemporaryFile
 
 from tqdm.std import tqdm, Bar
-from tqdm.utils import FormatReplace, _unicode, disp_len, disp_trim, _is_ascii, _unich
+from tqdm.utils import FormatReplace, _unicode, disp_len, disp_trim, _is_ascii
 
 from lbry import __version__
 from lbry.service.base import Service
@@ -26,6 +26,8 @@ class RedirectOutput:
         self.stream_no = getattr(sys, stream_type).fileno()
         self.last_flush = time.time()
         self.last_read = 0
+        self.backup = None
+        self.file = None
 
     def __enter__(self):
         self.backup = os.dup(self.stream_no)
@@ -142,10 +144,10 @@ class Bar2(Bar):
         return ''.join(bar)
 
 
-class tqdm2(tqdm):
+class tqdm2(tqdm):  # pylint: disable=invalid-name
 
     def __init__(self, initial=(0, 0), unit=('it', 'it'), total=(None, None), **kwargs):
-        self.n2 = self.last_print_n2 = initial[1]
+        self.n2 = self.last_print_n2 = initial[1]  # pylint: disable=invalid-name
         self.unit2 = unit[1]
         self.total2 = total[1]
         super().__init__(initial=initial[0], unit=unit[0], total=total[0], **kwargs)
@@ -171,7 +173,7 @@ class tqdm2(tqdm):
 
     @staticmethod
     def format_meter(
-        n, total, elapsed, ncols=None, prefix='', ascii=False,
+        n, total, elapsed, ncols=None, prefix='', ascii=False,  # pylint: disable=redefined-builtin
         unit='it', unit_scale=False, rate=None, bar_format=None,
         postfix=None, unit_divisor=1000, **extra_kwargs
     ):
@@ -251,7 +253,7 @@ class tqdm2(tqdm):
 
         # total is known: we can predict some stats
         if total:
-            n2, total2 = extra_kwargs['n2'], extra_kwargs['total2']
+            n2, total2 = extra_kwargs['n2'], extra_kwargs['total2']  # pylint: disable=invalid-name
 
             # fractional and percentage progress
             frac = n / total
@@ -411,43 +413,6 @@ class Advanced(Basic):
             if d['done'][0] == -1 or d['done'][0] == bar.total:
                 bar.close()
 
-    def update_block_bars(self, event, d):
-        total_bar = self.bars[event[-4:]]
-        if event.endswith("read") and self.block_readers == 0:
-            total_bar.unpause()
-        if event.endswith("read") and d['step'] == d['total']:
-            self.block_readers -= 1
-
-        bar_name = f"block-{d['block_file']}"
-        bar = self.bars.get(bar_name)
-        if bar is None:
-            self.block_readers += 1
-            return self.get_or_create_bar(
-                bar_name,
-                f"  ├─ blk{d['block_file']:05}.dat reading", 'blocks', d['total']
-            )
-
-        if event.endswith("save") and bar.unit == "blocks":
-            if self.block_savers == 0:
-                total_bar.unpause()
-            self.block_savers += 1
-            bar.desc = f"  ├─ blk{d['block_file']:05}.dat  saving"
-            bar.unit = "txs"
-            bar.reset(d['total'])
-            return
-
-        diff = d['step']-bar.n
-        bar.update(diff)
-        if event.endswith("save") and d['step'] == d['total']:
-            self.block_savers -= 1
-            bar.close()
-
-        total_bar.update(diff)
-        if total_bar.total == total_bar.n:
-            if total_bar.desc.endswith('txs saved'):
-                total_bar.desc = "├─    txs saved"
-                total_bar.refresh()
-
     def update_other_bars(self, e, d):
         if d['total'] == 0:
             return
@@ -464,11 +429,6 @@ class Advanced(Basic):
         bar.update(diff)
         #if d['step'] == d['total']:
             #bar.close()
-
-    def sync_complete(self):
-        self.bars['read'].postfix = (self.last_stats,)
-        for bar in self.bars.values():
-            bar.close()
 
     def on_sync_progress(self, event):
         e, d = event['event'], event.get('data', {})
