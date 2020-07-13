@@ -394,7 +394,7 @@ class Advanced(Basic):
             label = d.get('label', name[-11:])
             self.get_or_create_bar(
                 f"{name}#{d['id']}", label, d['units'], d['total'],
-                name.split('.')[-1] not in ('insert', 'update')
+                name.split('.')[-1] not in ('insert', 'update', 'file')
             )
         else:
             if d['done'][0] != -1:

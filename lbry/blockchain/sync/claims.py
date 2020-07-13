@@ -58,9 +58,9 @@ def staked_support_count_calc(other):
 
 def make_label(action, blocks):
     if blocks[0] == blocks[-1]:
-        return f"{action}{blocks[0]:>6}"
+        return f"{action} {blocks[0]:>6}"
     else:
-        return f"{action}{blocks[0]:>6}-{blocks[-1]:>6}"
+        return f"{action} {blocks[0]:>6}-{blocks[-1]:>6}"
 
 
 def select_claims_for_saving(
@@ -175,7 +175,7 @@ def claims_update(blocks: Tuple[int, int], p: ProgressContext):
         for row in cursor:
             txo, extra = row_to_claim_for_saving(row)
             loader.update_claim(txo, **extra)
-            if len(loader.update_claims) >= 500:
+            if len(loader.update_claims) >= 25:
                 p.add(loader.flush(Claim))
         p.add(loader.flush(Claim))
 

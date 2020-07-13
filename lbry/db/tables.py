@@ -203,22 +203,25 @@ Claim = Table(
 )
 
 
-def pg_add_claim_constraints_and_indexes(execute):
-    execute(text("ALTER TABLE claim ADD PRIMARY KEY (claim_hash);"))
-    # finding claims that aren't updated with latest TXO
-    execute(text("CREATE INDEX claim_txo_hash ON claim (txo_hash);"))
-    # used to calculate content in a channel
-    execute(text("""
-        CREATE INDEX signed_content ON claim (channel_hash)
-        INCLUDE (amount) WHERE is_signature_valid;
-    """))
-
-
 Tag = Table(
     'tag', metadata,
     Column('claim_hash', LargeBinary),
     Column('tag', Text),
 )
+
+
+def pg_add_claim_constraints_and_indexes(execute):
+    execute(text("ALTER TABLE claim ADD PRIMARY KEY (claim_hash);"))
+    execute(text("ALTER TABLE tag ADD PRIMARY KEY (claim_hash, tag);"))
+    # take over updates are base on normalized name
+    execute(text("CREATE INDEX claim_normalized ON claim (normalized);"))
+    # finding claims that aren't updated with latest TXO
+    execute(text("CREATE UNIQUE INDEX claim_txo_hash ON claim (txo_hash);"))
+    # used to calculate content in a channel
+    execute(text("""
+        CREATE INDEX signed_content ON claim (channel_hash)
+        INCLUDE (amount) WHERE is_signature_valid;
+    """))
 
 
 Support = Table(
