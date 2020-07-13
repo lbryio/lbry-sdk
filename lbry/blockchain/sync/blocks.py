@@ -27,7 +27,7 @@ def get_best_block_height_for_file(file_number):
     )['height']
 
 
-@event_emitter("blockchain.sync.block.file", "blocks", "txs", throttle=100)
+@event_emitter("blockchain.sync.blocks.file", "blocks", "txs", throttle=100)
 def sync_block_file(
     file_number: int, start_height: int, txs: int, flush_size: int, p: ProgressContext
 ):
@@ -59,8 +59,8 @@ def sync_block_file(
     return last_block_processed
 
 
-@event_emitter("blockchain.sync.txoi.main", "steps")
-def sync_txoi(initial_sync: bool, p: ProgressContext):
+@event_emitter("blockchain.sync.spends.main", "steps")
+def sync_spends(initial_sync: bool, p: ProgressContext):
     if initial_sync:
         p.start(9)
         # A. Update TXIs to have the address of TXO they are spending.

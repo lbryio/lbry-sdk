@@ -185,6 +185,14 @@ Claim = Table(
 )
 
 
+def pg_add_claim_constraints_and_indexes(execute):
+    execute(text("ALTER TABLE claim ADD PRIMARY KEY (claim_hash);"))
+    execute(text("""
+        CREATE INDEX signed_content ON claim (channel_hash)
+        INCLUDE (amount) WHERE is_signature_valid;
+    """))
+
+
 Tag = Table(
     'tag', metadata,
     Column('claim_hash', LargeBinary),
@@ -211,3 +219,11 @@ Support = Table(
     Column('signature_digest', LargeBinary, nullable=True),
     Column('is_signature_valid', Boolean, nullable=True),
 )
+
+
+def pg_add_support_constraints_and_indexes(execute):
+    execute(text("ALTER TABLE support ADD PRIMARY KEY (txo_hash);"))
+    execute(text("""
+        CREATE INDEX signed_support ON support (channel_hash)
+        INCLUDE (amount) WHERE is_signature_valid;
+    """))

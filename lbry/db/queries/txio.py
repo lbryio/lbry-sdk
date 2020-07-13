@@ -129,7 +129,7 @@ def distribute_unspent_txos(
             func.count('*').label('items'),
             func.min(chunks.c.height).label('start_height'),
             func.max(chunks.c.height).label('end_height'),
-        ).group_by(chunks.c.chunk)
+        ).group_by(chunks.c.chunk).order_by(chunks.c.chunk)
     )
     total = 0
     buckets = []

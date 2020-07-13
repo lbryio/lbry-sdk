@@ -545,8 +545,11 @@ class BulkLoader:
             d['claim_type'] = TXO_TYPES['channel']
         if claim.is_signed:
             d['channel_hash'] = claim.signing_channel_hash
-            d['is_signature_valid'] = Output.is_signature_valid(
-                signature, signature_digest, channel_public_key
+            d['is_signature_valid'] = (
+                all((signature, signature_digest, channel_public_key)) &
+                Output.is_signature_valid(
+                    signature, signature_digest, channel_public_key
+                )
             )
 
         tags = []
@@ -580,8 +583,11 @@ class BulkLoader:
             d['emoji'] = support.emoji
             if support.is_signed:
                 d['channel_hash'] = support.signing_channel_hash
-                d['is_signature_valid'] = Output.is_signature_valid(
-                    signature, signature_digest, channel_public_key
+                d['is_signature_valid'] = (
+                    all((signature, signature_digest, channel_public_key)) &
+                    Output.is_signature_valid(
+                        signature, signature_digest, channel_public_key
+                    )
                 )
         return d
 

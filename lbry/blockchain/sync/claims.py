@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple, Union
 
-from sqlalchemy import case, func, desc
+from sqlalchemy import case, func, desc, text
 from sqlalchemy.future import select
 
 from lbry.db.queries.txio import (
@@ -11,7 +11,7 @@ from lbry.db.queries.txio import (
     where_abandoned_claims
 )
 from lbry.db.query_context import ProgressContext, event_emitter
-from lbry.db.tables import TX, TXO, Claim, Support
+from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_constraints_and_indexes
 from lbry.db.utils import least
 from lbry.db.constants import TXO_TYPES
 from lbry.blockchain.transaction import Output
@@ -79,10 +79,9 @@ def select_claims_for_saving(
             missing_in_claims_table=missing_in_claims_table,
             missing_or_stale_in_claims_table=missing_or_stale_in_claims_table,
         )
-    )
+    ).select_from(TXO.join(TX))
     if txo_types != TXO_TYPES['channel']:
         channel_txo = TXO.alias('channel_txo')
-        channel_claim = Claim.alias('channel_claim')
         return (
             select_claims.add_columns(
                 TXO.c.signature, TXO.c.signature_digest,
@@ -93,15 +92,10 @@ def select_claims_for_saving(
                         (channel_txo.c.claim_hash == TXO.c.channel_hash) &
                         (channel_txo.c.height <= TXO.c.height)
                     ).order_by(desc(channel_txo.c.height)).limit(1).scalar_subquery()
-                )]).label('channel_public_key'),
-                channel_claim.c.short_url.label('channel_url')
-            ).select_from(
-                TXO.join(TX).join(
-                    channel_claim, channel_claim.c.claim_hash == TXO.c.channel_hash, isouter=True
-                )
+                )]).label('channel_public_key')
             )
         )
-    return select_claims.select_from(TXO.join(TX))
+    return select_claims
 
 
 def row_to_claim_for_saving(row) -> Tuple[Output, dict]:
@@ -114,18 +108,17 @@ def row_to_claim_for_saving(row) -> Tuple[Output, dict]:
         extra.update({
             'signature': row.signature,
             'signature_digest': row.signature_digest,
-            'channel_public_key': row.channel_public_key,
-            'channel_url': row.channel_url
+            'channel_public_key': row.channel_public_key
         })
     return txo, extra
 
 
 @event_emitter("blockchain.sync.claims.insert", "claims")
 def claims_insert(
-        txo_types: Union[int, Tuple[int, ...]],
-        blocks: Tuple[int, int],
-        missing_in_claims_table: bool,
-        p: ProgressContext
+    txo_types: Union[int, Tuple[int, ...]],
+    blocks: Tuple[int, int],
+    missing_in_claims_table: bool,
+    p: ProgressContext
 ):
     chain = get_or_initialize_lbrycrd(p.ctx)
 
@@ -136,29 +129,26 @@ def claims_insert(
         ), progress_id=blocks[0], label=make_label("add claims at", blocks)
     )
 
+    channel_url_cache = {}
+
     with p.ctx.engine.connect().execution_options(stream_results=True) as c:
         loader = p.ctx.get_bulk_loader()
         cursor = c.execute(select_claims_for_saving(
             txo_types, blocks, missing_in_claims_table=missing_in_claims_table
         ).order_by(TXO.c.claim_hash))
         for rows in cursor.partitions(900):
-            claim_metadata = iter(chain.db.sync_get_claim_metadata(
+            claim_metadata = chain.db.sync_get_claim_metadata(
                 claim_hashes=[row['claim_hash'] for row in rows]
-            ))
+            )
+            i, txos_w_extra, unknown_channel_urls, txos_wo_channel_url = 0, [], set(), []
             for row in rows:
-                metadata = next(claim_metadata, None)
-                if metadata is None or metadata['claim_hash'] != row.claim_hash:
-                    log.error(
-                        r"During sync'ing a claim in our db couldn't find a "
-                        r"match in lbrycrd's db. This could be because lbrycrd "
-                        r"moved a block forward and updated its own claim table "
-                        r"while we were still on a previous block, or it could be "
-                        r"a more fundamental issue... ¯\_(ツ)_/¯"
-                    )
-                    if metadata is None:
-                        break
-                    if metadata['claim_hash'] != row.claim_hash:
-                        continue
+                metadata = claim_metadata[i] if i < len(claim_metadata) else None
+                if metadata is None:
+                    break
+                elif metadata['claim_hash'] != row.claim_hash:
+                    continue
+                else:
+                    i += 1
                 txo, extra = row_to_claim_for_saving(row)
                 extra.update({
                     'short_url': metadata['short_url'],
@@ -167,10 +157,48 @@ def claims_insert(
                     'expiration_height': metadata['expiration_height'],
                     'takeover_height': metadata['takeover_height'],
                 })
+                txos_w_extra.append((txo, extra))
+                set_or_add_to_url_lookup(
+                    channel_url_cache, txo, extra, unknown_channel_urls, txos_wo_channel_url
+                )
+            perform_url_lookup(chain, channel_url_cache, unknown_channel_urls, txos_wo_channel_url)
+            for txo, extra in txos_w_extra:
                 loader.add_claim(txo, **extra)
             if len(loader.claims) >= 25_000:
                 p.add(loader.flush(Claim))
         p.add(loader.flush(Claim))
+
+
+def set_or_add_to_url_lookup(cache: dict, txo: Output, extra: dict, to_lookup: set, to_set: list):
+    claim = txo.can_decode_claim
+    if claim and claim.is_signed:
+        if claim.signing_channel_hash not in cache:
+            to_lookup.add(claim.signing_channel_hash)
+            to_set.append((claim.signing_channel_hash, extra))
+        else:
+            extra['channel_url'] = cache[claim.signing_channel_hash]
+
+
+def perform_url_lookup(chain, cache, to_lookup: set, to_set: list):
+    if to_lookup:
+        channels = chain.db.sync_get_claim_metadata(claim_hashes=list(to_lookup))
+        for channel in channels:
+            cache[channel['claim_hash']] = channel['short_url']
+        for channel_hash, extra in to_set:
+            extra['channel_url'] = cache.get(channel_hash)
+
+
+@event_emitter("blockchain.sync.claims.indexes", "steps")
+def claims_constraints_and_indexes(p: ProgressContext):
+    p.start(2)
+    if p.ctx.is_postgres:
+        with p.ctx.engine.connect() as c:
+            c.execute(text("COMMIT;"))
+            c.execute(text("VACUUM ANALYZE claim;"))
+    p.step()
+    if p.ctx.is_postgres:
+        pg_add_claim_constraints_and_indexes(p.ctx.execute)
+    p.step()
 
 
 @event_emitter("blockchain.sync.claims.update", "claims")
@@ -179,13 +207,22 @@ def claims_update(txo_types: Union[int, Tuple[int, ...]], blocks: Tuple[int, int
         count_unspent_txos(txo_types, blocks, missing_or_stale_in_claims_table=True),
         progress_id=blocks[0], label=make_label("update claims at", blocks)
     )
+    chain = get_or_initialize_lbrycrd(p.ctx)
     with p.ctx.engine.connect().execution_options(stream_results=True) as c:
         loader = p.ctx.get_bulk_loader()
         cursor = c.execute(select_claims_for_saving(
             txo_types, blocks, missing_or_stale_in_claims_table=True
         ))
+        channel_url_cache = {}
         for row in cursor:
             txo, extra = row_to_claim_for_saving(row)
+            claim = txo.can_decode_claim
+            if claim and claim.is_signed:
+                if claim.signing_channel_hash not in channel_url_cache:
+                    channels = chain.db.sync_get_claim_metadata(claim_hashes=[claim.signing_channel_hash])
+                    if channels:
+                        channel_url_cache[channels[0]['claim_hash']] = channels[0]['short_url']
+                extra['channel_url'] = channel_url_cache.get(claim.signing_channel_hash)
             loader.update_claim(txo, **extra)
             if len(loader.update_claims) >= 500:
                 p.add(loader.flush(Claim))

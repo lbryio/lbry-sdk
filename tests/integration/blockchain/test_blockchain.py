@@ -257,7 +257,8 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         active = []
         for txo in await self.db.search_claims(
                 activation_height__lte=self.current_height,
-                expiration_height__gt=self.current_height):
+                expiration_height__gt=self.current_height,
+                order_by=['^height']):
             if controlling and controlling[0] == txo.claim.stream.title:
                 continue
             active.append((
@@ -503,13 +504,13 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
         self.assertConsumingEvents(
-            events, "blockchain.sync.block.init", ("steps",), [
+            events, "blockchain.sync.blocks.init", ("steps",), [
                 (0, None, (3,), (1,), (2,), (3,))
             ]
         )
         self.assertEqual(
             events.pop(0), {
-                "event": "blockchain.sync.block.main",
+                "event": "blockchain.sync.blocks.main",
                 "data": {
                     "id": 0, "done": (0, 0), "total": (353, 544), "units": ("blocks", "txs"),
                     "starting_height": 0, "ending_height": 352,
@@ -518,7 +519,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             }
         )
         self.assertConsumingEvents(
-            events, "blockchain.sync.block.file", ("blocks", "txs"), [
+            events, "blockchain.sync.blocks.file", ("blocks", "txs"), [
                 (0, "blk00000.dat", (191, 280), (100, 0), (191, 280)),
                 (1, "blk00001.dat", (89, 178), (89, 178)),
                 (2, "blk00002.dat", (73, 86), (73, 86)),
@@ -526,12 +527,12 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertEqual(
             events.pop(0), {
-                "event": "blockchain.sync.block.main",
+                "event": "blockchain.sync.blocks.main",
                 "data": {"id": 0, "done": (-1, -1)}
             }
         )
         self.assertConsumingEvents(
-            events, "blockchain.sync.txoi.main", ("steps",), [
+            events, "blockchain.sync.spends.main", ("steps",), [
                 (0, None, (9,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,))
             ]
         )
@@ -560,6 +561,11 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 (273, "add claims at 273-291", (361,), (361,)),
             ]
         )
+        self.assertConsumingEvents(
+            events, "blockchain.sync.claims.indexes", ("steps",), [
+                (0, None, (2,), (1,), (2,))
+            ]
+        )
         self.assertEqual(
             events.pop(0), {
                 "event": "blockchain.sync.claims.main",
@@ -577,6 +583,11 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 (352, "add supports at 352", (2,), (2,)),
             ]
         )
+        self.assertConsumingEvents(
+            events, "blockchain.sync.supports.indexes", ("steps",), [
+                (0, None, (2,), (1,), (2,))
+            ]
+        )
         self.assertEqual(
             events.pop(0), {
                 "event": "blockchain.sync.supports.main",
@@ -589,7 +600,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         await self.sync.advance()  # should be no-op
         await asyncio.sleep(1)  # give it time to collect events
         self.assertConsumingEvents(
-            events, "blockchain.sync.block.init", ("steps",), [
+            events, "blockchain.sync.blocks.init", ("steps",), [
                 (0, None, (3,), (1,), (2,), (3,))
             ]
         )
@@ -605,13 +616,13 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
         self.assertConsumingEvents(
-            events, "blockchain.sync.block.init", ("steps",), [
+            events, "blockchain.sync.blocks.init", ("steps",), [
                 (0, None, (3,), (1,), (2,), (3,))
             ]
         )
         self.assertEqual(
             events.pop(0), {
-                "event": "blockchain.sync.block.main",
+                "event": "blockchain.sync.blocks.main",
                 "data": {
                     "id": 0, "done": (0, 0), "total": (2, 4), "units": ("blocks", "txs"),
                     "starting_height": 353, "ending_height": 354,
@@ -620,18 +631,18 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             }
         )
         self.assertConsumingEvents(
-            events, "blockchain.sync.block.file", ("blocks", "txs"), [
+            events, "blockchain.sync.blocks.file", ("blocks", "txs"), [
                 (2, "blk00002.dat", (2, 4), (2, 4)),
             ]
         )
         self.assertEqual(
             events.pop(0), {
-                "event": "blockchain.sync.block.main",
+                "event": "blockchain.sync.blocks.main",
                 "data": {"id": 0, "done": (-1, -1)}
             }
         )
         self.assertConsumingEvents(
-            events, "blockchain.sync.txoi.main", ("steps",), [
+            events, "blockchain.sync.spends.main", ("steps",), [
                 (0, None, (2,), (1,), (2,))
             ]
         )

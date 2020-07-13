@@ -1,7 +1,6 @@
 import os
 import asyncio
 import logging
-from functools import partial
 from typing import Optional, Tuple, Set, List, Coroutine
 
 from lbry.db import Database
@@ -17,16 +16,16 @@ from . import blocks as block_phase, claims as claim_phase, supports as support_
 
 log = logging.getLogger(__name__)
 
-BLOCK_INIT_EVENT = Event.add("blockchain.sync.block.init", "steps")
-BLOCK_MAIN_EVENT = Event.add("blockchain.sync.block.main", "blocks", "txs")
+BLOCKS_INIT_EVENT = Event.add("blockchain.sync.blocks.init", "steps")
+BLOCKS_MAIN_EVENT = Event.add("blockchain.sync.blocks.main", "blocks", "txs")
 FILTER_INIT_EVENT = Event.add("blockchain.sync.filter.init", "steps")
 FILTER_MAIN_EVENT = Event.add("blockchain.sync.filter.main", "blocks")
-CLAIM_INIT_EVENT = Event.add("blockchain.sync.claims.init", "steps")
-CLAIM_MAIN_EVENT = Event.add("blockchain.sync.claims.main", "claims")
-SUPPORT_INIT_EVENT = Event.add("blockchain.sync.supports.init", "steps")
-SUPPORT_MAIN_EVENT = Event.add("blockchain.sync.supports.main", "supports")
-TREND_INIT_EVENT = Event.add("blockchain.sync.trends.init", "steps")
-TREND_MAIN_EVENT = Event.add("blockchain.sync.trends.main", "blocks")
+CLAIMS_INIT_EVENT = Event.add("blockchain.sync.claims.init", "steps")
+CLAIMS_MAIN_EVENT = Event.add("blockchain.sync.claims.main", "claims")
+TRENDS_INIT_EVENT = Event.add("blockchain.sync.trends.init", "steps")
+TRENDS_MAIN_EVENT = Event.add("blockchain.sync.trends.main", "blocks")
+SUPPORTS_INIT_EVENT = Event.add("blockchain.sync.supports.init", "steps")
+SUPPORTS_MAIN_EVENT = Event.add("blockchain.sync.supports.main", "supports")
 
 
 class BlockchainSync(Sync):
@@ -87,7 +86,7 @@ class BlockchainSync(Sync):
         tasks = []
         starting_height = None
         tx_count = block_count = 0
-        with Progress(self.db.message_queue, BLOCK_INIT_EVENT) as p:
+        with Progress(self.db.message_queue, BLOCKS_INIT_EVENT) as p:
             ending_height = await self.chain.db.get_best_height()
             for chain_file in p.iter(await self.chain.db.get_block_files()):
                 # block files may be read and saved out of order, need to check
@@ -113,7 +112,7 @@ class BlockchainSync(Sync):
                     block_phase.sync_block_file, chain_file['file_number'], our_best_file_height+1,
                     chain_file['txs'], self.TX_FLUSH_SIZE
                 ))
-        with Progress(self.db.message_queue, BLOCK_MAIN_EVENT) as p:
+        with Progress(self.db.message_queue, BLOCKS_MAIN_EVENT) as p:
             p.start(block_count, tx_count, extra={
                 "starting_height": starting_height,
                 "ending_height": ending_height,
@@ -137,9 +136,9 @@ class BlockchainSync(Sync):
             p.start(blocks)
             await self.run_tasks(tasks)
 
-    async def sync_txios(self, blocks_added):
+    async def sync_spends(self, blocks_added):
         if blocks_added:
-            await self.db.run(block_phase.sync_txoi, blocks_added[0] == 0)
+            await self.db.run(block_phase.sync_spends, blocks_added[0] == 0)
 
     async def count_unspent_txos(
         self,
@@ -191,7 +190,7 @@ class BlockchainSync(Sync):
     async def sync_claims(self, blocks):
         total = delete_claims = takeovers = claims_with_changed_supports = 0
         initial_sync = not await self.db.has_claims()
-        with Progress(self.db.message_queue, CLAIM_INIT_EVENT) as p:
+        with Progress(self.db.message_queue, CLAIMS_INIT_EVENT) as p:
             if initial_sync:
                 p.start(2)
                 # 1. distribute channel insertion load
@@ -237,7 +236,7 @@ class BlockchainSync(Sync):
                 p.step()
             else:
                 return
-        with Progress(self.db.message_queue, CLAIM_MAIN_EVENT) as p:
+        with Progress(self.db.message_queue, CLAIMS_MAIN_EVENT) as p:
             p.start(total)
             insertions = [
                 (TXO_TYPES['channel'], channel_batches),
@@ -261,13 +260,15 @@ class BlockchainSync(Sync):
                 await self.db.run(claim_phase.update_takeovers, blocks, takeovers)
             if claims_with_changed_supports:
                 await self.db.run(claim_phase.update_stakes, blocks, claims_with_changed_supports)
+            if initial_sync:
+                await self.db.run(claim_phase.claims_constraints_and_indexes)
             if channels_with_changed_content:
                 return initial_sync, channels_with_changed_content
 
     async def sync_supports(self, blocks):
         delete_supports = 0
         initial_sync = not await self.db.has_supports()
-        with Progress(self.db.message_queue, SUPPORT_INIT_EVENT) as p:
+        with Progress(self.db.message_queue, SUPPORTS_INIT_EVENT) as p:
             if initial_sync:
                 total, support_batches = await self.distribute_unspent_txos(TXO_TYPES['support'])
             elif blocks:
@@ -284,7 +285,7 @@ class BlockchainSync(Sync):
                 p.step()
             else:
                 return
-        with Progress(self.db.message_queue, SUPPORT_MAIN_EVENT) as p:
+        with Progress(self.db.message_queue, SUPPORTS_MAIN_EVENT) as p:
             p.start(total)
             if support_batches:
                 await self.run_tasks([
@@ -294,6 +295,8 @@ class BlockchainSync(Sync):
                 ])
             if delete_supports:
                 await self.db.run(support_phase.supports_delete, delete_supports)
+            if initial_sync:
+                await self.db.run(support_phase.supports_constraints_and_indexes)
 
     async def sync_channel_stats(self, blocks, initial_sync, channels_with_changed_content):
         if channels_with_changed_content:
@@ -308,7 +311,7 @@ class BlockchainSync(Sync):
         blocks_added = await self.sync_blocks()
         sync_filters_task = asyncio.create_task(self.sync_filters())
         sync_trends_task = asyncio.create_task(self.sync_trends())
-        await self.sync_txios(blocks_added)
+        await self.sync_spends(blocks_added)
         channel_stats = await self.sync_claims(blocks_added)
         await self.sync_supports(blocks_added)
         if channel_stats:

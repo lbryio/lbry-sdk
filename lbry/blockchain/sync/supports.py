@@ -1,10 +1,10 @@
 import logging
 from typing import Tuple
 
-from sqlalchemy import case, desc
+from sqlalchemy import case, desc, text
 from sqlalchemy.future import select
 
-from lbry.db.tables import TX, TXO, Support
+from lbry.db.tables import TX, TXO, Support, pg_add_support_constraints_and_indexes
 from lbry.db.query_context import ProgressContext, event_emitter
 from lbry.db.queries import row_to_txo
 from lbry.db.constants import TXO_TYPES
@@ -61,6 +61,19 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
             if len(loader.supports) >= 25_000:
                 p.add(loader.flush(Support))
         p.add(loader.flush(Support))
+
+
+@event_emitter("blockchain.sync.supports.indexes", "steps")
+def supports_constraints_and_indexes(p: ProgressContext):
+    p.start(2)
+    if p.ctx.is_postgres:
+        with p.ctx.engine.connect() as c:
+            c.execute(text("COMMIT;"))
+            c.execute(text("VACUUM ANALYZE support;"))
+    p.step()
+    if p.ctx.is_postgres:
+        pg_add_support_constraints_and_indexes(p.ctx.execute)
+    p.step()
 
 
 @event_emitter("blockchain.sync.supports.delete", "supports")
