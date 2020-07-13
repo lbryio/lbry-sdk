@@ -5,7 +5,7 @@ from sqlalchemy import (
     LargeBinary, Text, SmallInteger, Integer, BigInteger, Boolean,
     text
 )
-from .constants import TXO_TYPES
+from .constants import TXO_TYPES, CLAIM_TYPE_CODES
 
 
 SCHEMA_VERSION = '1.4'
@@ -97,15 +97,33 @@ txo_join_account = TXO.join(AccountAddress, TXO.columns.address == AccountAddres
 
 def pg_add_txo_constraints_and_indexes(execute):
     execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+    # find appropriate channel public key for signing a content claim
     execute(text(f"""
         CREATE INDEX txo_channel_hash_w_height_desc_and_pub_key
         ON txo (claim_hash, height desc) INCLUDE (public_key)
         WHERE txo_type={TXO_TYPES['channel']};
     """))
+    # update supports for a claim
     execute(text(f"""
         CREATE INDEX txo_unspent_supports
         ON txo (claim_hash) INCLUDE (amount)
         WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};
+    """))
+    # claim changes by height
+    execute(text(f"""
+        CREATE INDEX txo_claim_changes
+        ON txo (height DESC) INCLUDE (txo_hash)
+        WHERE spent_height = 0 AND txo_type IN {tuple(CLAIM_TYPE_CODES)};
+    """))
+    # supports added
+    execute(text(f"""
+        CREATE INDEX txo_added_supports_by_height ON txo (height DESC)
+        INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};
+    """))
+    # supports spent
+    execute(text(f"""
+        CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC)
+        INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};
     """))
 
 
@@ -187,6 +205,9 @@ Claim = Table(
 
 def pg_add_claim_constraints_and_indexes(execute):
     execute(text("ALTER TABLE claim ADD PRIMARY KEY (claim_hash);"))
+    # finding claims that aren't updated with latest TXO
+    execute(text("CREATE INDEX claim_txo_hash ON claim (txo_hash);"))
+    # used to calculate content in a channel
     execute(text("""
         CREATE INDEX signed_content ON claim (channel_hash)
         INCLUDE (amount) WHERE is_signature_valid;

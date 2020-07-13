@@ -1,5 +1,6 @@
 import os
 import time
+import traceback
 import functools
 from io import BytesIO
 import multiprocessing as mp
@@ -160,7 +161,7 @@ def context(with_timer: str = None) -> 'QueryContext':
 
 def set_postgres_settings(connection, _):
     cursor = connection.cursor()
-    cursor.execute('SET work_mem="100MB";')
+    cursor.execute('SET work_mem="500MB";')
     cursor.close()
 
 
@@ -241,7 +242,11 @@ def event_emitter(name: str, *units: str, throttle=1):
         @functools.wraps(f)
         def with_progress(*args, **kwargs):
             with progress(event, throttle=throttle) as p:
-                return f(*args, **kwargs, p=p)
+                try:
+                    return f(*args, **kwargs, p=p)
+                except:
+                    traceback.print_exc()
+                    raise
         return with_progress
 
     return wrapper
@@ -546,7 +551,7 @@ class BulkLoader:
         if claim.is_signed:
             d['channel_hash'] = claim.signing_channel_hash
             d['is_signature_valid'] = (
-                all((signature, signature_digest, channel_public_key)) &
+                all((signature, signature_digest, channel_public_key)) and
                 Output.is_signature_valid(
                     signature, signature_digest, channel_public_key
                 )
@@ -584,7 +589,7 @@ class BulkLoader:
             if support.is_signed:
                 d['channel_hash'] = support.signing_channel_hash
                 d['is_signature_valid'] = (
-                    all((signature, signature_digest, channel_public_key)) &
+                    all((signature, signature_digest, channel_public_key)) and
                     Output.is_signature_valid(
                         signature, signature_digest, channel_public_key
                     )
