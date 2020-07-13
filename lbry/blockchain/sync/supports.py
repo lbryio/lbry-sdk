@@ -26,7 +26,7 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
         count_unspent_txos(
             TXO_TYPES['support'], blocks,
             missing_in_supports_table=missing_in_supports_table,
-        ), progress_id=blocks[0], label=make_label("add supports at", blocks)
+        ), progress_id=blocks[0], label=make_label("add supprt", blocks)
     )
     channel_txo = TXO.alias('channel_txo')
     select_supports = select(
@@ -78,6 +78,6 @@ def supports_constraints_and_indexes(p: ProgressContext):
 
 @event_emitter("blockchain.sync.supports.delete", "supports")
 def supports_delete(supports, p: ProgressContext):
-    p.start(supports, label="delete supports")
+    p.start(supports, label="del supprt")
     deleted = p.ctx.execute(Support.delete().where(where_abandoned_supports()))
     p.step(deleted.rowcount)

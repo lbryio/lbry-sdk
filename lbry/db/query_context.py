@@ -244,6 +244,8 @@ def event_emitter(name: str, *units: str, throttle=1):
             with progress(event, throttle=throttle) as p:
                 try:
                     return f(*args, **kwargs, p=p)
+                except BreakProgress:
+                    raise
                 except:
                     traceback.print_exc()
                     raise

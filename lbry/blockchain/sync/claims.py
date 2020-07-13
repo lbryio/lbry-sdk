@@ -58,9 +58,9 @@ def staked_support_count_calc(other):
 
 def make_label(action, blocks):
     if blocks[0] == blocks[-1]:
-        return f"{action} {blocks[0]}"
+        return f"{action}{blocks[0]:>6}"
     else:
-        return f"{action} {blocks[0]}-{blocks[-1]}"
+        return f"{action}{blocks[0]:>6}-{blocks[-1]:>6}"
 
 
 def select_claims_for_saving(
@@ -113,7 +113,7 @@ def claims_insert(
         count_unspent_txos(
             CLAIM_TYPE_CODES, blocks,
             missing_in_claims_table=missing_in_claims_table,
-        ), progress_id=blocks[0], label=make_label("add claims at", blocks)
+        ), progress_id=blocks[0], label=make_label("add claims", blocks)
     )
 
     with p.ctx.engine.connect().execution_options(stream_results=True) as c:
@@ -165,7 +165,7 @@ def claims_constraints_and_indexes(p: ProgressContext):
 def claims_update(blocks: Tuple[int, int], p: ProgressContext):
     p.start(
         count_unspent_txos(CLAIM_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True),
-        progress_id=blocks[0], label=make_label("update claims at", blocks)
+        progress_id=blocks[0], label=make_label("mod claims", blocks)
     )
     with p.ctx.engine.connect().execution_options(stream_results=True) as c:
         loader = p.ctx.get_bulk_loader()
@@ -182,14 +182,14 @@ def claims_update(blocks: Tuple[int, int], p: ProgressContext):
 
 @event_emitter("blockchain.sync.claims.delete", "claims")
 def claims_delete(claims, p: ProgressContext):
-    p.start(claims, label="delete claims")
+    p.start(claims, label="del claims")
     deleted = p.ctx.execute(Claim.delete().where(where_abandoned_claims()))
     p.step(deleted.rowcount)
 
 
 @event_emitter("blockchain.sync.claims.takeovers", "claims")
 def update_takeovers(blocks: Tuple[int, int], takeovers, p: ProgressContext):
-    p.start(takeovers, label="winning")
+    p.start(takeovers, label=make_label("mod winner", blocks))
     chain = get_or_initialize_lbrycrd(p.ctx)
     for takeover in chain.db.sync_get_takeovers(start_height=blocks[0], end_height=blocks[-1]):
         update_claims = (

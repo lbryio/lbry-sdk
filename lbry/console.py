@@ -392,7 +392,10 @@ class Advanced(Basic):
         if bar is None:
             assert d['done'][0] == 0
             label = d.get('label', name[-11:])
-            self.get_or_create_bar(f"{name}#{d['id']}", label, d['units'], d['total'])
+            self.get_or_create_bar(
+                f"{name}#{d['id']}", label, d['units'], d['total'],
+                name.split('.')[-1] not in ('insert', 'update')
+            )
         else:
             if d['done'][0] != -1:
                 main_bar_name = f"{name[:name.rindex('.')]}.main"
