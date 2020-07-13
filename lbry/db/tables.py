@@ -146,10 +146,10 @@ Claim = Table(
     Column('sync_height', Integer),  # claim dynamic values up-to-date as of this height (eg. staked_amount)
     Column('is_controlling', Boolean),
 
-    # normalized#shortest-unique-claim_id
+    # short_url: normalized#shortest-unique-claim_id
     Column('short_url', Text),
-    # channel's-short_url/normalized#shortest-unique-claim_id-within-channel
-    Column('canonical_url', Text, nullable=True),
+    # canonical_url: channel's-short_url/normalized#shortest-unique-claim_id-within-channel
+    # canonical_url is computed dynamically
 
     Column('title', Text, nullable=True),
     Column('author', Text, nullable=True),

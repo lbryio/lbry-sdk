@@ -5,7 +5,7 @@ from typing import Optional, Tuple, Set, List, Coroutine
 
 from lbry.db import Database
 from lbry.db import queries as q
-from lbry.db.constants import TXO_TYPES, CONTENT_TYPE_CODES
+from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
 from lbry.db.query_context import Event, Progress
 from lbry.event import BroadcastSubscription
 from lbry.service.base import Sync, BlockEvent
@@ -187,73 +187,44 @@ class BlockchainSync(Sync):
             start_height=blocks[0], end_height=blocks[-1]
         )
 
-    async def sync_claims(self, blocks):
-        total = delete_claims = takeovers = claims_with_changed_supports = 0
+    async def sync_claims(self, blocks) -> bool:
+        delete_claims = takeovers = claims_with_changed_supports = 0
         initial_sync = not await self.db.has_claims()
         with Progress(self.db.message_queue, CLAIMS_INIT_EVENT) as p:
             if initial_sync:
-                p.start(2)
-                # 1. distribute channel insertion load
-                channels, channel_batches = await self.distribute_unspent_txos(TXO_TYPES['channel'])
-                channels_with_changed_content = channels
-                total += channels + channels_with_changed_content
-                p.step()
-                # 2. distribute content insertion load
-                content, content_batches = await self.distribute_unspent_txos(CONTENT_TYPE_CODES)
-                total += content
-                p.step()
+                total, batches = await self.distribute_unspent_txos(CLAIM_TYPE_CODES)
             elif blocks:
-                p.start(6)
-                # 1. channel claims to be inserted or updated
-                channels = await self.count_unspent_txos(
-                    TXO_TYPES['channel'], blocks, missing_or_stale_in_claims_table=True
+                p.start(4)
+                # 1. content claims to be inserted or updated
+                total = await self.count_unspent_txos(
+                    CLAIM_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True
                 )
-                channel_batches = [blocks] if channels else []
-                total += channels
+                batches = [blocks] if total else []
                 p.step()
-                # 2. content claims to be inserted or updated
-                content = await self.count_unspent_txos(
-                    CONTENT_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True
-                )
-                content_batches = [blocks] if content else []
-                total += content
-                p.step()
-                # 3. claims to be deleted
+                # 2. claims to be deleted
                 delete_claims = await self.count_abandoned_claims()
                 total += delete_claims
                 p.step()
-                # 4. claims to be updated with new support totals
+                # 3. claims to be updated with new support totals
                 claims_with_changed_supports = await self.count_claims_with_changed_supports(blocks)
                 total += claims_with_changed_supports
                 p.step()
-                # 5. channels to be updated with changed content totals
-                channels_with_changed_content = await self.count_channels_with_changed_content(blocks)
-                total += channels_with_changed_content
-                p.step()
-                # 6. claims to be updated due to name takeovers
+                # 5. claims to be updated due to name takeovers
                 takeovers = await self.count_takeovers(blocks)
                 total += takeovers
                 p.step()
             else:
-                return
+                return initial_sync
         with Progress(self.db.message_queue, CLAIMS_MAIN_EVENT) as p:
             p.start(total)
-            insertions = [
-                (TXO_TYPES['channel'], channel_batches),
-                (CONTENT_TYPE_CODES, content_batches),
-            ]
-            for txo_type, batches in insertions:
-                if batches:
+            if batches:
+                await self.run_tasks([
+                    self.db.run(claim_phase.claims_insert, batch, not initial_sync) for batch in batches
+                ])
+                if not initial_sync:
                     await self.run_tasks([
-                        self.db.run(
-                            claim_phase.claims_insert, txo_type, batch, not initial_sync
-                        ) for batch in batches
+                        self.db.run(claim_phase.claims_update, batch) for batch in batches
                     ])
-                    if not initial_sync:
-                        await self.run_tasks([
-                            self.db.run(claim_phase.claims_update, txo_type, batch)
-                            for batch in batches
-                        ])
             if delete_claims:
                 await self.db.run(claim_phase.claims_delete, delete_claims)
             if takeovers:
@@ -262,8 +233,7 @@ class BlockchainSync(Sync):
                 await self.db.run(claim_phase.update_stakes, blocks, claims_with_changed_supports)
             if initial_sync:
                 await self.db.run(claim_phase.claims_constraints_and_indexes)
-            if channels_with_changed_content:
-                return initial_sync, channels_with_changed_content
+            return initial_sync
 
     async def sync_supports(self, blocks):
         delete_supports = 0
@@ -298,11 +268,8 @@ class BlockchainSync(Sync):
             if initial_sync:
                 await self.db.run(support_phase.supports_constraints_and_indexes)
 
-    async def sync_channel_stats(self, blocks, initial_sync, channels_with_changed_content):
-        if channels_with_changed_content:
-            await self.db.run(
-                claim_phase.update_channel_stats, blocks, initial_sync, channels_with_changed_content
-            )
+    async def sync_channel_stats(self, blocks, initial_sync):
+        await self.db.run(claim_phase.update_channel_stats, blocks, initial_sync)
 
     async def sync_trends(self):
         pass
@@ -312,10 +279,9 @@ class BlockchainSync(Sync):
         sync_filters_task = asyncio.create_task(self.sync_filters())
         sync_trends_task = asyncio.create_task(self.sync_trends())
         await self.sync_spends(blocks_added)
-        channel_stats = await self.sync_claims(blocks_added)
+        initial_claim_sync = await self.sync_claims(blocks_added)
         await self.sync_supports(blocks_added)
-        if channel_stats:
-            await self.sync_channel_stats(blocks_added, *channel_stats)
+        await self.sync_channel_stats(blocks_added, initial_claim_sync)
         await sync_trends_task
         await sync_filters_task
         if blocks_added:

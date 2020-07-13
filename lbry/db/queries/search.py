@@ -4,7 +4,7 @@ from decimal import Decimal
 from binascii import unhexlify
 from typing import Tuple, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, case
 from sqlalchemy.future import select, Select
 
 from lbry.schema.tags import clean_tags
@@ -56,6 +56,7 @@ def search_support_count(**constraints) -> int:
     return count[0]['total'] or 0
 
 
+channel_claim = Claim.alias('channel')
 BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
@@ -64,14 +65,18 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.channel_hash,
     Claim.c.reposted_claim_hash,
     Claim.c.short_url,
-    Claim.c.canonical_url,
     Claim.c.signed_claim_count,
     Claim.c.signed_support_count,
     (Claim.c.amount + Claim.c.staked_support_amount).label('staked_amount'),
     Claim.c.staked_support_amount,
     Claim.c.staked_support_count,
     Claim.c.is_signature_valid,
+    case([(
+        channel_claim.c.short_url.isnot(None),
+        channel_claim.c.short_url + '/' + Claim.c.short_url
+    )]).label('canonical_url'),
 ]
+
 
 def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
     if cols is None:
@@ -203,8 +208,14 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         # TODO: fix
         constraints["search"] = constraints.pop("text")
 
-    joins = Claim.join(TXO).join(TX)
-    return query([Claim], select(*cols).select_from(joins), **constraints)
+    return query(
+        [Claim],
+        select(*cols)
+        .select_from(
+            Claim.join(TXO).join(TX)
+            .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
+        ), **constraints
+    )
 
 
 def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:
@@ -226,6 +237,8 @@ def search_claim_count(**constraints) -> int:
     constraints.pop('order_by', None)
     count = context().fetchall(select_claims([func.count().label('total')], **constraints))
     return count[0]['total'] or 0
+
+
 CLAIM_HASH_OR_REPOST_HASH_SQL = f"""
 CASE WHEN claim.claim_type = {TXO_TYPES['repost']}
     THEN claim.reposted_claim_hash

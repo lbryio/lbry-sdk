@@ -612,7 +612,7 @@ class BulkLoader:
     def add_claim(
         self, txo: Output, short_url: str,
         creation_height: int, activation_height: int, expiration_height: int,
-        takeover_height: int = None, channel_url: str = None, **extra
+        takeover_height: int = None, **extra
     ):
         try:
             claim_name = txo.claim_name.replace('\x00', '')
@@ -630,18 +630,13 @@ class BulkLoader:
         d['expiration_height'] = expiration_height
         d['takeover_height'] = takeover_height
         d['is_controlling'] = takeover_height is not None
-        if d['is_signature_valid'] and channel_url is not None:
-            d['canonical_url'] = channel_url + '/' + short_url
-        else:
-            d['canonical_url'] = None
         self.claims.append(d)
         self.tags.extend(tags)
         return self
 
-    def update_claim(self, txo: Output, channel_url: str = None, **extra):
+    def update_claim(self, txo: Output, **extra):
         d, tags = self.claim_to_rows(txo, **extra)
         d['pk'] = txo.claim_hash
-        d['channel_url'] = channel_url
         d['set_canonical_url'] = d['is_signature_valid']
         self.update_claims.append(d)
         self.delete_tags.append({'pk': txo.claim_hash})
@@ -656,11 +651,7 @@ class BulkLoader:
             (TXI.insert(), self.txis),
             (Claim.insert(), self.claims),
             (Tag.delete().where(Tag.c.claim_hash == bindparam('pk')), self.delete_tags),
-            (Claim.update().where(Claim.c.claim_hash == bindparam('pk')).values(
-                canonical_url=case([
-                    (bindparam('set_canonical_url'), bindparam('channel_url') + '/' + Claim.c.short_url)
-                ], else_=None)
-            ), self.update_claims),
+            (Claim.update().where(Claim.c.claim_hash == bindparam('pk')), self.update_claims),
             (Tag.insert(), self.tags),
             (Support.insert(), self.supports),
         )
