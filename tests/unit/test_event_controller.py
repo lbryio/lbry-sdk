@@ -92,8 +92,8 @@ class StreamControllerTestCase(AsyncioTestCase):
 class TestEventQueuePublisher(AsyncioTestCase):
 
     async def test_event_buffering_avoids_overloading_asyncio(self):
-        threads = 4
-        generate_events = 3000
+        threads = 3
+        generate_events = 2000
         expected_event_count = (threads * generate_events)-1
 
         queue = mp.Queue()
