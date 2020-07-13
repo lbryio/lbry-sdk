@@ -544,16 +544,16 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.claims.insert", ("claims",), [
-                (102, "add claims at 102-120", (361,), (361,)),
-                (121, "add claims at 121-139", (361,), (361,)),
-                (140, "add claims at 140-158", (361,), (361,)),
-                (159, "add claims at 159-177", (361,), (361,)),
-                (178, "add claims at 178-196", (361,), (361,)),
-                (197, "add claims at 197-215", (361,), (361,)),
-                (216, "add claims at 216-234", (361,), (361,)),
-                (235, "add claims at 235-253", (361,), (361,)),
-                (254, "add claims at 254-272", (361,), (361,)),
-                (273, "add claims at 273-291", (361,), (361,)),
+                (102, "add claims    102-   120", (361,), (361,)),
+                (121, "add claims    121-   139", (361,), (361,)),
+                (140, "add claims    140-   158", (361,), (361,)),
+                (159, "add claims    159-   177", (361,), (361,)),
+                (178, "add claims    178-   196", (361,), (361,)),
+                (197, "add claims    197-   215", (361,), (361,)),
+                (216, "add claims    216-   234", (361,), (361,)),
+                (235, "add claims    235-   253", (361,), (361,)),
+                (254, "add claims    254-   272", (361,), (361,)),
+                (273, "add claims    273-   291", (361,), (361,)),
             ]
         )
         self.assertConsumingEvents(
@@ -575,7 +575,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.supports.insert", ("supports",), [
-                (352, "add supports at 352", (2,), (2,)),
+                (352, "add supprt    352", (2,), (2,)),
             ]
         )
         self.assertConsumingEvents(
@@ -654,12 +654,12 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.claims.insert", ("claims",), [
-                (353, "add claims at 353-354", (1,), (1,)),
+                (353, "add claims    353-   354", (1,), (1,)),
             ]
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.claims.takeovers", ("claims",), [
-                (0, "winning", (1,), (1,)),
+                (0, "mod winner    353-   354", (1,), (1,)),
             ]
         )
         self.assertConsumingEvents(
@@ -686,7 +686,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.supports.insert", ("supports",), [
-                (353, "add supports at 353-354", (1,), (1,)),
+                (353, "add supprt    353-   354", (1,), (1,)),
             ]
         )
         self.assertEqual(
