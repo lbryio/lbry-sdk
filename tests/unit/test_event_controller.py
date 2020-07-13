@@ -1,7 +1,8 @@
+import sys
 import asyncio
 import logging
+import unittest
 import multiprocessing as mp
-from unittest import skip
 from concurrent.futures import ThreadPoolExecutor
 
 from lbry.testcase import AsyncioTestCase
@@ -91,9 +92,10 @@ class StreamControllerTestCase(AsyncioTestCase):
 
 class TestEventQueuePublisher(AsyncioTestCase):
 
+    @unittest.skipIf("darwin" in sys.platform, "test is very unreliable on mac")
     async def test_event_buffering_avoids_overloading_asyncio(self):
-        threads = 2
-        generate_events = 1000
+        threads = 3
+        generate_events = 3000
         expected_event_count = (threads * generate_events)-1
 
         queue = mp.Queue()
