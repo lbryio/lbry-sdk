@@ -14,9 +14,9 @@ SPENDS_UPDATE_EVENT = Event.add("client.sync.spends.update", "steps")
 CLAIMS_INSERT_EVENT = Event.add("client.sync.claims.insert", "claims")
 CLAIMS_UPDATE_EVENT = Event.add("client.sync.claims.update", "claims")
 CLAIMS_DELETE_EVENT = Event.add("client.sync.claims.delete", "claims")
-SUPPORT_INSERT_EVENT = Event.add("client.sync.claims.insert", "supports")
-SUPPORT_UPDATE_EVENT = Event.add("client.sync.claims.update", "supports")
-SUPPORT_DELETE_EVENT = Event.add("client.sync.claims.delete", "supports")
+SUPPORT_INSERT_EVENT = Event.add("client.sync.supports.insert", "supports")
+SUPPORT_UPDATE_EVENT = Event.add("client.sync.supports.update", "supports")
+SUPPORT_DELETE_EVENT = Event.add("client.sync.supports.delete", "supports")
 
 
 def process_all_things_after_sync():

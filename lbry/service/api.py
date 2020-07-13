@@ -2655,9 +2655,9 @@ class API:
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
         if is_spent:
-            constraints['is_spent'] = True
+            constraints['spent_height__not'] = 0
         elif is_not_spent:
-            constraints['is_spent'] = False
+            constraints['spent_height'] = 0
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
