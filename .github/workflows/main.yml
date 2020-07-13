@@ -61,7 +61,7 @@ jobs:
 
   tests-integration:
     name: "tests / integration"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         test:
