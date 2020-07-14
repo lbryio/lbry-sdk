@@ -366,7 +366,7 @@ class Advanced(Basic):
                 bar.update(d['done'][0] - bar.n)
             if d['done'][0] == -1 or d['done'][0] == bar.total:
                 bar.close()
-            self.bars.pop(bar_name)
+                self.bars.pop(bar_name)
 
     def sync_main(self, name, d):
         bar = self.bars.get(name)
