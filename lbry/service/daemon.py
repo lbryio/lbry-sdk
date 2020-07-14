@@ -111,7 +111,7 @@ class Daemon:
     async def start(self):
         self.console.starting()
         await self.runner.setup()
-        site = TCPSite(self.runner, 'localhost', self.conf.api_port)
+        site = TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
         await site.start()
         await self.service.start()
 
