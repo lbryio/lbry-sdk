@@ -409,7 +409,7 @@ class Advanced(Basic):
                     diff = d['done'][0] - bar.n
                 if main_bar_name != name:
                     main_bar = self.bars.get(main_bar_name)
-                    if main_bar.unit == bar.unit:
+                    if main_bar and main_bar.unit == bar.unit:
                         main_bar.update(diff)
                 bar.update(diff)
             if d['done'][0] == -1 or d['done'][0] == bar.total:
