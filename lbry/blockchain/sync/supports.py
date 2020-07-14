@@ -63,6 +63,13 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
         p.add(loader.flush(Support))
 
 
+@event_emitter("blockchain.sync.supports.delete", "supports")
+def supports_delete(supports, p: ProgressContext):
+    p.start(supports, label="del supprt")
+    deleted = p.ctx.execute(Support.delete().where(where_abandoned_supports()))
+    p.step(deleted.rowcount)
+
+
 @event_emitter("blockchain.sync.supports.indexes", "steps")
 def supports_constraints_and_indexes(p: ProgressContext):
     p.start(1 + len(pg_add_support_constraints_and_indexes))
@@ -77,8 +84,11 @@ def supports_constraints_and_indexes(p: ProgressContext):
         p.step()
 
 
-@event_emitter("blockchain.sync.supports.delete", "supports")
-def supports_delete(supports, p: ProgressContext):
-    p.start(supports, label="del supprt")
-    deleted = p.ctx.execute(Support.delete().where(where_abandoned_supports()))
-    p.step(deleted.rowcount)
+@event_emitter("blockchain.sync.supports.vacuum", "steps")
+def supports_vacuum(p: ProgressContext):
+    p.start(1)
+    with p.ctx.engine.connect() as c:
+        if p.ctx.is_postgres:
+            c.execute(text("COMMIT;"))
+            c.execute(text("VACUUM support;"))
+        p.step()

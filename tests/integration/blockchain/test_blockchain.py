@@ -639,7 +639,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.spends.main", ("steps",), [
-                (0, None, (2,), (1,), (2,))
+                (0, None, (3,), (1,), (2,), (3,))
             ]
         )
         self.assertConsumingEvents(
@@ -668,6 +668,11 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 (0, None, (1,), (1,)),
             ]
         )
+        self.assertConsumingEvents(
+            events, "blockchain.sync.claims.vacuum", ("steps",), [
+                (0, None, (2,), (1,), (2,))
+            ]
+        )
         self.assertEqual(
             events.pop(0), {
                 "event": "blockchain.sync.claims.main",
@@ -688,6 +693,11 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertConsumingEvents(
             events, "blockchain.sync.supports.insert", ("supports",), [
                 (353, "add supprt    353-   354", (1,), (1,)),
+            ]
+        )
+        self.assertConsumingEvents(
+            events, "blockchain.sync.supports.vacuum", ("steps",), [
+                (0, None, (1,), (1,))
             ]
         )
         self.assertEqual(

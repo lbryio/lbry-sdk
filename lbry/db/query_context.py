@@ -645,7 +645,6 @@ class BulkLoader:
     def update_claim(self, txo: Output, **extra):
         d, tags = self.claim_to_rows(txo, **extra)
         d['pk'] = txo.claim_hash
-        d['set_canonical_url'] = d['is_signature_valid']
         self.update_claims.append(d)
         self.delete_tags.append({'pk': txo.claim_hash})
         self.tags.extend(tags)

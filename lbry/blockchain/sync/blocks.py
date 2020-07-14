@@ -128,12 +128,18 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
                 p.ctx.execute(text(constraint))
             p.step()
     else:
-        p.start(2)
+        p.start(3)
         # 1. Update spent TXOs setting spent_height
         update_spent_outputs(p.ctx)
         p.step()
         # 2. Update TXIs to have the address of TXO they are spending.
         set_input_addresses(p.ctx)
+        p.step()
+        # 3. Update visibility map, which speeds up index-only scans.
+        if p.ctx.is_postgres:
+            with p.ctx.engine.connect() as c:
+                c.execute(text("COMMIT;"))
+                c.execute(text("VACUUM txo;"))
         p.step()
 
 

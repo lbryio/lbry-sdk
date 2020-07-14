@@ -159,6 +159,19 @@ def claims_constraints_and_indexes(p: ProgressContext):
         p.step()
 
 
+@event_emitter("blockchain.sync.claims.vacuum", "steps")
+def claims_vacuum(p: ProgressContext):
+    p.start(2)
+    with p.ctx.engine.connect() as c:
+        if p.ctx.is_postgres:
+            c.execute(text("COMMIT;"))
+            c.execute(text("VACUUM claim;"))
+        p.step()
+        if p.ctx.is_postgres:
+            c.execute(text("VACUUM tag;"))
+        p.step()
+
+
 @event_emitter("blockchain.sync.claims.update", "claims")
 def claims_update(blocks: Tuple[int, int], p: ProgressContext):
     p.start(

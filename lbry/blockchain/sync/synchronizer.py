@@ -233,6 +233,8 @@ class BlockchainSync(Sync):
                 await self.db.run(claim_phase.update_stakes, blocks, claims_with_changed_supports)
             if initial_sync:
                 await self.db.run(claim_phase.claims_constraints_and_indexes)
+            else:
+                await self.db.run(claim_phase.claims_vacuum)
             return initial_sync
 
     async def sync_supports(self, blocks):
@@ -267,6 +269,8 @@ class BlockchainSync(Sync):
                 await self.db.run(support_phase.supports_delete, delete_supports)
             if initial_sync:
                 await self.db.run(support_phase.supports_constraints_and_indexes)
+            else:
+                await self.db.run(support_phase.supports_vacuum)
 
     async def sync_channel_stats(self, blocks, initial_sync):
         await self.db.run(claim_phase.update_channel_stats, blocks, initial_sync)
