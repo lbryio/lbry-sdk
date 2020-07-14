@@ -65,15 +65,16 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
 
 @event_emitter("blockchain.sync.supports.indexes", "steps")
 def supports_constraints_and_indexes(p: ProgressContext):
-    p.start(2)
+    p.start(1 + len(pg_add_support_constraints_and_indexes))
     if p.ctx.is_postgres:
         with p.ctx.engine.connect() as c:
             c.execute(text("COMMIT;"))
             c.execute(text("VACUUM ANALYZE support;"))
     p.step()
-    if p.ctx.is_postgres:
-        pg_add_support_constraints_and_indexes(p.ctx.execute)
-    p.step()
+    for constraint in pg_add_support_constraints_and_indexes:
+        if p.ctx.is_postgres:
+            p.ctx.execute(constraint)
+        p.step()
 
 
 @event_emitter("blockchain.sync.supports.delete", "supports")

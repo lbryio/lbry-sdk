@@ -1,9 +1,8 @@
 # pylint: skip-file
 
 from sqlalchemy import (
-    MetaData, Table, Column, ForeignKey, PrimaryKeyConstraint,
+    MetaData, Table, Column, ForeignKey,
     LargeBinary, Text, SmallInteger, Integer, BigInteger, Boolean,
-    text
 )
 from .constants import TXO_TYPES, CLAIM_TYPE_CODES
 
@@ -65,6 +64,11 @@ TX = Table(
 )
 
 
+pg_add_tx_constraints_and_indexes = [
+    "ALTER TABLE tx ADD PRIMARY KEY (tx_hash);",
+]
+
+
 TXO = Table(
     'txo', metadata,
     Column('tx_hash', LargeBinary, ForeignKey(TX.columns.tx_hash)),
@@ -95,36 +99,25 @@ TXO = Table(
 txo_join_account = TXO.join(AccountAddress, TXO.columns.address == AccountAddress.columns.address)
 
 
-def pg_add_txo_constraints_and_indexes(execute):
-    execute(text("ALTER TABLE txo ADD PRIMARY KEY (txo_hash);"))
+pg_add_txo_constraints_and_indexes = [
+    "ALTER TABLE txo ADD PRIMARY KEY (txo_hash);",
     # find appropriate channel public key for signing a content claim
-    execute(text(f"""
-        CREATE INDEX txo_channel_hash_w_height_desc_and_pub_key
-        ON txo (claim_hash, height desc) INCLUDE (public_key)
-        WHERE txo_type={TXO_TYPES['channel']};
-    """))
-    # update supports for a claim
-    execute(text(f"""
-        CREATE INDEX txo_unspent_supports
-        ON txo (claim_hash) INCLUDE (amount)
-        WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};
-    """))
-    # claim changes by height
-    execute(text(f"""
-        CREATE INDEX txo_claim_changes
-        ON txo (height DESC) INCLUDE (txo_hash)
-        WHERE spent_height = 0 AND txo_type IN {tuple(CLAIM_TYPE_CODES)};
-    """))
-    # supports added
-    execute(text(f"""
-        CREATE INDEX txo_added_supports_by_height ON txo (height DESC)
-        INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};
-    """))
-    # supports spent
-    execute(text(f"""
-        CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC)
-        INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};
-    """))
+    f"CREATE INDEX txo_channel_hash_by_height_desc_w_pub_key "
+    f"ON txo (claim_hash, height desc) INCLUDE (public_key) "
+    f"WHERE txo_type={TXO_TYPES['channel']};",
+    # for calculating supports on a claim
+    f"CREATE INDEX txo_unspent_supports ON txo (claim_hash) INCLUDE (amount) "
+    f"WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};",
+    # for finding modified claims in a block range
+    f"CREATE INDEX txo_claim_changes "
+    f"ON txo (height DESC) INCLUDE (txo_hash) "
+    f"WHERE spent_height = 0 AND txo_type IN {tuple(CLAIM_TYPE_CODES)};",
+    # for finding claims which need support totals re-calculated in a block range
+    f"CREATE INDEX txo_added_supports_by_height ON txo (height DESC) "
+    f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
+    f"CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC) "
+    f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
+]
 
 
 TXI = Table(
@@ -139,8 +132,9 @@ TXI = Table(
 txi_join_account = TXI.join(AccountAddress, TXI.columns.address == AccountAddress.columns.address)
 
 
-def pg_add_txi_constraints_and_indexes(execute):
-    execute(text("ALTER TABLE txi ADD PRIMARY KEY (txo_hash);"))
+pg_add_txi_constraints_and_indexes = [
+    "ALTER TABLE txi ADD PRIMARY KEY (txo_hash);",
+]
 
 
 Claim = Table(
@@ -210,18 +204,19 @@ Tag = Table(
 )
 
 
-def pg_add_claim_constraints_and_indexes(execute):
-    execute(text("ALTER TABLE claim ADD PRIMARY KEY (claim_hash);"))
-    execute(text("ALTER TABLE tag ADD PRIMARY KEY (claim_hash, tag);"))
-    # take over updates are base on normalized name
-    execute(text("CREATE INDEX claim_normalized ON claim (normalized);"))
-    # finding claims that aren't updated with latest TXO
-    execute(text("CREATE UNIQUE INDEX claim_txo_hash ON claim (txo_hash);"))
-    # used to calculate content in a channel
-    execute(text("""
-        CREATE INDEX signed_content ON claim (channel_hash)
-        INCLUDE (amount) WHERE is_signature_valid;
-    """))
+pg_add_claim_and_tag_constraints_and_indexes = [
+    "ALTER TABLE claim ADD PRIMARY KEY (claim_hash);",
+    # for checking if claim is up-to-date
+    "CREATE UNIQUE INDEX claim_txo_hash ON claim (txo_hash);",
+    # used by takeover process to reset winning claims
+    "CREATE INDEX claim_normalized ON claim (normalized);",
+    # used to count()/sum() claims signed by channel
+    "CREATE INDEX signed_content ON claim (channel_hash) "
+    "INCLUDE (amount) WHERE is_signature_valid;",
+    # basic tag indexes
+    "ALTER TABLE tag ADD PRIMARY KEY (claim_hash, tag);",
+    "CREATE INDEX tags ON tag (tag) INCLUDE (claim_hash);",
+]
 
 
 Support = Table(
@@ -245,9 +240,9 @@ Support = Table(
 )
 
 
-def pg_add_support_constraints_and_indexes(execute):
-    execute(text("ALTER TABLE support ADD PRIMARY KEY (txo_hash);"))
-    execute(text("""
-        CREATE INDEX signed_support ON support (channel_hash)
-        INCLUDE (amount) WHERE is_signature_valid;
-    """))
+pg_add_support_constraints_and_indexes = [
+    "ALTER TABLE support ADD PRIMARY KEY (txo_hash);",
+    # used to count()/sum() supports signed by channel
+    "CREATE INDEX signed_support ON support (channel_hash) "
+    "INCLUDE (amount) WHERE is_signature_valid;",
+]

@@ -6,6 +6,7 @@ from sqlalchemy.schema import CreateTable
 
 from lbry.db.tables import Block as BlockTable, TX, TXO, TXI
 from lbry.db.tables import (
+    pg_add_tx_constraints_and_indexes,
     pg_add_txo_constraints_and_indexes,
     pg_add_txi_constraints_and_indexes,
 )
@@ -62,19 +63,24 @@ def sync_block_file(
 @event_emitter("blockchain.sync.spends.main", "steps")
 def sync_spends(initial_sync: bool, p: ProgressContext):
     if initial_sync:
-        p.start(9)
+        p.start(
+            6 +
+            len(pg_add_tx_constraints_and_indexes) +
+            len(pg_add_txi_constraints_and_indexes) +
+            len(pg_add_txo_constraints_and_indexes)
+        )
+        for constraint in pg_add_tx_constraints_and_indexes:
+            if p.ctx.is_postgres:
+                p.ctx.execute(text(constraint))
+            p.step()
         # A. Update TXIs to have the address of TXO they are spending.
-        # 1. add tx constraints
-        if p.ctx.is_postgres:
-            p.ctx.execute(text("ALTER TABLE tx ADD PRIMARY KEY (tx_hash);"))
-        p.step()
-        # 2. txi table reshuffling
+        # 1. txi table reshuffling
         p.ctx.execute(text("ALTER TABLE txi RENAME TO old_txi;"))
         p.ctx.execute(CreateTable(TXI, include_foreign_key_constraints=[]))
         if p.ctx.is_postgres:
             p.ctx.execute(text("ALTER TABLE txi DROP CONSTRAINT txi_pkey;"))
         p.step()
-        # 3. insert
+        # 2. insert
         old_txi = table("old_txi", *(c.copy() for c in TXI.columns))  # pylint: disable=not-an-iterable
         columns = [c for c in old_txi.columns if c.name != "address"] + [TXO.c.address]
         join_txi_on_txo = old_txi.join(TXO, old_txi.c.txo_hash == TXO.c.txo_hash)
@@ -82,48 +88,45 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
         insert_txis = TXI.insert().from_select(columns, select_txis)
         p.ctx.execute(insert_txis)
         p.step()
-        # 4. drop old txi and vacuum
+        # 3. drop old txi and vacuum
         p.ctx.execute(text("DROP TABLE old_txi;"))
         if p.ctx.is_postgres:
             with p.ctx.engine.connect() as c:
                 c.execute(text("COMMIT;"))
                 c.execute(text("VACUUM ANALYZE txi;"))
         p.step()
-        # 5. restore integrity constraint
-        if p.ctx.is_postgres:
-            pg_add_txi_constraints_and_indexes(p.ctx.execute)
-        p.step()
-        # 6. txo table reshuffling
+        for constraint in pg_add_txi_constraints_and_indexes:
+            if p.ctx.is_postgres:
+                p.ctx.execute(text(constraint))
+            p.step()
+        # B. Update TXOs to have the height at which they were spent (if they were).
+        # 4. txo table reshuffling
         p.ctx.execute(text("ALTER TABLE txo RENAME TO old_txo;"))
         p.ctx.execute(CreateTable(TXO, include_foreign_key_constraints=[]))
         if p.ctx.is_postgres:
             p.ctx.execute(text("ALTER TABLE txo DROP CONSTRAINT txo_pkey;"))
         p.step()
-        # 7. insert
+        # 5. insert
         old_txo = table("old_txo", *(c.copy() for c in TXO.columns))  # pylint: disable=not-an-iterable
         columns = [c for c in old_txo.columns if c.name != "spent_height"]
         insert_columns = columns + [TXO.c.spent_height]
-        select_columns = columns + [
-            func.coalesce(TXI.c.height, 0).label("spent_height")
-        ]
-        join_txo_on_txi = old_txo.join(
-            TXI, old_txo.c.txo_hash == TXI.c.txo_hash, isouter=True
-        )
+        select_columns = columns + [func.coalesce(TXI.c.height, 0).label("spent_height")]
+        join_txo_on_txi = old_txo.join(TXI, old_txo.c.txo_hash == TXI.c.txo_hash, isouter=True)
         select_txos = select(*select_columns).select_from(join_txo_on_txi)
         insert_txos = TXO.insert().from_select(insert_columns, select_txos)
         p.ctx.execute(insert_txos)
         p.step()
-        # 8. drop old txo
+        # 6. drop old txo
         p.ctx.execute(text("DROP TABLE old_txo;"))
         if p.ctx.is_postgres:
             with p.ctx.engine.connect() as c:
                 c.execute(text("COMMIT;"))
                 c.execute(text("VACUUM ANALYZE txo;"))
         p.step()
-        # 9. restore integrity constraint
-        if p.ctx.is_postgres:
-            pg_add_txo_constraints_and_indexes(p.ctx.execute)
-        p.step()
+        for constraint in pg_add_txo_constraints_and_indexes:
+            if p.ctx.is_postgres:
+                p.ctx.execute(text(constraint))
+            p.step()
     else:
         p.start(2)
         # 1. Update spent TXOs setting spent_height

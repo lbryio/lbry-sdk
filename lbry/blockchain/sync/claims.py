@@ -11,7 +11,7 @@ from lbry.db.queries.txio import (
     where_abandoned_claims, count_channels_with_changed_content
 )
 from lbry.db.query_context import ProgressContext, event_emitter
-from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_constraints_and_indexes
+from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_and_tag_constraints_and_indexes
 from lbry.db.utils import least
 from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
 from lbry.blockchain.transaction import Output
@@ -149,15 +149,16 @@ def claims_insert(
 
 @event_emitter("blockchain.sync.claims.indexes", "steps")
 def claims_constraints_and_indexes(p: ProgressContext):
-    p.start(2)
+    p.start(1 + len(pg_add_claim_and_tag_constraints_and_indexes))
     if p.ctx.is_postgres:
         with p.ctx.engine.connect() as c:
             c.execute(text("COMMIT;"))
             c.execute(text("VACUUM ANALYZE claim;"))
     p.step()
-    if p.ctx.is_postgres:
-        pg_add_claim_constraints_and_indexes(p.ctx.execute)
-    p.step()
+    for constraint in pg_add_claim_and_tag_constraints_and_indexes:
+        if p.ctx.is_postgres:
+            p.ctx.execute(constraint)
+        p.step()
 
 
 @event_emitter("blockchain.sync.claims.update", "claims")

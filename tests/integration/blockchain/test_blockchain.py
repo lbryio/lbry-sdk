@@ -500,7 +500,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         events = []
         self.sync.on_progress.listen(events.append)
 
-        # initial_sync = True
+        # initial sync
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
         self.assertConsumingEvents(
@@ -533,7 +533,8 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.spends.main", ("steps",), [
-                (0, None, (9,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,))
+                (0, None, (14,), (1,), (2,), (3,), (4,), (5,), (6,),
+                    (7,), (8,), (9,), (10,), (11,), (12,), (13,), (14,))
             ]
         )
         self.assertEqual(
@@ -558,7 +559,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.claims.indexes", ("steps",), [
-                (0, None, (2,), (1,), (2,))
+                (0, None, (7,), (1,), (2,), (3,), (4,), (5,), (6,), (7,))
             ]
         )
         self.assertEqual(
@@ -580,7 +581,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.supports.indexes", ("steps",), [
-                (0, None, (2,), (1,), (2,))
+                (0, None, (3,), (1,), (2,), (3,))
             ]
         )
         self.assertEqual(
