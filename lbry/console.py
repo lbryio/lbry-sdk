@@ -366,6 +366,7 @@ class Advanced(Basic):
                 bar.update(d['done'][0] - bar.n)
             if d['done'][0] == -1 or d['done'][0] == bar.total:
                 bar.close()
+            self.bars.pop(bar_name)
 
     def sync_main(self, name, d):
         bar = self.bars.get(name)
@@ -382,9 +383,10 @@ class Advanced(Basic):
                     if child_name.startswith(base_name):
                         child_bar.close()
                 bar.close()
+                self.bars.pop(name)
             else:
-                if len(d['done']) > 1:
-                    bar.update(d['done']-bar.n)
+                if len(d['done']) == 2:
+                    bar.update((d['done'][0]-bar.n, d['done'][1]-bar.n2))
                 else:
                     bar.update(d['done'][0]-bar.n)
 
@@ -412,6 +414,7 @@ class Advanced(Basic):
                 bar.update(diff)
             if d['done'][0] == -1 or d['done'][0] == bar.total:
                 bar.close()
+                self.bars.pop(bar_name)
 
     def update_other_bars(self, e, d):
         if d['total'] == 0:

@@ -127,19 +127,16 @@ def claims_insert(
             )
             i = 0
             for row in rows:
-                metadata = claim_metadata[i] if i < len(claim_metadata) else None
-                if metadata is None:
-                    break
-                if metadata['claim_hash'] != row.claim_hash:
-                    continue
-                i += 1
+                metadata = claim_metadata[i] if i < len(claim_metadata) else {}
+                if metadata and metadata['claim_hash'] == row.claim_hash:
+                    i += 1
                 txo, extra = row_to_claim_for_saving(row)
                 extra.update({
-                    'short_url': metadata['short_url'],
-                    'creation_height': metadata['creation_height'],
-                    'activation_height': metadata['activation_height'],
-                    'expiration_height': metadata['expiration_height'],
-                    'takeover_height': metadata['takeover_height'],
+                    'short_url': metadata.get('short_url'),
+                    'creation_height': metadata.get('creation_height'),
+                    'activation_height': metadata.get('activation_height'),
+                    'expiration_height': metadata.get('expiration_height'),
+                    'takeover_height': metadata.get('takeover_height'),
                 })
                 loader.add_claim(txo, **extra)
             if len(loader.claims) >= 25_000:
@@ -154,10 +151,11 @@ def claims_constraints_and_indexes(p: ProgressContext):
         with p.ctx.engine.connect() as c:
             c.execute(text("COMMIT;"))
             c.execute(text("VACUUM ANALYZE claim;"))
+            c.execute(text("VACUUM ANALYZE tag;"))
     p.step()
     for constraint in pg_add_claim_and_tag_constraints_and_indexes:
         if p.ctx.is_postgres:
-            p.ctx.execute(constraint)
+            p.ctx.execute(text(constraint))
         p.step()
 
 

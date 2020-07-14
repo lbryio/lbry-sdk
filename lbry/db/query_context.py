@@ -626,7 +626,7 @@ class BulkLoader:
             claim_name = txo.claim_name.replace('\x00', '')
             normalized_name = txo.normalized_name
         except UnicodeDecodeError:
-            return self
+            claim_name = normalized_name = ''
         d, tags = self.claim_to_rows(txo, **extra)
         d['claim_hash'] = txo.claim_hash
         d['claim_id'] = txo.claim_id

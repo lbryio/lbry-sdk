@@ -73,7 +73,7 @@ def supports_constraints_and_indexes(p: ProgressContext):
     p.step()
     for constraint in pg_add_support_constraints_and_indexes:
         if p.ctx.is_postgres:
-            p.ctx.execute(constraint)
+            p.ctx.execute(text(constraint))
         p.step()
 
 
