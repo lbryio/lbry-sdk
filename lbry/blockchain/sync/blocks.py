@@ -91,9 +91,7 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
         # 3. drop old txi and vacuum
         p.ctx.execute(text("DROP TABLE old_txi;"))
         if p.ctx.is_postgres:
-            with p.ctx.engine.connect() as c:
-                c.execute(text("COMMIT;"))
-                c.execute(text("VACUUM ANALYZE txi;"))
+            p.ctx.execute_notx(text("VACUUM ANALYZE txi;"))
         p.step()
         for constraint in pg_add_txi_constraints_and_indexes:
             if p.ctx.is_postgres:
@@ -119,9 +117,7 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
         # 6. drop old txo
         p.ctx.execute(text("DROP TABLE old_txo;"))
         if p.ctx.is_postgres:
-            with p.ctx.engine.connect() as c:
-                c.execute(text("COMMIT;"))
-                c.execute(text("VACUUM ANALYZE txo;"))
+            p.ctx.execute_notx(text("VACUUM ANALYZE txo;"))
         p.step()
         for constraint in pg_add_txo_constraints_and_indexes:
             if p.ctx.is_postgres:
@@ -137,9 +133,7 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
         p.step()
         # 3. Update visibility map, which speeds up index-only scans.
         if p.ctx.is_postgres:
-            with p.ctx.engine.connect() as c:
-                c.execute(text("COMMIT;"))
-                c.execute(text("VACUUM txo;"))
+            p.ctx.execute_notx(text("VACUUM txo;"))
         p.step()
 
 

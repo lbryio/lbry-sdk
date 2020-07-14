@@ -559,7 +559,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         )
         self.assertConsumingEvents(
             events, "blockchain.sync.claims.indexes", ("steps",), [
-                (0, None, (7,), (1,), (2,), (3,), (4,), (5,), (6,), (7,))
+                (0, None, (8,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,))
             ]
         )
         self.assertEqual(

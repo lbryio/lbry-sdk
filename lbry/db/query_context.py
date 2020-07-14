@@ -36,7 +36,6 @@ _context: ContextVar['QueryContext'] = ContextVar('_context')
 @dataclass
 class QueryContext:
     engine: Engine
-    connection: Connection
     ledger: Ledger
     message_queue: mp.Queue
     stop_event: mp.Event
@@ -58,14 +57,14 @@ class QueryContext:
 
     @property
     def is_postgres(self):
-        return self.connection.dialect.name == 'postgresql'
+        return self.engine.dialect.name == 'postgresql'
 
     @property
     def is_sqlite(self):
-        return self.connection.dialect.name == 'sqlite'
+        return self.engine.dialect.name == 'sqlite'
 
     def raise_unsupported_dialect(self):
-        raise RuntimeError(f'Unsupported database dialect: {self.connection.dialect.name}.')
+        raise RuntimeError(f'Unsupported database dialect: {self.engine.dialect.name}.')
 
     def get_resolve_censor(self) -> Censor:
         return Censor(self.blocked_streams, self.blocked_channels)
@@ -74,25 +73,39 @@ class QueryContext:
         return Censor(self.filtered_streams, self.filtered_channels)
 
     def pg_copy(self, table, rows):
-        connection = self.connection.connection
-        copy_manager = self.copy_managers.get(table.name)
-        if copy_manager is None:
-            self.copy_managers[table.name] = copy_manager = CopyManager(
-                self.connection.connection, table.name, rows[0].keys()
-            )
-        copy_manager.copy(map(dict.values, rows), BytesIO)
-        connection.commit()
+        with self.engine.begin() as c:
+            copy_manager = self.copy_managers.get(table.name)
+            if copy_manager is None:
+                self.copy_managers[table.name] = copy_manager = CopyManager(
+                    c.connection, table.name, rows[0].keys()
+                )
+            copy_manager.conn = c.connection
+            copy_manager.copy(map(dict.values, rows), BytesIO)
+            copy_manager.conn = None
+
+    def connect_without_transaction(self):
+        return self.engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+
+    def connect_streaming(self):
+        return self.engine.connect().execution_options(stream_results=True)
+
+    def execute_notx(self, sql, *args):
+        with self.connect_without_transaction() as c:
+            return c.execute(sql, *args)
 
     def execute(self, sql, *args):
-        return self.connection.execute(sql, *args)
+        with self.engine.begin() as c:
+            return c.execute(sql, *args)
 
     def fetchone(self, sql, *args):
-        row = self.connection.execute(sql, *args).fetchone()
-        return dict(row._mapping) if row else row
+        with self.engine.begin() as c:
+            row = c.execute(sql, *args).fetchone()
+            return dict(row._mapping) if row else row
 
     def fetchall(self, sql, *args):
-        rows = self.connection.execute(sql, *args).fetchall()
-        return [dict(row._mapping) for row in rows]
+        with self.engine.begin() as c:
+            rows = c.execute(sql, *args).fetchall()
+            return [dict(row._mapping) for row in rows]
 
     def fetchtotal(self, condition) -> int:
         sql = select(func.count('*').label('total')).where(condition)
@@ -166,9 +179,15 @@ def set_postgres_settings(connection, _):
 
 
 def set_sqlite_settings(connection, _):
+    connection.isolation_level = None
     cursor = connection.cursor()
     cursor.execute('PRAGMA journal_mode=WAL;')
     cursor.close()
+
+
+def do_sqlite_begin(connection):
+    # see: https://bit.ly/3j4vvXm
+    connection.exec_driver_sql("BEGIN")
 
 
 def initialize(
@@ -180,15 +199,14 @@ def initialize(
         sqlalchemy_event.listen(engine, "connect", set_postgres_settings)
     elif engine.name == "sqlite":
         sqlalchemy_event.listen(engine, "connect", set_sqlite_settings)
-    connection = engine.connect()
+        sqlalchemy_event.listen(engine, "begin", do_sqlite_begin)
     if block_and_filter is not None:
         blocked_streams, blocked_channels, filtered_streams, filtered_channels = block_and_filter
     else:
         blocked_streams = blocked_channels = filtered_streams = filtered_channels = {}
     _context.set(
         QueryContext(
-            pid=os.getpid(),
-            engine=engine, connection=connection,
+            pid=os.getpid(), engine=engine,
             ledger=ledger, message_queue=message_queue, stop_event=stop_event,
             stack=[], metrics={}, is_tracking_metrics=track_metrics,
             blocked_streams=blocked_streams, blocked_channels=blocked_channels,
@@ -200,10 +218,7 @@ def initialize(
 def uninitialize():
     ctx = _context.get(None)
     if ctx is not None:
-        if ctx.connection:
-            ctx.connection.close()
-        if ctx.engine:
-            ctx.engine.dispose()
+        ctx.engine.dispose()
         _context.set(None)
 
 
@@ -664,7 +679,6 @@ class BulkLoader:
         )
 
     def flush(self, return_row_count_for_table) -> int:
-        execute = self.ctx.connection.execute
         done = 0
         for sql, rows in self.get_queries():
             if not rows:
@@ -672,7 +686,7 @@ class BulkLoader:
             if self.ctx.is_postgres and isinstance(sql, Insert):
                 self.ctx.pg_copy(sql.table, rows)
             else:
-                execute(sql, rows)
+                self.ctx.execute(sql, rows)
             if sql.table == return_row_count_for_table:
                 done += len(rows)
             rows.clear()

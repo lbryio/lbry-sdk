@@ -116,7 +116,7 @@ def claims_insert(
         ), progress_id=blocks[0], label=make_label("add claims", blocks)
     )
 
-    with p.ctx.engine.connect().execution_options(stream_results=True) as c:
+    with p.ctx.connect_streaming() as c:
         loader = p.ctx.get_bulk_loader()
         cursor = c.execute(select_claims_for_saving(
             blocks, missing_in_claims_table=missing_in_claims_table
@@ -146,12 +146,12 @@ def claims_insert(
 
 @event_emitter("blockchain.sync.claims.indexes", "steps")
 def claims_constraints_and_indexes(p: ProgressContext):
-    p.start(1 + len(pg_add_claim_and_tag_constraints_and_indexes))
+    p.start(2 + len(pg_add_claim_and_tag_constraints_and_indexes))
     if p.ctx.is_postgres:
-        with p.ctx.engine.connect() as c:
-            c.execute(text("COMMIT;"))
-            c.execute(text("VACUUM ANALYZE claim;"))
-            c.execute(text("VACUUM ANALYZE tag;"))
+        p.ctx.execute_notx(text("VACUUM ANALYZE claim;"))
+    p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM ANALYZE tag;"))
     p.step()
     for constraint in pg_add_claim_and_tag_constraints_and_indexes:
         if p.ctx.is_postgres:
@@ -162,14 +162,12 @@ def claims_constraints_and_indexes(p: ProgressContext):
 @event_emitter("blockchain.sync.claims.vacuum", "steps")
 def claims_vacuum(p: ProgressContext):
     p.start(2)
-    with p.ctx.engine.connect() as c:
-        if p.ctx.is_postgres:
-            c.execute(text("COMMIT;"))
-            c.execute(text("VACUUM claim;"))
-        p.step()
-        if p.ctx.is_postgres:
-            c.execute(text("VACUUM tag;"))
-        p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM claim;"))
+    p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM tag;"))
+    p.step()
 
 
 @event_emitter("blockchain.sync.claims.update", "claims")
@@ -178,7 +176,7 @@ def claims_update(blocks: Tuple[int, int], p: ProgressContext):
         count_unspent_txos(CLAIM_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True),
         progress_id=blocks[0], label=make_label("mod claims", blocks)
     )
-    with p.ctx.engine.connect().execution_options(stream_results=True) as c:
+    with p.ctx.connect_streaming() as c:
         loader = p.ctx.get_bulk_loader()
         cursor = c.execute(select_claims_for_saving(
             blocks, missing_or_stale_in_claims_table=True
@@ -202,24 +200,25 @@ def claims_delete(claims, p: ProgressContext):
 def update_takeovers(blocks: Tuple[int, int], takeovers, p: ProgressContext):
     p.start(takeovers, label=make_label("mod winner", blocks))
     chain = get_or_initialize_lbrycrd(p.ctx)
-    for takeover in chain.db.sync_get_takeovers(start_height=blocks[0], end_height=blocks[-1]):
-        update_claims = (
-            Claim.update()
-            .where(Claim.c.normalized == takeover['normalized'])
-            .values(
-                is_controlling=case(
-                    [(Claim.c.claim_hash == takeover['claim_hash'], True)],
-                    else_=False
-                ),
-                takeover_height=case(
-                    [(Claim.c.claim_hash == takeover['claim_hash'], takeover['height'])],
-                    else_=None
-                ),
-                activation_height=least(Claim.c.activation_height, takeover['height']),
+    with p.ctx.engine.begin() as c:
+        for takeover in chain.db.sync_get_takeovers(start_height=blocks[0], end_height=blocks[-1]):
+            update_claims = (
+                Claim.update()
+                .where(Claim.c.normalized == takeover['normalized'])
+                .values(
+                    is_controlling=case(
+                        [(Claim.c.claim_hash == takeover['claim_hash'], True)],
+                        else_=False
+                    ),
+                    takeover_height=case(
+                        [(Claim.c.claim_hash == takeover['claim_hash'], takeover['height'])],
+                        else_=None
+                    ),
+                    activation_height=least(Claim.c.activation_height, takeover['height']),
+                )
             )
-        )
-        result = p.ctx.execute(update_claims)
-        p.add(result.rowcount)
+            result = c.execute(update_claims)
+            p.add(result.rowcount)
 
 
 @event_emitter("blockchain.sync.claims.stakes", "claims")

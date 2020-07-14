@@ -48,7 +48,7 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
             missing_in_supports_table=missing_in_supports_table,
         )
     )
-    with p.ctx.engine.connect().execution_options(stream_results=True) as c:
+    with p.ctx.connect_streaming() as c:
         loader = p.ctx.get_bulk_loader()
         for row in c.execute(select_supports):
             txo = row_to_txo(row)
@@ -74,9 +74,7 @@ def supports_delete(supports, p: ProgressContext):
 def supports_constraints_and_indexes(p: ProgressContext):
     p.start(1 + len(pg_add_support_constraints_and_indexes))
     if p.ctx.is_postgres:
-        with p.ctx.engine.connect() as c:
-            c.execute(text("COMMIT;"))
-            c.execute(text("VACUUM ANALYZE support;"))
+        p.ctx.execute_notx(text("VACUUM ANALYZE support;"))
     p.step()
     for constraint in pg_add_support_constraints_and_indexes:
         if p.ctx.is_postgres:
@@ -87,8 +85,6 @@ def supports_constraints_and_indexes(p: ProgressContext):
 @event_emitter("blockchain.sync.supports.vacuum", "steps")
 def supports_vacuum(p: ProgressContext):
     p.start(1)
-    with p.ctx.engine.connect() as c:
-        if p.ctx.is_postgres:
-            c.execute(text("COMMIT;"))
-            c.execute(text("VACUUM support;"))
-        p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM support;"))
+    p.step()
