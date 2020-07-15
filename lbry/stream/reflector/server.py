@@ -15,7 +15,10 @@ log = logging.getLogger(__name__)
 
 
 class ReflectorServerProtocol(asyncio.Protocol):
-    def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000):
+    def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
+                 stop_event: typing.Optional[asyncio.Event] = None,
+                 incoming_event: typing.Optional[asyncio.Event] = None,
+                 not_incoming_event: typing.Optional[asyncio.Event] = None):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
@@ -27,11 +30,24 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.descriptor: typing.Optional['StreamDescriptor'] = None
         self.sd_blob: typing.Optional['BlobFile'] = None
         self.received = []
-        self.incoming = asyncio.Event(loop=self.loop)
+        self.incoming = incoming_event or asyncio.Event(loop=self.loop)
+        self.not_incoming = not_incoming_event or asyncio.Event(loop=self.loop)
+        self.stop_event = stop_event or asyncio.Event(loop=self.loop)
         self.chunk_size = response_chunk_size
+
+    async def wait_for_stop(self):
+        await self.stop_event.wait()
+        if self.transport:
+            self.transport.close()
 
     def connection_made(self, transport):
         self.transport = transport
+        self.wait_for_stop_task = self.loop.create_task(self.wait_for_stop())
+
+    def connection_lost(self, exc: typing.Optional[Exception]) -> None:
+        if self.wait_for_stop_task:
+            self.wait_for_stop_task.cancel()
+            self.wait_for_stop_task = None
 
     def data_received(self, data: bytes):
         if self.incoming.is_set():
@@ -73,6 +89,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
             self.sd_blob = self.blob_manager.get_blob(request['sd_blob_hash'], request['sd_blob_size'])
             if not self.sd_blob.get_is_verified():
                 self.writer = self.sd_blob.get_blob_writer(self.transport.get_extra_info('peername'))
+                self.not_incoming.clear()
                 self.incoming.set()
                 self.send_response({"send_sd_blob": True})
                 try:
@@ -86,6 +103,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                     self.transport.close()
                 finally:
                     self.incoming.clear()
+                    self.not_incoming.set()
                     self.writer.close_handle()
                     self.writer = None
             else:
@@ -93,6 +111,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                     self.loop, self.blob_manager.blob_dir, self.sd_blob
                 )
                 self.incoming.clear()
+                self.not_incoming.set()
                 if self.writer:
                     self.writer.close_handle()
                     self.writer = None
@@ -112,6 +131,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
             blob = self.blob_manager.get_blob(request['blob_hash'], request['blob_size'])
             if not blob.get_is_verified():
                 self.writer = blob.get_blob_writer(self.transport.get_extra_info('peername'))
+                self.not_incoming.clear()
                 self.incoming.set()
                 self.send_response({"send_blob": True})
                 try:
@@ -120,6 +140,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 except asyncio.TimeoutError:
                     self.send_response({"received_blob": False})
                 self.incoming.clear()
+                self.not_incoming.set()
                 self.writer.close_handle()
                 self.writer = None
             else:
@@ -130,12 +151,19 @@ class ReflectorServerProtocol(asyncio.Protocol):
 
 
 class ReflectorServer:
-    def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000):
+    def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
+                 stop_event: typing.Optional[asyncio.Event] = None,
+                 incoming_event: typing.Optional[asyncio.Event] = None,
+                 not_incoming_event: typing.Optional[asyncio.Event] = None):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
         self.started_listening = asyncio.Event(loop=self.loop)
+        self.stopped_listening = asyncio.Event(loop=self.loop)
+        self.incoming_event = incoming_event or asyncio.Event(loop=self.loop)
+        self.not_incoming_event = not_incoming_event or asyncio.Event(loop=self.loop)
         self.response_chunk_size = response_chunk_size
+        self.stop_event = stop_event
 
     def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
         if self.server_task is not None:
@@ -143,13 +171,20 @@ class ReflectorServer:
 
         async def _start_server():
             server = await self.loop.create_server(
-                lambda: ReflectorServerProtocol(self.blob_manager, self.response_chunk_size),
+                lambda: ReflectorServerProtocol(
+                    self.blob_manager, self.response_chunk_size, self.stop_event, self.incoming_event,
+                    self.not_incoming_event
+                ),
                 interface, port
             )
             self.started_listening.set()
+            self.stopped_listening.clear()
             log.info("Reflector server listening on TCP %s:%i", interface, port)
-            async with server:
-                await server.serve_forever()
+            try:
+                async with server:
+                    await server.serve_forever()
+            finally:
+                self.stopped_listening.set()
 
         self.server_task = self.loop.create_task(_start_server())
 

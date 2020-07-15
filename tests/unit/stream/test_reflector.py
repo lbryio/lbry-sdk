@@ -10,7 +10,7 @@ from lbry.stream.stream_manager import StreamManager
 from lbry.stream.reflector.server import ReflectorServer
 
 
-class TestStreamAssembler(AsyncioTestCase):
+class TestReflector(AsyncioTestCase):
     async def asyncSetUp(self):
         self.loop = asyncio.get_event_loop()
         self.key = b'deadbeef' * 4
@@ -22,6 +22,7 @@ class TestStreamAssembler(AsyncioTestCase):
         self.storage = SQLiteStorage(self.conf, os.path.join(tmp_dir, "lbrynet.sqlite"))
         await self.storage.open()
         self.blob_manager = BlobManager(self.loop, tmp_dir, self.storage, self.conf)
+        self.addCleanup(self.blob_manager.stop)
         self.stream_manager = StreamManager(self.loop, Config(), self.blob_manager, None, self.storage, None)
 
         server_tmp_dir = tempfile.mkdtemp()
@@ -30,6 +31,7 @@ class TestStreamAssembler(AsyncioTestCase):
         self.server_storage = SQLiteStorage(self.server_conf, os.path.join(server_tmp_dir, "lbrynet.sqlite"))
         await self.server_storage.open()
         self.server_blob_manager = BlobManager(self.loop, server_tmp_dir, self.server_storage, self.server_conf)
+        self.addCleanup(self.server_blob_manager.stop)
 
         download_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(download_dir))
@@ -54,6 +56,7 @@ class TestStreamAssembler(AsyncioTestCase):
             set(map(lambda b: b.blob_hash,
                     self.stream.descriptor.blobs[:-1] + [self.blob_manager.get_blob(self.stream.sd_hash)]))
         )
+        self.assertTrue(self.stream.is_fully_reflected)
         server_sd_blob = self.server_blob_manager.get_blob(self.stream.sd_hash)
         self.assertTrue(server_sd_blob.get_is_verified())
         self.assertEqual(server_sd_blob.length, server_sd_blob.length)
@@ -75,3 +78,87 @@ class TestStreamAssembler(AsyncioTestCase):
         to_announce = await self.storage.get_blobs_to_announce()
         self.assertIn(self.stream.sd_hash, to_announce, "sd blob not set to announce")
         self.assertIn(self.stream.descriptor.blobs[0].blob_hash, to_announce, "head blob not set to announce")
+
+    async def test_result_from_disconnect_mid_sd_transfer(self):
+        stop = asyncio.Event()
+        incoming = asyncio.Event()
+        reflector = ReflectorServer(
+            self.server_blob_manager, response_chunk_size=50, stop_event=stop, incoming_event=incoming
+        )
+        reflector.start_server(5566, '127.0.0.1')
+        await reflector.started_listening.wait()
+        self.addCleanup(reflector.stop_server)
+        self.assertEqual(0, self.stream.reflector_progress)
+        reflect_task = asyncio.create_task(self.stream.upload_to_reflector('127.0.0.1', 5566))
+        await incoming.wait()
+        stop.set()
+        # this used to raise (and then propagate) a CancelledError
+        self.assertListEqual(await reflect_task, [])
+        self.assertFalse(self.stream.is_fully_reflected)
+
+    async def test_result_from_disconnect_after_sd_transfer(self):
+        stop = asyncio.Event()
+        incoming = asyncio.Event()
+        not_incoming = asyncio.Event()
+        reflector = ReflectorServer(
+            self.server_blob_manager, response_chunk_size=50, stop_event=stop, incoming_event=incoming,
+            not_incoming_event=not_incoming
+        )
+        reflector.start_server(5566, '127.0.0.1')
+        await reflector.started_listening.wait()
+        self.addCleanup(reflector.stop_server)
+        self.assertEqual(0, self.stream.reflector_progress)
+        reflect_task = asyncio.create_task(self.stream.upload_to_reflector('127.0.0.1', 5566))
+        await incoming.wait()
+        await not_incoming.wait()
+        stop.set()
+        self.assertListEqual(await reflect_task, [self.stream.sd_hash])
+        self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
+        self.assertFalse(self.stream.is_fully_reflected)
+
+    async def test_result_from_disconnect_after_data_transfer(self):
+        stop = asyncio.Event()
+        incoming = asyncio.Event()
+        not_incoming = asyncio.Event()
+        reflector = ReflectorServer(
+            self.server_blob_manager, response_chunk_size=50, stop_event=stop, incoming_event=incoming,
+            not_incoming_event=not_incoming
+        )
+        reflector.start_server(5566, '127.0.0.1')
+        await reflector.started_listening.wait()
+        self.addCleanup(reflector.stop_server)
+        self.assertEqual(0, self.stream.reflector_progress)
+        reflect_task = asyncio.create_task(self.stream.upload_to_reflector('127.0.0.1', 5566))
+        await incoming.wait()
+        await not_incoming.wait()
+        await incoming.wait()
+        await not_incoming.wait()
+        stop.set()
+        self.assertListEqual(await reflect_task, [self.stream.sd_hash, self.stream.descriptor.blobs[0].blob_hash])
+        self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
+        self.assertTrue(self.server_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified())
+        self.assertFalse(self.stream.is_fully_reflected)
+
+    async def test_result_from_disconnect_mid_data_transfer(self):
+        stop = asyncio.Event()
+        incoming = asyncio.Event()
+        not_incoming = asyncio.Event()
+        reflector = ReflectorServer(
+            self.server_blob_manager, response_chunk_size=50, stop_event=stop, incoming_event=incoming,
+            not_incoming_event=not_incoming
+        )
+        reflector.start_server(5566, '127.0.0.1')
+        await reflector.started_listening.wait()
+        self.addCleanup(reflector.stop_server)
+        self.assertEqual(0, self.stream.reflector_progress)
+        reflect_task = asyncio.create_task(self.stream.upload_to_reflector('127.0.0.1', 5566))
+        await incoming.wait()
+        await not_incoming.wait()
+        await incoming.wait()
+        stop.set()
+        self.assertListEqual(await reflect_task, [self.stream.sd_hash])
+        self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
+        self.assertFalse(
+            self.server_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified()
+        )
+        self.assertFalse(self.stream.is_fully_reflected)
