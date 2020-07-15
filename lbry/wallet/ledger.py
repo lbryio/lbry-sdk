@@ -133,7 +133,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
-            lambda e: log.debug(
+            lambda e: log.info(
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
                 self.get_id(), e.address, e.tx.height, e.tx.is_verified, e.tx.id
             )
@@ -557,7 +557,7 @@ class Ledger(metaclass=LedgerRegistry):
                 #     continue
                 to_request[i] = (txid, remote_height)
 
-            log.info("request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs), len(remote_history), address)
+            log.debug("request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs), len(remote_history), address)
             requested_txes = await self._request_transaction_batch(to_request, len(remote_history), address)
             for tx in requested_txes:
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
@@ -629,7 +629,7 @@ class Ledger(metaclass=LedgerRegistry):
                 self._known_addresses_out_of_sync.add(address)
                 return False
             else:
-                log.info("finished syncing transaction history for %s, %i known txs", address, len(local_history))
+                log.debug("finished syncing transaction history for %s, %i known txs", address, len(local_history))
                 return True
 
     async def cache_transaction(self, txid, remote_height, check_local=True):
