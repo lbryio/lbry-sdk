@@ -255,6 +255,10 @@ class Network:
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
 
+    def get_transaction_batch(self, txids):
+        # use any server if its old, otherwise restrict to who gave us the history
+        return self.rpc('blockchain.transaction.get_batch', txids, True)
+
     def get_transaction_and_merkle(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
