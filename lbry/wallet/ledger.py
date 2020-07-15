@@ -704,7 +704,7 @@ class Ledger(metaclass=LedgerRegistry):
                 batches.append([])
                 heights_in_batch = 1
             batches[-1].append(txid)
-        if not len(batches[-1]):
+        if not batches[-1]:
             batches.pop()
 
         last_showed_synced_count = 0
