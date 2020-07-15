@@ -479,7 +479,7 @@ class TranscodeConfig(BaseConfig):
     video_encoder = String('FFmpeg codec and parameters for the video encoding. '
                            'Example: libaom-av1 -crf 25 -b:v 0 -strict experimental',
                            'libx264 -crf 24 -preset faster -pix_fmt yuv420p')
-    video_bitrate_maximum = Integer('Maximum bits per second allowed for video streams (0 to disable).', 8400000)
+    video_bitrate_maximum = Integer('Maximum bits per second allowed for video streams (0 to disable).', 5_000_000)
     video_scaler = String('FFmpeg scaling parameters for reducing bitrate. '
                           'Example: -vf "scale=-2:720,fps=24" -maxrate 5M -bufsize 3M',
                           r'-vf "scale=if(gte(iw\,ih)\,min(1920\,iw)\,-2):if(lt(iw\,ih)\,min(1920\,ih)\,-2)" '
