@@ -34,6 +34,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.not_incoming = not_incoming_event or asyncio.Event(loop=self.loop)
         self.stop_event = stop_event or asyncio.Event(loop=self.loop)
         self.chunk_size = response_chunk_size
+        self.wait_for_stop_task: typing.Optional[asyncio.Task] = None
 
     async def wait_for_stop(self):
         await self.stop_event.wait()

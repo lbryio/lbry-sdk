@@ -60,10 +60,16 @@ class StreamReflectorClient(asyncio.Protocol):
 
     async def send_request(self, request_dict: typing.Dict, timeout: int = 180):
         msg = json.dumps(request_dict)
-        self.transport.write(msg.encode())
         try:
+            self.transport.write(msg.encode())
             self.pending_request = self.loop.create_task(asyncio.wait_for(self.response_queue.get(), timeout))
             return await self.pending_request
+        except (AttributeError, asyncio.CancelledError):
+            # attribute error happens when we transport.write after disconnect
+            # cancelled error happens when the pending_request task is cancelled by a disconnect
+            if self.transport:
+                self.transport.close()
+            raise asyncio.TimeoutError()
         finally:
             self.pending_request = None
 
