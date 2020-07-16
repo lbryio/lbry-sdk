@@ -11,7 +11,7 @@ from contextvars import ContextVar
 
 from sqlalchemy import create_engine, inspect, bindparam, func, exists, event as sqlalchemy_event
 from sqlalchemy.future import select
-from sqlalchemy.engine import Engine, Connection
+from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Insert
 try:
     from pgcopy import CopyManager
