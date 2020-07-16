@@ -5,9 +5,8 @@ import typing
 import logging
 from argparse import ArgumentParser
 from contextlib import contextmanager
-
-import yaml
 from appdirs import user_data_dir, user_config_dir
+import yaml
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
 from lbry.wallet.coinselection import STRATEGIES
@@ -334,7 +333,7 @@ class ConfigFileAccess:
         cls = type(self.configuration)
         with open(self.path, 'r') as config_file:
             raw = config_file.read()
-        serialized = yaml.load(raw) or {}
+        serialized = yaml.safe_load(raw) or {}
         for key, value in serialized.items():
             attr = getattr(cls, key, None)
             if attr is None:
