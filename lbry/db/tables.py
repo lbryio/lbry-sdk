@@ -110,7 +110,7 @@ pg_add_txo_constraints_and_indexes = [
     f"WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};",
     # for finding modified claims in a block range
     f"CREATE INDEX txo_claim_changes "
-    f"ON txo (height DESC) INCLUDE (txo_hash) "
+    f"ON txo (height DESC) INCLUDE (claim_hash, txo_hash) "
     f"WHERE spent_height = 0 AND txo_type IN {tuple(CLAIM_TYPE_CODES)};",
     # for finding claims which need support totals re-calculated in a block range
     f"CREATE INDEX txo_added_supports_by_height ON txo (height DESC) "
