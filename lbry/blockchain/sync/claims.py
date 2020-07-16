@@ -251,4 +251,6 @@ def update_channel_stats(blocks: Tuple[int, int], initial_sync: int, p: Progress
     else:
         return
     result = p.ctx.execute(update_sql)
+    if result.rowcount and p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM claim;"))
     p.step(result.rowcount)
