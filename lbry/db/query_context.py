@@ -175,6 +175,7 @@ def context(with_timer: str = None) -> 'QueryContext':
 def set_postgres_settings(connection, _):
     cursor = connection.cursor()
     cursor.execute('SET work_mem="500MB";')
+    cursor.execute('COMMIT;')
     cursor.close()
 
 
