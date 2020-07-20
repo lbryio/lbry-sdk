@@ -16,9 +16,8 @@ log = logging.getLogger(__name__)
 
 class ReflectorServerProtocol(asyncio.Protocol):
     def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
-                 stop_event: typing.Optional[asyncio.Event] = None,
-                 incoming_event: typing.Optional[asyncio.Event] = None,
-                 not_incoming_event: typing.Optional[asyncio.Event] = None):
+                 stop_event: asyncio.Event = None, incoming_event: asyncio.Event = None,
+                 not_incoming_event: asyncio.Event = None):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
@@ -45,7 +44,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.transport = transport
         self.wait_for_stop_task = self.loop.create_task(self.wait_for_stop())
 
-    def connection_lost(self, exc: typing.Optional[Exception]) -> None:
+    def connection_lost(self, exc):
         if self.wait_for_stop_task:
             self.wait_for_stop_task.cancel()
             self.wait_for_stop_task = None
@@ -153,9 +152,8 @@ class ReflectorServerProtocol(asyncio.Protocol):
 
 class ReflectorServer:
     def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
-                 stop_event: typing.Optional[asyncio.Event] = None,
-                 incoming_event: typing.Optional[asyncio.Event] = None,
-                 not_incoming_event: typing.Optional[asyncio.Event] = None):
+                 stop_event: asyncio.Event = None, incoming_event: asyncio.Event = None,
+                 not_incoming_event: asyncio.Event = None):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
