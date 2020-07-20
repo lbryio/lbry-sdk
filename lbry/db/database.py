@@ -162,7 +162,7 @@ class Database:
                 self.message_queue, self.stop_event
             )
         }
-        if self.processes > 1:
+        if self.processes > 1 and self.processes != 99:
             self.executor = ProcessPoolExecutor(max_workers=self.processes, **kwargs)
         else:
             self.executor = ThreadPoolExecutor(max_workers=1, **kwargs)

@@ -88,7 +88,7 @@ class Basic(Console):
             s.append('Full Node')
         elif isinstance(self.service, LightClient):
             s.append('Light Client')
-        if conf.processes == -1:
+        if conf.processes in (-1, 99):
             s.append('Threads Only')
         elif conf.processes == 0:
             s.append(f'{os.cpu_count()} Process(es)')
