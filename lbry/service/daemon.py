@@ -97,7 +97,9 @@ class Daemon:
             pass  # Not implemented on Windows
 
         try:
+            print('loop.run_until_complete(self.start())')
             loop.run_until_complete(self.start())
+            print('loop.run_forever()')
             loop.run_forever()
         except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
             pass
@@ -109,10 +111,15 @@ class Daemon:
             loop.run_until_complete(loop.shutdown_asyncgens())
 
     async def start(self):
+        print('self.console.starting()')
         self.console.starting()
+        print('await self.runner.setup()')
         await self.runner.setup()
+        print('TCPSite(self.runner, self.conf.api_host, self.conf.api_port)')
         site = TCPSite(self.runner, self.conf.api_host, self.conf.api_port)
+        print('await site.start()')
         await site.start()
+        print('await self.service.start()')
         await self.service.start()
 
     async def stop(self):
