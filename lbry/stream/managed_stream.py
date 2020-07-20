@@ -356,6 +356,9 @@ class ManagedStream(ManagedDownloadSource):
             return sent
         except ConnectionRefusedError:
             return sent
+        except OSError:
+            # raised if a blob is deleted while it's being sent
+            return sent
         finally:
             if protocol.transport:
                 protocol.transport.close()
