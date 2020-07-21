@@ -134,7 +134,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         constraints['reposted_claim_hash'] = unhexlify(constraints.pop('reposted_claim_id'))[::-1]
 
     if 'name' in constraints:
-        constraints['claim_name'] = normalize_name(constraints.pop('name'))
+        constraints['normalized'] = normalize_name(constraints.pop('name'))
 
     if 'public_key_id' in constraints:
         constraints['public_key_hash'] = (
