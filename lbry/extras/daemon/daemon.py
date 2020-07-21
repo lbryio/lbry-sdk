@@ -1714,7 +1714,7 @@ class Daemon(metaclass=JSONRPCServerType):
             change_made = True
 
         if change_made:
-            account.modified_on = time.time()
+            account.modified_on = int(time.time())
             wallet.save()
 
         return account
