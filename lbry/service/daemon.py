@@ -79,8 +79,7 @@ class Daemon:
         #        streams[event_name] = WeakSet()
         #        event_stream.listen(partial(self.broadcast_event, component.name, event_name))
         self.app.router.add_get('/ws', self.on_connect)
-        self.app.router.add_get('/lbryapi', self.on_rpc)
-        self.app.router.add_get('/api', self.on_rpc)
+        self.app.router.add_post('/api', self.on_rpc)
         self.app.on_shutdown.append(self.on_shutdown)
         self.runner = AppRunner(self.app)
 
