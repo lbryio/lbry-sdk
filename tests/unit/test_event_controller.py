@@ -92,7 +92,7 @@ class StreamControllerTestCase(AsyncioTestCase):
 
 class TestEventQueuePublisher(AsyncioTestCase):
 
-    @unittest.skipIf("darwin" in sys.platform, "test is very unreliable on mac")
+    @unittest.skipIf("linux" not in sys.platform)
     async def test_event_buffering_avoids_overloading_asyncio(self):
         threads = 3
         generate_events = 3000
