@@ -92,7 +92,7 @@ class StreamControllerTestCase(AsyncioTestCase):
 
 class TestEventQueuePublisher(AsyncioTestCase):
 
-    @unittest.skipIf("linux" not in sys.platform)
+    @unittest.skipIf("linux" not in sys.platform, "unreliable everywhere except linux")
     async def test_event_buffering_avoids_overloading_asyncio(self):
         threads = 3
         generate_events = 3000
