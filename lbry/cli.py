@@ -221,14 +221,11 @@ def main(argv=None):
         if args.help:
             args.start_parser.print_help()
         elif args.full_node:
-            print('Instantiating FullNode')
             service = FullNode(Ledger(conf))
             if conf.console == "advanced":
                 console = AdvancedConsole(service)
             else:
-                print('Instantiating BasicConsole')
                 console = BasicConsole(service)
-            print('Daemon(service, console).run()')
             return Daemon(service, console).run()
         else:
             print('Only `start --full-node` is currently supported.')

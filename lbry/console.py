@@ -394,7 +394,7 @@ class Advanced(Basic):
         bar_name = f"{name}#{d['id']}"
         bar = self.bars.get(bar_name)
         if bar is None:
-            assert d['done'][0] == 0
+            #assert d['done'][0] == 0
             label = d.get('label', name[-11:])
             self.get_or_create_bar(
                 f"{name}#{d['id']}", label, d['units'], d['total'],
