@@ -38,7 +38,7 @@ class TestWalletCreation(AsyncioTestCase):
                     'certificates': {},
                     'name': 'An Account',
                     'ledger': 'lbc_mainnet',
-                    'modified_on': 123.456,
+                    'modified_on': 123,
                     'seed':
                         "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                         "h absent",
@@ -62,7 +62,7 @@ class TestWalletCreation(AsyncioTestCase):
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertEqual(wallet.name, 'Main Wallet')
         self.assertEqual(
-            hexlify(wallet.hash), b'a75913d2e7339c1a9ac0c89d621a4e10fd3a40dc3560dc01f4cf4ada0a0b05b8'
+            hexlify(wallet.hash), b'869acc4660dde0f13784ed743796adf89562cdf79fdfc9e5c6dbea98d62ccf90'
         )
         self.assertEqual(len(wallet.accounts), 1)
         account = wallet.default_account
