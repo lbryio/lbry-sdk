@@ -516,6 +516,9 @@ class CommandTestCase(IntegrationTestCase):
         ledger = RegTestLedger(Config.with_same_dir(path).set(
             api=f'localhost:{self.daemon_port}',
             lbrycrd_dir=self.chain.ledger.conf.lbrycrd_dir,
+            lbrycrd_rpc_port=self.chain.ledger.conf.lbrycrd_rpc_port,
+            lbrycrd_peer_port=self.chain.ledger.conf.lbrycrd_peer_port,
+            lbrycrd_zmq_blocks=self.chain.ledger.conf.lbrycrd_zmq_blocks,
             spv_address_filters=False
         ))
         service = FullNode(ledger)
