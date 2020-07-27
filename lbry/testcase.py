@@ -812,7 +812,8 @@ class EventGenerator:
             }
         }
 
-    def blocks_main_finish(self):
+    @staticmethod
+    def blocks_main_finish():
         yield {
             "event": "blockchain.sync.blocks.main",
             "data": {"id": 0, "done": (-1, -1)}
@@ -822,7 +823,8 @@ class EventGenerator:
         for file in files:
             yield from self.blocks_file(*file)
 
-    def blocks_file(self, file, blocks, txs, steps):
+    @staticmethod
+    def blocks_file(file, blocks, txs, steps):
         for i, step in enumerate(steps):
             if i == 0:
                 yield {
@@ -864,7 +866,8 @@ class EventGenerator:
                 "units": ("claims",)}
         }
 
-    def claims_main_finish(self):
+    @staticmethod
+    def claims_main_finish():
         yield {
             "event": "blockchain.sync.claims.main",
             "data": {"id": 0, "done": (-1,)}
@@ -907,7 +910,8 @@ class EventGenerator:
             }
         }
 
-    def supports_main_finish(self):
+    @staticmethod
+    def supports_main_finish():
         yield {
             "event": "blockchain.sync.supports.main",
             "data": {"id": 0, "done": (-1,)}
@@ -917,7 +921,7 @@ class EventGenerator:
         for start, end, total, count in heights:
             yield from self.generate(
                 "blockchain.sync.supports.insert", ("supports",), start,
-                f"add supprt    {start}" if start==end else f"add supprt    {start}-   {end}",
+                f"add supprt    {start}" if start == end else f"add supprt    {start}-   {end}",
                 (total,), (count,)
             )
 
@@ -926,7 +930,8 @@ class EventGenerator:
             "blockchain.sync.supports.vacuum", ("steps",), 0, None, (1,), (1,)
         )
 
-    def generate(self, name, units, eid, label, total, steps):
+    @staticmethod
+    def generate(name, units, eid, label, total, steps):
         done = (0,)*len(total)
         while not all(d >= t for d, t in zip(done, total)):
             if done[0] == 0:
