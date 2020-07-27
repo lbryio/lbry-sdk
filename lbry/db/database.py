@@ -81,7 +81,7 @@ class Database:
     def __init__(self, ledger: 'Ledger'):
         self.url = ledger.conf.db_url_or_default
         self.ledger = ledger
-        self.processes = self._normalize_processes(ledger.conf.processes)
+        self.workers = self._normalize_worker_processes(ledger.conf.workers)
         self.executor: Optional[Executor] = None
         self.message_queue = mp.Queue()
         self.stop_event = mp.Event()
@@ -92,11 +92,11 @@ class Database:
         )
 
     @staticmethod
-    def _normalize_processes(processes):
-        if processes == 0:
+    def _normalize_worker_processes(workers):
+        if workers == 0:
             return os.cpu_count()
-        elif processes > 0:
-            return processes
+        elif workers > 0:
+            return workers
         return 1
 
     @classmethod
@@ -162,8 +162,8 @@ class Database:
                 self.message_queue, self.stop_event
             )
         }
-        if self.processes > 1 and self.processes != 99:
-            self.executor = ProcessPoolExecutor(max_workers=self.processes, **kwargs)
+        if self.workers > 1:
+            self.executor = ProcessPoolExecutor(max_workers=self.workers, **kwargs)
         else:
             self.executor = ThreadPoolExecutor(max_workers=1, **kwargs)
         return await self.run(q.check_version_and_create_tables)

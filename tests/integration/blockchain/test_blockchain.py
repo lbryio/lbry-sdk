@@ -4,19 +4,19 @@ import asyncio
 import tempfile
 from unittest import skip
 from binascii import hexlify, unhexlify
-from typing import List, Optional
+from typing import List, Optional, Iterable
 from distutils.dir_util import copy_tree, remove_tree
 
 from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
-from lbry.blockchain.script import OutputScript
+from lbry.error import LbrycrdEventSubscriptionError
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.constants import CENT, COIN
-from lbry.testcase import AsyncioTestCase
+from lbry.testcase import AsyncioTestCase, EventGenerator
 
 
 #logging.getLogger('lbry.blockchain').setLevel(logging.DEBUG)
@@ -284,26 +284,58 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         self.assertEqual(accepted or [], await self.get_accepted())
 
 
-class TestLbrycrdEvents(BasicBlockchainTestCase):
+class TestLbrycrdEvents(AsyncioTestCase):
+
+    async def test_zmq(self):
+        chain = Lbrycrd.temp_regtest()
+        chain.ledger.conf.set(lbrycrd_zmq_blocks='')
+        await chain.ensure()
+        self.addCleanup(chain.stop)
+
+        # lbrycrdr started without zmq
+        await chain.start()
+        with self.assertRaises(LbrycrdEventSubscriptionError):
+            await chain.ensure_subscribable()
+        await chain.stop()
+
+        # lbrycrdr started with zmq, ensure_subscribable updates lbrycrd_zmq_blocks config
+        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29000')
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, '')
+        await chain.ensure_subscribable()
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://127.0.0.1:29000')
+        await chain.stop()
+
+        # lbrycrdr started with zmq, ensure_subscribable does not override lbrycrd_zmq_blocks config
+        chain.ledger.conf.set(lbrycrd_zmq_blocks='')
+        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29000')
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, '')
+        chain.ledger.conf.set(lbrycrd_zmq_blocks='tcp://external-ip:29000')
+        await chain.ensure_subscribable()
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://external-ip:29000')
 
     async def test_block_event(self):
+        chain = Lbrycrd.temp_regtest()
+        await chain.ensure()
+        self.addCleanup(chain.stop)
+        await chain.start()
+
         msgs = []
 
-        self.chain.subscribe()
-        self.chain.on_block.listen(lambda e: msgs.append(e['msg']))
-        res = await self.chain.generate(5)
-        await self.chain.on_block.where(lambda e: e['msg'] == 4)
+        await chain.subscribe()
+        chain.on_block.listen(lambda e: msgs.append(e['msg']))
+        res = await chain.generate(5)
+        await chain.on_block.where(lambda e: e['msg'] == 4)
         self.assertEqual([0, 1, 2, 3, 4], msgs)
         self.assertEqual(5, len(res))
 
-        self.chain.unsubscribe()
-        res = await self.chain.generate(2)
+        chain.unsubscribe()
+        res = await chain.generate(2)
         self.assertEqual(2, len(res))
         await asyncio.sleep(0.1)  # give some time to "miss" the new block events
 
-        self.chain.subscribe()
-        res = await self.chain.generate(3)
-        await self.chain.on_block.where(lambda e: e['msg'] == 9)
+        await chain.subscribe()
+        res = await chain.generate(3)
+        await chain.on_block.where(lambda e: e['msg'] == 9)
         self.assertEqual(3, len(res))
         self.assertEqual([
             0, 1, 2, 3, 4,
@@ -381,32 +413,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         await self.chain.start(*self.LBRYCRD_ARGS)
 
     @staticmethod
-    def extract_block_events(name, events):
-        return sorted([[
-            p['data']['block_file'],
-            p['data']['step'],
-            p['data']['total'],
-            p['data']['txs_done'],
-            p['data']['txs_total'],
-        ] for p in events if p['event'] == name])
-
-    @staticmethod
-    def extract_events(name, events):
-        return sorted([
-            [p['data']['step'], p['data']['total']]
-            for p in events if p['event'] == name
-        ])
-
-    def assertEventsAlmostEqual(self, actual, expected):
-        # this is needed because the sample tx data created
-        # by lbrycrd does not have deterministic number of TXIs,
-        # which throws off the progress reporting steps.
-        # adjust the 'actual' to match 'expected' if it's only off by 1:
-        for e, a in zip(expected, actual):
-            if a[1] != e[1] and abs(a[1]-e[1]) <= 1:
-                a[1] = e[1]
-        self.assertEqual(expected, actual)
-
     async def test_lbrycrd_database_queries(self):
         db = self.chain.db
 
@@ -461,148 +467,65 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
              for c in await db.get_support_metadata(0, 500)]
         )
 
-    def assertConsumingEvents(self, events: list, name, units, expectation_generator):
-        expected_count = 0
-        for expectation in expectation_generator:
-            expected_count += len(expectation[2:])
-        self.assertGreaterEqual(len(events), expected_count)
-        extracted = []
-        for _ in range(expected_count):
-            extracted.append(events.pop(0))
-        actual = sorted(extracted, key=lambda e: (e["event"], e["data"]["id"], e["data"]["done"]))
-        expected = []
-        for expectation in expectation_generator:
-            for i, done in enumerate(expectation[2:]):
-                if i == 0:
-                    first_event = {
-                        "event": name,
-                        "data": {
-                            "id": expectation[0],
-                            "done": (0,) * len(units),
-                            "total": expectation[2],
-                            "units": units,
-                        }
-                    }
-                    if expectation[1] is not None:
-                        first_event["data"]["label"] = expectation[1]
-                    expected.append(first_event)
-                else:
-                    expected.append({
-                        "event": name,
-                        "data": {
-                            "id": expectation[0],
-                            "done": done,
-                        }
-                    })
-        self.assertEqual(expected, actual)
+    @staticmethod
+    def sorted_events(events):
+        sorted_events = []
+        buffer = []
+        sort_key = lambda e: (e["event"], e["data"]["id"], e["data"]["done"])
+        for event in events:
+            if buffer and event['event'] != buffer[-1]['event']:
+                buffer.sort(key=sort_key)
+                sorted_events.extend(buffer)
+                buffer.clear()
+            buffer.append(event)
+        buffer.sort(key=sort_key)
+        sorted_events.extend(buffer)
+        return sorted_events
 
     async def test_multi_block_file_sync(self):
+
         events = []
         self.sync.on_progress.listen(events.append)
 
         # initial sync
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
-        self.assertConsumingEvents(
-            events, "blockchain.sync.blocks.init", ("steps",), [
-                (0, None, (3,), (1,), (2,), (3,))
-            ]
-        )
         self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.blocks.main",
-                "data": {
-                    "id": 0, "done": (0, 0), "total": (353, 544), "units": ("blocks", "txs"),
-                    "starting_height": 0, "ending_height": 352,
-                    "files": 3, "claims": 3610, "supports": 2
-                }
-            }
+            self.sorted_events(events),
+            list(EventGenerator(
+                initial_sync=True,
+                start=0, end=352,
+                block_files=[
+                    (0, 191, 280, ((100, 0), (191, 280))),
+                    (1, 89, 178, ((89, 178),)),
+                    (2, 73, 86, ((73, 86),)),
+                ],
+                claims=[
+                    (102, 120, 361, 361),
+                    (121, 139, 361, 361),
+                    (140, 158, 361, 361),
+                    (159, 177, 361, 361),
+                    (178, 196, 361, 361),
+                    (197, 215, 361, 361),
+                    (216, 234, 361, 361),
+                    (235, 253, 361, 361),
+                    (254, 272, 361, 361),
+                    (273, 291, 361, 361),
+                ],
+                supports=[
+                    (352, 352, 2, 2),
+                ]
+            ).events)
         )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.blocks.file", ("blocks", "txs"), [
-                (0, "blk00000.dat", (191, 280), (100, 0), (191, 280)),
-                (1, "blk00001.dat", (89, 178), (89, 178)),
-                (2, "blk00002.dat", (73, 86), (73, 86)),
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.blocks.main",
-                "data": {"id": 0, "done": (-1, -1)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.spends.main", ("steps",), [
-                (0, None, (15,), (1,), (2,), (3,), (4,), (5,), (6,), (7,),
-                    (8,), (9,), (10,), (11,), (12,), (13,), (14,), (15,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.claims.main",
-                "data": {"id": 0, "done": (0,), "total": (3610,), "units": ("claims",)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.insert", ("claims",), [
-                (102, "add claims    102-   120", (361,), (361,)),
-                (121, "add claims    121-   139", (361,), (361,)),
-                (140, "add claims    140-   158", (361,), (361,)),
-                (159, "add claims    159-   177", (361,), (361,)),
-                (178, "add claims    178-   196", (361,), (361,)),
-                (197, "add claims    197-   215", (361,), (361,)),
-                (216, "add claims    216-   234", (361,), (361,)),
-                (235, "add claims    235-   253", (361,), (361,)),
-                (254, "add claims    254-   272", (361,), (361,)),
-                (273, "add claims    273-   291", (361,), (361,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.indexes", ("steps",), [
-                (0, None, (8,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.claims.main",
-                "data": {"id": 0, "done": (-1,)}
-            }
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.supports.main",
-                "data": {"id": 0, "done": (0,), "total": (2,), "units": ("supports",)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.insert", ("supports",), [
-                (352, "add supprt    352", (2,), (2,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.indexes", ("steps",), [
-                (0, None, (3,), (1,), (2,), (3,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.supports.main",
-                "data": {"id": 0, "done": (-1,)}
-            }
-        )
-        self.assertEqual(events, [])
 
         # initial_sync = False & no new blocks
+        events.clear()
         await self.sync.advance()  # should be no-op
         await asyncio.sleep(1)  # give it time to collect events
-        self.assertConsumingEvents(
-            events, "blockchain.sync.blocks.init", ("steps",), [
-                (0, None, (3,), (1,), (2,), (3,))
-            ]
-        )
-        self.assertEqual(events, [])
+        self.assertEqual(self.sorted_events(events), list(EventGenerator().events))
 
         # initial_sync = False
+        events.clear()
         txid = await self.chain.claim_name('foo', 'beef', '0.01')
         await self.chain.generate(1)
         tx = Transaction(unhexlify(await self.chain.get_raw_transaction(txid)))
@@ -611,102 +534,26 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         await self.chain.generate(1)
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events
-        self.assertConsumingEvents(
-            events, "blockchain.sync.blocks.init", ("steps",), [
-                (0, None, (3,), (1,), (2,), (3,))
-            ]
-        )
         self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.blocks.main",
-                "data": {
-                    "id": 0, "done": (0, 0), "total": (2, 4), "units": ("blocks", "txs"),
-                    "starting_height": 353, "ending_height": 354,
-                    "files": 1, "claims": 1, "supports": 1
-                }
-            }
+            self.sorted_events(events),
+            list(EventGenerator(
+                initial_sync=False,
+                start=353, end=354,
+                block_files=[
+                    (2, 2, 4, ((2, 4),)),
+                ],
+                claims=[
+                    (353, 354, 1, 1),
+                ],
+                takeovers=[
+                    (353, 354, 1, 1),
+                ],
+                stakes=1,
+                supports=[
+                    (353, 354, 1, 1),
+                ]
+            ).events)
         )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.blocks.file", ("blocks", "txs"), [
-                (2, "blk00002.dat", (2, 4), (2, 4)),
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.blocks.main",
-                "data": {"id": 0, "done": (-1, -1)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.spends.main", ("steps",), [
-                (0, None, (5,), (1,), (2,), (3,), (4,), (5,))
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.init", ("steps",), [
-                (0, None, (4,), (1,), (2,), (3,), (4,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.claims.main",
-                "data": {"id": 0, "done": (0,), "total": (3,), "units": ("claims",)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.insert", ("claims",), [
-                (353, "add claims    353-   354", (1,), (1,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.takeovers", ("claims",), [
-                (0, "mod winner    353-   354", (1,), (1,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.stakes", ("claims",), [
-                (0, None, (1,), (1,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.claims.vacuum", ("steps",), [
-                (0, None, (2,), (1,), (2,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.claims.main",
-                "data": {"id": 0, "done": (-1,)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.init", ("steps",), [
-                (0, None, (2,), (1,), (2,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.supports.main",
-                "data": {"id": 0, "done": (0,), "total": (1,), "units": ("supports",)}
-            }
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.insert", ("supports",), [
-                (353, "add supprt    353-   354", (1,), (1,)),
-            ]
-        )
-        self.assertConsumingEvents(
-            events, "blockchain.sync.supports.vacuum", ("steps",), [
-                (0, None, (1,), (1,))
-            ]
-        )
-        self.assertEqual(
-            events.pop(0), {
-                "event": "blockchain.sync.supports.main",
-                "data": {"id": 0, "done": (-1,)}
-            }
-        )
-        self.assertEqual(events, [])
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):

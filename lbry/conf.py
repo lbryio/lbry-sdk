@@ -505,8 +505,8 @@ class CLIConfig(TranscodeConfig):
 
 class Config(CLIConfig):
     db_url = String("Database connection URL, uses a local file based SQLite by default.")
-    processes = Integer(
-        "Multiprocessing, specify number of processes lbrynet can start (including main process)."
+    workers = Integer(
+        "Multiprocessing, specify number of worker processes lbrynet can start (including main process)."
         " (-1: threads only, 0: equal to number of CPUs, >1: specific number of processes)", -1
     )
     console = StringChoice(
@@ -615,6 +615,12 @@ class Config(CLIConfig):
     comment_server = String("Comment server API URL", "https://comments.lbry.com/api")
 
     # blockchain
+    lbrycrd_rpc_user = String("Username for connecting to lbrycrd.", "rpcuser")
+    lbrycrd_rpc_pass = String("Password for connecting to lbrycrd.", "rpcpassword")
+    lbrycrd_rpc_host = String("Hostname for connecting to lbrycrd.", "localhost")
+    lbrycrd_rpc_port = Integer("Port for connecting to lbrycrd.", 9245)
+    lbrycrd_peer_port = Integer("Port for connecting to lbrycrd.", 9246)
+    lbrycrd_zmq_blocks = String("ZMQ block events address.")
     lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
     spv_address_filters = Toggle(

@@ -81,3 +81,5 @@ Code | Name | Message
 701 | InvalidExchangeRateResponse | Failed to get exchange rate from {source}: {reason}
 702 | CurrencyConversion | {message}
 703 | InvalidCurrency | Invalid currency: {currency} is not a supported currency.
+**8xx** | Lbrycrd | **Lbrycrd**
+811 | LbrycrdEventSubscription | Lbrycrd is not publishing '{event}' events.

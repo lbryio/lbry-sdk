@@ -88,13 +88,12 @@ class Basic(Console):
             s.append('Full Node')
         elif isinstance(self.service, LightClient):
             s.append('Light Client')
-        if conf.processes in (-1, 99):
+        if conf.workers == -1:
             s.append('Threads Only')
-        elif conf.processes == 0:
-            s.append(f'{os.cpu_count()} Process(es)')
         else:
-            s.append(f'{conf.processes} Process(es)')
-        s.append(f'({os.cpu_count()} CPU(s) available)')
+            workers = os.cpu_count() if conf.workers == 0 else conf.workers
+            s.append(f'{workers} Worker' if workers == 1 else f'{workers} Workers')
+        s.append(f'({os.cpu_count()} CPUs available)')
         print(' '.join(s))
 
     def stopping(self):

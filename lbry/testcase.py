@@ -742,3 +742,211 @@ class CommandTestCase(IntegrationTestCase):
     @staticmethod
     def get_address(tx):
         return tx['outputs'][0]['address']
+
+
+class EventGenerator:
+
+    def __init__(
+        self, initial_sync=False, start=None, end=None, block_files=None, claims=None,
+        takeovers=None, stakes=0, supports=None
+    ):
+        self.initial_sync = initial_sync
+        self.block_files = block_files or []
+        self.claims = claims or []
+        self.takeovers = takeovers or []
+        self.stakes = stakes
+        self.supports = supports or []
+        self.start_height = start
+        self.end_height = end
+
+    @property
+    def events(self):
+        yield from self.blocks_init()
+        if self.block_files:
+            yield from self.blocks_main_start()
+            for block_file in self.block_files:
+                yield from self.blocks_file(*block_file)
+            yield from self.blocks_main_finish()
+
+            yield from self.spends_steps()
+
+        if self.claims:
+            if not self.initial_sync:
+                yield from self.claims_init()
+            yield from self.claims_main_start()
+            yield from self.claims_insert(self.claims)
+            if self.initial_sync:
+                yield from self.generate("blockchain.sync.claims.indexes", ("steps",), 0, None, (8,), (1,))
+            else:
+                yield from self.claims_takeovers(self.takeovers)
+                yield from self.claims_stakes()
+                yield from self.claims_vacuum()
+            yield from self.claims_main_finish()
+
+        if self.supports:
+            if not self.initial_sync:
+                yield from self.supports_init()
+            yield from self.supports_main_start()
+            yield from self.supports_insert(self.supports)
+            if self.initial_sync:
+                yield from self.generate("blockchain.sync.supports.indexes", ("steps",), 0, None, (3,), (1,))
+            else:
+                yield from self.supports_vacuum()
+            yield from self.supports_main_finish()
+
+    def blocks_init(self):
+        yield from self.generate("blockchain.sync.blocks.init", ("steps",), 0, None, (3,), (1,))
+
+    def blocks_main_start(self):
+        files = len(self.block_files)
+        blocks = sum([bf[1] for bf in self.block_files])
+        txs = sum([bf[2] for bf in self.block_files])
+        claims = sum([c[2] for c in self.claims])
+        supports = sum([c[2] for c in self.supports])
+        yield {
+            "event": "blockchain.sync.blocks.main",
+            "data": {
+                "id": 0, "done": (0, 0), "total": (blocks, txs), "units": ("blocks", "txs"),
+                "starting_height": self.start_height, "ending_height": self.end_height,
+                "files": files, "claims": claims, "supports": supports
+            }
+        }
+
+    def blocks_main_finish(self):
+        yield {
+            "event": "blockchain.sync.blocks.main",
+            "data": {"id": 0, "done": (-1, -1)}
+        }
+
+    def blocks_files(self, files):
+        for file in files:
+            yield from self.blocks_file(*file)
+
+    def blocks_file(self, file, blocks, txs, steps):
+        for i, step in enumerate(steps):
+            if i == 0:
+                yield {
+                    "event": "blockchain.sync.blocks.file",
+                    "data": {
+                        "id": file,
+                        "done": (0, 0),
+                        "total": (blocks, txs),
+                        "units": ("blocks", "txs"),
+                        "label": f"blk0000{file}.dat",
+                    }
+                }
+            yield {
+                "event": "blockchain.sync.blocks.file",
+                "data": {"id": file, "done": step}
+            }
+
+    def spends_steps(self):
+        yield from self.generate(
+            "blockchain.sync.spends.main", ("steps",), 0, None,
+            (15 if self.initial_sync else 5,),
+            (1,)
+        )
+
+    def claims_init(self):
+        yield from self.generate("blockchain.sync.claims.init", ("steps",), 0, None, (4,), (1,))
+
+    def claims_main_start(self):
+        total = (
+            sum([c[2] for c in self.claims]) +
+            sum([c[2] for c in self.takeovers]) +
+            self.stakes
+        )
+        yield {
+            "event": "blockchain.sync.claims.main",
+            "data": {
+                "id": 0, "done": (0,),
+                "total": (total,),
+                "units": ("claims",)}
+        }
+
+    def claims_main_finish(self):
+        yield {
+            "event": "blockchain.sync.claims.main",
+            "data": {"id": 0, "done": (-1,)}
+        }
+
+    def claims_insert(self, heights):
+        for start, end, total, count in heights:
+            yield from self.generate(
+                "blockchain.sync.claims.insert", ("claims",), start,
+                f"add claims    {start}-   {end}", (total,), (count,)
+            )
+
+    def claims_takeovers(self, heights):
+        for start, end, total, count in heights:
+            yield from self.generate(
+                "blockchain.sync.claims.takeovers", ("claims",), 0,
+                f"mod winner    {start}-   {end}", (total,), (count,)
+            )
+
+    def claims_stakes(self):
+        yield from self.generate(
+            "blockchain.sync.claims.stakes", ("claims",), 0, None, (self.stakes,), (1,)
+        )
+
+    def claims_vacuum(self):
+        yield from self.generate(
+            "blockchain.sync.claims.vacuum", ("steps",), 0, None, (2,), (1,)
+        )
+
+    def supports_init(self):
+        yield from self.generate("blockchain.sync.supports.init", ("steps",), 0, None, (2,), (1,))
+
+    def supports_main_start(self):
+        yield {
+            "event": "blockchain.sync.supports.main",
+            "data": {
+                "id": 0, "done": (0,),
+                "total": (sum([c[2] for c in self.supports]),),
+                "units": ("supports",)
+            }
+        }
+
+    def supports_main_finish(self):
+        yield {
+            "event": "blockchain.sync.supports.main",
+            "data": {"id": 0, "done": (-1,)}
+        }
+
+    def supports_insert(self, heights):
+        for start, end, total, count in heights:
+            yield from self.generate(
+                "blockchain.sync.supports.insert", ("supports",), start,
+                f"add supprt    {start}" if start==end else f"add supprt    {start}-   {end}",
+                (total,), (count,)
+            )
+
+    def supports_vacuum(self):
+        yield from self.generate(
+            "blockchain.sync.supports.vacuum", ("steps",), 0, None, (1,), (1,)
+        )
+
+    def generate(self, name, units, eid, label, total, steps):
+        done = (0,)*len(total)
+        while not all(d >= t for d, t in zip(done, total)):
+            if done[0] == 0:
+                first_event = {
+                    "event": name,
+                    "data": {
+                        "id": eid,
+                        "done": done,
+                        "total": total,
+                        "units": units,
+                    }
+                }
+                if label is not None:
+                    first_event["data"]["label"] = label
+                yield first_event
+            done = tuple(min(d+s, t) for d, s, t in zip(done, steps, total))
+            yield {
+                "event": name,
+                "data": {
+                    "id": eid,
+                    "done": done,
+                }
+            }

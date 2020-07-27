@@ -15,6 +15,7 @@ import zmq.asyncio
 
 from lbry.conf import Config
 from lbry.event import EventController
+from lbry.error import LbrycrdEventSubscriptionError
 
 from .database import BlockchainDB
 from .ledger import Ledger, RegTestLedger
@@ -57,10 +58,13 @@ class Process(asyncio.SubprocessProtocol):
         self.ready.set()
 
 
+ZMQ_BLOCK_EVENT = 'pubhashblock'
+
+
 class Lbrycrd:
 
     def __init__(self, ledger: Ledger):
-        self.ledger = ledger
+        self.ledger, self.conf = ledger, ledger.conf
         self.data_dir = self.actual_data_dir = ledger.conf.lbrycrd_dir
         if self.is_regtest:
             self.actual_data_dir = os.path.join(self.data_dir, 'regtest')
@@ -70,14 +74,8 @@ class Lbrycrd:
         self.cli_bin = os.path.join(self.bin_dir, 'lbrycrd-cli')
         self.protocol = None
         self.transport = None
-        self.hostname = 'localhost'
-        self.peerport = 9246 + 2  # avoid conflict with default peer port
-        self.rpcport = 9245 + 2  # avoid conflict with default rpc port
-        self.rpcuser = 'rpcuser'
-        self.rpcpassword = 'rpcpassword'
         self.subscribed = False
         self.subscription: Optional[asyncio.Task] = None
-        self.subscription_url = 'tcp://127.0.0.1:29000'
         self.default_generate_address = None
         self._on_block_controller = EventController()
         self.on_block = self._on_block_controller.stream
@@ -88,7 +86,13 @@ class Lbrycrd:
 
     @classmethod
     def temp_regtest(cls):
-        return cls(RegTestLedger(Config.with_same_dir(tempfile.mkdtemp())))
+        return cls(RegTestLedger(
+            Config.with_same_dir(tempfile.mkdtemp()).set(
+                lbrycrd_rpc_port=9245 + 2,  # avoid conflict with default rpc port
+                lbrycrd_peer_port=9246 + 2,  # avoid conflict with default peer port
+                lbrycrd_zmq_blocks="tcp://127.0.0.1:29000"
+            )
+        ))
 
     @staticmethod
     def get_block_file_name(block_file_number):
@@ -106,7 +110,10 @@ class Lbrycrd:
 
     @property
     def rpc_url(self):
-        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.rpcport}/'
+        return (
+            f'http://{self.conf.lbrycrd_rpc_user}:{self.conf.lbrycrd_rpc_pass}'
+            f'@{self.conf.lbrycrd_rpc_host}:{self.conf.lbrycrd_rpc_port}/'
+        )
 
     @property
     def exists(self):
@@ -153,14 +160,15 @@ class Lbrycrd:
     def get_start_command(self, *args):
         if self.is_regtest:
             args += ('-regtest',)
+        if self.conf.lbrycrd_zmq_blocks:
+            args += (f'-zmqpubhashblock={self.conf.lbrycrd_zmq_blocks}',)
         return (
             self.daemon_bin,
             f'-datadir={self.data_dir}',
-            f'-port={self.peerport}',
-            f'-rpcport={self.rpcport}',
-            f'-rpcuser={self.rpcuser}',
-            f'-rpcpassword={self.rpcpassword}',
-            f'-zmqpubhashblock={self.subscription_url}',
+            f'-port={self.conf.lbrycrd_peer_port}',
+            f'-rpcport={self.conf.lbrycrd_rpc_port}',
+            f'-rpcuser={self.conf.lbrycrd_rpc_user}',
+            f'-rpcpassword={self.conf.lbrycrd_rpc_pass}',
             '-server', '-printtoconsole',
             *args
         )
@@ -197,12 +205,20 @@ class Lbrycrd:
             None, shutil.rmtree, self.data_dir, True
         )
 
-    def subscribe(self):
+    async def ensure_subscribable(self):
+        zmq_notifications = await self.get_zmq_notifications()
+        subs = {e['type']: e['address'] for e in zmq_notifications}
+        if ZMQ_BLOCK_EVENT not in subs:
+            raise LbrycrdEventSubscriptionError(ZMQ_BLOCK_EVENT)
+        if not self.conf.lbrycrd_zmq_blocks:
+            self.conf.lbrycrd_zmq_blocks = subs[ZMQ_BLOCK_EVENT]
+
+    async def subscribe(self):
         if not self.subscribed:
             self.subscribed = True
             ctx = zmq.asyncio.Context.instance()
             sock = ctx.socket(zmq.SUB)  # pylint: disable=no-member
-            sock.connect(self.subscription_url)
+            sock.connect(self.conf.lbrycrd_zmq_blocks)
             sock.subscribe("hashblock")
             self.subscription = asyncio.create_task(self.subscription_handler(sock))
 
@@ -241,6 +257,9 @@ class Lbrycrd:
             else:
                 result['error'].update(method=method, params=params)
                 raise Exception(result['error'])
+
+    async def get_zmq_notifications(self):
+        return await self.rpc("getzmqnotifications")
 
     async def generate(self, blocks):
         if self.default_generate_address is None:

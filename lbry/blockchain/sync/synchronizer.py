@@ -48,9 +48,10 @@ class BlockchainSync(Sync):
 
     async def start(self):
         self.db.stop_event.clear()
+        await self.chain.ensure_subscribable()
         self.advance_loop_task = asyncio.create_task(self.advance())
         await self.advance_loop_task
-        self.chain.subscribe()
+        await self.chain.subscribe()
         self.advance_loop_task = asyncio.create_task(self.advance_loop())
         self.on_block_subscription = self.chain.on_block.listen(
             lambda e: self.advance_loop_event.set()

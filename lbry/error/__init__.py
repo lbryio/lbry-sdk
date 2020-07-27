@@ -398,3 +398,16 @@ class InvalidCurrencyError(CurrencyExchangeError):
     def __init__(self, currency):
         self.currency = currency
         super().__init__(f"Invalid currency: {currency} is not a supported currency.")
+
+
+class LbrycrdError(BaseError):
+    """
+    **Lbrycrd**
+    """
+
+
+class LbrycrdEventSubscriptionError(LbrycrdError):
+
+    def __init__(self, event):
+        self.event = event
+        super().__init__(f"Lbrycrd is not publishing '{event}' events.")
