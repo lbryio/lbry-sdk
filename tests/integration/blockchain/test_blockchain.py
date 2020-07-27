@@ -412,7 +412,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         copy_tree(self.chain.ledger.conf.lbrycrd_dir, self.TEST_DATA_CACHE_DIR)
         await self.chain.start(*self.LBRYCRD_ARGS)
 
-    @staticmethod
     async def test_lbrycrd_database_queries(self):
         db = self.chain.db
 
