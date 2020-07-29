@@ -137,7 +137,11 @@ class Basic(Console):
             total, last = self.tasks[name]
         elif total == 0:
             return
-        self.tasks[name] = (total, self.maybe_log_progress(name, current, total, last))
+        progress_status = (total, self.maybe_log_progress(name, current, total, last))
+        if progress_status[1] == 1:
+            del self.tasks[name]
+        else:
+            self.tasks[name] = progress_status
 
 
 class Bar2(Bar):
