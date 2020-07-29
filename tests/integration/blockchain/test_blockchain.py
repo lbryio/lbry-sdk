@@ -11,7 +11,7 @@ from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
-from lbry.error import LbrycrdEventSubscriptionError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
@@ -284,7 +284,16 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
         self.assertEqual(accepted or [], await self.get_accepted())
 
 
-class TestLbrycrdEvents(AsyncioTestCase):
+class TestLbrycrdAPIs(AsyncioTestCase):
+
+    async def test_unauthorized(self):
+        chain = Lbrycrd.temp_regtest()
+        await chain.ensure()
+        await chain.start()
+        await chain.get_new_address()
+        chain.conf.set(lbrycrd_rpc_pass='wrong')
+        with self.assertRaises(LbrycrdUnauthorizedError):
+            await chain.get_new_address()
 
     async def test_zmq(self):
         chain = Lbrycrd.temp_regtest()

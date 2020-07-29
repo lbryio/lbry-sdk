@@ -15,7 +15,7 @@ import zmq.asyncio
 
 from lbry.conf import Config
 from lbry.event import EventController
-from lbry.error import LbrycrdEventSubscriptionError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 
 from .database import BlockchainDB
 from .ledger import Ledger, RegTestLedger
@@ -248,6 +248,8 @@ class Lbrycrd:
             "params": params or []
         }
         async with self.session.post(self.rpc_url, json=message) as resp:
+            if resp.status == 401:
+                raise LbrycrdUnauthorizedError()
             try:
                 result = await resp.json()
             except aiohttp.ContentTypeError as e:

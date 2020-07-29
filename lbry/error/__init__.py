@@ -406,6 +406,12 @@ class LbrycrdError(BaseError):
     """
 
 
+class LbrycrdUnauthorizedError(LbrycrdError):
+
+    def __init__(self):
+        super().__init__("Failed to authenticate with lbrycrd. Perhaps wrong username or password?")
+
+
 class LbrycrdEventSubscriptionError(LbrycrdError):
 
     def __init__(self, event):

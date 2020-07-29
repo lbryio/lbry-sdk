@@ -82,4 +82,5 @@ Code | Name | Message
 702 | CurrencyConversion | {message}
 703 | InvalidCurrency | Invalid currency: {currency} is not a supported currency.
 **8xx** | Lbrycrd | **Lbrycrd**
+801 | LbrycrdUnauthorized | Failed to authenticate with lbrycrd. Perhaps wrong username or password?
 811 | LbrycrdEventSubscription | Lbrycrd is not publishing '{event}' events.
