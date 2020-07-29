@@ -2,6 +2,7 @@ import os
 import sys
 import time
 import itertools
+import logging
 from typing import Dict, Any
 from tempfile import TemporaryFile
 
@@ -12,6 +13,9 @@ from lbry import __version__
 from lbry.service.base import Service
 from lbry.service.full_node import FullNode
 from lbry.service.light_client import LightClient
+
+
+log = logging.getLogger(__name__)
 
 
 class RedirectOutput:
@@ -80,6 +84,8 @@ class Basic(Console):
     def __init__(self, service: Service):
         super().__init__(service)
         self.service.sync.on_progress.listen(self.on_sync_progress)
+        self.tasks = {}
+        logging.getLogger().setLevel(logging.INFO)
 
     def starting(self):
         conf = self.service.conf
@@ -94,14 +100,44 @@ class Basic(Console):
             workers = os.cpu_count() if conf.workers == 0 else conf.workers
             s.append(f'{workers} Worker' if workers == 1 else f'{workers} Workers')
         s.append(f'({os.cpu_count()} CPUs available)')
-        print(' '.join(s))
+        log.info(' '.join(s))
 
     def stopping(self):
-        print('bye.')
+        log.info('exiting')
 
     @staticmethod
-    def on_sync_progress(event):
-        print(event)
+    def maybe_log_progress(event, done, total, last):
+        if done == 0:
+            log.info("%s 0%%", event)
+            return 0
+        elif done == total:
+            log.info("%s 100%%", event)
+            return 1
+        else:
+            percent = done/total
+            if percent >= 0.25 > last:
+                log.info("%s 25%%", event)
+                return 0.25
+            elif percent >= 0.50 > last:
+                log.info("%s 50%%", event)
+                return 0.50
+            elif percent >= 0.75 > last:
+                log.info("%s 75%%", event)
+                return 0.75
+        return last
+
+    def on_sync_progress(self, event):
+        e, data = event["event"], event["data"]
+        name, current, total, last = e, data['done'][0], 0, 0
+        if not e.endswith("init") and not e.endswith("main") and not  e.endswith("indexes"):
+            name = f"{e}#{data['id']}"
+        if "total" in data:
+            total, last = self.tasks[name] = (data["total"][0], last)
+        elif name in self.tasks:
+            total, last = self.tasks[name]
+        elif total == 0:
+            return
+        self.tasks[name] = (total, self.maybe_log_progress(name, current, total, last))
 
 
 class Bar2(Bar):
