@@ -4990,24 +4990,28 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
-                                   include_replies=True, is_channel_signature_valid=False,
-                                   hidden=False, visible=False):
+    async def jsonrpc_comment_list(self, claim_id, comment_id=None, parent_id=None, page=1, page_size=50,
+                                   include_replies=False, order_by='timestamp',
+                                   is_channel_signature_valid=False, hidden=False, visible=False):
         """
         List comments associated with a claim.
 
         Usage:
             comment_list    (<claim_id> | --claim_id=<claim_id>)
-                            [(--page=<page> --page_size=<page_size>)]
+                            [(--page=<page> --page_size=<page_size>) |
+                            (--comment_id=<comment_id> --page_size=<page_size>)]
                             [--parent_id=<parent_id>] [--include_replies]
                             [--is_channel_signature_valid]
+                            [--order_by=<order_by>]
                             [--visible | --hidden]
 
         Options:
             --claim_id=<claim_id>           : (str) The claim on which the comment will be made on
             --parent_id=<parent_id>         : (str) CommentId of a specific thread you'd like to see
+            --comment_id=<claim_id>         : (str) CommentId of comment in page for page_size.
             --page=<page>                   : (int) The page you'd like to see in the comment list.
             --page_size=<page_size>         : (int) The amount of comments that you'd like to retrieve
+            --order_by=<order_by>           : (str) Order by 'rating', '^rating', 'timestamp', '^timestamp'
             --include_replies               : (bool) Whether or not you want to include replies in list
             --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
                                               [Warning: Paginated total size will not change, even
@@ -5033,11 +5037,14 @@ class Daemon(metaclass=JSONRPCServerType):
                         "channel_url":  (str) Channel's URI in the ClaimTrie,
                         "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                         "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
+                        "total_replies":(int) The number of replies the comment has
                     },
                     ...
                 ]
             }
         """
+
+        order = order_by.replace('^', '-')
         if hidden ^ visible:
             result = await comment_client.jsonrpc_post(
                 self.conf.comment_server,
@@ -5047,14 +5054,34 @@ class Daemon(metaclass=JSONRPCServerType):
                 page=page,
                 page_size=page_size
             )
+        elif parent_id:
+            result = await comment_client.jsonrpc_post(
+                self.conf.comment_server,
+                'get_comment_replies',
+                claim_id=claim_id,
+                parent_id=parent_id,
+                page=page,
+                page_size=page_size,
+                order_by=order,
+            )
+        elif comment_id:
+            result = await comment_client.jsonrpc_post(
+                self.conf.comment_server,
+                'get_page_for_comment',
+                claim_id=claim_id,
+                comment_id=parent_id,
+                page_size=page_size,
+                order_by=order,
+                top_level=not include_replies
+            )
         else:
             result = await comment_client.jsonrpc_post(
                 self.conf.comment_server,
                 'get_claim_comments',
                 claim_id=claim_id,
-                parent_id=parent_id,
                 page=page,
                 page_size=page_size,
+                order_by=order,
                 top_level=not include_replies
             )
         for comment in result.get('items', []):
