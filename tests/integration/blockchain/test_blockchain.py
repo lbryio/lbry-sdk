@@ -289,6 +289,7 @@ class TestLbrycrdAPIs(AsyncioTestCase):
     async def test_unauthorized(self):
         chain = Lbrycrd.temp_regtest()
         await chain.ensure()
+        self.addCleanup(chain.stop)
         await chain.start()
         await chain.get_new_address()
         chain.conf.set(lbrycrd_rpc_pass='wrong')
