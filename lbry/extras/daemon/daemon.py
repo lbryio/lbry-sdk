@@ -4989,10 +4989,9 @@ class Daemon(metaclass=JSONRPCServerType):
     View, create and abandon comments.
     """
 
-    @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_list(self, claim_id, parent_id=None, page=1, page_size=50,
-                                   include_replies=True, is_channel_signature_valid=False,
-                                   hidden=False, visible=False):
+                                   include_replies=False, skip_validation=False,
+                                   is_channel_signature_valid=False, hidden=False, visible=False):
         """
         List comments associated with a claim.
 
@@ -5000,7 +4999,7 @@ class Daemon(metaclass=JSONRPCServerType):
             comment_list    (<claim_id> | --claim_id=<claim_id>)
                             [(--page=<page> --page_size=<page_size>)]
                             [--parent_id=<parent_id>] [--include_replies]
-                            [--is_channel_signature_valid]
+                            [--skip_validation] [--is_channel_signature_valid]
                             [--visible | --hidden]
 
         Options:
@@ -5008,6 +5007,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --parent_id=<parent_id>         : (str) CommentId of a specific thread you'd like to see
             --page=<page>                   : (int) The page you'd like to see in the comment list.
             --page_size=<page_size>         : (int) The amount of comments that you'd like to retrieve
+            --skip_validation               : (bool) Skip resolving comments to validate channel names
             --include_replies               : (bool) Whether or not you want to include replies in list
             --is_channel_signature_valid    : (bool) Only include comments with valid signatures.
                                               [Warning: Paginated total size will not change, even
@@ -5057,21 +5057,22 @@ class Daemon(metaclass=JSONRPCServerType):
                 page_size=page_size,
                 top_level=not include_replies
             )
-        for comment in result.get('items', []):
-            channel_url = comment.get('channel_url')
-            if not channel_url:
-                continue
-            resolve_response = await self.resolve([], [channel_url])
-            if isinstance(resolve_response[channel_url], Output):
-                comment['is_channel_signature_valid'] = comment_client.is_comment_signed_by_channel(
-                    comment, resolve_response[channel_url]
-                )
-            else:
-                comment['is_channel_signature_valid'] = False
-        if is_channel_signature_valid:
-            result['items'] = [
-                c for c in result.get('items', []) if c.get('is_channel_signature_valid', False)
-            ]
+        if not skip_validation:
+            for comment in result.get('items', []):
+                channel_url = comment.get('channel_url')
+                if not channel_url:
+                    continue
+                resolve_response = await self.resolve([], [channel_url])
+                if isinstance(resolve_response[channel_url], Output):
+                    comment['is_channel_signature_valid'] = comment_client.is_comment_signed_by_channel(
+                        comment, resolve_response[channel_url]
+                    )
+                else:
+                    comment['is_channel_signature_valid'] = False
+            if is_channel_signature_valid:
+                result['items'] = [
+                    c for c in result.get('items', []) if c.get('is_channel_signature_valid', False)
+                ]
         return result
 
     @requires(WALLET_COMPONENT)
