@@ -5058,11 +5058,15 @@ class Daemon(metaclass=JSONRPCServerType):
                 top_level=not include_replies
             )
         if not skip_validation:
+            channel_urls = []
             for comment in result.get('items', []):
                 channel_url = comment.get('channel_url')
-                if not channel_url:
-                    continue
-                resolve_response = await self.resolve([], [channel_url])
+                if channel_url:
+                    channel_urls.append(channel_url)
+            resolve_response = await self.resolve([], channel_urls)
+
+            for comment in result.get('items', []):
+                channel_url = comment.get('channel_url')
                 if isinstance(resolve_response[channel_url], Output):
                     comment['is_channel_signature_valid'] = comment_client.is_comment_signed_by_channel(
                         comment, resolve_response[channel_url]
