@@ -196,6 +196,7 @@ class Lbrycrd:
             self.transport.terminate()
             await self.protocol.stopped.wait()
             assert self.transport.get_returncode() == 0, "lbrycrd daemon exit with error"
+            self.transport.close()
         finally:
             if cleanup:
                 await self.cleanup()
