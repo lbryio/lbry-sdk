@@ -400,6 +400,18 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             funded = await self.chain.fund_raw_transaction(hexlify(tx.raw).decode())
             signed = await self.chain.sign_raw_transaction_with_wallet(funded['hex'])
             await self.chain.send_raw_transaction(signed['hex'])
+            tx = Transaction(unhexlify(signed['hex']))
+            claim = None
+            for txo in tx.outputs:
+                if txo.is_claim:
+                    claim = txo
+                    break
+            support_tx = Transaction().add_outputs([
+                Output.pay_support_pubkey_hash(CENT, claim.claim_name, claim.claim_id, address),
+            ])
+            funded = await self.chain.fund_raw_transaction(hexlify(support_tx.raw).decode())
+            signed = await self.chain.sign_raw_transaction_with_wallet(funded['hex'])
+            await self.chain.send_raw_transaction(signed['hex'])
             await self.chain.generate(1)
 
         # supports \w data aren't supported until block 350, fast forward a little
@@ -430,12 +442,12 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
         # get_block_files
         self.assertEqual(
-            [(0, 191, 280), (1, 89, 178), (2, 73, 86)],
+            [(0, 191, 369), (1, 89, 267), (2, 73, 98)],
             [(file['file_number'], file['blocks'], file['txs'])
              for file in await db.get_block_files()]
         )
         self.assertEqual(
-            [(1, 29, 58)],
+            [(1, 29, 87)],
             [(file['file_number'], file['blocks'], file['txs'])
              for file in await db.get_block_files(1, 251)]
         )
@@ -465,7 +477,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         self.assertEqual(0, await db.get_claim_metadata_count(500, 1000))
 
         # get_support_metadata_count
-        self.assertEqual(2, await db.get_support_metadata_count(0, 500))
+        self.assertEqual(192, await db.get_support_metadata_count(0, 500))
         self.assertEqual(0, await db.get_support_metadata_count(500, 1000))
 
         # get_support_metadata
@@ -473,7 +485,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             [{'name': b'two', 'activation_height': 359, 'expiration_height': 852},
              {'name': b'two', 'activation_height': 359, 'expiration_height': 852}],
             [{'name': c['name'], 'activation_height': c['activation_height'], 'expiration_height': c['expiration_height']}
-             for c in await db.get_support_metadata(0, 500)]
+             for c in await db.get_support_metadata(350, 500)]
         )
 
     @staticmethod
@@ -507,9 +519,9 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 initial_sync=True,
                 start=0, end=352,
                 block_files=[
-                    (0, 191, 280, ((100, 0), (191, 280))),
-                    (1, 89, 178, ((89, 178),)),
-                    (2, 73, 86, ((73, 86),)),
+                    (0, 191, 369, ((100, 0), (191, 369))),
+                    (1, 89, 267, ((89, 267),)),
+                    (2, 73, 98, ((73, 98),)),
                 ],
                 claims=[
                     (102, 120, 361, 361),
@@ -524,7 +536,16 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                     (273, 291, 361, 361),
                 ],
                 supports=[
-                    (352, 352, 2, 2),
+                    (102, 121, 20, 20),
+                    (122, 141, 20, 20),
+                    (142, 160, 19, 19),
+                    (161, 179, 19, 19),
+                    (180, 198, 19, 19),
+                    (199, 217, 19, 19),
+                    (218, 236, 19, 19),
+                    (237, 255, 19, 19),
+                    (256, 274, 19, 19),
+                    (275, 352, 19, 19),
                 ]
             ).events)
         )
@@ -562,6 +583,30 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
                 stakes=1,
                 supports=[
                     (353, 354, 1, 1),
+                ]
+            ).events)
+        )
+
+        # test non-initial sync across multiple files
+        await self.sync.rewind(250)
+        await asyncio.sleep(1)  # give it time to collect events
+        events.clear()
+        await self.sync.advance()
+        await asyncio.sleep(1)  # give it time to collect events
+        self.assertEqual(
+            self.sorted_events(events),
+            list(EventGenerator(
+                initial_sync=False,
+                start=250, end=354,
+                block_files=[
+                    (1, 30, 90, ((30, 90),)),
+                    (2, 75, 102, ((75, 102),)),
+                ],
+                claims=[(250, 354, 799, 1084)],
+                takeovers=[(250, 354, 1, 1)],
+                stakes=43,
+                supports=[
+                    (250, 354, 45, 45),
                 ]
             ).events)
         )

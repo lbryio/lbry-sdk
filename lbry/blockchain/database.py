@@ -112,7 +112,8 @@ class BlockchainDB:
                 file as file_number,
                 COUNT(hash) as blocks,
                 SUM(txcount) as txs,
-                MAX(height) as best_height
+                MAX(height) as best_height,
+                MIN(height) as start_height
             FROM block_info
             WHERE status&1 AND status&4
         """

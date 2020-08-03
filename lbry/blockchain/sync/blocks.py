@@ -4,7 +4,7 @@ from sqlalchemy import table, bindparam, text, func, union
 from sqlalchemy.future import select
 from sqlalchemy.schema import CreateTable
 
-from lbry.db.tables import Block as BlockTable, TX, TXO, TXI
+from lbry.db.tables import Block as BlockTable, TX, TXO, TXI, Claim, Support
 from lbry.db.tables import (
     pg_add_tx_constraints_and_indexes,
     pg_add_txo_constraints_and_indexes,
@@ -190,3 +190,17 @@ def get_block_tx_addresses(block_hash=None, tx_hash=None):
             .where((TXI.c.address.isnot_(None)) & constraint),
         )
     )
+
+
+@event_emitter("blockchain.sync.rewind.main", "steps")
+def rewind(height: int, p: ProgressContext):
+    deletes = [
+        BlockTable.delete().where(BlockTable.c.height >= height),
+        TXI.delete().where(TXI.c.height >= height),
+        TXO.delete().where(TXO.c.height >= height),
+        TX.delete().where(TX.c.height >= height),
+        Claim.delete().where(Claim.c.height >= height),
+        Support.delete().where(Support.c.height >= height),
+    ]
+    for delete in p.iter(deletes):
+        p.ctx.execute(delete)

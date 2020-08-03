@@ -103,11 +103,13 @@ class BlockchainSync(Sync):
                     ))[0]
                 tx_count += chain_file['txs']
                 block_count += chain_file['blocks']
+                file_start_height = chain_file['start_height']
                 starting_height = min(
-                    our_best_file_height+1 if starting_height is None else starting_height, our_best_file_height+1
+                    file_start_height if starting_height is None else starting_height,
+                    file_start_height
                 )
                 tasks.append(self.db.run(
-                    block_phase.sync_block_file, chain_file['file_number'], our_best_file_height+1,
+                    block_phase.sync_block_file, chain_file['file_number'], file_start_height,
                     chain_file['txs'], self.TX_FLUSH_SIZE
                 ))
         with Progress(self.db.message_queue, BLOCKS_MAIN_EVENT) as p:
@@ -302,3 +304,6 @@ class BlockchainSync(Sync):
             except Exception as e:
                 log.exception(e)
                 await self.stop()
+
+    async def rewind(self, height):
+        await self.db.run(block_phase.rewind, height)

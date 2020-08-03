@@ -892,7 +892,7 @@ class EventGenerator:
 
     def claims_stakes(self):
         yield from self.generate(
-            "blockchain.sync.claims.stakes", ("claims",), 0, None, (self.stakes,), (1,)
+            "blockchain.sync.claims.stakes", ("claims",), 0, None, (self.stakes,), (self.stakes,)
         )
 
     def claims_vacuum(self):
