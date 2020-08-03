@@ -496,6 +496,8 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         events = []
         self.sync.on_progress.listen(events.append)
 
+        self.db.workers = 10  # sets how many claim/update workers there will be
+
         # initial sync
         await self.sync.advance()
         await asyncio.sleep(1)  # give it time to collect events

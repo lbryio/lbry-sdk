@@ -30,13 +30,10 @@ SUPPORTS_MAIN_EVENT = Event.add("blockchain.sync.supports.main", "supports")
 
 class BlockchainSync(Sync):
 
-    TX_FLUSH_SIZE = 50_000  # flush to db after processing this many TXs and update progress
-    FILTER_CHUNK_SIZE = 100_000  # split filter generation tasks into this size block chunks
+    TX_FLUSH_SIZE = 25_000  # flush to db after processing this many TXs and update progress
+    CLAIM_FLUSH_SIZE = 25_000  # flush to db after processing this many claims and update progress
+    SUPPORT_FLUSH_SIZE = 25_000  # flush to db after processing this many supports and update progress
     FILTER_FLUSH_SIZE = 10_000  # flush to db after processing this many filters and update progress
-    CLAIM_CHUNK_SIZE = 50_000  # split claim sync tasks into this size block chunks
-    CLAIM_FLUSH_SIZE = 10_000  # flush to db after processing this many claims and update progress
-    SUPPORT_CHUNK_SIZE = 50_000  # split support sync tasks into this size block chunks
-    SUPPORT_FLUSH_SIZE = 10_000  # flush to db after processing this many supports and update progress
 
     def __init__(self, chain: Lbrycrd, db: Database):
         super().__init__(chain.ledger, db)
@@ -133,7 +130,7 @@ class BlockchainSync(Sync):
             blocks = 0
             tasks = []
             # for chunk in range(select min(height), max(height) from block where filter is null):
-            #     tasks.append(self.db.run(block_phase.sync_filters, chunk))
+            #     tasks.append(self.db.run(block_phase.sync_filters, chunk, self.FILTER_FLUSH_SIZE))
             p.start(blocks)
             await self.run_tasks(tasks)
 
@@ -169,6 +166,7 @@ class BlockchainSync(Sync):
             missing_in_supports_table,
             missing_in_claims_table,
             missing_or_stale_in_claims_table,
+            self.db.workers
         )
 
     async def count_abandoned_supports(self) -> int:
@@ -220,7 +218,8 @@ class BlockchainSync(Sync):
             p.start(total)
             if batches:
                 await self.run_tasks([
-                    self.db.run(claim_phase.claims_insert, batch, not initial_sync) for batch in batches
+                    self.db.run(claim_phase.claims_insert, batch, not initial_sync, self.CLAIM_FLUSH_SIZE)
+                    for batch in batches
                 ])
                 if not initial_sync:
                     await self.run_tasks([
@@ -263,7 +262,7 @@ class BlockchainSync(Sync):
             if support_batches:
                 await self.run_tasks([
                     self.db.run(
-                        support_phase.supports_insert, batch, not initial_sync
+                        support_phase.supports_insert, batch, not initial_sync, self.SUPPORT_FLUSH_SIZE
                     ) for batch in support_batches
                 ])
             if delete_supports:

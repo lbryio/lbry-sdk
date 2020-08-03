@@ -110,9 +110,10 @@ def distribute_unspent_txos(
     missing_in_supports_table: bool = False,
     missing_in_claims_table: bool = False,
     missing_or_stale_in_claims_table: bool = False,
+    number_of_buckets: int = 10
 ) -> Tuple[int, List[Tuple[int, int]]]:
     chunks = (
-        select(func.ntile(10).over(order_by=TXO.c.height).label('chunk'), TXO.c.height)
+        select(func.ntile(number_of_buckets).over(order_by=TXO.c.height).label('chunk'), TXO.c.height)
         .where(
             where_unspent_txos(
                 txo_types, blocks,

@@ -249,7 +249,6 @@ class Lbrycrd:
             "params": params or []
         }
         async with self.session.post(self.rpc_url, json=message) as resp:
-            print(await resp.text())
             if resp.status == 401:
                 raise LbrycrdUnauthorizedError()
             try:

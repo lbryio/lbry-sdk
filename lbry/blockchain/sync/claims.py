@@ -105,6 +105,7 @@ def row_to_claim_for_saving(row) -> Tuple[Output, dict]:
 def claims_insert(
     blocks: Tuple[int, int],
     missing_in_claims_table: bool,
+    flush_size: int,
     p: ProgressContext
 ):
     chain = get_or_initialize_lbrycrd(p.ctx)
@@ -139,7 +140,7 @@ def claims_insert(
                     'takeover_height': metadata.get('takeover_height'),
                 })
                 loader.add_claim(txo, **extra)
-            if len(loader.claims) >= 25_000:
+            if len(loader.claims) >= flush_size:
                 p.add(loader.flush(Claim))
         p.add(loader.flush(Claim))
 

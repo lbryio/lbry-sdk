@@ -21,7 +21,12 @@ log = logging.getLogger(__name__)
 
 
 @event_emitter("blockchain.sync.supports.insert", "supports")
-def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p: ProgressContext):
+def supports_insert(
+    blocks: Tuple[int, int],
+    missing_in_supports_table: bool,
+    flush_size: int,
+    p: ProgressContext
+):
     p.start(
         count_unspent_txos(
             TXO_TYPES['support'], blocks,
@@ -58,7 +63,7 @@ def supports_insert(blocks: Tuple[int, int], missing_in_supports_table: bool, p:
                 signature_digest=row.signature_digest,
                 channel_public_key=row.channel_public_key
             )
-            if len(loader.supports) >= 25_000:
+            if len(loader.supports) >= flush_size:
                 p.add(loader.flush(Support))
         p.add(loader.flush(Support))
 
