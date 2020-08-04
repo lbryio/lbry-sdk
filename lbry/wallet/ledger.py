@@ -923,7 +923,10 @@ class Ledger(metaclass=LedgerRegistry):
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
-        resolve = partial(self.network.retriable_call, self.network.resolve)
+        if 'new_sdk_server' in kwargs:
+            resolve = partial(self.network.new_resolve, kwargs.pop('new_sdk_server'))
+        else:
+            resolve = partial(self.network.retriable_call, self.network.resolve)
         urls_copy = list(urls)
         txos = []
         while urls_copy:
