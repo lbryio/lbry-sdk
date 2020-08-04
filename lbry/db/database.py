@@ -279,7 +279,7 @@ class Database:
     async def resolve(self, urls, **kwargs) -> Dict[str, Output]:
         return await self.run(q.resolve, urls, **kwargs)
 
-    async def protobuf_resolve(self, urls, **kwargs) -> bytes:
+    async def protobuf_resolve(self, urls, **kwargs) -> str:
         return await self.run(q.protobuf_resolve, urls, **kwargs)
 
     async def get_txo_sum(self, **constraints) -> int:

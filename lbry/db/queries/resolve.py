@@ -36,8 +36,8 @@ def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
     return channel_txos + reposted_txos
 
 
-def protobuf_resolve(urls, **kwargs) -> bytes:
-    return ResultOutput.to_bytes([resolve_url(raw_url) for raw_url in urls], [])
+def protobuf_resolve(urls, **kwargs) -> str:
+    return ResultOutput.to_base64([resolve_url(raw_url) for raw_url in urls], [])
 
 
 def resolve(urls, **kwargs) -> Dict[str, Output]:
