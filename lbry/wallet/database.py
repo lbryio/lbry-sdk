@@ -1254,13 +1254,16 @@ class Database(SQLiteMixin):
         self.constrain_collections(constraints)
         return self.get_utxo_count(**constraints)
 
-    async def release_all_outputs(self, account):
-        await self.db.execute_fetchall(
-            "UPDATE txo SET is_reserved = 0 WHERE"
-            "  is_reserved = 1 AND txo.address IN ("
-            "    SELECT address from account_address WHERE account = ?"
-            "  )", (account.public_key.address, )
-        )
+    async def release_all_outputs(self, account=None):
+        if account is None:
+            await self.db.execute_fetchall("UPDATE txo SET is_reserved = 0 WHERE is_reserved = 1")
+        else:
+            await self.db.execute_fetchall(
+                "UPDATE txo SET is_reserved = 0 WHERE"
+                "  is_reserved = 1 AND txo.address IN ("
+                "    SELECT address from account_address WHERE account = ?"
+                "  )", (account.public_key.address, )
+            )
 
     def get_supports_summary(self, read_only=False, **constraints):
         return self.get_txos(
