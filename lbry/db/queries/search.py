@@ -8,7 +8,7 @@ from sqlalchemy import func, case
 from sqlalchemy.future import select, Select
 
 from lbry.schema.tags import clean_tags
-from lbry.schema.result import Censor
+from lbry.schema.result import Censor, Outputs as ResultOutput
 from lbry.schema.url import normalize_name
 from lbry.blockchain.transaction import Output
 
@@ -217,6 +217,11 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
             .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
         ), **constraints
     )
+
+
+def protobuf_search_claims(**constraints) -> str:
+    txos, _, censor = search_claims(**constraints)
+    return ResultOutput.to_base64(txos, [], blocked=censor)
 
 
 def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:

@@ -45,14 +45,17 @@ class FullNode(Service):
             for tx in await self.db.get_transactions(tx_hashes=tx_hashes)
         }
 
-    async def search_claims(self, accounts, **kwargs):
-        return await self.db.search_claims(**kwargs)
-
     async def broadcast(self, tx):
         return await self.chain.send_raw_transaction(hexlify(tx.raw).decode())
 
     async def wait(self, tx: Transaction, height=-1, timeout=1):
         pass
+
+    async def search_claims(self, accounts, **kwargs):
+        return await self.db.search_claims(**kwargs)
+
+    async def protobuf_search_claims(self, **kwargs):
+        return await self.db.protobuf_search_claims(**kwargs)
 
     async def resolve(self, urls, **kwargs):
         return await self.db.resolve(urls, **kwargs)

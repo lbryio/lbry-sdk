@@ -1590,6 +1590,7 @@ class API:
                                          # 'height', 'release_time', 'publish_time', 'amount', 'effective_amount',
                                          # 'support_amount', 'trending_group', 'trending_mixed', 'trending_local',
                                          # 'trending_global', 'activation_height'
+        protobuf=False,                  # protobuf encoded result
         **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
     ) -> Paginated[Output]:  # search results
         """
@@ -1611,29 +1612,39 @@ class API:
                          [--reposted_claim_id=<reposted_claim_id>] [--reposted=<reposted>]
                          [--claim_type=<claim_type>] [--order_by=<order_by>...]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
+                         [--protobuf]
                          {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(kwargs.pop('wallet_id', None))
-        if {'claim_id', 'claim_ids'}.issubset(kwargs):
-            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
-        if kwargs.pop('valid_channel_signature', False):
-            kwargs['signature_valid'] = 1
-        if kwargs.pop('invalid_channel_signature', False):
-            kwargs['signature_valid'] = 0
-        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
-        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, total, censored = await self.service.search_claims(wallet.accounts, **kwargs)
-        result = {
-            "items": txos,
+        claim_filter_dict, kwargs = pop_kwargs('claim_filter', claim_filter_kwargs(
+            **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+        ))
+        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        wallet = self.wallets.get_or_default(wallet_id)
+#        if {'claim_id', 'claim_ids'}.issubset(kwargs):
+#            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
+#        if kwargs.pop('valid_channel_signature', False):
+#            kwargs['signature_valid'] = 1
+#        if kwargs.pop('invalid_channel_signature', False):
+#            kwargs['signature_valid'] = 0
+        page_num = abs(pagination['page'] or 1)
+        page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
+        claim_filter_dict.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        if protobuf:
+            return await self.service.protobuf_search_claims(**remove_nulls(claim_filter_dict))
+        result = await self.service.search_claims(
+            wallet.accounts, **remove_nulls(claim_filter_dict)
+        )
+        d = {
+            "items": result.rows,
             #"blocked": censored,
             "page": page_num,
             "page_size": page_size
         }
         if not kwargs.pop('no_totals', False):
-            result['total_pages'] = int((total + (page_size - 1)) / page_size)
-            result['total_items'] = total
-        return result
+            d['total_pages'] = int((result.total + (page_size - 1)) / page_size)
+            d['total_items'] = result.total
+        return d
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.

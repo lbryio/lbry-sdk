@@ -273,6 +273,9 @@ class Database:
         claims, total, censor = await self.run(q.search_claims, **constraints)
         return Result(claims, total, censor)
 
+    async def protobuf_search_claims(self, **constraints) -> str:
+        return await self.run(q.protobuf_search_claims, **constraints)
+
     async def search_supports(self, **constraints) -> Result[Output]:
         return await self.fetch_result(q.search_supports, **constraints)
 
