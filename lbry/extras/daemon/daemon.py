@@ -986,10 +986,12 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--include_sent_supports]
                     [--include_sent_tips]
                     [--include_received_tips]
+                    [--new_sdk_server=<new_sdk_server>]
 
         Options:
             --urls=<urls>              : (str, list) one or more urls to resolve
             --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase reciepts
+           --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
            --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet
                                                 has purchased the claim being resolved
             --include_is_my_output     : (bool) lookup and include a boolean indicating
@@ -2327,6 +2329,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
+                         [--new_sdk_server=<new_sdk_server>]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
@@ -2432,6 +2435,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+           --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
 
         Returns: {Paginated[Output]}
         """
