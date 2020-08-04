@@ -331,6 +331,7 @@ class Ledger(metaclass=LedgerRegistry):
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
         await fully_synced
+        await self.db.release_all_outputs()
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
         if len(self.accounts) > 10:
