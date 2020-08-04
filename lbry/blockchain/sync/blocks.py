@@ -4,7 +4,7 @@ from sqlalchemy import table, bindparam, text, func, union
 from sqlalchemy.future import select
 from sqlalchemy.schema import CreateTable
 
-from lbry.db.tables import Block as BlockTable, TX, TXO, TXI, Claim, Support
+from lbry.db.tables import Block as BlockTable, TX, TXO, TXI, Claim, Tag, Support
 from lbry.db.tables import (
     pg_add_tx_constraints_and_indexes,
     pg_add_txo_constraints_and_indexes,
@@ -199,6 +199,11 @@ def rewind(height: int, p: ProgressContext):
         TXI.delete().where(TXI.c.height >= height),
         TXO.delete().where(TXO.c.height >= height),
         TX.delete().where(TX.c.height >= height),
+        Tag.delete().where(
+            Tag.c.claim_hash.in_(
+                select(Claim.c.claim_hash).where(Claim.c.height >= height)
+            )
+        ),
         Claim.delete().where(Claim.c.height >= height),
         Support.delete().where(Support.c.height >= height),
     ]
