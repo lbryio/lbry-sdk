@@ -328,6 +328,13 @@ class Network:
             result = await r.json()
             return result['result']
 
+    async def new_claim_search(self, server, **kwargs):
+        kwargs['protobuf'] = True
+        message = {"method": "claim_search", "params": kwargs}
+        async with self.aiohttp_session.post(server, json=message) as r:
+            result = await r.json()
+            return result['result']
+
 
 class SessionPool:
 

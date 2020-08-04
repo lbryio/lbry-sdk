@@ -922,9 +922,9 @@ class Ledger(metaclass=LedgerRegistry):
                         txo.received_tips = tips
         return txos, blocked, outputs.offset, outputs.total
 
-    async def resolve(self, accounts, urls, **kwargs):
-        if 'new_sdk_server' in kwargs:
-            resolve = partial(self.network.new_resolve, kwargs.pop('new_sdk_server'))
+    async def resolve(self, accounts, urls, new_sdk_server=None, **kwargs):
+        if new_sdk_server:
+            resolve = partial(self.network.new_resolve, new_sdk_server)
         else:
             resolve = partial(self.network.retriable_call, self.network.resolve)
         urls_copy = list(urls)
@@ -946,9 +946,13 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def claim_search(
             self, accounts, include_purchase_receipt=False, include_is_my_output=False,
-            **kwargs) -> Tuple[List[Output], dict, int, int]:
+            new_sdk_server=None, **kwargs) -> Tuple[List[Output], dict, int, int]:
+        if new_sdk_server:
+            claim_search = partial(self.network.new_claim_search, new_sdk_server)
+        else:
+            claim_search = self.network.claim_search
         return await self._inflate_outputs(
-            self.network.claim_search(**kwargs), accounts,
+            claim_search(**kwargs), accounts,
             include_purchase_receipt=include_purchase_receipt,
             include_is_my_output=include_is_my_output
         )

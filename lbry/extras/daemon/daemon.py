@@ -2329,6 +2329,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
+                         [--new_sdk_server=<new_sdk_server>]
 
         Options:
             --name=<name>                   : (str) claim name (normalized)
@@ -2434,6 +2435,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+           --new_sdk_server=<new_sdk_server> : (str) use the new SDK server (EXPERIMENTAL)
 
         Returns: {Paginated[Output]}
         """
