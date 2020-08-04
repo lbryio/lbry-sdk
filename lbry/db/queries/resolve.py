@@ -4,6 +4,7 @@ from operator import itemgetter
 from typing import List, Dict
 
 from lbry.schema.url import URL
+from lbry.schema.result import Outputs as ResultOutput
 from lbry.error import ResolveCensoredError
 from lbry.blockchain.transaction import Output
 
@@ -35,7 +36,11 @@ def _get_referenced_rows(txo_rows: List[dict], censor_channels: List[bytes]):
     return channel_txos + reposted_txos
 
 
-def resolve(*urls) -> Dict[str, Output]:
+def protobuf_resolve(urls, **kwargs) -> bytes:
+    return ResultOutput.to_bytes([resolve_url(raw_url) for raw_url in urls], [])
+
+
+def resolve(urls, **kwargs) -> Dict[str, Output]:
     return {url: resolve_url(url) for url in urls}
     #txo_rows = [resolve_url(raw_url) for raw_url in urls]
     #extra_txo_rows = _get_referenced_rows(

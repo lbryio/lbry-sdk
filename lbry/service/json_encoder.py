@@ -187,7 +187,7 @@ class JSONResponseEncoder(JSONEncoder):
         if isinstance(obj, Decimal):
             return float(obj)
         if isinstance(obj, bytes):
-            return obj.decode()
+            return hexlify(obj).decode()
         return super().default(obj)
 
     def encode_transaction(self, tx):

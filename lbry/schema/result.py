@@ -185,26 +185,26 @@ class Outputs:
                 txo_message.error.code = ErrorMessage.BLOCKED
                 set_reference(txo_message.error.blocked.channel, txo.censor_hash, extra_txo_rows)
             return
-        txo_message.tx_hash = txo['txo_hash'][:32]
-        txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
-        txo_message.height = txo['height']
-        txo_message.claim.short_url = txo['short_url']
-        txo_message.claim.reposted = txo['reposted']
-        if txo['canonical_url'] is not None:
-            txo_message.claim.canonical_url = txo['canonical_url']
-        txo_message.claim.is_controlling = bool(txo['is_controlling'])
-        if txo['last_take_over_height'] is not None:
-            txo_message.claim.take_over_height = txo['last_take_over_height']
-        txo_message.claim.creation_height = txo['creation_height']
-        txo_message.claim.activation_height = txo['activation_height']
-        txo_message.claim.expiration_height = txo['expiration_height']
-        if txo['claims_in_channel'] is not None:
-            txo_message.claim.claims_in_channel = txo['claims_in_channel']
-        txo_message.claim.effective_amount = txo['effective_amount']
-        txo_message.claim.support_amount = txo['support_amount']
-        txo_message.claim.trending_group = txo['trending_group']
-        txo_message.claim.trending_mixed = txo['trending_mixed']
-        txo_message.claim.trending_local = txo['trending_local']
-        txo_message.claim.trending_global = txo['trending_global']
-        set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
-        set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)
+        txo_message.tx_hash = txo.tx_ref.hash
+        txo_message.nout = txo.position
+        txo_message.height = txo.tx_ref.height
+        txo_message.claim.short_url = txo.meta['short_url']
+        txo_message.claim.reposted = txo.meta['reposted_count']
+        if txo.meta['canonical_url'] is not None:
+            txo_message.claim.canonical_url = txo.meta['canonical_url']
+        txo_message.claim.is_controlling = bool(txo.meta['takeover_height'])
+        #if txo['last_take_over_height'] is not None:
+        #    txo_message.claim.take_over_height = txo['last_take_over_height']
+        txo_message.claim.creation_height = txo.meta['creation_height']
+        txo_message.claim.activation_height = txo.meta['activation_height']
+        #txo_message.claim.expiration_height = txo['expiration_height']
+        if txo.meta['signed_claim_count'] is not None:
+            txo_message.claim.claims_in_channel = txo.meta['signed_claim_count']
+        txo_message.claim.effective_amount = txo.meta['staked_amount']
+        txo_message.claim.support_amount = txo.meta['staked_support_amount']
+        #txo_message.claim.trending_group = txo['trending_group']
+        #txo_message.claim.trending_mixed = txo['trending_mixed']
+        #txo_message.claim.trending_local = txo['trending_local']
+        #txo_message.claim.trending_global = txo['trending_global']
+        #set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
+        #set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)

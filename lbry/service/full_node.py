@@ -55,4 +55,7 @@ class FullNode(Service):
         pass
 
     async def resolve(self, urls, **kwargs):
-        return await self.db.resolve(*urls)
+        return await self.db.resolve(urls, **kwargs)
+
+    async def protobuf_resolve(self, urls, **kwargs):
+        return await self.db.protobuf_resolve(urls, **kwargs)

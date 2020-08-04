@@ -181,6 +181,7 @@ Claim = Table(
 
     # reposts
     Column('reposted_claim_hash', LargeBinary, nullable=True),
+    Column('reposted_count', Integer, server_default='0'),
 
     # claims which are channels
     Column('signed_claim_count', Integer, server_default='0'),

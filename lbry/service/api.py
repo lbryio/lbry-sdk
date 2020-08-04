@@ -502,8 +502,9 @@ class API:
                                          # of supports you've made to this claim
         include_sent_tips=False,         # lookup and sum the total amount
                                          # of tips you've made to this claim
-        include_received_tips=False      # lookup and sum the total amount
+        include_received_tips=False,     # lookup and sum the total amount
                                          # of tips you've received to this claim
+        protobuf=False,                  # protobuf encoded result
     ) -> dict:  # resolve results, keyed by url
         """
         Get the claim that a URL refers to.
@@ -515,6 +516,7 @@ class API:
                     [--include_sent_supports]
                     [--include_sent_tips]
                     [--include_received_tips]
+                    [--protobuf]
 
         Returns:
             '<url>': {
@@ -573,6 +575,8 @@ class API:
         """
         if isinstance(urls, str):
             urls = [urls]
+        if protobuf:
+            return await self.service.protobuf_resolve(urls)
         return await self.service.resolve(
             urls, wallet=None,#self.wallets.get_or_default(wallet_id),
             include_purchase_receipt=include_purchase_receipt,
@@ -1968,53 +1972,45 @@ class API:
                           {kwargs}
 
         """
+        stream_dict, kwargs = pop_kwargs('stream', stream_kwargs(**stream_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+        assert_consumed_kwargs(kwargs)
         self.ledger.valid_stream_name_or_error(name)
-        wallet = self.wallets.get_or_default_for_spending(wallet_id)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
-        holding_account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
-        channel = await wallet.channels.get_for_signing_or_none(claim_id=channel_id, claim_name=channel_name)
-        holding_address = await holding_account.get_valid_receiving_address(claim_address)
-        kwargs['fee_address'] = self.ledger.get_fee_address(kwargs, claim_address)
+        holding_account = wallet.accounts.get_or_default(stream_dict.pop('account_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        signing_channel = None
+        if 'channel_id' in stream_dict or 'channel_name' in stream_dict:
+            signing_channel = await wallet.channels.get_for_signing_or_none(
+                channel_id=stream_dict.pop('channel_id', None),
+                channel_name=stream_dict.pop('channel_name', None)
+            )
+        holding_address = await holding_account.get_valid_receiving_address(
+            stream_dict.pop('claim_address', None)
+        )
+        kwargs['fee_address'] = self.ledger.get_fee_address(kwargs, holding_address)
 
         await wallet.verify_duplicate(name, allow_duplicate_name)
 
+        stream_dict.pop('validate_file')
+        stream_dict.pop('optimize_file')
         # TODO: fix
         #file_path, spec = await self._video_file_analyzer.verify_or_repair(
         #    validate_file, optimize_file, file_path, ignore_non_video=True
         #)
         #kwargs.update(spec)
-
-        tx = await wallet.stream.create(
-            name,
+        class FakeManagedStream:
+            sd_hash = 'beef'
+        async def create_file_stream(path):
+            return FakeManagedStream()
+        tx, fs = await wallet.streams.create(
+            name=name, amount=amount, file_path=stream_dict.pop('file_path'),
+            create_file_stream=create_file_stream,
+            holding_address=holding_address, funding_accounts=funding_accounts,
+            signing_channel=signing_channel, **remove_nulls(stream_dict)
         )
-        claim = Claim()
-        claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
-        tx = await wallet.streams.create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
-        )
-        new_txo = tx.outputs[0]
-
-        file_stream = None
-        if not preview:
-            file_stream = await self.stream_manager.create_stream(file_path)
-            claim.stream.source.sd_hash = file_stream.sd_hash
-            new_txo.script.generate()
-
-        if channel:
-            new_txo.sign(channel)
-        await tx.sign(funding_accounts)
-
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
-            )])
-            await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
         return tx
 
     async def stream_update(

@@ -63,6 +63,7 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.creation_height,
     Claim.c.is_controlling,
     Claim.c.channel_hash,
+    Claim.c.reposted_count,
     Claim.c.reposted_claim_hash,
     Claim.c.short_url,
     Claim.c.signed_claim_count,

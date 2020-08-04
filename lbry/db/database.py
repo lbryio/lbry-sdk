@@ -276,8 +276,11 @@ class Database:
     async def search_supports(self, **constraints) -> Result[Output]:
         return await self.fetch_result(q.search_supports, **constraints)
 
-    async def resolve(self, *urls) -> Dict[str, Output]:
-        return await self.run(q.resolve, *urls)
+    async def resolve(self, urls, **kwargs) -> Dict[str, Output]:
+        return await self.run(q.resolve, urls, **kwargs)
+
+    async def protobuf_resolve(self, urls, **kwargs) -> bytes:
+        return await self.run(q.protobuf_resolve, urls, **kwargs)
 
     async def get_txo_sum(self, **constraints) -> int:
         return await self.run(q.get_txo_sum, **constraints)
