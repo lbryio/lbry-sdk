@@ -861,7 +861,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(0, r.meta['signed_support_count'])
 
     async def resolve_to_claim_id(self, url):
-        return (await self.db.resolve(url))[url].claim_id
+        return (await self.db.resolve([url]))[url].claim_id
 
     async def test_resolve(self):
         chan_a = await self.get_claim(
