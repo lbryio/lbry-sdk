@@ -56,7 +56,7 @@ def sign_comment(comment: dict, channel: Output, abandon=False):
 async def jsonrpc_post(url: str, method: str, params: dict = None, **kwargs) -> any:
     params = params or {}
     params.update(kwargs)
-    json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
+    json_body = {'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params}
     async with utils.aiohttp_request('POST', url, json=json_body) as response:
         try:
             result = await response.json()
