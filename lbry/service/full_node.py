@@ -57,6 +57,9 @@ class FullNode(Service):
     async def protobuf_search_claims(self, **kwargs):
         return await self.db.protobuf_search_claims(**kwargs)
 
+    async def search_supports(self, accounts, **kwargs):
+        return await self.db.search_supports(**kwargs)
+
     async def resolve(self, urls, **kwargs):
         return await self.db.resolve(urls, **kwargs)
 

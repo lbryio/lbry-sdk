@@ -194,6 +194,9 @@ class Service:
     async def search_claims(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int], Censor]:
         raise NotImplementedError
 
+    async def search_supports(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int]]:
+        raise NotImplementedError
+
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
         for claim in (await self.search_claims(accounts, claim_id=claim_id, **kwargs))[0]:
             return claim

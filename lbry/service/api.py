@@ -367,6 +367,18 @@ def txo_filter_kwargs(
     pass
 
 
+@expander
+def support_filter_kwargs(
+    claim_id: StrOrList = None,      # full claim id
+    txid: str = None,                # transaction id
+    nout: int = None,                # position in the transaction
+    height: int = None,              # last updated block height (supports equality constraints)
+    timestamp: int = None,           # last updated timestamp (supports equality constraints)
+    amount: str = None,              # claim amount (supports equality constraints)
+):
+    pass
+
+
 class API:
 
     def __init__(self, service: Service):
@@ -2513,6 +2525,49 @@ class API:
             kwargs['is_my_input'] = True
             kwargs['is_my_output'] = True
         return await self.txo_list(*args, **kwargs)
+
+    async def support_search(
+        self,
+        wallet_id: str = None,       # wallet to check if support is owned by user
+        order_by: StrOrList = None,  # field to order by
+        **support_filter_and_pagination_kwargs
+    ) -> Paginated[Output]:  # search results
+        """
+        Search for supports on the blockchain.
+
+        Arguments marked with "supports equality constraints" allow prepending the
+        value with an equality constraint such as '>', '>=', '<' and '<='
+        eg. --height=">400000" would limit results to only supports above 400k block height.
+
+        Usage:
+            support search [--wallet_id=<wallet_id>] [--order_by=<order_by>...]
+                           {kwargs}
+
+        """
+        support_filter_dict, kwargs = pop_kwargs('support_filter', support_filter_kwargs(
+            **support_filter_and_pagination_kwargs
+        ))
+        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        wallet = self.wallets.get_or_default(wallet_id)
+        page_num = abs(pagination['page'] or 1)
+        page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
+        support_filter_dict.update({
+            'offset': page_size * (page_num - 1), 'limit': page_size,
+            'include_total': pagination['include_total'],
+            'order_by': order_by
+        })
+        result = await self.service.search_supports(
+            wallet.accounts, **remove_nulls(support_filter_dict)
+        )
+        d = {
+            "items": result.rows,
+            "page": page_num,
+            "page_size": page_size
+        }
+        if pagination['include_total']:
+            d['total_pages'] = int((result.total + (page_size - 1)) / page_size)
+            d['total_items'] = result.total
+        return d
 
     async def support_abandon(
         self,

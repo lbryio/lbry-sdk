@@ -41,7 +41,7 @@ def select_supports(cols: List = None, **constraints) -> Select:
 
 def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
     total = None
-    if not constraints.pop('no_totals', False):
+    if constraints.pop('include_total', False):
         total = search_support_count(**constraints)
     rows = context().fetchall(select_supports(**constraints))
     txos = rows_to_txos(rows, include_tx=False)
