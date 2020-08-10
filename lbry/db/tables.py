@@ -155,7 +155,6 @@ Claim = Table(
     Column('activation_height', Integer),
     Column('expiration_height', Integer),
     Column('takeover_height', Integer, nullable=True),
-    Column('sync_height', Integer),  # claim dynamic values up-to-date as of this height (eg. staked_amount)
     Column('is_controlling', Boolean),
 
     # short_url: normalized#shortest-unique-claim_id
@@ -211,6 +210,8 @@ pg_add_claim_and_tag_constraints_and_indexes = [
     "CREATE UNIQUE INDEX claim_txo_hash ON claim (txo_hash);",
     # used by takeover process to reset winning claims
     "CREATE INDEX claim_normalized ON claim (normalized);",
+    # ordering and search by release_time
+    "CREATE INDEX claim_release_time ON claim (release_time DESC NULLs LAST);",
     # used to count()/sum() claims signed by channel
     "CREATE INDEX signed_content ON claim (channel_hash) "
     "INCLUDE (amount) WHERE is_signature_valid;",
@@ -247,3 +248,15 @@ pg_add_support_constraints_and_indexes = [
     "CREATE INDEX signed_support ON support (channel_hash) "
     "INCLUDE (amount) WHERE is_signature_valid;",
 ]
+
+
+Stake = Table(
+    'stake', metadata,
+    Column('claim_hash', LargeBinary),
+    Column('height', Integer),
+    Column('stake_min', BigInteger),
+    Column('stake_max', BigInteger),
+    Column('stake_sum', BigInteger),
+    Column('stake_count', Integer),
+    Column('stake_unique', Integer),
+)

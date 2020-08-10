@@ -94,8 +94,11 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
                 raise NameError(f'{column} is not a valid order_by field')
             if column == 'name':
                 column = 'claim_name'
+            nulls_last = ''
+            if column == 'release_time':
+                nulls_last = ' NULLs LAST'
             sql_order_by.append(
-                f"claim.{column} ASC NULLs LAST" if is_asc else f"claim.{column} DESC NULLs LAST"
+                f"claim.{column} ASC{nulls_last}" if is_asc else f"claim.{column} DESC{nulls_last}"
             )
         constraints['order_by'] = sql_order_by
 
