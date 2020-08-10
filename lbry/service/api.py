@@ -1631,7 +1631,7 @@ class API:
         page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
         claim_filter_dict.update({
             'offset': page_size * (page_num - 1), 'limit': page_size,
-            'include_totals': pagination['include_totals'],
+            'include_total': pagination['include_total'],
             'order_by': order_by
         })
         if protobuf:
@@ -1645,7 +1645,7 @@ class API:
             "page": page_num,
             "page_size": page_size
         }
-        if pagination['include_totals']:
+        if pagination['include_total']:
             d['total_pages'] = int((result.total + (page_size - 1)) / page_size)
             d['total_items'] = result.total
         return d

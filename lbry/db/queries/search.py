@@ -226,7 +226,7 @@ def protobuf_search_claims(**constraints) -> str:
 
 def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:
     total = None
-    if constraints.pop('include_totals', False):
+    if constraints.pop('include_total', False):
         total = search_claim_count(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
