@@ -43,6 +43,8 @@ def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
     total = None
     if constraints.pop('include_total', False):
         total = search_support_count(**constraints)
+    if 'claim_id' in constraints:
+        constraints['claim_hash'] = unhexlify(constraints.pop('claim_id'))[::-1]
     rows = context().fetchall(select_supports(**constraints))
     txos = rows_to_txos(rows, include_tx=False)
     return txos, total
