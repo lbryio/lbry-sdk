@@ -1629,7 +1629,11 @@ class API:
 #            kwargs['signature_valid'] = 0
         page_num = abs(pagination['page'] or 1)
         page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
-        claim_filter_dict.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        claim_filter_dict.update({
+            'offset': page_size * (page_num - 1), 'limit': page_size,
+            'include_totals': pagination['include_totals'],
+            'order_by': order_by
+        })
         if protobuf:
             return await self.service.protobuf_search_claims(**remove_nulls(claim_filter_dict))
         result = await self.service.search_claims(
@@ -1641,7 +1645,7 @@ class API:
             "page": page_num,
             "page_size": page_size
         }
-        if not kwargs.pop('no_totals', False):
+        if pagination['include_totals']:
             d['total_pages'] = int((result.total + (page_size - 1)) / page_size)
             d['total_items'] = result.total
         return d

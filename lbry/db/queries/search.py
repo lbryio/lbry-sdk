@@ -95,7 +95,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
             if column == 'name':
                 column = 'claim_name'
             sql_order_by.append(
-                f"claim.{column} ASC" if is_asc else f"claim.{column} DESC"
+                f"claim.{column} ASC NULLs LAST" if is_asc else f"claim.{column} DESC NULLs LAST"
             )
         constraints['order_by'] = sql_order_by
 
@@ -226,7 +226,7 @@ def protobuf_search_claims(**constraints) -> str:
 
 def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:
     total = None
-    if not constraints.pop('no_totals', False):
+    if constraints.pop('include_totals', False):
         total = search_claim_count(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
