@@ -123,6 +123,7 @@ types_map = {
     '.txt': ('text/plain', 'document'),
     '.ustar': ('application/x-ustar', 'binary'),
     '.vcf': ('text/x-vcard', 'document'),
+    '.vtt': ('text/vtt', 'document'),
     '.wav': ('audio/x-wav', 'audio'),
     '.webm': ('video/webm', 'video'),
     '.wiz': ('application/msword', 'document'),
