@@ -3,6 +3,8 @@ import sys
 import asyncio
 import pathlib
 import argparse
+import textwrap
+import subprocess
 
 from docopt import docopt
 
@@ -136,8 +138,15 @@ def get_argument_parser():
         '--initial-headers', dest='initial_headers',
         help='Specify path to initial blockchain headers, faster than downloading them on first run.'
     )
+    install = sub.add_parser("install", help="Install lbrynet with various system services.")
+    install.add_argument("system", choices=["systemd"])
+    install.add_argument(
+        "--global", dest="install_global", action="store_true",
+        help="Install system wide (requires running as root), default is for current user only."
+    )
     Config.contribute_to_argparse(start)
     start.set_defaults(command='start', start_parser=start, doc=start.format_help())
+    install.set_defaults(command='install', install_parser=install, doc=install.format_help())
 
     groups = {}
     for group_name in sorted(interface['groups']):
@@ -206,6 +215,22 @@ def set_kwargs(parsed_args):
     return kwargs
 
 
+def install_systemd_service():
+    SYSTEMD_SERVICE = textwrap.dedent(f"""\
+    [Unit]
+    Description=LBRYnet
+
+    [Service]
+    Type=simple
+    ExecStart={sys.argv[0]}
+    """)
+    subprocess.run(
+        ["systemctl", "edit", "--user", "--full", "--force", "lbrynet.service"],
+        input=SYSTEMD_SERVICE, text=True,
+        env=dict(os.environ, SYSTEMD_EDITOR="cp /dev/stdin"),
+    )
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     parser = get_argument_parser()
@@ -229,6 +254,11 @@ def main(argv=None):
             return Daemon(service, console).run()
         else:
             print('Only `start --full-node` is currently supported.')
+    elif args.command == 'install':
+        if args.help:
+            args.install_parser.print_help()
+        elif args.system == 'systemd':
+            install_systemd_service()
     elif args.command is not None:
         doc = args.doc
         api_method_name = args.api_method_name
