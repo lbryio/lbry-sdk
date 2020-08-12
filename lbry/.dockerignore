@@ -1,7 +1,0 @@
-.git
-.tox
-__pycache__
-dist
-lbry.egg-info
-docs
-tests

@@ -661,10 +661,6 @@ class Config(CLIConfig):
     def streaming_port(self):
         return int(self.streaming_server.split(':')[1])
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.set_default_paths()
-
     @classmethod
     def with_null_dir(cls):
         return cls.with_same_dir('/dev/null')

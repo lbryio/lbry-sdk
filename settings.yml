@@ -1,0 +1,7 @@
+api: 0.0.0.0:5279
+db_url: postgresql:///lbry
+workers: 14
+console: basic
+no_spv_address_filters: true
+lbrycrd_rpc_user: lbry
+lbrycrd_rpc_pass: lbry

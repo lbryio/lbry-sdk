@@ -236,7 +236,11 @@ def main(argv=None):
     parser = get_argument_parser()
     args, command_args = parser.parse_known_args(argv)
 
-    conf = Config.create_from_arguments(args)
+    conf = Config()
+    conf.set_arguments(args)
+    conf.set_environment()
+    conf.set_default_paths()
+    conf.set_persisted()
     for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
         ensure_directory_exists(directory)
 

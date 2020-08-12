@@ -26,6 +26,7 @@ class ConfigurationTests(unittest.TestCase):
     @unittest.skipIf("darwin" not in sys.platform, "skipping mac only test")
     def test_mac_defaults(self):
         c = Config()
+        c.set_default_paths()
         prefix = os.path.expanduser("~/Library/Application Support/lbrynet")
         self.assertEqual(c.data_dir,      prefix)
         self.assertEqual(c.blob_dir,      os.path.join(prefix, "blobs"))
@@ -37,6 +38,7 @@ class ConfigurationTests(unittest.TestCase):
     @unittest.skipIf("win32" not in sys.platform, "skipping windows only test")
     def test_windows_defaults(self):
         c = Config()
+        c.set_default_paths()
         prefix = os.path.join(r"C:\Users", os.getlogin(), r"AppData\Local\LBRY\lbrynet")
         self.assertEqual(c.data_dir,      prefix)
         self.assertEqual(c.blob_dir,      os.path.join(prefix, "blobs"))
@@ -48,6 +50,7 @@ class ConfigurationTests(unittest.TestCase):
     @unittest.skipIf("linux" not in sys.platform, "skipping linux only test")
     def test_linux_defaults(self):
         c = Config()
+        c.set_default_paths()
         self.assertEqual(c.data_dir,      os.path.expanduser("~/.local/share/lbrynet"))
         self.assertEqual(c.blob_dir,      os.path.expanduser("~/.local/share/lbrynet/blobs"))
         self.assertEqual(c.wallet_dir,    os.path.expanduser("~/.local/share/lbrynet/wallets"))
@@ -58,6 +61,7 @@ class ConfigurationTests(unittest.TestCase):
 
         # changes the root for all defaults
         c = Config(data_dir='/foo/bar')
+        c.set_default_paths()
         self.assertEqual(c.data_dir,      '/foo/bar')
         self.assertEqual(c.blob_dir,      '/foo/bar/blobs')
         self.assertEqual(c.wallet_dir,    '/foo/bar/wallets')
@@ -66,11 +70,13 @@ class ConfigurationTests(unittest.TestCase):
 
         # overwriting default blob_dir
         c = Config(data_dir='/foo/bar', blob_dir='/stuff')
+        c.set_default_paths()
         self.assertEqual(c.blob_dir,   '/stuff')
         self.assertEqual(c.wallet_dir, '/foo/bar/wallets')
 
         # overwriting default wallet_dir
         c = Config(data_dir='/foo/bar', wallet_dir='/secrets')
+        c.set_default_paths()
         self.assertEqual(c.blob_dir,   '/foo/bar/blobs')
         self.assertEqual(c.wallet_dir, '/secrets')
 
