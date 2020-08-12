@@ -222,7 +222,7 @@ def install_systemd_service():
 
     [Service]
     Type=simple
-    ExecStart={sys.argv[0]}
+    ExecStart={sys.argv[0]} start --full-node
     """)
     subprocess.run(
         ["systemctl", "edit", "--user", "--full", "--force", "lbrynet.service"],
