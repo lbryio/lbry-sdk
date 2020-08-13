@@ -1,3 +1,7 @@
 FROM ubuntu:20.04
+RUN ls
 COPY lbrynet /bin
-ENTRYPOINT ["lbrynet", "start", "--full-node"]
+RUN /bin/ls
+RUN lbrynet --version
+ENTRYPOINT ["lbrynet"]
+CMD ["start", "--full-node"]
