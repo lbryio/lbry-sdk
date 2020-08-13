@@ -176,6 +176,7 @@ jobs:
   docker:
     needs: ["build"]
     name: "docker image"
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
       - name: fetch lbrynet binary
