@@ -2,125 +2,125 @@ name: ci
 on: push
 jobs:
 
-  lint:
-    name: lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - name: extract pip cache
-        uses: actions/cache@v2
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - run: |
-          pip install --user --upgrade pip wheel
-          pip install -e .[lint]
-      - run: make lint
-
-  tests-unit:
-    name: "tests / unit"
-    strategy:
-      matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - name: set pip cache dir
-        id: pip-cache
-        run: echo "::set-output name=dir::$(pip cache dir)"
-      - name: extract pip cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ steps.pip-cache.outputs.dir }}
-          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
-          restore-keys: ${{ runner.os }}-pip-
-      - run: |
-          pip install --user --upgrade pip wheel
-          pip install -e .[test]
-      - env:
-          HOME: /tmp
-        run: coverage run -m unittest -vv tests.unit.test_conf tests.unit.blockchain tests.unit.test_event_controller tests.unit.crypto tests.unit.schema tests.unit.db
-#        run: coverage run -m unittest discover -vv tests.unit
-      - env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_PARALLEL: true
-        name: Submit to coveralls
-        run: |
-          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
-          coveralls
-
-  tests-integration:
-    name: "tests / integration"
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        test:
-#          - datanetwork
-          - blockchain
-#          - other
-        db:
-          - sqlite
-          - postgres
-    services:
-      postgres:
-        image: postgres:12
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: postgres
-        ports:
-        - 5432:5432
-        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
-        with:
-          python-version: '3.7'
-      - if: matrix.test == 'other'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
-      - name: extract pip cache
-        uses: actions/cache@v2
-        with:
-          path: ./.tox
-          key: tox-integration-${{ matrix.test }}-${{ matrix.db }}-${{ hashFiles('setup.py') }}
-          restore-keys: txo-integration-${{ matrix.test }}-${{ matrix.db }}-
-      - run: pip install tox
-      - env:
-          TEST_DB: ${{ matrix.db }}
-        run: tox -e ${{ matrix.test }}
-      - env:
-          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_PARALLEL: true
-        name: Submit to coveralls
-        run: |
-          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
-          coverage combine tests
-          coveralls
-
-  coveralls-finished:
-    needs: ["tests-unit", "tests-integration"]
-    runs-on: ubuntu-latest
-    steps:
-      - name: Coveralls Finished
-        uses: coverallsapp/github-action@57daa114
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          parallel-finished: true
+#  lint:
+#    name: lint
+#    runs-on: ubuntu-latest
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: extract pip cache
+#        uses: actions/cache@v2
+#        with:
+#          path: ~/.cache/pip
+#          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+#          restore-keys: ${{ runner.os }}-pip-
+#      - run: |
+#          pip install --user --upgrade pip wheel
+#          pip install -e .[lint]
+#      - run: make lint
+#
+#  tests-unit:
+#    name: "tests / unit"
+#    strategy:
+#      matrix:
+#        os:
+#          - ubuntu-latest
+#          - macos-latest
+#          - windows-latest
+#    runs-on: ${{ matrix.os }}
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - name: set pip cache dir
+#        id: pip-cache
+#        run: echo "::set-output name=dir::$(pip cache dir)"
+#      - name: extract pip cache
+#        uses: actions/cache@v2
+#        with:
+#          path: ${{ steps.pip-cache.outputs.dir }}
+#          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
+#          restore-keys: ${{ runner.os }}-pip-
+#      - run: |
+#          pip install --user --upgrade pip wheel
+#          pip install -e .[test]
+#      - env:
+#          HOME: /tmp
+#        run: coverage run -m unittest -vv tests.unit.test_conf tests.unit.blockchain tests.unit.test_event_controller tests.unit.crypto tests.unit.schema tests.unit.db
+##        run: coverage run -m unittest discover -vv tests.unit
+#      - env:
+#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          COVERALLS_PARALLEL: true
+#        name: Submit to coveralls
+#        run: |
+#          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
+#          coveralls
+#
+#  tests-integration:
+#    name: "tests / integration"
+#    runs-on: ubuntu-20.04
+#    strategy:
+#      matrix:
+#        test:
+##          - datanetwork
+#          - blockchain
+##          - other
+#        db:
+#          - sqlite
+#          - postgres
+#    services:
+#      postgres:
+#        image: postgres:12
+#        env:
+#          POSTGRES_USER: postgres
+#          POSTGRES_PASSWORD: postgres
+#          POSTGRES_DB: postgres
+#        ports:
+#        - 5432:5432
+#        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+#    steps:
+#      - uses: actions/checkout@v1
+#      - uses: actions/setup-python@v1
+#        with:
+#          python-version: '3.7'
+#      - if: matrix.test == 'other'
+#        run: |
+#          sudo apt-get update
+#          sudo apt-get install -y --no-install-recommends ffmpeg
+#      - name: extract pip cache
+#        uses: actions/cache@v2
+#        with:
+#          path: ./.tox
+#          key: tox-integration-${{ matrix.test }}-${{ matrix.db }}-${{ hashFiles('setup.py') }}
+#          restore-keys: txo-integration-${{ matrix.test }}-${{ matrix.db }}-
+#      - run: pip install tox
+#      - env:
+#          TEST_DB: ${{ matrix.db }}
+#        run: tox -e ${{ matrix.test }}
+#      - env:
+#          COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          COVERALLS_PARALLEL: true
+#        name: Submit to coveralls
+#        run: |
+#          pip install https://github.com/bboe/coveralls-python/archive/github_actions.zip
+#          coverage combine tests
+#          coveralls
+#
+#  coveralls-finished:
+#    needs: ["tests-unit", "tests-integration"]
+#    runs-on: ubuntu-latest
+#    steps:
+#      - name: Coveralls Finished
+#        uses: coverallsapp/github-action@57daa114
+#        with:
+#          github-token: ${{ secrets.GITHUB_TOKEN }}
+#          parallel-finished: true
 
   build:
-    needs: ["lint", "tests-unit", "tests-integration"]
+    #needs: ["lint", "tests-unit", "tests-integration"]
     name: "build"
     strategy:
       matrix:
@@ -172,3 +172,22 @@ jobs:
         with:
           name: lbrynet-${{ matrix.os }}
           path: dist/
+
+  docker:
+    needs: ["build"]
+    name: "docker image"
+    steps:
+      - uses: actions/checkout@v1
+      - name: fetch lbrynet binary
+        uses: actions/download-artifact@v2
+        with:
+          name: lbrynet-ubuntu-16.04
+      - run: ls
+      - name: build and push docker image
+        uses: docker/build-push-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          repository: lbry/lbrynet
+          tag_with_ref: true
+          tag_with_sha: true

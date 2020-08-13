@@ -1,6 +1,2 @@
 *
-!README.md
-!setup.py
-!lbry
-!settings.yml
-lbry/blockchain/bin
+!dist/lbrynet
