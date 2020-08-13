@@ -50,7 +50,7 @@ def disable_trigger_and_constraints(table_name):
     ctx = context()
     if ctx.is_postgres:
         ctx.execute(text(f"ALTER TABLE {table_name} DISABLE TRIGGER ALL;"))
-    if table_name == 'tag':
+    if table_name in ('tag', 'stake'):
         return
     if ctx.is_postgres:
         ctx.execute(text(
