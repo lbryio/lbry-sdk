@@ -126,8 +126,8 @@ jobs:
       matrix:
         os:
           - ubuntu-16.04
-          - macos-latest
-          - windows-latest
+#          - macos-latest
+#          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v1
@@ -175,7 +175,7 @@ jobs:
 
   docker:
     needs: ["build"]
-    name: "docker image"
+    name: "build (docker)"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
@@ -183,7 +183,6 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: lbrynet-ubuntu-16.04
-      - run: ls
       - name: build and push docker image
         uses: docker/build-push-action@v1
         with:

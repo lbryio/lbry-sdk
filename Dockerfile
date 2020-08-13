@@ -1,3 +1,3 @@
 FROM ubuntu:20.04
-COPY ./dist/lbrynet /bin
+COPY lbrynet /bin
 ENTRYPOINT ["lbrynet", "start", "--full-node"]
