@@ -216,7 +216,7 @@ def set_kwargs(parsed_args):
 
 
 def install_systemd_service():
-    SYSTEMD_SERVICE = textwrap.dedent(f"""\
+    systemd_service = textwrap.dedent(f"""\
     [Unit]
     Description=LBRYnet
 
@@ -226,7 +226,7 @@ def install_systemd_service():
     """)
     subprocess.run(
         ["systemctl", "edit", "--user", "--full", "--force", "lbrynet.service"],
-        input=SYSTEMD_SERVICE, text=True,
+        input=systemd_service, text=True, check=True,
         env=dict(os.environ, SYSTEMD_EDITOR="cp /dev/stdin"),
     )
 

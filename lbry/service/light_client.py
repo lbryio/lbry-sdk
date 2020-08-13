@@ -37,3 +37,6 @@ class LightClient(Service):
 
     async def search_claims(self, accounts, **kwargs):
         pass
+
+    async def search_supports(self, accounts, **kwargs):
+        pass
