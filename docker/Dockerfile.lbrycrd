@@ -1,0 +1,8 @@
+FROM ubuntu:20.04
+RUN apt-get update && \
+    apt-get install -y wget unzip && \
+    wget -nv https://build.lbry.io/lbrycrd/block_info_fix_try2/lbrycrd-linux.zip && \
+    unzip -d /bin lbrycrd-linux.zip && \
+    rm -rf lbrycrd-linux.zip /var/lib/apt/lists/*
+RUN lbrycrdd --version
+ENTRYPOINT ["lbrycrdd"]

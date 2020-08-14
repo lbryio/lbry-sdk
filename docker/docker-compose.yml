@@ -1,0 +1,42 @@
+version: "3.8"
+volumes:
+  lbrycrd-data:
+services:
+  postgres:
+    image: postgres:12
+    environment:
+      POSTGRES_USER: lbry
+      POSTGRES_PASSWORD: lbry
+  lbrycrd:
+    image: lbry/lbrycrd
+    build:
+      context: .
+      dockerfile: Dockerfile.lbrycrd
+    volumes:
+      - lbrycrd-data:/root/.lbrycrd
+    command: >
+      -rpcbind=lbrycrd
+      -rpcallowip=0.0.0.0/0
+      -rpcuser=lbryuser
+      -rpcpassword=lbrypass
+      -zmqpubhashblock=tcp://0.0.0.0:29000
+  lbrynet:
+    image: lbry/lbrynet:fast_wallet_server_sync
+    depends_on:
+      - postgres
+      - lbrycrd
+    volumes:
+      - lbrycrd-data:/lbrycrd
+    command: >
+      start
+      --full-node
+      --api=0.0.0.0:5279
+      --db-url=postgresql://lbry:lbry@postgres:5432/lbry
+      --workers=12
+      --console=basic
+      --no-spv-address-filters
+      --lbrycrd-rpc-host=lbrycrd
+      --lbrycrd-rpc-user=lbryuser
+      --lbrycrd-rpc-pass=lbrypass
+      --lbrycrd-dir=/lbrycrd
+      --lbrycrd-zmq-blocks=tcp://lbrycrd:29000
