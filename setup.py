@@ -41,7 +41,7 @@ setup(
         'aioupnp==0.0.17',
         'certifi>=2018.11.29',
         'colorama==0.3.7',
-        'distro==1.4.0',
+        'distro==1.5.0',
         'base58==1.0.0',
         'cffi==1.13.2',
         'cryptography==2.5',
