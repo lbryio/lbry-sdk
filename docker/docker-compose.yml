@@ -19,7 +19,7 @@ services:
       -rpcallowip=0.0.0.0/0
       -rpcuser=lbryuser
       -rpcpassword=lbrypass
-      -zmqpubhashblock=tcp://0.0.0.0:29000
+      -zmqpubhashblock=tcp://lbrycrd:29000
   lbrynet:
     image: lbry/lbrynet:fast_wallet_server_sync
     depends_on:
@@ -39,4 +39,3 @@ services:
       --lbrycrd-rpc-user=lbryuser
       --lbrycrd-rpc-pass=lbrypass
       --lbrycrd-dir=/lbrycrd
-      --lbrycrd-zmq-blocks=tcp://lbrycrd:29000
