@@ -337,9 +337,9 @@ class BlobFile(AbstractBlob):
         return self.loop.create_task(write_blob())
 
     def delete(self):
+        super().delete()
         if os.path.isfile(self.file_path):
             os.remove(self.file_path)
-        return super().delete()
 
     @classmethod
     async def create_from_unencrypted(
