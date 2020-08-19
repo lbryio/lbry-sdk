@@ -25,12 +25,14 @@ def set_reference(reference, claim_hash, rows):
 
 class Censor:
 
-    __slots__ = 'streams', 'channels', 'censored', 'total'
+    __slots__ = 'streams', 'channels', 'limit_claims_per_channel', 'censored', 'claims_in_channel', 'total'
 
-    def __init__(self, streams: dict = None, channels: dict = None):
+    def __init__(self, streams: dict = None, channels: dict = None, limit_claims_per_channel: int = None):
         self.streams = streams or {}
         self.channels = channels or {}
+        self.limit_claims_per_channel = limit_claims_per_channel  # doesn't count as censored
         self.censored = {}
+        self.claims_in_channel = {}
         self.total = 0
 
     def censor(self, row) -> bool:
@@ -49,6 +51,13 @@ class Censor:
                 break
         if was_censored:
             self.total += 1
+        if not was_censored and self.limit_claims_per_channel is not None and row['channel_hash']:
+            if row['channel_hash'] not in self.claims_in_channel:
+                self.claims_in_channel[row['channel_hash']] = 1
+            else:
+                self.claims_in_channel[row['channel_hash']] += 1
+            if self.claims_in_channel[row['channel_hash']] > self.limit_claims_per_channel:
+                return True
         return was_censored
 
     def to_message(self, outputs: OutputsMessage, extra_txo_rows):
