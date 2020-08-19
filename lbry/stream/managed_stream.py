@@ -360,7 +360,7 @@ class ManagedStream(ManagedDownloadSource):
             if isinstance(err, asyncio.CancelledError):
                 log.warning("stopped uploading %s#%s to reflector", self.claim_name, self.claim_id)
                 raise err
-            elif isinstance(err, OSError):
+            if isinstance(err, OSError):
                 log.warning(
                     "stopped uploading %s#%s to reflector because blobs were deleted or moved", self.claim_name,
                     self.claim_id
