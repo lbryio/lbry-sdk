@@ -319,7 +319,7 @@ class ClaimSearchCommand(ClaimTestCase):
                     not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
         await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
 
-    async def test_limit_channel_results(self):
+    async def test_limit_claims_per_channel(self):
         match = self.assertFindsClaims
         chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
         chan2_id = self.get_claim_id(await self.channel_create('@chan2'))

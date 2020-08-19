@@ -52,10 +52,8 @@ class Censor:
         if was_censored:
             self.total += 1
         if not was_censored and self.limit_claims_per_channel is not None and row['channel_hash']:
-            if row['channel_hash'] not in self.claims_in_channel:
-                self.claims_in_channel[row['channel_hash']] = 1
-            else:
-                self.claims_in_channel[row['channel_hash']] += 1
+            self.claims_in_channel.setdefault(row['channel_hash'], 0)
+            self.claims_in_channel[row['channel_hash']] += 1
             if self.claims_in_channel[row['channel_hash']] > self.limit_claims_per_channel:
                 return True
         return was_censored
