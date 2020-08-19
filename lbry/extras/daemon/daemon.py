@@ -2359,7 +2359,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --invalid_channel_signature     : (bool) claims with invalid channel signature or no signature,
                                                      use in conjunction with --has_channel_signature to
                                                      only get claims with invalid signatures
-            --limit_claims_per_channel      : (int) only return up to the specified number of claims per channel
+            --limit_claims_per_channel=<limit_claims_per_channel>: (int) only return up to the specified
+                                                                         number of claims per channel
             --is_controlling                : (bool) winning claims of their respective name
             --public_key_id=<public_key_id> : (str) only return channels having this public key id, this is
                                                     the same key as used in the wallet file to map
