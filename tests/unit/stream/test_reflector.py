@@ -40,7 +40,7 @@ class TestReflector(AsyncioTestCase):
         file_path = os.path.join(tmp_dir, "test_file")
         with open(file_path, 'wb') as f:
             f.write(self.cleartext)
-
+        self.stream_manager.config.reflect_streams = False
         self.stream = await self.stream_manager.create(file_path)
 
     async def _test_reflect_stream(self, response_chunk_size):
@@ -93,8 +93,10 @@ class TestReflector(AsyncioTestCase):
         await incoming.wait()
         stop.set()
         # this used to raise (and then propagate) a CancelledError
-        self.assertListEqual(await reflect_task, [])
+        with self.assertRaises(asyncio.CancelledError):
+            await reflect_task
         self.assertFalse(self.stream.is_fully_reflected)
+        self.assertFalse(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
 
     async def test_result_from_disconnect_after_sd_transfer(self):
         stop = asyncio.Event()
@@ -112,7 +114,8 @@ class TestReflector(AsyncioTestCase):
         await incoming.wait()
         await not_incoming.wait()
         stop.set()
-        self.assertListEqual(await reflect_task, [self.stream.sd_hash])
+        with self.assertRaises(asyncio.CancelledError):
+            await reflect_task
         self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
         self.assertFalse(self.stream.is_fully_reflected)
 
@@ -134,7 +137,8 @@ class TestReflector(AsyncioTestCase):
         await incoming.wait()
         await not_incoming.wait()
         stop.set()
-        self.assertListEqual(await reflect_task, [self.stream.sd_hash, self.stream.descriptor.blobs[0].blob_hash])
+        with self.assertRaises(asyncio.CancelledError):
+            await reflect_task
         self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
         self.assertTrue(self.server_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified())
         self.assertFalse(self.stream.is_fully_reflected)
@@ -156,7 +160,9 @@ class TestReflector(AsyncioTestCase):
         await not_incoming.wait()
         await incoming.wait()
         stop.set()
-        self.assertListEqual(await reflect_task, [self.stream.sd_hash])
+        with self.assertRaises(asyncio.CancelledError):
+            await reflect_task
+        # self.assertListEqual(await reflect_task, [self.stream.sd_hash])
         self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
         self.assertFalse(
             self.server_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified()
@@ -181,7 +187,8 @@ class TestReflector(AsyncioTestCase):
         await incoming.wait()
         await self.stream_manager.delete(self.stream, delete_file=True)
         # this used to raise OSError when it can't read the deleted blob for the upload
-        self.assertListEqual(await reflect_task, [self.stream.sd_hash])
+        with self.assertRaises(asyncio.CancelledError):
+            await reflect_task
         self.assertTrue(self.server_blob_manager.get_blob(self.stream.sd_hash).get_is_verified())
         self.assertFalse(
             self.server_blob_manager.get_blob(self.stream.descriptor.blobs[0].blob_hash).get_is_verified()

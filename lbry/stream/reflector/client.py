@@ -64,12 +64,12 @@ class StreamReflectorClient(asyncio.Protocol):
             self.transport.write(msg.encode())
             self.pending_request = self.loop.create_task(asyncio.wait_for(self.response_queue.get(), timeout))
             return await self.pending_request
-        except (AttributeError, asyncio.CancelledError):
+        except (AttributeError, asyncio.CancelledError) as err:
             # attribute error happens when we transport.write after disconnect
             # cancelled error happens when the pending_request task is cancelled by a disconnect
             if self.transport:
                 self.transport.close()
-            raise asyncio.TimeoutError()
+            raise err if isinstance(err, asyncio.CancelledError) else asyncio.CancelledError()
         finally:
             self.pending_request = None
 
@@ -94,8 +94,16 @@ class StreamReflectorClient(asyncio.Protocol):
         needed = response.get('needed_blobs', [])
         sent_sd = False
         if response['send_sd_blob']:
-            await sd_blob.sendfile(self)
-            received = await asyncio.wait_for(self.response_queue.get(), 30)
+            try:
+                sent = await sd_blob.sendfile(self)
+                if sent == -1:
+                    log.warning("failed to send sd blob")
+                    raise asyncio.CancelledError()
+                received = await asyncio.wait_for(self.response_queue.get(), 30)
+            except asyncio.CancelledError as err:
+                if self.transport:
+                    self.transport.close()
+                raise err
             if received.get('received_sd_blob'):
                 sent_sd = True
                 if not needed:
@@ -118,8 +126,16 @@ class StreamReflectorClient(asyncio.Protocol):
         if 'send_blob' not in response:
             raise ValueError("I don't know whether to send the blob or not!")
         if response['send_blob']:
-            await blob.sendfile(self)
-            received = await asyncio.wait_for(self.response_queue.get(), 30)
+            try:
+                sent = await blob.sendfile(self)
+                if sent == -1:
+                    log.warning("failed to send blob")
+                    raise asyncio.CancelledError()
+                received = await asyncio.wait_for(self.response_queue.get(), 30)
+            except asyncio.CancelledError as err:
+                if self.transport:
+                    self.transport.close()
+                raise err
             if received.get('received_blob'):
                 self.reflected_blobs.append(blob.blob_hash)
                 log.info("Sent reflector blob %s", blob.blob_hash[:8])
