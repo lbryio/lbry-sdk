@@ -179,7 +179,7 @@ class Database:
             # seems to only happen when running in PyCharm
             # https://github.com/python/cpython/pull/6084#issuecomment-564585446
             # TODO: delete this in Python 3.8/3.9?
-            from concurrent.futures.process import _threads_wakeups
+            from concurrent.futures.process import _threads_wakeups  # pylint: disable=import-outside-toplevel
             _threads_wakeups.clear()
 
     async def run(self, func, *args, **kwargs):
