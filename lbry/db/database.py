@@ -141,7 +141,7 @@ class Database:
         db.execute(text(f"CREATE DATABASE {name}"))
 
     async def create(self, name):
-        return await asyncio.get_event_loop().run_in_executor(None, self.sync_create, name)
+        return await asyncio.get_running_loop().run_in_executor(None, self.sync_create, name)
 
     def sync_drop(self, name):
         engine = create_engine(self.url)
@@ -150,7 +150,7 @@ class Database:
         db.execute(text(f"DROP DATABASE IF EXISTS {name}"))
 
     async def drop(self, name):
-        return await asyncio.get_event_loop().run_in_executor(None, self.sync_drop, name)
+        return await asyncio.get_running_loop().run_in_executor(None, self.sync_drop, name)
 
     async def open(self):
         assert self.executor is None, "Database already open."
@@ -175,11 +175,17 @@ class Database:
                 await self.run(uninitialize)
             self.executor.shutdown()
             self.executor = None
+            # fixes "OSError: handle is closed"
+            # seems to only happen when running in PyCharm
+            # https://github.com/python/cpython/pull/6084#issuecomment-564585446
+            # TODO: delete this in Python 3.8/3.9?
+            from concurrent.futures.process import _threads_wakeups
+            _threads_wakeups.clear()
 
     async def run(self, func, *args, **kwargs):
         if kwargs:
             clean_wallet_account_ids(kwargs)
-        return await asyncio.get_event_loop().run_in_executor(
+        return await asyncio.get_running_loop().run_in_executor(
             self.executor, partial(func, *args, **kwargs)
         )
 

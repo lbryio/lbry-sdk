@@ -54,11 +54,11 @@ class VideoFileAnalyzer:
     # We work around that issue here by using run_in_executor. Check it again in Python 3.8.
     async def _execute_ffmpeg(self, arguments):
         arguments = self._which_ffmpeg + " " + arguments
-        return await asyncio.get_event_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
+        return await asyncio.get_running_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
 
     async def _execute_ffprobe(self, arguments):
         arguments = self._which_ffprobe + " " + arguments
-        return await asyncio.get_event_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
+        return await asyncio.get_running_loop().run_in_executor(None, self._execute, arguments, self._env_copy)
 
     async def _verify_executables(self):
         try:

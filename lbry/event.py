@@ -149,7 +149,7 @@ class EventStream:
 
     @property
     def first(self) -> asyncio.Future:
-        future = asyncio.get_event_loop().create_future()
+        future = asyncio.get_running_loop().create_future()
         subscription = self.listen(
             lambda value: not future.done() and self._cancel_and_callback(subscription, future, value),
             lambda exception: not future.done() and self._cancel_and_error(subscription, future, exception)
@@ -158,7 +158,7 @@ class EventStream:
 
     @property
     def last(self) -> asyncio.Future:
-        future = asyncio.get_event_loop().create_future()
+        future = asyncio.get_running_loop().create_future()
         value = None
 
         def update_value(_value):
@@ -237,7 +237,8 @@ class EventQueuePublisher(threading.Thread):
 
     def stop(self):
         self.queue.put(self.STOP)
-        self.join()
+        if self.is_alive():
+            self.join()
 
     def __enter__(self):
         self.start()

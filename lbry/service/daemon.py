@@ -1,9 +1,11 @@
 import json
+import signal
 import asyncio
 import logging
-import signal
+
 from weakref import WeakSet
-from aiohttp.web import GracefulExit
+from asyncio.runners import _cancel_all_tasks
+
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
@@ -11,6 +13,9 @@ from lbry.service.json_encoder import JSONResponseEncoder
 from lbry.service.base import Service
 from lbry.service.api import API
 from lbry.console import Console
+
+
+log = logging.getLogger(__name__)
 
 
 def jsonrpc_dumps_pretty(obj, **kwargs):
@@ -84,28 +89,21 @@ class Daemon:
         self.runner = AppRunner(self.app)
 
     def run(self):
-        loop = asyncio.get_event_loop()
-
-        def graceful_exit():
-            raise GracefulExit()
-
-        try:
-            loop.add_signal_handler(signal.SIGINT, graceful_exit)
-            loop.add_signal_handler(signal.SIGTERM, graceful_exit)
-        except NotImplementedError:
-            pass  # Not implemented on Windows
-
+        loop = asyncio.new_event_loop()
+        for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
+            loop.add_signal_handler(sig, loop.stop)
         try:
             loop.run_until_complete(self.start())
             loop.run_forever()
-        except (GracefulExit, KeyboardInterrupt, asyncio.CancelledError):
-            pass
         finally:
-            loop.run_until_complete(self.stop())
-            logging.shutdown()
-
-        if hasattr(loop, 'shutdown_asyncgens'):
-            loop.run_until_complete(loop.shutdown_asyncgens())
+            try:
+                loop.run_until_complete(self.stop())
+            finally:
+                try:
+                    _cancel_all_tasks(loop)
+                    loop.run_until_complete(loop.shutdown_asyncgens())
+                finally:
+                    loop.close()
 
     async def start(self):
         self.console.starting()

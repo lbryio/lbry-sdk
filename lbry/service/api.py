@@ -2922,7 +2922,7 @@ class API:
 
         """
 
-        blob = await download_blob(asyncio.get_event_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
+        blob = await download_blob(asyncio.get_running_loop(), self.conf, self.blob_manager, self.dht_node, blob_hash)
         if read:
             with blob.reader_context() as handle:
                 return handle.read().decode()

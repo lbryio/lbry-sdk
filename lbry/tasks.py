@@ -1,10 +1,10 @@
-from asyncio import Event, get_event_loop
+from asyncio import Event, get_running_loop
 
 
 class TaskGroup:
 
     def __init__(self, loop=None):
-        self._loop = loop or get_event_loop()
+        self._loop = loop or get_running_loop()
         self._tasks = set()
         self.done = Event()
         self.started = Event()

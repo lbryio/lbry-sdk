@@ -478,7 +478,7 @@ class Account:
                 continue
             if "-----BEGIN EC PRIVATE KEY-----" not in private_key_pem:
                 continue
-            public_key_der = await asyncio.get_event_loop().run_in_executor(None, to_der, private_key_pem)
+            public_key_der = await asyncio.get_running_loop().run_in_executor(None, to_der, private_key_pem)
             channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
         if self.channel_keys != channel_keys:
             self.channel_keys = channel_keys

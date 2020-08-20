@@ -179,10 +179,11 @@ class Lbrycrd:
 
     async def close(self):
         await self.db.close()
-        await self.session.close()
+        if self.session is not None:
+            await self.session.close()
 
     async def start(self, *args):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         command = self.get_start_command(*args)
         log.info(' '.join(command))
         self.transport, self.protocol = await loop.subprocess_exec(Process, *command)

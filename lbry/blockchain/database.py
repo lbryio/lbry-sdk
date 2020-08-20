@@ -51,7 +51,7 @@ class BlockchainDB:
         self.executor: Optional[ThreadPoolExecutor] = None
 
     async def run_in_executor(self, *args):
-        return await asyncio.get_event_loop().run_in_executor(self.executor, *args)
+        return await asyncio.get_running_loop().run_in_executor(self.executor, *args)
 
     def sync_open(self):
         self.connection = sqlite3.connect(
