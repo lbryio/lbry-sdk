@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.future import select
 
 from ..query_context import context
-from ..tables import SCHEMA_VERSION, metadata, Version, Claim, Support, Block
+from ..tables import SCHEMA_VERSION, metadata, Version, Claim, Support, Block, TX
 
 
 def execute(sql):
@@ -30,7 +30,7 @@ def insert_block(block):
 
 
 def insert_transaction(block_hash, tx):
-    context().get_bulk_loader().add_transaction(block_hash, tx).flush()
+    context().get_bulk_loader().add_transaction(block_hash, tx).flush(TX)
 
 
 def check_version_and_create_tables():

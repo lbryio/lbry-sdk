@@ -49,7 +49,7 @@ jobs:
           pip install -e .[test]
       - env:
           HOME: /tmp
-        run: coverage run -m unittest -vv tests.unit.test_conf tests.unit.blockchain tests.unit.test_event_controller tests.unit.crypto tests.unit.schema tests.unit.db
+        run: coverage run -m unittest -vv tests.unit.test_conf tests.unit.test_console tests.unit.test_event_controller tests/unit/blockchain/test* tests/unit/crypto/test* tests/unit/db/test* tests/unit/schema/test* tests/unit/service/test*
 #        run: coverage run -m unittest discover -vv tests.unit
       - env:
           COVERALLS_REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}

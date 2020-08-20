@@ -54,6 +54,10 @@ class TXRefMutable(TXRef):
     def height(self):
         return self.tx.height
 
+    @property
+    def timestamp(self):
+        return self.tx.timestamp
+
     def reset(self):
         self._id = None
         self._hash = None

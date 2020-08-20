@@ -376,14 +376,14 @@ class UnitDBTestCase(AsyncioTestCase):
     async def get_txos(self):
         txos = []
         sql = (
-            "select txo_hash, txo.position, is_spent from txo join tx using (tx_hash) "
+            "select txo_hash, txo.position, spent_height from txo join tx using (tx_hash) "
             "order by tx.height, tx.position, txo.position"
         )
         for txo in await self.db.execute_fetchall(sql):
             txoid = hexlify(txo["txo_hash"][:32][::-1]).decode()
             txos.append((
                 f"{txoid}:{txo['position']}",
-                bool(txo['is_spent'])
+                bool(txo['spent_height'])
             ))
         return txos
 

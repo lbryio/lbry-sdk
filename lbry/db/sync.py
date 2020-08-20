@@ -1,9 +1,10 @@
 from sqlalchemy.future import select
 
 from lbry.db.query_context import progress, Event
-from lbry.db.tables import TXI, TXO, Claim, Support
+from lbry.db.tables import TX, TXI, TXO, Claim, Support
 from .constants import TXO_TYPES, CLAIM_TYPE_CODES
 from .queries import (
+    BASE_SELECT_TXO_COLUMNS,
     rows_to_txos, where_unspent_txos,
     where_abandoned_supports,
     where_abandoned_claims
@@ -22,9 +23,9 @@ SUPPORT_DELETE_EVENT = Event.add("client.sync.supports.delete", "supports")
 def process_all_things_after_sync():
     with progress(SPENDS_UPDATE_EVENT) as p:
         p.start(2)
-        set_input_addresses(p.ctx)
-        p.step(1)
         update_spent_outputs(p.ctx)
+        p.step(1)
+        set_input_addresses(p.ctx)
         p.step(2)
     with progress(SUPPORT_DELETE_EVENT) as p:
         p.start(1)
@@ -32,7 +33,11 @@ def process_all_things_after_sync():
         p.ctx.execute(sql)
     with progress(SUPPORT_INSERT_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        sql = where_unspent_txos(TXO_TYPES['support'], missing_in_supports_table=True)
+        sql = (
+            select(*BASE_SELECT_TXO_COLUMNS)
+            .where(where_unspent_txos(TXO_TYPES['support'], missing_in_supports_table=True))
+            .select_from(TXO.join(TX))
+        )
         for support in rows_to_txos(p.ctx.fetchall(sql)):
             loader.add_support(support)
         loader.flush(Support)
@@ -42,13 +47,21 @@ def process_all_things_after_sync():
         p.ctx.execute(sql)
     with progress(CLAIMS_INSERT_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        sql = where_unspent_txos(CLAIM_TYPE_CODES, missing_in_claims_table=True)
+        sql = (
+            select(*BASE_SELECT_TXO_COLUMNS)
+            .where(where_unspent_txos(CLAIM_TYPE_CODES, missing_in_claims_table=True))
+            .select_from(TXO.join(TX))
+        )
         for claim in rows_to_txos(p.ctx.fetchall(sql)):
-            loader.add_claim(claim)
+            loader.add_claim(claim, '', 0, 0, 0, 0, staked_support_amount=0, staked_support_count=0)
         loader.flush(Claim)
     with progress(CLAIMS_UPDATE_EVENT) as p:
         loader = p.ctx.get_bulk_loader()
-        sql = where_unspent_txos(CLAIM_TYPE_CODES, missing_or_stale_in_claims_table=True)
+        sql = (
+            select(*BASE_SELECT_TXO_COLUMNS)
+            .where(where_unspent_txos(CLAIM_TYPE_CODES, missing_or_stale_in_claims_table=True))
+            .select_from(TXO.join(TX))
+        )
         for claim in rows_to_txos(p.ctx.fetchall(sql)):
             loader.update_claim(claim)
         loader.flush(Claim)

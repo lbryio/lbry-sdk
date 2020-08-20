@@ -384,6 +384,7 @@ def rows_to_txos(rows: List[dict], include_tx=True) -> List[Output]:
             if row['tx_hash'] not in tx_cache:
                 tx_cache[row['tx_hash']] = Transaction(
                     row['raw'], height=row['height'], position=row['tx_position'],
+                    timestamp=row['timestamp'],
                     is_verified=bool(row['is_verified']),
                 )
             txo = tx_cache[row['tx_hash']].outputs[row['txo_position']]
