@@ -3493,8 +3493,8 @@ class Client(API):
         self.ws = await self.session.ws_connect(self.url)
         self.receive_messages_task = asyncio.create_task(self.receive_messages())
 
-    def disconnect(self):
-        self.session.close()
+    async def disconnect(self):
+        await self.session.close()
         self.receive_messages_task.cancel()
 
     async def receive_messages(self):
