@@ -12,7 +12,7 @@ idea:
 	cp -r scripts/idea/* .idea
 
 start:
-	dropdb lbry
+	dropdb lbry --if-exists
 	createdb lbry
 	lbrynet start --full-node \
 		--db-url=postgresql:///lbry --workers=28 --console=advanced --no-spv-address-filters \
