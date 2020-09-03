@@ -160,8 +160,6 @@ class Daemon:
                     'result': encoded_result
                 })
             except Exception as e:
-                import traceback
-                traceback.print_exc()
                 log.exception("RPC error")
                 await web_socket.send_json({'id': msg.get('id', ''), 'result': "unexpected error: " + str(e)})
                 raise e

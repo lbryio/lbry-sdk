@@ -176,9 +176,10 @@ def ensure_directory_exists(path: str):
 async def execute_command(conf, method, params):
     client = Client(f"http://{conf.api}/ws")
     await client.connect()
-    resp = await client.send(method, **params)
-    print(await resp.first)
+    resp = await (await client.send(method, **params)).first
+    print(resp)
     await client.disconnect()
+    return resp
 
 
 def normalize_value(x, key=None):
