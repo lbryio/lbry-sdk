@@ -146,6 +146,7 @@ def parse_method(method, expanders: dict) -> dict:
         'returns': None
     }
     src = inspect.getsource(method)
+    known_names = set()
     for tokens in produce_argument_tokens(src):
         if tokens[0].string == '**':
             tokens.pop(0)
@@ -156,12 +157,17 @@ def parse_method(method, expanders: dict) -> dict:
             for expander_name in expander_names.split('_and_'):
                 if expander_name not in expanders:
                     raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
-                d['arguments'].extend(expanders[expander_name])
-                d['kwargs'].extend(expanders[expander_name])
+                for expanded in expanders[expander_name]:
+                    if expanded['name'] in known_names:
+                        continue
+                    d['arguments'].append(expanded)
+                    d['kwargs'].append(expanded)
+                    known_names.add(expanded['name'])
         else:
             arg = parse_argument(tokens, d['name'])
             if arg:
                 d['arguments'].append(arg)
+                known_names.add(arg['name'])
     d['returns'] = parse_return(produce_return_tokens(src))
     return d
 
