@@ -215,6 +215,12 @@ def generate_options(method, indent) -> List[str]:
                 text += f" [default: {arg['default']}]"
         wrapped = textwrap.wrap(text, LINE_WIDTH-len(left))
         lines = [f"{left}{wrapped.pop(0)}"]
+        # dont break on -- or docopt will parse as a new option
+        for line_number, line in enumerate(wrapped):
+            if line.strip().startswith('--'):
+                wrapped[line_number-1] += ' ' + line.strip()
+                wrapped[line_number] = ''
+                continue
         for line in wrapped:
             lines.append(f"{' '*len(left)} {line}")
         options.extend(lines)
