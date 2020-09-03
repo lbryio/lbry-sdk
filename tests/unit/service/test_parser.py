@@ -33,6 +33,11 @@ class FakeAPI:
     def thing_update(self, value1: str) -> Wallet:  # updated wallet
         """update command doc"""
 
+    def thing_search(
+            self,
+            **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs):
+        """search command doc"""
+
     def thing_delete(self, value1: str, **tx_and_pagination_kwargs) -> Wallet:  # deleted thing
         """
         delete command doc
@@ -59,6 +64,11 @@ class FakeAPI:
 
 class TestParser(TestCase):
     maxDiff = None
+
+    def test_parse_does_not_duplicate_arguments(self):
+        parsed = parse_method(FakeAPI.thing_search, get_expanders())
+        names = [arg['name'] for arg in parsed['arguments']]
+        self.assertEqual(len(names), len(set(names)))
 
     def test_parse_method(self):
         expanders = get_expanders()
