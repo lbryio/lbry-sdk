@@ -1,10 +1,20 @@
 from unittest import TestCase
 from textwrap import dedent
-from lbry.service.api import Paginated, Wallet
+from lbry.service.api import Paginated, Wallet, expander
 from lbry.service.parser import (
     parse_method, get_expanders, get_api_definitions,
     generate_options
 )
+
+
+@expander
+def test_kwargs(somevalue=1):
+    pass
+
+
+@expander
+def another_test_kwargs(somevalue=2, repeated=3):
+    pass
 
 
 class FakeAPI:
@@ -35,7 +45,7 @@ class FakeAPI:
 
     def thing_search(
             self,
-            **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs):
+            **test_and_another_test_kwargs):
         """search command doc"""
 
     def thing_delete(self, value1: str, **tx_and_pagination_kwargs) -> Wallet:  # deleted thing
