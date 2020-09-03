@@ -318,7 +318,7 @@ Options:
     --angry=<angry>                      : (int)  [default: 4]
 
 Returns:
-    (Wallet)
+    (Wallet) 
     {
         "id": "wallet_id",
         "name": "optional wallet name"
