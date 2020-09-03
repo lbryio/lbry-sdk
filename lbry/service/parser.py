@@ -218,11 +218,9 @@ def generate_options(method, indent) -> List[str]:
         # dont break on -- or docopt will parse as a new option
         for line_number, line in enumerate(wrapped):
             if line.strip().startswith('--'):
-                wrapped[line_number-1] += ' ' + line.strip()
-                wrapped[line_number] = ''
-                continue
-        for line in wrapped:
-            lines.append(f"{' '*len(left)} {line}")
+                lines[-1] = lines[-1] + ' ' + line.strip()
+            else:
+                lines.append(f"{' ' * len(left)} {line}")
         options.extend(lines)
     return options
 

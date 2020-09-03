@@ -13,7 +13,12 @@ def test_kwargs(somevalue=1):
 
 
 @expander
-def another_test_kwargs(somevalue=2, repeated=3):
+def another_test_kwargs(
+        somevalue=1,
+        repeated=2,
+        bad_description=3,  # using linebreaks makes docopt very very --angry
+        angry=4
+):
     pass
 
 
@@ -45,8 +50,15 @@ class FakeAPI:
 
     def thing_search(
             self,
-            **test_and_another_test_kwargs):
-        """search command doc"""
+            query='a',
+            **test_and_another_test_kwargs) -> Wallet:
+        """
+        search command doc
+
+        Usage:
+            thing search [--query=<query>]
+                         {kwargs}
+        """
 
     def thing_delete(self, value1: str, **tx_and_pagination_kwargs) -> Wallet:  # deleted thing
         """
@@ -287,3 +299,27 @@ class TestGenerator(TestCase):
                 (str) cheese
                 foo bar""")
         )
+
+    def test_parse_does_not_break_with_two_dashes(self):
+        # breaking with two dashes breaks docopt parsing
+        definitions = get_api_definitions(FakeAPI)
+        self.assertEqual(definitions['commands']['thing_search']['help'], """search command doc
+
+Usage:
+    thing search [--query=<query>]
+                 [--somevalue=<somevalue>] [--repeated=<repeated>]
+                 [--bad_description=<bad_description>] [--angry=<angry>]
+
+Options:
+    --query=<query>                      : (str)  [default: 'a']
+    --somevalue=<somevalue>              : (int)  [default: 1]
+    --repeated=<repeated>                : (int)  [default: 2]
+    --bad_description=<bad_description>  : (int) using linebreaks makes docopt very very --angry [default: 3]
+    --angry=<angry>                      : (int)  [default: 4]
+
+Returns:
+    (Wallet)
+    {
+        "id": "wallet_id",
+        "name": "optional wallet name"
+    }""")
