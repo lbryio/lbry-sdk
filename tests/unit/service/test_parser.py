@@ -45,6 +45,9 @@ class FakeAPI:
     ) -> Paginated[Wallet]:  # list of wallets
         """list command doc"""
 
+    def thing_save(self, **another_test_kwargs):
+        """save command doc"""
+
     def thing_update(self, value1: str) -> Wallet:  # updated wallet
         """update command doc"""
 
@@ -89,10 +92,19 @@ class BadAPI(FakeAPI):
 class TestParser(TestCase):
     maxDiff = None
 
-    def test_parse_does_not_duplicate_arguments(self):
+    def test_parse_does_not_allow_duplicate_arguments(self):
         with self.assertRaises(Exception) as exc:
             parse_method(BadAPI.thing_search, get_expanders())
         self.assertEqual(exc.exception.args[0], "Expander 'another_test' argument repeated: thing_search.")
+
+    def test_parse_does_not_allow_line_break_with_two_dashes(self):
+        # breaking with two dashes breaks docopt parsing
+        with self.assertRaises(Exception) as exc:
+            get_api_definitions(FakeAPI)
+        self.assertEqual(
+            exc.exception.args[0],
+            "Continuation line starts with -- on thing save: \"--angry [default: 3]\""
+        )
 
     def test_parse_method(self):
         expanders = get_expanders()
@@ -301,27 +313,3 @@ class TestGenerator(TestCase):
                 (str) cheese
                 foo bar""")
         )
-
-    def test_parse_does_not_break_with_two_dashes(self):
-        # breaking with two dashes breaks docopt parsing
-        definitions = get_api_definitions(FakeAPI)
-        self.assertEqual(definitions['commands']['thing_search']['help'], """search command doc
-
-Usage:
-    thing search [--query=<query>]
-                 [--somevalue=<somevalue>] [--repeated=<repeated>]
-                 [--bad_description=<bad_description>] [--angry=<angry>]
-
-Options:
-    --query=<query>                      : (str)  [default: 'a']
-    --somevalue=<somevalue>              : (int)  [default: 1]
-    --repeated=<repeated>                : (int)  [default: 2]
-    --bad_description=<bad_description>  : (int) using linebreaks makes docopt very very --angry [default: 3]
-    --angry=<angry>                      : (int)  [default: 4]
-
-Returns:
-    (Wallet) 
-    {
-        "id": "wallet_id",
-        "name": "optional wallet name"
-    }""")
