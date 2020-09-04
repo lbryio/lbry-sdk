@@ -1669,6 +1669,7 @@ class API:
         name: str,                   # name of the channel prefixed with '@'
         bid: str,                    # amount to back the channel
         allow_duplicate_name=False,  # create new channel even if one already exists with given name
+        wallet_id: str = None,   # restrict operation to specific wallet
         **channel_and_tx_kwargs
     ) -> Transaction:  # new channel transaction
         """
@@ -1683,7 +1684,7 @@ class API:
         tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
         assert_consumed_kwargs(kwargs)
         self.ledger.valid_channel_name_or_error(name)
-        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        wallet = self.wallets.get_or_default_for_spending(wallet_id)
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         holding_account = wallet.accounts.get_or_default(channel_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
@@ -2760,8 +2761,8 @@ class API:
         """
         txo_dict, kwargs = pop_kwargs('txo_filter', txo_filter_kwargs(**txo_filter_and_pagination_kwargs))
         pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        wallet = self.wallets.get_or_default(kwargs.pop('wallet_id'))
         assert_consumed_kwargs(kwargs)
-        wallet = self.wallets.get_or_default(txo_dict.pop('wallet_id'))
         accounts = wallet.accounts.get_or_all(txo_dict.pop('account_id'))
         constraints = {
             'resolve': resolve,
