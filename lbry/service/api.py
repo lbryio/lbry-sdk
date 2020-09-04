@@ -1548,7 +1548,7 @@ class API:
         is_spent=False,               # shows previous claim updates and abandons
         resolve=False,                # resolves each claim to provide additional metadata
         include_received_tips=False,  # calculate the amount of tips recieved for claim outputs
-        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+        **claim_filter_and_stream_filter_and_pagination_kwargs
     ) -> Paginated[Output]:  # streams and channels in wallet
         """
         List my stream and channel claims.
@@ -1603,7 +1603,7 @@ class API:
                                          # 'support_amount', 'trending_group', 'trending_mixed', 'trending_local',
                                          # 'trending_global', 'activation_height'
         protobuf=False,                  # protobuf encoded result
-        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+        **claim_filter_and_stream_filter_and_pagination_kwargs
     ) -> Paginated[Output]:  # search results
         """
         Search for stream and channel claims on the blockchain.
@@ -1629,7 +1629,7 @@ class API:
 
         """
         claim_filter_dict, kwargs = pop_kwargs('claim_filter', claim_filter_kwargs(
-            **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+            **claim_filter_and_stream_filter_and_pagination_kwargs
         ))
         pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
         wallet = self.wallets.get_or_default(wallet_id)

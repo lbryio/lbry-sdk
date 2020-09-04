@@ -216,7 +216,7 @@ def generate_options(method, indent) -> List[str]:
         wrapped = textwrap.wrap(text, LINE_WIDTH-len(left))
         lines = [f"{left}{wrapped.pop(0)}"]
         # dont break on -- or docopt will parse as a new option
-        for line_number, line in enumerate(wrapped):
+        for line in wrapped:
             if line.strip().startswith('--'):
                 raise Exception(f"Continuation line starts with -- on {method['cli']}: \"{line.strip()}\"")
             lines.append(f"{' ' * len(left)} {line}")
