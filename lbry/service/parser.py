@@ -159,7 +159,9 @@ def parse_method(method, expanders: dict) -> dict:
                     raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
                 for expanded in expanders[expander_name]:
                     if expanded['name'] in known_names:
-                        raise Exception(f"Expander '{expander_name}' argument repeated: {expanded['name']}.")
+                        raise Exception(
+                            f"Expander '{expander_name}' argument repeated '{expanded['name']}' used by {d['name']}."
+                        )
                     d['arguments'].append(expanded)
                     d['kwargs'].append(expanded)
                     known_names.add(expanded['name'])
@@ -213,11 +215,12 @@ def generate_options(method, indent) -> List[str]:
         if 'default' in arg:
             if arg['type'] != 'bool':
                 text += f" [default: {arg['default']}]"
-        wrapped = textwrap.wrap(text, LINE_WIDTH-len(left))
+        wrapped = textwrap.wrap(text, LINE_WIDTH-len(left), break_long_words=False)
         lines = [f"{left}{wrapped.pop(0)}"]
         # dont break on -- or docopt will parse as a new option
         for line in wrapped:
             if line.strip().startswith('--'):
+                print(f"Full text before continuation error: \"{text}\"")
                 raise Exception(f"Continuation line starts with -- on {method['cli']}: \"{line.strip()}\"")
             lines.append(f"{' ' * len(left)} {line}")
         options.extend(lines)

@@ -97,7 +97,10 @@ class TestParser(TestCase):
     def test_parse_does_not_allow_duplicate_arguments(self):
         with self.assertRaises(Exception) as exc:
             parse_method(BadAPI.thing_search, get_expanders())
-        self.assertEqual(exc.exception.args[0], "Expander 'another_test' argument repeated: somevalue.")
+        self.assertEqual(
+            exc.exception.args[0],
+            "Expander 'another_test' argument repeated 'somevalue' used by thing_search."
+        )
 
     def test_parse_does_not_allow_line_break_with_two_dashes(self):
         # breaking with two dashes breaks docopt parsing
