@@ -119,7 +119,6 @@ def pagination_kwargs(
 
 @expander
 def tx_kwargs(
-    wallet_id: str = None,              # restrict operation to specific wallet
     change_account_id: str = None,      # account to send excess change (LBC)
     fund_account_id: StrOrList = None,  # accounts to fund the transaction
     preview=False,                      # do not broadcast the transaction
@@ -154,14 +153,14 @@ def claim_kwargs(
                                  #         "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
                                  #       making sure to include colon for blank values, for
                                  #       example to provide only the city:
-                                 #         ... --locations="::Manchester"
+                                 #         ...--locations="::Manchester"
                                  #       with all values set:
-                                 #        ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                 #        ...--locations="US:NH:Manchester:03101:42.990605:-71.460989"
                                  #       optionally, you can just pass the "LATITUDE:LONGITUDE":
-                                 #         ... --locations="42.990605:-71.460989"
+                                 #         ...--locations="42.990605:-71.460989"
                                  #       finally, you can also pass JSON string of dictionary
                                  #       on the command line as you would via JSON RPC
-                                 #         ... --locations="{'country': 'US', 'state': 'NH'}"
+                                 #         ...--locations="{'country': 'US', 'state': 'NH'}"
     account_id: str = None,      # account to hold the claim
     claim_address: str = None,   # specific address where the claim is held, if not specified
                                  # it will be determined automatically from the account
@@ -293,10 +292,10 @@ def signed_filter_kwargs(
                                        # see --channel_id if you need to filter by
                                        # multiple channels at the same time,
                                        # includes results with invalid signatures,
-                                       # use in conjunction with --valid_channel_signature
+                                       # use in conjunction with "--valid_channel_signature"
     channel_id: StrOrList = None,      # signed by any of these channels including invalid signatures,
                                        # implies --has_channel_signature,
-                                       # use in conjunction with --valid_channel_signature
+                                       # use in conjunction with "--valid_channel_signature"
     not_channel_id: StrOrList = None,  # exclude everything signed by any of these channels
     has_channel_signature=False,       # results with a channel signature (valid or invalid)
     valid_channel_signature=False,     # results with a valid channel signature or no signature,
@@ -352,17 +351,16 @@ def txo_filter_kwargs(
     is_not_spent=False,                # only show not spent txos
     is_my_input_or_output=False,       # txos which have your inputs or your outputs,
                                        # if using this flag the other related flags
-                                       # are ignored (--is_my_output, --is_my_input, etc)
+                                       # are ignored. ("--is_my_output", "--is_my_input", etc)
     is_my_output=False,                # show outputs controlled by you
     is_not_my_output=False,            # show outputs not controlled by you
     is_my_input=False,                 # show outputs created by you
     is_not_my_input=False,             # show outputs not created by you
     exclude_internal_transfers=False,  # excludes any outputs that are exactly this combination:
-                                       # "--is_my_input --is_my_output --type=other"
+                                       # "--is_my_input" + "--is_my_output" + "--type=other"
                                        # this allows to exclude "change" payments, this
                                        # flag can be used in combination with any of the other flags
     account_id: StrOrList = None,      # id(s) of the account(s) to query
-    wallet_id: str = None,             # restrict results to specific wallet
 ):
     pass
 
@@ -2789,6 +2787,7 @@ class API:
             self,
             batch_size=500,         # number of txos to spend per transactions
             include_full_tx=False,  # include entire tx in output and not just the txid
+            wallet_id: str = None,  # restrict results to specific wallet
             **txo_filter_and_tx_kwargs
     ) -> List[Transaction]:
         """
@@ -2839,9 +2838,9 @@ class API:
         self,
         days_back=0,             # number of days back from today
                                  # (not compatible with --start_day, --days_after, --end_day)
-        start_day: str = None,   # start on specific date (YYYY-MM-DD) (instead of --days_back)
-        days_after: int = None,  # end number of days after --start_day (instead of --end_day)
-        end_day: str = None,     # end on specific date (YYYY-MM-DD) (instead of --days_after)
+        start_day: str = None,   # start on specific date (format: YYYY-MM-DD) (instead of --days_back)
+        days_after: int = None,  # end number of days after --start_day (instead of using --end_day)
+        end_day: str = None,     # end on specific date (format: YYYY-MM-DD) (instead of --days_after)
         **txo_filter_and_pagination_kwargs
     ) -> List:
         """
