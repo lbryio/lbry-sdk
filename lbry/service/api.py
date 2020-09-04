@@ -612,7 +612,7 @@ class API:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>]
              [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
+             [--save_file] [--wallet_id=<wallet_id>]
 
         """
         return await self.service.get(
@@ -2755,7 +2755,7 @@ class API:
         List my transaction outputs.
 
         Usage:
-            txo list [--include_received_tips] [--resolve] [--order_by]
+            txo list [--include_received_tips] [--resolve] [--order_by=<order_by>]
                      {kwargs}
 
         """
