@@ -2762,8 +2762,8 @@ class API:
         """
         txo_dict, kwargs = pop_kwargs('txo_filter', txo_filter_kwargs(**txo_filter_and_pagination_kwargs))
         pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
-        wallet = self.wallets.get_or_default(kwargs.pop('wallet_id'))
         assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default(kwargs.pop('wallet_id'))
         accounts = wallet.accounts.get_or_all(txo_dict.pop('account_id'))
         constraints = {
             'resolve': resolve,
