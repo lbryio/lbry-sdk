@@ -119,6 +119,7 @@ def pagination_kwargs(
 
 @expander
 def tx_kwargs(
+    wallet_id: str = None,              # restrict operation to specific wallet
     change_account_id: str = None,      # account to send excess change (LBC)
     fund_account_id: StrOrList = None,  # accounts to fund the transaction
     preview=False,                      # do not broadcast the transaction
@@ -361,6 +362,7 @@ def txo_filter_kwargs(
                                        # this allows to exclude "change" payments, this
                                        # flag can be used in combination with any of the other flags
     account_id: StrOrList = None,      # id(s) of the account(s) to query
+    wallet_id: str = None,             # restrict results to specific wallet
 ):
     pass
 
@@ -1669,7 +1671,6 @@ class API:
         name: str,                   # name of the channel prefixed with '@'
         bid: str,                    # amount to back the channel
         allow_duplicate_name=False,  # create new channel even if one already exists with given name
-        wallet_id: str = None,   # restrict operation to specific wallet
         **channel_and_tx_kwargs
     ) -> Transaction:  # new channel transaction
         """
@@ -1684,7 +1685,7 @@ class API:
         tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
         assert_consumed_kwargs(kwargs)
         self.ledger.valid_channel_name_or_error(name)
-        wallet = self.wallets.get_or_default_for_spending(wallet_id)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         holding_account = wallet.accounts.get_or_default(channel_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
@@ -2785,11 +2786,14 @@ class API:
         )
 
     async def txo_spend(
-            self,
-            batch_size=500,         # number of txos to spend per transactions
-            include_full_tx=False,  # include entire tx in output and not just the txid
-            wallet_id: str = None,  # restrict results to specific wallet
-            **txo_filter_and_tx_kwargs
+        self,
+        batch_size=500,                 # number of txos to spend per transactions
+        include_full_tx=False,          # include entire tx in output and not just the txid
+        change_account_id: str = None,  # account to send excess change (LBC)
+        fund_account_id: StrOrList = None,  # accounts to fund the transaction
+        preview=False,                  # do not broadcast the transaction
+        no_wait=False,                  # do not wait for mempool confirmation
+        **txo_filter_kwargs
     ) -> List[Transaction]:
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
@@ -2820,7 +2824,7 @@ class API:
             return txs
         return [{'txid': tx.id} for tx in txs]
 
-    async def txo_sum(self, **txo_filter_and_tx_kwargs) -> int:  # sum of filtered outputs
+    async def txo_sum(self, **txo_filter_kwargs) -> int:  # sum of filtered outputs
         """
         Sum of transaction outputs.
 
