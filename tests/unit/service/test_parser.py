@@ -7,21 +7,6 @@ from lbry.service.parser import (
 )
 
 
-@expander
-def test_kwargs(somevalue=1):
-    pass
-
-
-@expander
-def another_test_kwargs(
-    somevalue=1,
-    repeated=2,
-    bad_description=3,  # using linebreaks makes docopt very very --angry
-    angry=4
-):
-    pass
-
-
 class FakeAPI:
 
     THING_DOC = "thing doc"
@@ -72,23 +57,29 @@ class FakeAPI:
         """
 
 
-class BadAPI(FakeAPI):
-    def thing_search(
-        self,
-        query='a',
-        **test_and_another_test_kwargs) -> Wallet:
-        """
-        search command doc
-
-        Usage:
-            thing search [--query=<query>]
-                         {kwargs}
-        """
+@expander
+def test_kwargs(
+    somevalue=1
+):
+    pass
 
 
-class BadContinuationAPI(FakeAPI):
-    def thing_save(self, **another_test_kwargs):
-        """save command doc"""
+@expander
+def another_test_kwargs(
+    somevalue=1,
+    bad_description=3,  # using linebreaks makes docopt very very --angry
+):
+    pass
+
+
+class CommandWithRepeatedArgs(FakeAPI):
+    def thing_bad(self, **test_and_another_test_kwargs) -> Wallet:
+        """bad thing"""
+
+
+class CommandWithDoubleDashAtLineStart(FakeAPI):
+    def thing_bad(self, **another_test_kwargs):
+        """bad thing"""
 
 
 class TestParser(TestCase):
@@ -96,19 +87,23 @@ class TestParser(TestCase):
 
     def test_parse_does_not_allow_duplicate_arguments(self):
         with self.assertRaises(Exception) as exc:
-            parse_method(BadAPI.thing_search, get_expanders())
+            parse_method(CommandWithRepeatedArgs.thing_bad, get_expanders())
         self.assertEqual(
             exc.exception.args[0],
-            "Expander 'another_test' argument repeated 'somevalue' used by thing_search."
+            "Duplicate argument 'somevalue' in 'thing_bad'. "
+            "Expander 'another_test' is attempting to add an argument which is already defined "
+            "in the 'thing_bad' command (possibly by another expander)."
         )
 
-    def test_parse_does_not_allow_line_break_with_two_dashes(self):
-        # breaking with two dashes breaks docopt parsing
+    def test_parse_does_not_allow_two_dashes_at_start_of_line(self):
         with self.assertRaises(Exception) as exc:
-            get_api_definitions(BadContinuationAPI)
+            get_api_definitions(CommandWithDoubleDashAtLineStart)
         self.assertEqual(
             exc.exception.args[0],
-            "Continuation line starts with -- on thing save: \"--angry [default: 3]\""
+            "Word wrapping the description for argument 'bad_description' in method 'thing_bad' "
+            "resulted in a line which starts with '--' and this will break docopt. Try wrapping "
+            "the '--' in quotes. Instead of --foo do \"--foo\". Line which caused this issue is:"
+            "\n--angry [default: 3]"
         )
 
     def test_parse_method(self):

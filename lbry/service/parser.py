@@ -160,7 +160,9 @@ def parse_method(method, expanders: dict) -> dict:
                 for expanded in expanders[expander_name]:
                     if expanded['name'] in known_names:
                         raise Exception(
-                            f"Expander '{expander_name}' argument repeated '{expanded['name']}' used by {d['name']}."
+                            f"Duplicate argument '{expanded['name']}' in '{d['name']}'. "
+                            f"Expander '{expander_name}' is attempting to add an argument which is "
+                            f"already defined in the '{d['name']}' command (possibly by another expander)."
                         )
                     d['arguments'].append(expanded)
                     d['kwargs'].append(expanded)
@@ -217,12 +219,15 @@ def generate_options(method, indent) -> List[str]:
                 text += f" [default: {arg['default']}]"
         wrapped = textwrap.wrap(text, LINE_WIDTH-len(left), break_long_words=False)
         lines = [f"{left}{wrapped.pop(0)}"]
-        # dont break on -- or docopt will parse as a new option
         for line in wrapped:
             if line.strip().startswith('--'):
-                print(f"Full text before continuation error: \"{text}\"")
-                raise Exception(f"Continuation line starts with -- on {method['cli']}: \"{line.strip()}\"")
-            lines.append(f"{' ' * len(left)} {line}")
+                raise Exception(
+                    f"Word wrapping the description for argument '{arg['name']}' in method "
+                    f"'{method['method'].__name__}' resulted in a line which starts with '--' and this will "
+                    f"break docopt. Try wrapping the '--' in quotes. Instead of --foo do \"--foo\". "
+                    f"Line which caused this issue is:\n{line.strip()}"
+                )
+            lines.append(f"{' '*len(left)} {line}")
         options.extend(lines)
     return options
 
