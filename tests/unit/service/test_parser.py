@@ -1,6 +1,9 @@
-from unittest import TestCase
+from unittest import TestCase, mock
 from textwrap import dedent
-from lbry.service.api import Paginated, Wallet
+
+from docopt import docopt, DocoptExit
+
+from lbry.service.api import API, Paginated, Wallet, expander
 from lbry.service.parser import (
     parse_method, get_expanders, get_api_definitions,
     generate_options
@@ -57,8 +60,54 @@ class FakeAPI:
         """
 
 
+@expander
+def test_kwargs(
+    somevalue=1
+):
+    pass
+
+
+@expander
+def another_test_kwargs(
+    somevalue=1,
+    bad_description=3,  # using linebreaks makes docopt very very --angry
+):
+    pass
+
+
+class CommandWithRepeatedArgs(FakeAPI):
+    def thing_bad(self, **test_and_another_test_kwargs) -> Wallet:
+        """bad thing"""
+
+
+class CommandWithDoubleDashAtLineStart(FakeAPI):
+    def thing_bad(self, **another_test_kwargs):
+        """bad thing"""
+
+
 class TestParser(TestCase):
     maxDiff = None
+
+    def test_parse_does_not_allow_duplicate_arguments(self):
+        with self.assertRaises(Exception) as exc:
+            parse_method(CommandWithRepeatedArgs.thing_bad, get_expanders())
+        self.assertEqual(
+            exc.exception.args[0],
+            "Duplicate argument 'somevalue' in 'thing_bad'. "
+            "Expander 'another_test' is attempting to add an argument which is already defined "
+            "in the 'thing_bad' command (possibly by another expander)."
+        )
+
+    def test_parse_does_not_allow_two_dashes_at_start_of_line(self):
+        with self.assertRaises(Exception) as exc:
+            get_api_definitions(CommandWithDoubleDashAtLineStart)
+        self.assertEqual(
+            exc.exception.args[0],
+            "Word wrapping the description for argument 'bad_description' in method 'thing_bad' "
+            "resulted in a line which starts with '--' and this will break docopt. Try wrapping "
+            "the '--' in quotes. Instead of --foo do \"--foo\". Line which caused this issue is:"
+            "\n--angry [default: 3]"
+        )
 
     def test_parse_method(self):
         expanders = get_expanders()
@@ -147,6 +196,14 @@ class TestParser(TestCase):
 
 class TestGenerator(TestCase):
     maxDiff = None
+
+    def test_generated_api_works_in_docopt(self):
+        from lbry.service.metadata import interface
+        for command in interface["commands"].values():
+            with mock.patch('sys.exit') as exit:
+                with self.assertRaises(DocoptExit):
+                    docopt(command["help"], ["--help"])
+                self.assertTrue(exit.called)
 
     def test_generate_options(self):
         expanders = get_expanders()

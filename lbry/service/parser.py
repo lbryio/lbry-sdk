@@ -146,6 +146,7 @@ def parse_method(method, expanders: dict) -> dict:
         'returns': None
     }
     src = inspect.getsource(method)
+    known_names = set()
     for tokens in produce_argument_tokens(src):
         if tokens[0].string == '**':
             tokens.pop(0)
@@ -156,12 +157,21 @@ def parse_method(method, expanders: dict) -> dict:
             for expander_name in expander_names.split('_and_'):
                 if expander_name not in expanders:
                     raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
-                d['arguments'].extend(expanders[expander_name])
-                d['kwargs'].extend(expanders[expander_name])
+                for expanded in expanders[expander_name]:
+                    if expanded['name'] in known_names:
+                        raise Exception(
+                            f"Duplicate argument '{expanded['name']}' in '{d['name']}'. "
+                            f"Expander '{expander_name}' is attempting to add an argument which is "
+                            f"already defined in the '{d['name']}' command (possibly by another expander)."
+                        )
+                    d['arguments'].append(expanded)
+                    d['kwargs'].append(expanded)
+                    known_names.add(expanded['name'])
         else:
             arg = parse_argument(tokens, d['name'])
             if arg:
                 d['arguments'].append(arg)
+                known_names.add(arg['name'])
     d['returns'] = parse_return(produce_return_tokens(src))
     return d
 
@@ -207,9 +217,16 @@ def generate_options(method, indent) -> List[str]:
         if 'default' in arg:
             if arg['type'] != 'bool':
                 text += f" [default: {arg['default']}]"
-        wrapped = textwrap.wrap(text, LINE_WIDTH-len(left))
+        wrapped = textwrap.wrap(text, LINE_WIDTH-len(left), break_long_words=False)
         lines = [f"{left}{wrapped.pop(0)}"]
         for line in wrapped:
+            if line.strip().startswith('--'):
+                raise Exception(
+                    f"Word wrapping the description for argument '{arg['name']}' in method "
+                    f"'{method['method'].__name__}' resulted in a line which starts with '--' and this will "
+                    f"break docopt. Try wrapping the '--' in quotes. Instead of --foo do \"--foo\". "
+                    f"Line which caused this issue is:\n{line.strip()}"
+                )
             lines.append(f"{' '*len(left)} {line}")
         options.extend(lines)
     return options

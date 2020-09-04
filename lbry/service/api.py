@@ -154,14 +154,14 @@ def claim_kwargs(
                                  #         "COUNTRY:STATE:CITY:CODE:LATITUDE:LONGITUDE"
                                  #       making sure to include colon for blank values, for
                                  #       example to provide only the city:
-                                 #         ... --locations="::Manchester"
+                                 #         ...--locations="::Manchester"
                                  #       with all values set:
-                                 #        ... --locations="US:NH:Manchester:03101:42.990605:-71.460989"
+                                 #        ...--locations="US:NH:Manchester:03101:42.990605:-71.460989"
                                  #       optionally, you can just pass the "LATITUDE:LONGITUDE":
-                                 #         ... --locations="42.990605:-71.460989"
+                                 #         ...--locations="42.990605:-71.460989"
                                  #       finally, you can also pass JSON string of dictionary
                                  #       on the command line as you would via JSON RPC
-                                 #         ... --locations="{'country': 'US', 'state': 'NH'}"
+                                 #         ...--locations="{'country': 'US', 'state': 'NH'}"
     account_id: str = None,      # account to hold the claim
     claim_address: str = None,   # specific address where the claim is held, if not specified
                                  # it will be determined automatically from the account
@@ -293,10 +293,10 @@ def signed_filter_kwargs(
                                        # see --channel_id if you need to filter by
                                        # multiple channels at the same time,
                                        # includes results with invalid signatures,
-                                       # use in conjunction with --valid_channel_signature
+                                       # use in conjunction with "--valid_channel_signature"
     channel_id: StrOrList = None,      # signed by any of these channels including invalid signatures,
                                        # implies --has_channel_signature,
-                                       # use in conjunction with --valid_channel_signature
+                                       # use in conjunction with "--valid_channel_signature"
     not_channel_id: StrOrList = None,  # exclude everything signed by any of these channels
     has_channel_signature=False,       # results with a channel signature (valid or invalid)
     valid_channel_signature=False,     # results with a valid channel signature or no signature,
@@ -352,13 +352,13 @@ def txo_filter_kwargs(
     is_not_spent=False,                # only show not spent txos
     is_my_input_or_output=False,       # txos which have your inputs or your outputs,
                                        # if using this flag the other related flags
-                                       # are ignored (--is_my_output, --is_my_input, etc)
+                                       # are ignored. ("--is_my_output", "--is_my_input", etc)
     is_my_output=False,                # show outputs controlled by you
     is_not_my_output=False,            # show outputs not controlled by you
     is_my_input=False,                 # show outputs created by you
     is_not_my_input=False,             # show outputs not created by you
     exclude_internal_transfers=False,  # excludes any outputs that are exactly this combination:
-                                       # "--is_my_input --is_my_output --type=other"
+                                       # "--is_my_input" + "--is_my_output" + "--type=other"
                                        # this allows to exclude "change" payments, this
                                        # flag can be used in combination with any of the other flags
     account_id: StrOrList = None,      # id(s) of the account(s) to query
@@ -614,7 +614,7 @@ class API:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>]
              [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
+             [--save_file] [--wallet_id=<wallet_id>]
 
         """
         return await self.service.get(
@@ -1548,7 +1548,7 @@ class API:
         is_spent=False,               # shows previous claim updates and abandons
         resolve=False,                # resolves each claim to provide additional metadata
         include_received_tips=False,  # calculate the amount of tips recieved for claim outputs
-        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+        **claim_filter_and_stream_filter_and_pagination_kwargs
     ) -> Paginated[Output]:  # streams and channels in wallet
         """
         List my stream and channel claims.
@@ -1603,7 +1603,7 @@ class API:
                                          # 'support_amount', 'trending_group', 'trending_mixed', 'trending_local',
                                          # 'trending_global', 'activation_height'
         protobuf=False,                  # protobuf encoded result
-        **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+        **claim_filter_and_stream_filter_and_pagination_kwargs
     ) -> Paginated[Output]:  # search results
         """
         Search for stream and channel claims on the blockchain.
@@ -1629,7 +1629,7 @@ class API:
 
         """
         claim_filter_dict, kwargs = pop_kwargs('claim_filter', claim_filter_kwargs(
-            **claim_filter_and_signed_filter_and_stream_filter_and_pagination_kwargs
+            **claim_filter_and_stream_filter_and_pagination_kwargs
         ))
         pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
         wallet = self.wallets.get_or_default(wallet_id)
@@ -2756,7 +2756,7 @@ class API:
         List my transaction outputs.
 
         Usage:
-            txo list [--include_received_tips] [--resolve] [--order_by]
+            txo list [--include_received_tips] [--resolve] [--order_by=<order_by>]
                      {kwargs}
 
         """
@@ -2786,10 +2786,14 @@ class API:
         )
 
     async def txo_spend(
-            self,
-            batch_size=500,         # number of txos to spend per transactions
-            include_full_tx=False,  # include entire tx in output and not just the txid
-            **txo_filter_and_tx_kwargs
+        self,
+        batch_size=500,                 # number of txos to spend per transactions
+        include_full_tx=False,          # include entire tx in output and not just the txid
+        change_account_id: str = None,  # account to send excess change (LBC)
+        fund_account_id: StrOrList = None,  # accounts to fund the transaction
+        preview=False,                  # do not broadcast the transaction
+        no_wait=False,                  # do not wait for mempool confirmation
+        **txo_filter_kwargs
     ) -> List[Transaction]:
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
@@ -2820,7 +2824,7 @@ class API:
             return txs
         return [{'txid': tx.id} for tx in txs]
 
-    async def txo_sum(self, **txo_filter_and_tx_kwargs) -> int:  # sum of filtered outputs
+    async def txo_sum(self, **txo_filter_kwargs) -> int:  # sum of filtered outputs
         """
         Sum of transaction outputs.
 
@@ -2839,9 +2843,9 @@ class API:
         self,
         days_back=0,             # number of days back from today
                                  # (not compatible with --start_day, --days_after, --end_day)
-        start_day: str = None,   # start on specific date (YYYY-MM-DD) (instead of --days_back)
-        days_after: int = None,  # end number of days after --start_day (instead of --end_day)
-        end_day: str = None,     # end on specific date (YYYY-MM-DD) (instead of --days_after)
+        start_day: str = None,   # start on specific date (format: YYYY-MM-DD) (instead of --days_back)
+        days_after: int = None,  # end number of days after --start_day (instead of using --end_day)
+        end_day: str = None,     # end on specific date (format: YYYY-MM-DD) (instead of --days_after)
         **txo_filter_and_pagination_kwargs
     ) -> List:
         """
