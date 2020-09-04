@@ -1,6 +1,9 @@
-from unittest import TestCase
+from unittest import TestCase, mock
 from textwrap import dedent
-from lbry.service.api import Paginated, Wallet, expander
+
+from docopt import docopt, DocoptExit
+
+from lbry.service.api import API, Paginated, Wallet, expander
 from lbry.service.parser import (
     parse_method, get_expanders, get_api_definitions,
     generate_options
@@ -193,6 +196,14 @@ class TestParser(TestCase):
 
 class TestGenerator(TestCase):
     maxDiff = None
+
+    def test_generated_api_works_in_docopt(self):
+        from lbry.service.metadata import interface
+        for command in interface["commands"].values():
+            with mock.patch('sys.exit') as exit:
+                with self.assertRaises(DocoptExit):
+                    docopt(command["help"], ["--help"])
+                self.assertTrue(exit.called)
 
     def test_generate_options(self):
         expanders = get_expanders()
