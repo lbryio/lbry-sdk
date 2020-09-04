@@ -152,12 +152,17 @@ class Daemon:
         else:
             params = msg.get('params', {})
             method = getattr(self.api, msg['method'])
-            result = await method(**params)
-            encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
-            await web_socket.send_json({
-                'id': msg.get('id', ''),
-                'result': encoded_result
-            })
+            try:
+                result = await method(**params)
+                encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
+                await web_socket.send_json({
+                    'id': msg.get('id', ''),
+                    'result': encoded_result
+                })
+            except Exception as e:
+                log.exception("RPC error")
+                await web_socket.send_json({'id': msg.get('id', ''), 'result': "unexpected error: " + str(e)})
+                raise e
 
     @staticmethod
     async def on_shutdown(app):

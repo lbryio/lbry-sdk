@@ -6,8 +6,10 @@ from threading import Thread
 from unittest import TestCase
 
 from lbry import Daemon, FullNode
+from lbry.cli import execute_command
 from lbry.console import Console
 from lbry.blockchain.lbrycrd import Lbrycrd
+from lbry.testcase import CommandTestCase
 
 
 class TestShutdown(TestCase):
@@ -33,3 +35,14 @@ class TestShutdown(TestCase):
         thread.start()
 
         daemon.run()
+
+
+class WebSocketAPITestCase(CommandTestCase):
+    async def test_api_failure_over_websocket_doesnt_hang(self):
+        self.assertEqual(
+            await asyncio.wait_for(
+                execute_command(self.daemon.conf, 'resolve', {'crazyparameters': 'not there'}),
+                timeout=1
+            ),
+            "unexpected error: resolve() got an unexpected keyword argument 'crazyparameters'"
+        )
