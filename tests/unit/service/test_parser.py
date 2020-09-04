@@ -252,12 +252,13 @@ class TestGenerator(TestCase):
 
             Usage:
                 thing delete <value1>
-                             [--change_account_id=<change_account_id>]
+                             [--wallet_id=<wallet_id>] [--change_account_id=<change_account_id>]
                              [--fund_account_id=<fund_account_id>...] [--preview] [--no_wait]
                              [--page=<page>] [--page_size=<page_size>] [--include_total]
 
             Options:
                 --value1=<value1>                        : (str)
+                --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
                 --change_account_id=<change_account_id>  : (str) account to send excess change (LBC)
                 --fund_account_id=<fund_account_id>      : (str, list) accounts to fund the
                                                             transaction
