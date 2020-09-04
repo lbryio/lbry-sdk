@@ -45,9 +45,6 @@ class FakeAPI:
     ) -> Paginated[Wallet]:  # list of wallets
         """list command doc"""
 
-    def thing_save(self, **another_test_kwargs):
-        """save command doc"""
-
     def thing_update(self, value1: str) -> Wallet:  # updated wallet
         """update command doc"""
 
@@ -89,18 +86,23 @@ class BadAPI(FakeAPI):
         """
 
 
+class BadContinuationAPI(FakeAPI):
+    def thing_save(self, **another_test_kwargs):
+        """save command doc"""
+
+
 class TestParser(TestCase):
     maxDiff = None
 
     def test_parse_does_not_allow_duplicate_arguments(self):
         with self.assertRaises(Exception) as exc:
             parse_method(BadAPI.thing_search, get_expanders())
-        self.assertEqual(exc.exception.args[0], "Expander 'another_test' argument repeated: thing_search.")
+        self.assertEqual(exc.exception.args[0], "Expander 'another_test' argument repeated: somevalue.")
 
     def test_parse_does_not_allow_line_break_with_two_dashes(self):
         # breaking with two dashes breaks docopt parsing
         with self.assertRaises(Exception) as exc:
-            get_api_definitions(FakeAPI)
+            get_api_definitions(BadContinuationAPI)
         self.assertEqual(
             exc.exception.args[0],
             "Continuation line starts with -- on thing save: \"--angry [default: 3]\""
@@ -241,13 +243,12 @@ class TestGenerator(TestCase):
 
             Usage:
                 thing delete <value1>
-                             [--wallet_id=<wallet_id>] [--change_account_id=<change_account_id>]
+                             [--change_account_id=<change_account_id>]
                              [--fund_account_id=<fund_account_id>...] [--preview] [--no_wait]
                              [--page=<page>] [--page_size=<page_size>] [--include_total]
 
             Options:
                 --value1=<value1>                        : (str)
-                --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
                 --change_account_id=<change_account_id>  : (str) account to send excess change (LBC)
                 --fund_account_id=<fund_account_id>      : (str, list) accounts to fund the
                                                             transaction
