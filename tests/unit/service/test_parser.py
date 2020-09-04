@@ -14,10 +14,10 @@ def test_kwargs(somevalue=1):
 
 @expander
 def another_test_kwargs(
-        somevalue=1,
-        repeated=2,
-        bad_description=3,  # using linebreaks makes docopt very very --angry
-        angry=4
+    somevalue=1,
+    repeated=2,
+    bad_description=3,  # using linebreaks makes docopt very very --angry
+    angry=4
 ):
     pass
 
@@ -48,18 +48,6 @@ class FakeAPI:
     def thing_update(self, value1: str) -> Wallet:  # updated wallet
         """update command doc"""
 
-    def thing_search(
-            self,
-            query='a',
-            **test_and_another_test_kwargs) -> Wallet:
-        """
-        search command doc
-
-        Usage:
-            thing search [--query=<query>]
-                         {kwargs}
-        """
-
     def thing_delete(self, value1: str, **tx_and_pagination_kwargs) -> Wallet:  # deleted thing
         """
         delete command doc
@@ -84,13 +72,27 @@ class FakeAPI:
         """
 
 
+class BadAPI(FakeAPI):
+    def thing_search(
+        self,
+        query='a',
+        **test_and_another_test_kwargs) -> Wallet:
+        """
+        search command doc
+
+        Usage:
+            thing search [--query=<query>]
+                         {kwargs}
+        """
+
+
 class TestParser(TestCase):
     maxDiff = None
 
     def test_parse_does_not_duplicate_arguments(self):
-        parsed = parse_method(FakeAPI.thing_search, get_expanders())
-        names = [arg['name'] for arg in parsed['arguments']]
-        self.assertEqual(len(names), len(set(names)))
+        with self.assertRaises(Exception) as exc:
+            parse_method(BadAPI.thing_search, get_expanders())
+        self.assertEqual(exc.exception.args[0], "Expander 'another_test' argument repeated: thing_search.")
 
     def test_parse_method(self):
         expanders = get_expanders()

@@ -159,7 +159,7 @@ def parse_method(method, expanders: dict) -> dict:
                     raise Exception(f"Expander '{expander_name}' not found, used by {d['name']}.")
                 for expanded in expanders[expander_name]:
                     if expanded['name'] in known_names:
-                        continue
+                        raise Exception(f"Expander '{expander_name}' argument repeated: {expanded['name']}.")
                     d['arguments'].append(expanded)
                     d['kwargs'].append(expanded)
                     known_names.add(expanded['name'])
