@@ -16,3 +16,6 @@ trending*.log
 /tests/.coverage.*
 
 /lbry/wallet/bin
+
+/.vscode
+/.gitignore

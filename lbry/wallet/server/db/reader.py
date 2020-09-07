@@ -39,7 +39,7 @@ ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
-    'tx_position', 'channel_join', 'reposted',
+    'tx_position', 'channel_join', 'reposted', 'limit_claims_per_channel',
     'amount', 'effective_amount', 'support_amount',
     'trending_group', 'trending_mixed',
     'trending_local', 'trending_global',
@@ -96,8 +96,8 @@ class ReaderState:
     def get_resolve_censor(self) -> Censor:
         return Censor(self.blocked_streams, self.blocked_channels)
 
-    def get_search_censor(self) -> Censor:
-        return Censor(self.filtered_streams, self.filtered_channels)
+    def get_search_censor(self, limit_claims_per_channel: int) -> Censor:
+        return Censor(self.filtered_streams, self.filtered_channels, limit_claims_per_channel)
 
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
@@ -421,12 +421,13 @@ def search(constraints) -> Tuple[List, List, int, int, Censor]:
     assert set(constraints).issubset(SEARCH_PARAMS), \
         f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
     total = None
+    limit_claims_per_channel = constraints.pop('limit_claims_per_channel', None)
     if not constraints.pop('no_totals', False):
         total = count_claims(**constraints)
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
     context = ctx.get()
-    search_censor = context.get_search_censor()
+    search_censor = context.get_search_censor(limit_claims_per_channel)
     txo_rows = search_claims(search_censor, **constraints)
     extra_txo_rows = _get_referenced_rows(txo_rows, search_censor.censored.keys())
     return txo_rows, extra_txo_rows, constraints['offset'], total, search_censor

@@ -132,7 +132,7 @@ class TestAccount(AsyncioTestCase):
     async def test_load_and_save_account(self):
         account_data = {
             'name': 'Main Account',
-            'modified_on': 123.456,
+            'modified_on': 123,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
@@ -183,7 +183,7 @@ class TestAccount(AsyncioTestCase):
     def test_merge_diff(self):
         account_data = {
             'name': 'My Account',
-            'modified_on': 123.456,
+            'modified_on': 123,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
@@ -203,7 +203,7 @@ class TestAccount(AsyncioTestCase):
         account = Account.from_dict(self.ledger, Wallet(), account_data)
 
         self.assertEqual(account.name, 'My Account')
-        self.assertEqual(account.modified_on, 123.456)
+        self.assertEqual(account.modified_on, 123)
         self.assertEqual(account.change.gap, 5)
         self.assertEqual(account.change.maximum_uses_per_address, 2)
         self.assertEqual(account.receiving.gap, 5)
@@ -366,7 +366,7 @@ class TestSingleKeyAccount(AsyncioTestCase):
     async def test_load_and_save_account(self):
         account_data = {
             'name': 'My Account',
-            'modified_on': 123.456,
+            'modified_on': 123,
             'seed':
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",

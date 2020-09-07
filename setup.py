@@ -46,7 +46,7 @@ setup(
         'msgpack==0.6.1',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
-        'pyyaml==4.2b1',
+        'pyyaml==5.3.1',
         'docopt==0.6.2',
         'hachoir',
         'multidict==4.6.1',

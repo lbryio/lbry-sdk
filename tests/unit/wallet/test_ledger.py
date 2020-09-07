@@ -35,10 +35,16 @@ class MockNetwork:
 
     async def get_transaction_and_merkle(self, tx_hash, known_height=None):
         tx = await self.get_transaction(tx_hash)
-        merkle = {}
+        merkle = {'block_height': -1}
         if known_height:
             merkle = await self.get_merkle(tx_hash, known_height)
         return tx, merkle
+
+    async def get_transaction_batch(self, txids):
+        return {
+            txid: await self.get_transaction_and_merkle(txid)
+            for txid in txids
+        }
 
 
 class LedgerTestCase(AsyncioTestCase):
@@ -120,8 +126,9 @@ class TestSynchronization(LedgerTestCase):
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        for cache_item in self.ledger._tx_cache.values():
-            cache_item.tx.is_verified = True
+        self.assertFalse(self.ledger._tx_cache[txid1].tx.is_verified)
+        self.assertFalse(self.ledger._tx_cache[txid2].tx.is_verified)
+        self.assertFalse(self.ledger._tx_cache[txid3].tx.is_verified)
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [])

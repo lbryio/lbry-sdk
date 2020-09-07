@@ -5,6 +5,8 @@ from time import perf_counter
 from operator import itemgetter
 from typing import Dict, Optional, Tuple
 
+import aiohttp
+
 from lbry import __version__
 from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
@@ -181,6 +183,8 @@ class Network:
             'blockchain.address.subscribe': self._on_status_controller,
         }
 
+        self.aiohttp_session: Optional[aiohttp.ClientSession] = None
+
     @property
     def config(self):
         return self.ledger.config
@@ -207,6 +211,7 @@ class Network:
 
     async def start(self):
         self.running = True
+        self.aiohttp_session = aiohttp.ClientSession()
         self._switch_task = asyncio.ensure_future(self.switch_forever())
         # this may become unnecessary when there are no more bugs found,
         # but for now it helps understanding log reports
@@ -217,6 +222,7 @@ class Network:
     async def stop(self):
         if self.running:
             self.running = False
+            await self.aiohttp_session.close()
             self._switch_task.cancel()
             self.session_pool.stop()
 
@@ -254,6 +260,10 @@ class Network:
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
         return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
+
+    def get_transaction_batch(self, txids):
+        # use any server if its old, otherwise restrict to who gave us the history
+        return self.rpc('blockchain.transaction.get_batch', txids, True)
 
     def get_transaction_and_merkle(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history
@@ -311,6 +321,19 @@ class Network:
 
     def claim_search(self, **kwargs):
         return self.rpc('blockchain.claimtrie.search', kwargs)
+
+    async def new_resolve(self, server, urls):
+        message = {"method": "resolve", "params": {"urls": urls, "protobuf": True}}
+        async with self.aiohttp_session.post(server, json=message) as r:
+            result = await r.json()
+            return result['result']
+
+    async def new_claim_search(self, server, **kwargs):
+        kwargs['protobuf'] = True
+        message = {"method": "claim_search", "params": kwargs}
+        async with self.aiohttp_session.post(server, json=message) as r:
+            result = await r.json()
+            return result['result']
 
 
 class SessionPool:

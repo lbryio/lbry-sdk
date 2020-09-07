@@ -199,6 +199,8 @@ class VideoFileAnalyzer:
             if not {"aac", "mp3", "flac", "vorbis", "opus"}.intersection(codec.split(",")):
                 return "Audio codec is not in the approved list of AAC, FLAC, MP3, Vorbis, and Opus. " \
                        f"Actual: {codec} [{stream['codec_long_name']}]"
+            if int(stream['sample_rate']) > 48000:
+                return "Sample rate out of range"
 
         return ""
 
@@ -304,9 +306,6 @@ class VideoFileAnalyzer:
 
         raise Exception(f"The audio encoder is not available. Requested: {encoder or 'aac'}")
 
-    async def _get_volume_filter(self):
-        return self._conf.volume_filter if self._conf.volume_filter else "-af loudnorm"
-
     @staticmethod
     def _get_best_container_extension(scan_data, video_encoder):
         # the container is chosen by the video format
@@ -410,7 +409,7 @@ class VideoFileAnalyzer:
         # the plan for transcoding:
         # we have to re-encode the video if it is in a nonstandard format
         # we also re-encode if we are h264 but not yuv420p (both errors caught in video_msg)
-        # we also re-encode if our bitrate is too high
+        # we also re-encode if our bitrate or sample rate is too high
 
         try:
             transcode_command = [f'-i "{file_path}" -y -c:s copy -c:d copy -c:v']
@@ -430,9 +429,10 @@ class VideoFileAnalyzer:
             if audio_msg or volume_msg:
                 audio_encoder = await self._get_audio_encoder(extension)
                 transcode_command.append(audio_encoder)
-                if volume_msg:
-                    volume_filter = await self._get_volume_filter()
-                    transcode_command.append(volume_filter)
+                if volume_msg and self._conf.volume_filter:
+                    transcode_command.append(self._conf.volume_filter)
+                if audio_msg == "Sample rate out of range":
+                    transcode_command.append(" -ar 48000 ")
             else:
                 transcode_command.append("copy")
 

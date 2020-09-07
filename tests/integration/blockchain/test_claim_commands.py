@@ -319,6 +319,25 @@ class ClaimSearchCommand(ClaimTestCase):
                     not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
         await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
 
+    async def test_limit_claims_per_channel(self):
+        match = self.assertFindsClaims
+        chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
+        chan2_id = self.get_claim_id(await self.channel_create('@chan2'))
+        claim1 = await self.stream_create('claim1')
+        claim2 = await self.stream_create('claim2', channel_id=chan1_id)
+        claim3 = await self.stream_create('claim3', channel_id=chan1_id)
+        claim4 = await self.stream_create('claim4', channel_id=chan1_id)
+        claim5 = await self.stream_create('claim5', channel_id=chan2_id)
+        claim6 = await self.stream_create('claim6', channel_id=chan2_id)
+        await match(
+            [claim6, claim5, claim4, claim3, claim1],
+            limit_claims_per_channel=2, claim_type='stream'
+        )
+        await match(
+            [claim6, claim5, claim4, claim3, claim2, claim1],
+            limit_claims_per_channel=3, claim_type='stream'
+        )
+
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()

@@ -311,7 +311,7 @@ class Account:
             private_key=private_key,
             public_key=public_key,
             address_generator=d.get('address_generator', {}),
-            modified_on=d.get('modified_on', time.time()),
+            modified_on=int(d.get('modified_on', time.time())),
             channel_keys=d.get('certificates', {})
         )
 
@@ -343,7 +343,7 @@ class Account:
     def merge(self, d: dict):
         if d.get('modified_on', 0) > self.modified_on:
             self.name = d['name']
-            self.modified_on = d.get('modified_on', time.time())
+            self.modified_on = int(d.get('modified_on', time.time()))
             assert self.address_generator.name == d['address_generator']['name']
             for chain_name in ('change', 'receiving'):
                 if chain_name in d['address_generator']:

@@ -35,7 +35,7 @@ class TimestampedPreferences(UserDict):
     def __setitem__(self, key, value):
         self.data[key] = {
             'value': value,
-            'ts': time.time()
+            'ts': int(time.time())
         }
 
     def __repr__(self):
