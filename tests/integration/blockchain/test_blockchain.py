@@ -10,6 +10,7 @@ from distutils.dir_util import copy_tree, remove_tree
 from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
+from lbry.schema.result import Outputs
 from lbry.schema.support import Support
 from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 from lbry.blockchain.lbrycrd import Lbrycrd
@@ -896,6 +897,20 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await self.generate(1)
         self.assertEqual(stream_c.claim_id, await self.resolve_to_claim_id("@foo#a/foo#c"))
         self.assertEqual(stream_cd.claim_id, await self.resolve_to_claim_id("@foo#ab/foo#cd"))
+
+    async def test_resolve_protobuf_includes_enough_information_for_signature_validation(self):
+        # important for old sdk
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab)
+        await self.generate(1)
+        resolutions = await self.db.protobuf_resolve(["@foo#ab/foo#cd"])
+        resolutions = Outputs.from_base64(resolutions)
+        txs = await self.db.get_transactions(tx_hash__in=[tx[0] for tx in resolutions.txs])
+        self.assertEqual(len(txs), 2)
+        resolutions = resolutions.inflate(txs)
+        claim = resolutions[0][0]
+        self.assertTrue(claim.is_signed_by(claim.channel, self.chain.ledger))
 
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):

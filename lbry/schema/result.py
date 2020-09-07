@@ -206,5 +206,10 @@ class Outputs:
         #txo_message.claim.trending_mixed = txo['trending_mixed']
         #txo_message.claim.trending_local = txo['trending_local']
         #txo_message.claim.trending_global = txo['trending_global']
-        #set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
+        if txo.channel:
+            reference = txo_message.claim.channel
+            hash = txo.channel.hash
+            reference.tx_hash = hash[:32]
+            reference.nout = struct.unpack('<I', hash[32:])[0]
+            reference.height = txo.channel.spent_height
         #set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)
