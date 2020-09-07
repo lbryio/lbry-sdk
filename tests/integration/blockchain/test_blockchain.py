@@ -613,6 +613,14 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
+    async def test_sync_waits_for_lbrycrd_to_start(self):
+        await self.sync.stop()
+        await self.chain.stop()
+        sync_start = asyncio.ensure_future(self.sync.start())
+        await asyncio.sleep(0)
+        await self.chain.start()
+        await sync_start
+        self.assertTrue(sync_start.done())  # test goal is to get here without exceptions
 
     async def test_sync_advances(self):
         blocks = []

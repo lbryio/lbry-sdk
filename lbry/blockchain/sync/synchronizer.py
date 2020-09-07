@@ -43,9 +43,19 @@ class BlockchainSync(Sync):
         self.advance_loop_task: Optional[asyncio.Task] = None
         self.advance_loop_event = asyncio.Event()
 
+    async def wait_for_chain_ready(self):
+        while True:
+            try:
+                return await self.chain.ensure_subscribable()
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                log.warning("Blockchain not ready, waiting for it: %s", str(e))
+                await asyncio.sleep(1)
+
     async def start(self):
         self.db.stop_event.clear()
-        await self.chain.ensure_subscribable()
+        await self.wait_for_chain_ready()
         self.advance_loop_task = asyncio.create_task(self.advance())
         await self.advance_loop_task
         await self.chain.subscribe()
