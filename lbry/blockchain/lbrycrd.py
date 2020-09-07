@@ -90,7 +90,7 @@ class Lbrycrd:
             Config.with_same_dir(tempfile.mkdtemp()).set(
                 lbrycrd_rpc_port=9245 + 2,  # avoid conflict with default rpc port
                 lbrycrd_peer_port=9246 + 2,  # avoid conflict with default peer port
-                lbrycrd_zmq_blocks="tcp://127.0.0.1:29000"
+                lbrycrd_zmq_blocks="tcp://127.0.0.1:29002"  # avoid conflict with default port
             )
         ))
 
