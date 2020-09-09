@@ -912,6 +912,9 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         claim = resolutions[0][0]
         self.assertTrue(claim.is_signed_by(claim.channel, self.chain.ledger))
 
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/notfound"]))
+        self.assertEqual(len(resolutions.txs), 0)
+
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 

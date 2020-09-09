@@ -41,7 +41,7 @@ def _get_referenced_rows(txo_rows: List[Output], censor_channels: List[bytes]):
 def protobuf_resolve(urls, **kwargs) -> str:
     txo_rows = [resolve_url(raw_url) for raw_url in urls]
     extra_txo_rows = _get_referenced_rows(
-        txo_rows,
+        [txo_row for txo_row in txo_rows if isinstance(txo_row, Output)],
         [txo.censor_hash for txo in txo_rows if isinstance(txo, ResolveCensoredError)]
     )
     return ResultOutput.to_base64(txo_rows, extra_txo_rows)
