@@ -1,7 +1,6 @@
 import base64
 import struct
 from typing import List
-from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError

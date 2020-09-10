@@ -899,7 +899,6 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(stream_cd.claim_id, await self.resolve_to_claim_id("@foo#ab/foo#cd"))
 
     async def test_resolve_protobuf_includes_enough_information_for_signature_validation(self):
-        # important for old sdk
         chan_ab = await self.get_claim(
             await self.create_claim(claim_id_startswith='ab', is_channel=True))
         await self.create_claim(claim_id_startswith='cd', sign=chan_ab)

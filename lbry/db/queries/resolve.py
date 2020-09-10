@@ -49,12 +49,6 @@ def protobuf_resolve(urls, **kwargs) -> str:
 
 def resolve(urls, **kwargs) -> Dict[str, Output]:
     return {url: resolve_url(url) for url in urls}
-    #txo_rows = [resolve_url(raw_url) for raw_url in urls]
-    #extra_txo_rows = _get_referenced_rows(
-    #    [txo for txo in txo_rows if isinstance(txo, dict)],
-    #    [txo.censor_hash for txo in txo_rows if isinstance(txo, ResolveCensoredError)]
-    #)
-    #return txo_rows, extra_txo_rows
 
 
 def resolve_url(raw_url):
