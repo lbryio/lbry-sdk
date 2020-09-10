@@ -912,8 +912,13 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         claim = resolutions[0][0]
         self.assertTrue(claim.is_signed_by(claim.channel, self.chain.ledger))
 
+    async def test_resolve_not_found(self):
+        await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.generate(1)
         resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/notfound"]))
-        self.assertEqual(len(resolutions.txs), 0)
+        self.assertEqual(resolutions.txos[0].error.text, "Could not find claim at \"@foo#ab/notfound\".")
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@notfound#ab/notfound"]))
+        self.assertEqual(resolutions.txos[0].error.text, "Could not find channel in \"@notfound#ab/notfound\".")
 
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
