@@ -15,10 +15,10 @@ BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 def set_reference(reference, claim_hash, rows):
     if claim_hash:
         for txo in rows:
-            if claim_hash == txo['claim_hash']:
-                reference.tx_hash = txo['txo_hash'][:32]
-                reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
-                reference.height = txo['height']
+            if claim_hash == txo.claim_hash:
+                reference.tx_hash = txo.tx_ref.hash
+                reference.nout = txo.position
+                reference.height = txo.spent_height
                 return
 
 
@@ -206,9 +206,5 @@ class Outputs:
         #txo_message.claim.trending_local = txo['trending_local']
         #txo_message.claim.trending_global = txo['trending_global']
         if txo.channel:
-            reference = txo_message.claim.channel
-            hash = txo.channel.hash
-            reference.tx_hash = hash[:32]
-            reference.nout = struct.unpack('<I', hash[32:])[0]
-            reference.height = txo.channel.spent_height
+            set_reference(txo_message.claim.channel, txo.claim.signing_channel_hash, extra_txo_rows)
         #set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)
