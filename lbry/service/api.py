@@ -380,6 +380,10 @@ def support_filter_kwargs(
 
 
 class API:
+    """
+    The high-level interface for the Service (either wallet server or client)
+    This is hte "public" api, for CLI and stuff.
+    """
 
     def __init__(self, service: Service):
         self.service = service

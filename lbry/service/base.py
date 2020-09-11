@@ -19,6 +19,11 @@ class BlockEvent(NamedTuple):
 
 
 class Sync:
+    """
+    Maintains local state in sync with some upstream source of truth.
+    Client stays synced with wallet server
+    Server stays synced with lbrycrd
+    """
 
     def __init__(self, ledger: Ledger, db: Database):
         self.ledger = ledger
@@ -50,6 +55,7 @@ class Sync:
 class Service:
     """
     Base class for light client and full node LBRY service implementations.
+    This is the programmatic api (as compared to API)
     """
 
     sync: Sync

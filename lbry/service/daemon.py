@@ -68,7 +68,10 @@ class WebSocketManager(WebSocketResponse):
 
 
 class Daemon:
-
+    """
+    Mostly connects API to aiohttp stuff.
+    Handles starting and stopping API
+    """
     def __init__(self, service: Service, console: Console):
         self.service = service
         self.conf = service.conf
