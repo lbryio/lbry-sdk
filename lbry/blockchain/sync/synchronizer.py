@@ -12,7 +12,7 @@ from lbry.service.base import Sync, BlockEvent
 from lbry.blockchain.lbrycrd import Lbrycrd
 
 from . import blocks as block_phase, claims as claim_phase, supports as support_phase
-
+from ...error import LbrycrdMisconfigurationError
 
 log = logging.getLogger(__name__)
 
@@ -48,6 +48,9 @@ class BlockchainSync(Sync):
             try:
                 return await self.chain.ensure_subscribable()
             except asyncio.CancelledError:
+                raise
+            except LbrycrdMisconfigurationError as e:
+                log.warning(str(e))
                 raise
             except Exception as e:
                 log.warning("Blockchain not ready, waiting for it: %s", str(e))

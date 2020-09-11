@@ -11,7 +11,7 @@ from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
-from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError, LbrycrdMisconfigurationError
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
@@ -613,14 +613,15 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
-    async def test_sync_waits_for_lbrycrd_to_start(self):
+    async def test_sync_exits_if_zmq_is_misconfigured(self):
         await self.sync.stop()
         await self.chain.stop()
         sync_start = asyncio.create_task(self.sync.start())
         await asyncio.sleep(0)
+        self.chain.ledger.conf.set(lbrycrd_zmq_blocks='')
         await self.chain.start()
-        await sync_start
-        self.assertTrue(sync_start.done())  # test goal is to get here without exceptions
+        with self.assertRaises(LbrycrdMisconfigurationError):
+            await asyncio.wait_for(sync_start, timeout=10)
 
     async def test_sync_advances(self):
         blocks = []
