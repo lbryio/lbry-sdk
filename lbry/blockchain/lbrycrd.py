@@ -246,7 +246,7 @@ class Lbrycrd:
 
     async def rpc(self, method, params=None):
         if self.session.closed:
-            raise Exception("session is closed! We are shutting down.")
+            raise Exception("session is closed! RPC attempted during shutting down.")
         message = {
             "jsonrpc": "1.0",
             "id": "1",
