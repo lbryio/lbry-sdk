@@ -304,7 +304,7 @@ class TestLbrycrdAPIs(AsyncioTestCase):
 
         # lbrycrdr started without zmq
         await chain.start()
-        with self.assertRaises(LbrycrdEventSubscriptionError):
+        with self.assertRaises(LbrycrdMisconfigurationError):
             await chain.ensure_subscribable()
         await chain.stop()
 
@@ -613,7 +613,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
-    async def test_sync_exits_if_zmq_is_misconfigured(self):
+    async def test_sync_waits_for_lbrycrd_to_start_but_exits_if_zmq_misconfigured(self):
         await self.sync.stop()
         await self.chain.stop()
         sync_start = asyncio.create_task(self.sync.start())
@@ -622,6 +622,13 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await self.chain.start()
         with self.assertRaises(LbrycrdMisconfigurationError):
             await asyncio.wait_for(sync_start, timeout=10)
+
+        await self.chain.stop()
+        await self.sync.stop()
+        sync_start = asyncio.create_task(self.sync.start())
+        await self.chain.start('-zmqpubhashblock=tcp://127.0.0.1:29005')
+        await sync_start
+        self.assertTrue(sync_start.done())
 
     async def test_sync_advances(self):
         blocks = []
