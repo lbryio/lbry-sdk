@@ -309,19 +309,19 @@ class TestLbrycrdAPIs(AsyncioTestCase):
         await chain.stop()
 
         # lbrycrdr started with zmq, ensure_subscribable updates lbrycrd_zmq_blocks config
-        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29000')
+        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29005')
         self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, '')
         await chain.ensure_subscribable()
-        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://127.0.0.1:29000')
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://127.0.0.1:29005')
         await chain.stop()
 
         # lbrycrdr started with zmq, ensure_subscribable does not override lbrycrd_zmq_blocks config
         chain.ledger.conf.set(lbrycrd_zmq_blocks='')
-        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29000')
+        await chain.start('-zmqpubhashblock=tcp://127.0.0.1:29005')
         self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, '')
-        chain.ledger.conf.set(lbrycrd_zmq_blocks='tcp://external-ip:29000')
+        chain.ledger.conf.set(lbrycrd_zmq_blocks='tcp://external-ip:29005')
         await chain.ensure_subscribable()
-        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://external-ip:29000')
+        self.assertEqual(chain.ledger.conf.lbrycrd_zmq_blocks, 'tcp://external-ip:29005')
 
     async def test_block_event(self):
         chain = Lbrycrd.temp_regtest()
@@ -613,6 +613,22 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
 
 class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
+    async def test_sync_waits_for_lbrycrd_to_start_but_exits_if_zmq_misconfigured(self):
+        await self.sync.stop()
+        await self.chain.stop()
+        sync_start = asyncio.create_task(self.sync.start())
+        await asyncio.sleep(0)
+        self.chain.ledger.conf.set(lbrycrd_zmq_blocks='')
+        await self.chain.start()
+        with self.assertRaises(LbrycrdEventSubscriptionError):
+            await asyncio.wait_for(sync_start, timeout=10)
+
+        await self.chain.stop()
+        await self.sync.stop()
+        sync_start = asyncio.create_task(self.sync.start())
+        await self.chain.start('-zmqpubhashblock=tcp://127.0.0.1:29005')
+        await sync_start
+        self.assertTrue(sync_start.done())
 
     async def test_sync_advances(self):
         blocks = []
