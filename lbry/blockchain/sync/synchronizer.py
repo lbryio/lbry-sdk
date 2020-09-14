@@ -10,9 +10,9 @@ from lbry.db.query_context import Event, Progress
 from lbry.event import BroadcastSubscription
 from lbry.service.base import Sync, BlockEvent
 from lbry.blockchain.lbrycrd import Lbrycrd
+from lbry.error import LbrycrdEventSubscriptionError
 
 from . import blocks as block_phase, claims as claim_phase, supports as support_phase
-from ...error import LbrycrdMisconfigurationError
 
 log = logging.getLogger(__name__)
 
@@ -49,8 +49,11 @@ class BlockchainSync(Sync):
                 return await self.chain.ensure_subscribable()
             except asyncio.CancelledError:
                 raise
-            except LbrycrdMisconfigurationError as e:
-                log.warning(str(e))
+            except LbrycrdEventSubscriptionError as e:
+                log.warning(
+                    "Lbrycrd is misconfigured. Please double check if"
+                    " zmqpubhashblock is properly set on lbrycrd.conf"
+                )
                 raise
             except Exception as e:
                 log.warning("Blockchain not ready, waiting for it: %s", str(e))

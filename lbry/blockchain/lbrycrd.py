@@ -15,7 +15,7 @@ import zmq.asyncio
 
 from lbry.conf import Config
 from lbry.event import EventController
-from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError, LbrycrdMisconfigurationError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 
 from .database import BlockchainDB
 from .ledger import Ledger, RegTestLedger
@@ -209,8 +209,6 @@ class Lbrycrd:
 
     async def ensure_subscribable(self):
         zmq_notifications = await self.get_zmq_notifications()
-        if not zmq_notifications:
-            raise LbrycrdMisconfigurationError("zmqpubhashblock")
         subs = {e['type']: e['address'] for e in zmq_notifications}
         if ZMQ_BLOCK_EVENT not in subs:
             raise LbrycrdEventSubscriptionError(ZMQ_BLOCK_EVENT)

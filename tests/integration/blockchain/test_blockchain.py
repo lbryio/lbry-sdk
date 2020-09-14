@@ -11,7 +11,7 @@ from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Stream, Channel
 from lbry.schema.support import Support
-from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError, LbrycrdMisconfigurationError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
@@ -304,7 +304,7 @@ class TestLbrycrdAPIs(AsyncioTestCase):
 
         # lbrycrdr started without zmq
         await chain.start()
-        with self.assertRaises(LbrycrdMisconfigurationError):
+        with self.assertRaises(LbrycrdEventSubscriptionError):
             await chain.ensure_subscribable()
         await chain.stop()
 
@@ -620,7 +620,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await asyncio.sleep(0)
         self.chain.ledger.conf.set(lbrycrd_zmq_blocks='')
         await self.chain.start()
-        with self.assertRaises(LbrycrdMisconfigurationError):
+        with self.assertRaises(LbrycrdEventSubscriptionError):
             await asyncio.wait_for(sync_start, timeout=10)
 
         await self.chain.stop()

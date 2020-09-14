@@ -417,10 +417,3 @@ class LbrycrdEventSubscriptionError(LbrycrdError):
     def __init__(self, event):
         self.event = event
         super().__init__(f"Lbrycrd is not publishing '{event}' events.")
-
-
-class LbrycrdMisconfigurationError(LbrycrdError):
-    def __init__(self, config_key):
-        self.config_key = config_key
-        super().__init__(f"Lbrycrd is misconfigured. Please double check if"
-                         f" {config_key} is properly set on lbrycrd.conf")
