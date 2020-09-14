@@ -58,7 +58,7 @@ setup(
         'pyzmq==18.1.1',
         'sqlalchemy@git+https://github.com/sqlalchemy/sqlalchemy.git',
         'chiabip158@git+https://github.com/Chia-Network/chiabip158.git',
-        'tqdm',
+        'tqdm==4.49.0',
     ],
     extras_require={
         'ui': ['pyside2'],
