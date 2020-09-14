@@ -214,7 +214,7 @@ class tqdm2(tqdm):  # pylint: disable=invalid-name
     def format_meter(
         n, total, elapsed, ncols=None, prefix='', ascii=False,  # pylint: disable=redefined-builtin
         unit='it', unit_scale=False, rate=None, bar_format=None,
-        postfix=None, unit_divisor=1000, **extra_kwargs
+        postfix=None, unit_divisor=1000, initial=0, **extra_kwargs
     ):
 
         # sanity check: total
