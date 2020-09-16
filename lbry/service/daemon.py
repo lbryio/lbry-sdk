@@ -10,9 +10,11 @@ from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Resp
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
 from lbry.service.json_encoder import JSONResponseEncoder
+from lbry.blockchain.ledger import Ledger
 from lbry.service.base import Service
 from lbry.service.api import API
-from lbry.console import Console
+from lbry.service.full_node import FullNode
+from lbry.console import Console, Advanced as AdvancedConsole, Basic as BasicConsole
 
 
 log = logging.getLogger(__name__)
@@ -72,7 +74,8 @@ class Daemon:
     Mostly connects API to aiohttp stuff.
     Handles starting and stopping API
     """
-    def __init__(self, service: Service, console: Console):
+    def __init__(self, loop: asyncio.AbstractEventLoop, service: Service, console: Console):
+        self._loop = loop
         self.service = service
         self.conf = service.conf
         self.console = console
@@ -91,22 +94,31 @@ class Daemon:
         self.app.on_shutdown.append(self.on_shutdown)
         self.runner = AppRunner(self.app)
 
-    def run(self):
+    @classmethod
+    def from_config(cls, conf):
         loop = asyncio.new_event_loop()
+        service = FullNode(Ledger(conf))
+        if conf.console == "advanced":
+            console = AdvancedConsole(service)
+        else:
+            console = BasicConsole(service)
+        return cls(loop, service, console)
+
+    def run(self):
         for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, loop.stop)
+            self._loop.add_signal_handler(sig, self._loop.stop)
         try:
-            loop.run_until_complete(self.start())
-            loop.run_forever()
+            self._loop.run_until_complete(self.start())
+            self._loop.run_forever()
         finally:
             try:
-                loop.run_until_complete(self.stop())
+                self._loop.run_until_complete(self.stop())
             finally:
                 try:
-                    _cancel_all_tasks(loop)
-                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    _cancel_all_tasks(self._loop)
+                    self._loop.run_until_complete(self._loop.shutdown_asyncgens())
                 finally:
-                    loop.close()
+                    self._loop.close()
 
     async def start(self):
         self.console.starting()
