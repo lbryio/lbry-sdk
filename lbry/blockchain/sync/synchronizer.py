@@ -2,17 +2,19 @@ import os
 import asyncio
 import logging
 from typing import Optional, Tuple, Set, List, Coroutine
+from concurrent.futures import ThreadPoolExecutor
 
 from lbry.db import Database
 from lbry.db import queries as q
 from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
 from lbry.db.query_context import Event, Progress
-from lbry.event import BroadcastSubscription
+from lbry.event import BroadcastSubscription, EventController
 from lbry.service.base import Sync, BlockEvent
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.error import LbrycrdEventSubscriptionError
 
 from . import blocks as block_phase, claims as claim_phase, supports as support_phase
+from .context import uninitialize
 from .filter_builder import split_range_into_10k_batches
 
 log = logging.getLogger(__name__)
@@ -40,9 +42,13 @@ class BlockchainSync(Sync):
         super().__init__(chain.ledger, db)
         self.chain = chain
         self.pid = os.getpid()
-        self.on_block_subscription: Optional[BroadcastSubscription] = None
+        self.on_block_hash_subscription: Optional[BroadcastSubscription] = None
+        self.on_tx_hash_subscription: Optional[BroadcastSubscription] = None
         self.advance_loop_task: Optional[asyncio.Task] = None
-        self.advance_loop_event = asyncio.Event()
+        self.block_hash_event = asyncio.Event()
+        self.tx_hash_event = asyncio.Event()
+        self._on_mempool_controller = EventController()
+        self.on_mempool = self._on_mempool_controller.stream
 
     async def wait_for_chain_ready(self):
         while True:
@@ -67,17 +73,25 @@ class BlockchainSync(Sync):
         await self.advance_loop_task
         await self.chain.subscribe()
         self.advance_loop_task = asyncio.create_task(self.advance_loop())
-        self.on_block_subscription = self.chain.on_block.listen(
-            lambda e: self.advance_loop_event.set()
+        self.on_block_hash_subscription = self.chain.on_block_hash.listen(
+            lambda e: self.block_hash_event.set()
+        )
+        self.on_tx_hash_subscription = self.chain.on_tx_hash.listen(
+            lambda e: self.tx_hash_event.set()
         )
 
     async def stop(self):
         self.chain.unsubscribe()
-        if self.on_block_subscription is not None:
-            self.on_block_subscription.cancel()
         self.db.stop_event.set()
-        if self.advance_loop_task is not None:
-            self.advance_loop_task.cancel()
+        for subscription in (
+            self.on_block_hash_subscription,
+            self.on_tx_hash_subscription,
+            self.advance_loop_task
+        ):
+            if subscription is not None:
+                subscription.cancel()
+        if isinstance(self.db.executor, ThreadPoolExecutor):
+            await self.db.run(uninitialize)
 
     async def run_tasks(self, tasks: List[Coroutine]) -> Optional[Set[asyncio.Future]]:
         done, pending = await asyncio.wait(
@@ -337,12 +351,25 @@ class BlockchainSync(Sync):
         if blocks_added:
             await self._on_block_controller.add(BlockEvent(blocks_added[-1]))
 
+    async def sync_mempool(self):
+        await self.db.run(block_phase.sync_mempool)
+        await self.sync_spends([-1])
+        await self.db.run(claim_phase.claims_insert, [-2, 0], True, self.CLAIM_FLUSH_SIZE)
+        await self.db.run(claim_phase.claims_vacuum)
+
     async def advance_loop(self):
         while True:
-            await self.advance_loop_event.wait()
-            self.advance_loop_event.clear()
             try:
-                await self.advance()
+                await asyncio.wait([
+                    self.tx_hash_event.wait(),
+                    self.block_hash_event.wait(),
+                ], return_when=asyncio.FIRST_COMPLETED)
+                if self.block_hash_event.is_set():
+                    self.block_hash_event.clear()
+                    await self.db.run(block_phase.clear_mempool)
+                    await self.advance()
+                self.tx_hash_event.clear()
+                await self.sync_mempool()
             except asyncio.CancelledError:
                 return
             except Exception as e:

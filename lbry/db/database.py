@@ -100,22 +100,31 @@ class Database:
         return 1
 
     @classmethod
-    def temp_from_url_regtest(cls, db_url, lbrycrd_dir=None):
+    def temp_from_url_regtest(cls, db_url, lbrycrd_config=None):
         from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
         directory = tempfile.mkdtemp()
-        conf = Config.with_same_dir(directory).set(db_url=db_url)
-        if lbrycrd_dir is not None:
-            conf.lbrycrd_dir = lbrycrd_dir
+        if lbrycrd_config:
+            conf = lbrycrd_config
+            conf.data_dir = directory
+            conf.download_dir = directory
+            conf.wallet_dir = directory
+        else:
+            conf = Config.with_same_dir(directory)
+        conf.set(blockchain="regtest", db_url=db_url)
         ledger = RegTestLedger(conf)
         return cls(ledger)
 
     @classmethod
-    def temp_sqlite_regtest(cls, lbrycrd_dir=None):
+    def temp_sqlite_regtest(cls, lbrycrd_config=None):
         from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
         directory = tempfile.mkdtemp()
-        conf = Config.with_same_dir(directory).set(blockchain="regtest")
-        if lbrycrd_dir is not None:
-            conf.lbrycrd_dir = lbrycrd_dir
+        if lbrycrd_config:
+            conf = lbrycrd_config
+            conf.data_dir = directory
+            conf.download_dir = directory
+            conf.wallet_dir = directory
+        else:
+            conf = Config.with_same_dir(directory).set(blockchain="regtest")
         ledger = RegTestLedger(conf)
         return cls(ledger)
 
