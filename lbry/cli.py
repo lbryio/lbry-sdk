@@ -12,9 +12,6 @@ from lbry import __version__
 from lbry.conf import Config, CLIConfig
 from lbry.service import Daemon, Client
 from lbry.service.metadata import interface
-from lbry.service.full_node import FullNode
-from lbry.blockchain.ledger import Ledger
-from lbry.console import Advanced as AdvancedConsole, Basic as BasicConsole
 
 
 def split_subparser_argument(parent, original, name, condition):
@@ -251,12 +248,7 @@ def main(argv=None):
         if args.help:
             args.start_parser.print_help()
         elif args.full_node:
-            service = FullNode(Ledger(conf))
-            if conf.console == "advanced":
-                console = AdvancedConsole(service)
-            else:
-                console = BasicConsole(service)
-            return Daemon(service, console).run()
+            return Daemon.from_config(conf).run()
         else:
             print('Only `start --full-node` is currently supported.')
     elif args.command == 'install':
