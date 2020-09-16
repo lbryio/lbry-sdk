@@ -594,7 +594,7 @@ class Config(CLIConfig):
     reflector_servers = Servers("Reflector re-hosting servers", [
         ('reflector.lbry.com', 5566)
     ])
-    lbryum_servers = Servers("SPV wallet servers", [
+    known_full_nodes = Servers("Full blockchain nodes", [
         ('spv11.lbry.com', 50001),
         ('spv12.lbry.com', 50001),
         ('spv13.lbry.com', 50001),
@@ -621,7 +621,7 @@ class Config(CLIConfig):
     lbrycrd_rpc_host = String("Hostname for connecting to lbrycrd.", "localhost")
     lbrycrd_rpc_port = Integer("Port for connecting to lbrycrd.", 9245)
     lbrycrd_peer_port = Integer("Peer port for lbrycrd.", 9246)
-    lbrycrd_zmq_blocks = String("ZMQ block events address.")
+    lbrycrd_zmq = String("ZMQ events address.")
     lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
     spv_address_filters = Toggle(
         "Generate Golomb-Rice coding filters for blocks and transactions. Enables "

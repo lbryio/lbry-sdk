@@ -19,7 +19,9 @@ class LightClient(Service):
 
     def __init__(self, ledger: Ledger):
         super().__init__(ledger)
-        self.client = Client(Config().api_connection_url)
+        self.client = Client(
+            f"http://{ledger.conf.full_nodes[0][0]}:{ledger.conf.full_nodes[0][1]}/api"
+        )
         self.sync = SPVSync(self)
 
     async def search_transactions(self, txids):

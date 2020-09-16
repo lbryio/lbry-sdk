@@ -16,6 +16,7 @@ from typing import Optional, List, Union
 from binascii import unhexlify, hexlify
 
 import ecdsa
+from distutils.dir_util import remove_tree
 
 from lbry.db import Database
 from lbry.blockchain import (
@@ -26,7 +27,7 @@ from lbry.blockchain.bcd_data_stream import BCDataStream
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.dewies import lbc_to_dewies
 from lbry.constants import COIN, CENT, NULL_HASH32
-from lbry.service import Daemon, FullNode, jsonrpc_dumps_pretty
+from lbry.service import Daemon, FullNode, LightClient, jsonrpc_dumps_pretty
 from lbry.conf import Config
 from lbry.console import Console
 from lbry.wallet import Wallet, Account
@@ -400,6 +401,7 @@ class UnitDBTestCase(AsyncioTestCase):
 class IntegrationTestCase(AsyncioTestCase):
 
     SEED = None
+    LBRYCRD_ARGS = '-rpcworkqueue=128',
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -410,6 +412,52 @@ class IntegrationTestCase(AsyncioTestCase):
         self.api = None
         self.wallet: Optional[Wallet] = None
         self.account: Optional[Account] = None
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        self.chain = self.make_chain()
+        await self.chain.ensure()
+        self.addCleanup(self.chain.stop)
+        await self.chain.start(*self.LBRYCRD_ARGS)
+
+    @staticmethod
+    def make_chain():
+        return Lbrycrd.temp_regtest()
+
+    async def make_db(self, chain):
+        db_driver = os.environ.get('TEST_DB', 'sqlite')
+        if db_driver == 'sqlite':
+            db = Database.temp_sqlite_regtest(chain.ledger.conf)
+        elif db_driver.startswith('postgres') or db_driver.startswith('psycopg'):
+            db_driver = 'postgresql'
+            db_name = f'lbry_test_chain'
+            db_connection = 'postgres:postgres@localhost:5432'
+            meta_db = Database.from_url(f'postgresql://{db_connection}/postgres')
+            await meta_db.drop(db_name)
+            await meta_db.create(db_name)
+            db = Database.temp_from_url_regtest(
+                f'postgresql://{db_connection}/{db_name}',
+                chain.ledger.conf
+            )
+        else:
+            raise RuntimeError(f"Unsupported database driver: {db_driver}")
+        self.addCleanup(remove_tree, db.ledger.conf.data_dir)
+        await db.open()
+        self.addCleanup(db.close)
+        self.db_driver = db_driver
+        return db
+
+    @staticmethod
+    def find_claim_txo(tx) -> Optional[Output]:
+        for txo in tx.outputs:
+            if txo.is_claim:
+                return txo
+
+    @staticmethod
+    def find_support_txo(tx) -> Optional[Output]:
+        for txo in tx.outputs:
+            if txo.is_support:
+                return txo
 
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
@@ -487,14 +535,13 @@ class CommandTestCase(IntegrationTestCase):
         self.reflector = None
 
     async def asyncSetUp(self):
-        self.chain = Lbrycrd.temp_regtest()
-        await self.chain.ensure()
-        self.addCleanup(self.chain.stop)
-        await self.chain.start('-rpcworkqueue=128')
-
+        await super().asyncSetUp()
         await self.generate(200, wait=False)
 
-        self.daemon = await self.add_daemon()
+        self.full_node = self.daemon = await self.add_full_node()
+        if os.environ.get('TEST_MODE', 'full-node') == 'client':
+            self.daemon = await self.add_light_client(self.full_node)
+
         self.service = self.daemon.service
         self.ledger = self.service.ledger
         self.api = self.daemon.api
@@ -509,7 +556,7 @@ class CommandTestCase(IntegrationTestCase):
         await self.chain.send_to_address(addresses[0], '10.0')
         await self.generate(5)
 
-    async def add_daemon(self):
+    async def add_full_node(self):
         self.daemon_port += 1
         path = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, path, True)
@@ -522,6 +569,21 @@ class CommandTestCase(IntegrationTestCase):
             spv_address_filters=False
         ))
         service = FullNode(ledger)
+        console = Console(service)
+        daemon = Daemon(service, console)
+        self.addCleanup(daemon.stop)
+        await daemon.start()
+        return daemon
+
+    async def add_light_client(self, full_node):
+        self.daemon_port += 1
+        path = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, path, True)
+        ledger = RegTestLedger(Config.with_same_dir(path).set(
+            api=f'localhost:{self.daemon_port}',
+            full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)]
+        ))
+        service = LightClient(ledger)
         console = Console(service)
         daemon = Daemon(service, console)
         self.addCleanup(daemon.stop)

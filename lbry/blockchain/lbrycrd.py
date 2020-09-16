@@ -77,12 +77,21 @@ class Lbrycrd:
         self.subscribed = False
         self.subscription: Optional[asyncio.Task] = None
         self.default_generate_address = None
-        self._on_block_controller = EventController()
-        self.on_block = self._on_block_controller.stream
-        self.on_block.listen(lambda e: log.info('%s %s', hexlify(e['hash']), e['msg']))
+        self._on_block_hash_controller = EventController()
+        self.on_block_hash = self._on_block_hash_controller.stream
+        self.on_block_hash.listen(lambda e: log.info('%s %s', hexlify(e['hash']), e['msg']))
+        self._on_tx_hash_controller = EventController()
+        self.on_tx_hash = self._on_tx_hash_controller.stream
 
         self.db = BlockchainDB(self.actual_data_dir)
-        self.session: Optional[aiohttp.ClientSession] = None
+        self._session: Optional[aiohttp.ClientSession] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    @property
+    def session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     @classmethod
     def temp_regtest(cls):
@@ -91,7 +100,7 @@ class Lbrycrd:
                 blockchain="regtest",
                 lbrycrd_rpc_port=9245 + 2,  # avoid conflict with default rpc port
                 lbrycrd_peer_port=9246 + 2,  # avoid conflict with default peer port
-                lbrycrd_zmq_blocks="tcp://127.0.0.1:29002"  # avoid conflict with default port
+                lbrycrd_zmq="tcp://127.0.0.1:29002"
             )
         ))
 
@@ -161,8 +170,11 @@ class Lbrycrd:
     def get_start_command(self, *args):
         if self.is_regtest:
             args += ('-regtest',)
-        if self.conf.lbrycrd_zmq_blocks:
-            args += (f'-zmqpubhashblock={self.conf.lbrycrd_zmq_blocks}',)
+        if self.conf.lbrycrd_zmq:
+            args += (
+                f'-zmqpubhashblock={self.conf.lbrycrd_zmq}',
+                f'-zmqpubhashtx={self.conf.lbrycrd_zmq}',
+            )
         return (
             self.daemon_bin,
             f'-datadir={self.data_dir}',
@@ -175,13 +187,15 @@ class Lbrycrd:
         )
 
     async def open(self):
-        self.session = aiohttp.ClientSession()
         await self.db.open()
 
     async def close(self):
         await self.db.close()
-        if self.session is not None:
-            await self.session.close()
+        await self.close_session()
+
+    async def close_session(self):
+        if self._session is not None:
+            await self._session.close()
 
     async def start(self, *args):
         loop = asyncio.get_running_loop()
@@ -213,26 +227,33 @@ class Lbrycrd:
         subs = {e['type']: e['address'] for e in zmq_notifications}
         if ZMQ_BLOCK_EVENT not in subs:
             raise LbrycrdEventSubscriptionError(ZMQ_BLOCK_EVENT)
-        if not self.conf.lbrycrd_zmq_blocks:
-            self.conf.lbrycrd_zmq_blocks = subs[ZMQ_BLOCK_EVENT]
+        if not self.conf.lbrycrd_zmq:
+            self.conf.lbrycrd_zmq = subs[ZMQ_BLOCK_EVENT]
 
     async def subscribe(self):
         if not self.subscribed:
             self.subscribed = True
             ctx = zmq.asyncio.Context.instance()
             sock = ctx.socket(zmq.SUB)  # pylint: disable=no-member
-            sock.connect(self.conf.lbrycrd_zmq_blocks)
+            sock.connect(self.conf.lbrycrd_zmq)
             sock.subscribe("hashblock")
+            sock.subscribe("hashtx")
             self.subscription = asyncio.create_task(self.subscription_handler(sock))
 
     async def subscription_handler(self, sock):
         try:
             while self.subscribed:
                 msg = await sock.recv_multipart()
-                await self._on_block_controller.add({
-                    'hash': msg[1],
-                    'msg': struct.unpack('<I', msg[2])[0]
-                })
+                if msg[0] == b'hashtx':
+                    await self._on_tx_hash_controller.add({
+                        'hash': msg[1],
+                        'msg': struct.unpack('<I', msg[2])[0]
+                    })
+                elif msg[0] == b'hashblock':
+                    await self._on_block_hash_controller.add({
+                        'hash': msg[1],
+                        'msg': struct.unpack('<I', msg[2])[0]
+                    })
         except asyncio.CancelledError:
             sock.close()
             raise
@@ -243,8 +264,16 @@ class Lbrycrd:
             self.subscription.cancel()
             self.subscription = None
 
+    def sync_run(self, coro):
+        if self._loop is None:
+            try:
+                self._loop = asyncio.get_event_loop()
+            except RuntimeError:
+                self._loop = asyncio.new_event_loop()
+        return self._loop.run_until_complete(coro)
+
     async def rpc(self, method, params=None):
-        if self.session.closed:
+        if self._session is not None and self._session.closed:
             raise Exception("session is closed! RPC attempted during shutting down.")
         message = {
             "jsonrpc": "1.0",
@@ -284,6 +313,9 @@ class Lbrycrd:
 
     async def get_block(self, block_hash):
         return await self.rpc("getblock", [block_hash])
+
+    async def get_raw_mempool(self):
+        return await self.rpc("getrawmempool")
 
     async def get_raw_transaction(self, txid):
         return await self.rpc("getrawtransaction", [txid])
