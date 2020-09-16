@@ -10,7 +10,7 @@ from docopt import docopt
 
 from lbry import __version__
 from lbry.conf import Config, CLIConfig
-from lbry.service import Daemon, Client
+from lbry.service import Daemon, Client, FullNode, LightClient
 from lbry.service.metadata import interface
 
 
@@ -115,8 +115,7 @@ def get_argument_parser():
         help='Start LBRY Network interface.'
     )
     start.add_argument(
-        '--full-node', dest='full_node', action="store_true",
-        help='Start a full node with local blockchain data, requires lbrycrd.'
+        "service", choices=[LightClient.name, FullNode.name], default=LightClient.name, nargs="?"
     )
     start.add_argument(
         '--quiet', dest='quiet', action="store_true",
@@ -173,10 +172,11 @@ def ensure_directory_exists(path: str):
 async def execute_command(conf, method, params):
     client = Client(f"http://{conf.api}/ws")
     await client.connect()
-    resp = await (await client.send(method, **params)).first
-    print(resp)
+    responses = await client.send(method, **params)
+    result = await responses.first
     await client.disconnect()
-    return resp
+    print(result)
+    return result
 
 
 def normalize_value(x, key=None):
@@ -247,10 +247,10 @@ def main(argv=None):
     elif args.command == 'start':
         if args.help:
             args.start_parser.print_help()
-        elif args.full_node:
-            return Daemon.from_config(conf).run()
+        elif args.service == FullNode.name:
+            return Daemon.from_config(FullNode, conf).run()
         else:
-            print('Only `start --full-node` is currently supported.')
+            print(f'Only `start {FullNode.name}` is currently supported.')
     elif args.command == 'install':
         if args.help:
             args.install_parser.print_help()

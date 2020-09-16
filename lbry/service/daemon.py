@@ -2,19 +2,18 @@ import json
 import signal
 import asyncio
 import logging
-
 from weakref import WeakSet
 from asyncio.runners import _cancel_all_tasks
+from typing import Type
 
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
+from lbry.conf import Config
+from lbry.console import Console, console_class_from_name
+from lbry.service import API, Service
 from lbry.service.json_encoder import JSONResponseEncoder
-from lbry.blockchain.ledger import Ledger
-from lbry.service.base import Service
-from lbry.service.api import API
-from lbry.service.full_node import FullNode
-from lbry.console import Console, Advanced as AdvancedConsole, Basic as BasicConsole
+from lbry.blockchain.ledger import ledger_class_from_name
 
 
 log = logging.getLogger(__name__)
@@ -74,8 +73,8 @@ class Daemon:
     Mostly connects API to aiohttp stuff.
     Handles starting and stopping API
     """
-    def __init__(self, loop: asyncio.AbstractEventLoop, service: Service, console: Console):
-        self._loop = loop
+    def __init__(self, service: Service, console: Console):
+        self._loop = asyncio.get_running_loop()
         self.service = service
         self.conf = service.conf
         self.console = console
@@ -95,14 +94,17 @@ class Daemon:
         self.runner = AppRunner(self.app)
 
     @classmethod
-    def from_config(cls, conf):
-        loop = asyncio.new_event_loop()
-        service = FullNode(Ledger(conf))
-        if conf.console == "advanced":
-            console = AdvancedConsole(service)
-        else:
-            console = BasicConsole(service)
-        return cls(loop, service, console)
+    def from_config(cls, service_class: Type[Service], conf: Config, ) -> 'Daemon':
+
+        async def setup():
+            ledger_class = ledger_class_from_name(conf.blockchain)
+            ledger = ledger_class(conf)
+            service = service_class(ledger)
+            console_class = console_class_from_name(conf.console)
+            console = console_class(service)
+            return cls(service, console)
+
+        return asyncio.new_event_loop().run_until_complete(setup())
 
     def run(self):
         for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):

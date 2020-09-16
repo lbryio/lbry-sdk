@@ -1,6 +1,6 @@
-import typing
 from binascii import unhexlify
 from string import hexdigits
+from typing import TYPE_CHECKING, Type
 
 from lbry.crypto.hash import hash160, double_sha256
 from lbry.crypto.base58 import Base58
@@ -10,7 +10,7 @@ from .checkpoints import HASHES
 from .dewies import lbc_to_dewies
 
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from lbry.conf import Config
 
 
@@ -164,3 +164,11 @@ class RegTestLedger(Ledger):
     genesis_bits = 0x207fffff
     target_timespan = 1
     checkpoints = {}
+
+
+def ledger_class_from_name(name) -> Type[Ledger]:
+    return {
+        Ledger.network_name: Ledger,
+        TestNetLedger.network_name: TestNetLedger,
+        RegTestLedger.network_name: RegTestLedger
+    }[name]

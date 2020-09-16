@@ -511,7 +511,7 @@ class Config(CLIConfig):
     )
     console = StringChoice(
         "Basic text console output or advanced colored output with progress bars.",
-        ["basic", "advanced"], "advanced"
+        ["basic", "advanced", "none"], "advanced"
     )
 
     # directories
@@ -615,14 +615,14 @@ class Config(CLIConfig):
     comment_server = String("Comment server API URL", "https://comments.lbry.com/api")
 
     # blockchain
+    blockchain = StringChoice("Blockchain network type.", ["mainnet", "regtest", "testnet"], "mainnet")
     lbrycrd_rpc_user = String("Username for connecting to lbrycrd.", "rpcuser")
     lbrycrd_rpc_pass = String("Password for connecting to lbrycrd.", "rpcpassword")
     lbrycrd_rpc_host = String("Hostname for connecting to lbrycrd.", "localhost")
     lbrycrd_rpc_port = Integer("Port for connecting to lbrycrd.", 9245)
-    lbrycrd_peer_port = Integer("Port for connecting to lbrycrd.", 9246)
+    lbrycrd_peer_port = Integer("Peer port for lbrycrd.", 9246)
     lbrycrd_zmq_blocks = String("ZMQ block events address.")
     lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
-    blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
     spv_address_filters = Toggle(
         "Generate Golomb-Rice coding filters for blocks and transactions. Enables "
         "light client to synchronize with a full node.",
@@ -703,7 +703,7 @@ class Config(CLIConfig):
     def db_url_or_default(self):
         if self.db_url:
             return self.db_url
-        return 'sqlite:///'+os.path.join(self.data_dir, f'{self.blockchain_name}.db')
+        return 'sqlite:///'+os.path.join(self.data_dir, f'{self.blockchain}.db')
 
 
 def get_windows_directories() -> Tuple[str, str, str, str]:
