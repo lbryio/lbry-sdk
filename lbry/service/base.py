@@ -58,7 +58,6 @@ class Service:
     This is the programmatic api (as compared to API)
     """
 
-    name: str
     sync: Sync
 
     def __init__(self, ledger: Ledger):
