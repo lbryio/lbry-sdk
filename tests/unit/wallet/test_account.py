@@ -1,14 +1,14 @@
-from lbry.testcase import AsyncioTestCase
-from lbry.blockchain import Ledger
+from lbry import Config, Ledger
 from lbry.db import Database, tables
 from lbry.wallet import Account, SingleKey, HierarchicalDeterministic
+from lbry.testcase import AsyncioTestCase
 
 
 class AccountTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = Ledger()
-        self.db = Database(self.ledger, 'sqlite:///:memory:')
+        self.ledger = Ledger(Config.with_null_dir().set(db_url='sqlite:///:memory:'))
+        self.db = Database(self.ledger)
         await self.db.open()
         self.addCleanup(self.db.close)
 
@@ -350,8 +350,8 @@ class AccountEncryptionTests(AccountTestCase):
         'address_generator': {'name': 'single-address'}
     }
 
-    def test_encrypt_wallet(self):
-        account = Account.from_dict(self.ledger, self.db, self.unencrypted_account)
+    async def test_encrypt_wallet(self):
+        account = await Account.from_dict(self.ledger, self.db, self.unencrypted_account)
         account.init_vectors = {
             'seed': self.init_vector,
             'private_key': self.init_vector
@@ -398,11 +398,11 @@ class AccountEncryptionTests(AccountTestCase):
         self.assertEqual(account.to_dict()['seed'], self.unencrypted_account['seed'])
         self.assertEqual(account.to_dict()['private_key'], self.unencrypted_account['private_key'])
 
-    def test_encrypt_decrypt_read_only_account(self):
+    async def test_encrypt_decrypt_read_only_account(self):
         account_data = self.unencrypted_account.copy()
         del account_data['seed']
         del account_data['private_key']
-        account = Account.from_dict(self.ledger, self.db, account_data)
+        account = await Account.from_dict(self.ledger, self.db, account_data)
         encrypted = account.to_dict('password')
         self.assertFalse(encrypted['seed'])
         self.assertFalse(encrypted['private_key'])

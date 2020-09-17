@@ -2,12 +2,8 @@ import os
 import shutil
 import tempfile
 
-
+from lbry import Config, Ledger, Database, WalletManager, Wallet, Account
 from lbry.testcase import AsyncioTestCase
-from lbry.blockchain.ledger import Ledger
-from lbry.wallet import WalletManager, Wallet, Account
-from lbry.db import Database
-from lbry.conf import Config
 
 
 class TestWalletManager(AsyncioTestCase):
@@ -15,10 +11,10 @@ class TestWalletManager(AsyncioTestCase):
     async def asyncSetUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.temp_dir)
-        self.ledger = Ledger(Config(
-            wallet_dir=self.temp_dir
+        self.ledger = Ledger(Config.with_same_dir(self.temp_dir).set(
+            db_url="sqlite:///:memory:"
         ))
-        self.db = Database.from_memory(self.ledger)
+        self.db = Database(self.ledger)
 
     async def test_ensure_path_exists(self):
         wm = WalletManager(self.ledger, self.db)

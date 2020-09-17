@@ -2,20 +2,17 @@ import tempfile
 from binascii import hexlify
 from unittest import TestCase, mock
 
+from lbry import Config, Database, Ledger, Account, Wallet, WalletManager
 from lbry.testcase import AsyncioTestCase
-from lbry.db import Database
-from lbry.blockchain.ledger import Ledger
-from lbry.wallet.manager import WalletManager
-from lbry.wallet.wallet import (
-    Account, Wallet, WalletStorage, TimestampedPreferences
-)
+from lbry.wallet.storage import WalletStorage
+from lbry.wallet.preferences import TimestampedPreferences
 
 
 class WalletTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
-        self.ledger = Ledger()
-        self.db = Database(self.ledger, 'sqlite:///:memory:')
+        self.ledger = Ledger(Config.with_null_dir())
+        self.db = Database(self.ledger, "sqlite:///:memory:")
         await self.db.open()
         self.addCleanup(self.db.close)
 
