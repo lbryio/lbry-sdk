@@ -14,6 +14,8 @@ log = logging.getLogger(__name__)
 
 class FullNode(Service):
 
+    name = "node"
+
     sync: BlockchainSync
 
     def __init__(self, ledger: Ledger, chain: Lbrycrd = None):

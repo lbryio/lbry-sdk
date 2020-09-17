@@ -2,17 +2,18 @@ import json
 import signal
 import asyncio
 import logging
-
 from weakref import WeakSet
 from asyncio.runners import _cancel_all_tasks
+from typing import Type
 
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
 
+from lbry.conf import Config
+from lbry.console import Console, console_class_from_name
+from lbry.service import API, Service
 from lbry.service.json_encoder import JSONResponseEncoder
-from lbry.service.base import Service
-from lbry.service.api import API
-from lbry.console import Console
+from lbry.blockchain.ledger import ledger_class_from_name
 
 
 log = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class Daemon:
     Handles starting and stopping API
     """
     def __init__(self, service: Service, console: Console):
+        self._loop = asyncio.get_running_loop()
         self.service = service
         self.conf = service.conf
         self.console = console
@@ -91,22 +93,34 @@ class Daemon:
         self.app.on_shutdown.append(self.on_shutdown)
         self.runner = AppRunner(self.app)
 
+    @classmethod
+    def from_config(cls, service_class: Type[Service], conf: Config, ) -> 'Daemon':
+
+        async def setup():
+            ledger_class = ledger_class_from_name(conf.blockchain)
+            ledger = ledger_class(conf)
+            service = service_class(ledger)
+            console_class = console_class_from_name(conf.console)
+            console = console_class(service)
+            return cls(service, console)
+
+        return asyncio.new_event_loop().run_until_complete(setup())
+
     def run(self):
-        loop = asyncio.new_event_loop()
         for sig in (signal.SIGHUP, signal.SIGTERM, signal.SIGINT):
-            loop.add_signal_handler(sig, loop.stop)
+            self._loop.add_signal_handler(sig, self._loop.stop)
         try:
-            loop.run_until_complete(self.start())
-            loop.run_forever()
+            self._loop.run_until_complete(self.start())
+            self._loop.run_forever()
         finally:
             try:
-                loop.run_until_complete(self.stop())
+                self._loop.run_until_complete(self.stop())
             finally:
                 try:
-                    _cancel_all_tasks(loop)
-                    loop.run_until_complete(loop.shutdown_asyncgens())
+                    _cancel_all_tasks(self._loop)
+                    self._loop.run_until_complete(self._loop.shutdown_asyncgens())
                 finally:
-                    loop.close()
+                    self._loop.close()
 
     async def start(self):
         self.console.starting()

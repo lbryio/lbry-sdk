@@ -7,7 +7,6 @@ from unittest import TestCase
 
 from lbry import Daemon, FullNode
 from lbry.cli import execute_command
-from lbry.console import Console
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.testcase import CommandTestCase
 
@@ -23,9 +22,8 @@ class TestShutdown(TestCase):
         chain_loop.run_until_complete(chain.ensure())
         chain_loop.run_until_complete(chain.start())
         chain_loop.run_until_complete(chain.generate(1))
-        chain.ledger.conf.set(workers=2)
-        service = FullNode(chain.ledger)
-        daemon = Daemon(service, Console(service))
+        chain.ledger.conf.set(workers=2, console='none')
+        daemon = Daemon.from_config(FullNode, chain.ledger.conf)
 
         def send_signal():
             time.sleep(2)

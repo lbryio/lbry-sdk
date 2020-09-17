@@ -3,7 +3,7 @@ import sys
 import time
 import itertools
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, Type
 from tempfile import TemporaryFile
 
 from tqdm.std import tqdm, Bar
@@ -490,3 +490,7 @@ class Advanced(Basic):
 #        else:
 #            self.stderr.flush(self.bars['read'].write)
 #            self.update_progress(e, d)
+
+
+def console_class_from_name(name) -> Type[Console]:
+    return {'basic': Basic, 'advanced': Advanced}.get(name, Console)

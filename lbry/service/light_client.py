@@ -12,6 +12,8 @@ log = logging.getLogger(__name__)
 
 class LightClient(Service):
 
+    name = "client"
+
     sync: SPVSync
 
     def __init__(self, ledger: Ledger):

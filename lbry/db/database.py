@@ -113,7 +113,7 @@ class Database:
     def temp_sqlite_regtest(cls, lbrycrd_dir=None):
         from lbry import Config, RegTestLedger  # pylint: disable=import-outside-toplevel
         directory = tempfile.mkdtemp()
-        conf = Config.with_same_dir(directory)
+        conf = Config.with_same_dir(directory).set(blockchain="regtest")
         if lbrycrd_dir is not None:
             conf.lbrycrd_dir = lbrycrd_dir
         ledger = RegTestLedger(conf)
