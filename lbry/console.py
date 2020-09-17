@@ -85,7 +85,7 @@ class Basic(Console):
         super().__init__(service)
         self.service.sync.on_progress.listen(self.on_sync_progress)
         self.tasks = {}
-        logging.basicConfig(level=logging.INFO)
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(name)s:%(lineno)d: %(message)s")
 
     def starting(self):
         conf = self.service.conf
