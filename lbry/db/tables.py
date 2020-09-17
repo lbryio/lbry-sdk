@@ -45,9 +45,25 @@ Block = Table(
     Column('file_number', SmallInteger),
     Column('height', Integer),
     Column('timestamp', Integer),
-    Column('block_filter', LargeBinary, nullable=True)
 )
 
+pg_add_block_constraints_and_indexes = [
+    "ALTER TABLE block ADD PRIMARY KEY (block_hash);"
+]
+
+BlockFilter = Table(
+    'block_filter', metadata,
+    Column('block_hash', LargeBinary, primary_key=True),
+    Column('block_filter', LargeBinary, nullable=True),
+)
+join_block_filter = Block.join(BlockFilter, BlockFilter.columns.block_hash == Block.columns.block_hash, full=True)
+pg_add_block_filter_constraints_and_indexes = [
+    "ALTER TABLE block_filter ADD PRIMARY KEY (block_hash);",
+    "ALTER TABLE block_filter ADD CONSTRAINT fk_block_filter "
+    " FOREIGN KEY(block_hash) "
+	" REFERENCES block(block_hash) "
+    " ON DELETE CASCADE;"
+]
 
 TX = Table(
     'tx', metadata,
@@ -117,6 +133,7 @@ pg_add_txo_constraints_and_indexes = [
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
     f"CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC) "
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
+    "CREATE INDEX txo_tx_height ON txo (height);"
 ]
 
 
@@ -134,6 +151,7 @@ txi_join_account = TXI.join(AccountAddress, TXI.columns.address == AccountAddres
 
 pg_add_txi_constraints_and_indexes = [
     "ALTER TABLE txi ADD PRIMARY KEY (txo_hash);",
+    "CREATE INDEX txi_tx_height ON txi (height);"
 ]
 
 
