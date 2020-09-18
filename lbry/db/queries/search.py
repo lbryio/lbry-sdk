@@ -32,6 +32,15 @@ BASE_SELECT_SUPPORT_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
 ]
 
 
+def compat_layer(**constraints):
+    # for old sdk, to be removed later
+    replacements = {"effective_amount": "staked_amount"}
+    for old_key, new_key in replacements.items():
+        if old_key in constraints:
+            constraints[new_key] = constraints.pop(old_key)
+    return constraints
+
+
 def select_supports(cols: List = None, **constraints) -> Select:
     if cols is None:
         cols = BASE_SELECT_SUPPORT_COLUMNS
@@ -82,6 +91,7 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
 
 
 def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
+    constraints = compat_layer(**constraints)
     if cols is None:
         cols = BASE_SELECT_CLAIM_COLUMNS
     if 'order_by' in constraints:

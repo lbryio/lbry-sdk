@@ -919,6 +919,17 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@notfound#ab/notfound"]))
         self.assertEqual(resolutions.txos[0].error.text, "Could not find channel in \"@notfound#ab/notfound\".")
 
+    async def test_claim_search_effective_amount(self):
+        claim = await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True, amount='0.42'))
+        await self.generate(1)
+        results = await self.db.search_claims(staked_amount=42000000)
+        self.assertEqual(claim.claim_id, results[0].claim_id)
+        # compat layer
+        results = await self.db.search_claims(effective_amount=42000000)
+        self.assertEqual(claim.claim_id, results[0].claim_id)
+
+
+
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 
