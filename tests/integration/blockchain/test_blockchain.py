@@ -401,11 +401,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             signed = await self.chain.sign_raw_transaction_with_wallet(funded['hex'])
             await self.chain.send_raw_transaction(signed['hex'])
             tx = Transaction(unhexlify(signed['hex']))
-            claim = None
-            for txo in tx.outputs:
-                if txo.is_claim:
-                    claim = txo
-                    break
+            claim = self.find_claim_txo(tx)
             support_tx = Transaction().add_outputs([
                 Output.pay_support_pubkey_hash(CENT, claim.claim_name, claim.claim_id, address),
             ])
@@ -416,7 +412,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
         # supports \w data aren't supported until block 350, fast forward a little
         await self.chain.generate(60)
-        claim = tx.outputs[0]
+        claim = self.find_claim_txo(tx)
         tx = Transaction().add_outputs([
             Output.pay_support_pubkey_hash(CENT, claim.claim_name, claim.claim_id, address),
             Output.pay_support_data_pubkey_hash(
