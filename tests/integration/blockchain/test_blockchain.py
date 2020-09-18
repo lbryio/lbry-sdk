@@ -921,7 +921,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         results = await self.db.search_claims(staked_amount=42000000)
         self.assertEqual(claim.claim_id, results[0].claim_id)
         # compat layer
-        results = await self.db.search_claims(effective_amount=42000000)
+        results = await self.db.search_claims(effective_amount=42000000, amount_order=1, order_by=["effective_amount"])
         self.assertEqual(claim.claim_id, results[0].claim_id)
 
 

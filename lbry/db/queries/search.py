@@ -38,6 +38,9 @@ def compat_layer(**constraints):
     for old_key, new_key in replacements.items():
         if old_key in constraints:
             constraints[new_key] = constraints.pop(old_key)
+        order_by = constraints.get("order_by", [])
+        if old_key in order_by:
+            constraints["order_by"] = [order_key if order_key != old_key else new_key for order_key in order_by]
     return constraints
 
 
@@ -133,7 +136,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         constraints['offset'] = int(constraints.pop('sequence')) - 1
         constraints['limit'] = 1
     if 'amount_order' in constraints:
-        constraints['order_by'] = 'effective_amount DESC'
+        constraints['order_by'] = 'staked_amount DESC'
         constraints['offset'] = int(constraints.pop('amount_order')) - 1
         constraints['limit'] = 1
 
