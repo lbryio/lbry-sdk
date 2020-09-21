@@ -273,11 +273,17 @@ class Output(InputOutput):
 
     @property
     def pubkey_hash(self):
-        return self.script.values['pubkey_hash']
+        pubkey_hash = self.script.values.get('pubkey_hash')
+        if pubkey_hash:
+            return pubkey_hash
+        return hash160(self.script.values['pubkey'])
 
     @property
     def has_address(self):
-        return 'pubkey_hash' in self.script.values
+        return (
+            'pubkey_hash' in self.script.values or
+            'pubkey' in self.script.values
+        )
 
     def get_address(self, ledger):
         return ledger.hash160_to_address(self.pubkey_hash)
