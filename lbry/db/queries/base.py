@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.future import select
 
 from ..query_context import context
-from ..tables import SCHEMA_VERSION, metadata, Version, Claim, Support, Block, TX
+from ..tables import SCHEMA_VERSION, metadata, Version, Claim, Support, Block, BlockFilter, TX
 
 
 def execute(sql):
@@ -11,6 +11,10 @@ def execute(sql):
 
 def execute_fetchall(sql):
     return context().fetchall(text(sql))
+
+
+def has_filters():
+    return context().has_records(BlockFilter)
 
 
 def has_claims():
@@ -22,7 +26,7 @@ def has_supports():
 
 
 def get_best_block_height():
-    context().fetchmax(Block.c.height, -1)
+    return context().fetchmax(Block.c.height, -1)
 
 
 def insert_block(block):
@@ -50,7 +54,7 @@ def disable_trigger_and_constraints(table_name):
     ctx = context()
     if ctx.is_postgres:
         ctx.execute(text(f"ALTER TABLE {table_name} DISABLE TRIGGER ALL;"))
-    if table_name in ('tag', 'stake'):
+    if table_name in ('tag', 'stake', 'block_group_filter', 'mempool_filter'):
         return
     if ctx.is_postgres:
         ctx.execute(text(

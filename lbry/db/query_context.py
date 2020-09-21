@@ -26,7 +26,10 @@ from lbry.schema.result import Censor
 from lbry.schema.mime_types import guess_stream_type
 
 from .utils import pg_insert
-from .tables import Block, TX, TXO, TXI, Claim, Tag, Support
+from .tables import (
+    Block, BlockFilter, BlockGroupFilter,
+    TX, TXFilter, TXO, TXI, Claim, Tag, Support
+)
 from .constants import TXO_TYPES, STREAM_TYPES
 
 
@@ -414,6 +417,9 @@ class BulkLoader:
         self.tags = []
         self.update_claims = []
         self.delete_tags = []
+        self.tx_filters = []
+        self.block_filters = []
+        self.group_filters = []
 
     @staticmethod
     def block_to_row(block: Block) -> dict:
@@ -429,7 +435,7 @@ class BulkLoader:
     def tx_to_row(block_hash: bytes, tx: Transaction) -> dict:
         row = {
             'tx_hash': tx.hash,
-            'block_hash': block_hash,
+            #'block_hash': block_hash,
             'raw': tx.raw,
             'height': tx.height,
             'position': tx.position,
@@ -621,6 +627,19 @@ class BulkLoader:
             self.add_transaction(block.block_hash, tx)
         return self
 
+    def add_block_filter(self, height: int, address_filter: bytes):
+        self.block_filters.append({
+            'height': height,
+            'address_filter': address_filter
+        })
+
+    def add_group_filter(self, height: int, factor: int, address_filter: bytes):
+        self.group_filters.append({
+            'height': height,
+            'factor': factor,
+            'address_filter': address_filter
+        })
+
     def add_transaction(self, block_hash: bytes, tx: Transaction):
         self.txs.append(self.tx_to_row(block_hash, tx))
         for txi in tx.inputs:
@@ -629,6 +648,13 @@ class BulkLoader:
         for txo in tx.outputs:
             self.txos.append(self.txo_to_row(tx, txo))
         return self
+
+    def add_transaction_filter(self, tx_hash: bytes, height: int, address_filter: bytes):
+        self.tx_filters.append({
+            'tx_hash': tx_hash,
+            'height': height,
+            'address_filter': address_filter
+        })
 
     def add_support(self, txo: Output, **extra):
         self.supports.append(self.support_to_row(txo, **extra))
@@ -669,7 +695,10 @@ class BulkLoader:
     def get_queries(self):
         return (
             (Block.insert(), self.blocks),
+            (BlockFilter.insert(), self.block_filters),
+            (BlockGroupFilter.insert(), self.group_filters),
             (TX.insert(), self.txs),
+            (TXFilter.insert(), self.tx_filters),
             (TXO.insert(), self.txos),
             (TXI.insert(), self.txis),
             (Claim.insert(), self.claims),
