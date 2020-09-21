@@ -1,5 +1,4 @@
 import struct
-from typing import Set
 from typing import NamedTuple, List
 
 from chiabip158 import PyBIP158  # pylint: disable=no-name-in-module
@@ -12,12 +11,12 @@ from lbry.blockchain.bcd_data_stream import BCDataStream
 ZERO_BLOCK = bytes((0,)*32)
 
 
-def create_block_filter(address_hashes: Set[bytes]) -> bytes:
+def create_address_filter(address_hashes: List[bytes]) -> bytes:
     return bytes(PyBIP158([bytearray(a) for a in address_hashes]).GetEncoded())
 
 
-def get_block_filter(block_filter: bytes) -> PyBIP158:
-    return PyBIP158(bytearray(block_filter))
+def get_address_filter(address_filter: bytes) -> PyBIP158:
+    return PyBIP158(bytearray(address_filter))
 
 
 class Block(NamedTuple):

@@ -372,7 +372,6 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
         generate = not os.path.exists(self.TEST_DATA_CACHE_DIR)
 
         self.db = await self.make_db(self.chain)
-        self.chain.ledger.conf.spv_address_filters = False
         self.sync = BlockchainSync(self.chain, self.db)
 
         if not generate:

@@ -13,13 +13,14 @@ from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.error import LbrycrdEventSubscriptionError
 
 from . import blocks as block_phase, claims as claim_phase, supports as support_phase
+from .filter_builder import split_range_into_10k_batches
 
 log = logging.getLogger(__name__)
 
 BLOCKS_INIT_EVENT = Event.add("blockchain.sync.blocks.init", "steps")
 BLOCKS_MAIN_EVENT = Event.add("blockchain.sync.blocks.main", "blocks", "txs")
-FILTER_INIT_EVENT = Event.add("blockchain.sync.filter.init", "steps")
-FILTER_MAIN_EVENT = Event.add("blockchain.sync.filter.main", "blocks")
+FILTER_INIT_EVENT = Event.add("blockchain.sync.filters.init", "steps")
+FILTER_MAIN_EVENT = Event.add("blockchain.sync.filters.main", "blocks")
 CLAIMS_INIT_EVENT = Event.add("blockchain.sync.claims.init", "steps")
 CLAIMS_MAIN_EVENT = Event.add("blockchain.sync.claims.main", "claims")
 TRENDS_INIT_EVENT = Event.add("blockchain.sync.trends.init", "steps")
@@ -138,19 +139,39 @@ class BlockchainSync(Sync):
             })
             completed = await self.run_tasks(tasks)
             if completed:
+                if starting_height == 0:
+                    await self.db.run(block_phase.blocks_constraints_and_indexes)
+                else:
+                    await self.db.run(block_phase.blocks_vacuum)
                 best_height_processed = max(f.result() for f in completed)
                 return starting_height, best_height_processed
 
     async def sync_filters(self):
         if not self.conf.spv_address_filters:
             return
+        with Progress(self.db.message_queue, FILTER_INIT_EVENT) as p:
+            p.start(2)
+            initial_sync = not await self.db.has_filters()
+            p.step()
+            if initial_sync:
+                blocks = [0, await self.db.get_best_block_height()]
+            else:
+                blocks = await self.db.run(block_phase.get_block_range_without_filters)
+            if blocks != (-1, -1):
+                batches = split_range_into_10k_batches(*blocks)
+                p.step()
+            else:
+                p.step()
+                return
         with Progress(self.db.message_queue, FILTER_MAIN_EVENT) as p:
-            blocks = 0
-            tasks = []
-            # for chunk in range(select min(height), max(height) from block where filter is null):
-            #     tasks.append(self.db.run(block_phase.sync_filters, chunk, self.FILTER_FLUSH_SIZE))
-            p.start(blocks)
-            await self.run_tasks(tasks)
+            p.start((blocks[1]-blocks[0])+1)
+            await self.run_tasks([
+                self.db.run(block_phase.sync_filters, *batch) for batch in batches
+            ])
+            if initial_sync:
+                await self.db.run(block_phase.filters_constraints_and_indexes)
+            else:
+                await self.db.run(block_phase.filters_vacuum)
 
     async def sync_spends(self, blocks_added):
         if blocks_added:
@@ -298,14 +319,12 @@ class BlockchainSync(Sync):
 
     async def advance(self):
         blocks_added = await self.sync_blocks()
-        sync_filters_task = asyncio.create_task(self.sync_filters())
-        sync_trends_task = asyncio.create_task(self.sync_trends())
         await self.sync_spends(blocks_added)
+        await self.sync_filters()
         initial_claim_sync = await self.sync_claims(blocks_added)
         await self.sync_supports(blocks_added)
         await self.sync_channel_stats(blocks_added, initial_claim_sync)
-        await sync_trends_task
-        await sync_filters_task
+        await self.sync_trends()
         if blocks_added:
             await self._on_block_controller.add(BlockEvent(blocks_added[-1]))
 

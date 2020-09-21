@@ -51,7 +51,7 @@ class Ledger:
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
     @staticmethod
-    def address_to_hash160(address):
+    def address_to_hash160(address) -> bytes:
         return Base58.decode(address)[1:21]
 
     @classmethod

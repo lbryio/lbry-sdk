@@ -1,21 +1,29 @@
 import logging
+from typing import Tuple
 
-from sqlalchemy import table, bindparam, text, func, union
+from sqlalchemy import table, text, func, union, between
 from sqlalchemy.future import select
 from sqlalchemy.schema import CreateTable
 
-from lbry.db.tables import Block as BlockTable, TX, TXO, TXI, Claim, Tag, Support
 from lbry.db.tables import (
+    Block as BlockTable, BlockFilter, BlockGroupFilter,
+    TX, TXFilter, MempoolFilter, TXO, TXI, Claim, Tag, Support
+)
+from lbry.db.tables import (
+    pg_add_block_constraints_and_indexes,
+    pg_add_block_filter_constraints_and_indexes,
     pg_add_tx_constraints_and_indexes,
+    pg_add_tx_filter_constraints_and_indexes,
     pg_add_txo_constraints_and_indexes,
     pg_add_txi_constraints_and_indexes,
 )
 from lbry.db.query_context import ProgressContext, event_emitter, context
 from lbry.db.sync import set_input_addresses, update_spent_outputs
-from lbry.blockchain.block import Block, create_block_filter
+from lbry.blockchain.block import Block, create_address_filter
 from lbry.blockchain.bcd_data_stream import BCDataStream
 
 from .context import get_or_initialize_lbrycrd
+from .filter_builder import FilterBuilder
 
 
 log = logging.getLogger(__name__)
@@ -58,6 +66,26 @@ def sync_block_file(
         done_txs += loader.flush(TX)
         p.step(done_blocks, done_txs)
     return last_block_processed
+
+
+@event_emitter("blockchain.sync.blocks.indexes", "steps")
+def blocks_constraints_and_indexes(p: ProgressContext):
+    p.start(1 + len(pg_add_block_constraints_and_indexes))
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM ANALYZE block;"))
+    p.step()
+    for constraint in pg_add_block_constraints_and_indexes:
+        if p.ctx.is_postgres:
+            p.ctx.execute(text(constraint))
+        p.step()
+
+
+@event_emitter("blockchain.sync.blocks.vacuum", "steps")
+def blocks_vacuum(p: ProgressContext):
+    p.start(1)
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM block;"))
+    p.step()
 
 
 @event_emitter("blockchain.sync.spends.main", "steps")
@@ -149,47 +177,96 @@ def sync_spends(initial_sync: bool, p: ProgressContext):
         p.step()
 
 
-@event_emitter("blockchain.sync.filter.generate", "blocks")
-def sync_block_filters(p: ProgressContext):
-    blocks = []
-    all_filters = []
-    all_addresses = []
-    for block in get_blocks_without_filters():
-        addresses = {
-            p.ctx.ledger.address_to_hash160(r["address"])
-            for r in get_block_tx_addresses(block_hash=block["block_hash"])
-        }
-        all_addresses.extend(addresses)
-        block_filter = create_block_filter(addresses)
-        all_filters.append(block_filter)
-        blocks.append({"pk": block["block_hash"], "block_filter": block_filter})
-    p.ctx.execute(
-        BlockTable.update().where(BlockTable.c.block_hash == bindparam("pk")), blocks
+@event_emitter("blockchain.sync.filters.generate", "blocks", throttle=100)
+def sync_filters(start, end, p: ProgressContext):
+    fp = FilterBuilder(start, end)
+    p.start((end-start)+1, progress_id=start, label=f"generate filters {start}-{end}")
+    with p.ctx.connect_streaming() as c:
+        loader = p.ctx.get_bulk_loader()
+
+        tx_hash, height, addresses, last_added = None, None, set(), None
+        address_to_hash = p.ctx.ledger.address_to_hash160
+        for row in c.execute(get_block_tx_addresses_sql(*fp.query_heights)):
+            if tx_hash != row.tx_hash:
+                if tx_hash is not None:
+                    last_added = tx_hash
+                    fp.add(tx_hash, height, addresses)
+                tx_hash, height, addresses = row.tx_hash, row.height, set()
+            addresses.add(address_to_hash(row.address))
+        if all([last_added, tx_hash]) and last_added != tx_hash:  # pickup last tx
+            fp.add(tx_hash, height, addresses)
+
+        for tx_hash, height, addresses in fp.tx_filters:
+            loader.add_transaction_filter(
+                tx_hash, height, create_address_filter(list(addresses))
+            )
+
+        for height, addresses in fp.block_filters.items():
+            loader.add_block_filter(
+                height, create_address_filter(list(addresses))
+            )
+
+        for group_filter in fp.group_filters:
+            for height, addresses in group_filter.groups.items():
+                loader.add_group_filter(
+                    height, group_filter.factor, create_address_filter(list(addresses))
+                )
+
+        p.add(loader.flush(BlockFilter))
+
+
+@event_emitter("blockchain.sync.filters.indexes", "steps")
+def filters_constraints_and_indexes(p: ProgressContext):
+    constraints = (
+        pg_add_tx_filter_constraints_and_indexes +
+        pg_add_block_filter_constraints_and_indexes
     )
+    p.start(2 + len(constraints))
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM ANALYZE block_filter;"))
+    p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM ANALYZE tx_filter;"))
+    p.step()
+    for constraint in constraints:
+        if p.ctx.is_postgres:
+            p.ctx.execute(text(constraint))
+        p.step()
 
 
-def get_blocks_without_filters():
-    return context().fetchall(
-        select(BlockTable.c.block_hash)
-        .where(BlockTable.c.block_filter.is_(None))
-    )
+@event_emitter("blockchain.sync.filters.vacuum", "steps")
+def filters_vacuum(p: ProgressContext):
+    p.start(2)
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM block_filter;"))
+    p.step()
+    if p.ctx.is_postgres:
+        p.ctx.execute_notx(text("VACUUM tx_filter;"))
+    p.step()
 
 
-def get_block_tx_addresses(block_hash=None, tx_hash=None):
-    if block_hash is not None:
-        constraint = (TX.c.block_hash == block_hash)
-    elif tx_hash is not None:
-        constraint = (TX.c.tx_hash == tx_hash)
-    else:
-        raise ValueError('block_hash or tx_hash must be provided.')
-    return context().fetchall(
-        union(
-            select(TXO.c.address).select_from(TXO.join(TX))
-            .where((TXO.c.address.isnot_(None)) & constraint),
-            select(TXI.c.address).select_from(TXI.join(TX))
-            .where((TXI.c.address.isnot_(None)) & constraint),
+def get_block_range_without_filters() -> Tuple[int, int]:
+    sql = (
+        select(
+            func.coalesce(func.min(BlockTable.c.height), -1).label('start_height'),
+            func.coalesce(func.max(BlockTable.c.height), -1).label('end_height'),
         )
+        .select_from(BlockTable)
+        .where(BlockTable.c.height.notin_(select(BlockFilter.c.height)))
     )
+    result = context().fetchone(sql)
+    return result['start_height'], result['end_height']
+
+
+def get_block_tx_addresses_sql(start_height, end_height):
+    return union(
+        select(TXO.c.tx_hash, TXO.c.height, TXO.c.address).where(
+            (TXO.c.address.isnot(None)) & between(TXO.c.height, start_height, end_height)
+        ),
+        select(TXI.c.tx_hash, TXI.c.height, TXI.c.address).where(
+            (TXI.c.address.isnot(None)) & between(TXI.c.height, start_height, end_height)
+        ),
+    ).order_by('height', 'tx_hash')
 
 
 @event_emitter("blockchain.sync.rewind.main", "steps")
@@ -206,6 +283,11 @@ def rewind(height: int, p: ProgressContext):
         ),
         Claim.delete().where(Claim.c.height >= height),
         Support.delete().where(Support.c.height >= height),
+        BlockFilter.delete().where(BlockFilter.c.height >= height),
+        # TODO: group and tx filters need where() clauses (below actually breaks things)
+        BlockGroupFilter.delete(),
+        TXFilter.delete(),
+        MempoolFilter.delete()
     ]
     for delete in p.iter(deletes):
         p.ctx.execute(delete)

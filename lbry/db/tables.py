@@ -40,18 +40,41 @@ AccountAddress = Table(
 
 Block = Table(
     'block', metadata,
-    Column('block_hash', LargeBinary, primary_key=True),
+    Column('height', Integer, primary_key=True),
+    Column('block_hash', LargeBinary),
     Column('previous_hash', LargeBinary),
     Column('file_number', SmallInteger),
-    Column('height', Integer),
     Column('timestamp', Integer),
-    Column('block_filter', LargeBinary, nullable=True)
+)
+
+pg_add_block_constraints_and_indexes = [
+    "ALTER TABLE block ADD PRIMARY KEY (height);",
+]
+
+
+BlockFilter = Table(
+    'block_filter', metadata,
+    Column('height', Integer, primary_key=True),
+    Column('address_filter', LargeBinary),
+)
+
+pg_add_block_filter_constraints_and_indexes = [
+    "ALTER TABLE block_filter ADD PRIMARY KEY (height);",
+    "ALTER TABLE block_filter ADD CONSTRAINT fk_block_filter"
+    " FOREIGN KEY (height) REFERENCES block (height) ON DELETE CASCADE;",
+]
+
+
+BlockGroupFilter = Table(
+    'block_group_filter', metadata,
+    Column('height', Integer),
+    Column('factor', SmallInteger),
+    Column('address_filter', LargeBinary),
 )
 
 
 TX = Table(
     'tx', metadata,
-    Column('block_hash', LargeBinary, nullable=True),
     Column('tx_hash', LargeBinary, primary_key=True),
     Column('raw', LargeBinary),
     Column('height', Integer),
@@ -60,13 +83,32 @@ TX = Table(
     Column('day', Integer, nullable=True),
     Column('is_verified', Boolean, server_default='FALSE'),
     Column('purchased_claim_hash', LargeBinary, nullable=True),
-    Column('tx_filter', LargeBinary, nullable=True)
 )
-
 
 pg_add_tx_constraints_and_indexes = [
     "ALTER TABLE tx ADD PRIMARY KEY (tx_hash);",
 ]
+
+
+TXFilter = Table(
+    'tx_filter', metadata,
+    Column('tx_hash', LargeBinary, primary_key=True),
+    Column('height', Integer),
+    Column('address_filter', LargeBinary),
+)
+
+pg_add_tx_filter_constraints_and_indexes = [
+    "ALTER TABLE tx_filter ADD PRIMARY KEY (tx_hash);",
+    "ALTER TABLE tx_filter ADD CONSTRAINT fk_tx_filter"
+    " FOREIGN KEY (tx_hash) REFERENCES tx (tx_hash) ON DELETE CASCADE;"
+]
+
+
+MempoolFilter = Table(
+    'mempool_filter', metadata,
+    Column('filter_number', Integer),
+    Column('mempool_filter', LargeBinary),
+)
 
 
 TXO = Table(
@@ -98,7 +140,6 @@ TXO = Table(
 
 txo_join_account = TXO.join(AccountAddress, TXO.columns.address == AccountAddress.columns.address)
 
-
 pg_add_txo_constraints_and_indexes = [
     "ALTER TABLE txo ADD PRIMARY KEY (txo_hash);",
     # find appropriate channel public key for signing a content claim
@@ -117,6 +158,7 @@ pg_add_txo_constraints_and_indexes = [
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
     f"CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC) "
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
+    "CREATE INDEX txo_height ON txo (height);",
 ]
 
 
@@ -131,9 +173,9 @@ TXI = Table(
 
 txi_join_account = TXI.join(AccountAddress, TXI.columns.address == AccountAddress.columns.address)
 
-
 pg_add_txi_constraints_and_indexes = [
     "ALTER TABLE txi ADD PRIMARY KEY (txo_hash);",
+    "CREATE INDEX txi_height ON txi (height);",
 ]
 
 
@@ -196,13 +238,11 @@ Claim = Table(
     Column('trending_global', BigInteger, server_default='0'),
 )
 
-
 Tag = Table(
     'tag', metadata,
     Column('claim_hash', LargeBinary),
     Column('tag', Text),
 )
-
 
 pg_add_claim_and_tag_constraints_and_indexes = [
     "ALTER TABLE claim ADD PRIMARY KEY (claim_hash);",
@@ -240,7 +280,6 @@ Support = Table(
     Column('signature_digest', LargeBinary, nullable=True),
     Column('is_signature_valid', Boolean, nullable=True),
 )
-
 
 pg_add_support_constraints_and_indexes = [
     "ALTER TABLE support ADD PRIMARY KEY (txo_hash);",

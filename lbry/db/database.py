@@ -199,6 +199,9 @@ class Database:
     async def execute_fetchall(self, sql):
         return await self.run(q.execute_fetchall, sql)
 
+    async def has_filters(self):
+        return await self.run(q.has_filters)
+
     async def has_claims(self):
         return await self.run(q.has_claims)
 

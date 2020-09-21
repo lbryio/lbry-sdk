@@ -769,9 +769,22 @@ class EventGenerator:
             yield from self.blocks_main_start()
             for block_file in self.block_files:
                 yield from self.blocks_file(*block_file)
+            if self.initial_sync:
+                yield from self.blocks_indexes()
+            else:
+                yield from self.blocks_vacuum()
             yield from self.blocks_main_finish()
-
             yield from self.spends_steps()
+
+        yield from self.filters_init()
+        if self.block_files:
+            yield from self.filters_main_start()
+            yield from self.filters_generate()
+            if self.initial_sync:
+                yield from self.filters_indexes()
+            else:
+                yield from self.filters_vacuum()
+            yield from self.filters_main_finish()
 
         if self.claims:
             if not self.initial_sync:
@@ -845,10 +858,69 @@ class EventGenerator:
                 "data": {"id": file, "done": step}
             }
 
+    def blocks_indexes(self):
+        yield from self.generate(
+            "blockchain.sync.blocks.indexes", ("steps",), 0, None, (2,), (1,)
+        )
+
+    def blocks_vacuum(self):
+        yield from self.generate(
+            "blockchain.sync.blocks.vacuum", ("steps",), 0, None, (1,), (1,)
+        )
+
+    def filters_init(self):
+        yield from self.generate("blockchain.sync.filters.init", ("steps",), 0, None, (2,), (1,))
+
+    def filters_main_start(self):
+        yield {
+            "event": "blockchain.sync.filters.main",
+            "data": {
+                "id": 0, "done": (0,),
+                "total": ((self.end_height-self.start_height)+1,),
+                "units": ("blocks",)}
+        }
+
+    @staticmethod
+    def filters_main_finish():
+        yield {
+            "event": "blockchain.sync.filters.main",
+            "data": {"id": 0, "done": (-1,)}
+        }
+
+    def filters_generate(self):
+        #yield from self.generate(
+        #    "blockchain.sync.filters.generate", ("blocks",), 0,
+        #    f"generate filters 0-{blocks-1}", (blocks,), (100,)
+        #)
+        blocks = (self.end_height-self.start_height)+1
+        yield {
+            "event": "blockchain.sync.filters.generate",
+            "data": {
+                "id": self.start_height, "done": (0,),
+                "total": (blocks,),
+                "units": ("blocks",),
+                "label": f"generate filters {self.start_height}-{self.end_height}",
+            }
+        }
+        yield {
+            "event": "blockchain.sync.filters.generate",
+            "data": {"id": self.start_height, "done": (blocks,)}
+        }
+
+    def filters_indexes(self):
+        yield from self.generate(
+            "blockchain.sync.filters.indexes", ("steps",), 0, None, (6,), (1,)
+        )
+
+    def filters_vacuum(self):
+        yield from self.generate(
+            "blockchain.sync.filters.vacuum", ("steps",), 0, None, (2,), (1,)
+        )
+
     def spends_steps(self):
         yield from self.generate(
             "blockchain.sync.spends.main", ("steps",), 0, None,
-            (15 if self.initial_sync else 5,),
+            (17 if self.initial_sync else 5,),
             (1,)
         )
 
