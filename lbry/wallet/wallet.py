@@ -334,7 +334,7 @@ class Wallet:
             assert txi.txo_ref.txo is not None
             txo_script = txi.txo_ref.txo.script
             if txo_script.is_pay_pubkey_hash:
-                address = self.ledger.hash160_to_address(txo_script.values['pubkey_hash'])
+                address = self.ledger.pubkey_hash_to_address(txo_script.values['pubkey_hash'])
                 private_key = await self.get_private_key_for_address(address)
                 assert private_key is not None, 'Cannot find private key for signing output.'
                 serialized = tx._serialize_for_signature(i)

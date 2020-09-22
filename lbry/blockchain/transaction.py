@@ -282,11 +282,14 @@ class Output(InputOutput):
     def has_address(self):
         return (
             'pubkey_hash' in self.script.values or
+            'script_hash' in self.script.values or
             'pubkey' in self.script.values
         )
 
     def get_address(self, ledger):
-        return ledger.hash160_to_address(self.pubkey_hash)
+        if 'script_hash' in self.script.values:
+            return ledger.script_hash_to_address(self.script.values['script_hash'])
+        return ledger.pubkey_hash_to_address(self.pubkey_hash)
 
     @classmethod
     def pay_pubkey_hash(cls, amount, pubkey_hash):

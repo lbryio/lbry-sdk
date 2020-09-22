@@ -45,14 +45,27 @@ class Ledger:
     def get_id(cls):
         return '{}_{}'.format(cls.symbol.lower(), cls.network_name.lower())
 
-    @classmethod
-    def hash160_to_address(cls, h160):
-        raw_address = cls.pubkey_address_prefix + h160
-        return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
-
     @staticmethod
     def address_to_hash160(address) -> bytes:
         return Base58.decode(address)[1:21]
+
+    @classmethod
+    def pubkey_hash_to_address(cls, h160):
+        raw_address = cls.pubkey_address_prefix + h160
+        return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
+
+    @classmethod
+    def public_key_to_address(cls, public_key):
+        return cls.pubkey_hash_to_address(hash160(public_key))
+
+    @classmethod
+    def script_hash_to_address(cls, h160):
+        raw_address = cls.script_address_prefix + h160
+        return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
+
+    @staticmethod
+    def private_key_to_wif(private_key):
+        return b'\x1c' + private_key + b'\x01'
 
     @classmethod
     def is_valid_address(cls, address):
@@ -132,14 +145,6 @@ class Ledger:
             return kwargs['fee_address']
         if 'fee_currency' in kwargs or 'fee_amount' in kwargs:
             return claim_address
-
-    @classmethod
-    def public_key_to_address(cls, public_key):
-        return cls.hash160_to_address(hash160(public_key))
-
-    @staticmethod
-    def private_key_to_wif(private_key):
-        return b'\x1c' + private_key + b'\x01'
 
 
 class TestNetLedger(Ledger):

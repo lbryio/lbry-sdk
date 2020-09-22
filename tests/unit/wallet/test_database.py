@@ -237,7 +237,7 @@ class TestQueries(AsyncioTestCase):
 
     async def create_tx_from_txo(self, txo, to_account, height):
         from_hash = txo.script.values['pubkey_hash']
-        from_address = self.ledger.hash160_to_address(from_hash)
+        from_address = self.ledger.pubkey_hash_to_address(from_hash)
         to_address = await to_account.receiving.get_or_create_usable_address()
         to_hash = Ledger.address_to_hash160(to_address)
         tx = Transaction(height=height, is_verified=True) \
@@ -250,7 +250,7 @@ class TestQueries(AsyncioTestCase):
 
     async def create_tx_to_nowhere(self, txo, height):
         from_hash = txo.script.values['pubkey_hash']
-        from_address = self.ledger.hash160_to_address(from_hash)
+        from_address = self.ledger.pubkey_hash_to_address(from_hash)
         to_hash = NULL_HASH
         tx = Transaction(height=height, is_verified=True) \
             .add_inputs([self.txi(txo)]) \

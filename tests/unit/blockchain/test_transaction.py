@@ -96,6 +96,10 @@ class TestAccountBalanceImpactFromTransaction(TestCase):
 
 class TestTransactionSerialization(TestCase):
 
+    def setUp(self):
+        super().setUp()
+        self.ledger = Ledger(Config.with_null_dir())
+
     def test_genesis_transaction(self):
         raw = unhexlify(
             "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff1f0"
@@ -228,3 +232,24 @@ class TestTransactionSerialization(TestCase):
 
         tx._reset()
         self.assertEqual(tx.raw, raw)
+
+    def test_pubkey_address(self):
+        t = Transaction(unhexlify(
+            "010000000100000000000000000000000000000000000000000000000000000000"
+            "00000000ffffffff03510101ffffffff0100e1f505000000002321024ca653fc09"
+            "4c95aa409430caf2eee08fa6e5fbbe78431e0ec9e7cd80193d98f9ac00000000"
+        ))
+        txo = t.outputs[0]
+        self.assertEqual(txo.script.template.name, 'pay_pubkey_full')
+        self.assertEqual(txo.get_address(self.ledger), 'bZi1WEjGtsdAwuZTnNNTCAZLxhHkiHec4m')
+
+    def test_script_hash_address(self):
+        t = Transaction(unhexlify(
+            "020000000100000000000000000000000000000000000000000000000000000000"
+            "00000000ffffffff2403b5a50b04b9e6ba5e08810007e6675b03002f504c41594d"
+            "4f4e415f69735f676f6f642f000000000100c37ec60600000017a914fbbf4e9bfe"
+            "70f27fb8aacd5386acc57f7a5ff7f58700000000"
+        ))
+        txo = t.outputs[0]
+        self.assertEqual(txo.script.template.name, 'pay_script_hash')
+        self.assertEqual(txo.get_address(self.ledger), 'rVBhueRT9E8RPdVcpCdXV5gRiiXVjE6VD9')
