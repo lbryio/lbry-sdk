@@ -254,7 +254,7 @@ def get_block_range_without_filters() -> Tuple[int, int]:
         .select_from(
             BlockTable.join(BlockFilter, BlockTable.c.height == BlockFilter.c.height, isouter=True)
         )
-        .where(BlockFilter.c.height == None)
+        .where(BlockFilter.c.height.is_(None))
     )
     result = context().fetchone(sql)
     return result['start_height'], result['end_height']

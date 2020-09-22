@@ -4,7 +4,7 @@ import asyncio
 import tempfile
 from unittest import skip
 from binascii import hexlify, unhexlify
-from typing import List, Optional, Iterable
+from typing import List, Optional
 from distutils.dir_util import copy_tree, remove_tree
 
 from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
