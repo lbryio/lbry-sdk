@@ -251,8 +251,10 @@ def get_block_range_without_filters() -> Tuple[int, int]:
             func.coalesce(func.min(BlockTable.c.height), -1).label('start_height'),
             func.coalesce(func.max(BlockTable.c.height), -1).label('end_height'),
         )
-        .select_from(BlockTable)
-        .where(BlockTable.c.height.notin_(select(BlockFilter.c.height)))
+        .select_from(
+            BlockTable.join(BlockFilter, BlockTable.c.height == BlockFilter.c.height, isouter=True)
+        )
+        .where(BlockFilter.c.height == None)
     )
     result = context().fetchone(sql)
     return result['start_height'], result['end_height']
