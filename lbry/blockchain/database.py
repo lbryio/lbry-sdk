@@ -16,7 +16,7 @@ FILES = [
 
 def make_short_url(r):
     try:
-        # fixme: we describe it as normalized but the old SDK didnt do that
+        # TODO: we describe it as normalized but the old SDK didnt do that
         name = r["name"].decode().replace("\x00", "")
         return f'{name}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
     except UnicodeDecodeError:
