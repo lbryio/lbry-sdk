@@ -947,6 +947,19 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(claim.take_over_height, 103)
         self.assertTrue(claim.is_controlling)
 
+    async def test_uris_and_uppercase(self):
+        # fixme: this is a bug but its how the old SDK expects it (non-normalized URIs)
+        # to be decided if we are going to ignore it or how its used today
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@Chá"))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab, name="Hortelã")
+        await self.generate(1)
+
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["Hortelã"]))
+        self.assertEqual(1, len(resolutions.txos))
+        claim = resolutions.txos[0].claim
+        self.assertEqual("@Chá#a/Hortelã#c", claim.canonical_url)
+        self.assertEqual("Hortelã#c", claim.short_url)
 
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
