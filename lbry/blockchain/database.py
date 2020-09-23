@@ -17,7 +17,8 @@ FILES = [
 def make_short_url(r):
     try:
         # fixme: we describe it as normalized but the old SDK didnt do that
-        return f'{r["name"].decode()}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
+        name = r["name"].decode().replace("\x00", "")
+        return f'{name}#{r["shortestID"] or r["claimID"][::-1].hex()[0]}'
     except UnicodeDecodeError:
         # print(f'failed making short url due to name parse error for claim_id: {r["claimID"][::-1].hex()}')
         return "INVALID NAME"
