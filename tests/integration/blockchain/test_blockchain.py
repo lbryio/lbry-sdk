@@ -924,6 +924,15 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         results = await self.db.search_claims(effective_amount=42000000, amount_order=1, order_by=["effective_amount"])
         self.assertEqual(claim.claim_id, results[0].claim_id)
 
+    async def test_meta_fields_are_translated_to_protobuf(self):
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab)
+        await self.generate(1)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#cd"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.effective_amount, 1000000)
+        self.assertEqual(claim.expiration_height, 602)
 
 
 

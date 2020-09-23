@@ -372,7 +372,7 @@ META_ATTRS = (
     'activation_height', 'takeover_height', 'creation_height', 'staked_amount',
     'short_url', 'canonical_url', 'staked_support_amount', 'staked_support_count',
     'signed_claim_count', 'signed_support_count', 'is_signature_valid',
-    'reposted_count',
+    'reposted_count', 'expiration_height'
 )
 
 
