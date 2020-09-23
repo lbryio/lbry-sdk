@@ -32,6 +32,15 @@ class MockedCommentServer:
         'is_hidden': False,
     }
 
+    REACT_SCHEMA = {
+        'comment_id': None,
+        'reaction_type': None,
+        'timestamp': None,
+        'signature': None,
+        'channel_id': None,
+        'channel_name': None
+    }
+
     def __init__(self, port=2903):
         self.port = port
         self.app = web.Application(debug=True)
@@ -39,11 +48,19 @@ class MockedCommentServer:
         self.runner = None
         self.server = None
         self.comments = []
+        self.reacts = []
         self.comment_id = 0
+        self.react_id = 0
 
     @classmethod
     def _create_comment(cls, **kwargs):
         schema = cls.COMMENT_SCHEMA.copy()
+        schema.update(**kwargs)
+        return schema
+
+    @classmethod
+    def _react(cls, **kwargs):
+        schema = cls.REACT_SCHEMA.copy()
         schema.update(**kwargs)
         return schema
 
@@ -117,27 +134,18 @@ class MockedCommentServer:
             'visible': list(comment_ids - set(hidden))
         }
 
-    def get_claim_comments(self, claim_id, page=1, page_size=50,**kwargs):
+    def get_claim_comments(self, claim_id, hidden=False, visible=False, page=1, page_size=50,**kwargs):
         comments = list(filter(lambda c: c['claim_id'] == claim_id, self.comments))
+        if hidden ^ visible:
+            comments = list(filter(lambda c: c['is_hidden'] == hidden, comments))
+
         return {
             'page': page,
             'page_size': page_size,
             'total_pages': ceil(len(comments)/page_size),
             'total_items': len(comments),
             'items': [self.clean(c) for c in (comments[::-1])[(page - 1) * page_size: page * page_size]],
-            'has_hidden_comments': bool(list(filter(lambda x: x['is_hidden'], comments)))
-        }
-
-    def get_claim_hidden_comments(self, claim_id, hidden=True, page=1, page_size=50):
-        comments = list(filter(lambda c: c['claim_id'] == claim_id, self.comments))
-        select_comments = list(filter(lambda c: c['is_hidden'] == hidden, comments))
-        return {
-            'page': page,
-            'page_size': page_size,
-            'total_pages': ceil(len(select_comments) / page_size),
-            'total_items': len(select_comments),
-            'items': [self.clean(c) for c in (select_comments[::-1])[(page - 1) * page_size: page * page_size]],
-            'has_hidden_comments': bool(list(filter(lambda c: c['is_hidden'], comments)))
+            'has_hidden_comments': bool(list(filter(lambda x: x['is_hidden'], self.comments)))
         }
 
     def get_comment_channel_by_id(self, comment_id: int, **kwargs):
@@ -157,15 +165,83 @@ class MockedCommentServer:
             'has_hidden_comments': bool({c for c in comments if c['is_hidden']})
         }
 
+    def react(
+            self,
+            comment_ids=None,
+            channel_name=None,
+            channel_id=None,
+            remove=None,
+            clear_types=None,
+            type=None,
+            signing_ts=None,
+            **kwargs
+    ):
+        comment_batch = comment_ids.split(',')
+        for item in comment_batch:
+            c_id = item.strip()
+            reacts_for_comment_id = [r for r in self.reacts if r['comment_id'] == c_id]
+            channels_reacts_for_comment_id = [r for r in reacts_for_comment_id if ['channel_id'] == channel_id]
+
+            if remove:
+                matching_react = None
+                for reaction in channels_reacts_for_comment_id:
+                    if reaction['reaction_type'] == type:
+                        matching_react = reaction
+                        break
+                if matching_react:
+                    self.reacts.pop(matching_react['id'])
+            else:
+                if clear_types:
+                    for r_type in clear_types:
+                        for reaction in channels_reacts_for_comment_id:
+                            if reaction['reaction_type'] == r_type:
+                                self.reacts.pop(reaction['id'])
+                react = self._react(
+                    comment_id=str(c_id),
+                    channel_name=channel_name,
+                    channel_id=channel_id,
+                    reaction_type=type,
+                    timestamp=str(int(time.time())),
+                    **kwargs
+                )
+                self.reacts.append(react)
+                self.react_id += 1
+        return self.clean(react)
+
+    def list_reacts(self, comment_id, channel_id, **kwargs):
+        reacts_for_comment = list(filter(lambda c: c['comment_id'] == comment_id, self.reacts))
+        own_reacts_for_comment = list(filter(lambda c: c['channel_id'] == channel_id, reacts_for_comment))
+        other_reacts_for_comment = list(filter(lambda c: c['channel_id'] != channel_id, reacts_for_comment))
+        print('seriously wtf', own_reacts_for_comment)
+        own_counts = {}
+        if own_reacts_for_comment:
+            for react in own_reacts_for_comment:
+                own_counts[react['reaction_type']] = own_counts[react['reaction_type']] + 1 if react['reaction_type'] in own_counts else 1
+        print('eh??')
+        other_counts = {}
+        if other_reacts_for_comment:
+            for react in other_reacts_for_comment:
+                other_counts[react['reaction_type']] = other_counts[react['reaction_type']] + 1 if react['reaction_type'] in other_counts else 1
+
+        return {
+            'my_reactions': {
+                comment_id: own_counts,
+            },
+            'others_reactions': {
+                comment_id: other_counts,
+            }
+        }
+
     methods = {
-        'get_claim_comments': get_claim_comments,
+        'comment.List': get_claim_comments,
         'get_comments_by_id': get_comments_by_id,
-        'create_comment': create_comment,
-        'abandon_comment': abandon_comment,
-        'get_channel_from_comment_id': get_comment_channel_by_id,
-        'get_claim_hidden_comments': get_claim_hidden_comments,
-        'hide_comments': hide_comments,
-        'edit_comment': edit_comment,
+        'comment.Create': create_comment,
+        'comment.Abandon': abandon_comment,
+        'comment.GetChannelFromCommentID': get_comment_channel_by_id,
+        'comment.Hide': hide_comments,
+        'comment.Edit': edit_comment,
+        'reaction.React': react,
+        'reaction.List': list_reacts,
     }
 
     def process_json(self, body) -> dict:
@@ -450,7 +526,6 @@ class CommentCommands(CommandTestCase):
             channel_id=bee['claim_id']
         )
         all_comments = [other_comment, owner_comment, hidden_comment]
-
         normal_list = await self.daemon.jsonrpc_comment_list(claim_id)
         self.assertEqual(
             {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
@@ -532,3 +607,55 @@ class CommentCommands(CommandTestCase):
                 comment='If you see it and you mean then you know you have to go',
                 comment_id=original_cid
             )
+
+    async def test06_reactions(self):
+        moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
+        bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
+        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth['claim_id'])
+        claim_id = stream['outputs'][0]['claim_id']
+
+        first_comment = await self.daemon.jsonrpc_comment_create(
+            comment='Go away you yellow freak',
+            claim_id=claim_id,
+            channel_id=moth['claim_id'],
+        )
+        second_comment = await self.daemon.jsonrpc_comment_create(
+            comment='I got my swim trunks and my flippy-floppies',
+            claim_id=claim_id,
+            channel_id=bee['claim_id']
+        )
+        all_comments = [second_comment, first_comment]
+        comment_list = await self.daemon.jsonrpc_comment_list(claim_id)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(comment_list)
+        )
+        self.assertEqual(comment_list['total_items'], 2)
+
+        # bee likes [0]
+        # moth likes [0,1]
+        # moth smiles [0,1,2]
+        # bee dislikes (cleartypes) [1,2,3]
+        # bee undislikes (remove) [1,2]
+        # list likes
+
+        bee_like_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_id=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='dislike',
+        )
+
+        bee_like_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_id=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+            react_type='like',
+        )
+
+        reactions = await self.daemon.jsonrpc_comment_react_list(
+            comment_id=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+        # test assertions

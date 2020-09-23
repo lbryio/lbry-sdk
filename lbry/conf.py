@@ -611,7 +611,7 @@ class Config(CLIConfig):
         ('lbrynet4.lbry.com', 4444)  # ASIA
     ])
 
-    comment_server = String("Comment server API URL", "https://comments.lbry.com/api")
+    comment_server = String("Comment server API URL", "https://comments.lbry.com/api/v2")
 
     # blockchain
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
