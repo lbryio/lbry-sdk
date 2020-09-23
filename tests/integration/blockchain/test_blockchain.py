@@ -933,6 +933,19 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         claim = resolutions.txos[0].claim
         self.assertEqual(claim.effective_amount, 1000000)
         self.assertEqual(claim.expiration_height, 602)
+        self.assertEqual(claim.take_over_height, 102)
+        self.assertTrue(claim.is_controlling)
+        # takeover
+        await self.create_claim(claim_id_startswith='ad', sign=chan_ab, amount='1.1')
+        await self.generate(1)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#cd"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.take_over_height, 0)
+        self.assertFalse(claim.is_controlling)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#ad"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.take_over_height, 103)
+        self.assertTrue(claim.is_controlling)
 
 
 

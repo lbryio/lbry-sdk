@@ -192,8 +192,8 @@ class Outputs:
         if txo.meta['canonical_url'] is not None:
             txo_message.claim.canonical_url = txo.meta['canonical_url']
         txo_message.claim.is_controlling = bool(txo.meta['takeover_height'])
-        #if txo['last_take_over_height'] is not None:
-        #    txo_message.claim.take_over_height = txo['last_take_over_height']
+        if txo_message.claim.is_controlling:
+            txo_message.claim.take_over_height = txo.meta['takeover_height']
         txo_message.claim.creation_height = txo.meta['creation_height']
         txo_message.claim.activation_height = txo.meta['activation_height']
         txo_message.claim.expiration_height = txo.meta['expiration_height']
