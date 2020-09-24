@@ -33,6 +33,7 @@ class MockedCommentServer:
     }
 
     REACT_SCHEMA = {
+        'react_id': None,
         'comment_id': None,
         'reaction_type': None,
         'timestamp': None,
@@ -48,7 +49,7 @@ class MockedCommentServer:
         self.runner = None
         self.server = None
         self.comments = []
-        self.reacts = []
+        self.reacts = {}
         self.comment_id = 0
         self.react_id = 0
 
@@ -178,10 +179,11 @@ class MockedCommentServer:
     ):
         comment_batch = comment_ids.split(',')
         for item in comment_batch:
+            react_id = self.react_id
             c_id = item.strip()
-            reacts_for_comment_id = [r for r in self.reacts if r['comment_id'] == c_id]
-            channels_reacts_for_comment_id = [r for r in reacts_for_comment_id if ['channel_id'] == channel_id]
-
+            reacts_for_comment_id = [r for r in list(self.reacts.values()) if r['comment_id'] == c_id]
+            channels_reacts_for_comment_id = [r for r in reacts_for_comment_id if r['channel_id'] == channel_id]
+            print('channels_reacts', channels_reacts_for_comment_id)
             if remove:
                 matching_react = None
                 for reaction in channels_reacts_for_comment_id:
@@ -189,14 +191,15 @@ class MockedCommentServer:
                         matching_react = reaction
                         break
                 if matching_react:
-                    self.reacts.pop(matching_react['id'])
+                    self.reacts.pop(int(matching_react['react_id']), None)
             else:
                 if clear_types:
-                    for r_type in clear_types:
+                    for r_type in clear_types.split(','):
                         for reaction in channels_reacts_for_comment_id:
                             if reaction['reaction_type'] == r_type:
-                                self.reacts.pop(reaction['id'])
+                                x = self.reacts.pop(int(reaction['react_id']), None)
                 react = self._react(
+                    react_id=str(react_id),
                     comment_id=str(c_id),
                     channel_name=channel_name,
                     channel_id=channel_id,
@@ -204,31 +207,33 @@ class MockedCommentServer:
                     timestamp=str(int(time.time())),
                     **kwargs
                 )
-                self.reacts.append(react)
+                self.reacts[self.react_id] = react
                 self.react_id += 1
         return self.clean(react)
 
-    def list_reacts(self, comment_id, channel_id, **kwargs):
-        reacts_for_comment = list(filter(lambda c: c['comment_id'] == comment_id, self.reacts))
+    def list_reacts(self, comment_ids, channel_id, channel_name, types=None, **kwargs):
+        all_types = list(set([r['reaction_type'] for r in list(self.reacts.values())]))
+        # better test would support multiple comment_ids
+        reacts_for_comment = list(filter(lambda c: c['comment_id'] == comment_ids, list(self.reacts.values())))
+        if types:
+            reacts_for_comment = list(filter(lambda c: c['reaction_type'] in types.split(','), reacts_for_comment))
         own_reacts_for_comment = list(filter(lambda c: c['channel_id'] == channel_id, reacts_for_comment))
         other_reacts_for_comment = list(filter(lambda c: c['channel_id'] != channel_id, reacts_for_comment))
-        print('seriously wtf', own_reacts_for_comment)
-        own_counts = {}
+        own_counts = dict.fromkeys(all_types, 0)
+        other_counts = dict.copy(own_counts)
         if own_reacts_for_comment:
             for react in own_reacts_for_comment:
-                own_counts[react['reaction_type']] = own_counts[react['reaction_type']] + 1 if react['reaction_type'] in own_counts else 1
-        print('eh??')
-        other_counts = {}
+                own_counts[react['reaction_type']] += 1
         if other_reacts_for_comment:
             for react in other_reacts_for_comment:
-                other_counts[react['reaction_type']] = other_counts[react['reaction_type']] + 1 if react['reaction_type'] in other_counts else 1
+                other_counts[react['reaction_type']] += 1
 
         return {
             'my_reactions': {
-                comment_id: own_counts,
+                comment_ids: own_counts,
             },
             'others_reactions': {
-                comment_id: other_counts,
+                comment_ids: other_counts,
             }
         }
 
@@ -609,6 +614,12 @@ class CommentCommands(CommandTestCase):
             )
 
     async def test06_reactions(self):
+        # wherein a bee insulted by a rude moth accidentally
+        # 1) likes an insult
+        # 2) clicks dislike instead, testing "clear_types"
+        # 3) then clicks dislike again, testing "remove"
+        # calls from the point of view of the moth
+
         moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
         bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
         stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth['claim_id'])
@@ -632,30 +643,75 @@ class CommentCommands(CommandTestCase):
         )
         self.assertEqual(comment_list['total_items'], 2)
 
-        # bee likes [0]
-        # moth likes [0,1]
-        # moth smiles [0,1,2]
-        # bee dislikes (cleartypes) [1,2,3]
-        # bee undislikes (remove) [1,2]
-        # list likes
-
         bee_like_reaction = await self.daemon.jsonrpc_comment_react(
             comment_id=first_comment['comment_id'],
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
-            react_type='dislike',
+            react_type='like',
         )
 
-        bee_like_reaction = await self.daemon.jsonrpc_comment_react(
+        moth_like_reaction = await self.daemon.jsonrpc_comment_react(
             comment_id=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
             react_type='like',
         )
-
         reactions = await self.daemon.jsonrpc_comment_react_list(
             comment_id=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
-        # test assertions
+        # {'my_reactions': {'0': {'like': 1}}, 'others_reactions': {'0': {'like': 1}}}
+        self.assertEqual(reactions['my_reactions']['0']['like'], 1)
+        self.assertEqual(reactions['others_reactions']['0']['like'], 1)
+
+        bee_dislike_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_id=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='dislike',
+            clear_types='like',
+        )
+
+        reactions_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
+            comment_id=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+        # {'my_reactions': {'0': {'like': 1, 'dislike', 0}}, 'others_reactions': {'0': {'like': 0, 'dislike': 1}}}
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['like'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['dislike'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['like'], 0)
+
+        only_likes_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
+            comment_id=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+            react_types='like',
+        )
+
+        print('only', only_likes_after_bee_dislikes)
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['like'], 1)
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['like'], 0)
+
+        bee_un_dislike_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_id=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            remove=True,
+            react_type='dislike',
+        )
+
+        reactions_after_bee_absconds = await self.daemon.jsonrpc_comment_react_list(
+            comment_id=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+
+        self.assertEqual(reactions_after_bee_absconds['my_reactions']['0']['like'], 1)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['my_reactions']['0'])
+        self.assertEqual(reactions_after_bee_absconds['others_reactions']['0']['like'], 0)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['others_reactions']['0'])
