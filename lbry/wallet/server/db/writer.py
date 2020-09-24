@@ -6,7 +6,6 @@ from decimal import Decimal
 from collections import namedtuple
 from multiprocessing import Manager
 from binascii import unhexlify
-
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
 from lbry.wallet.database import query, constraints_to_sql
@@ -19,7 +18,7 @@ from lbry.wallet.server.db.canonical import register_canonical_functions
 from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
-from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
+from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
 
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
@@ -117,6 +116,15 @@ class SQLDB:
         create unique index if not exists tag_claim_hash_tag_idx on tag (claim_hash, tag);
     """
 
+    CREATE_LANGUAGE_TABLE = """
+        create table if not exists language (
+            language text not null,
+            claim_hash bytes not null,
+            height integer not null
+        );
+        create unique index if not exists language_claim_hash_language_idx on language (claim_hash, language);
+    """
+
     CREATE_CLAIMTRIE_TABLE = """
         create table if not exists claimtrie (
             normalized text primary key,
@@ -174,12 +182,18 @@ class SQLDB:
         for tag_value, tag_key in COMMON_TAGS.items()
     )
 
+    LANGUAGE_INDEXES = '\n'.join(
+        f"create unique index if not exists language_{language}_idx on language (language, claim_hash) WHERE language='{language}';"
+        for language in INDEXED_LANGUAGES
+    )
+
     CREATE_TABLES_QUERY = (
         CREATE_CLAIM_TABLE +
         CREATE_FULL_TEXT_SEARCH +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
-        CREATE_TAG_TABLE
+        CREATE_TAG_TABLE +
+        CREATE_LANGUAGE_TABLE
     )
 
     def __init__(
@@ -305,7 +319,7 @@ class SQLDB:
         self.execute('commit;')
 
     def _upsertable_claims(self, txos: List[Output], header, clear_first=False):
-        claim_hashes, claims, tags = set(), [], {}
+        claim_hashes, claims, tags, languages = set(), [], {}, {}
         for txo in txos:
             tx = txo.tx_ref.tx
 
@@ -315,6 +329,13 @@ class SQLDB:
             except:
                 #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
                 continue
+
+            language = None
+            try:
+                if txo.claim.is_stream and txo.claim.stream.languages:
+                    language = txo.claim.stream.languages[0].language
+            except:
+                pass
 
             claim_hash = txo.claim_hash
             claim_hashes.add(claim_hash)
@@ -373,6 +394,9 @@ class SQLDB:
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
+            if language:
+                languages[(language, claim_hash)] = (language, claim_hash, tx.height)
+
             for tag in clean_tags(claim.message.tags):
                 tags[(tag, claim_hash)] = (tag, claim_hash, tx.height)
 
@@ -382,6 +406,10 @@ class SQLDB:
         if tags:
             self.executemany(
                 "INSERT OR IGNORE INTO tag (tag, claim_hash, height) VALUES (?, ?, ?)", tags.values()
+            )
+        if languages:
+            self.executemany(
+                "INSERT OR IGNORE INTO language (language, claim_hash, height) VALUES (?, ?, ?)", languages.values()
             )
 
         return claims

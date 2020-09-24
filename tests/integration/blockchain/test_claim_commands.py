@@ -262,6 +262,17 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim4, claim3, claim2], fee_amount='<1.0', fee_currency='lbc')
         await self.assertFindsClaims([claim3], fee_amount='0.5', fee_currency='lbc')
         await self.assertFindsClaims([claim5], fee_currency='usd')
+
+    async def test_search_by_language(self):
+        claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
+        claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
+        claim3 = await self.stream_create('claim3', fee_amount='0.5', fee_currency='lbc', languages='en')
+        claim4 = await self.stream_create('claim4', fee_amount='0.1', fee_currency='lbc', languages='en')
+        claim5 = await self.stream_create('claim5', fee_amount='1.0', fee_currency='usd', languages='es')
+
+        await self.assertFindsClaims([claim4, claim3], any_languages=['en'])
+        await self.assertFindsClaims([claim5], any_languages=['es'])
+        await self.assertFindsClaims([claim5, claim4, claim3], any_languages=['en', 'es'])
         await self.assertFindsClaims([], fee_currency='foo')
 
     async def test_search_by_channel(self):
