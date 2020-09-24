@@ -476,6 +476,7 @@ class BulkLoader:
             'channel_hash': None,
             'signature': None,
             'signature_digest': None,
+            'reposted_claim_hash': None,
             'public_key': None,
             'public_key_hash': None
         }
@@ -488,6 +489,8 @@ class BulkLoader:
                     row['public_key_hash'] = self.ledger.address_to_hash160(
                         self.ledger.public_key_to_address(claim.channel.public_key_bytes)
                     )
+                elif claim.is_repost:
+                    row['reposted_claim_hash'] = claim.repost.reference.claim_hash
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
@@ -511,7 +514,7 @@ class BulkLoader:
         return row
 
     def claim_to_rows(
-        self, txo: Output, staked_support_amount: int, staked_support_count: int,
+        self, txo: Output, staked_support_amount: int, staked_support_count: int, reposted_count: int,
         signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
     ) -> Tuple[dict, List]:
 
@@ -540,6 +543,7 @@ class BulkLoader:
             'fee_currency': None,
             # reposts
             'reposted_claim_hash': None,
+            'reposted_count': reposted_count,
             # signed claims
             'channel_hash': None,
             'is_signature_valid': None,

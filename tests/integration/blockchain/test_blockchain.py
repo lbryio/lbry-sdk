@@ -9,7 +9,7 @@ from distutils.dir_util import copy_tree, remove_tree
 
 from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
-from lbry.schema.claim import Stream, Channel
+from lbry.schema.claim import Claim, Stream, Channel
 from lbry.schema.result import Outputs
 from lbry.schema.support import Support
 from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
@@ -115,10 +115,14 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
 
     async def create_claim(
             self, title='', amount='0.01', name=None, author='', desc='',
-            claim_id_startswith='', sign=None, is_channel=False) -> str:
+            claim_id_startswith='', sign=None, is_channel=False, repost=None) -> str:
         name = name or ('@foo' if is_channel else 'foo')
         if not claim_id_startswith and sign is None and not is_channel:
-            claim = Stream().update(title=title, author=author, description=desc).claim
+            if repost:
+                claim = Claim()
+                claim.repost.reference.claim_id = repost
+            else:
+                claim = Stream().update(title=title, author=author, description=desc).claim
             return await self.chain.claim_name(
                 name, hexlify(claim.to_bytes()).decode(), amount
             )
@@ -871,6 +875,22 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         r, = await search(claim_id=self.channel2.claim_id)
         self.assertEqual(0, r.meta['signed_claim_count'])  # channel2 lost abandoned claim
         self.assertEqual(0, r.meta['signed_support_count'])
+
+    async def test_reposts(self):
+        self.stream1 = await self.get_claim(await self.create_claim())
+        claim_id = self.stream1.claim_id
+
+        # in same block
+        self.stream2 = await self.get_claim(await self.create_claim(repost=claim_id))
+        await self.generate(1)
+        r, = await self.db.search_claims(claim_id=claim_id)
+        self.assertEqual(1, r.meta['reposted_count'])
+
+        # in subsequent block
+        self.stream3 = await self.get_claim(await self.create_claim(repost=claim_id))
+        await self.generate(1)
+        r, = await self.db.search_claims(claim_id=claim_id)
+        self.assertEqual(2, r.meta['reposted_count'])
 
     async def resolve_to_claim_id(self, url):
         return (await self.db.resolve([url]))[url].claim_id

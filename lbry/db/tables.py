@@ -133,6 +133,9 @@ TXO = Table(
     Column('signature', LargeBinary, nullable=True),
     Column('signature_digest', LargeBinary, nullable=True),
 
+    # reposts
+    Column('reposted_claim_hash', LargeBinary, nullable=True),
+
     # channels
     Column('public_key', LargeBinary, nullable=True),
     Column('public_key_hash', LargeBinary, nullable=True),
@@ -158,6 +161,13 @@ pg_add_txo_constraints_and_indexes = [
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
     f"CREATE INDEX txo_spent_supports_by_height ON txo (spent_height DESC) "
     f"INCLUDE (claim_hash) WHERE txo_type={TXO_TYPES['support']};",
+    # for finding claims which need repost totals re-calculated in a block range
+    f"CREATE INDEX txo_added_reposts_by_height ON txo (height DESC) "
+    f"INCLUDE (reposted_claim_hash) WHERE txo_type={TXO_TYPES['repost']};",
+    f"CREATE INDEX txo_spent_reposts_by_height ON txo (spent_height DESC) "
+    f"INCLUDE (reposted_claim_hash) WHERE txo_type={TXO_TYPES['repost']};",
+    "CREATE INDEX txo_reposted_claim_hash ON txo (reposted_claim_hash)"
+    "WHERE reposted_claim_hash IS NOT NULL AND spent_height = 0;",
     "CREATE INDEX txo_height ON txo (height);",
 ]
 
@@ -209,7 +219,6 @@ Claim = Table(
     Column('description', Text, nullable=True),
 
     Column('claim_type', SmallInteger),
-    Column('claim_reposted_count', Integer, server_default='0'),
     Column('staked_support_count', Integer, server_default='0'),
     Column('staked_support_amount', BigInteger, server_default='0'),
 
@@ -221,8 +230,8 @@ Claim = Table(
     Column('duration', Integer, nullable=True),
 
     # reposts
-    Column('reposted_claim_hash', LargeBinary, nullable=True),
-    Column('reposted_count', Integer, server_default='0'),
+    Column('reposted_claim_hash', LargeBinary, nullable=True),  # on claim doing the repost
+    Column('reposted_count', Integer, server_default='0'),  # on claim being reposted
 
     # claims which are channels
     Column('signed_claim_count', Integer, server_default='0'),
@@ -255,6 +264,8 @@ pg_add_claim_and_tag_constraints_and_indexes = [
     # used to count()/sum() claims signed by channel
     "CREATE INDEX signed_content ON claim (channel_hash) "
     "INCLUDE (amount) WHERE is_signature_valid;",
+    # used to count()/sum() reposted claims
+    "CREATE INDEX reposted_content ON claim (reposted_claim_hash);",
     # basic tag indexes
     "ALTER TABLE tag ADD PRIMARY KEY (claim_hash, tag);",
     "CREATE INDEX tags ON tag (tag) INCLUDE (claim_hash);",

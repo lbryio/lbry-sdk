@@ -193,6 +193,31 @@ def count_channels_with_changed_content(blocks: Optional[Tuple[int, int]]):
     return context().fetchone(sql)['total']
 
 
+def where_changed_repost_txos(blocks: Optional[Tuple[int, int]]):
+    return (
+        (TXO.c.txo_type == TXO_TYPES['repost']) & (
+            between(TXO.c.height, blocks[0], blocks[-1]) |
+            between(TXO.c.spent_height, blocks[0], blocks[-1])
+        )
+    )
+
+
+def where_claims_with_changed_reposts(blocks: Optional[Tuple[int, int]]):
+    return Claim.c.claim_hash.in_(
+        select(TXO.c.reposted_claim_hash).where(
+            where_changed_repost_txos(blocks)
+        )
+    )
+
+
+def count_claims_with_changed_reposts(blocks: Optional[Tuple[int, int]]):
+    sql = (
+        select(func.count(distinct(TXO.c.reposted_claim_hash)).label('total'))
+        .where(where_changed_repost_txos(blocks))
+    )
+    return context().fetchone(sql)['total']
+
+
 def select_transactions(cols, account_ids=None, **constraints):
     s: Select = select(*cols).select_from(TX)
     if not {'tx_hash', 'tx_hash__in'}.intersection(constraints):
