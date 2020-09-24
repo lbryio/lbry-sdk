@@ -18,7 +18,7 @@ from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs, Censor
 from lbry.wallet import Ledger, RegTestLedger
 
-from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS
+from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
 from .full_text_search import FTS_ORDER_BY
 
 
@@ -534,6 +534,18 @@ def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_coun
             EXISTS(
                 SELECT 1 FROM tag WHERE {CLAIM_HASH_OR_REPOST_HASH_SQL}=tag.claim_hash
                 AND tag IN ({values})
+            )
+            """
+    elif attr == 'language':
+        indexed_languages = any_items & set(INDEXED_LANGUAGES)
+        if indexed_languages:
+            any_items -= indexed_languages
+        for language in indexed_languages:
+            any_queries[f'#_any_common_languages_{language}'] = f"""
+            EXISTS(
+                SELECT 1 FROM language INDEXED BY language_{language}_idx
+                WHERE {CLAIM_HASH_OR_REPOST_HASH_SQL}=language.claim_hash
+                AND language = '{language}'
             )
             """
 
