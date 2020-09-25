@@ -984,6 +984,15 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 
+    async def test_claimtrie_name_normalization_query_bug(self):
+        # this used to fail due to bug in sync_get_claim_metadata
+        await self.generate(150)  # enable normalization
+        txid1 = await self.create_claim(name='Thing')
+        await self.generate(1)
+        claim1, = await self.db.search_claims()
+        self.assertEqual(claim1.meta['takeover_height'], 252)
+        self.assertEqual(claim1.tx_ref.id, txid1)
+
     async def test_example_from_spec(self):
         # https://spec.lbry.com/#claim-activation-example
         advance, state = self.advance, self.state

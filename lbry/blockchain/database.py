@@ -195,7 +195,7 @@ class BlockchainDB:
             name, claimID, activationHeight, expirationHeight, originalHeight,
             (SELECT
                 CASE WHEN takeover.claimID = claim.claimID THEN takeover.height END
-                FROM takeover WHERE takeover.name = claim.name
+                FROM takeover WHERE takeover.name = claim.nodename
                 ORDER BY height DESC LIMIT 1
             ) AS takeoverHeight,
             (SELECT find_shortest_id(c.claimid, claim.claimid) FROM claim AS c
