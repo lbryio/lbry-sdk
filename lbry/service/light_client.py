@@ -1,7 +1,6 @@
 import logging
 from typing import List, Dict, Tuple
 
-from lbry.conf import Config
 from lbry.blockchain import Ledger, Transaction
 from lbry.wallet.sync import SPVSync
 
