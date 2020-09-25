@@ -217,6 +217,9 @@ class BlockchainSync(Sync):
     async def count_claims_with_changed_supports(self, blocks) -> int:
         return await self.db.run(q.count_claims_with_changed_supports, blocks)
 
+    async def count_claims_with_changed_reposts(self, blocks) -> int:
+        return await self.db.run(q.count_claims_with_changed_reposts, blocks)
+
     async def count_channels_with_changed_content(self, blocks) -> int:
         return await self.db.run(q.count_channels_with_changed_content, blocks)
 
@@ -226,13 +229,13 @@ class BlockchainSync(Sync):
         )
 
     async def sync_claims(self, blocks) -> bool:
-        delete_claims = takeovers = claims_with_changed_supports = 0
+        delete_claims = takeovers = claims_with_changed_supports = claims_with_changed_reposts = 0
         initial_sync = not await self.db.has_claims()
         with Progress(self.db.message_queue, CLAIMS_INIT_EVENT) as p:
             if initial_sync:
                 total, batches = await self.distribute_unspent_txos(CLAIM_TYPE_CODES)
             elif blocks:
-                p.start(4)
+                p.start(5)
                 # 1. content claims to be inserted or updated
                 total = await self.count_unspent_txos(
                     CLAIM_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True
@@ -246,6 +249,10 @@ class BlockchainSync(Sync):
                 # 3. claims to be updated with new support totals
                 claims_with_changed_supports = await self.count_claims_with_changed_supports(blocks)
                 total += claims_with_changed_supports
+                p.step()
+                # 4. claims to be updated with new repost totals
+                claims_with_changed_reposts = await self.count_claims_with_changed_reposts(blocks)
+                total += claims_with_changed_reposts
                 p.step()
                 # 5. claims to be updated due to name takeovers
                 takeovers = await self.count_takeovers(blocks)
@@ -270,6 +277,8 @@ class BlockchainSync(Sync):
                 await self.db.run(claim_phase.update_takeovers, blocks, takeovers)
             if claims_with_changed_supports:
                 await self.db.run(claim_phase.update_stakes, blocks, claims_with_changed_supports)
+            if claims_with_changed_reposts:
+                await self.db.run(claim_phase.update_reposts, blocks, claims_with_changed_reposts)
             if initial_sync:
                 await self.db.run(claim_phase.claims_constraints_and_indexes)
             else:

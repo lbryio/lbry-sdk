@@ -137,12 +137,16 @@ class Daemon:
         data = await request.json()
         params = data.get('params', {})
         method = getattr(self.api, data['method'])
-        result = await method(**params)
-        encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
-        return Response(
-            text=encoded_result,
-            content_type='application/json'
-        )
+        try:
+            result = await method(**params)
+            encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
+            return Response(
+                text=encoded_result,
+                content_type='application/json'
+            )
+        except Exception as e:
+            log.exception("RPC error")
+            raise e
 
     async def on_connect(self, request):
         web_socket = WebSocketManager()

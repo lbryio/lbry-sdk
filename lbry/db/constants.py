@@ -53,7 +53,7 @@ SEARCH_INTEGER_PARAMS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
     'tx_position', 'channel_join', 'reposted',
-    'amount', 'effective_amount', 'support_amount',
+    'amount', 'staked_amount', 'support_amount',
     'trending_group', 'trending_mixed',
     'trending_local', 'trending_global',
 }

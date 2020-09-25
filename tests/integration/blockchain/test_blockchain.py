@@ -9,7 +9,8 @@ from distutils.dir_util import copy_tree, remove_tree
 
 from lbry import Config, Database, RegTestLedger, Transaction, Output, Input
 from lbry.crypto.base58 import Base58
-from lbry.schema.claim import Stream, Channel
+from lbry.schema.claim import Claim, Stream, Channel
+from lbry.schema.result import Outputs
 from lbry.schema.support import Support
 from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
 from lbry.blockchain.lbrycrd import Lbrycrd
@@ -114,10 +115,14 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
 
     async def create_claim(
             self, title='', amount='0.01', name=None, author='', desc='',
-            claim_id_startswith='', sign=None, is_channel=False) -> str:
+            claim_id_startswith='', sign=None, is_channel=False, repost=None) -> str:
         name = name or ('@foo' if is_channel else 'foo')
         if not claim_id_startswith and sign is None and not is_channel:
-            claim = Stream().update(title=title, author=author, description=desc).claim
+            if repost:
+                claim = Claim()
+                claim.repost.reference.claim_id = repost
+            else:
+                claim = Stream().update(title=title, author=author, description=desc).claim
             return await self.chain.claim_name(
                 name, hexlify(claim.to_bytes()).decode(), amount
             )
@@ -400,11 +405,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             signed = await self.chain.sign_raw_transaction_with_wallet(funded['hex'])
             await self.chain.send_raw_transaction(signed['hex'])
             tx = Transaction(unhexlify(signed['hex']))
-            claim = None
-            for txo in tx.outputs:
-                if txo.is_claim:
-                    claim = txo
-                    break
+            claim = self.find_claim_txo(tx)
             support_tx = Transaction().add_outputs([
                 Output.pay_support_pubkey_hash(CENT, claim.claim_name, claim.claim_id, address),
             ])
@@ -415,7 +416,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
 
         # supports \w data aren't supported until block 350, fast forward a little
         await self.chain.generate(60)
-        claim = tx.outputs[0]
+        claim = self.find_claim_txo(tx)
         tx = Transaction().add_outputs([
             Output.pay_support_pubkey_hash(CENT, claim.claim_name, claim.claim_id, address),
             Output.pay_support_data_pubkey_hash(
@@ -875,6 +876,22 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(0, r.meta['signed_claim_count'])  # channel2 lost abandoned claim
         self.assertEqual(0, r.meta['signed_support_count'])
 
+    async def test_reposts(self):
+        self.stream1 = await self.get_claim(await self.create_claim())
+        claim_id = self.stream1.claim_id
+
+        # in same block
+        self.stream2 = await self.get_claim(await self.create_claim(repost=claim_id))
+        await self.generate(1)
+        r, = await self.db.search_claims(claim_id=claim_id)
+        self.assertEqual(1, r.meta['reposted_count'])
+
+        # in subsequent block
+        self.stream3 = await self.get_claim(await self.create_claim(repost=claim_id))
+        await self.generate(1)
+        r, = await self.db.search_claims(claim_id=claim_id)
+        self.assertEqual(2, r.meta['reposted_count'])
+
     async def resolve_to_claim_id(self, url):
         return (await self.db.resolve([url]))[url].claim_id
 
@@ -896,6 +913,73 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await self.generate(1)
         self.assertEqual(stream_c.claim_id, await self.resolve_to_claim_id("@foo#a/foo#c"))
         self.assertEqual(stream_cd.claim_id, await self.resolve_to_claim_id("@foo#ab/foo#cd"))
+
+    async def test_resolve_protobuf_includes_enough_information_for_signature_validation(self):
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab)
+        await self.generate(1)
+        resolutions = await self.db.protobuf_resolve(["@foo#ab/foo#cd"])
+        resolutions = Outputs.from_base64(resolutions)
+        txs = await self.db.get_transactions(tx_hash__in=[tx[0] for tx in resolutions.txs])
+        self.assertEqual(len(txs), 2)
+        resolutions = resolutions.inflate(txs)
+        claim = resolutions[0][0]
+        self.assertTrue(claim.is_signed_by(claim.channel, self.chain.ledger))
+
+    async def test_resolve_not_found(self):
+        await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.generate(1)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/notfound"]))
+        self.assertEqual(resolutions.txos[0].error.text, "Could not find claim at \"@foo#ab/notfound\".")
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@notfound#ab/notfound"]))
+        self.assertEqual(resolutions.txos[0].error.text, "Could not find channel in \"@notfound#ab/notfound\".")
+
+    async def test_claim_search_effective_amount(self):
+        claim = await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True, amount='0.42'))
+        await self.generate(1)
+        results = await self.db.search_claims(staked_amount=42000000)
+        self.assertEqual(claim.claim_id, results[0].claim_id)
+        # compat layer
+        results = await self.db.search_claims(effective_amount=42000000, amount_order=1, order_by=["effective_amount"])
+        self.assertEqual(claim.claim_id, results[0].claim_id)
+
+    async def test_meta_fields_are_translated_to_protobuf(self):
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab)
+        await self.generate(1)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#cd"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.effective_amount, 1000000)
+        self.assertEqual(claim.expiration_height, 602)
+        self.assertEqual(claim.take_over_height, 102)
+        self.assertTrue(claim.is_controlling)
+        # takeover
+        await self.create_claim(claim_id_startswith='ad', sign=chan_ab, amount='1.1')
+        await self.generate(1)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#cd"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.take_over_height, 0)
+        self.assertFalse(claim.is_controlling)
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["@foo#ab/foo#ad"]))
+        claim = resolutions.txos[0].claim
+        self.assertEqual(claim.take_over_height, 103)
+        self.assertTrue(claim.is_controlling)
+
+    async def test_uris_and_uppercase(self):
+        # fixme: this is a bug but its how the old SDK expects it (non-normalized URIs)
+        # to be decided if we are going to ignore it or how its used today
+        chan_ab = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@Chá"))
+        await self.create_claim(claim_id_startswith='cd', sign=chan_ab, name="Hortelã")
+        await self.generate(1)
+
+        resolutions = Outputs.from_base64(await self.db.protobuf_resolve(["Hortelã"]))
+        self.assertEqual(1, len(resolutions.txos))
+        claim = resolutions.txos[0].claim
+        self.assertEqual("@Chá#a/Hortelã#c", claim.canonical_url)
+        self.assertEqual("Hortelã#c", claim.short_url)
 
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):

@@ -1,4 +1,5 @@
 from unittest import TestCase
+from pickle import dumps
 from binascii import hexlify, unhexlify
 
 from lbry import Config, Ledger, Transaction
@@ -253,3 +254,24 @@ class TestTransactionSerialization(TestCase):
         txo = t.outputs[0]
         self.assertEqual(txo.script.template.name, 'pay_script_hash')
         self.assertEqual(txo.get_address(self.ledger), 'rVBhueRT9E8RPdVcpCdXV5gRiiXVjE6VD9')
+
+    def test_tx_with_claim_can_pickle(self):
+        # used to fail with this error:
+        # _pickle.PicklingError: Can't pickle <class 'lbry.blockchain.util.PUSH_SINGLE'>:
+        #   attribute lookup PUSH_SINGLE on lbry.blockchain.util failed
+        raw = unhexlify(
+            "01000000012433e1b327603843b083344dbae5306ff7927f87ebbc5ae9eb50856c5b53fd1d000000006a4"
+            "7304402201a91e1023d11c383a11e26bf8f9034087b15d8ada78fa565e0610455ffc8505e0220038a63a6"
+            "ecb399723d4f1f78a20ddec0a78bf8fb6c75e63e166ef780f3944fbf0121021810150a2e4b088ec51b20c"
+            "be1b335962b634545860733367824d5dc3eda767dffffffff028096980000000000fdff00b50463617473"
+            "4cdc080110011a7808011230080410011a084d616361726f6e6922002a003214416c6c207269676874732"
+            "072657365727665642e38004a0052005a001a42080110011a30add80aaf02559ba09853636a0658c42b72"
+            "7cb5bb4ba8acedb4b7fe656065a47a31878dbf9912135ddb9e13806cc1479d220a696d6167652f6a70656"
+            "72a5c080110031a404180cc0fa4d3839ee29cca866baed25fafb43fca1eb3b608ee889d351d3573d042c7"
+            "b83e2e643db0d8e062a04e6e9ae6b90540a2f95fe28638d0f18af4361a1c2214f73de93f4299fb32c32f9"
+            "49e02198a8e91101abd6d7576a914be16e4b0f9bd8f6d47d02b3a887049c36d3b84cb88ac0cd2520b0000"
+            "00001976a914f521178feb733a719964e1da4a9efb09dcc39cfa88ac00000000"
+        )
+        tx = Transaction(raw)
+        tx.outputs[0].script.values  # triggers parsing, needed to reproduce pickle error
+        dumps(tx)

@@ -8,7 +8,8 @@ from lbry.db.queries.txio import (
     minimum_txo_columns, row_to_txo,
     where_unspent_txos, where_claims_with_changed_supports,
     count_unspent_txos, where_channels_with_changed_content,
-    where_abandoned_claims, count_channels_with_changed_content
+    where_abandoned_claims, count_channels_with_changed_content,
+    where_claims_with_changed_reposts,
 )
 from lbry.db.query_context import ProgressContext, event_emitter
 from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_and_tag_constraints_and_indexes
@@ -56,6 +57,17 @@ def staked_support_count_calc(other):
     )
 
 
+def reposted_claim_count_calc(other):
+    repost = TXO.alias('repost')
+    return (
+        select(func.coalesce(func.count(repost.c.reposted_claim_hash), 0))
+        .where(
+            (repost.c.reposted_claim_hash == other.c.claim_hash) &
+            (repost.c.spent_height == 0)
+        ).scalar_subquery()
+    )
+
+
 def make_label(action, blocks):
     if blocks[0] == blocks[-1]:
         return f"{action} {blocks[0]:>6}"
@@ -73,6 +85,7 @@ def select_claims_for_saving(
         *minimum_txo_columns, TXO.c.claim_hash,
         staked_support_amount_calc(TXO).label('staked_support_amount'),
         staked_support_count_calc(TXO).label('staked_support_count'),
+        reposted_claim_count_calc(TXO).label('reposted_count'),
         TXO.c.signature, TXO.c.signature_digest,
         case([(
             TXO.c.channel_hash.isnot(None),
@@ -95,6 +108,7 @@ def row_to_claim_for_saving(row) -> Tuple[Output, dict]:
     return row_to_txo(row), {
         'staked_support_amount': int(row.staked_support_amount),
         'staked_support_count': int(row.staked_support_count),
+        'reposted_count': int(row.reposted_count),
         'signature': row.signature,
         'signature_digest': row.signature_digest,
         'channel_public_key': row.channel_public_key
@@ -232,6 +246,18 @@ def update_stakes(blocks: Tuple[int, int], claims: int, p: ProgressContext):
             staked_support_amount=staked_support_amount_calc(Claim),
             staked_support_count=staked_support_count_calc(Claim),
         )
+    )
+    result = p.ctx.execute(sql)
+    p.step(result.rowcount)
+
+
+@event_emitter("blockchain.sync.claims.reposts", "claims")
+def update_reposts(blocks: Tuple[int, int], claims: int, p: ProgressContext):
+    p.start(claims)
+    sql = (
+        Claim.update()
+        .where(where_claims_with_changed_reposts(blocks))
+        .values(reposted_count=reposted_claim_count_calc(Claim))
     )
     result = p.ctx.execute(sql)
     p.step(result.rowcount)

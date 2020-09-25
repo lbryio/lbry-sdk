@@ -4,7 +4,10 @@ from binascii import hexlify
 from collections import namedtuple
 
 from .bcd_data_stream import BCDataStream
-from .util import subclass_tuple
+
+
+def subclass_tuple(name, base):
+    return type(name, (base,), {'__slots__': ()})
 
 
 # bitcoin opcodes

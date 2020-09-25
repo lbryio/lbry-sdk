@@ -16,10 +16,6 @@ class ReadOnlyList(Sequence[T]):
         return len(self.lst)
 
 
-def subclass_tuple(name, base):
-    return type(name, (base,), {'__slots__': ()})
-
-
 class ArithUint256:
     # https://github.com/bitcoin/bitcoin/blob/master/src/arith_uint256.cpp
 

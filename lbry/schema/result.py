@@ -1,7 +1,6 @@
 import base64
 import struct
 from typing import List
-from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError
@@ -16,10 +15,10 @@ BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 def set_reference(reference, claim_hash, rows):
     if claim_hash:
         for txo in rows:
-            if claim_hash == txo['claim_hash']:
-                reference.tx_hash = txo['txo_hash'][:32]
-                reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
-                reference.height = txo['height']
+            if claim_hash == txo.claim_hash:
+                reference.tx_hash = txo.tx_ref.hash
+                reference.nout = txo.position
+                reference.height = txo.spent_height
                 return
 
 
@@ -193,11 +192,11 @@ class Outputs:
         if txo.meta['canonical_url'] is not None:
             txo_message.claim.canonical_url = txo.meta['canonical_url']
         txo_message.claim.is_controlling = bool(txo.meta['takeover_height'])
-        #if txo['last_take_over_height'] is not None:
-        #    txo_message.claim.take_over_height = txo['last_take_over_height']
+        if txo_message.claim.is_controlling:
+            txo_message.claim.take_over_height = txo.meta['takeover_height']
         txo_message.claim.creation_height = txo.meta['creation_height']
         txo_message.claim.activation_height = txo.meta['activation_height']
-        #txo_message.claim.expiration_height = txo['expiration_height']
+        txo_message.claim.expiration_height = txo.meta['expiration_height']
         if txo.meta['signed_claim_count'] is not None:
             txo_message.claim.claims_in_channel = txo.meta['signed_claim_count']
         txo_message.claim.effective_amount = txo.meta['staked_amount']
@@ -206,5 +205,6 @@ class Outputs:
         #txo_message.claim.trending_mixed = txo['trending_mixed']
         #txo_message.claim.trending_local = txo['trending_local']
         #txo_message.claim.trending_global = txo['trending_global']
-        #set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
+        if txo.channel:
+            set_reference(txo_message.claim.channel, txo.claim.signing_channel_hash, extra_txo_rows)
         #set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)

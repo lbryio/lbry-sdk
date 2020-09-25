@@ -32,6 +32,18 @@ BASE_SELECT_SUPPORT_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
 ]
 
 
+def compat_layer(**constraints):
+    # for old sdk, to be removed later
+    replacements = {"effective_amount": "staked_amount"}
+    for old_key, new_key in replacements.items():
+        if old_key in constraints:
+            constraints[new_key] = constraints.pop(old_key)
+        order_by = constraints.get("order_by", [])
+        if old_key in order_by:
+            constraints["order_by"] = [order_key if order_key != old_key else new_key for order_key in order_by]
+    return constraints
+
+
 def select_supports(cols: List = None, **constraints) -> Select:
     if cols is None:
         cols = BASE_SELECT_SUPPORT_COLUMNS
@@ -63,6 +75,7 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
     Claim.c.creation_height,
+    Claim.c.expiration_height,
     Claim.c.is_controlling,
     Claim.c.channel_hash,
     Claim.c.reposted_count,
@@ -82,6 +95,7 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
 
 
 def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
+    constraints = compat_layer(**constraints)
     if cols is None:
         cols = BASE_SELECT_CLAIM_COLUMNS
     if 'order_by' in constraints:
@@ -123,7 +137,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         constraints['offset'] = int(constraints.pop('sequence')) - 1
         constraints['limit'] = 1
     if 'amount_order' in constraints:
-        constraints['order_by'] = 'effective_amount DESC'
+        constraints['order_by'] = 'staked_amount DESC'
         constraints['offset'] = int(constraints.pop('amount_order')) - 1
         constraints['limit'] = 1
 
