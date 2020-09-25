@@ -14,9 +14,9 @@ import unittest
 from unittest.case import _Outcome
 from typing import Optional, List, Union
 from binascii import unhexlify, hexlify
+from distutils.dir_util import remove_tree
 
 import ecdsa
-from distutils.dir_util import remove_tree
 
 from lbry.db import Database
 from lbry.blockchain import (
@@ -430,7 +430,7 @@ class IntegrationTestCase(AsyncioTestCase):
             db = Database.temp_sqlite_regtest(chain.ledger.conf)
         elif db_driver.startswith('postgres') or db_driver.startswith('psycopg'):
             db_driver = 'postgresql'
-            db_name = f'lbry_test_chain'
+            db_name = 'lbry_test_chain'
             db_connection = 'postgres:postgres@localhost:5432'
             meta_db = Database.from_url(f'postgresql://{db_connection}/postgres')
             await meta_db.drop(db_name)

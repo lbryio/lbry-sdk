@@ -309,7 +309,7 @@ def delete_all_the_things(height: int, p: ProgressContext):
     def constrain(col):
         if height == -1:
             return col == -1
-        return col <= height
+        return col >= height
 
     deletes = [
         BlockTable.delete().where(constrain(BlockTable.c.height)),
