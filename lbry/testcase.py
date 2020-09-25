@@ -565,7 +565,7 @@ class CommandTestCase(IntegrationTestCase):
             lbrycrd_dir=self.chain.ledger.conf.lbrycrd_dir,
             lbrycrd_rpc_port=self.chain.ledger.conf.lbrycrd_rpc_port,
             lbrycrd_peer_port=self.chain.ledger.conf.lbrycrd_peer_port,
-            lbrycrd_zmq_blocks=self.chain.ledger.conf.lbrycrd_zmq_blocks,
+            lbrycrd_zmq=self.chain.ledger.conf.lbrycrd_zmq,
             spv_address_filters=False
         ))
         service = FullNode(ledger)
