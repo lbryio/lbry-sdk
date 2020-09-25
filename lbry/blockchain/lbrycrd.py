@@ -196,6 +196,7 @@ class Lbrycrd:
     async def close_session(self):
         if self._session is not None:
             await self._session.close()
+            self._session = None
 
     async def start(self, *args):
         loop = asyncio.get_running_loop()

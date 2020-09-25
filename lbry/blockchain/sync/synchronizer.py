@@ -49,6 +49,7 @@ class BlockchainSync(Sync):
         self.tx_hash_event = asyncio.Event()
         self._on_mempool_controller = EventController()
         self.on_mempool = self._on_mempool_controller.stream
+        self.mempool = []
 
     async def wait_for_chain_ready(self):
         while True:
@@ -352,10 +353,17 @@ class BlockchainSync(Sync):
             await self._on_block_controller.add(BlockEvent(blocks_added[-1]))
 
     async def sync_mempool(self):
-        await self.db.run(block_phase.sync_mempool)
+        added = await self.db.run(block_phase.sync_mempool)
         await self.sync_spends([-1])
-        await self.db.run(claim_phase.claims_insert, [-2, 0], True, self.CLAIM_FLUSH_SIZE)
+        await self.db.run(claim_phase.claims_insert, [-1, -1], True, self.CLAIM_FLUSH_SIZE)
+        await self.db.run(claim_phase.claims_update, [-1, -1])
         await self.db.run(claim_phase.claims_vacuum)
+        self.mempool.extend(added)
+        await self._on_mempool_controller.add(added)
+
+    async def clear_mempool(self):
+        self.mempool.clear()
+        await self.db.run(block_phase.clear_mempool)
 
     async def advance_loop(self):
         while True:
@@ -366,7 +374,7 @@ class BlockchainSync(Sync):
                 ], return_when=asyncio.FIRST_COMPLETED)
                 if self.block_hash_event.is_set():
                     self.block_hash_event.clear()
-                    await self.db.run(block_phase.clear_mempool)
+                    await self.clear_mempool()
                     await self.advance()
                 self.tx_hash_event.clear()
                 await self.sync_mempool()

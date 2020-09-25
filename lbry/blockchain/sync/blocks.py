@@ -1,7 +1,6 @@
-import asyncio
 import logging
 from binascii import hexlify, unhexlify
-from typing import Tuple
+from typing import Tuple, List
 
 from sqlalchemy import table, text, func, union, between
 from sqlalchemy.future import select
@@ -186,22 +185,25 @@ def clear_mempool(p: ProgressContext):
 
 
 @event_emitter("blockchain.sync.mempool.main", "txs")
-def sync_mempool(p: ProgressContext):
+def sync_mempool(p: ProgressContext) -> List[str]:
     chain = get_or_initialize_lbrycrd(p.ctx)
     mempool = chain.sync_run(chain.get_raw_mempool())
-    current = [hexlify(r['tx_hash'][::-1]) for r in p.ctx.fetchall(
+    current = [hexlify(r['tx_hash'][::-1]).decode() for r in p.ctx.fetchall(
         select(TX.c.tx_hash).where(TX.c.height < 0)
     )]
     loader = p.ctx.get_bulk_loader()
+    added = []
     for txid in mempool:
         if txid not in current:
             raw_tx = chain.sync_run(chain.get_raw_transaction(txid))
             loader.add_transaction(
                 None, Transaction(unhexlify(raw_tx), height=-1)
             )
+            added.append(txid)
         if p.ctx.stop_event.is_set():
             return
     loader.flush(TX)
+    return added
 
 
 @event_emitter("blockchain.sync.filters.generate", "blocks", throttle=100)
@@ -305,8 +307,8 @@ def rewind(height: int, p: ProgressContext):
 
 def delete_all_the_things(height: int, p: ProgressContext):
     def constrain(col):
-        if height >= 0:
-            return col >= height
+        if height == -1:
+            return col == -1
         return col <= height
 
     deletes = [
