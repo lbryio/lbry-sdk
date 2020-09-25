@@ -5272,8 +5272,10 @@ class Daemon(metaclass=JSONRPCServerType):
         return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Hide', pieces=pieces)
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_react(self, comment_id, channel_name=None, channel_id=None,
-                                      channel_account_id=None, remove=False, clear_types=None, react_type=None, wallet_id=None):
+    async def jsonrpc_comment_react(
+        self, comment_id, channel_name=None, channel_id=None,
+        channel_account_id=None, remove=False, clear_types=None, react_type=None, wallet_id=None
+    ):
         """
         Create and associate a reaction emoji with a comment using your channel identity.
 
@@ -5310,8 +5312,6 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
 
-        print(channel)
-
         react_body = {
             'comment_ids': comment_id,
             'channel_id': channel_id,
@@ -5327,8 +5327,10 @@ class Daemon(metaclass=JSONRPCServerType):
         return response
 
     @requires(WALLET_COMPONENT)
-    async def jsonrpc_comment_react_list(self, comment_id, channel_name=None, channel_id=None,
-                                      channel_account_id=None, react_types=None, wallet_id=None):
+    async def jsonrpc_comment_react_list(
+        self, comment_id, channel_name=None, channel_id=None,
+        channel_account_id=None, react_types=None, wallet_id=None
+    ):
         """
         List reactions emoji with a claim using your channel identity.
 
