@@ -1,5 +1,4 @@
 import re
-
 import time
 import typing
 from math import ceil
@@ -183,7 +182,6 @@ class MockedCommentServer:
             c_id = item.strip()
             reacts_for_comment_id = [r for r in list(self.reacts.values()) if r['comment_id'] == c_id]
             channels_reacts_for_comment_id = [r for r in reacts_for_comment_id if r['channel_id'] == channel_id]
-            print('channels_reacts', channels_reacts_for_comment_id)
             if remove:
                 matching_react = None
                 for reaction in channels_reacts_for_comment_id:
@@ -209,32 +207,44 @@ class MockedCommentServer:
                 )
                 self.reacts[self.react_id] = react
                 self.react_id += 1
-        return self.clean(react)
+                self.clean(react)
+        return True
 
     def list_reacts(self, comment_ids, channel_id, channel_name, types=None, **kwargs):
         all_types = list(set([r['reaction_type'] for r in list(self.reacts.values())]))
-        # better test would support multiple comment_ids
-        reacts_for_comment = list(filter(lambda c: c['comment_id'] == comment_ids, list(self.reacts.values())))
-        if types:
-            reacts_for_comment = list(filter(lambda c: c['reaction_type'] in types.split(','), reacts_for_comment))
-        own_reacts_for_comment = list(filter(lambda c: c['channel_id'] == channel_id, reacts_for_comment))
-        other_reacts_for_comment = list(filter(lambda c: c['channel_id'] != channel_id, reacts_for_comment))
-        own_counts = dict.fromkeys(all_types, 0)
-        other_counts = dict.copy(own_counts)
-        if own_reacts_for_comment:
-            for react in own_reacts_for_comment:
-                own_counts[react['reaction_type']] += 1
-        if other_reacts_for_comment:
-            for react in other_reacts_for_comment:
-                other_counts[react['reaction_type']] += 1
+        comment_id_list = comment_ids.split(',')
+        # _reacts: {'a1': {'like': 0, 'dislike': 0}, 'a2': {'like': 0, 'dislike': 0}}
+        own_reacts = {}
+        other_reacts = {}
+
+        # for each comment_id
+            # add comment_id: {} to own_reacts and other_reacts
+            # for each react in own_reacts
+            # for each react in other_reacts
+        for cid in comment_id_list:
+            own_reacts[cid] = {}
+            other_reacts[cid] = {}
+
+            for r_type in all_types:
+                own_reacts[cid][r_type] = 0
+                other_reacts[cid][r_type] = 0
+            # process that comment ids reactions for own and other categories
+            reacts_for_comment = list(filter(lambda c: c['comment_id'] == cid, list(self.reacts.values())))
+            if types:
+                reacts_for_comment = list(filter(lambda c: c['reaction_type'] in types.split(','), reacts_for_comment))
+            own_reacts_for_comment = list(filter(lambda c: c['channel_id'] == channel_id, reacts_for_comment))
+            other_reacts_for_comment = list(filter(lambda c: c['channel_id'] != channel_id, reacts_for_comment))
+
+            if own_reacts_for_comment:
+                for react in own_reacts_for_comment:
+                    own_reacts[cid][react['reaction_type']] += 1
+            if other_reacts_for_comment:
+                for react in other_reacts_for_comment:
+                    other_reacts[cid][react['reaction_type']] += 1
 
         return {
-            'my_reactions': {
-                comment_ids: own_counts,
-            },
-            'others_reactions': {
-                comment_ids: other_counts,
-            }
+            'my_reactions': own_reacts,
+            'others_reactions': other_reacts,
         }
 
     methods = {
@@ -644,20 +654,20 @@ class CommentCommands(CommandTestCase):
         self.assertEqual(comment_list['total_items'], 2)
 
         bee_like_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             react_type='like',
         )
 
         moth_like_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
             react_type='like',
         )
         reactions = await self.daemon.jsonrpc_comment_react_list(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
@@ -666,7 +676,7 @@ class CommentCommands(CommandTestCase):
         self.assertEqual(reactions['others_reactions']['0']['like'], 1)
 
         bee_dislike_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             react_type='dislike',
@@ -674,7 +684,7 @@ class CommentCommands(CommandTestCase):
         )
 
         reactions_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
@@ -685,20 +695,19 @@ class CommentCommands(CommandTestCase):
         self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['like'], 0)
 
         only_likes_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
             react_types='like',
         )
 
-        print('only', only_likes_after_bee_dislikes)
         self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['like'], 1)
         self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
         self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['dislike'], 0)
         self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['like'], 0)
 
         bee_un_dislike_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             remove=True,
@@ -706,7 +715,7 @@ class CommentCommands(CommandTestCase):
         )
 
         reactions_after_bee_absconds = await self.daemon.jsonrpc_comment_react_list(
-            comment_id=first_comment['comment_id'],
+            comment_ids=first_comment['comment_id'],
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
@@ -715,3 +724,21 @@ class CommentCommands(CommandTestCase):
         self.assertNotIn('dislike', reactions_after_bee_absconds['my_reactions']['0'])
         self.assertEqual(reactions_after_bee_absconds['others_reactions']['0']['like'], 0)
         self.assertNotIn('dislike', reactions_after_bee_absconds['others_reactions']['0'])
+
+        bee_reacts_to_both_comments = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='frozen_tom',
+        )
+
+        reactions_after_double_frozen_tom = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+
+        self.assertEqual(reactions_after_double_frozen_tom['my_reactions']['0']['like'], 1)
+        self.assertNotIn('dislike', reactions_after_double_frozen_tom['my_reactions']['0'])
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['0']['frozen_tom'], 1)
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['1']['frozen_tom'], 1)

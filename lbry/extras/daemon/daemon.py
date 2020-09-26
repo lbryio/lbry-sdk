@@ -5273,13 +5273,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_react(
-            self, comment_id, channel_name=None, channel_id=None,
+            self, comment_ids, channel_name=None, channel_id=None,
             channel_account_id=None, remove=False, clear_types=None, react_type=None, wallet_id=None):
         """
         Create and associate a reaction emoji with a comment using your channel identity.
 
         Usage:
-            comment_react  (<comment_id> | --comment_id=<comment_id>)
+            comment_react   (--comment_ids=<comment_ids>)
                             (--channel_id=<channel_id>)
                             (--channel_name=<channel_name>)
                             (--react_type=<react_type>)
@@ -5287,7 +5287,7 @@ class Daemon(metaclass=JSONRPCServerType):
                             [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
         Options:
-            --comment_id=<comment_id>                   : (str) The comment id reacted to
+            --comment_ids=<comment_ids>                 : (str) one or more comment id reacted to, comma delimited
             --channel_id=<claim_id>                     : (str) The ID of channel reacting
             --channel_name=<claim_name>                 : (str) The name of the channel reacting
             --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
@@ -5312,7 +5312,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         react_body = {
-            'comment_ids': comment_id,
+            'comment_ids': comment_ids,
             'channel_id': channel_id,
             'channel_name': channel.claim_name,
             'type': react_type,
@@ -5327,19 +5327,19 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_react_list(
-            self, comment_id, channel_name=None, channel_id=None,
+            self, comment_ids, channel_name=None, channel_id=None,
             channel_account_id=None, react_types=None, wallet_id=None):
         """
         List reactions emoji with a claim using your channel identity.
 
         Usage:
-            comment_react_list  (<comment_id> | --comment_id=<comment_id>)
+            comment_react_list  (--comment_ids=<comment_ids>)
                                 (--channel_id=<channel_id>)
                                 (--channel_name=<channel_name>)
                                 [--react_types=<react_types>]
 
         Options:
-            --comment_id=<comment_id>                   : (str) The comment id reacted to
+            --comment_ids=<comment_ids>                 : (str) The comment ids reacted to, comma delimited
             --channel_id=<claim_id>                     : (str) The ID of channel reacting
             --channel_name=<claim_name>                 : (str) The name of the channel reacting
             --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
@@ -5368,7 +5368,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
         react_list_body = {
-            'comment_ids': comment_id,
+            'comment_ids': comment_ids,
             'channel_id': channel_id,
             'channel_name': channel.claim_name,
         }
