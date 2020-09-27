@@ -5334,8 +5334,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             comment_react_list  (--comment_ids=<comment_ids>)
-                                (--channel_id=<channel_id>)
-                                (--channel_name=<channel_name>)
+                                [(--channel_id=<channel_id>)(--channel_name=<channel_name>)]
                                 [--react_types=<react_types>]
 
         Options:
@@ -5363,19 +5362,20 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        channel = await self.get_channel_or_error(
-            wallet, channel_account_id, channel_id, channel_name, for_signing=True
-        )
-
         react_list_body = {
             'comment_ids': comment_ids,
-            'channel_id': channel_id,
-            'channel_name': channel.claim_name,
         }
+        if channel_id:
+            channel = await self.get_channel_or_error(
+                wallet, channel_account_id, channel_id, channel_name, for_signing=True
+            )
+            react_list_body['channel_id'] = channel_id
+            react_list_body['channel_name'] = channel.claim_name
 
         if react_types:
             react_list_body['types'] = react_types
-        comment_client.sign_reaction(react_list_body, channel)
+        if channel_id:
+            comment_client.sign_reaction(react_list_body, channel)
         response = await comment_client.jsonrpc_post(self.conf.comment_server, 'reaction.List', react_list_body)
         return response
 
