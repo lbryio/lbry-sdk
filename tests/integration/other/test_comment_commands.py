@@ -1,5 +1,4 @@
 import re
-
 import time
 import typing
 from math import ceil
@@ -32,6 +31,16 @@ class MockedCommentServer:
         'is_hidden': False,
     }
 
+    REACT_SCHEMA = {
+        'react_id': None,
+        'comment_id': None,
+        'reaction_type': None,
+        'timestamp': None,
+        'signature': None,
+        'channel_id': None,
+        'channel_name': None
+    }
+
     def __init__(self, port=2903):
         self.port = port
         self.app = web.Application(debug=True)
@@ -39,11 +48,19 @@ class MockedCommentServer:
         self.runner = None
         self.server = None
         self.comments = []
+        self.reacts = {}
         self.comment_id = 0
+        self.react_id = 0
 
     @classmethod
     def _create_comment(cls, **kwargs):
         schema = cls.COMMENT_SCHEMA.copy()
+        schema.update(**kwargs)
+        return schema
+
+    @classmethod
+    def _react(cls, **kwargs):
+        schema = cls.REACT_SCHEMA.copy()
         schema.update(**kwargs)
         return schema
 
@@ -117,27 +134,18 @@ class MockedCommentServer:
             'visible': list(comment_ids - set(hidden))
         }
 
-    def get_claim_comments(self, claim_id, page=1, page_size=50,**kwargs):
+    def get_claim_comments(self, claim_id, hidden=False, visible=False, page=1, page_size=50,**kwargs):
         comments = list(filter(lambda c: c['claim_id'] == claim_id, self.comments))
+        if hidden ^ visible:
+            comments = list(filter(lambda c: c['is_hidden'] == hidden, comments))
+
         return {
             'page': page,
             'page_size': page_size,
             'total_pages': ceil(len(comments)/page_size),
             'total_items': len(comments),
             'items': [self.clean(c) for c in (comments[::-1])[(page - 1) * page_size: page * page_size]],
-            'has_hidden_comments': bool(list(filter(lambda x: x['is_hidden'], comments)))
-        }
-
-    def get_claim_hidden_comments(self, claim_id, hidden=True, page=1, page_size=50):
-        comments = list(filter(lambda c: c['claim_id'] == claim_id, self.comments))
-        select_comments = list(filter(lambda c: c['is_hidden'] == hidden, comments))
-        return {
-            'page': page,
-            'page_size': page_size,
-            'total_pages': ceil(len(select_comments) / page_size),
-            'total_items': len(select_comments),
-            'items': [self.clean(c) for c in (select_comments[::-1])[(page - 1) * page_size: page * page_size]],
-            'has_hidden_comments': bool(list(filter(lambda c: c['is_hidden'], comments)))
+            'has_hidden_comments': bool(list(filter(lambda x: x['is_hidden'], self.comments)))
         }
 
     def get_comment_channel_by_id(self, comment_id: int, **kwargs):
@@ -157,15 +165,98 @@ class MockedCommentServer:
             'has_hidden_comments': bool({c for c in comments if c['is_hidden']})
         }
 
+    def react(
+            self,
+            comment_ids=None,
+            channel_name=None,
+            channel_id=None,
+            remove=None,
+            clear_types=None,
+            type=None,
+            signing_ts=None,
+            **kwargs
+    ):
+        comment_batch = comment_ids.split(',')
+        for item in comment_batch:
+            react_id = self.react_id
+            c_id = item.strip()
+            reacts_for_comment_id = [r for r in list(self.reacts.values()) if r['comment_id'] == c_id]
+            channels_reacts_for_comment_id = [r for r in reacts_for_comment_id if r['channel_id'] == channel_id]
+            if remove:
+                matching_react = None
+                for reaction in channels_reacts_for_comment_id:
+                    if reaction['reaction_type'] == type:
+                        matching_react = reaction
+                        break
+                if matching_react:
+                    self.reacts.pop(int(matching_react['react_id']), None)
+            else:
+                if clear_types:
+                    for r_type in clear_types.split(','):
+                        for reaction in channels_reacts_for_comment_id:
+                            if reaction['reaction_type'] == r_type:
+                                x = self.reacts.pop(int(reaction['react_id']), None)
+                react = self._react(
+                    react_id=str(react_id),
+                    comment_id=str(c_id),
+                    channel_name=channel_name,
+                    channel_id=channel_id,
+                    reaction_type=type,
+                    timestamp=str(int(time.time())),
+                    **kwargs
+                )
+                self.reacts[self.react_id] = react
+                self.react_id += 1
+                self.clean(react)
+        return True
+
+    def list_reacts(self, comment_ids, channel_id, channel_name, types=None, **kwargs):
+        all_types = list(set([r['reaction_type'] for r in list(self.reacts.values())]))
+        comment_id_list = comment_ids.split(',')
+        # _reacts: {'a1': {'like': 0, 'dislike': 0}, 'a2': {'like': 0, 'dislike': 0}}
+        own_reacts = {}
+        other_reacts = {}
+
+        # for each comment_id
+            # add comment_id: {} to own_reacts and other_reacts
+            # for each react in own_reacts
+            # for each react in other_reacts
+        for cid in comment_id_list:
+            own_reacts[cid] = {}
+            other_reacts[cid] = {}
+
+            for r_type in all_types:
+                own_reacts[cid][r_type] = 0
+                other_reacts[cid][r_type] = 0
+            # process that comment ids reactions for own and other categories
+            reacts_for_comment = list(filter(lambda c: c['comment_id'] == cid, list(self.reacts.values())))
+            if types:
+                reacts_for_comment = list(filter(lambda c: c['reaction_type'] in types.split(','), reacts_for_comment))
+            own_reacts_for_comment = list(filter(lambda c: c['channel_id'] == channel_id, reacts_for_comment))
+            other_reacts_for_comment = list(filter(lambda c: c['channel_id'] != channel_id, reacts_for_comment))
+
+            if own_reacts_for_comment:
+                for react in own_reacts_for_comment:
+                    own_reacts[cid][react['reaction_type']] += 1
+            if other_reacts_for_comment:
+                for react in other_reacts_for_comment:
+                    other_reacts[cid][react['reaction_type']] += 1
+
+        return {
+            'my_reactions': own_reacts,
+            'others_reactions': other_reacts,
+        }
+
     methods = {
-        'get_claim_comments': get_claim_comments,
+        'comment.List': get_claim_comments,
         'get_comments_by_id': get_comments_by_id,
-        'create_comment': create_comment,
-        'abandon_comment': abandon_comment,
-        'get_channel_from_comment_id': get_comment_channel_by_id,
-        'get_claim_hidden_comments': get_claim_hidden_comments,
-        'hide_comments': hide_comments,
-        'edit_comment': edit_comment,
+        'comment.Create': create_comment,
+        'comment.Abandon': abandon_comment,
+        'comment.GetChannelFromCommentID': get_comment_channel_by_id,
+        'comment.Hide': hide_comments,
+        'comment.Edit': edit_comment,
+        'reaction.React': react,
+        'reaction.List': list_reacts,
     }
 
     def process_json(self, body) -> dict:
@@ -450,7 +541,6 @@ class CommentCommands(CommandTestCase):
             channel_id=bee['claim_id']
         )
         all_comments = [other_comment, owner_comment, hidden_comment]
-
         normal_list = await self.daemon.jsonrpc_comment_list(claim_id)
         self.assertEqual(
             {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
@@ -532,3 +622,123 @@ class CommentCommands(CommandTestCase):
                 comment='If you see it and you mean then you know you have to go',
                 comment_id=original_cid
             )
+
+    async def test06_reactions(self):
+        # wherein a bee insulted by a rude moth accidentally
+        # 1) likes an insult
+        # 2) clicks dislike instead, testing "clear_types"
+        # 3) then clicks dislike again, testing "remove"
+        # calls from the point of view of the moth
+
+        moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
+        bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
+        stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth['claim_id'])
+        claim_id = stream['outputs'][0]['claim_id']
+
+        first_comment = await self.daemon.jsonrpc_comment_create(
+            comment='Go away you yellow freak',
+            claim_id=claim_id,
+            channel_id=moth['claim_id'],
+        )
+        second_comment = await self.daemon.jsonrpc_comment_create(
+            comment='I got my swim trunks and my flippy-floppies',
+            claim_id=claim_id,
+            channel_id=bee['claim_id']
+        )
+        all_comments = [second_comment, first_comment]
+        comment_list = await self.daemon.jsonrpc_comment_list(claim_id)
+        self.assertEqual(
+            {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
+            set(comment_list)
+        )
+        self.assertEqual(comment_list['total_items'], 2)
+
+        bee_like_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='like',
+        )
+
+        moth_like_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+            react_type='like',
+        )
+        reactions = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+        # {'my_reactions': {'0': {'like': 1}}, 'others_reactions': {'0': {'like': 1}}}
+        self.assertEqual(reactions['my_reactions']['0']['like'], 1)
+        self.assertEqual(reactions['others_reactions']['0']['like'], 1)
+
+        bee_dislike_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='dislike',
+            clear_types='like',
+        )
+
+        reactions_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+        # {'my_reactions': {'0': {'like': 1, 'dislike', 0}}, 'others_reactions': {'0': {'like': 0, 'dislike': 1}}}
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['like'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['dislike'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['like'], 0)
+
+        only_likes_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+            react_types='like',
+        )
+
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['like'], 1)
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['like'], 0)
+
+        bee_un_dislike_reaction = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            remove=True,
+            react_type='dislike',
+        )
+
+        reactions_after_bee_absconds = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+
+        self.assertEqual(reactions_after_bee_absconds['my_reactions']['0']['like'], 1)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['my_reactions']['0'])
+        self.assertEqual(reactions_after_bee_absconds['others_reactions']['0']['like'], 0)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['others_reactions']['0'])
+
+        bee_reacts_to_both_comments = await self.daemon.jsonrpc_comment_react(
+            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            channel_id=bee['claim_id'],
+            channel_name=bee['name'],
+            react_type='frozen_tom',
+        )
+
+        reactions_after_double_frozen_tom = await self.daemon.jsonrpc_comment_react_list(
+            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+        )
+
+        self.assertEqual(reactions_after_double_frozen_tom['my_reactions']['0']['like'], 1)
+        self.assertNotIn('dislike', reactions_after_double_frozen_tom['my_reactions']['0'])
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['0']['frozen_tom'], 1)
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['1']['frozen_tom'], 1)

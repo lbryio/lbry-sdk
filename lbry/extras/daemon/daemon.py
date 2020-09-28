@@ -5048,8 +5048,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if hidden ^ visible:
             result = await comment_client.jsonrpc_post(
                 self.conf.comment_server,
-                'get_claim_hidden_comments',
+                'comment.List',
                 claim_id=claim_id,
+                visible=visible,
                 hidden=hidden,
                 page=page,
                 page_size=page_size
@@ -5057,7 +5058,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             result = await comment_client.jsonrpc_post(
                 self.conf.comment_server,
-                'get_claim_comments',
+                'comment.List',
                 claim_id=claim_id,
                 parent_id=parent_id,
                 page=page,
@@ -5132,7 +5133,7 @@ class Daemon(metaclass=JSONRPCServerType):
         }
         comment_client.sign_comment(comment_body, channel)
 
-        response = await comment_client.jsonrpc_post(self.conf.comment_server, 'create_comment', comment_body)
+        response = await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Create', comment_body)
         response.update({
             'is_claim_signature_valid': comment_client.is_comment_signed_by_channel(response, channel)
         })
@@ -5169,7 +5170,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         channel = await comment_client.jsonrpc_post(
             self.conf.comment_server,
-            'get_channel_from_comment_id',
+            'comment.GetChannelFromCommentID',
             comment_id=comment_id
         )
         if 'error' in channel:
@@ -5186,7 +5187,7 @@ class Daemon(metaclass=JSONRPCServerType):
         }
         comment_client.sign_comment(edited_comment, channel_claim)
         return await comment_client.jsonrpc_post(
-            self.conf.comment_server, 'edit_comment', edited_comment
+            self.conf.comment_server, 'comment.Edit', edited_comment
         )
 
     @requires(WALLET_COMPONENT)
@@ -5212,7 +5213,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         abandon_comment_body = {'comment_id': comment_id}
         channel = await comment_client.jsonrpc_post(
-            self.conf.comment_server, 'get_channel_from_comment_id', comment_id=comment_id
+            self.conf.comment_server, 'comment.GetChannelFromCommentID', comment_id=comment_id
         )
         if 'error' in channel:
             return {comment_id: {'abandoned': False}}
@@ -5222,7 +5223,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_name': channel.claim_name,
         })
         comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
-        return await comment_client.jsonrpc_post(self.conf.comment_server, 'abandon_comment', abandon_comment_body)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Abandon', abandon_comment_body)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_hide(self, comment_ids: typing.Union[str, list], wallet_id=None):
@@ -5268,7 +5269,115 @@ class Daemon(metaclass=JSONRPCServerType):
                 piece = {'comment_id': comment['comment_id']}
                 comment_client.sign_comment(piece, channel, abandon=True)
                 pieces.append(piece)
-        return await comment_client.jsonrpc_post(self.conf.comment_server, 'hide_comments', pieces=pieces)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Hide', pieces=pieces)
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_react(
+            self, comment_ids, channel_name=None, channel_id=None,
+            channel_account_id=None, remove=False, clear_types=None, react_type=None, wallet_id=None):
+        """
+        Create and associate a reaction emoji with a comment using your channel identity.
+
+        Usage:
+            comment_react   (--comment_ids=<comment_ids>)
+                            (--channel_id=<channel_id>)
+                            (--channel_name=<channel_name>)
+                            (--react_type=<react_type>)
+                            [(--remove) | (--clear_types=<clear_types>)]
+                            [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
+
+        Options:
+            --comment_ids=<comment_ids>                 : (str) one or more comment id reacted to, comma delimited
+            --channel_id=<claim_id>                     : (str) The ID of channel reacting
+            --channel_name=<claim_name>                 : (str) The name of the channel reacting
+            --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
+            --react_type=<react_type>                   : (str) name of reaction type
+            --remove                                    : (bool) remove specified react_type
+            --clear_types=<clear_types>                 : (str) types to clear when adding another type
+
+
+        Returns:
+            (dict) Reaction object if successfully made, (None) otherwise
+            {
+            "Reactions": {
+                <comment_id>: {
+                    <reaction_type>: (int) Count for this reaction
+                    ...
+                }
+            }
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        channel = await self.get_channel_or_error(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True
+        )
+
+        react_body = {
+            'comment_ids': comment_ids,
+            'channel_id': channel_id,
+            'channel_name': channel.claim_name,
+            'type': react_type,
+            'remove': remove,
+            'clear_types': clear_types,
+        }
+        comment_client.sign_reaction(react_body, channel)
+
+        response = await comment_client.jsonrpc_post(self.conf.comment_server, 'reaction.React', react_body)
+
+        return response
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_react_list(
+            self, comment_ids, channel_name=None, channel_id=None,
+            channel_account_id=None, react_types=None, wallet_id=None):
+        """
+        List reactions emoji with a claim using your channel identity.
+
+        Usage:
+            comment_react_list  (--comment_ids=<comment_ids>)
+                                [(--channel_id=<channel_id>)(--channel_name=<channel_name>)]
+                                [--react_types=<react_types>]
+
+        Options:
+            --comment_ids=<comment_ids>                 : (str) The comment ids reacted to, comma delimited
+            --channel_id=<claim_id>                     : (str) The ID of channel reacting
+            --channel_name=<claim_name>                 : (str) The name of the channel reacting
+            --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
+            --react_types=<react_type>                   : (str) comma delimited reaction types
+
+        Returns:
+            (dict) Comment object if successfully made, (None) otherwise
+            {
+                "my_reactions": {
+                    <comment_id>: {
+                    <reaction_type>: (int) Count for this reaction type
+                    ...
+                    }
+                }
+                "other_reactions": {
+                    <comment_id>: {
+                    <reaction_type>: (int) Count for this reaction type
+                    ...
+                    }
+                }
+            }
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        react_list_body = {
+            'comment_ids': comment_ids,
+        }
+        if channel_id:
+            channel = await self.get_channel_or_error(
+                wallet, channel_account_id, channel_id, channel_name, for_signing=True
+            )
+            react_list_body['channel_id'] = channel_id
+            react_list_body['channel_name'] = channel.claim_name
+
+        if react_types:
+            react_list_body['types'] = react_types
+        if channel_id:
+            comment_client.sign_reaction(react_list_body, channel)
+        response = await comment_client.jsonrpc_post(self.conf.comment_server, 'reaction.List', react_list_body)
+        return response
 
     async def broadcast_or_release(self, tx, blocking=False):
         await self.wallet_manager.broadcast_or_release(tx, blocking)

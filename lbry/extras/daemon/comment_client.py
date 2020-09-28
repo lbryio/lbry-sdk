@@ -52,11 +52,21 @@ def sign_comment(comment: dict, channel: Output, abandon=False):
         'signing_ts': timestamp
     })
 
+def sign_reaction(reaction: dict, channel: Output):
+    timestamp = str(int(time.time()))
+    signing_field = reaction['channel_name']
+    pieces = [timestamp.encode(), channel.claim_hash, signing_field.encode()]
+    digest = sha256(b''.join(pieces))
+    signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+    reaction.update({
+        'signature': binascii.hexlify(signature).decode(),
+        'signing_ts': timestamp
+    })
 
 async def jsonrpc_post(url: str, method: str, params: dict = None, **kwargs) -> any:
     params = params or {}
     params.update(kwargs)
-    json_body = {'jsonrpc': '2.0', 'id': None, 'method': method, 'params': params}
+    json_body = {'jsonrpc': '2.0', 'id': 1, 'method': method, 'params': params}
     async with utils.aiohttp_request('POST', url, json=json_body) as response:
         try:
             result = await response.json()
