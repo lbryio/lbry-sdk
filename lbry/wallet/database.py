@@ -62,7 +62,7 @@ def run_read_only_fetchone(sql, params):
         raise
 
 
-if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' in os.environ:
+if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
     ReaderExecutorClass = ThreadPoolExecutor
 else:
     ReaderExecutorClass = ProcessPoolExecutor
