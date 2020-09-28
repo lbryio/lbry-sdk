@@ -8,7 +8,6 @@ from collections import defaultdict
 from dataclasses import dataclass
 from contextvars import ContextVar
 from concurrent.futures.thread import ThreadPoolExecutor
-from concurrent.futures.process import ProcessPoolExecutor
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 from datetime import date
 from prometheus_client import Gauge, Counter, Histogram
@@ -65,6 +64,7 @@ def run_read_only_fetchone(sql, params):
 if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
     ReaderExecutorClass = ThreadPoolExecutor
 else:
+    from concurrent.futures.process import ProcessPoolExecutor
     ReaderExecutorClass = ProcessPoolExecutor
 
 
