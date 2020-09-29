@@ -7,7 +7,6 @@ from binascii import hexlify
 from collections import defaultdict
 from dataclasses import dataclass
 from contextvars import ContextVar
-from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 from datetime import date
 from prometheus_client import Gauge, Counter, Histogram
@@ -17,6 +16,12 @@ from .bip32 import PubKey
 from .transaction import Transaction, Output, OutputScript, TXRefImmutable, Input
 from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day
+
+from concurrent.futures.thread import ThreadPoolExecutor  # pylint: disable=wrong-import-order
+if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
+    from concurrent.futures.thread import ThreadPoolExecutor as ReaderExecutorClass  # pylint: disable=reimported
+else:
+    from concurrent.futures.process import ProcessPoolExecutor as ReaderExecutorClass
 
 
 log = logging.getLogger(__name__)
@@ -59,13 +64,6 @@ def run_read_only_fetchone(sql, params):
     except (Exception, OSError) as e:
         log.exception('Error running transaction:', exc_info=e)
         raise
-
-
-if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
-    ReaderExecutorClass = ThreadPoolExecutor
-else:
-    from concurrent.futures.process import ProcessPoolExecutor
-    ReaderExecutorClass = ProcessPoolExecutor
 
 
 class AIOSQLite:
