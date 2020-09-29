@@ -144,7 +144,7 @@ class ErrorDatagram(KademliaDatagramBase):
         self.response = response.decode()
 
 
-def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram]:
+def _decode_datagram(datagram: bytes):
     msg_types = {
         REQUEST_TYPE: RequestDatagram,
         RESPONSE_TYPE: ResponseDatagram,
@@ -152,19 +152,29 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
     }
 
     primitive: typing.Dict = bdecode(datagram)
-    if primitive[0] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object
-        datagram_type = primitive[0]  # pylint: disable=unsubscriptable-object
+
+    converted = {
+        str(k).encode() if not isinstance(k, bytes) else k: v for k, v in primitive.items()
+    }
+
+    if converted[b'0'] in [REQUEST_TYPE, ERROR_TYPE, RESPONSE_TYPE]:  # pylint: disable=unsubscriptable-object
+        datagram_type = converted[b'0']  # pylint: disable=unsubscriptable-object
     else:
         raise ValueError("invalid datagram type")
     datagram_class = msg_types[datagram_type]
     decoded = {
-        k: primitive[i]  # pylint: disable=unsubscriptable-object
+        k: converted[str(i).encode()]  # pylint: disable=unsubscriptable-object
         for i, k in enumerate(datagram_class.required_fields)
-        if i in primitive  # pylint: disable=unsupported-membership-test
+        if str(i).encode() in converted  # pylint: disable=unsupported-membership-test
     }
     for i, _ in enumerate(OPTIONAL_FIELDS):
-        if i + OPTIONAL_ARG_OFFSET in primitive:
-            decoded[i + OPTIONAL_ARG_OFFSET] = primitive[i + OPTIONAL_ARG_OFFSET]
+        if str(i + OPTIONAL_ARG_OFFSET).encode() in converted:
+            decoded[i + OPTIONAL_ARG_OFFSET] = converted[str(i + OPTIONAL_ARG_OFFSET).encode()]
+    return decoded, datagram_class
+
+
+def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDatagram, ErrorDatagram]:
+    decoded, datagram_class = _decode_datagram(datagram)
     return datagram_class(**decoded)
 
 

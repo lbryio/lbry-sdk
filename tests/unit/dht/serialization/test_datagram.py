@@ -1,7 +1,9 @@
+import binascii
 import unittest
 from lbry.dht.error import DecodeError
 from lbry.dht.serialization.bencoding import _bencode
 from lbry.dht.serialization.datagram import RequestDatagram, ResponseDatagram, decode_datagram, ErrorDatagram
+from lbry.dht.serialization.datagram import _decode_datagram
 from lbry.dht.serialization.datagram import REQUEST_TYPE, RESPONSE_TYPE, ERROR_TYPE
 from lbry.dht.serialization.datagram import make_compact_address, decode_compact_address
 
@@ -138,6 +140,38 @@ class TestDatagram(unittest.TestCase):
         }))
         self.assertEqual(datagram.packet_type, REQUEST_TYPE)
         self.assertEqual(b'ping', datagram.method)
+
+    def test_str_or_int_keys(self):
+        datagram = decode_datagram(_bencode({
+            b'0': 0,
+            b'1': b'\n\xbc\xb5&\x9dl\xfc\x1e\x87\xa0\x8e\x92\x0b\xf3\x9f\xe9\xdf\x8e\x92\xfc',
+            b'2': b'111111111111111111111111111111111111111111111111',
+            b'3': b'ping',
+            b'4': [{b'protocolVersion': 1}],
+            b'5': b'should not error'
+        }))
+        self.assertEqual(datagram.packet_type, REQUEST_TYPE)
+        self.assertEqual(b'ping', datagram.method)
+
+    def test_mixed_str_or_int_keys(self):
+        # datagram, _ = _bencode({
+        #     b'0': 0,
+        #     1: b'\n\xbc\xb5&\x9dl\xfc\x1e\x87\xa0\x8e\x92\x0b\xf3\x9f\xe9\xdf\x8e\x92\xfc',
+        #     b'2': b'111111111111111111111111111111111111111111111111',
+        #     3: b'ping',
+        #     b'4': [{b'protocolVersion': 1}],
+        #     b'5': b'should not error'
+        # }))
+        encoded = binascii.unhexlify(b"64313a3069306569316532303a0abcb5269d6cfc1e87a08e920bf39fe9df8e92fc313a3234383a313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131313131693365343a70696e67313a346c6431353a70726f746f636f6c56657273696f6e6931656565313a3531363a73686f756c64206e6f74206572726f7265")
+        self.assertDictEqual(
+            {
+             'packet_type': 0,
+             'rpc_id': b'\n\xbc\xb5&\x9dl\xfc\x1e\x87\xa0\x8e\x92\x0b\xf3\x9f\xe9\xdf\x8e\x92\xfc',
+             'node_id': b'111111111111111111111111111111111111111111111111',
+             'method': b'ping',
+             'args': [{b'protocolVersion': 1}]
+            }, _decode_datagram(encoded)[0]
+        )
 
 
 class TestCompactAddress(unittest.TestCase):
