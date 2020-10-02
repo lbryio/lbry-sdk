@@ -312,6 +312,17 @@ class Database:
         return await self.fetch_result(q.get_purchases, **constraints)
 
     async def search_claims(self, **constraints) -> Result[Output]:
+        if 'channel' in constraints:
+            channel_url = constraints.pop('channel')
+            match = await self.resolve([channel_url])
+            if isinstance(match, dict):
+                for value in match.values():
+                    if isinstance(value, Output):
+                        constraints['channel_hash'] = value.claim_hash
+                    else:
+                        return Result([], 0)
+            else:
+                return Result([], 0)
         #assert set(constraints).issubset(SEARCH_PARAMS), \
         #    f"Search query contains invalid arguments: {set(constraints).difference(SEARCH_PARAMS)}"
         claims, total, censor = await self.run(q.search_claims, **constraints)

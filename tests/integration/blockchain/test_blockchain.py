@@ -1127,6 +1127,17 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual("@Chá#a/Hortelã#c", claim.canonical_url)
         self.assertEqual("Hortelã#c", claim.short_url)
 
+    async def test_claim_search_filters(self):
+        chan1 = await self.get_claim(await self.create_claim(is_channel=True, name="@one"))
+        chan2 = await self.get_claim(await self.create_claim(is_channel=True, name="@two"))
+        claim1 = await self.get_claim(await self.create_claim(sign=chan1))
+        await self.get_claim(await self.create_claim(sign=chan2))
+        await self.generate(1)
+        results = await self.db.search_claims(channel="@one")
+        self.assertEqual([claim1.claim_id], [result.claim_id for result in results])
+        results = await self.db.search_claims(channel="@404")
+        self.assertEqual([], results.rows)
+
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 
