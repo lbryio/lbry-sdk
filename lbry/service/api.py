@@ -60,9 +60,9 @@ kwarg_expanders = {}
 
 
 def expander(m):
-    assert m.__name__.endswith('_kwargs'), "Argument expanders must end with '_kwargs'."
-    name = m.__name__[:-7]
-    dict_name = f'_{name}_dict'
+    assert m.__name__.startswith("extract_"), "Argument expanders must start with 'extract_'."
+    name = m.__name__[len("extract_"):]
+    dict_name = f"_{name}_dict"
 
     template = {
         k: v.default
@@ -105,11 +105,11 @@ def pop_kwargs(k, d) -> Tuple[dict, dict]:
 
 def assert_consumed_kwargs(d):
     if d:
-        raise ValueError(f"Unknown argument pass: {d}")
+        raise ValueError(f"Unknown argument passed: {d}")
 
 
 @expander
-def pagination_kwargs(
+def extract_pagination(
     page: int = None,       # page to return for paginating
     page_size: int = None,  # number of items on page for pagination
     include_total=False,    # calculate total number of items and pages
@@ -118,7 +118,7 @@ def pagination_kwargs(
 
 
 @expander
-def tx_kwargs(
+def extract_tx(
     wallet_id: str = None,              # restrict operation to specific wallet
     change_account_id: str = None,      # account to send excess change (LBC)
     fund_account_id: StrOrList = None,  # accounts to fund the transaction
@@ -129,7 +129,7 @@ def tx_kwargs(
 
 
 @expander
-def claim_kwargs(
+def extract_claim(
     title: str = None,
     description: str = None,
     thumbnail_url: str = None,   # url to thumbnail image
@@ -170,7 +170,7 @@ def claim_kwargs(
 
 
 @expander
-def claim_edit_kwargs(
+def extract_claim_edit(
     replace=False,          # instead of modifying specific values on
                             # the claim, this will clear all existing values
                             # and only save passed in values, useful for form
@@ -183,7 +183,7 @@ def claim_edit_kwargs(
 
 
 @expander
-def signed_kwargs(
+def extract_signed(
     channel_id: str = None,    # claim id of the publishing channel
     channel_name: str = None,  # name of publishing channel
 ):
@@ -191,7 +191,7 @@ def signed_kwargs(
 
 
 @expander
-def stream_kwargs(
+def extract_stream(
     file_path: str = None,      # path to file to be associated with name.
     validate_file=False,        # validate that the video container and encodings match
                                 # common web browser support or that optimization succeeds if specified.
@@ -219,7 +219,7 @@ def stream_kwargs(
 
 
 @expander
-def stream_edit_kwargs(
+def extract_stream_edit(
     clear_fee=False,      # clear fee
     clear_channel=False,  # clear channel signature
     **stream_and_claim_edit_kwargs
@@ -228,7 +228,7 @@ def stream_edit_kwargs(
 
 
 @expander
-def channel_kwargs(
+def extract_channel(
     email: str = None,           # email of channel owner
     website_url: str = None,     # website url
     cover_url: str = None,       # url to cover image
@@ -239,7 +239,7 @@ def channel_kwargs(
 
 
 @expander
-def channel_edit_kwargs(
+def extract_channel_edit(
     new_signing_key=False,  # generate a new signing key, will invalidate all previous publishes
     clear_featured=False,   # clear existing featured content (prior to adding new ones)
     **channel_and_claim_edit_kwargs
@@ -248,7 +248,7 @@ def channel_edit_kwargs(
 
 
 @expander
-def abandon_kwargs(
+def extract_abandon(
     claim_id: str = None,    # claim_id of the claim to abandon
     txid: str = None,        # txid of the claim to abandon
     nout: int = 0,           # nout of the claim to abandon
@@ -258,7 +258,7 @@ def abandon_kwargs(
 
 
 @expander
-def claim_filter_kwargs(
+def extract_claim_filter(
     name: StrOrList = None,          # claim name (normalized)
     claim_id: StrOrList = None,      # full or partial claim id
     text: str = None,                # full text search
@@ -287,7 +287,7 @@ def claim_filter_kwargs(
 
 
 @expander
-def signed_filter_kwargs(
+def extract_signed_filter(
     channel: str = None,               # signed by this channel (argument is
                                        # a URL which automatically gets resolved),
                                        # see --channel_id if you need to filter by
@@ -310,7 +310,7 @@ def signed_filter_kwargs(
 
 
 @expander
-def stream_filter_kwargs(
+def extract_stream_filter(
     stream_type: StrOrList = None,  # filter by 'video', 'image', 'document', etc
     media_type: StrOrList = None,   # filter by 'video/mp4', 'image/png', etc
     fee_currency: str = None,       # specify fee currency# LBC, BTC, USD
@@ -322,7 +322,7 @@ def stream_filter_kwargs(
 
 
 @expander
-def file_filter_kwargs(
+def extract_file_filter(
     sd_hash: str = None,           # filter by sd hash
     file_name: str = None,         # filter by file name
     stream_hash: str = None,       # filter by stream hash
@@ -342,7 +342,7 @@ def file_filter_kwargs(
 
 
 @expander
-def txo_filter_kwargs(
+def extract_txo_filter(
     type: StrOrList = None,            # claim type: stream, channel, support, purchase, collection, repost, other
     txid: StrOrList = None,            # transaction id of outputs
     claim_id: StrOrList = None,        # claim id
@@ -368,7 +368,7 @@ def txo_filter_kwargs(
 
 
 @expander
-def support_filter_kwargs(
+def extract_support_filter(
     claim_id: StrOrList = None,      # full claim id
     txid: str = None,                # transaction id
     nout: int = None,                # position in the transaction
@@ -1632,10 +1632,10 @@ class API:
                          {kwargs}
 
         """
-        claim_filter_dict, kwargs = pop_kwargs('claim_filter', claim_filter_kwargs(
+        claim_filter_dict, kwargs = pop_kwargs('claim_filter', extract_claim_filter(
             **claim_filter_and_stream_filter_and_pagination_kwargs
         ))
-        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        pagination, kwargs = pop_kwargs('pagination', extract_pagination(**kwargs))
         wallet = self.wallets.get_or_default(wallet_id)
 #        if {'claim_id', 'claim_ids'}.issubset(kwargs):
 #            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
@@ -1685,8 +1685,8 @@ class API:
                            {kwargs}
 
         """
-        channel_dict, kwargs = pop_kwargs('channel', channel_kwargs(**channel_and_tx_kwargs))
-        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+        channel_dict, kwargs = pop_kwargs('channel', extract_channel(**channel_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
         assert_consumed_kwargs(kwargs)
         self.ledger.valid_channel_name_or_error(name)
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
@@ -1717,8 +1717,8 @@ class API:
 
         """
         channel_edit_dict, kwargs = pop_kwargs(
-            'channel_edit', channel_edit_kwargs(**channel_edit_and_tx_kwargs))
-        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+            'channel_edit', extract_channel_edit(**channel_edit_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
         assert_consumed_kwargs(kwargs)
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         holding_account = wallet.accounts.get_or_none(channel_edit_dict.pop('account_id'))
@@ -2003,8 +2003,8 @@ class API:
                           {kwargs}
 
         """
-        stream_dict, kwargs = pop_kwargs('stream', stream_kwargs(**stream_and_tx_kwargs))
-        tx_dict, kwargs = pop_kwargs('tx', tx_kwargs(**kwargs))
+        stream_dict, kwargs = pop_kwargs('stream', extract_stream(**stream_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
         assert_consumed_kwargs(kwargs)
         self.ledger.valid_stream_name_or_error(name)
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
@@ -2548,10 +2548,10 @@ class API:
                            {kwargs}
 
         """
-        support_filter_dict, kwargs = pop_kwargs('support_filter', support_filter_kwargs(
+        support_filter_dict, kwargs = pop_kwargs('support_filter', extract_support_filter(
             **support_filter_and_pagination_kwargs
         ))
-        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        pagination, kwargs = pop_kwargs('pagination', extract_pagination(**kwargs))
         wallet = self.wallets.get_or_default(wallet_id)
         page_num = abs(pagination['page'] or 1)
         page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
@@ -2764,8 +2764,8 @@ class API:
                      {kwargs}
 
         """
-        txo_dict, kwargs = pop_kwargs('txo_filter', txo_filter_kwargs(**txo_filter_and_pagination_kwargs))
-        pagination, kwargs = pop_kwargs('pagination', pagination_kwargs(**kwargs))
+        txo_dict, kwargs = pop_kwargs('txo_filter', extract_txo_filter(**txo_filter_and_pagination_kwargs))
+        pagination, kwargs = pop_kwargs('pagination', extract_pagination(**kwargs))
         assert_consumed_kwargs(kwargs)
         wallet = self.wallets.get_or_default(txo_dict.pop('wallet_id'))
         accounts = wallet.accounts.get_or_all(txo_dict.pop('account_id'))

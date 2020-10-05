@@ -61,14 +61,14 @@ class FakeAPI:
 
 
 @expander
-def test_kwargs(
+def extract_test(
     somevalue=1
 ):
     pass
 
 
 @expander
-def another_test_kwargs(
+def extract_another_test(
     somevalue=1,
     bad_description=3,  # using linebreaks makes docopt very very --angry
 ):
