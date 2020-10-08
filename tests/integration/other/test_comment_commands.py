@@ -29,6 +29,7 @@ class MockedCommentServer:
         'timestamp': None,
         'channel_url': None,
         'is_hidden': False,
+        'is_pinned': False,
     }
 
     REACT_SCHEMA = {
@@ -120,6 +121,21 @@ class MockedCommentServer:
         if self.is_signable(signature, signing_ts):
             self.comments[comment_id]['is_hidden'] = True
             return True
+        return False
+
+    def pin_comment(
+            self,
+            comment_id: typing.Union[int, str],
+            channel_name: str, channel_id: str, remove: bool,
+            signing_ts: str, signature: str
+    ):
+        comment_id = self.get_comment_id(comment_id)
+        if self.is_signable(signature, signing_ts):
+            if remove:
+                self.comments[comment_id]['is_pinned'] = False
+            else:
+                self.comments[comment_id]['is_pinned'] = True
+            return self.comments[comment_id]
         return False
 
     def hide_comments(self, pieces: list):
@@ -254,6 +270,7 @@ class MockedCommentServer:
         'comment.Abandon': abandon_comment,
         'comment.GetChannelFromCommentID': get_comment_channel_by_id,
         'comment.Hide': hide_comments,
+        'comment.Pin': pin_comment,
         'comment.Edit': edit_comment,
         'reaction.React': react,
         'reaction.List': list_reacts,
@@ -517,6 +534,56 @@ class CommentCommands(CommandTestCase):
         items_visible = visible_comments['items']
         for item in items_visible + items_hidden:
             self.assertIn(item, comments['items'])
+
+    async def test05_comment_pin(self):
+        # wherein a bee makes a sick burn on moth's channel and moth pins it
+        moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]
+        bee = (await self.channel_create('@LazyBumblebee'))['outputs'][0]
+        moth_id = moth['claim_id']
+        moth_stream = await self.stream_create('Cool_Lamps_to_Sit_On', channel_id=moth_id)
+        moth_claim_id = moth_stream['outputs'][0]['claim_id']
+
+        comment1 = await self.daemon.jsonrpc_comment_create(
+            comment='Who on earth would want to sit around on a lamp all day',
+            claim_id=moth_claim_id,
+            channel_id=bee['claim_id']
+        )
+        self.assertFalse(comment1['is_pinned'])
+
+        comment2 = await self.daemon.jsonrpc_comment_create(
+            comment='sick burn, brah',
+            claim_id=moth_claim_id,
+            channel_id=moth_id,
+        )
+        self.assertFalse(comment2['is_pinned'])
+
+        comments = await self.daemon.jsonrpc_comment_list(moth_claim_id)
+        comments_items = comments['items']
+        self.assertIn('is_pinned', comments_items[0])
+        self.assertFalse(comments_items[0]['is_pinned'])
+
+        pinned = await self.daemon.jsonrpc_comment_pin(
+            comment_id=comment1['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name']
+        )
+        self.assertTrue(pinned['is_pinned'])
+
+        comments_after_pinning = await self.daemon.jsonrpc_comment_list(moth_claim_id)
+        items_after_pin = comments_after_pinning['items']
+        self.assertTrue(items_after_pin[1]['is_pinned'])
+
+        unpinned = await self.daemon.jsonrpc_comment_pin(
+            comment_id=comment1['comment_id'],
+            channel_id=moth['claim_id'],
+            channel_name=moth['name'],
+            remove=True
+        )
+        self.assertFalse(unpinned['is_pinned'])
+
+        comments_after_unpinning = await self.daemon.jsonrpc_comment_list(moth_claim_id)
+        items_after_unpin = comments_after_unpinning['items']
+        self.assertFalse(items_after_unpin[1]['is_pinned'])
 
     async def test06_comment_list(self):
         moth = (await self.channel_create('@InconspicuousMoth'))['outputs'][0]

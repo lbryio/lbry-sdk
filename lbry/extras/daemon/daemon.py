@@ -5110,8 +5110,10 @@ class Daemon(metaclass=JSONRPCServerType):
             {
                 "comment":      (str) The actual string as inputted by the user,
                 "comment_id":   (str) The Comment's unique identifier,
+                "claim_id":     (str) The claim commented on,
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                 "channel_id":   (str) The Channel Claim ID that this comment was posted under,
+                "is_pinned":    (boolean) Channel owner has pinned this comment,
                 "signature":    (str) The signature of the comment,
                 "signing_ts":   (str) The timestamp used to sign the comment,
                 "channel_url":  (str) Channel's URI in the ClaimTrie,
@@ -5159,11 +5161,13 @@ class Daemon(metaclass=JSONRPCServerType):
             {
                 "comment":      (str) The actual string as inputted by the user,
                 "comment_id":   (str) The Comment's unique identifier,
+                "claim_id":     (str) The claim commented on,
                 "channel_name": (str) Name of the channel this was posted under, prepended with a '@',
                 "channel_id":   (str) The Channel Claim ID that this comment was posted under,
                 "signature":    (str) The signature of the comment,
                 "signing_ts":   (str) Timestamp used to sign the most recent signature,
                 "channel_url":  (str) Channel's URI in the ClaimTrie,
+                "is_pinned":    (boolean) Channel owner has pinned this comment,
                 "parent_id":    (str) Comment this is replying to, (None) if this is the root,
                 "timestamp":    (int) The time at which comment was entered into the server at, in nanoseconds.
             }
@@ -5222,7 +5226,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel.claim_id,
             'channel_name': channel.claim_name,
         })
-        comment_client.sign_comment(abandon_comment_body, channel, abandon=True)
+        comment_client.sign_comment(abandon_comment_body, channel, sign_comment_id=True)
         return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Abandon', abandon_comment_body)
 
     @requires(WALLET_COMPONENT)
@@ -5267,9 +5271,50 @@ class Daemon(metaclass=JSONRPCServerType):
                     for_signing=True
                 )
                 piece = {'comment_id': comment['comment_id']}
-                comment_client.sign_comment(piece, channel, abandon=True)
+                comment_client.sign_comment(piece, channel, sign_comment_id=True)
                 pieces.append(piece)
         return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Hide', pieces=pieces)
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_comment_pin(self, comment_id=None, channel_id=None, channel_name=None,
+                                  channel_account_id=None, remove=False, wallet_id=None):
+        """
+        Pin a comment published to a claim you control.
+
+        Usage:
+            comment_pin     (<comment_id> | --comment_id=<comment_id>)
+                            (--channel_id=<channel_id>)
+                            (--channel_name=<channel_name>)
+                            [--remove]
+                            [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
+
+        Options:
+            --comment_id=<comment_id>   : (str) Hash identifying the comment to pin
+            --channel_id=<claim_id>                     : (str) The ID of channel owning the commented claim
+            --channel_name=<claim_name>                 : (str) The name of channel owning the commented claim
+            --remove                                    : (bool) remove the pin
+            --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
+            --wallet_id=<wallet_id                      : (str) restrict operation to specific wallet
+
+        Returns: lists containing the ids comments that are hidden and visible.
+
+            {
+                "hidden":   (list) IDs of hidden comments.
+                "visible":  (list) IDs of visible comments.
+            }
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        channel = await self.get_channel_or_error(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True
+        )
+        comment_pin_args = {
+            'comment_id': comment_id,
+            'channel_name': channel_name,
+            'channel_id': channel_id,
+            'remove': remove,
+        }
+        comment_client.sign_comment(comment_pin_args, channel, sign_comment_id=True)
+        return await comment_client.jsonrpc_post(self.conf.comment_server, 'comment.Pin', comment_pin_args)
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_comment_react(
@@ -5291,6 +5336,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_id=<claim_id>                     : (str) The ID of channel reacting
             --channel_name=<claim_name>                 : (str) The name of the channel reacting
             --wallet_id=<wallet_id>                     : (str) restrict operation to specific wallet
+            --channel_account_id=<channel_account_id>   : (str) one or more account ids for accounts to look in
             --react_type=<react_type>                   : (str) name of reaction type
             --remove                                    : (bool) remove specified react_type
             --clear_types=<clear_types>                 : (str) types to clear when adding another type
