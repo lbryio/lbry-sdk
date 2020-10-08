@@ -37,8 +37,8 @@ class TestSigningComments(AsyncioTestCase):
         rswanson = await get_channel('@RonSwanson')
         dsilver = get_stream('Welcome to the Pawnee, and give a big round for Ron Swanson, AKA Duke Silver')
         comment_body = self.create_claim_comment_body('COMPUTER, DELETE ALL VIDEOS OF RON.', dsilver, rswanson)
-        sign_comment(comment_body, rswanson, abandon=True)
-        self.assertTrue(is_comment_signed_by_channel(comment_body, rswanson, abandon=True))
+        sign_comment(comment_body, rswanson, sign_comment_id=True)
+        self.assertTrue(is_comment_signed_by_channel(comment_body, rswanson, sign_comment_id=True))
 
     async def test04_invalid_signature(self):
         rswanson = await get_channel('@RonSwanson')
@@ -53,7 +53,7 @@ class TestSigningComments(AsyncioTestCase):
         self.assertTrue(is_comment_signed_by_channel(chair_comment, rswanson))
         self.assertFalse(is_comment_signed_by_channel(chair_comment, jeanralphio))
         fake_abandon_signal = chair_comment.copy()
-        sign_comment(fake_abandon_signal, jeanralphio, abandon=True)
-        self.assertFalse(is_comment_signed_by_channel(fake_abandon_signal, rswanson, abandon=True))
-        self.assertFalse(is_comment_signed_by_channel(fake_abandon_signal, jeanralphio, abandon=True))
+        sign_comment(fake_abandon_signal, jeanralphio, sign_comment_id=True)
+        self.assertFalse(is_comment_signed_by_channel(fake_abandon_signal, rswanson, sign_comment_id=True))
+        self.assertFalse(is_comment_signed_by_channel(fake_abandon_signal, jeanralphio, sign_comment_id=True))
 

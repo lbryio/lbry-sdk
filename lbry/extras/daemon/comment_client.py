@@ -22,10 +22,10 @@ def cid2hash(claim_id: str) -> bytes:
     return binascii.unhexlify(claim_id.encode())[::-1]
 
 
-def is_comment_signed_by_channel(comment: dict, channel: Output, abandon=False):
+def is_comment_signed_by_channel(comment: dict, channel: Output, sign_comment_id=False):
     if isinstance(channel, Output):
         try:
-            signing_field = comment['comment_id'] if abandon else comment['comment']
+            signing_field = comment['comment_id'] if sign_comment_id else comment['comment']
             pieces = [
                 comment['signing_ts'].encode(),
                 cid2hash(comment['channel_id']),
@@ -41,9 +41,9 @@ def is_comment_signed_by_channel(comment: dict, channel: Output, abandon=False):
     return False
 
 
-def sign_comment(comment: dict, channel: Output, abandon=False):
+def sign_comment(comment: dict, channel: Output, sign_comment_id=False):
     timestamp = str(int(time.time()))
-    signing_field = comment['comment_id'] if abandon else comment['comment']
+    signing_field = comment['comment_id'] if sign_comment_id else comment['comment']
     pieces = [timestamp.encode(), channel.claim_hash, signing_field.encode()]
     digest = sha256(b''.join(pieces))
     signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
