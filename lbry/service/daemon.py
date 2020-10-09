@@ -19,11 +19,13 @@ from lbry.blockchain.ledger import ledger_class_from_name
 log = logging.getLogger(__name__)
 
 
-def jsonrpc_dumps_pretty(obj, **kwargs):
+def jsonrpc_dumps_pretty(obj, message_id=None, **kwargs):
     #if not isinstance(obj, dict):
     #    data = {"jsonrpc": "2.0", "error": obj.to_dict()}
     #else:
     data = {"jsonrpc": "2.0", "result": obj}
+    if message_id is not None:
+        data["id"] = message_id
     return json.dumps(data, cls=JSONResponseEncoder, sort_keys=True, indent=2, **kwargs) + "\n"
 
 
@@ -166,7 +168,7 @@ class Daemon:
 
     async def on_message(self, web_socket: WebSocketManager, msg: dict):
         if msg['method'] == 'subscribe':
-            streams = msg['streams']
+            streams = msg['params']
             if isinstance(streams, str):
                 streams = [streams]
             web_socket.subscribe(streams, self.app['subscriptions'])
@@ -175,11 +177,10 @@ class Daemon:
             method = getattr(self.api, msg['method'])
             try:
                 result = await method(**params)
-                encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
-                await web_socket.send_json({
-                    'id': msg.get('id', ''),
-                    'result': encoded_result
-                })
+                encoded_result = jsonrpc_dumps_pretty(
+                    result, message_id=msg.get('id', ''), service=self.service
+                )
+                await web_socket.send_str(encoded_result)
             except Exception as e:
                 log.exception("RPC error")
                 await web_socket.send_json({'id': msg.get('id', ''), 'result': "unexpected error: " + str(e)})

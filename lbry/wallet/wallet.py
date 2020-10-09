@@ -1,5 +1,4 @@
 # pylint: disable=arguments-differ
-import os
 import json
 import zlib
 import asyncio
@@ -10,9 +9,8 @@ from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
 
-
 from lbry.db import Database, SPENDABLE_TYPE_CODES, Result
-from lbry.blockchain.ledger import Ledger
+from lbry.event import EventController
 from lbry.constants import COIN, NULL_HASH32
 from lbry.blockchain.transaction import Transaction, Input, Output
 from lbry.blockchain.dewies import dewies_to_lbc
@@ -23,9 +21,8 @@ from lbry.schema.purchase import Purchase
 from lbry.error import InsufficientFundsError, KeyFeeAboveMaxAllowedError
 from lbry.stream.managed_stream import ManagedStream
 
-from .account import Account, SingleKey, HierarchicalDeterministic
+from .account import Account
 from .coinselection import CoinSelector, OutputEffectiveAmountEstimator
-from .storage import WalletStorage
 from .preferences import TimestampedPreferences
 
 
@@ -37,20 +34,22 @@ ENCRYPT_ON_DISK = 'encrypt-on-disk'
 class Wallet:
     """ The primary role of Wallet is to encapsulate a collection
         of accounts (seed/private keys) and the spending rules / settings
-        for the coins attached to those accounts. Wallets are represented
-        by physical files on the filesystem.
+        for the coins attached to those accounts.
     """
 
-    def __init__(self, ledger: Ledger, db: Database, name: str, storage: WalletStorage, preferences: dict):
-        self.ledger = ledger
+    VERSION = 1
+
+    def __init__(self, wallet_id: str, db: Database, name: str = "", preferences: dict = None):
+        self.id = wallet_id
         self.db = db
         self.name = name
-        self.storage = storage
+        self.ledger = db.ledger
         self.preferences = TimestampedPreferences(preferences or {})
         self.encryption_password: Optional[str] = None
-        self.id = self.get_id()
 
         self.utxo_lock = asyncio.Lock()
+        self._on_change_controller = EventController()
+        self.on_change = self._on_change_controller.stream
 
         self.accounts = AccountListManager(self)
         self.claims = ClaimListManager(self)
@@ -60,61 +59,55 @@ class Wallet:
         self.purchases = PurchaseListManager(self)
         self.supports = SupportListManager(self)
 
-    def get_id(self):
-        return os.path.basename(self.storage.path) if self.storage.path else self.name
+    async def notify_change(self, field: str, value=None):
+        await self._on_change_controller.add({
+            'field': field, 'value': value
+        })
 
     @classmethod
-    async def create(
-            cls, ledger: Ledger, db: Database, path: str, name: str,
-            create_account=False, language='en', single_key=False):
-        wallet = cls(ledger, db, name, WalletStorage(path), {})
-        if create_account:
-            await wallet.accounts.generate(language=language, address_generator={
-                'name': SingleKey.name if single_key else HierarchicalDeterministic.name
-            })
-        await wallet.save()
-        return wallet
-
-    @classmethod
-    async def from_path(cls, ledger: Ledger, db: Database, path: str):
-        return await cls.from_storage(ledger, db, WalletStorage(path))
-
-    @classmethod
-    async def from_storage(cls, ledger: Ledger, db: Database, storage: WalletStorage) -> 'Wallet':
-        json_dict = await storage.read()
-        if 'ledger' in json_dict and json_dict['ledger'] != ledger.get_id():
+    async def from_dict(cls, wallet_id: str, wallet_dict, db: Database) -> 'Wallet':
+        if 'ledger' in wallet_dict and wallet_dict['ledger'] != db.ledger.get_id():
             raise ValueError(
-                f"Using ledger {ledger.get_id()} but wallet is {json_dict['ledger']}."
+                f"Using ledger {db.ledger.get_id()} but wallet is {wallet_dict['ledger']}."
             )
+        version = wallet_dict.get('version')
+        if version == 1:
+            pass
         wallet = cls(
-            ledger, db,
-            name=json_dict.get('name', 'Wallet'),
-            storage=storage,
-            preferences=json_dict.get('preferences', {}),
+            wallet_id, db,
+            name=wallet_dict.get('name', 'Wallet'),
+            preferences=wallet_dict.get('preferences', {}),
         )
-        for account_dict in json_dict.get('accounts', []):
+        for account_dict in wallet_dict.get('accounts', []):
             await wallet.accounts.add_from_dict(account_dict)
         return wallet
 
-    def to_dict(self, encrypt_password: str = None):
+    def to_dict(self, encrypt_password: str = None) -> dict:
         return {
-            'version': WalletStorage.VERSION,
+            'version': self.VERSION,
             'ledger': self.ledger.get_id(),
             'name': self.name,
             'preferences': self.preferences.data,
             'accounts': [a.to_dict(encrypt_password) for a in self.accounts]
         }
 
-    async def save(self):
+    @classmethod
+    async def from_serialized(cls, wallet_id: str, json_data: str, db: Database) -> 'Wallet':
+        return await cls.from_dict(wallet_id, json.loads(json_data), db)
+
+    def to_serialized(self) -> str:
+        wallet_dict = None
         if self.preferences.get(ENCRYPT_ON_DISK, False):
             if self.encryption_password is not None:
-                return await self.storage.write(self.to_dict(encrypt_password=self.encryption_password))
+                wallet_dict = self.to_dict(encrypt_password=self.encryption_password)
             elif not self.is_locked:
                 log.warning(
                     "Disk encryption requested but no password available for encryption. "
                     "Saving wallet in an unencrypted state."
                 )
-        return await self.storage.write(self.to_dict())
+        if wallet_dict is None:
+            wallet_dict = self.to_dict()
+        return json.dumps(wallet_dict, indent=4, sort_keys=True)
 
     @property
     def hash(self) -> bytes:
@@ -157,8 +150,9 @@ class Wallet:
                 local_match.merge(account_dict)
             else:
                 added_accounts.append(
-                    self.accounts.add_from_dict(account_dict)
+                    await self.accounts.add_from_dict(account_dict, notify=False)
                 )
+        await self.notify_change('wallet.merge')
         return added_accounts
 
     @property
@@ -190,7 +184,7 @@ class Wallet:
     async def decrypt(self):
         assert not self.is_locked, "Cannot decrypt a locked wallet, unlock first."
         self.preferences[ENCRYPT_ON_DISK] = False
-        await self.save()
+        await self.notify_change(ENCRYPT_ON_DISK, False)
         return True
 
     async def encrypt(self, password):
@@ -198,7 +192,7 @@ class Wallet:
         assert password, "Cannot encrypt with blank password."
         self.encryption_password = password
         self.preferences[ENCRYPT_ON_DISK] = True
-        await self.save()
+        await self.notify_change(ENCRYPT_ON_DISK, True)
         return True
 
     @property
@@ -237,7 +231,7 @@ class Wallet:
             if await account.save_max_gap():
                 gap_changed = True
         if gap_changed:
-            await self.save()
+            await self.notify_change('address-max-gap')
 
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[Account]):
         estimators = []
@@ -379,30 +373,6 @@ class Wallet:
 
         return tx
 
-    async def _report_state(self):
-        try:
-            for account in self.accounts:
-                balance = dewies_to_lbc(await account.get_balance(include_claims=True))
-                _, channel_count = await account.get_channels(limit=1)
-                claim_count = await account.get_claim_count()
-                if isinstance(account.receiving, SingleKey):
-                    log.info("Loaded single key account %s with %s LBC. "
-                             "%d channels, %d certificates and %d claims",
-                             account.id, balance, channel_count, len(account.channel_keys), claim_count)
-                else:
-                    total_receiving = len(await account.receiving.get_addresses())
-                    total_change = len(await account.change.get_addresses())
-                    log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
-                             "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
-                             account.id, balance, total_receiving, account.receiving.gap, total_change,
-                             account.change.gap, channel_count, len(account.channel_keys), claim_count)
-        except Exception as err:
-            if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
-                raise
-            log.exception(
-                'Failed to display wallet state, please file issue '
-                'for this bug along with the traceback you see below:')
-
     async def verify_duplicate(self, name: str, allow_duplicate: bool):
         if not allow_duplicate:
             claims = await self.claims.list(claim_name=name)
@@ -438,21 +408,22 @@ class AccountListManager:
             return account
 
     async def generate(self, name: str = None, language: str = 'en', address_generator: dict = None) -> Account:
-        account = await Account.generate(
-            self.wallet.ledger, self.wallet.db, name, language, address_generator
-        )
+        account = await Account.generate(self.wallet.db, name, language, address_generator)
         self._accounts.append(account)
+        await self.wallet.notify_change('account.added')
         return account
 
-    async def add_from_dict(self, account_dict: dict) -> Account:
-        account = await Account.from_dict(self.wallet.ledger, self.wallet.db, account_dict)
+    async def add_from_dict(self, account_dict: dict, notify=True) -> Account:
+        account = await Account.from_dict(self.wallet.db, account_dict)
         self._accounts.append(account)
+        if notify:
+            await self.wallet.notify_change('account.added')
         return account
 
     async def remove(self, account_id: str) -> Account:
         account = self[account_id]
         self._accounts.remove(account)
-        await self.wallet.save()
+        await self.wallet.notify_change('account.removed')
         return account
 
     def get_or_none(self, account_id: str) -> Optional[Account]:
@@ -608,7 +579,7 @@ class ChannelListManager(ClaimListManager):
 
         if save_key:
             holding_account.add_channel_private_key(txo.private_key)
-            await self.wallet.save()
+            await self.wallet.notify_change('channel.added')
 
         return tx
 
@@ -652,7 +623,7 @@ class ChannelListManager(ClaimListManager):
 
         if any((new_signing_key, moving_accounts)) and save_key:
             holding_account.add_channel_private_key(txo.private_key)
-            await self.wallet.save()
+            await self.wallet.notify_change('channel.added')
 
         return tx
 

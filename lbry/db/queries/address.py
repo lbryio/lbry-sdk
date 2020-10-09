@@ -62,11 +62,11 @@ def add_keys(account, chain, pubkeys):
     c = context()
     c.execute(
         c.insert_or_ignore(PubkeyAddress)
-            .values([{'address': k.address} for k in pubkeys])
+        .values([{'address': k.address} for k in pubkeys])
     )
     c.execute(
         c.insert_or_ignore(AccountAddress)
-            .values([{
+        .values([{
             'account': account.id,
             'address': k.address,
             'chain': chain,

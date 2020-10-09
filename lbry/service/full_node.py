@@ -35,7 +35,15 @@ class FullNode(Service):
     async def get_status(self):
         return 'everything is wonderful'
 
-#    async def get_block_address_filters(self):
+    async def get_block_headers(self, first, last=None):
+        return await self.db.get_blocks(first, last)
+
+    async def get_address_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
+        return await self.db.get_filters(
+            start_height=start_height, end_height=end_height, granularity=granularity
+        )
+
+    #    async def get_block_address_filters(self):
 #        return {
 #            hexlify(f['block_hash']).decode(): hexlify(f['block_filter']).decode()
 #            for f in await self.db.get_block_address_filters()
