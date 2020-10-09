@@ -519,6 +519,7 @@ class Config(CLIConfig):
     data_dir = Path("Main directory containing blobs, wallets and blockchain data.", metavar='DIR')
     blob_dir = Path("Directory to store blobs (default: 'data_dir'/blobs).", metavar='DIR')
     wallet_dir = Path("Directory to store wallets (default: 'data_dir'/wallets).", metavar='DIR')
+    wallet_storage = StringChoice("Wallet storage mode.", ["file", "database"], "file")
     wallets = Strings(
         "Wallet files in 'wallet_dir' to load at startup.", ['default_wallet']
     )

@@ -1225,7 +1225,7 @@ class API:
         wallet = self.wallets.get_or_default(wallet_id)
         wallet_changed = False
         if data is not None:
-            added_accounts = await wallet.merge(self.wallets, password, data)
+            added_accounts = await wallet.merge(password, data)
             if added_accounts and self.ledger.sync.network.is_connected:
                 if blocking:
                     await asyncio.wait([
@@ -1318,11 +1318,24 @@ class API:
             .receiving.get_or_create_usable_address()
         )
 
-    async def address_block_filters(self):
-        return await self.service.get_block_address_filters()
+    async def address_filter(
+        self,
+        start_height: int,        # starting height of block range or just single block
+        end_height: int = None,   # return a range of blocks from start_height to end_height
+        granularity: int = None,  # 0 - individual tx filters, 1 - block per filter,
+                                  # 1000, 10000, 100000 blocks per filter
+    ) -> list:  # blocks
+        """
+        List address filters
 
-    async def address_transaction_filters(self, block_hash: str):
-        return await self.service.get_transaction_address_filters(block_hash)
+        Usage:
+            address_filter <start_height>
+                           [--end_height=<end_height>]
+                           [--granularity=<granularity>]
+        """
+        return await self.service.get_address_filters(
+            start_height=start_height, end_height=end_height, granularity=granularity
+        )
 
     FILE_DOC = """
     File management.
@@ -2656,6 +2669,23 @@ class API:
         await self.service.maybe_broadcast_or_release(tx, blocking, preview)
         return tx
 
+    BLOCK_DOC = """
+    Block information.
+    """
+
+    async def block_list(
+        self,
+        start_height: int,       # starting height of block range or just single block
+        end_height: int = None,  # return a range of blocks from start_height to end_height
+    ) -> list:  # blocks
+        """
+        List block info
+
+        Usage:
+            block_list <start_height> [<end_height>]
+        """
+        return await self.service.get_blocks(start_height=start_height, end_height=end_height)
+
     TRANSACTION_DOC = """
     Transaction management.
     """
@@ -3529,8 +3559,12 @@ class Client(API):
         self.receive_messages_task = asyncio.create_task(self.receive_messages())
 
     async def disconnect(self):
-        await self.session.close()
-        self.receive_messages_task.cancel()
+        if self.session is not None:
+            await self.session.close()
+        self.session = None
+        if self.receive_messages_task is not None:
+            self.receive_messages_task.cancel()
+        self.receive_messages_task = None
 
     async def receive_messages(self):
         async for message in self.ws:
@@ -3559,11 +3593,15 @@ class Client(API):
         await self.ws.send_json({'id': self.message_id, 'method': method, 'params': kwargs})
         return ec.stream
 
-    async def subscribe(self, event) -> EventStream:
+    def get_event_stream(self, event) -> EventStream:
         if event not in self.subscriptions:
             self.subscriptions[event] = EventController()
-            await self.ws.send_json({'id': None, 'method': 'subscribe', 'params': [event]})
         return self.subscriptions[event].stream
+
+    async def start_event_streams(self):
+        events = list(self.subscriptions.keys())
+        if events:
+            await self.ws.send_json({'id': None, 'method': 'subscribe', 'params': events})
 
     def __getattribute__(self, name):
         if name in dir(API):

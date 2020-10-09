@@ -42,13 +42,15 @@ class BlockchainSync(Sync):
         super().__init__(chain.ledger, db)
         self.chain = chain
         self.pid = os.getpid()
+        self._on_block_controller = EventController()
+        self.on_block = self._on_block_controller.stream
+        self._on_mempool_controller = EventController()
+        self.on_mempool = self._on_mempool_controller.stream
         self.on_block_hash_subscription: Optional[BroadcastSubscription] = None
         self.on_tx_hash_subscription: Optional[BroadcastSubscription] = None
         self.advance_loop_task: Optional[asyncio.Task] = None
         self.block_hash_event = asyncio.Event()
         self.tx_hash_event = asyncio.Event()
-        self._on_mempool_controller = EventController()
-        self.on_mempool = self._on_mempool_controller.stream
         self.mempool = []
 
     async def wait_for_chain_ready(self):

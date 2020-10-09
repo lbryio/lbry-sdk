@@ -447,6 +447,38 @@ class IntegrationTestCase(AsyncioTestCase):
         self.db_driver = db_driver
         return db
 
+    async def add_full_node(self, port):
+        path = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, path, True)
+        ledger = RegTestLedger(Config.with_same_dir(path).set(
+            api=f'localhost:{port}',
+            lbrycrd_dir=self.chain.ledger.conf.lbrycrd_dir,
+            lbrycrd_rpc_port=self.chain.ledger.conf.lbrycrd_rpc_port,
+            lbrycrd_peer_port=self.chain.ledger.conf.lbrycrd_peer_port,
+            lbrycrd_zmq=self.chain.ledger.conf.lbrycrd_zmq
+        ))
+        service = FullNode(ledger)
+        console = Console(service)
+        daemon = Daemon(service, console)
+        self.addCleanup(daemon.stop)
+        await daemon.start()
+        return daemon
+
+    async def add_light_client(self, full_node, port, start=True):
+        path = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, path, True)
+        ledger = RegTestLedger(Config.with_same_dir(path).set(
+            api=f'localhost:{port}',
+            full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)]
+        ))
+        service = LightClient(ledger)
+        console = Console(service)
+        daemon = Daemon(service, console)
+        self.addCleanup(daemon.stop)
+        if start:
+            await daemon.start()
+        return daemon
+
     @staticmethod
     def find_claim_txo(tx) -> Optional[Output]:
         for txo in tx.outputs:
@@ -538,9 +570,11 @@ class CommandTestCase(IntegrationTestCase):
         await super().asyncSetUp()
         await self.generate(200, wait=False)
 
-        self.full_node = self.daemon = await self.add_full_node()
-        if os.environ.get('TEST_MODE', 'full-node') == 'client':
-            self.daemon = await self.add_light_client(self.full_node)
+        self.daemon_port += 1
+        self.full_node = self.daemon = await self.add_full_node(self.daemon_port)
+        if os.environ.get('TEST_MODE', 'node') == 'client':
+            self.daemon_port += 1
+            self.daemon = await self.add_light_client(self.full_node, self.daemon_port)
 
         self.service = self.daemon.service
         self.ledger = self.service.ledger
@@ -555,40 +589,6 @@ class CommandTestCase(IntegrationTestCase):
 
         await self.chain.send_to_address(addresses[0], '10.0')
         await self.generate(5)
-
-    async def add_full_node(self):
-        self.daemon_port += 1
-        path = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, path, True)
-        ledger = RegTestLedger(Config.with_same_dir(path).set(
-            api=f'localhost:{self.daemon_port}',
-            lbrycrd_dir=self.chain.ledger.conf.lbrycrd_dir,
-            lbrycrd_rpc_port=self.chain.ledger.conf.lbrycrd_rpc_port,
-            lbrycrd_peer_port=self.chain.ledger.conf.lbrycrd_peer_port,
-            lbrycrd_zmq=self.chain.ledger.conf.lbrycrd_zmq,
-            spv_address_filters=False
-        ))
-        service = FullNode(ledger)
-        console = Console(service)
-        daemon = Daemon(service, console)
-        self.addCleanup(daemon.stop)
-        await daemon.start()
-        return daemon
-
-    async def add_light_client(self, full_node):
-        self.daemon_port += 1
-        path = tempfile.mkdtemp()
-        self.addCleanup(shutil.rmtree, path, True)
-        ledger = RegTestLedger(Config.with_same_dir(path).set(
-            api=f'localhost:{self.daemon_port}',
-            full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)]
-        ))
-        service = LightClient(ledger)
-        console = Console(service)
-        daemon = Daemon(service, console)
-        self.addCleanup(daemon.stop)
-        await daemon.start()
-        return daemon
 
     async def asyncTearDown(self):
         await super().asyncTearDown()

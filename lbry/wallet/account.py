@@ -12,6 +12,7 @@ import ecdsa
 
 from lbry.constants import COIN
 from lbry.db import Database, CLAIM_TYPE_CODES, TXO_TYPES
+from lbry.db.tables import AccountAddress
 from lbry.blockchain import Ledger
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
@@ -214,12 +215,12 @@ class Account:
         HierarchicalDeterministic.name: HierarchicalDeterministic,
     }
 
-    def __init__(self, ledger: Ledger, db: Database, name: str,
+    def __init__(self, db: Database, name: str,
                  phrase: str, language: str, private_key_string: str,
                  encrypted: bool, private_key: Optional[PrivateKey], public_key: PubKey,
                  address_generator: dict, modified_on: float, channel_keys: dict) -> None:
-        self.ledger = ledger
         self.db = db
+        self.ledger = db.ledger
         self.id = public_key.address
         self.name = name
         self.phrase = phrase
@@ -245,10 +246,10 @@ class Account:
 
     @classmethod
     async def generate(
-            cls, ledger: Ledger, db: Database,
-            name: str = None, language: str = 'en',
-            address_generator: dict = None):
-        return await cls.from_dict(ledger, db, {
+        cls, db: Database, name: str = None,
+        language: str = 'en', address_generator: dict = None
+    ):
+        return await cls.from_dict(db, {
             'name': name,
             'seed': await mnemonic.generate_phrase(language),
             'language': language,
@@ -276,13 +277,12 @@ class Account:
         return phrase, private_key, public_key
 
     @classmethod
-    async def from_dict(cls, ledger: Ledger, db: Database, d: dict):
-        phrase, private_key, public_key = await cls.keys_from_dict(ledger, d)
+    async def from_dict(cls, db: Database, d: dict):
+        phrase, private_key, public_key = await cls.keys_from_dict(db.ledger, d)
         name = d.get('name')
         if not name:
             name = f'Account #{public_key.address}'
         return cls(
-            ledger=ledger,
             db=db,
             name=name,
             phrase=phrase,
@@ -415,7 +415,7 @@ class Account:
         return await self.db.get_addresses(account=self, **constraints)
 
     async def get_addresses(self, **constraints) -> List[str]:
-        rows = await self.get_address_records(cols=['account_address.address'], **constraints)
+        rows = await self.get_address_records(cols=[AccountAddress.c.address], **constraints)
         return [r['address'] for r in rows]
 
     async def get_valid_receiving_address(self, default_address: str) -> str:

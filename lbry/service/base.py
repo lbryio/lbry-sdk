@@ -9,7 +9,7 @@ from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Transaction, Output
 from lbry.blockchain.ledger import Ledger
 from lbry.wallet import WalletManager
-from lbry.event import EventController
+from lbry.event import EventController, EventStream
 
 log = logging.getLogger(__name__)
 
@@ -25,13 +25,13 @@ class Sync:
     Server stays synced with lbrycrd
     """
 
+    on_block: EventStream
+    on_mempool: EventStream
+
     def __init__(self, ledger: Ledger, db: Database):
         self.ledger = ledger
         self.conf = ledger.conf
         self.db = db
-
-        self._on_block_controller = EventController()
-        self.on_block = self._on_block_controller.stream
 
         self._on_progress_controller = db._on_progress_controller
         self.on_progress = db.on_progress
@@ -63,13 +63,7 @@ class Service:
     def __init__(self, ledger: Ledger):
         self.ledger, self.conf = ledger, ledger.conf
         self.db = Database(ledger)
-        self.wallets = WalletManager(ledger, self.db)
-
-        #self.on_address = sync.on_address
-        #self.accounts = sync.accounts
-        #self.on_header = sync.on_header
-        #self.on_ready = sync.on_ready
-        #self.on_transaction = sync.on_transaction
+        self.wallets = WalletManager(self.db)
 
         # sync has established connection with a source from which it can synchronize
         # for full service this is lbrycrd (or sync service) and for light this is full node
@@ -78,8 +72,8 @@ class Service:
 
     async def start(self):
         await self.db.open()
-        await self.wallets.ensure_path_exists()
-        await self.wallets.load()
+        await self.wallets.storage.prepare()
+        await self.wallets.initialize()
         await self.sync.start()
 
     async def stop(self):
@@ -95,15 +89,20 @@ class Service:
     async def find_ffmpeg(self):
         pass
 
-    async def get(self, uri, **kwargs):
+    async def get_file(self, uri, **kwargs):
         pass
 
-    def create_wallet(self, file_name):
-        path = os.path.join(self.conf.wallet_dir, file_name)
-        return self.wallets.add_from_path(path)
+    async def get_block_headers(self, first, last=None):
+        pass
+
+    def create_wallet(self, wallet_id):
+        return self.wallets.create(wallet_id)
 
     async def get_addresses(self, **constraints):
         return await self.db.get_addresses(**constraints)
+
+    async def get_address_filters(self, start_height: int, end_height: int=None, granularity: int=0):
+        raise NotImplementedError
 
     def reserve_outputs(self, txos):
         return self.db.reserve_outputs(txos)

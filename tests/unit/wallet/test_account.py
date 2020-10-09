@@ -13,7 +13,7 @@ class AccountTestCase(AsyncioTestCase):
         self.addCleanup(self.db.close)
 
     async def update_addressed_used(self, address, used):
-        await self.db.execute(
+        await self.db.execute_sql_object(
             tables.PubkeyAddress.update()
             .where(tables.PubkeyAddress.c.address == address)
             .values(used_times=used)
@@ -23,7 +23,7 @@ class AccountTestCase(AsyncioTestCase):
 class TestHierarchicalDeterministicAccount(AccountTestCase):
 
     async def test_generate_account(self):
-        account = await Account.generate(self.ledger, self.db)
+        account = await Account.generate(self.db)
         self.assertEqual(account.ledger, self.ledger)
         self.assertEqual(account.db, self.db)
         self.assertEqual(account.name, f'Account #{account.public_key.address}')
@@ -36,18 +36,19 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
         self.assertIsInstance(account.receiving, HierarchicalDeterministic)
         self.assertIsInstance(account.change, HierarchicalDeterministic)
 
-    async def test_ensure_address_gap(self):
-        account = await Account.generate(self.ledger, self.db, 'lbryum')
         self.assertEqual(len(await account.receiving.get_addresses()), 0)
         self.assertEqual(len(await account.change.get_addresses()), 0)
         await account.ensure_address_gap()
         self.assertEqual(len(await account.receiving.get_addresses()), 20)
         self.assertEqual(len(await account.change.get_addresses()), 6)
 
+    async def test_ensure_address_gap(self):
+        account = await Account.generate(self.db)
         async with account.receiving.address_generator_lock:
             await account.receiving._generate_keys(4, 7)
             await account.receiving._generate_keys(0, 3)
             await account.receiving._generate_keys(8, 11)
+
         records = await account.receiving.get_address_records()
         self.assertListEqual(
             [r['pubkey'].n for r in records],
@@ -79,14 +80,14 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
         self.assertEqual(len(new_keys), 20)
 
     async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
-        account = Account.generate(self.ledger, self.db, 'lbryum')
+        account = await Account.generate(self.db)
         async with account.receiving.address_generator_lock:
             await account.receiving._generate_keys(0, 200)
         records = await account.receiving.get_address_records()
         self.assertEqual(len(records), 201)
 
     async def test_get_or_create_usable_address(self):
-        account = Account.generate(self.ledger, self.db, 'lbryum')
+        account = await Account.generate(self.db)
 
         keys = await account.receiving.get_addresses()
         self.assertEqual(len(keys), 0)
@@ -98,13 +99,11 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
         self.assertEqual(len(keys), 20)
 
     async def test_generate_account_from_seed(self):
-        account = await Account.from_dict(
-            self.ledger, self.db, {
-                "seed":
-                    "carbon smart garage balance margin twelve chest sword toas"
-                    "t envelope bottom stomach absent"
-            }
-        )
+        account = await Account.from_dict(self.db, {
+            "seed":
+                "carbon smart garage balance margin twelve chest sword toas"
+                "t envelope bottom stomach absent"
+        })
         self.assertEqual(
             account.private_key.extended_key_string(),
             'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7DRNLEoB8'
@@ -126,6 +125,7 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
             'encrypted': False,
+            'lang': 'en',
             'private_key':
                 'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7DRNLEoB8'
                 'HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
@@ -140,7 +140,7 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
             }
         }
 
-        account = Account.from_dict(self.ledger, self.db, account_data)
+        account = await Account.from_dict(self.db, account_data)
 
         await account.ensure_address_gap()
 
@@ -150,7 +150,7 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
         self.assertEqual(len(addresses), 10)
         self.assertDictEqual(account_data, account.to_dict())
 
-    def test_merge_diff(self):
+    async def test_merge_diff(self):
         account_data = {
             'name': 'My Account',
             'modified_on': 123.456,
@@ -158,6 +158,7 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
             'encrypted': False,
+            'lang': 'en',
             'private_key':
                 'xprv9s21ZrQH143K3TsAz5efNV8K93g3Ms3FXcjaWB9fVUsMwAoE3ZT4vYymkp'
                 '5BxKKfnpz8J6sHDFriX1SnpvjNkzcks8XBnxjGLS83BTyfpna',
@@ -170,7 +171,7 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
                 'change': {'gap': 5, 'maximum_uses_per_address': 2}
             }
         }
-        account = Account.from_dict(self.ledger, self.db, account_data)
+        account = await Account.from_dict(self.db, account_data)
 
         self.assertEqual(account.name, 'My Account')
         self.assertEqual(account.modified_on, 123.456)
@@ -203,15 +204,15 @@ class TestSingleKeyAccount(AccountTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-        self.account = Account.generate(
-            self.ledger, self.db, "torba", {'name': 'single-address'}
+        self.account = await Account.generate(
+            self.db, address_generator={"name": "single-address"}
         )
 
     async def test_generate_account(self):
         account = self.account
 
         self.assertEqual(account.ledger, self.ledger)
-        self.assertIsNotNone(account.seed)
+        self.assertIsNotNone(account.phrase)
         self.assertEqual(account.public_key.ledger, self.ledger)
         self.assertEqual(account.private_key.public_key, account.public_key)
 
@@ -246,7 +247,7 @@ class TestSingleKeyAccount(AccountTestCase):
         self.assertEqual(new_keys[0], account.public_key.address)
         records = await account.receiving.get_address_records()
         pubkey = records[0].pop('pubkey')
-        self.assertListEqual(records, [{
+        self.assertEqual(records.rows, [{
             'chain': 0,
             'account': account.public_key.address,
             'address': account.public_key.address,
@@ -294,6 +295,7 @@ class TestSingleKeyAccount(AccountTestCase):
                 "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
                 "h absent",
             'encrypted': False,
+            'lang': 'en',
             'private_key': 'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
                            'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
             'public_key': 'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EM'
@@ -302,7 +304,7 @@ class TestSingleKeyAccount(AccountTestCase):
             'certificates': {}
         }
 
-        account = Account.from_dict(self.ledger, self.db, account_data)
+        account = await Account.from_dict(self.db, account_data)
 
         await account.ensure_address_gap()
 
@@ -351,9 +353,9 @@ class AccountEncryptionTests(AccountTestCase):
     }
 
     async def test_encrypt_wallet(self):
-        account = await Account.from_dict(self.ledger, self.db, self.unencrypted_account)
+        account = await Account.from_dict(self.db, self.unencrypted_account)
         account.init_vectors = {
-            'seed': self.init_vector,
+            'phrase': self.init_vector,
             'private_key': self.init_vector
         }
 
@@ -361,7 +363,7 @@ class AccountEncryptionTests(AccountTestCase):
         self.assertIsNotNone(account.private_key)
         account.encrypt(self.password)
         self.assertTrue(account.encrypted)
-        self.assertEqual(account.seed, self.encrypted_account['seed'])
+        self.assertEqual(account.phrase, self.encrypted_account['seed'])
         self.assertEqual(account.private_key_string, self.encrypted_account['private_key'])
         self.assertIsNone(account.private_key)
 
@@ -370,9 +372,9 @@ class AccountEncryptionTests(AccountTestCase):
 
         account.decrypt(self.password)
         self.assertEqual(account.init_vectors['private_key'], self.init_vector)
-        self.assertEqual(account.init_vectors['seed'], self.init_vector)
+        self.assertEqual(account.init_vectors['phrase'], self.init_vector)
 
-        self.assertEqual(account.seed, self.unencrypted_account['seed'])
+        self.assertEqual(account.phrase, self.unencrypted_account['seed'])
         self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
 
         self.assertEqual(account.to_dict(encrypt_password=self.password)['seed'], self.encrypted_account['seed'])
@@ -381,16 +383,16 @@ class AccountEncryptionTests(AccountTestCase):
         self.assertFalse(account.encrypted)
 
     async def test_decrypt_wallet(self):
-        account = await Account.from_dict(self.ledger, self.db, self.encrypted_account)
+        account = await Account.from_dict(self.db, self.encrypted_account)
 
         self.assertTrue(account.encrypted)
         account.decrypt(self.password)
         self.assertEqual(account.init_vectors['private_key'], self.init_vector)
-        self.assertEqual(account.init_vectors['seed'], self.init_vector)
+        self.assertEqual(account.init_vectors['phrase'], self.init_vector)
 
         self.assertFalse(account.encrypted)
 
-        self.assertEqual(account.seed, self.unencrypted_account['seed'])
+        self.assertEqual(account.phrase, self.unencrypted_account['seed'])
         self.assertEqual(account.private_key.extended_key_string(), self.unencrypted_account['private_key'])
 
         self.assertEqual(account.to_dict(encrypt_password=self.password)['seed'], self.encrypted_account['seed'])
@@ -402,7 +404,7 @@ class AccountEncryptionTests(AccountTestCase):
         account_data = self.unencrypted_account.copy()
         del account_data['seed']
         del account_data['private_key']
-        account = await Account.from_dict(self.ledger, self.db, account_data)
+        account = await Account.from_dict(self.db, account_data)
         encrypted = account.to_dict('password')
         self.assertFalse(encrypted['seed'])
         self.assertFalse(encrypted['private_key'])

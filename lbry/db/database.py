@@ -205,6 +205,9 @@ class Database:
     async def execute(self, sql):
         return await self.run(q.execute, sql)
 
+    async def execute_sql_object(self, sql):
+        return await self.run(q.execute_sql_object, sql)
+
     async def execute_fetchall(self, sql):
         return await self.run(q.execute_fetchall, sql)
 
@@ -217,11 +220,26 @@ class Database:
     async def has_supports(self):
         return await self.run(q.has_supports)
 
+    async def has_wallet(self, wallet_id):
+        return await self.run(q.has_wallet, wallet_id)
+
+    async def get_wallet(self, wallet_id: str):
+        return await self.run(q.get_wallet, wallet_id)
+
+    async def add_wallet(self, wallet_id: str, data: str):
+        return await self.run(q.add_wallet, wallet_id, data)
+
     async def get_best_block_height(self) -> int:
         return await self.run(q.get_best_block_height)
 
     async def process_all_things_after_sync(self):
         return await self.run(sync.process_all_things_after_sync)
+
+    async def get_blocks(self, first, last=None):
+        return await self.run(q.get_blocks, first, last)
+
+    async def get_filters(self, start_height, end_height=None, granularity=0):
+        return await self.run(q.get_filters, start_height, end_height, granularity)
 
     async def insert_block(self, block):
         return await self.run(q.insert_block, block)

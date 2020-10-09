@@ -19,6 +19,13 @@ Version = Table(
 )
 
 
+Wallet = Table(
+    'wallet', metadata,
+    Column('wallet_id', Text, primary_key=True),
+    Column('data', Text),
+)
+
+
 PubkeyAddress = Table(
     'pubkey_address', metadata,
     Column('address', Text, primary_key=True),
