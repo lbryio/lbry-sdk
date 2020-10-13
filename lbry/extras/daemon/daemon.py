@@ -2295,6 +2295,39 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(**kwargs)
 
+    async def jsonrpc_support_sum(self, claim_id, new_sdk_server, include_channel_content=False, **kwargs):
+        """
+        List total staked supports for a claim, grouped by the channel that signed the support.
++
++       If claim_id is a channel claim, you can use --include_channel_content to also include supports for
++       content claims in the channel.
+
+        !!!! NOTE: PAGINATION DOES NOT DO ANYTHING AT THE MOMENT !!!!!
+
+        Usage:
+            support_sum <claim_id> <new_sdk_server>
+                         [--include_channel_content]
+                         [--page=<page>] [--page_size=<page_size>]
+
+        Options:
+            --claim_id=<claim_id>             : (str)  claim id
+            --new_sdk_server=<new_sdk_server> : (str)  URL of the new SDK server (EXPERIMENTAL)
+            --include_channel_content         : (bool) if claim_id is for a channel, include supports for claims in
+                                                       that channel
+            --page=<page>                     : (int)  page to return during paginating
+            --page_size=<page_size>           : (int)  number of items on page during pagination
+
+        Returns: {Paginated[Dict]}
+        """
+        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        support_sums = await self.ledger.sum_supports(new_sdk_server, claim_id=claim_id, include_channel_content=include_channel_content, **kwargs)
+        return {
+            "items": support_sums,
+            "page": page_num,
+            "page_size": page_size
+        }
+
     @requires(WALLET_COMPONENT)
     async def jsonrpc_claim_search(self, **kwargs):
         """

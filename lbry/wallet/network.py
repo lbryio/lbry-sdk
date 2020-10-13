@@ -335,6 +335,12 @@ class Network:
             result = await r.json()
             return result['result']
 
+    async def sum_supports(self, server, **kwargs):
+        message = {"method": "support_sum", "params": kwargs}
+        async with self.aiohttp_session.post(server, json=message) as r:
+            result = await r.json()
+            return result['result']
+
 
 class SessionPool:
 
