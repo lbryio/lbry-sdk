@@ -191,7 +191,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
     async def abandon_claim(self, txid: str) -> str:
         return await self.chain.abandon_claim(txid, self.address)
 
-    async def support_claim(self, txo: Output, amount='0.01', sign=None) -> str:
+    async def support_claim(self, txo: Output, amount='0.01', sign=None, address=None) -> str:
         if not sign:
             response = await self.chain.support_claim(
                 txo.claim_name, txo.claim_id, amount
@@ -202,7 +202,7 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
             .add_outputs([
                 Output.pay_support_data_pubkey_hash(
                     lbc_to_dewies(amount), txo.claim_name, txo.claim_id, Support(),
-                    self.chain.ledger.address_to_hash160(self.address)
+                    self.chain.ledger.address_to_hash160(address if address else self.address)
                 )
             ])
         )
@@ -943,6 +943,36 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         # compat layer
         results = await self.db.search_claims(effective_amount=42000000, amount_order=1, order_by=["effective_amount"])
         self.assertEqual(claim.claim_id, results[0].claim_id)
+
+    async def test_claim_search_sum(self):
+        await self.generate(100)
+
+        channel_a = await self.get_claim(await self.create_claim(name="@A", is_channel=True))
+        channel_b = await self.get_claim(await self.create_claim(name="@B", is_channel=True))
+        channel_c = await self.get_claim(await self.create_claim(name="@C", is_channel=True))
+
+        await self.support_claim(channel_a, '10.0', sign=channel_b)
+        await self.support_claim(channel_a, '4.0', sign=channel_c)
+        await self.support_claim(channel_a, '2.0', sign=channel_c)
+        await self.generate(1)
+
+        results = await self.db.sum_supports(channel_a.claim_hash)
+        self.assertEqual(results, [{'supporter': '@B', 'staked': 1000000000}, {'supporter': '@C', 'staked': 600000000}])
+
+        claim_a = await self.get_claim(await self.create_claim(name="bob", amount='2.0', sign=channel_a))
+        await self.support_claim(claim_a, '1.0', sign=channel_b)
+        await self.generate(1)
+
+        results = await self.db.sum_supports(channel_a.claim_hash)
+        self.assertEqual(results, [{'supporter': '@B', 'staked': 1000000000}, {'supporter': '@C', 'staked': 600000000}])
+
+        results = await self.db.sum_supports(channel_a.claim_hash, True)
+        self.assertEqual(results, [{'supporter': '@B', 'staked': 1100000000}, {'supporter': '@C', 'staked': 600000000}])
+
+        results = await self.db.sum_supports(claim_a.claim_hash, False)
+        self.assertEqual(results, [{'supporter': '@B', 'staked': 100000000}])
+        results = await self.db.sum_supports(claim_a.claim_hash, True)
+        self.assertEqual(results, [{'supporter': '@B', 'staked': 100000000}])
 
     async def test_meta_fields_are_translated_to_protobuf(self):
         chan_ab = await self.get_claim(

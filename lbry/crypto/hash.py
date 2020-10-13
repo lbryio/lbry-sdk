@@ -36,12 +36,12 @@ def hash160(x):
     return ripemd160(sha256(x))
 
 
-def hash_to_hex_str(x):
+def hash_to_hex_str(x: bytes) -> str:
     """ Convert a big-endian binary hash to displayed hex string.
         Display form of a binary hash is reversed and converted to hex. """
-    return hexlify(reversed(x))
+    return hexlify(x[::-1])
 
 
-def hex_str_to_hash(x):
+def hex_str_to_hash(x: str) -> bytes:
     """ Convert a displayed hex string to a binary hash. """
-    return reversed(unhexlify(x))
+    return unhexlify(x)[::-1]

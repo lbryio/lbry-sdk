@@ -18,6 +18,7 @@ from lbry.wallet import Wallet, Account, SingleKey, HierarchicalDeterministic
 from lbry.blockchain import Transaction, Output, dewies_to_lbc, dict_values_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 from lbry.event import EventController, EventStream
+from lbry.crypto.hash import hex_str_to_hash
 
 from .base import Service
 from .json_encoder import Paginated
@@ -2572,6 +2573,26 @@ class API:
             d['total_pages'] = int((result.total + (page_size - 1)) / page_size)
             d['total_items'] = result.total
         return d
+
+    async def support_sum(
+            self,
+            claim_id: str,                          # id of claim to calculate support stats for
+            include_channel_content: bool = False,  # if claim_id is for a channel, include supports for
+                                                    # claims in that channel
+            **pagination_kwargs
+    ) -> Paginated[Dict]:  # supports grouped by channel
+        # TODO: add unsigned supports to the output so the numbers add up. just a left join on identity
+        """
+        List total staked supports for a claim, grouped by the channel that signed the support.
+
+        If claim_id is a channel claim, you can use --include_channel_content to also include supports for
+        content claims in the channel.
+
+        Usage:
+            support sum <claim_id> [--inculde_channel_content]
+                        {kwargs}
+        """
+        return await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content)
 
     async def support_abandon(
         self,
