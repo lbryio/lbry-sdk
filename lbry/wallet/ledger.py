@@ -945,6 +945,9 @@ class Ledger(metaclass=LedgerRegistry):
             result[url] = txo
         return result
 
+    async def sum_supports(self, new_sdk_server, **kwargs) -> List[Dict]:
+        return await self.network.sum_supports(new_sdk_server, **kwargs)
+
     async def claim_search(
             self, accounts, include_purchase_receipt=False, include_is_my_output=False,
             new_sdk_server=None, **kwargs) -> Tuple[List[Output], dict, int, int]:

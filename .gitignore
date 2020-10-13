@@ -6,6 +6,7 @@
 /.coverage*
 /lbry-venv
 /venv
+/lbry/blockchain
 
 lbry.egg-info
 __pycache__
