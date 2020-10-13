@@ -1,7 +1,7 @@
 import os
 import asyncio
 import logging
-from typing import List, Optional, Tuple, NamedTuple
+from typing import List, Optional, Tuple, NamedTuple, Dict
 
 from lbry.db import Database, Result
 from lbry.db.constants import TXO_TYPES
@@ -150,6 +150,9 @@ class Service:
         # return tx
 
     async def search_transactions(self, txids):
+        raise NotImplementedError
+
+    async def sum_supports(self, claim_hash: bytes, include_channel_content=False) -> List[Dict]:
         raise NotImplementedError
 
     async def announce_addresses(self, address_manager, addresses: List[str]):

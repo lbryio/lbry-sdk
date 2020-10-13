@@ -288,6 +288,9 @@ class Database:
     async def search_supports(self, **constraints) -> Result[Output]:
         return await self.fetch_result(q.search_supports, **constraints)
 
+    async def sum_supports(self, claim_hash, include_channel_content=False) -> List[Dict]:
+        return await self.run(q.sum_supports, claim_hash, include_channel_content)
+
     async def resolve(self, urls, **kwargs) -> Dict[str, Output]:
         return await self.run(q.resolve, urls, **kwargs)
 

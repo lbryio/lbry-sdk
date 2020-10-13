@@ -4,7 +4,7 @@ from decimal import Decimal
 from binascii import unhexlify
 from typing import Tuple, List, Optional
 
-from sqlalchemy import func, case
+from sqlalchemy import func, case, text
 from sqlalchemy.future import select, Select
 
 from lbry.schema.tags import clean_tags
@@ -60,6 +60,32 @@ def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
     rows = context().fetchall(select_supports(**constraints))
     txos = rows_to_txos(rows, include_tx=False)
     return txos, total
+
+
+def sum_supports(claim_hash, include_channel_content = False) -> Tuple[List[Output], Optional[int]]:
+    supporter = Claim.alias("supporter")
+    content = Claim.alias("content")
+    where_condition = (content.c.claim_hash == claim_hash)
+    if include_channel_content:
+        where_condition |= (content.c.channel_hash == claim_hash)
+
+    q = select(
+        supporter.c.claim_name.label("supporter"),
+        func.sum(TXO.c.amount).label("staked"),
+    ).select_from(
+        TXO
+        .join(content, TXO.c.claim_hash == content.c.claim_hash)
+        .join(supporter, TXO.c.channel_hash == supporter.c.claim_hash)
+    ).where(
+        where_condition &
+        (TXO.c.txo_type == TXO_TYPES["support"]) &
+        ((TXO.c.address == content.c.address) | ((TXO.c.address != content.c.address) & (TXO.c.spent_height == 0)))
+    ).group_by(
+        supporter.c.claim_name
+    ).order_by(
+        text("staked DESC")
+    )
+    return context().fetchall(q)
 
 
 def search_support_count(**constraints) -> int:
