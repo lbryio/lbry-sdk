@@ -54,3 +54,4 @@ The documentation for the API can be found [here](https://lbry.tech/api/sdk).
 Daemon defaults, ports, and other settings are documented [here](https://lbry.tech/resources/daemon-settings).
 
 Settings can be configured using a daemon-settings.yml file. An example can be found [here](https://github.com/lbryio/lbry-sdk/blob/master/example_daemon_settings.yml).
+
