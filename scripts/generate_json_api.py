@@ -25,7 +25,8 @@ RETURN_DOCS = {
     'File': encode_file_doc(),
     'Transaction': encode_tx_doc(),
     'Output': encode_txo_doc(),
-    'Address': 'an address in base58'
+    'Address': 'an address in base58',
+    'Dict': 'glorious data in dictionary',
 }
 
 
