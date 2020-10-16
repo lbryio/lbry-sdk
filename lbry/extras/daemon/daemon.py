@@ -2321,7 +2321,9 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        support_sums = await self.ledger.sum_supports(new_sdk_server, claim_id=claim_id, include_channel_content=include_channel_content, **kwargs)
+        support_sums = await self.ledger.sum_supports(
+            new_sdk_server, claim_id=claim_id, include_channel_content=include_channel_content, **kwargs
+        )
         return {
             "items": support_sums,
             "page": page_num,
