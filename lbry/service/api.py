@@ -989,21 +989,15 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = await Account.from_dict(
-            self.ledger, wallet, {
-                'name': account_name,
-                'seed': seed,
-                'private_key': private_key,
-                'public_key': public_key,
-                'address_generator': {
-                    'name': SingleKey.name if single_key else HierarchicalDeterministic.name
-                }
+        return await wallet.accounts.add_from_dict({
+            'name': account_name,
+            'seed': seed,
+            'private_key': private_key,
+            'public_key': public_key,
+            'address_generator': {
+                'name': SingleKey.name if single_key else HierarchicalDeterministic.name
             }
-        )
-        wallet.save()
-        if self.ledger.sync.network.is_connected:
-            await self.ledger.subscribe_account(account)
-        return account
+        })
 
     async def account_create(
         self,
@@ -1046,10 +1040,7 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = wallet.accounts.get_account_or_error(account_id)
-        wallet.accounts.remove(account)
-        await wallet.save()
-        return account
+        return await wallet.accounts.remove(account_id)
 
     async def account_set(
         self,
