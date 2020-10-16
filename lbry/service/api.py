@@ -2579,20 +2579,22 @@ class API:
             claim_id: str,                          # id of claim to calculate support stats for
             include_channel_content: bool = False,  # if claim_id is for a channel, include supports for
                                                     # claims in that channel
+            exclude_own_supports: bool = False,     # exclude supports signed by claim_id (i.e. self-supports)
             **pagination_kwargs
     ) -> Paginated[Dict]:  # supports grouped by channel
         # TODO: add unsigned supports to the output so the numbers add up. just a left join on identity
         """
         List total staked supports for a claim, grouped by the channel that signed the support.
 
-        If claim_id is a channel claim, you can use --include_channel_content to also include supports for
-        content claims in the channel.
+        If claim_id is a channel claim:
+            Use --include_channel_content to include supports for content claims in the channel.
+            Use --exclude_own_supports to exclude supports from the channel to itself.
 
         Usage:
             support sum <claim_id> [--inculde_channel_content]
                         {kwargs}
         """
-        return await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content)
+        return await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content, exclude_own_supports)
 
     async def support_abandon(
         self,
