@@ -69,5 +69,6 @@ class FullNode(Service):
     async def protobuf_resolve(self, urls, **kwargs):
         return await self.db.protobuf_resolve(urls, **kwargs)
 
-    async def sum_supports(self, claim_hash: bytes, include_channel_content=False) -> List[Dict]:
-        return await self.db.sum_supports(claim_hash, include_channel_content)
+    async def sum_supports(self, claim_hash: bytes, include_channel_content=False, exclude_own_supports=False) \
+            -> List[Dict]:
+        return await self.db.sum_supports(claim_hash, include_channel_content, exclude_own_supports)

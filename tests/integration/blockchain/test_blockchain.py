@@ -945,34 +945,91 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(claim.claim_id, results[0].claim_id)
 
     async def test_claim_search_sum(self):
+        # print("DB URL: " + self.chain.ledger.conf.db_url_or_default)
         await self.generate(100)
 
+        # create a few channels with unique addresses
         channel_a = await self.get_claim(await self.create_claim(name="@A", is_channel=True))
+        self.address = await self.chain.get_new_address()
         channel_b = await self.get_claim(await self.create_claim(name="@B", is_channel=True))
+        self.address = await self.chain.get_new_address()
         channel_c = await self.get_claim(await self.create_claim(name="@C", is_channel=True))
+        self.address = await self.chain.get_new_address()
+        await self.generate(1)
+        ch_c, ch_b, ch_a = await self.db.search_claims(order_by=['name'], claim_type="channel", limit=3)
 
-        await self.support_claim(channel_a, '10.0', sign=channel_b)
-        await self.support_claim(channel_a, '4.0', sign=channel_c)
+        # make some tips and supports from channels B and C to channel A
+        support_b = await self.support_claim(channel_a, '5.0', sign=channel_b)
+        tip_b = await self.support_claim(channel_a, '5.0', sign=channel_b, address=channel_a.get_address(self.chain.ledger))
         await self.support_claim(channel_a, '2.0', sign=channel_c)
+        await self.support_claim(channel_a, '2.0', sign=channel_c)
+        tip_c = await self.support_claim(channel_a, '2.0', sign=channel_c, address=channel_a.get_address(self.chain.ledger))
         await self.generate(1)
 
+        # check that supports sum correctly
         results = await self.db.sum_supports(channel_a.claim_hash)
-        self.assertEqual(results, [{'supporter': '@B', 'staked': 1000000000}, {'supporter': '@C', 'staked': 600000000}])
+        self.assertEqual(results, [
+            {'supporter': ch_b.meta['short_url'], 'staked': 1000000000, 'percent': 62.5},
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 37.5},
+        ])
 
+        # create a claim in channel A and have channel B support that claim
         claim_a = await self.get_claim(await self.create_claim(name="bob", amount='2.0', sign=channel_a))
         await self.support_claim(claim_a, '1.0', sign=channel_b)
         await self.generate(1)
 
+        # supports for just the channel claim should be unaffected ...
         results = await self.db.sum_supports(channel_a.claim_hash)
-        self.assertEqual(results, [{'supporter': '@B', 'staked': 1000000000}, {'supporter': '@C', 'staked': 600000000}])
+        self.assertEqual(results, [
+            {'supporter': ch_b.meta['short_url'], 'staked': 1000000000, 'percent': 62.5},
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 37.5},
+        ])
+        # ... but when you include supports for content in the channel, the support for claim_a is added in
+        results = await self.db.sum_supports(channel_a.claim_hash, include_channel_content=True)
+        self.assertEqual(results, [
+            {'supporter': ch_b.meta['short_url'], 'staked': 1100000000, 'percent': 64.7059},
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 35.2941},
+        ])
 
-        results = await self.db.sum_supports(channel_a.claim_hash, True)
-        self.assertEqual(results, [{'supporter': '@B', 'staked': 1100000000}, {'supporter': '@C', 'staked': 600000000}])
+        # check that sum_supports works as expected for a non-channel claim (with and without including channel content)
+        results = await self.db.sum_supports(claim_a.claim_hash, include_channel_content=False)
+        self.assertEqual(results, [{'supporter': ch_b.meta['short_url'], 'staked': 100000000, 'percent': 100}])
+        results = await self.db.sum_supports(claim_a.claim_hash, include_channel_content=True)
+        self.assertEqual(results, [{'supporter': ch_b.meta['short_url'], 'staked': 100000000, 'percent': 100}])
 
-        results = await self.db.sum_supports(claim_a.claim_hash, False)
-        self.assertEqual(results, [{'supporter': '@B', 'staked': 100000000}])
-        results = await self.db.sum_supports(claim_a.claim_hash, True)
-        self.assertEqual(results, [{'supporter': '@B', 'staked': 100000000}])
+        # if a support is abandoned, it stops counting
+        await self.abandon_support(support_b)
+        await self.generate(1)
+        results = await self.db.sum_supports(channel_a.claim_hash)
+        self.assertEqual(results, [
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 54.5455},
+            {'supporter': ch_b.meta['short_url'], 'staked': 500000000, 'percent': 45.4545},
+        ])
+
+        # but if a creator unlocks a tip, that still counts as the tipping channel's contribution
+        await self.abandon_support(tip_b)
+        await self.abandon_support(tip_c)
+        await self.generate(1)
+        results = await self.db.sum_supports(channel_a.claim_hash)
+        self.assertEqual(results, [
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 54.5455},
+            {'supporter': ch_b.meta['short_url'], 'staked': 500000000, 'percent': 45.4545},
+        ])
+
+        # a channel's own supports don't count if you exclude them
+        await self.support_claim(channel_a, '10.0', sign=channel_a)
+        await self.generate(1)
+        results = await self.db.sum_supports(channel_a.claim_hash, exclude_own_supports=False)
+        self.assertEqual(results, [
+            {'supporter': ch_a.meta['short_url'], 'staked': 1000000000, 'percent': 47.6190},
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 28.5714},
+            {'supporter': ch_b.meta['short_url'], 'staked': 500000000, 'percent': 23.8095},
+        ])
+        results = await self.db.sum_supports(channel_a.claim_hash, exclude_own_supports=True)
+        self.assertEqual(results, [
+            {'supporter': ch_c.meta['short_url'], 'staked': 600000000, 'percent': 54.5455},
+            {'supporter': ch_b.meta['short_url'], 'staked': 500000000, 'percent': 45.4545},
+        ])
 
     async def test_meta_fields_are_translated_to_protobuf(self):
         chan_ab = await self.get_claim(

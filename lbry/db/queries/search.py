@@ -2,7 +2,7 @@ import struct
 import logging
 from decimal import Decimal
 from binascii import unhexlify
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Dict
 
 from sqlalchemy import func, case, text
 from sqlalchemy.future import select, Select
@@ -62,30 +62,39 @@ def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
     return txos, total
 
 
-def sum_supports(claim_hash, include_channel_content = False) -> Tuple[List[Output], Optional[int]]:
+def sum_supports(claim_hash, include_channel_content=False, exclude_own_supports=False) -> List[Dict]:
     supporter = Claim.alias("supporter")
     content = Claim.alias("content")
     where_condition = (content.c.claim_hash == claim_hash)
     if include_channel_content:
         where_condition |= (content.c.channel_hash == claim_hash)
+    support_join_condition = TXO.c.channel_hash == supporter.c.claim_hash
+    if exclude_own_supports:
+        support_join_condition &= TXO.c.channel_hash != claim_hash
 
     q = select(
-        supporter.c.claim_name.label("supporter"),
+        supporter.c.short_url.label("supporter"),
         func.sum(TXO.c.amount).label("staked"),
     ).select_from(
         TXO
         .join(content, TXO.c.claim_hash == content.c.claim_hash)
-        .join(supporter, TXO.c.channel_hash == supporter.c.claim_hash)
+        .join(supporter, support_join_condition)
     ).where(
         where_condition &
         (TXO.c.txo_type == TXO_TYPES["support"]) &
         ((TXO.c.address == content.c.address) | ((TXO.c.address != content.c.address) & (TXO.c.spent_height == 0)))
     ).group_by(
-        supporter.c.claim_name
+        supporter.c.short_url
     ).order_by(
-        text("staked DESC")
+        text("staked DESC, supporter ASC")
     )
-    return context().fetchall(q)
+
+    result = context().fetchall(q)
+    total = sum([row['staked'] for row in result])
+    for row in result:
+        row['percent'] = round(row['staked']/total*100, 4)
+
+    return result
 
 
 def search_support_count(**constraints) -> int:
