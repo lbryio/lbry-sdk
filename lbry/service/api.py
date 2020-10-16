@@ -745,25 +745,11 @@ class API:
                           [--create_account] [--single_key]
 
         """
-        wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
-        for wallet in self.wallets.wallets:
-            if wallet.id == wallet_id:
-                raise Exception(f"Wallet at path '{wallet_path}' already exists and is loaded.")
-        if os.path.exists(wallet_path):
-            raise Exception(f"Wallet at path '{wallet_path}' already exists, use 'wallet_add' to load wallet.")
-
-        wallet = self.wallets.import_wallet(wallet_path)
-        if not wallet.accounts and create_account:
-            account = Account.generate(
-                self.ledger, wallet, address_generator={
-                    'name': SingleKey.name if single_key else HierarchicalDeterministic.name
-                }
-            )
-            if self.ledger.sync.network.is_connected:
-                await self.ledger.subscribe_account(account)
-        wallet.save()
+        wallet = await self.wallets.create(
+            wallet_id, create_account=create_account, single_key=single_key
+        )
         if not skip_on_startup:
-            with self.conf.update_config() as c:
+            with self.service.conf.update_config() as c:
                 c.wallets += [wallet_id]
         return wallet
 
@@ -820,9 +806,7 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        balance = await self.ledger.get_detailed_balance(
-            accounts=wallet.accounts, confirmations=confirmations
-        )
+        balance = await wallet.get_balance()
         return dict_values_to_lbc(balance)
 
     async def wallet_status(
@@ -2682,9 +2666,20 @@ class API:
         List block info
 
         Usage:
-            block_list <start_height> [<end_height>]
+            block list <start_height> [<end_height>]
         """
-        return await self.service.get_blocks(start_height=start_height, end_height=end_height)
+        return await self.service.sync.get_block_headers(
+            start_height=start_height, end_height=end_height
+        )
+
+    async def block_tip(self) -> int:  # block number at the tip of the blockchain
+        """
+        Retrieve the last confirmed block (tip) of the blockchain.
+
+        Usage:
+            block tip
+        """
+        return await self.service.sync.get_best_block_height()
 
     TRANSACTION_DOC = """
     Transaction management.
@@ -3603,7 +3598,25 @@ class Client(API):
         if events:
             await self.ws.send_json({'id': None, 'method': 'subscribe', 'params': events})
 
+    @property
+    def first(self) -> 'Client':
+        return ClientReturnsFirstResponse(self)
+
     def __getattribute__(self, name):
         if name in dir(API):
             return partial(object.__getattribute__(self, 'send'), name)
+        return object.__getattribute__(self, name)
+
+
+class ClientReturnsFirstResponse(Client):
+
+    def __init__(self, client: Client):
+        self.client = client
+
+    def __getattribute__(self, name):
+        if name in dir(API):
+            async def return_first(**kwargs):
+                responses = await self.client.send(name, **kwargs)
+                return await responses.first
+            return return_first
         return object.__getattribute__(self, name)

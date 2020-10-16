@@ -235,10 +235,10 @@ class Database:
     async def process_all_things_after_sync(self):
         return await self.run(sync.process_all_things_after_sync)
 
-    async def get_blocks(self, first, last=None):
-        return await self.run(q.get_blocks, first, last)
+    async def get_block_headers(self, start_height: int, end_height: int = None):
+        return await self.run(q.get_block_headers, start_height, end_height)
 
-    async def get_filters(self, start_height, end_height=None, granularity=0):
+    async def get_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
         return await self.run(q.get_filters, start_height, end_height, granularity)
 
     async def insert_block(self, block):

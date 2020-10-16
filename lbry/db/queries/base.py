@@ -43,7 +43,7 @@ def insert_block(block):
     context().get_bulk_loader().add_block(block).flush()
 
 
-def get_blocks(first, last=None):
+def get_block_headers(first, last=None):
     if last is not None:
         query = (
             select('*').select_from(Block)

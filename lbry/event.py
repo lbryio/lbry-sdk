@@ -184,6 +184,22 @@ class EventStream:
         future.set_exception(exception)
 
 
+class EventRegistry:
+
+    def __init__(self):
+        self.events = {}
+
+    def register(self, name, stream: EventStream):
+        assert name not in self.events
+        self.events[name] = stream
+
+    def get(self, event_name):
+        return self.events.get(event_name)
+
+    def clear(self):
+        self.events.clear()
+
+
 class EventQueuePublisher(threading.Thread):
 
     STOP = 'STOP'

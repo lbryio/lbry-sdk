@@ -3,8 +3,9 @@ import signal
 import asyncio
 import logging
 from weakref import WeakSet
+from functools import partial
 from asyncio.runners import _cancel_all_tasks
-from typing import Type
+from typing import Type, List, Dict, Tuple
 
 from aiohttp.web import Application, AppRunner, WebSocketResponse, TCPSite, Response
 from aiohttp.http_websocket import WSMsgType, WSCloseCode
@@ -14,6 +15,7 @@ from lbry.console import Console, console_class_from_name
 from lbry.service import API, Service
 from lbry.service.json_encoder import JSONResponseEncoder
 from lbry.blockchain.ledger import ledger_class_from_name
+from lbry.event import BroadcastSubscription
 
 
 log = logging.getLogger(__name__)
@@ -51,24 +53,6 @@ class WebSocketManager(WebSocketResponse):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def subscribe(self, requested: list, subscriptions):
-        for request in requested:
-            if request == '*':
-                for _, component in subscriptions.items():
-                    for _, sockets in component.items():
-                        sockets.add(self)
-            elif '.' not in request:
-                for _, sockets in subscriptions[request].items():
-                    sockets.add(self)
-            elif request.count('.') == 1:
-                component, stream = request.split('.')
-                subscriptions[component][stream].add(self)
-
-    def unsubscribe(self, subscriptions):
-        for _, component in subscriptions.items():
-            for _, sockets in component.items():
-                sockets.discard(self)
-
 
 class Daemon:
     """
@@ -83,13 +67,7 @@ class Daemon:
         self.api = API(service)
         self.app = Application()
         self.app['websockets'] = WeakSet()
-        self.app['subscriptions'] = {}
-        self.components = {}
-        #for component in components:
-        #    streams = self.app['subscriptions'][component.name] = {}
-        #    for event_name, event_stream in component.event_streams.items():
-        #        streams[event_name] = WeakSet()
-        #        event_stream.listen(partial(self.broadcast_event, component.name, event_name))
+        self.app['subscriptions']: Dict[str, Tuple[BroadcastSubscription, WeakSet]] = {}
         self.app.router.add_get('/ws', self.on_connect)
         self.app.router.add_post('/api', self.on_rpc)
         self.app.on_shutdown.append(self.on_shutdown)
@@ -162,7 +140,6 @@ class Daemon:
                     print('web socket connection closed with exception %s' %
                           web_socket.exception())
         finally:
-            web_socket.unsubscribe(self.app['subscriptions'])
             self.app['websockets'].discard(web_socket)
         return web_socket
 
@@ -171,7 +148,7 @@ class Daemon:
             streams = msg['params']
             if isinstance(streams, str):
                 streams = [streams]
-            web_socket.subscribe(streams, self.app['subscriptions'])
+            await self.on_subscribe(web_socket, streams)
         else:
             params = msg.get('params', {})
             method = getattr(self.api, msg['method'])
@@ -186,22 +163,27 @@ class Daemon:
                 await web_socket.send_json({'id': msg.get('id', ''), 'result': "unexpected error: " + str(e)})
                 raise e
 
+    async def on_subscribe(self, web_socket: WebSocketManager, events: List[str]):
+        for event_name in events:
+            if event_name not in self.app["subscriptions"]:
+                event_stream = self.conf.events.get(event_name)
+                subscribers = WeakSet()
+                event_stream.listen(partial(self.broadcast_event, event_name, subscribers))
+                self.app["subscriptions"][event_name] = {
+                    "stream": event_stream,
+                    "subscribers": subscribers
+                }
+            else:
+                subscribers = self.app["subscriptions"][event_name]["subscribers"]
+            subscribers.add(web_socket)
+
+    def broadcast_event(self, event_name, subscribers, payload):
+        for web_socket in subscribers:
+            asyncio.create_task(web_socket.send_json({
+                'event': event_name, 'payload': payload
+            }))
+
     @staticmethod
     async def on_shutdown(app):
         for web_socket in set(app['websockets']):
             await web_socket.close(code=WSCloseCode.GOING_AWAY, message='Server shutdown')
-
-    def broadcast_event(self, module, stream, payload):
-        for web_socket in self.app['subscriptions'][module][stream]:
-            asyncio.create_task(web_socket.send_json({
-                'module': module,
-                'stream': stream,
-                'payload': payload
-            }))
-
-    def broadcast_message(self, msg):
-        for web_socket in self.app['websockets']:
-            asyncio.create_task(web_socket.send_json({
-                'module': 'blockchain_sync',
-                'payload': msg
-            }))
