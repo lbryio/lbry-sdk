@@ -32,6 +32,10 @@ class WalletManager:
         except KeyError:
             raise ValueError(f"Couldn't find wallet: {wallet_id}.")
 
+    async def generate_addresses(self):
+        for wallet in self.wallets.values():
+            await wallet.generate_addresses()
+
     @property
     def default(self) -> Optional[Wallet]:
         for wallet in self.wallets.values():

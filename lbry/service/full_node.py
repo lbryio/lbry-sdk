@@ -23,6 +23,10 @@ class FullNode(Service):
         super().__init__(ledger)
         self.chain = chain or Lbrycrd(ledger)
         self.sync = BlockchainSync(self.chain, self.db)
+        self.sync.on_block.listen(self.generate_addresses)
+
+    async def generate_addresses(self, _):
+        await self.wallets.generate_addresses()
 
     async def start(self):
         await self.chain.open()

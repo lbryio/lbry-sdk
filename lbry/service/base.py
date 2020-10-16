@@ -51,6 +51,12 @@ class Sync:
     async def stop(self):
         raise NotImplementedError
 
+    async def get_block_headers(self, start_height: int, end_height: int = None):
+        raise NotImplementedError
+
+    async def get_best_block_height(self) -> int:
+        raise NotImplementedError
+
 
 class Service:
     """
@@ -90,9 +96,6 @@ class Service:
         pass
 
     async def get_file(self, uri, **kwargs):
-        pass
-
-    async def get_block_headers(self, first, last=None):
         pass
 
     def create_wallet(self, wallet_id):

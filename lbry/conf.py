@@ -11,6 +11,7 @@ from lbry.utils.dirs import user_data_dir, user_download_dir
 from lbry.error import InvalidCurrencyError
 from lbry.dht import constants
 from lbry.wallet.coinselection import COIN_SELECTION_STRATEGIES
+from lbry.event import EventRegistry
 
 log = logging.getLogger(__name__)
 
@@ -382,6 +383,7 @@ class BaseConfig:
         self.environment = {}  # from environment variables
         self.persisted = {}    # from config file
         self._updating_config = False
+        self.events = EventRegistry()
         self.set(**kwargs)
 
     def set(self, **kwargs):

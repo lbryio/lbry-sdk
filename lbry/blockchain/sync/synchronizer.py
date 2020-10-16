@@ -44,6 +44,7 @@ class BlockchainSync(Sync):
         self.pid = os.getpid()
         self._on_block_controller = EventController()
         self.on_block = self._on_block_controller.stream
+        self.conf.events.register("blockchain.block", self.on_block)
         self._on_mempool_controller = EventController()
         self.on_mempool = self._on_mempool_controller.stream
         self.on_block_hash_subscription: Optional[BroadcastSubscription] = None
@@ -108,6 +109,12 @@ class BlockchainSync(Sync):
                 future.result()
             return
         return done
+
+    async def get_block_headers(self, start_height: int, end_height: int = None):
+        return await self.db.get_block_headers(start_height, end_height)
+
+    async def get_best_block_height(self) -> int:
+        return await self.db.get_best_block_height()
 
     async def get_best_block_height_for_file(self, file_number) -> int:
         return await self.db.run(

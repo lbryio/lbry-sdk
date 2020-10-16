@@ -59,6 +59,12 @@ class Wallet:
         self.purchases = PurchaseListManager(self)
         self.supports = SupportListManager(self)
 
+    async def generate_addresses(self):
+        await asyncio.wait([
+            account.ensure_address_gap()
+            for account in self.accounts
+        ])
+
     async def notify_change(self, field: str, value=None):
         await self._on_change_controller.add({
             'field': field, 'value': value
@@ -381,6 +387,12 @@ class Wallet:
                     f"You already have a claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
                 )
+
+    async def get_balance(self):
+        balance = {"total": 0}
+        for account in self.accounts:
+            balance["total"] += await account.get_balance()
+        return balance
 
 
 class AccountListManager:
