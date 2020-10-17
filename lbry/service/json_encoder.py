@@ -137,7 +137,7 @@ class Paginated(Generic[ResultType]):
         self.page_size = page_size
 
     @classmethod
-    def from_list(cls, items: list, page: int = None, page_size: int = None):
+    def from_list(cls, items: list, page: int = None, page_size: int = None, include_total=False):
         page = max(1, page or 1)
         page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
         total_items = len(items)
@@ -145,7 +145,7 @@ class Paginated(Generic[ResultType]):
         subitems = []
         if offset <= total_items:
             subitems = items[offset:offset + page_size]
-        return cls(Result(subitems, total_items), page, page_size)
+        return cls(Result(subitems, total_items if include_total else None), page, page_size)
 
     @classmethod
     async def from_getter(
