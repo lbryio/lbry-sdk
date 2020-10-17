@@ -438,6 +438,10 @@ class AccountListManager:
         await self.wallet.notify_change('account.removed')
         return account
 
+    def set_default(self, account):
+        self._accounts.remove(account)
+        self._accounts.insert(0, account)
+
     def get_or_none(self, account_id: str) -> Optional[Account]:
         if account_id is not None:
             return self[account_id]

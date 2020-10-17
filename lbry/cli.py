@@ -262,7 +262,11 @@ def main(argv=None):
         if args.help:
             print(doc)
         else:
-            parsed = docopt(doc, command_args)
+            parsed = docopt(
+                # TODO: ugly hack because docopt doesn't support commands with spaces in them
+                doc.replace(api_method_name.replace('_', ' '), api_method_name, 1),
+                command_args
+            )
             params = set_kwargs(parsed)
             asyncio.get_event_loop().run_until_complete(execute_command(conf, api_method_name, params))
     elif args.group is not None:
