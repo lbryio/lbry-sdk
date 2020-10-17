@@ -58,21 +58,7 @@ def get_all_addresses(self):
     return context().execute(select(PubkeyAddress.c.address))
 
 
-def add_keys(account, chain, pubkeys):
+def add_keys(pubkeys):
     c = context()
-    c.execute(
-        c.insert_or_ignore(PubkeyAddress)
-        .values([{'address': k.address} for k in pubkeys])
-    )
-    c.execute(
-        c.insert_or_ignore(AccountAddress)
-        .values([{
-            'account': account.id,
-            'address': k.address,
-            'chain': chain,
-            'pubkey': k.pubkey_bytes,
-            'chain_code': k.chain_code,
-            'n': k.n,
-            'depth': k.depth
-        } for k in pubkeys])
-    )
+    c.execute(c.insert_or_ignore(PubkeyAddress).values([{'address': k['address']} for k in pubkeys]))
+    c.execute(c.insert_or_ignore(AccountAddress).values(pubkeys))

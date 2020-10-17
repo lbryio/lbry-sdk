@@ -290,7 +290,15 @@ class Database:
             return address
 
     async def add_keys(self, account, chain, pubkeys):
-        return await self.run(q.add_keys, account, chain, pubkeys)
+        return await self.run(q.add_keys, [{
+            'account': account.id,
+            'address': k.address,
+            'chain': chain,
+            'pubkey': k.pubkey_bytes,
+            'chain_code': k.chain_code,
+            'n': k.n,
+            'depth': k.depth
+        } for k in pubkeys])
 
     async def get_transactions(self, **constraints) -> Result[Transaction]:
         return await self.fetch_result(q.get_transactions, **constraints)
