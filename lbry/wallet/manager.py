@@ -101,6 +101,9 @@ class WalletManager:
         wallet.on_change.listen(lambda _: self.storage.save(wallet))
         return wallet
 
+    def remove(self, wallet_id: str) -> Wallet:
+        return self.wallets.pop(wallet_id)
+
     async def _report_state(self):
         try:
             for account in self.accounts:

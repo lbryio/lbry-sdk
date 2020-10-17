@@ -4,7 +4,7 @@ from decimal import Decimal
 from binascii import hexlify, unhexlify
 from datetime import datetime, date
 from json import JSONEncoder
-from typing import Iterator, Generic
+from typing import Iterator, Generic, Callable, Awaitable
 
 from google.protobuf.message import DecodeError
 
@@ -15,6 +15,7 @@ from lbry.crypto.bip32 import PubKey
 from lbry.blockchain.dewies import dewies_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 from lbry.db.database import Result, ResultType
+from lbry.constants import DEFAULT_PAGE_SIZE
 
 
 log = logging.getLogger(__name__)
@@ -134,6 +135,30 @@ class Paginated(Generic[ResultType]):
         self.result = result
         self.page = page
         self.page_size = page_size
+
+    @classmethod
+    def from_list(cls, items: list, page: int = None, page_size: int = None):
+        page = max(1, page or 1)
+        page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
+        total_items = len(items)
+        offset = page_size * (page - 1)
+        subitems = []
+        if offset <= total_items:
+            subitems = items[offset:offset + page_size]
+        return cls(Result(subitems, total_items), page, page_size)
+
+    @classmethod
+    async def from_getter(
+        cls, get_records: Callable[..., Awaitable[Result]],
+        page: int = None, page_size: int = None, **constraints
+    ):
+        page = max(1, page or 1)
+        page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
+        constraints.update({
+            "offset": page_size * (page - 1),
+            "limit": page_size
+        })
+        return cls(await get_records(**constraints), page, page_size)
 
     def __getitem__(self, item: int) -> ResultType:
         return self.result[item]

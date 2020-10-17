@@ -582,12 +582,12 @@ class CommandTestCase(IntegrationTestCase):
 
         self.wallet = self.service.wallets.default
         self.account = self.wallet.accounts.default
-        addresses = await self.account.ensure_address_gap()
+        address = await self.account.receiving.get_or_create_usable_address()
 
         self.ledger.conf.upload_dir = os.path.join(self.ledger.conf.data_dir, 'uploads')
         os.mkdir(self.ledger.conf.upload_dir)
 
-        await self.chain.send_to_address(addresses[0], '10.0')
+        await self.chain.send_to_address(address, '10.0')
         await self.generate(5)
 
     async def asyncTearDown(self):
@@ -641,6 +641,33 @@ class CommandTestCase(IntegrationTestCase):
             await self.generate(1)
             await self.service.wait(tx)
         return self.sout(tx)
+
+    async def wallet_list(self, *args, **kwargs):
+        return (await self.out(self.api.wallet_list(*args, **kwargs)))['items']
+
+    async def wallet_create(self, *args, **kwargs):
+        return await self.out(self.api.wallet_create(*args, **kwargs))
+
+    async def wallet_add(self, *args, **kwargs):
+        return await self.out(self.api.wallet_add(*args, **kwargs))
+
+    async def wallet_remove(self, *args, **kwargs):
+        return await self.out(self.api.wallet_remove(*args, **kwargs))
+
+    async def account_list(self, *args, **kwargs):
+        return (await self.out(self.api.account_list(*args, **kwargs)))['items']
+
+    async def account_create(self, *args, **kwargs):
+        return await self.out(self.api.account_create(*args, **kwargs))
+
+    async def account_add(self, *args, **kwargs):
+        return await self.out(self.api.account_add(*args, **kwargs))
+
+    async def account_set(self, *args, **kwargs):
+        return await self.out(self.api.account_set(*args, **kwargs))
+
+    async def account_remove(self, *args, **kwargs):
+        return await self.out(self.api.account_remove(*args, **kwargs))
 
     def create_upload_file(self, data, prefix=None, suffix=None):
         file_path = tempfile.mktemp(

@@ -19,38 +19,10 @@ from lbry.blockchain import Transaction, Output, dewies_to_lbc, dict_values_to_l
 from lbry.stream.managed_stream import ManagedStream
 from lbry.event import EventController, EventStream
 from lbry.crypto.hash import hex_str_to_hash
+from lbry.constants import DEFAULT_PAGE_SIZE
 
 from .base import Service
 from .json_encoder import Paginated
-
-
-DEFAULT_PAGE_SIZE = 20
-
-
-async def paginate_rows(get_records: Callable, page: Optional[int], page_size: Optional[int], **constraints):
-    page = max(1, page or 1)
-    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
-    constraints.update({
-        "offset": page_size * (page - 1),
-        "limit": page_size
-    })
-    return Paginated(await get_records(**constraints), page, page_size)
-
-
-def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
-    page = max(1, page or 1)
-    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
-    total_items = len(items)
-    offset = page_size * (page - 1)
-    subitems = []
-    if offset <= total_items:
-        subitems = items[offset:offset+page_size]
-    return {
-        "items": subitems,
-        "total_pages": int((total_items + (page_size - 1)) / page_size),
-        "total_items": total_items,
-        "page": page, "page_size": page_size
-    }
 
 
 StrOrList = Union[str, list]
@@ -723,8 +695,8 @@ class API:
 
         """
         if wallet_id:
-            return paginate_list([self.wallets.get_wallet_or_error(wallet_id)], 1, 1)
-        return paginate_list(self.wallets.wallets, **pagination_kwargs)
+            return Paginated.from_list([self.wallets[wallet_id]], 1, 1)
+        return Paginated.from_list(list(self.wallets.wallets.values()), **pagination_kwargs)
 
     async def wallet_reconnect(self):
         """ Reconnects ledger network client, applying new configurations. """
@@ -733,6 +705,7 @@ class API:
     async def wallet_create(
         self,
         wallet_id: str,         # wallet file name
+        name: str = "",         #
         skip_on_startup=False,  # don't add wallet to daemon_settings.yml
         create_account=False,   # generates the default account
         single_key=False        # used with --create_account, creates single-key account
@@ -741,12 +714,12 @@ class API:
         Create a new wallet.
 
         Usage:
-            wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]
-                          [--create_account] [--single_key]
+            wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--name=<name>]
+                          [--skip_on_startup] [--create_account] [--single_key]
 
         """
         wallet = await self.wallets.create(
-            wallet_id, create_account=create_account, single_key=single_key
+            wallet_id, name=name, create_account=create_account, single_key=single_key
         )
         if not skip_on_startup:
             with self.service.conf.update_config() as c:
@@ -764,17 +737,7 @@ class API:
             wallet add (<wallet_id> | --wallet_id=<wallet_id>)
 
         """
-        wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
-        for wallet in self.wallets.wallets:
-            if wallet.id == wallet_id:
-                raise Exception(f"Wallet at path '{wallet_path}' is already loaded.")
-        if not os.path.exists(wallet_path):
-            raise Exception(f"Wallet at path '{wallet_path}' was not found.")
-        wallet = self.wallets.import_wallet(wallet_path)
-        if self.ledger.sync.network.is_connected:
-            for account in wallet.accounts:
-                await self.ledger.subscribe_account(account)
-        return wallet
+        return await self.wallets.load(wallet_id)
 
     async def wallet_remove(
         self,
@@ -787,11 +750,7 @@ class API:
             wallet remove (<wallet_id> | --wallet_id=<wallet_id>)
 
         """
-        wallet = self.wallets.get_wallet_or_error(wallet_id)
-        self.wallets.wallets.remove(wallet)
-        for account in wallet.accounts:
-            await self.ledger.unsubscribe_account(account)
-        return wallet
+        return self.wallets.remove(wallet_id)
 
     async def wallet_balance(
         self,
@@ -945,9 +904,8 @@ class API:
         kwargs = {'confirmations': confirmations, 'show_seed': include_seed}
         wallet = self.wallets.get_or_default(wallet_id)
         if account_id:
-            return paginate_list([await wallet.get_account_or_error(account_id).get_details(**kwargs)], 1, 1)
-        else:
-            return paginate_list(await wallet.get_detailed_accounts(**kwargs), **pagination_kwargs)
+            return Paginated.from_list([wallet.accounts[account_id]], 1, 1)
+        return Paginated.from_list(list(wallet.accounts), **pagination_kwargs)
 
     async def account_balance(
         self,
@@ -1018,14 +976,9 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = await wallet.accounts.generate(account_name, language, {
+        return await wallet.accounts.generate(account_name, language, {
             'name': SingleKey.name if single_key else HierarchicalDeterministic.name
         })
-        await wallet.save()
-        # TODO: fix
-        #if self.ledger.sync.network.is_connected:
-        #    await self.ledger.sync.subscribe_account(account)
-        return account
 
     async def account_remove(
         self,
@@ -1064,7 +1017,7 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        account = wallet.get_account_or_error(account_id)
+        account = wallet.accounts[account_id]
         change_made = False
 
         if account.receiving.name == HierarchicalDeterministic.name:
@@ -1083,14 +1036,13 @@ class API:
             account.name = new_name
             change_made = True
 
-        if default and wallet.default_account != account:
-            wallet.accounts.remove(account)
-            wallet.accounts.insert(0, account)
+        if default and wallet.accounts.default != account:
+            wallet.accounts.set_default(account)
             change_made = True
 
         if change_made:
             account.modified_on = time.time()
-            await wallet.save()
+            await wallet.notify_change('account.updated')
 
         return account
 
