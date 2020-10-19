@@ -755,13 +755,12 @@ class API:
     async def wallet_balance(
         self,
         wallet_id: str = None,  # balance for specific wallet, other than default wallet
-        confirmations=0         # only include transactions with this many confirmed blocks.
     ) -> dict:
         """
         Return the balance of a wallet
 
         Usage:
-            wallet balance [<wallet_id>] [--confirmations=<confirmations>]
+            wallet balance [<wallet_id>]
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
@@ -911,20 +910,17 @@ class API:
         self,
         account_id: str = None,  # balance for specific account, default otherwise
         wallet_id: str = None,   # restrict operation to specific wallet
-        confirmations=0          # required confirmations of transactions included
     ) -> dict:
         """
         Return the balance of an account
 
         Usage:
-            account balance [<account_id>] [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]
+            account balance [<account_id>] [--wallet_id=<wallet_id>]
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
         account = wallet.accounts.get_or_default(account_id)
-        balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=True,
-        )
+        balance = await account.get_balance()
         return dict_values_to_lbc(balance)
 
     async def account_add(
@@ -1953,10 +1949,11 @@ class API:
         holding_account = wallet.accounts.get_or_default(stream_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
         signing_channel = None
-        if 'channel_id' in stream_dict or 'channel_name' in stream_dict:
+        channel_id = stream_dict.pop('channel_id')
+        channel_name = stream_dict.pop('channel_name')
+        if channel_id or channel_name:
             signing_channel = await wallet.channels.get_for_signing_or_none(
-                channel_id=stream_dict.pop('channel_id', None),
-                channel_name=stream_dict.pop('channel_name', None)
+                channel_id=channel_id, channel_name=channel_name
             )
         holding_address = await holding_account.get_valid_receiving_address(
             stream_dict.pop('claim_address', None)
@@ -1999,103 +1996,63 @@ class API:
                           {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            accounts = [account]
-        else:
-            account = wallet.default_account
-            accounts = wallet.accounts
+        stream_dict, kwargs = pop_kwargs('stream_edit', extract_stream_edit(**stream_edit_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        holding_account = wallet.accounts.get_or_default(stream_dict.pop('account_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        replace = stream_dict.pop('replace')
 
-        existing_claims = await self.ledger.get_claims(
-            wallet=wallet, accounts=accounts, claim_id=claim_id
-        )
-        if len(existing_claims) != 1:
-            account_ids = ', '.join(f"'{account.id}'" for account in accounts)
+        old = await wallet.claims.get(claim_id=claim_id)
+        if not old.claim.is_stream:
             raise Exception(
-                f"Can't find the stream '{claim_id}' in account(s) {account_ids}."
-            )
-        old_txo = existing_claims[0]
-        if not old_txo.claim.is_stream:
-            raise Exception(
-                f"A claim with id '{claim_id}' was found but it is not a stream claim."
+                f"A claim with id '{claim_id}' was found but "
+                f"it is not a stream claim."
             )
 
         if bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+            amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         else:
-            amount = old_txo.amount
+            amount = old.amount
 
-        if claim_address is not None:
-            self.valid_address_or_error(claim_address)
+        claim_address = stream_dict.pop('claim_address')
+        if claim_address:
+            holding_address = await holding_account.get_valid_receiving_address(claim_address)
         else:
-            claim_address = old_txo.get_address(account.ledger)
+            holding_address = old.get_address(self.ledger)
 
-        channel = None
+        signing_channel = None
+        channel_id = stream_dict.pop('channel_id')
+        channel_name = stream_dict.pop('channel_name')
+        clear_channel = stream_dict.pop('clear_channel')
         if channel_id or channel_name:
-            channel = await self.get_channel_or_error(
-                wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        elif old_txo.claim.is_signed and not clear_channel and not replace:
-            channel = old_txo.channel
-
-        fee_address = self.get_fee_address(kwargs, claim_address)
-        if fee_address:
-            kwargs['fee_address'] = fee_address
-
-        file_path, spec = await self._video_file_analyzer.verify_or_repair(
-            validate_file, optimize_file, file_path, ignore_non_video=True
-        )
-        kwargs.update(spec)
-
-        if replace:
-            claim = Claim()
-            claim.stream.message.source.CopyFrom(
-                old_txo.claim.stream.message.source
+            signing_channel = await wallet.channels.get_for_signing_or_none(
+                channel_id=channel_id, channel_name=channel_name
             )
-            stream_type = old_txo.claim.stream.stream_type
-            if stream_type:
-                old_stream_type = getattr(old_txo.claim.stream.message, stream_type)
-                new_stream_type = getattr(claim.stream.message, stream_type)
-                new_stream_type.CopyFrom(old_stream_type)
-            claim.stream.update(file_path=file_path, **kwargs)
-        else:
-            claim = Claim.from_bytes(old_txo.claim.to_bytes())
-            claim.stream.update(file_path=file_path, **kwargs)
-        tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+        elif old.claim.is_signed and not clear_channel and not replace:
+            signing_channel = old.channel
+
+        kwargs['fee_address'] = self.ledger.get_fee_address(kwargs, holding_address)
+
+        stream_dict.pop('validate_file')
+        stream_dict.pop('optimize_file')
+        # TODO: fix
+        #file_path, spec = await self._video_file_analyzer.verify_or_repair(
+        #    validate_file, optimize_file, file_path, ignore_non_video=True
+        #)
+        #kwargs.update(spec)
+        class FakeManagedStream:
+            sd_hash = 'beef'
+        async def create_file_stream(path):
+            return FakeManagedStream()
+        tx, fs = await wallet.streams.update(
+            old=old, amount=amount, file_path=stream_dict.pop('file_path'),
+            create_file_stream=create_file_stream, replace=replace,
+            holding_address=holding_address, funding_accounts=funding_accounts,
+            signing_channel=signing_channel, **remove_nulls(stream_dict)
         )
-        new_txo = tx.outputs[0]
-
-        stream_hash = None
-        if not preview:
-            old_stream = self.stream_manager.streams.get(old_txo.claim.stream.source.sd_hash, None)
-            if file_path is not None:
-                if old_stream:
-                    await self.stream_manager.delete_stream(old_stream, delete_file=False)
-                file_stream = await self.stream_manager.create_stream(file_path)
-                new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
-                new_txo.script.generate()
-                stream_hash = file_stream.stream_hash
-            elif old_stream:
-                stream_hash = old_stream.stream_hash
-
-        if channel:
-            new_txo.sign(channel)
-        await tx.sign(funding_accounts)
-
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
-            )])
-            if stream_hash:
-                await self.storage.save_content_claim(stream_hash, new_txo.id)
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('publish'))
-        else:
-            await account.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
         return tx
 
     async def stream_abandon(
@@ -2403,33 +2360,21 @@ class API:
                            {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
-        amount = self.ledger.get_dewies_or_error("amount", amount)
-        claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
-        claim_address = claim.get_address(self.ledger.ledger)
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**tx_kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        amount = self.ledger.get_dewies_or_error('amount', amount, positive_value=True)
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        claim = await wallet.claims.get(claim_id=claim_id)
+        claim_address = claim.get_address(self.ledger)
         if not tip:
-            account = wallet.accounts.get_or_default(account_id)
-            claim_address = await account.receiving.get_or_create_usable_address()
+            holding_account = wallet.accounts.get_or_default(account_id)
+            claim_address = await holding_account.receiving.get_or_create_usable_address()
 
-        tx = await Transaction.support(
+        tx = await wallet.supports.create(
             claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0]
         )
-
-        if not preview:
-            await self.broadcast_or_release(tx, blocking)
-            await self.storage.save_supports({claim_id: [{
-                'txid': tx.id,
-                'nout': tx.position,
-                'address': claim_address,
-                'claim_id': claim_id,
-                'amount': dewies_to_lbc(amount)
-            }]})
-            self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('new_support'))
-        else:
-            await self.ledger.release_tx(tx)
-
+        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
         return tx
 
     async def support_list(

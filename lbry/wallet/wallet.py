@@ -388,11 +388,8 @@ class Wallet:
                     f"Use --allow-duplicate-name flag to override."
                 )
 
-    async def get_balance(self):
-        balance = {"total": 0}
-        for account in self.accounts:
-            balance["total"] += await account.get_balance()
-        return balance
+    async def get_balance(self, **constraints):
+        return await self.db.get_balance(accounts=self.accounts, **constraints)
 
 
 class AccountListManager:
@@ -533,7 +530,7 @@ class ClaimListManager(BaseListManager):
         else:
             updated_claim.clear_signature()
         return await self.wallet.create_transaction(
-            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
+            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account
         )
 
     async def delete(self, claim_id=None, txid=None, nout=None):
@@ -554,7 +551,7 @@ class ClaimListManager(BaseListManager):
             key, value, constraints = 'name', claim_name, {'claim_name': claim_name}
         else:
             raise ValueError(f"Couldn't find {self.name} because an {self.name}_id or name was not provided.")
-        claims = await self.list(**constraints)
+        claims = await self.list(is_spent=False, **constraints)
         if len(claims) == 1:
             return claims[0]
         elif len(claims) > 1:
@@ -574,8 +571,9 @@ class ChannelListManager(ClaimListManager):
     __slots__ = ()
 
     async def create(
-            self, name: str, amount: int, holding_account: Account,
-            funding_accounts: List[Account], save_key=True, **kwargs) -> Transaction:
+        self, name: str, amount: int, holding_account: Account,
+        funding_accounts: List[Account], save_key=True, **kwargs
+    ) -> Transaction:
 
         holding_address = await holding_account.receiving.get_or_create_usable_address()
 
@@ -600,9 +598,10 @@ class ChannelListManager(ClaimListManager):
         return tx
 
     async def update(
-            self, old: Output, amount: int, new_signing_key: bool, replace: bool,
-            holding_account: Account, funding_accounts: List[Account],
-            save_key=True, **kwargs) -> Transaction:
+        self, old: Output, amount: int, new_signing_key: bool, replace: bool,
+        holding_account: Account, funding_accounts: List[Account],
+        save_key=True, **kwargs
+    ) -> Transaction:
 
         moving_accounts = False
         holding_address = old.get_address(self.wallet.ledger)
@@ -664,11 +663,12 @@ class StreamListManager(ClaimListManager):
     __slots__ = ()
 
     async def create(
-            self, name: str, amount: int, file_path: str,
-            create_file_stream: Callable[[str], Awaitable[ManagedStream]],
-            holding_address: str, funding_accounts: List[Account],
-            signing_channel: Optional[Output] = None,
-            preview=False, **kwargs) -> Tuple[Transaction, ManagedStream]:
+        self, name: str, amount: int, file_path: str,
+        create_file_stream: Callable[[str], Awaitable[ManagedStream]],
+        holding_address: str, funding_accounts: List[Account],
+        signing_channel: Optional[Output] = None,
+        preview=False, **kwargs
+    ) -> Tuple[Transaction, ManagedStream]:
 
         claim = Claim()
         claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
@@ -689,6 +689,61 @@ class StreamListManager(ClaimListManager):
                 file_stream = await create_file_stream(file_path)
                 claim.stream.source.sd_hash = file_stream.sd_hash
                 txo.script.generate()
+
+            # creating TX and file stream was successful, now sign all the things
+            if signing_channel is not None:
+                txo.sign(signing_channel)
+            await self.wallet.sign(tx)
+
+        except Exception as e:
+            # creating file stream or something else went wrong, release txos
+            await self.wallet.db.release_tx(tx)
+            raise e
+
+        return tx, file_stream
+
+    async def update(
+        self, old: Output, amount: int, file_path: str,
+        create_file_stream: Callable[[str], Awaitable[ManagedStream]],
+        holding_address: str, funding_accounts: List[Account],
+        signing_channel: Optional[Output] = None,
+        preview=False, replace=False, **kwargs
+    ) -> Tuple[Transaction, ManagedStream]:
+
+        if replace:
+            claim = Claim()
+            # stream file metadata is not replaced
+            claim.stream.message.source.CopyFrom(old.claim.stream.message.source)
+            stream_type = old.claim.stream.stream_type
+            if stream_type:
+                old_stream_type = getattr(old.claim.stream.message, stream_type)
+                new_stream_type = getattr(claim.stream.message, stream_type)
+                new_stream_type.CopyFrom(old_stream_type)
+        else:
+            claim = Claim.from_bytes(old.claim.to_bytes())
+        claim.stream.update(file_path=file_path, **kwargs)
+
+        # before creating file stream, create TX to ensure we have enough LBC
+        tx = await super().update(
+            old, claim, amount, holding_address,
+            funding_accounts, funding_accounts[0],
+            signing_channel
+        )
+        txo = tx.outputs[0]
+
+        file_stream = None
+        try:
+
+            # we have enough LBC to create TX, now try create the file stream
+            if not preview:
+                old_stream = None  # TODO: get old stream
+                if file_path is not None:
+                    if old_stream is not None:
+                        # TODO: delete the old stream
+                        pass
+                    file_stream = await create_file_stream(file_path)
+                    claim.stream.source.sd_hash = file_stream.sd_hash
+                    txo.script.generate()
 
             # creating TX and file stream was successful, now sign all the things
             if signing_channel is not None:
