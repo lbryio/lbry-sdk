@@ -14,7 +14,7 @@ from lbry.blockchain.transaction import Output
 
 from ..utils import query
 from ..query_context import context
-from ..tables import TX, TXO, Claim, Support
+from ..tables import TX, TXO, Claim, Support, Trending
 from ..constants import (
     TXO_TYPES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
     SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
@@ -123,6 +123,10 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
         channel_claim.c.short_url.isnot(None),
         channel_claim.c.short_url + '/' + Claim.c.short_url
     )]).label('canonical_url'),
+    func.coalesce(Trending.c.trending_local, 0).label('trending_local'),
+    func.coalesce(Trending.c.trending_mixed, 0).label('trending_mixed'),
+    func.coalesce(Trending.c.trending_global, 0).label('trending_global'),
+    func.coalesce(Trending.c.trending_group, 0).label('trending_group')
 ]
 
 
@@ -145,8 +149,9 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
             nulls_last = ''
             if column == 'release_time':
                 nulls_last = ' NULLs LAST'
+            table = "trend" if column.startswith('trend') else "claim"
             sql_order_by.append(
-                f"claim.{column} ASC{nulls_last}" if is_asc else f"claim.{column} DESC{nulls_last}"
+                f"{table}.{column} ASC{nulls_last}" if is_asc else f"{table}.{column} DESC{nulls_last}"
             )
         constraints['order_by'] = sql_order_by
 
@@ -269,7 +274,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         [Claim, TXO],
         select(*cols)
         .select_from(
-            Claim.join(TXO).join(TX)
+            Claim.join(TXO).join(TX).join(Trending, Trending.c.claim_hash == Claim.c.claim_hash, isouter=True)
             .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
         ), **constraints
     )

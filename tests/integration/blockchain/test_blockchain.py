@@ -1138,6 +1138,31 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         results = await self.db.search_claims(channel="@404")
         self.assertEqual([], results.rows)
 
+    async def test_simple_support_trending(self):
+        claim1 = await self.get_claim(await self.create_claim(name="one"))
+        claim2 = await self.get_claim(await self.create_claim(name="two"))
+        await self.generate(1)
+        results = await self.db.search_claims(order_by=["trending_group", "trending_mixed"])
+        self.assertEqual(0, results.rows[0].meta['trending_mixed'])
+        self.assertEqual(0, results.rows[1].meta['trending_mixed'])
+        self.assertEqual(0, results.rows[0].meta['trending_group'])
+        self.assertEqual(0, results.rows[1].meta['trending_group'])
+        await self.support_claim(claim1, '1.0')
+        await self.generate(1)
+        results = await self.db.search_claims(order_by=["trending_group", "trending_mixed"])
+        self.assertEqual(57600000000, results.rows[0].meta['trending_mixed'])
+        self.assertEqual(0, results.rows[1].meta['trending_mixed'])
+        self.assertEqual(4, results.rows[0].meta['trending_group'])
+        self.assertEqual(0, results.rows[1].meta['trending_group'])
+        await self.support_claim(claim2, '1.0')
+        await self.generate(1)
+        results = await self.db.search_claims(order_by=["trending_group", "trending_mixed"])
+        self.assertEqual(57600000000, results.rows[0].meta['trending_mixed'])
+        self.assertEqual(57500000000, results.rows[1].meta['trending_mixed'])
+        self.assertEqual(4, results.rows[0].meta['trending_group'])
+        self.assertEqual(4, results.rows[1].meta['trending_group'])
+
+
 
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 

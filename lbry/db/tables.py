@@ -258,11 +258,6 @@ Claim = Table(
     # claims which are inside channels
     Column('channel_hash', LargeBinary, nullable=True),
     Column('is_signature_valid', Boolean, nullable=True),
-
-    Column('trending_group', BigInteger, server_default='0'),
-    Column('trending_mixed', BigInteger, server_default='0'),
-    Column('trending_local', BigInteger, server_default='0'),
-    Column('trending_global', BigInteger, server_default='0'),
 )
 
 Tag = Table(
@@ -329,4 +324,13 @@ Stake = Table(
     Column('stake_sum', BigInteger),
     Column('stake_count', Integer),
     Column('stake_unique', Integer),
+)
+
+Trending = Table(
+    'trend', metadata,
+    Column('claim_hash', LargeBinary, primary_key=True),
+    Column('trending_group', BigInteger, server_default='0'),
+    Column('trending_mixed', BigInteger, server_default='0'),
+    Column('trending_local', BigInteger, server_default='0'),
+    Column('trending_global', BigInteger, server_default='0'),
 )
