@@ -4,7 +4,7 @@ import logging
 from typing import Optional, Tuple, Set, List, Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
-from lbry.db import Database
+from lbry.db import Database, trending
 from lbry.db import queries as q
 from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
 from lbry.db.query_context import Event, Progress
@@ -348,7 +348,8 @@ class BlockchainSync(Sync):
         await self.db.run(claim_phase.update_channel_stats, blocks, initial_sync)
 
     async def sync_trends(self):
-        pass
+        ending_height = await self.chain.db.get_best_height()
+        await self.db.run(trending.calculate_trending, ending_height)
 
     async def advance(self):
         blocks_added = await self.sync_blocks()
