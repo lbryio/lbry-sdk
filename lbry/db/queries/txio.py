@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from typing import Tuple, List, Optional, Union
 
-from sqlalchemy import union, func, text, between, distinct
+from sqlalchemy import union, func, text, between, distinct, case
 from sqlalchemy.future import select, Select
 
 from ...blockchain.transaction import (
@@ -421,7 +421,7 @@ def rows_to_txos(rows: List[dict], include_tx=True) -> List[Output]:
                 tx_ref=TXRefImmutable.from_hash(row['tx_hash'], row['height'], row['timestamp']),
                 position=row['txo_position'],
             )
-        txo.spent_height = bool(row['spent_height'])
+        txo.spent_height = row['spent_height']
         if 'is_my_input' in row:
             txo.is_my_input = bool(row['is_my_input'])
         if 'is_my_output' in row:
@@ -534,8 +534,47 @@ def get_txo_sum(**constraints):
     return result[0]['total'] or 0
 
 
-def get_balance(**constraints):
-    return get_txo_sum(spent_height=0, **constraints)
+def get_balance(account_ids):
+    my_addresses = select(AccountAddress.c.address).where(in_account_ids(account_ids))
+    query = (
+        select(
+            func.sum(TXO.c.amount).label("total"),
+            func.sum(case(
+                [(TXO.c.txo_type != TXO_TYPES["other"], TXO.c.amount)],
+                else_=0
+            )).label("reserved"),
+            func.sum(case(
+                [(where_txo_type_in(CLAIM_TYPE_CODES), TXO.c.amount)],
+                else_=0
+            )).label("claims"),
+            func.sum(case(
+                [(where_txo_type_in(TXO_TYPES["support"]), TXO.c.amount)],
+                else_=0
+            )).label("supports"),
+            func.sum(case(
+                [(where_txo_type_in(TXO_TYPES["support"]) & (
+                   (TXI.c.address.isnot(None)) &
+                   (TXI.c.address.in_(my_addresses))
+                ), TXO.c.amount)],
+                else_=0
+            )).label("my_supports"),
+        )
+        .where((TXO.c.spent_height == 0) & (TXO.c.address.in_(my_addresses)))
+        .select_from(
+            TXO.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
+        )
+    )
+    result = context().fetchone(query)
+    return {
+        "total": result["total"],
+        "available": result["total"] - result["reserved"],
+        "reserved": result["reserved"],
+        "reserved_subtotals": {
+            "claims": result["claims"],
+            "supports": result["my_supports"],
+            "tips": result["supports"] - result["my_supports"]
+        }
+    }
 
 
 def get_report(account_ids):

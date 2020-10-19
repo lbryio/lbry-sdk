@@ -431,14 +431,6 @@ class Account:
     def get_public_key(self, chain: int, index: int) -> PubKey:
         return self.address_managers[chain].get_public_key(index)
 
-    def get_balance(self, confirmations=0, include_claims=False, **constraints):
-        if not include_claims:
-            constraints.update({'txo_type__in': (TXO_TYPES['other'], TXO_TYPES['purchase'])})
-        if confirmations > 0:
-            height = self.ledger.headers.height - (confirmations-1)
-            constraints.update({'height__lte': height, 'height__gt': 0})
-        return self.db.get_balance(account=self, **constraints)
-
     async def get_max_gap(self):
         change_gap = await self.change.get_max_gap()
         receiving_gap = await self.receiving.get_max_gap()
@@ -497,35 +489,5 @@ class Account:
                 gap_changed = True
         return gap_changed
 
-    def get_support_summary(self):
-        return self.db.get_supports_summary(account=self)
-
-    async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False):
-        tips_balance, supports_balance, claims_balance = 0, 0, 0
-        get_total_balance = partial(self.get_balance, confirmations=confirmations,
-                                    include_claims=True)
-        total = await get_total_balance()
-        if reserved_subtotals:
-            claims_balance = await get_total_balance(txo_type__in=CLAIM_TYPE_CODES)
-            for txo in await self.get_support_summary():
-                if confirmations > 0 and not 0 < txo.tx_ref.height <= self.ledger.headers.height - (confirmations - 1):
-                    continue
-                if txo.is_my_input:
-                    supports_balance += txo.amount
-                else:
-                    tips_balance += txo.amount
-            reserved = claims_balance + supports_balance + tips_balance
-        else:
-            reserved = await self.get_balance(
-                confirmations=confirmations, include_claims=True, txo_type__gt=0
-            )
-        return {
-            'total': total,
-            'available': total - reserved,
-            'reserved': reserved,
-            'reserved_subtotals': {
-                'claims': claims_balance,
-                'supports': supports_balance,
-                'tips': tips_balance
-            } if reserved_subtotals else None
-        }
+    async def get_balance(self, **constraints):
+        return await self.db.get_balance(account=self, **constraints)
