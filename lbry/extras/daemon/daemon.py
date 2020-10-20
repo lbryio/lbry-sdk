@@ -557,6 +557,14 @@ class Daemon(metaclass=JSONRPCServerType):
                 await self.component_manager.stop()
             else:
                 self.component_startup_task.cancel()
+                # the wallet component might have not started
+                try:
+                    wallet_component = self.component_manager.get_actual_component('wallet')
+                except NameError:
+                    pass
+                else:
+                    await wallet_component.stop()
+                await self.component_manager.stop()
         log.info("stopped api components")
         await self.rpc_runner.cleanup()
         await self.streaming_runner.cleanup()

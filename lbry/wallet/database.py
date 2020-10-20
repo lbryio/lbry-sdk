@@ -145,7 +145,7 @@ class AIOSQLite:
             self.waiting_reads_metric.inc()
             self.read_count_metric.inc()
             try:
-                while self.writers:  # more writes can come in while we are waiting for the first
+                while self.writers and not self._closing:  # more writes can come in while we are waiting for the first
                     if not urgent_read and still_waiting and self.urgent_read_done.is_set():
                         #  throttle the writes if they pile up
                         self.urgent_read_done.clear()
@@ -153,6 +153,8 @@ class AIOSQLite:
                     #  wait until the running writes have finished
                     await self.read_ready.wait()
                     still_waiting = True
+                if self._closing:
+                    raise asyncio.CancelledError
                 return await asyncio.get_event_loop().run_in_executor(
                     self.reader_executor, read_only_fn, sql, parameters
                 )
@@ -195,6 +197,8 @@ class AIOSQLite:
         self.read_ready.clear()
         try:
             async with self.write_lock:
+                if self._closing:
+                    raise asyncio.CancelledError
                 return await asyncio.get_event_loop().run_in_executor(
                     self.writer_executor, lambda: self.__run_transaction(fun, *args, **kwargs)
                 )
@@ -230,6 +234,8 @@ class AIOSQLite:
         self.read_ready.clear()
         try:
             async with self.write_lock:
+                if self._closing:
+                    raise asyncio.CancelledError
                 return await asyncio.get_event_loop().run_in_executor(
                     self.writer_executor, self.__run_transaction_with_foreign_keys_disabled, fun, args, kwargs
                 )
