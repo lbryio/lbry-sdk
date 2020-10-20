@@ -1,6 +1,6 @@
 import logging
 from binascii import hexlify, unhexlify
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
@@ -70,5 +70,5 @@ class FullNode(Service):
         return await self.db.protobuf_resolve(urls, **kwargs)
 
     async def sum_supports(self, claim_hash: bytes, include_channel_content=False, exclude_own_supports=False) \
-            -> List[Dict]:
+            -> Tuple[List[Dict], int]:
         return await self.db.sum_supports(claim_hash, include_channel_content, exclude_own_supports)

@@ -2594,7 +2594,11 @@ class API:
             support sum <claim_id> [--inculde_channel_content]
                         {kwargs}
         """
-        return await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content, exclude_own_supports)
+        items, total = await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content, exclude_own_supports)
+        return {
+            'items': dict_values_to_lbc(items),
+            'total': dewies_to_lbc(total),
+        }
 
     async def support_abandon(
         self,
