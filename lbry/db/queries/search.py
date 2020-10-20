@@ -62,7 +62,7 @@ def search_supports(**constraints) -> Tuple[List[Output], Optional[int]]:
     return txos, total
 
 
-def sum_supports(claim_hash, include_channel_content=False, exclude_own_supports=False) -> List[Dict]:
+def sum_supports(claim_hash, include_channel_content=False, exclude_own_supports=False) -> Tuple[List[Dict], int]:
     supporter = Claim.alias("supporter")
     content = Claim.alias("content")
     where_condition = (content.c.claim_hash == claim_hash)
@@ -91,10 +91,7 @@ def sum_supports(claim_hash, include_channel_content=False, exclude_own_supports
 
     result = context().fetchall(q)
     total = sum([row['staked'] for row in result])
-    for row in result:
-        row['percent'] = round(row['staked']/total*100, 4)
-
-    return result
+    return result, total
 
 
 def search_support_count(**constraints) -> int:

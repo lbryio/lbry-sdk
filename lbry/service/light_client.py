@@ -1,5 +1,5 @@
 import logging
-from typing import List, Dict
+from typing import List, Dict, Tuple
 
 from lbry.conf import Config
 from lbry.blockchain import Ledger, Transaction
@@ -47,5 +47,5 @@ class LightClient(Service):
         pass
 
     async def sum_supports(self, claim_hash: bytes, include_channel_content=False, exclude_own_supports=False) \
-            -> List[Dict]:
+            -> Tuple[List[Dict], int]:
         return await self.client.sum_supports(claim_hash, include_channel_content, exclude_own_supports)

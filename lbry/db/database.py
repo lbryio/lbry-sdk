@@ -2,7 +2,7 @@ import os
 import asyncio
 import tempfile
 import multiprocessing as mp
-from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING, Dict
+from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING, Dict, Tuple
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
 
@@ -288,7 +288,8 @@ class Database:
     async def search_supports(self, **constraints) -> Result[Output]:
         return await self.fetch_result(q.search_supports, **constraints)
 
-    async def sum_supports(self, claim_hash, include_channel_content=False, exclude_own_supports=False) -> List[Dict]:
+    async def sum_supports(self, claim_hash, include_channel_content=False, exclude_own_supports=False) \
+            -> Tuple[List[Dict], int]:
         return await self.run(q.sum_supports, claim_hash, include_channel_content, exclude_own_supports)
 
     async def resolve(self, urls, **kwargs) -> Dict[str, Output]:
