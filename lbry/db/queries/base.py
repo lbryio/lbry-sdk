@@ -8,6 +8,7 @@ from ..query_context import context
 from ..tables import (
     SCHEMA_VERSION, metadata, Version,
     Claim, Support, Block, BlockFilter, BlockGroupFilter, TX, TXFilter,
+    pg_add_account_address_constraints_and_indexes
 )
 
 
@@ -105,6 +106,8 @@ def check_version_and_create_tables():
         ctx.execute(Version.insert().values(version=SCHEMA_VERSION))
         for table in metadata.sorted_tables:
             disable_trigger_and_constraints(table.name)
+        if ctx.is_postgres:
+            ctx.execute(text(pg_add_account_address_constraints_and_indexes))
 
 
 def disable_trigger_and_constraints(table_name):

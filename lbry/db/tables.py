@@ -45,6 +45,11 @@ AccountAddress = Table(
 )
 
 
+pg_add_account_address_constraints_and_indexes = [
+    "CREATE UNIQUE INDEX account_address_idx ON account_address (account, address);"
+]
+
+
 Block = Table(
     'block', metadata,
     Column('height', Integer, primary_key=True),
@@ -160,7 +165,7 @@ pg_add_txo_constraints_and_indexes = [
     f"CREATE INDEX txo_unspent_supports ON txo (claim_hash) INCLUDE (amount) "
     f"WHERE spent_height = 0 AND txo_type={TXO_TYPES['support']};",
     # for calculating balance
-    f"CREATE INDEX txo_unspent_by_address ON txo (address) INCLUDE (amount) "
+    f"CREATE INDEX txo_unspent_by_address ON txo (address) INCLUDE (amount, txo_type, tx_hash) "
     f"WHERE spent_height = 0;",
     # for finding modified claims in a block range
     f"CREATE INDEX txo_claim_changes "

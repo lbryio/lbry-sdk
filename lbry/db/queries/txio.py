@@ -535,7 +535,14 @@ def get_txo_sum(**constraints):
 
 
 def get_balance(account_ids):
+    ctx = context()
     my_addresses = select(AccountAddress.c.address).where(in_account_ids(account_ids))
+    if ctx.is_postgres:
+        txo_address_check = TXO.c.address == func.any(func.array(my_addresses))
+        txi_address_check = TXI.c.address == func.any(func.array(my_addresses))
+    else:
+        txo_address_check = TXO.c.address.in_(my_addresses)
+        txi_address_check = TXI.c.address.in_(my_addresses)
     query = (
         select(
             func.sum(TXO.c.amount).label("total"),
@@ -553,18 +560,17 @@ def get_balance(account_ids):
             )).label("supports"),
             func.sum(case(
                 [(where_txo_type_in(TXO_TYPES["support"]) & (
-                   (TXI.c.address.isnot(None)) &
-                   (TXI.c.address.in_(my_addresses))
+                   (TXI.c.address.isnot(None)) & txi_address_check
                 ), TXO.c.amount)],
                 else_=0
             )).label("my_supports"),
         )
-        .where((TXO.c.spent_height == 0) & (TXO.c.address.in_(my_addresses)))
+        .where((TXO.c.spent_height == 0) & txo_address_check)
         .select_from(
             TXO.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
         )
     )
-    result = context().fetchone(query)
+    result = ctx.fetchone(query)
     return {
         "total": result["total"],
         "available": result["total"] - result["reserved"],
