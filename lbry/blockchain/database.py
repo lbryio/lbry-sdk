@@ -117,7 +117,7 @@ class BlockchainDB:
                 MAX(height) as best_height,
                 MIN(height) as start_height
             FROM block_info
-            WHERE status&1 AND status&4
+            WHERE status&1 AND status&4 AND NOT status&32 AND NOT status&64
         """
         args = ()
         if file_number is not None and start_height is not None:
@@ -135,7 +135,8 @@ class BlockchainDB:
             """
             SELECT datapos as data_offset, height, hash as block_hash, txCount as txs
             FROM block_info
-            WHERE file = ? AND height >= ? AND status&1 AND status&4
+            WHERE file = ? AND height >= ?
+            AND status&1 AND status&4 AND NOT status&32 AND NOT status&64
             ORDER BY datapos ASC;
             """, (block_file, start_height)
         )]
