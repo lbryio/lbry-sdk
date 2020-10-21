@@ -545,25 +545,21 @@ def get_balance(account_ids):
         txi_address_check = TXI.c.address.in_(my_addresses)
     query = (
         select(
-            func.sum(TXO.c.amount).label("total"),
-            func.sum(case(
+            func.coalesce(func.sum(TXO.c.amount), 0).label("total"),
+            func.coalesce(func.sum(case(
                 [(TXO.c.txo_type != TXO_TYPES["other"], TXO.c.amount)],
-                else_=0
-            )).label("reserved"),
-            func.sum(case(
+            )), 0).label("reserved"),
+            func.coalesce(func.sum(case(
                 [(where_txo_type_in(CLAIM_TYPE_CODES), TXO.c.amount)],
-                else_=0
-            )).label("claims"),
-            func.sum(case(
+            )), 0).label("claims"),
+            func.coalesce(func.sum(case(
                 [(where_txo_type_in(TXO_TYPES["support"]), TXO.c.amount)],
-                else_=0
-            )).label("supports"),
-            func.sum(case(
+            )), 0).label("supports"),
+            func.coalesce(func.sum(case(
                 [(where_txo_type_in(TXO_TYPES["support"]) & (
                    (TXI.c.address.isnot(None)) & txi_address_check
                 ), TXO.c.amount)],
-                else_=0
-            )).label("my_supports"),
+            )), 0).label("my_supports"),
         )
         .where((TXO.c.spent_height == 0) & txo_address_check)
         .select_from(
