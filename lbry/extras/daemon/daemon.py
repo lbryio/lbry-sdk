@@ -2308,10 +2308,7 @@ class Daemon(metaclass=JSONRPCServerType):
         old_txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
         if not old_txo:
             raise Exception('Claim not found.')
-        claim = Claim()
-        claim.stream.message.source.CopyFrom(
-            old_txo.claim.stream.message.source
-        )
+        claim = Claim.from_bytes(old_txo.claim.to_bytes())
         claim.clear_signature()
         name = name or old_txo.claim_name
 
