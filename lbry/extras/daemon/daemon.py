@@ -2262,6 +2262,79 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(WALLET_COMPONENT)
+    async def jsonrpc_claim_copy(self, claim_id, bid=None, channel_id=None, name=None,
+                           channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
+                           funding_account_ids=None, claim_address=None, blocking=None, preview=None):
+        """
+        Copy a claim.
+
+        Usage:
+            claim_copy (<claim_id> | --claim_id=<claim_id>) [--bid=<bid>]
+                       [--channel_id=<channel_id>] [--name=<name>]
+                       [--channel_account_id=<channel_account_id>...]
+                       [--channel_name=<channel_name>]
+                       [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                       [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
+                       [--preview] [--blocking]
+
+        Options:
+            --claim_id=<claim_id>          : (str) claim id
+            --bid=<bid>                    : (decimal) amount to back the claim
+            --channel_id=<channel_id>      : (str) channel id to sign
+            --name=<name>                  : (str) claim name
+            --channel_name=<channel_name>  : (str) name of publisher channel
+            --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+                                                   for channel certificates, defaults to all accounts.
+            --account_id=<account_id>      : (str) account to use for holding the transaction
+            --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
+            --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
+                                                   it will be determined automatically from the account
+            --preview                      : (bool) do not broadcast the transaction
+            --blocking                     : (bool) wait until transaction is in mempool
+
+        Returns: {Transaction}
+        """
+        if not VALID_FULL_CLAIM_ID.fullmatch(claim_id):
+            raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
+        bid = self.get_dewies_or_error('bid', bid or '0.01', positive_value=True)
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
+        funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
+        channel = await self.get_channel_or_none(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True)
+        account = wallet.get_account_or_error(account_id) if account_id else wallet.default_account
+        claim_address = await self.get_receiving_address(claim_address, account)
+        old_txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+        if not old_txo:
+            raise Exception('Claim not found.')
+        claim = Claim()
+        claim.stream.message.source.CopyFrom(
+            old_txo.claim.stream.message.source
+        )
+        claim.clear_signature()
+        name = name or old_txo.claim_name
+
+        tx = await Transaction.claim_create(
+            name, claim, bid, claim_address, funding_accounts, funding_accounts[0]
+        )
+        new_txo = tx.outputs[0]
+
+        if channel:
+            new_txo.sign(channel)
+        await tx.sign(funding_accounts)
+
+        if not preview:
+            await self.broadcast_or_release(tx, blocking)
+            #self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('copy'))
+        else:
+            await account.ledger.release_tx(tx)
+
+        return tx
+
+
+
+    @requires(WALLET_COMPONENT)
     def jsonrpc_claim_list(self, claim_type=None, **kwargs):
         """
         List my stream and channel claims.
