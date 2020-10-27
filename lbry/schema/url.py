@@ -1,6 +1,6 @@
 import re
 import unicodedata
-from typing import Iterable, NamedTuple, Pattern, Tuple
+from typing import NamedTuple, Tuple
 
 
 def _create_url_regex(legacy=False):
@@ -18,42 +18,29 @@ def _create_url_regex(legacy=False):
     def _oneof(*choices):
         return _group('|'.join(choices))
 
-    def _legacy_claim(name, prefix=""):
-        return _group(
-            _named(name + "_name", prefix + invalid_names_regex) +
-            _oneof(
-                _group('#' + _named(name + "_claim_id", "[0-9a-f]{1,40}")),
-                _group(':' + _named(name + "_sequence", '[1-9][0-9]*')),
-                _group(r'\$' + _named(name + "_amount_order", '[1-9][0-9]*'))
-            ) + '?'
-        )
-
     def _claim(name, prefix=""):
         return _group(
             _named(name+"_name", prefix + invalid_names_regex) +
             _oneof(
-                _group(':' + _named(name+"_claim_id", "[0-9a-f]{1,40}")),
+                _group('[:#]' + _named(name+"_claim_id", "[0-9a-f]{1,40}")),
                 _group(r'\*' + _named(name+"_sequence", '[1-9][0-9]*')),
                 _group(r'\$' + _named(name+"_amount_order", '[1-9][0-9]*'))
             ) + '?'
         )
 
-    claim = _claim if not legacy else _legacy_claim
-
     return (
         '^' +
         _named("scheme", "lbry://") + '?' +
         _oneof(
-            _group(claim("channel_with_stream", "@") + "/" + claim("stream_in_channel")),
-            claim("channel", "@"),
-            claim("stream")
+            _group(_claim("channel_with_stream", "@") + "/" + _claim("stream_in_channel")),
+            _claim("channel", "@"),
+            _claim("stream")
         ) +
         '$'
     )
 
 
 URL_REGEX = _create_url_regex()
-URL_REGEX_LEGACY = _create_url_regex(legacy=True)
 
 
 def normalize_name(name):
@@ -117,13 +104,9 @@ class URL(NamedTuple):
     def __str__(self):
         return f"lbry://{'/'.join(str(p) for p in self.parts)}"
 
-    @staticmethod
-    def _first_match(x: str, ptns: Iterable[Pattern[str]]):
-        return next(filter(None, (re.match(ptn, x) for ptn in ptns)), None)
-
     @classmethod
     def parse(cls, url):
-        match = URL._first_match(url, (URL_REGEX, URL_REGEX_LEGACY))
+        match = re.match(URL_REGEX, url)
 
         if match is None:
             raise ValueError('Invalid LBRY URL')
