@@ -145,14 +145,15 @@ class Wallet:
             elif not self.is_locked:
                 log.warning(
                     "Disk encryption requested but no password available for encryption. "
-                    "Saving wallet in an unencrypted state."
+                    "Resetting encryption preferences and saving wallet in an unencrypted state."
                 )
+                self.preferences[ENCRYPT_ON_DISK] = False
         return self.storage.write(self.to_dict())
 
     @property
     def hash(self) -> bytes:
         h = sha256()
-        if self.preferences.get(ENCRYPT_ON_DISK, False):
+        if self.is_encrypted:
             assert self.encryption_password is not None, \
                 "Encryption is enabled but no password is available, cannot generate hash."
             h.update(self.encryption_password.encode())
@@ -219,7 +220,11 @@ class Wallet:
 
     @property
     def is_encrypted(self) -> bool:
-        return self.is_locked or self.preferences.get(ENCRYPT_ON_DISK, False)
+        # either its locked or it was unlocked using a password.
+        # if its set to encrypt on preferences but isnt encrypted and no password was given so far,
+        # then its not encrypted
+        return self.is_locked or (
+            self.preferences.get(ENCRYPT_ON_DISK, False) and self.encryption_password is not None)
 
     def decrypt(self):
         assert not self.is_locked, "Cannot decrypt a locked wallet, unlock first."
