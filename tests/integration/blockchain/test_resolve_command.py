@@ -118,10 +118,10 @@ class ResolveCommand(BaseResolveTestCase):
         # plain winning claim
         await self.assertResolvesToClaimId('foo', claim_id3)
         # sequence resolution
-        await self.assertResolvesToClaimId('foo:1', claim_id1)
-        await self.assertResolvesToClaimId('foo:2', claim_id2)
-        await self.assertResolvesToClaimId('foo:3', claim_id3)
-        await self.assertResolvesToClaimId('foo:4', None)
+        await self.assertResolvesToClaimId('foo*1', claim_id1)
+        await self.assertResolvesToClaimId('foo*2', claim_id2)
+        await self.assertResolvesToClaimId('foo*3', claim_id3)
+        await self.assertResolvesToClaimId('foo*4', None)
         # amount order resolution
         await self.assertResolvesToClaimId('foo$1', claim_id3)
         await self.assertResolvesToClaimId('foo$2', claim_id2)
