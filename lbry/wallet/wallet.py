@@ -665,9 +665,8 @@ class StreamListManager(ClaimListManager):
     async def create(
         self, name: str, amount: int, file_path: str,
         create_file_stream: Callable[[str], Awaitable[ManagedStream]],
-        holding_address: str, funding_accounts: List[Account],
-        signing_channel: Optional[Output] = None,
-        preview=False, **kwargs
+        holding_address: str, funding_accounts: List[Account], change_account: Account,
+        signing_channel: Optional[Output] = None, preview=False, **kwargs
     ) -> Tuple[Transaction, ManagedStream]:
 
         claim = Claim()
@@ -676,7 +675,7 @@ class StreamListManager(ClaimListManager):
         # before creating file stream, create TX to ensure we have enough LBC
         tx = await self._create(
             name, claim, amount, holding_address,
-            funding_accounts, funding_accounts[0],
+            funding_accounts, change_account,
             signing_channel
         )
         txo = tx.outputs[0]
@@ -705,7 +704,7 @@ class StreamListManager(ClaimListManager):
     async def update(
         self, old: Output, amount: int, file_path: str,
         create_file_stream: Callable[[str], Awaitable[ManagedStream]],
-        holding_address: str, funding_accounts: List[Account],
+        holding_address: str, funding_accounts: List[Account], change_account: Account,
         signing_channel: Optional[Output] = None,
         preview=False, replace=False, **kwargs
     ) -> Tuple[Transaction, ManagedStream]:
@@ -726,7 +725,7 @@ class StreamListManager(ClaimListManager):
         # before creating file stream, create TX to ensure we have enough LBC
         tx = await super().update(
             old, claim, amount, holding_address,
-            funding_accounts, funding_accounts[0],
+            funding_accounts, change_account,
             signing_channel
         )
         txo = tx.outputs[0]
@@ -785,9 +784,27 @@ class SupportListManager(BaseListManager):
         support_output = Output.pay_support_pubkey_hash(
             amount, name, claim_id, self.wallet.ledger.address_to_hash160(holding_address)
         )
-        return await self.wallet.create_transaction(
+        tx = await self.wallet.create_transaction(
             [], [support_output], funding_accounts, change_account
         )
+        await self.wallet.sign(tx)
+        return tx
+
+    async def delete(self, supports, keep=0, funding_accounts=None, change_account=None):
+        outputs = []
+        if keep > 0:
+            outputs = [
+                Output.pay_support_pubkey_hash(
+                    keep, supports[0].claim_name, supports[0].claim_id, supports[0].pubkey_hash
+                )
+            ]
+        tx = await self.wallet.create_transaction(
+            [Input.spend(txo) for txo in supports], outputs,
+            funding_accounts or self.wallet._accounts,
+            change_account or self.wallet._accounts[0]
+        )
+        await self.wallet.sign(tx)
+        return tx
 
     async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_supports(**constraints)

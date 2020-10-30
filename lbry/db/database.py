@@ -38,7 +38,7 @@ def clean_wallet_account_ids(constraints):
 async def add_channel_keys_to_txo_results(accounts: List, txos: Iterable[Output]):
     sub_channels = set()
     for txo in txos:
-        if txo.claim.is_channel:
+        if txo.is_claim and txo.claim.is_channel:
             for account in accounts:
                 private_key = await account.get_channel_private_key(
                     txo.claim.channel.public_key_bytes

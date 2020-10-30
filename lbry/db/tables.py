@@ -203,6 +203,7 @@ txi_join_account = TXI.join(AccountAddress, TXI.columns.address == AccountAddres
 pg_add_txi_constraints_and_indexes = [
     "ALTER TABLE txi ADD PRIMARY KEY (txo_hash);",
     "CREATE INDEX txi_height ON txi (height);",
+    "CREATE INDEX txi_first_address ON txi (tx_hash) INCLUDE (address) WHERE position = 0;",
 ]
 
 

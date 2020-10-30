@@ -380,8 +380,8 @@ def select_txos(
                 (TXI.c.address.notin_(my_addresses))
             )
     joins = TXO.join(TX)
-    #if constraints.get('is_spent', None) is False:
-    #    s = s.where((TXO.c.is_spent == False) & (TXO.c.is_reserved == False))
+    if constraints.pop('is_spent', None) is False:
+        s = s.where((TXO.c.spent_height == 0) & (TXO.c.is_reserved == False))
     if include_is_my_input:
         joins = joins.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
     if claim_id_not_in_claim_table:
