@@ -859,10 +859,11 @@ class API:
                         {kwargs}
 
         """
-        args = transaction(**transaction_kwargs)
-        wallet = self.wallets.get_or_default_for_spending(args['wallet_id'])
-        account = wallet.accounts.get_or_default(args['change_account_id'])
-        accounts = wallet.accounts.get_or_all(args['funding_account_id'])
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**tx_kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
+        accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
         amount = self.ledger.get_dewies_or_error("amount", amount)
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]
@@ -876,7 +877,7 @@ class API:
             )
         tx = await wallet.create_transaction([], outputs, accounts, account)
         await wallet.sign(tx)
-        await self.service.maybe_broadcast_or_release(tx, args['blocking'], args['preview'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     ACCOUNT_DOC = """
@@ -1474,7 +1475,7 @@ class API:
         tx = await self.wallets.create_purchase_transaction(
             accounts, txo, self.exchange_rate_manager, override_max_key_fee
         )
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     CLAIM_DOC = """
@@ -1635,7 +1636,7 @@ class API:
             name=name, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
             save_key=not tx_dict['preview'], **remove_nulls(channel_dict)
         )
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def channel_update(
@@ -1678,7 +1679,7 @@ class API:
             save_key=not tx_dict['preview'], **remove_nulls(channel_edit_dict)
         )
 
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['blocking'], tx_dict['preview'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
 
         return tx
 
@@ -1719,7 +1720,7 @@ class API:
         tx = await Transaction.create(
             [Input.spend(txo) for txo in claims], [], [account], account
         )
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def channel_list(
@@ -1922,7 +1923,7 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def stream_create(
@@ -1948,6 +1949,7 @@ class API:
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         holding_account = wallet.accounts.get_or_default(stream_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
         signing_channel = None
         channel_id = stream_dict.pop('channel_id')
         channel_name = stream_dict.pop('channel_name')
@@ -1977,9 +1979,10 @@ class API:
             name=name, amount=amount, file_path=stream_dict.pop('file_path'),
             create_file_stream=create_file_stream,
             holding_address=holding_address, funding_accounts=funding_accounts,
-            signing_channel=signing_channel, **remove_nulls(stream_dict)
+            change_account=change_account, signing_channel=signing_channel,
+            **remove_nulls(stream_dict)
         )
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def stream_update(
@@ -2002,6 +2005,7 @@ class API:
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         holding_account = wallet.accounts.get_or_default(stream_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
         replace = stream_dict.pop('replace')
 
         old = await wallet.claims.get(claim_id=claim_id)
@@ -2050,9 +2054,10 @@ class API:
             old=old, amount=amount, file_path=stream_dict.pop('file_path'),
             create_file_stream=create_file_stream, replace=replace,
             holding_address=holding_address, funding_accounts=funding_accounts,
-            signing_channel=signing_channel, **remove_nulls(stream_dict)
+            change_account=change_account, signing_channel=signing_channel,
+            **remove_nulls(stream_dict)
         )
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def stream_abandon(
@@ -2093,7 +2098,7 @@ class API:
             [Input.spend(txo) for txo in claims], [], accounts, account
         )
 
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, tx_dict)
         return tx
 
     async def stream_list(
@@ -2179,7 +2184,7 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, tx_dict)
         return tx
 
     async def collection_update(
@@ -2259,7 +2264,7 @@ class API:
             new_txo.sign(channel)
         await tx.sign(funding_accounts)
 
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, tx_dict)
         return tx
 
     async def collection_abandon(
@@ -2365,16 +2370,22 @@ class API:
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         amount = self.ledger.get_dewies_or_error('amount', amount, positive_value=True)
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
-        claim = await wallet.claims.get(claim_id=claim_id)
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
+        claim = await self.service.get_claim_by_claim_id(wallet.accounts, claim_id)
+        if claim is None:
+            raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
+
         claim_address = claim.get_address(self.ledger)
         if not tip:
             holding_account = wallet.accounts.get_or_default(account_id)
             claim_address = await holding_account.receiving.get_or_create_usable_address()
 
         tx = await wallet.supports.create(
-            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0]
+            name=claim.claim_name, claim_id=claim_id,
+            amount=amount, holding_address=claim_address,
+            funding_accounts=funding_accounts, change_account=change_account
         )
-        await self.service.maybe_broadcast_or_release(tx, tx_dict['preview'], tx_dict['no_wait'])
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def support_list(
@@ -2499,23 +2510,19 @@ class API:
                             {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            accounts = [account]
-        else:
-            account = wallet.default_account
-            accounts = wallet.accounts
+        abandon_dict, kwargs = pop_kwargs('abandon', extract_abandon(**abandon_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
 
-        if txid is not None and nout is not None:
-            supports = await self.ledger.get_supports(
-                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
+        if abandon_dict['txid']:
+            supports = await wallet.supports.list(
+                wallet=wallet, tx_hash=unhexlify(abandon_dict['txid'])[::-1], position=abandon_dict['nout']
             )
-        elif claim_id is not None:
-            supports = await self.ledger.get_supports(
-                wallet=wallet, accounts=accounts, claim_id=claim_id
-            )
+        elif abandon_dict['claim_id'] is not None:
+            supports = await wallet.supports.list(wallet=wallet, claim_id=abandon_dict['claim_id'])
         else:
             raise Exception('Must specify claim_id, or txid and nout')
 
@@ -2523,22 +2530,14 @@ class API:
             raise Exception('No supports found for the specified claim_id or txid:nout')
 
         if keep is not None:
-            keep = self.get_dewies_or_error('keep', keep)
+            keep = self.ledger.get_dewies_or_error('keep', keep, positive_value=True)
         else:
             keep = 0
 
-        outputs = []
-        if keep > 0:
-            outputs = [
-                Output.pay_support_pubkey_hash(
-                    keep, supports[0].claim_name, supports[0].claim_id, supports[0].pubkey_hash
-                )
-            ]
-
-        tx = await Transaction.create(
-            [Input.spend(txo) for txo in supports], outputs, accounts, account
+        tx = await wallet.supports.delete(
+            supports=supports, keep=keep, funding_accounts=funding_accounts, change_account=change_account
         )
-        await self.service.maybe_broadcast_or_release(tx, blocking, preview)
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     BLOCK_DOC = """

@@ -203,14 +203,14 @@ class Service:
     async def resolve(self, urls, **kwargs):
         raise NotImplementedError
 
-    async def search_claims(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int], Censor]:
+    async def search_claims(self, accounts, **kwargs) -> Result[Output]:
         raise NotImplementedError
 
-    async def search_supports(self, accounts, **kwargs) -> Tuple[List[Output], Optional[int]]:
+    async def search_supports(self, accounts, **kwargs) -> Result[Output]:
         raise NotImplementedError
 
-    async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
-        for claim in (await self.search_claims(accounts, claim_id=claim_id, **kwargs))[0]:
+    async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Optional[Output]:
+        for claim in await self.search_claims(accounts, claim_id=claim_id, **kwargs):
             return claim
 
     @staticmethod

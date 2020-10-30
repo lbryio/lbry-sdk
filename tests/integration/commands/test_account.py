@@ -7,57 +7,63 @@ def extract(d, keys):
 
 
 class AccountManagement(CommandTestCase):
+
     async def test_account_list_set_create_remove_add(self):
         # check initial account
-        accounts = await self.daemon.jsonrpc_account_list()
-        self.assertItemCount(accounts, 1)
+        self.assertEqual(len(await self.account_list()), 1)
+
+        # create another account
+        await self.account_create('second account')
+        accounts = await self.account_list()
+        self.assertEqual(len(accounts), 2)
+        account = accounts[1]
+        self.assertEqual(account['name'], 'second account')
+        self.assertEqual(account['address_generator'], {
+            'name': 'deterministic-chain',
+            'receiving': {'gap': 20, 'maximum_uses_per_address': 1},
+            'change': {'gap': 6, 'maximum_uses_per_address': 1},
+        })
 
         # change account name and gap
-        account_id = accounts['items'][0]['id']
-        self.daemon.jsonrpc_account_set(
-            account_id=account_id, new_name='test account',
+        await self.account_set(
+            account_id=account['id'], new_name='test account',
             receiving_gap=95, receiving_max_uses=96,
             change_gap=97, change_max_uses=98
         )
-        accounts = (await self.daemon.jsonrpc_account_list())['items'][0]
-        self.assertEqual(accounts['name'], 'test account')
-        self.assertEqual(
-            accounts['address_generator']['receiving'],
-            {'gap': 95, 'maximum_uses_per_address': 96}
-        )
-        self.assertEqual(
-            accounts['address_generator']['change'],
-            {'gap': 97, 'maximum_uses_per_address': 98}
-        )
-
-        # create another account
-        await self.daemon.jsonrpc_account_create('second account')
-        accounts = await self.daemon.jsonrpc_account_list()
-        self.assertItemCount(accounts, 2)
-        self.assertEqual(accounts['items'][1]['name'], 'second account')
-        account_id2 = accounts['items'][1]['id']
+        account = (await self.account_list())[1]
+        self.assertEqual(account['name'], 'test account')
+        self.assertEqual(account['address_generator'], {
+            'name': 'deterministic-chain',
+            'receiving': {'gap': 95, 'maximum_uses_per_address': 96},
+            'change': {'gap': 97, 'maximum_uses_per_address': 98},
+        })
 
         # make new account the default
-        self.daemon.jsonrpc_account_set(account_id=account_id2, default=True)
-        accounts = await self.daemon.jsonrpc_account_list(show_seed=True)
-        self.assertEqual(accounts['items'][0]['name'], 'second account')
+        await self.account_set(account_id=account['id'], default=True)
+        actual = (await self.account_list())[0]
+        self.assertNotEqual(account['modified_on'], actual['modified_on'])
+        del account['modified_on']
+        del actual['modified_on']
+        self.assertEqual(account, actual)
 
-        account_seed = accounts['items'][1]['seed']
+        account_seed, account_pubkey = account['seed'], account['public_key']
 
         # remove account
-        self.daemon.jsonrpc_account_remove(accounts['items'][1]['id'])
-        accounts = await self.daemon.jsonrpc_account_list()
-        self.assertItemCount(accounts, 1)
+        await self.account_remove(account['id'])
+        self.assertEqual(len(await self.account_list()), 1)
 
         # add account
-        await self.daemon.jsonrpc_account_add('recreated account', seed=account_seed)
-        accounts = await self.daemon.jsonrpc_account_list()
-        self.assertItemCount(accounts, 2)
-        self.assertEqual(accounts['items'][1]['name'], 'recreated account')
+        await self.account_add('recreated account', seed=account_seed)
+        accounts = await self.account_list()
+        self.assertEqual(len(accounts), 2)
+        account = accounts[1]
+        self.assertEqual(account['name'], 'recreated account')
+        self.assertEqual(account['public_key'], account_pubkey)
 
         # list specific account
-        accounts = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
-        self.assertEqual(accounts['items'][0]['name'], 'recreated account')
+        accounts = await self.account_list(account['id'])
+        self.assertEqual(len(accounts), 1)
+        self.assertEqual(accounts[0]['name'], 'recreated account')
 
     async def test_wallet_migration(self):
         # null certificates should get deleted

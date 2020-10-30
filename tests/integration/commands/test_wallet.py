@@ -1,50 +1,37 @@
-import asyncio
 import json
+import asyncio
+from unittest import skip
 
 from sqlalchemy import event
 
-from lbry.wallet import ENCRYPT_ON_DISK
+from lbry.wallet.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
 from lbry.testcase import CommandTestCase
-from lbry.wallet.dewies import dict_values_to_lbc
+from lbry.blockchain.dewies import dict_values_to_lbc
 
 
 class WalletCommands(CommandTestCase):
 
-    async def test_wallet_create_and_add_subscribe(self):
-        session = next(iter(self.conductor.spv_node.server.session_mgr.sessions))
-        self.assertEqual(len(session.hashX_subs), 27)
-        wallet = await self.daemon.jsonrpc_wallet_create('foo', create_account=True, single_key=True)
-        self.assertEqual(len(session.hashX_subs), 28)
-        await self.daemon.jsonrpc_wallet_remove(wallet.id)
-        self.assertEqual(len(session.hashX_subs), 27)
-        await self.daemon.jsonrpc_wallet_add(wallet.id)
-        self.assertEqual(len(session.hashX_subs), 28)
-
-    async def test_wallet_syncing_status(self):
-        address = await self.daemon.jsonrpc_address_unused()
-        self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
-        await self.blockchain.send_to_address(address, 1)
-        await self.ledger._update_tasks.started.wait()
-        self.assertTrue(self.daemon.jsonrpc_wallet_status()['is_syncing'])
-        await self.ledger._update_tasks.done.wait()
-        self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
-
-        wallet = self.daemon.component_manager.get_actual_component('wallet')
-        wallet_manager = wallet.wallet_manager
-        # when component manager hasn't started yet
-        wallet.wallet_manager = None
+    async def test_list_create_add_and_remove(self):
+        self.assertEqual(await self.wallet_list(), [{'id': 'default_wallet', 'name': 'Wallet'}])
         self.assertEqual(
-            {'is_encrypted': None, 'is_syncing': None, 'is_locked': None},
-            self.daemon.jsonrpc_wallet_status()
+            await self.wallet_create('another', "Another"),
+            {'id': 'another', 'name': 'Another'}
         )
-        wallet.wallet_manager = wallet_manager
-        self.assertEqual(
-            {'is_encrypted': False, 'is_syncing': False, 'is_locked': False},
-            self.daemon.jsonrpc_wallet_status()
-        )
+        self.assertEqual(await self.wallet_list(), [
+            {'id': 'default_wallet', 'name': 'Wallet'},
+            {'id': 'another', 'name': 'Another'}
+        ])
+        self.assertEqual(await self.wallet_remove('another'), {'id': 'another', 'name': 'Another'})
+        self.assertEqual(await self.wallet_list(), [{'id': 'default_wallet', 'name': 'Wallet'}])
+        self.assertEqual(await self.wallet_add('another'), {'id': 'another', 'name': 'Another'})
+        self.assertEqual(await self.wallet_list(), [
+            {'id': 'default_wallet', 'name': 'Wallet'},
+            {'id': 'another', 'name': 'Another'}
+        ])
 
-    async def test_wallet_reconnect(self):
+    @skip
+    async def test_reconnect(self):
         await self.conductor.spv_node.stop(True)
         self.conductor.spv_node.port = 54320
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
@@ -57,69 +44,13 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(len(status['wallet']['servers']), 1)
         self.assertEqual(status['wallet']['servers'][0]['port'], 54320)
 
-    async def test_balance_caching(self):
-        account2 = await self.daemon.jsonrpc_account_create("Tip-er")
-        address2 = await self.daemon.jsonrpc_address_unused(account2.id)
-        sendtxid = await self.blockchain.send_to_address(address2, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(1)
-
-        wallet_balance = self.daemon.jsonrpc_wallet_balance
-        ledger = self.ledger
-
-        query_count = 0
-
-        def catch_queries(*args, **kwargs):
-            nonlocal query_count
-            query_count += 1
-
-        event.listen(self.ledger.db.engine, "before_cursor_execute", catch_queries)
-
-        expected = {
-            'total': '20.0',
-            'available': '20.0',
-            'reserved': '0.0',
-            'reserved_subtotals': {'claims': '0.0', 'supports': '0.0', 'tips': '0.0'}
-        }
-        self.assertIsNone(ledger._balance_cache.get(self.account.id))
-
-        self.assertEqual(await wallet_balance(), expected)
-        self.assertEqual(query_count, 6)
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
-
-        # calling again uses cache
-        self.assertEqual(await wallet_balance(), expected)
-        self.assertEqual(query_count, 6)
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
-
-        await self.stream_create()
-        await self.generate(1)
-
-        expected = {
-            'total': '19.979893',
-            'available': '18.979893',
-            'reserved': '1.0',
-            'reserved_subtotals': {'claims': '1.0', 'supports': '0.0', 'tips': '0.0'}
-        }
-        # on_transaction event reset balance cache
-        query_count = 0
-        self.assertEqual(await wallet_balance(), expected)
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '9.979893')
-        self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
-        self.assertEqual(query_count, 3)  # only one of the accounts changed
-
     async def test_granular_balances(self):
-        account2 = await self.daemon.jsonrpc_account_create("Tip-er")
-        wallet2 = await self.daemon.jsonrpc_wallet_create('foo', create_account=True)
-        account3 = wallet2.default_account
-        address3 = await self.daemon.jsonrpc_address_unused(account3.id, wallet2.id)
-        await self.confirm_tx(await self.blockchain.send_to_address(address3, 1))
+        account2 = (await self.account_create("Tip-er"))["id"]
+        wallet2 = (await self.wallet_create("foo", create_account=True))["id"]
+        account3 = (await self.account_list(wallet_id=wallet2))[0]["id"]
+        address3 = await self.address_unused(account3, wallet2)
+        await self.chain.send_to_address(address3, 1)
         await self.generate(1)
-
-        account_balance = self.daemon.jsonrpc_account_balance
-        wallet_balance = self.daemon.jsonrpc_wallet_balance
 
         expected = {
             'total': '10.0',
@@ -127,90 +58,93 @@ class WalletCommands(CommandTestCase):
             'reserved': '0.0',
             'reserved_subtotals': {'claims': '0.0', 'supports': '0.0', 'tips': '0.0'}
         }
-        self.assertEqual(await account_balance(), expected)
-        self.assertEqual(await wallet_balance(), expected)
+        self.assertEqual(await self.account_balance(), expected)
+        self.assertEqual(await self.wallet_balance(), expected)
 
         # claim with update + supporting our own claim
         stream1 = await self.stream_create('granularity', '3.0')
+        await self.generate(1)
         await self.stream_update(self.get_claim_id(stream1), data=b'news', bid='1.0')
+        await self.generate(1)
         await self.support_create(self.get_claim_id(stream1), '2.0')
         expected = {
-            'total': '9.977534',
-            'available': '6.977534',
+            'total': '9.977558',
+            'available': '6.977558',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         }
-        self.assertEqual(await account_balance(), expected)
-        self.assertEqual(await wallet_balance(), expected)
+        self.assertEqual(await self.account_balance(), expected)
+        self.assertEqual(await self.wallet_balance(), expected)
 
-        address2 = await self.daemon.jsonrpc_address_unused(account2.id)
+        address2 = await self.address_unused(account2)
 
         # send lbc to someone else
-        tx = await self.daemon.jsonrpc_account_send('1.0', address2)
-        await self.confirm_tx(tx.id)
-        self.assertEqual(await account_balance(), {
-            'total': '8.97741',
-            'available': '5.97741',
+        tx = await self.wallet_send('1.0', address2, fund_account_id=self.account.id)
+        await self.generate(1)
+        self.assertEqual(await self.account_balance(), {
+            'total': '8.977434',
+            'available': '5.977434',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
-        self.assertEqual(await wallet_balance(), {
-            'total': '9.97741',
-            'available': '6.97741',
+        self.assertEqual(await self.wallet_balance(), {
+            'total': '9.977434',
+            'available': '6.977434',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
 
         # tip received
         support1 = await self.support_create(
-            self.get_claim_id(stream1), '0.3', tip=True, wallet_id=wallet2.id
+            self.get_claim_id(stream1), '0.3', tip=True, wallet_id=wallet2
         )
-        self.assertEqual(await account_balance(), {
-            'total': '9.27741',
-            'available': '5.97741',
+        self.assertEqual(await self.account_balance(), {
+            'total': '9.277434',
+            'available': '5.977434',
             'reserved': '3.3',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'}
         })
-        self.assertEqual(await wallet_balance(), {
-            'total': '10.27741',
-            'available': '6.97741',
+        self.assertEqual(await self.wallet_balance(), {
+            'total': '10.277434',
+            'available': '6.977434',
             'reserved': '3.3',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.3'}
         })
 
         # tip claimed
-        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0)
-        await self.confirm_tx(tx.id)
-        self.assertEqual(await account_balance(), {
-            'total': '9.277303',
-            'available': '6.277303',
+        tx = await self.support_abandon(txid=support1['txid'])
+        await self.generate(1)
+        self.assertEqual(await self.account_balance(), {
+            'total': '9.277327',
+            'available': '6.277327',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
-        self.assertEqual(await wallet_balance(), {
-            'total': '10.277303',
-            'available': '7.277303',
+        self.assertEqual(await self.wallet_balance(), {
+            'total': '10.277327',
+            'available': '7.277327',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
 
         stream2 = await self.stream_create(
-            'granularity-is-cool', '0.1', account_id=account2.id, funding_account_ids=[account2.id]
+            'granularity-is-cool', '0.1',
+            account_id=account2, fund_account_id=[account2], change_account_id=account2
         )
 
         # tip another claim
         await self.support_create(
-            self.get_claim_id(stream2), '0.2', tip=True, wallet_id=wallet2.id
+            self.get_claim_id(stream2), '0.2', tip=True, wallet_id=wallet2
         )
-        self.assertEqual(await account_balance(), {
-            'total': '9.277303',
-            'available': '6.277303',
+        self.assertEqual(await self.account_balance(), {
+            'total': '9.277327',
+            'available': '6.277327',
             'reserved': '3.0',
             'reserved_subtotals': {'claims': '1.0', 'supports': '2.0', 'tips': '0.0'}
         })
-        self.assertEqual(await wallet_balance(), {
-            'total': '10.439196',
-            'available': '7.139196',
+        self.assertEqual(await self.wallet_balance(), {
+            'total': '10.43922',
+            'available': '7.13922',
             'reserved': '3.3',
             'reserved_subtotals': {'claims': '1.1', 'supports': '2.0', 'tips': '0.2'}
         })
@@ -225,7 +159,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-        self.daemon2 = await self.add_daemon(
+        self.daemon2 = await self.add_full_node(
             seed="chest sword toast envelope bottom stomach absent "
                  "carbon smart garage balance margin twelve"
         )

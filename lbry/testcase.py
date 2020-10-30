@@ -654,6 +654,9 @@ class CommandTestCase(IntegrationTestCase):
     async def wallet_remove(self, *args, **kwargs):
         return await self.out(self.api.wallet_remove(*args, **kwargs))
 
+    async def wallet_balance(self, *args, **kwargs):
+        return await self.out(self.api.wallet_balance(*args, **kwargs))
+
     async def account_list(self, *args, **kwargs):
         return (await self.out(self.api.account_list(*args, **kwargs)))['items']
 
@@ -668,6 +671,15 @@ class CommandTestCase(IntegrationTestCase):
 
     async def account_remove(self, *args, **kwargs):
         return await self.out(self.api.account_remove(*args, **kwargs))
+
+    async def account_send(self, *args, **kwargs):
+        return await self.out(self.api.account_send(*args, **kwargs))
+
+    async def account_balance(self, *args, **kwargs):
+        return await self.out(self.api.account_balance(*args, **kwargs))
+
+    async def address_unused(self, *args, **kwargs):
+        return await self.out(self.api.address_unused(*args, **kwargs))
 
     def create_upload_file(self, data, prefix=None, suffix=None):
         file_path = tempfile.mktemp(
@@ -762,8 +774,6 @@ class CommandTestCase(IntegrationTestCase):
         )
 
     async def support_abandon(self, *args, confirm=True, **kwargs):
-        if 'blocking' not in kwargs:
-            kwargs['blocking'] = False
         return await self.confirm_and_render(
             self.api.support_abandon(*args, **kwargs), confirm
         )
