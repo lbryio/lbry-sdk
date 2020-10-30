@@ -3,7 +3,7 @@ import unicodedata
 from typing import NamedTuple, Tuple
 
 
-def _create_url_regex(legacy=False):
+def _create_url_regex():
     # see https://spec.lbry.com/ and test_url.py
     invalid_names_regex = \
         r"[^=&#:$@%*?;\"/\\<>%{}|^~`\[\]" \
