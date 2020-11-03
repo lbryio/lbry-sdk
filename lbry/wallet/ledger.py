@@ -983,7 +983,7 @@ class Ledger(metaclass=LedgerRegistry):
         urls_copy = list(urls)
 
         if new_sdk_server:
-            resolve = partial(self.network.resolve, new_sdk_server)
+            resolve = partial(self.network.new_resolve, new_sdk_server)
             while urls_copy:
                 batch, urls_copy = urls_copy[:500], urls_copy[500:]
                 txos.extend(
