@@ -334,3 +334,9 @@ Trending = Table(
     Column('trending_local', BigInteger, server_default='0'),
     Column('trending_global', BigInteger, server_default='0'),
 )
+
+ClaimFilter = Table(
+    'claim_filter', metadata,
+    Column('claim_hash', LargeBinary, primary_key=True),
+    Column('filter_type', SmallInteger),
+)

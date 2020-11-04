@@ -12,7 +12,7 @@ from lbry.db.queries.txio import (
     where_claims_with_changed_reposts,
 )
 from lbry.db.query_context import ProgressContext, event_emitter
-from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_and_tag_constraints_and_indexes
+from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_and_tag_constraints_and_indexes, ClaimFilter
 from lbry.db.utils import least
 from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
 from lbry.blockchain.transaction import Output
@@ -281,3 +281,17 @@ def update_channel_stats(blocks: Tuple[int, int], initial_sync: int, p: Progress
     if result.rowcount and p.ctx.is_postgres:
         p.ctx.execute_notx(text("VACUUM claim;"))
     p.step(result.rowcount)
+
+
+@event_emitter("blockchain.sync.claims.filters", "claim_filters")
+def update_claim_filters(blocking_channel_hashes, filtering_channel_hashes, p: ProgressContext):
+    def select_reposts(channel_hashes, filter_type=0):
+        return select(
+            Claim.c.reposted_claim_hash, filter_type).where(
+            (Claim.c.channel_hash.in_(filtering_channel_hashes)) & (Claim.c.reposted_claim_hash.isnot(None)))
+
+    p.ctx.execute(ClaimFilter.delete())
+    p.ctx.execute(ClaimFilter.insert().from_select(
+        ['claim_hash', 'filter_type'], select_reposts(blocking_channel_hashes, 1)))
+    p.ctx.execute(p.ctx.insert_or_ignore(ClaimFilter).from_select(
+        ['claim_hash', 'filter_type'], select_reposts(filtering_channel_hashes, 0)))
