@@ -127,10 +127,15 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
                 name, hexlify(claim.to_bytes()).decode(), amount
             )
         meta_class = Channel if is_channel else Stream
+        if repost:
+            claim = Claim()
+            claim.repost.reference.claim_id = repost
+        else:
+            claim = meta_class().update(title='claim #001').claim
         tx = Transaction().add_outputs([
             Output.pay_claim_name_pubkey_hash(
                 lbc_to_dewies(amount), name,
-                meta_class().update(title='claim #001').claim,
+                claim,
                 self.chain.ledger.address_to_hash160(self.address)
             )
         ])
@@ -152,11 +157,14 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
             signed = await self.chain.sign_raw_transaction_with_wallet(hexlify(tx.raw).decode())
             tx = Transaction(unhexlify(signed['hex']))
             txo = self.find_claim_txo(tx)
-            claim = txo.claim.channel if is_channel else txo.claim.stream
             if txo.claim_id.startswith(claim_id_startswith):
                 if txo.claim_id[len(claim_id_startswith)] not in not_after_startswith:
                     break
+            if repost:
+                assert not claim_id_startswith, "not supported with repost"
+                break
             i += 1
+            claim = txo.claim.channel if is_channel else txo.claim.stream
             claim.update(title=f'claim #{i:03}')
             txo.script.generate()
         if private_key:
@@ -1163,7 +1171,6 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(4, results.rows[1].meta['trending_group'])
 
 
-
 class TestClaimtrieSync(SyncingBlockchainTestCase):
 
     async def test_claimtrie_name_normalization_query_bug(self):
@@ -1373,6 +1380,18 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
             active=[],
             accepted=[]
         )
+
+    async def test_content_filtering(self):
+        user_chan = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@some_channel"))
+        await self.create_claim(claim_id_startswith='cd', sign=user_chan, name="good_content")
+        bad_content = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ef', sign=user_chan, name="bad_content"))
+        moderator_chan = await self.get_claim(
+            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@filters"))
+        await self.create_claim(sign=moderator_chan, name="blocking_bad", repost=bad_content.claim_id)
+        self.sync.filtering_channel_hashes.add(moderator_chan.claim_hash)
+        await self.generate(1)
 
 
 @skip
