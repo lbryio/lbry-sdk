@@ -478,12 +478,14 @@ class Ledger(metaclass=LedgerRegistry):
                 for address, remote_status in zip(batch, results):
                     self._update_tasks.add(self.update_history(address, remote_status, address_manager))
                 addresses_remaining = addresses_remaining[batch_size:]
-                log.info("subscribed to %i/%i addresses on %s:%i", len(addresses) - len(addresses_remaining),
-                         len(addresses), *self.network.client.server_address_and_port)
-            log.info(
-                "finished subscribing to %i addresses on %s:%i", len(addresses),
-                *self.network.client.server_address_and_port
-            )
+                if self.network.client and self.network.client.server_address_and_port:
+                    log.info("subscribed to %i/%i addresses on %s:%i", len(addresses) - len(addresses_remaining),
+                             len(addresses), *self.network.client.server_address_and_port)
+            if self.network.client and self.network.client.server_address_and_port:
+                log.info(
+                    "finished subscribing to %i addresses on %s:%i", len(addresses),
+                    *self.network.client.server_address_and_port
+                )
 
     def process_status_update(self, update):
         address, remote_status = update
