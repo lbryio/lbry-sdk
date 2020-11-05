@@ -32,21 +32,15 @@ class Censor:
         self.censored = {}
         self.total = 0
 
+    def apply(self, rows):
+        return [row for row in rows if not self.censor(row)]
+
     def censor(self, row) -> bool:
-        was_censored = False
-        for claim_hash, lookup in (
-                (row['claim_hash'], self.streams),
-                (row['claim_hash'], self.channels),
-                (row['channel_hash'], self.channels),
-                (row['reposted_claim_hash'], self.streams),
-                (row['reposted_claim_hash'], self.channels)):
-            censoring_channel_hash = lookup.get(claim_hash)
-            if censoring_channel_hash:
-                was_censored = True
-                self.censored.setdefault(censoring_channel_hash, 0)
-                self.censored[censoring_channel_hash] += 1
-                break
+        was_censored = row['censor_type'] > 0
         if was_censored:
+            censoring_channel_hash = row['censor_owner_hash']
+            self.censored.setdefault(censoring_channel_hash, 0)
+            self.censored[censoring_channel_hash] += 1
             self.total += 1
         return was_censored
 

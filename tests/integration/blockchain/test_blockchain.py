@@ -1392,6 +1392,9 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
         await self.create_claim(sign=moderator_chan, name="blocking_bad", repost=bad_content.claim_id)
         self.sync.filtering_channel_hashes.add(moderator_chan.claim_hash)
         await self.generate(1)
+        results = await self.db.search_claims(channel="@some_channel")
+        self.assertEqual(len(results.rows), 1)
+        self.assertEqual(results.censor.censored.get(moderator_chan.claim_hash), 1)
 
 
 @skip
