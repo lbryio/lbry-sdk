@@ -103,7 +103,7 @@ def search_support_count(**constraints) -> int:
 
 
 channel_claim = Claim.alias('channel')
-BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
+BASE_SELECT_CLAIM_COLUMNS = [Claim.c.claim_hash.distinct()] + BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
     Claim.c.creation_height,
@@ -278,7 +278,10 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         .select_from(
             Claim.join(TXO).join(TX).join(Trending, Trending.c.claim_hash == Claim.c.claim_hash, isouter=True)
             .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
-            .join(ClaimFilter, (ClaimFilter.c.claim_hash == Claim.c.claim_hash) | (ClaimFilter.c.claim_hash == Claim.c.reposted_claim_hash), isouter=True)
+            .join(ClaimFilter,
+                  (ClaimFilter.c.claim_hash == Claim.c.claim_hash) |
+                  (ClaimFilter.c.claim_hash == Claim.c.reposted_claim_hash) |
+                  (ClaimFilter.c.claim_hash == Claim.c.channel_hash), isouter=True)
         ), **constraints
     )
 
