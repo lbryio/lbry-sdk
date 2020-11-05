@@ -287,11 +287,13 @@ def update_channel_stats(blocks: Tuple[int, int], initial_sync: int, p: Progress
 def update_claim_filters(blocking_channel_hashes, filtering_channel_hashes, p: ProgressContext):
     def select_reposts(channel_hashes, filter_type=0):
         return select(
-            Claim.c.reposted_claim_hash, filter_type).where(
+            Claim.c.reposted_claim_hash, filter_type, Claim.c.channel_hash).where(
             (Claim.c.channel_hash.in_(filtering_channel_hashes)) & (Claim.c.reposted_claim_hash.isnot(None)))
 
     p.ctx.execute(ClaimFilter.delete())
+    # order matters: first we insert the blocked ones. Then the filtered ones.
+    # If there is already a block in place, that takes priority because a block is just a harder filter
     p.ctx.execute(ClaimFilter.insert().from_select(
-        ['claim_hash', 'filter_type'], select_reposts(blocking_channel_hashes, 1)))
+        ['claim_hash', 'filter_type', 'owner_channel_hash'], select_reposts(blocking_channel_hashes, 2)))
     p.ctx.execute(p.ctx.insert_or_ignore(ClaimFilter).from_select(
-        ['claim_hash', 'filter_type'], select_reposts(filtering_channel_hashes, 0)))
+        ['claim_hash', 'filter_type', 'owner_channel_hash'], select_reposts(filtering_channel_hashes, 1)))

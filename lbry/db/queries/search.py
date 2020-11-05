@@ -14,7 +14,7 @@ from lbry.blockchain.transaction import Output
 
 from ..utils import query
 from ..query_context import context
-from ..tables import TX, TXO, Claim, Support, Trending
+from ..tables import TX, TXO, Claim, Support, Trending, ClaimFilter
 from ..constants import (
     TXO_TYPES, STREAM_TYPES, ATTRIBUTE_ARRAY_MAX_LENGTH,
     SEARCH_INTEGER_PARAMS, SEARCH_ORDER_FIELDS
@@ -126,7 +126,9 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     func.coalesce(Trending.c.trending_local, 0).label('trending_local'),
     func.coalesce(Trending.c.trending_mixed, 0).label('trending_mixed'),
     func.coalesce(Trending.c.trending_global, 0).label('trending_global'),
-    func.coalesce(Trending.c.trending_group, 0).label('trending_group')
+    func.coalesce(Trending.c.trending_group, 0).label('trending_group'),
+    func.coalesce(ClaimFilter.c.filter_type, 0).label('censor_type'),
+    ClaimFilter.c.owner_channel_hash.label('censor_owner_hash')
 ]
 
 
@@ -276,6 +278,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         .select_from(
             Claim.join(TXO).join(TX).join(Trending, Trending.c.claim_hash == Claim.c.claim_hash, isouter=True)
             .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
+            .join(ClaimFilter, ClaimFilter.c.claim_hash == Claim.c.claim_hash, isouter=True)
         ), **constraints
     )
 
@@ -306,6 +309,7 @@ def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[
             return [], total, search_censor
 
     rows = ctx.fetchall(select_claims(**constraints))
+    rows = search_censor.apply(rows)
     txos = rows_to_txos(rows, include_tx=False)
     annotate_with_channels(txos)
     return txos, total, search_censor
