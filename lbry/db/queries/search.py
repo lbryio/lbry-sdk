@@ -278,7 +278,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         .select_from(
             Claim.join(TXO).join(TX).join(Trending, Trending.c.claim_hash == Claim.c.claim_hash, isouter=True)
             .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
-            .join(ClaimFilter, ClaimFilter.c.claim_hash == Claim.c.claim_hash, isouter=True)
+            .join(ClaimFilter, (ClaimFilter.c.claim_hash == Claim.c.claim_hash) | (ClaimFilter.c.claim_hash == Claim.c.reposted_claim_hash), isouter=True)
         ), **constraints
     )
 
