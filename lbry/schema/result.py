@@ -24,19 +24,18 @@ def set_reference(reference, claim_hash, rows):
 
 class Censor:
 
-    __slots__ = 'streams', 'channels', 'censored', 'total'
+    __slots__ = 'level', 'censored', 'total'
 
-    def __init__(self, streams: dict = None, channels: dict = None):
-        self.streams = streams or {}
-        self.channels = channels or {}
+    def __init__(self, level=1):
+        self.level = level
         self.censored = {}
         self.total = 0
 
-    def apply(self, rows, level=1):
-        return [row for row in rows if not self.censor(row, level)]
+    def apply(self, rows):
+        return [row for row in rows if not self.censor(row)]
 
-    def censor(self, row, level=1) -> bool:
-        was_censored = row['censor_type'] >= level
+    def censor(self, row) -> bool:
+        was_censored = row['censor_type'] >= self.level
         if was_censored:
             censoring_channel_hash = row['censor_owner_hash']
             self.censored.setdefault(censoring_channel_hash, 0)

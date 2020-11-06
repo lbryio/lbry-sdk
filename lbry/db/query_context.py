@@ -85,11 +85,13 @@ class QueryContext:
     def raise_unsupported_dialect(self):
         raise RuntimeError(f'Unsupported database dialect: {self.engine.dialect.name}.')
 
-    def get_resolve_censor(self) -> Censor:
-        return Censor(self.blocked_streams, self.blocked_channels)
+    @classmethod
+    def get_resolve_censor(cls) -> Censor:
+        return Censor(level=2)
 
-    def get_search_censor(self) -> Censor:
-        return Censor(self.filtered_streams, self.filtered_channels)
+    @classmethod
+    def get_search_censor(cls) -> Censor:
+        return Censor(level=1)
 
     def pg_copy(self, table, rows):
         with self.engine.begin() as c:
