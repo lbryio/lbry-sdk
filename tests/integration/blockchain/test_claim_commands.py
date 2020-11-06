@@ -89,7 +89,7 @@ class ClaimSearchCommand(ClaimTestCase):
         # 23829 claim ids makes the request just large enough
         claim_ids = [
             '0000000000000000000000000000000000000000',
-        ] * 23829
+        ] * 33829
         with self.assertRaises(ConnectionResetError):
             await self.claim_search(claim_ids=claim_ids)
 

@@ -1,6 +1,7 @@
 import curses
 import time
 import asyncio
+import lbry.wallet
 from lbry.conf import Config
 from lbry.extras.daemon.client import daemon_rpc
 
