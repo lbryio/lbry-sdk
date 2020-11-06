@@ -1,6 +1,7 @@
 import os
 import asyncio
 import logging
+from binascii import unhexlify
 from typing import Optional, Tuple, Set, List, Coroutine
 from concurrent.futures import ThreadPoolExecutor
 
@@ -53,8 +54,12 @@ class BlockchainSync(Sync):
         self.block_hash_event = asyncio.Event()
         self.tx_hash_event = asyncio.Event()
         self.mempool = []
-        self.filtering_channel_hashes = set()
-        self.blocking_channel_hashes = set()
+        self.filtering_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in
+            os.getenv('FILTERING_CHANNEL_IDS', '').split(' ') if channel_id}
+        self.blocking_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in
+            os.getenv('BLOCKING_CHANNEL_IDS', '').split(' ') if channel_id}
 
     async def wait_for_chain_ready(self):
         while True:
