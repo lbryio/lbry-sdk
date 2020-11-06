@@ -9,7 +9,7 @@ from lbry.db.query_context import ProgressContext, event_emitter
 from lbry.db.queries import row_to_txo
 from lbry.db.constants import TXO_TYPES
 from lbry.db.queries.txio import (
-    minimum_txo_columns,
+    MINIMIUM_TXO_COLUMNS,
     where_unspent_txos, where_abandoned_supports,
     count_unspent_txos,
 )
@@ -35,7 +35,7 @@ def supports_insert(
     )
     channel_txo = TXO.alias('channel_txo')
     select_supports = select(
-        *minimum_txo_columns, TXO.c.claim_hash,
+        *MINIMIUM_TXO_COLUMNS, TXO.c.claim_hash,
         TXO.c.signature, TXO.c.signature_digest,
         case([(
             TXO.c.channel_hash.isnot(None),
