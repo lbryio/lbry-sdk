@@ -330,7 +330,7 @@ class SQLDB:
                 #self.logger.exception(f"Could not decode claim name for {tx.id}:{txo.position}.")
                 continue
 
-            language = None
+            language = 'none'
             try:
                 if txo.claim.is_stream and txo.claim.stream.languages:
                     language = txo.claim.stream.languages[0].language
@@ -394,8 +394,7 @@ class SQLDB:
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
 
-            if language:
-                languages[(language, claim_hash)] = (language, claim_hash, tx.height)
+            languages[(language, claim_hash)] = (language, claim_hash, tx.height)
 
             for tag in clean_tags(claim.message.tags):
                 tags[(tag, claim_hash)] = (tag, claim_hash, tx.height)
