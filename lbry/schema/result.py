@@ -32,11 +32,11 @@ class Censor:
         self.censored = {}
         self.total = 0
 
-    def apply(self, rows):
-        return [row for row in rows if not self.censor(row)]
+    def apply(self, rows, level=1):
+        return [row for row in rows if not self.censor(row, level)]
 
-    def censor(self, row) -> bool:
-        was_censored = row['censor_type'] > 0
+    def censor(self, row, level=1) -> bool:
+        was_censored = row['censor_type'] >= level
         if was_censored:
             censoring_channel_hash = row['censor_owner_hash']
             self.censored.setdefault(censoring_channel_hash, 0)
