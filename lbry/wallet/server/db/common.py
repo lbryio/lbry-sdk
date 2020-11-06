@@ -231,6 +231,7 @@ COMMON_TAGS = {
 }
 
 INDEXED_LANGUAGES = [
+  'none',
   'en',
   'aa',
   'ab',

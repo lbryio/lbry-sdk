@@ -271,6 +271,8 @@ class ClaimSearchCommand(ClaimTestCase):
         claim5 = await self.stream_create('claim5', fee_amount='1.0', fee_currency='usd', languages='es')
 
         await self.assertFindsClaims([claim4, claim3], any_languages=['en'])
+        await self.assertFindsClaims([claim2, claim1], any_languages=['none'])
+        await self.assertFindsClaims([claim4, claim3, claim2, claim1], any_languages=['none', 'en'])
         await self.assertFindsClaims([claim5], any_languages=['es'])
         await self.assertFindsClaims([claim5, claim4, claim3], any_languages=['en', 'es'])
         await self.assertFindsClaims([], fee_currency='foo')
