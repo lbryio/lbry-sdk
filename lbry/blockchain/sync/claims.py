@@ -5,7 +5,7 @@ from sqlalchemy import case, func, desc, text
 from sqlalchemy.future import select
 
 from lbry.db.queries.txio import (
-    minimum_txo_columns, row_to_txo,
+    MINIMIUM_TXO_COLUMNS, row_to_txo,
     where_unspent_txos, where_claims_with_changed_supports,
     count_unspent_txos, where_channels_with_changed_content,
     where_abandoned_claims, count_channels_with_changed_content,
@@ -31,29 +31,29 @@ def channel_content_count_calc(signable):
     )
 
 
-support = TXO.alias('support')
+SUPPORT = TXO.alias('support')
 
 
 def staked_support_aggregation(aggregate):
     return (
         select(aggregate).where(
-            (support.c.txo_type == TXO_TYPES['support']) &
-            (support.c.spent_height == 0)
+            (SUPPORT.c.txo_type == TXO_TYPES['support']) &
+            (SUPPORT.c.spent_height == 0)
         ).scalar_subquery()
     )
 
 
 def staked_support_amount_calc(other):
     return (
-        staked_support_aggregation(func.coalesce(func.sum(support.c.amount), 0))
-        .where(support.c.claim_hash == other.c.claim_hash)
+        staked_support_aggregation(func.coalesce(func.sum(SUPPORT.c.amount), 0))
+        .where(SUPPORT.c.claim_hash == other.c.claim_hash)
     )
 
 
 def staked_support_count_calc(other):
     return (
         staked_support_aggregation(func.coalesce(func.count('*'), 0))
-        .where(support.c.claim_hash == other.c.claim_hash)
+        .where(SUPPORT.c.claim_hash == other.c.claim_hash)
     )
 
 
@@ -82,7 +82,7 @@ def select_claims_for_saving(
 ):
     channel_txo = TXO.alias('channel_txo')
     return select(
-        *minimum_txo_columns, TXO.c.claim_hash,
+        *MINIMIUM_TXO_COLUMNS, TXO.c.claim_hash,
         staked_support_amount_calc(TXO).label('staked_support_amount'),
         staked_support_count_calc(TXO).label('staked_support_count'),
         reposted_claim_count_calc(TXO).label('reposted_count'),

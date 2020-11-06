@@ -832,7 +832,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         if support_channel is not None:
             r, = await self.db.search_supports()
             self.assertEqual(r.meta['is_signature_valid'], support_valid)
-            self.assertEqual(r.support.signing_channel_id, support_channel.claim_id)
+            self.assertEqual(r.SUPPORT.signing_channel_id, support_channel.claim_id)
 
     async def test_claim_and_support_signing(self):
         search = self.db.search_claims

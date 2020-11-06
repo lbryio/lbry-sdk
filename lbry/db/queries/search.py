@@ -102,7 +102,7 @@ def search_support_count(**constraints) -> int:
     return count[0]['total'] or 0
 
 
-channel_claim = Claim.alias('channel')
+CHANNEL_CLAIM = Claim.alias('channel')
 BASE_SELECT_CLAIM_COLUMNS = [Claim.c.claim_hash.distinct()] + BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
@@ -120,8 +120,8 @@ BASE_SELECT_CLAIM_COLUMNS = [Claim.c.claim_hash.distinct()] + BASE_SELECT_TXO_CO
     Claim.c.staked_support_count,
     Claim.c.is_signature_valid,
     case([(
-        channel_claim.c.short_url.isnot(None),
-        channel_claim.c.short_url + '/' + Claim.c.short_url
+        CHANNEL_CLAIM.c.short_url.isnot(None),
+        CHANNEL_CLAIM.c.short_url + '/' + Claim.c.short_url
     )]).label('canonical_url'),
     func.coalesce(Trending.c.trending_local, 0).label('trending_local'),
     func.coalesce(Trending.c.trending_mixed, 0).label('trending_mixed'),
@@ -277,7 +277,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         select(*cols)
         .select_from(
             Claim.join(TXO).join(TX).join(Trending, Trending.c.claim_hash == Claim.c.claim_hash, isouter=True)
-            .join(channel_claim, Claim.c.channel_hash == channel_claim.c.claim_hash, isouter=True)
+            .join(CHANNEL_CLAIM, Claim.c.channel_hash == CHANNEL_CLAIM.c.claim_hash, isouter=True)
             .join(ClaimFilter,
                   (ClaimFilter.c.claim_hash == Claim.c.claim_hash) |
                   (ClaimFilter.c.claim_hash == Claim.c.reposted_claim_hash) |
