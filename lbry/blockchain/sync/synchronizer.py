@@ -356,7 +356,8 @@ class BlockchainSync(Sync):
 
     async def sync_trends(self):
         ending_height = await self.chain.db.get_best_height()
-        await self.db.run(trending.calculate_trending, ending_height)
+        if ending_height is not None:
+            await self.db.run(trending.calculate_trending, ending_height)
 
     async def sync_claim_filtering(self):
         await self.db.run(
