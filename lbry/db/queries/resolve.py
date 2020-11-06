@@ -18,7 +18,7 @@ log = logging.getLogger(__name__)
 def resolve_claims(**constraints):
     censor = context().get_resolve_censor()
     rows = context().fetchall(select_claims(**constraints))
-    rows = censor.apply(rows, level=2)
+    rows = censor.apply(rows)
     return rows_to_txos(rows), censor
 
 
