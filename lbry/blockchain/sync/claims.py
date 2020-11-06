@@ -288,7 +288,7 @@ def update_claim_filters(blocking_channel_hashes, filtering_channel_hashes, p: P
     def select_reposts(channel_hashes, filter_type=0):
         return select(
             Claim.c.reposted_claim_hash, filter_type, Claim.c.channel_hash).where(
-            (Claim.c.channel_hash.in_(filtering_channel_hashes)) & (Claim.c.reposted_claim_hash.isnot(None)))
+            (Claim.c.channel_hash.in_(channel_hashes)) & (Claim.c.reposted_claim_hash.isnot(None)))
 
     p.ctx.execute(ClaimFilter.delete())
     # order matters: first we insert the blocked ones. Then the filtered ones.

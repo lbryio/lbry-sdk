@@ -12,7 +12,7 @@ from lbry.crypto.base58 import Base58
 from lbry.schema.claim import Claim, Stream, Channel
 from lbry.schema.result import Outputs
 from lbry.schema.support import Support
-from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError
+from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError, ResolveCensoredError
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
@@ -1405,6 +1405,14 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
         results = await self.db.search_claims(channel="@some_channel")
         self.assertEqual(len(results.rows), 0)
         self.assertEqual(results.censor.censored.get(moderator_chan.claim_hash), 3)  # good, bad and repost
+        # direct resolves are still possible
+        result = await self.db.resolve([bad_content.permanent_url])
+        self.assertEqual(bad_content.claim_id, result[bad_content.permanent_url].claim_id)
+        # blocklist, now applied to resolve as well
+        self.sync.blocking_channel_hashes.add(moderator_chan.claim_hash)
+        await self.generate(1)
+        result = await self.db.resolve([bad_content.permanent_url])
+        self.assertIsInstance(result[bad_content.permanent_url], ResolveCensoredError)
 
 
 @skip
