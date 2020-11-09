@@ -404,44 +404,36 @@ class BlockProcessor:
         self.tip = self.coin.header_hash(headers[-1])
 
     def advance_txs(self, height, txs, header):
-        self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx for tx, _ in txs]))
+        self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx.raw for tx, _ in txs]))
 
         # Use local vars for speed in the loops
         undo_info = []
         tx_num = self.tx_count
-        script_hashX = self.coin.hashX_from_script
-        s_pack = pack
-        put_utxo = self.utxo_cache.__setitem__
-        spend_utxo = self.spend_utxo
-        undo_info_append = undo_info.append
-        update_touched = self.touched.update
         hashXs_by_tx = []
-        append_hashXs = hashXs_by_tx.append
 
         for tx, tx_hash in txs:
             hashXs = []
             append_hashX = hashXs.append
-            tx_numb = s_pack('<I', tx_num)
+            tx_numb = pack('<I', tx_num)
 
             # Spend the inputs
             for txin in tx.inputs:
                 if txin.is_generation():
                     continue
-                cache_value = spend_utxo(txin.prev_hash, txin.prev_idx)
-                undo_info_append(cache_value)
+                cache_value = self.spend_utxo(txin.prev_hash, txin.prev_idx)
+                undo_info.append(cache_value)
                 append_hashX(cache_value[:-12])
 
             # Add the new UTXOs
             for idx, txout in enumerate(tx.outputs):
                 # Get the hashX.  Ignore unspendable outputs
-                hashX = script_hashX(txout.pk_script)
+                hashX = self.coin.hashX_from_script(txout.pk_script)
                 if hashX:
                     append_hashX(hashX)
-                    put_utxo(tx_hash + s_pack('<H', idx),
-                             hashX + tx_numb + s_pack('<Q', txout.value))
+                    self.utxo_cache[tx_hash + pack('<H', idx)] = hashX + tx_numb + pack('<Q', txout.value)
 
-            append_hashXs(hashXs)
-            update_touched(hashXs)
+            hashXs_by_tx.append(hashXs)
+            self.touched.update(hashXs)
             tx_num += 1
 
         self.db.history.add_unflushed(hashXs_by_tx, self.tx_count)
@@ -487,20 +479,16 @@ class BlockProcessor:
 
         # Use local vars for speed in the loops
         s_pack = pack
-        put_utxo = self.utxo_cache.__setitem__
-        spend_utxo = self.spend_utxo
-        script_hashX = self.coin.hashX_from_script
-        touched = self.touched
         undo_entry_len = 12 + HASHX_LEN
 
         for tx, tx_hash in reversed(txs):
             for idx, txout in enumerate(tx.outputs):
                 # Spend the TX outputs.  Be careful with unspendable
                 # outputs - we didn't save those in the first place.
-                hashX = script_hashX(txout.pk_script)
+                hashX = self.coin.hashX_from_script(txout.pk_script)
                 if hashX:
-                    cache_value = spend_utxo(tx_hash, idx)
-                    touched.add(cache_value[:-12])
+                    cache_value = self.spend_utxo(tx_hash, idx)
+                    self.touched.add(cache_value[:-12])
 
             # Restore the inputs
             for txin in reversed(tx.inputs):
@@ -508,9 +496,8 @@ class BlockProcessor:
                     continue
                 n -= undo_entry_len
                 undo_item = undo_info[n:n + undo_entry_len]
-                put_utxo(txin.prev_hash + s_pack('<H', txin.prev_idx),
-                         undo_item)
-                touched.add(undo_item[:-12])
+                self.utxo_cache[txin.prev_hash + s_pack('<H', txin.prev_idx)] = undo_item
+                self.touched.add(undo_item[:-12])
 
         assert n == 0
         self.tx_count -= len(txs)
