@@ -17,7 +17,7 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from prometheus_client import Counter, Info, Histogram, Gauge
@@ -141,7 +141,11 @@ class SessionManager:
     session_count_metric = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE,
                                       labelnames=("version",))
     request_count_metric = Counter("requests_count", "Number of requests received", namespace=NAMESPACE,
-                                        labelnames=("method", "version"))
+                                   labelnames=("method", "version"))
+    tx_request_count_metric = Counter("requested_transaction", "Number of transactions requested", namespace=NAMESPACE)
+    tx_replied_count_metric = Counter("replied_transaction", "Number of transactions responded", namespace=NAMESPACE)
+    urls_to_resolve_count_metric = Counter("urls_to_resolve", "Number of urls to resolve", namespace=NAMESPACE)
+    resolved_url_count_metric = Counter("resolved_url", "Number of resolved urls", namespace=NAMESPACE)
 
     interrupt_count_metric = Counter("interrupt", "Number of interrupted queries", namespace=NAMESPACE)
     db_operational_error_metric = Counter(
@@ -1045,7 +1049,12 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_resolve(self, *urls):
         if urls:
-            return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+            count = len(urls)
+            try:
+                self.session_mgr.urls_to_resolve_count_metric.inc(count)
+                return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+            finally:
+                self.session_mgr.resolved_url_count_metric.inc(count)
 
     async def get_server_height(self):
         return self.bp.height
@@ -1524,6 +1533,7 @@ class LBRYElectrumX(SessionBase):
 
     async def transaction_info(self, tx_hash: str):
         assert_tx_hash(tx_hash)
+        self.session_mgr.tx_request_count_metric.inc()
         tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
         raw_tx = tx_info['hex']
         block_hash = tx_info.get('blockhash')
@@ -1531,15 +1541,19 @@ class LBRYElectrumX(SessionBase):
             return raw_tx, {'block_height': -1}
         merkle_height = (await self.daemon.deserialised_block(block_hash))['height']
         merkle = await self.transaction_merkle(tx_hash, merkle_height)
+        self.session_mgr.tx_replied_count_metric.inc()
         return raw_tx, merkle
 
     async def transaction_get_batch(self, *tx_hashes):
+        self.session_mgr.tx_request_count_metric.inc(len(tx_hashes))
         if len(tx_hashes) > 100:
             raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
-        batch_result = {}
+        batch_result = await self.db.fs_transactions(tx_hashes)
         for tx_hash in tx_hashes:
+            if tx_hash in batch_result and batch_result[tx_hash][0]:
+                continue
             tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
             raw_tx = tx_info['hex']
             block_hash = tx_info.get('blockhash')
@@ -1558,6 +1572,7 @@ class LBRYElectrumX(SessionBase):
                 height = -1
             merkle['block_height'] = height
             batch_result[tx_hash] = [raw_tx, merkle]
+        self.session_mgr.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
 
     async def transaction_get(self, tx_hash, verbose=False):
@@ -1579,11 +1594,7 @@ class LBRYElectrumX(SessionBase):
         block_hash is a hexadecimal string, and tx_hashes is an
         ordered list of hexadecimal strings.
         """
-        height = non_negative_integer(height)
-        hex_hashes = await self.daemon_request('block_hex_hashes', height, 1)
-        block_hash = hex_hashes[0]
-        block = await self.daemon.deserialised_block(block_hash)
-        return block_hash, block['tx']
+        return await self.db.fs_block_tx_hashes(height)
 
     def _get_merkle_branch(self, tx_hashes, tx_pos):
         """Return a merkle branch to a transaction.

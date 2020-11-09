@@ -63,7 +63,7 @@ class Merkle:
             raise TypeError('index must be an integer')
         # This also asserts hashes is not empty
         if not 0 <= index < len(hashes):
-            raise ValueError('index out of range')
+            raise ValueError(f"index '{index}/{len(hashes)}' out of range")
         natural_length = self.branch_length(len(hashes))
         if length is None:
             length = natural_length
