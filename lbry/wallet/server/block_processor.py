@@ -171,7 +171,7 @@ class BlockProcessor:
 
         # Caches of unflushed items.
         self.headers = []
-        self.tx_hashes = []
+        self.block_txs = []
         self.undo_infos = []
 
         # UTXO cache
@@ -337,7 +337,7 @@ class BlockProcessor:
         """The data for a flush.  The lock must be taken."""
         assert self.state_lock.locked()
         return FlushData(self.height, self.tx_count, self.headers,
-                         self.tx_hashes, self.undo_infos, self.utxo_cache,
+                         self.block_txs, self.undo_infos, self.utxo_cache,
                          self.db_deletes, self.tip)
 
     async def flush(self, flush_utxos):
@@ -404,7 +404,7 @@ class BlockProcessor:
         self.tip = self.coin.header_hash(headers[-1])
 
     def advance_txs(self, height, txs, header):
-        self.tx_hashes.append(b''.join(tx_hash for tx, tx_hash in txs))
+        self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx for tx, _ in txs]))
 
         # Use local vars for speed in the loops
         undo_info = []
