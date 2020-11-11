@@ -169,6 +169,8 @@ pg_add_txo_constraints_and_indexes = [
     "CREATE INDEX txo_reposted_claim_hash ON txo (reposted_claim_hash)"
     "WHERE reposted_claim_hash IS NOT NULL AND spent_height = 0;",
     "CREATE INDEX txo_height ON txo (height);",
+    # used by sum_supports query (at least)
+    "CREATE INDEX txo_claim_hash ON txo (claim_hash)",
 ]
 
 
@@ -269,6 +271,8 @@ pg_add_claim_and_tag_constraints_and_indexes = [
     # basic tag indexes
     "ALTER TABLE tag ADD PRIMARY KEY (claim_hash, tag);",
     "CREATE INDEX tags ON tag (tag) INCLUDE (claim_hash);",
+    # used by sum_supports query (at least)
+    "CREATE INDEX claim_channel_hash ON claim (channel_hash)",
 ]
 
 

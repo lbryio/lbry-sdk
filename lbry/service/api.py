@@ -2591,7 +2591,7 @@ class API:
             Use --exclude_own_supports to exclude supports from the channel to itself.
 
         Usage:
-            support sum <claim_id> [--inculde_channel_content]
+            support sum <claim_id> [--include_channel_content]
                         {kwargs}
         """
         items, total = await self.service.sum_supports(hex_str_to_hash(claim_id), include_channel_content, exclude_own_supports)
