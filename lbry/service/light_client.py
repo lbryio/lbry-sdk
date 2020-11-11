@@ -11,11 +11,12 @@ from typing import List, Optional, DefaultDict, NamedTuple
 #from lbry.crypto.hash import double_sha256, sha256
 
 from lbry.tasks import TaskGroup
-from lbry.blockchain.transaction import Transaction
-from lbry.blockchain.block import get_address_filter
+from lbry.blockchain import Transaction
+from lbry.blockchain.block import Block, get_address_filter
 from lbry.event import BroadcastSubscription, EventController
 from lbry.wallet.account import AddressManager
 from lbry.blockchain import Ledger, Transaction
+from lbry.db import Database
 
 from .base import Service, Sync
 from .api import Client as APIClient
@@ -36,14 +37,21 @@ class LightClient(Service):
             f"http://{ledger.conf.full_nodes[0][0]}:{ledger.conf.full_nodes[0][1]}/ws"
         )
         self.sync = FastSync(self, self.client)
-        self.blocks = BlockHeaderManager(self.db, self.client)
-        self.filters = FilterManager(self.db, self.client)
+
+    async def start(self):
+        await self.client.connect()
+        await super().start()
+        await self.client.start_event_streams()
+
+    async def stop(self):
+        await super().stop()
+        await self.client.disconnect()
 
     async def search_transactions(self, txids):
         return await self.client.transaction_search(txids=txids)
 
     async def get_address_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
-        return await self.filters.get_filters(
+        return await self.sync.filters.get_filters(
             start_height=start_height, end_height=end_height, granularity=granularity
         )
 
@@ -108,74 +116,16 @@ class FilterManager:
         self.client = client
         self.cache = {}
 
-    async def get_filters(self, start_height, end_height, granularity):
-        return await self.client.address_filter(
-            start_height=start_height, end_height=end_height, granularity=granularity
-        )
-
-
-class BlockHeaderManager:
-    """
-    Efficient on-demand block header access.
-    Stores and retrieves from local db what it previously downloaded and
-    downloads on-demand what it doesn't have from full node.
-    """
-
-    def __init__(self, db, client):
-        self.db = db
-        self.client = client
-        self.cache = {}
-
-    async def get_header(self, height):
-        blocks = await self.client.block_list(height)
-        if blocks:
-            return blocks[0]
-
-    async def add(self, header):
-        pass
-
     async def download(self):
-        pass
+        filters_response = await self.client.get_address_filters(0, 500)
+        filters = await filters_response.first
+        address_array = [bytearray(self.client.ledger.address_to_hash160(address))]
+        for filter in filters:
+            print(filter)
+            filter = get_address_filter(unhexlify(filter['filter']))
+            print(filter.MatchAny(address_array))
 
 
-class FastSync(Sync):
-
-    def __init__(self, service: Service, client: APIClient):
-        super().__init__(service.ledger, service.db)
-        self.service = service
-        self.client = client
-        self.advance_loop_task: Optional[asyncio.Task] = None
-        self.on_block = client.get_event_stream('blockchain.block')
-        self.on_block_event = asyncio.Event()
-        self.on_block_subscription: Optional[BroadcastSubscription] = None
-        self.on_mempool = client.get_event_stream('blockchain.mempool')
-        self.on_mempool_event = asyncio.Event()
-        self.on_mempool_subscription: Optional[BroadcastSubscription] = None
-
-    async def wait_for_client_ready(self):
-        await self.client.connect()
-
-    async def start(self):
-        return
-        self.db.stop_event.clear()
-        await self.wait_for_client_ready()
-        self.advance_loop_task = asyncio.create_task(self.advance())
-        await self.advance_loop_task
-        await self.client.subscribe()
-        self.advance_loop_task = asyncio.create_task(self.advance_loop())
-        self.on_block_subscription = self.on_block.listen(
-            lambda e: self.on_block_event.set()
-        )
-        self.on_mempool_subscription = self.on_mempool.listen(
-            lambda e: self.on_mempool_event.set()
-        )
-        await self.download_filters()
-        await self.download_headers()
-
-    async def stop(self):
-        await self.client.disconnect()
-
-    async def advance(self):
         address_array = [
             bytearray(a['address'].encode())
             for a in await self.service.db.get_all_addresses()
@@ -193,6 +143,98 @@ class FastSync(Sync):
                         txs = await self.service.search_transactions([txid])
                         tx = Transaction(unhexlify(txs[txid]))
                         await self.service.db.insert_transaction(tx)
+
+    async def get_filters(self, start_height, end_height, granularity):
+        return await self.client.address_filter(
+            start_height=start_height, end_height=end_height, granularity=granularity
+        )
+
+
+class BlockHeaderManager:
+    """
+    Efficient on-demand block header access.
+    Stores and retrieves from local db what it previously downloaded and
+    downloads on-demand what it doesn't have from full node.
+    """
+
+    def __init__(self, db: Database, client: APIClient):
+        self.db = db
+        self.client = client
+        self.cache = {}
+
+    async def download(self):
+        our_height = await self.db.get_best_block_height()
+        best_height = await self.client.block_tip()
+        for block in await self.client.block_list(our_height+1, best_height):
+            await self.db.insert_block(Block(
+                height=block["height"],
+                version=0,
+                file_number=0,
+                block_hash=block["block_hash"],
+                prev_block_hash=block["previous_hash"],
+                merkle_root=block["merkle_root"],
+                claim_trie_root=block["claim_trie_root"],
+                timestamp=block["timestamp"],
+                bits=block["bits"],
+                nonce=block["nonce"],
+                txs=[]
+            ))
+
+    async def get_header(self, height):
+        blocks = await self.client.first.block_list(height=height)
+        if blocks:
+            return blocks[0]
+
+
+class FastSync(Sync):
+
+    def __init__(self, service: Service, client: APIClient):
+        super().__init__(service.ledger, service.db)
+        self.service = service
+        self.client = client
+        self.advance_loop_task: Optional[asyncio.Task] = None
+        self.on_block = client.get_event_stream('blockchain.block')
+        self.on_block_event = asyncio.Event()
+        self.on_block_subscription: Optional[BroadcastSubscription] = None
+        self.blocks = BlockHeaderManager(self.db, self.client)
+        self.filters = FilterManager(self.db, self.client)
+
+    async def get_block_headers(self, start_height: int, end_height: int = None):
+        return await self.client.block_list(start_height, end_height)
+
+    async def get_best_block_height(self) -> int:
+        return await self.client.block_tip()
+
+    async def start(self):
+        self.advance_loop_task = asyncio.create_task(self.advance())
+        await self.advance_loop_task
+        self.advance_loop_task = asyncio.create_task(self.loop())
+        self.on_block_subscription = self.on_block.listen(
+            lambda e: self.on_block_event.set()
+        )
+
+    async def stop(self):
+        for task in (self.on_block_subscription, self.advance_loop_task):
+            if task is not None:
+                task.cancel()
+
+    async def advance(self):
+        await asyncio.wait([
+            self.blocks.download(),
+            self.filters.download()
+        ])
+
+    async def loop(self):
+        while True:
+            try:
+                await self.on_block_event.wait()
+                self.on_block_event.clear()
+                await self.advance()
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                log.exception(e)
+                await self.stop()
 
     # async def get_local_status_and_history(self, address, history=None):
     #     if not history:

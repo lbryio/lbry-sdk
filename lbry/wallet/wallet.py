@@ -572,7 +572,7 @@ class ChannelListManager(ClaimListManager):
 
     async def create(
         self, name: str, amount: int, holding_account: Account,
-        funding_accounts: List[Account], save_key=True, **kwargs
+        funding_accounts: List[Account], change_account: Account, save_key=True, **kwargs
     ) -> Transaction:
 
         holding_address = await holding_account.receiving.get_or_create_usable_address()
@@ -586,7 +586,7 @@ class ChannelListManager(ClaimListManager):
         await txo.generate_channel_private_key()
 
         tx = await self.wallet.create_transaction(
-            [], [txo], funding_accounts, funding_accounts[0]
+            [], [txo], funding_accounts, change_account
         )
 
         await self.wallet.sign(tx)

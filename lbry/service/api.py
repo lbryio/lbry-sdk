@@ -12,7 +12,7 @@ import base58
 from aiohttp import ClientSession
 
 from lbry.conf import Setting, NOT_SET
-from lbry.db import TXO_TYPES
+from lbry.db import TXO_TYPES, CLAIM_TYPE_NAMES
 from lbry.db.utils import constrain_single_or_list
 from lbry.wallet import Wallet, Account, SingleKey, HierarchicalDeterministic
 from lbry.blockchain import Transaction, Output, dewies_to_lbc, dict_values_to_lbc
@@ -1501,11 +1501,16 @@ class API:
                        {kwargs}
 
         """
-        kwargs = claim_filter_and_and_signed_filter_and_stream_filter_and_channel_filter_and_pagination_kwargs
+        kwargs = claim_filter_and_stream_filter_and_pagination_kwargs
         kwargs['type'] = claim_type or CLAIM_TYPE_NAMES
         if 'is_spent' not in kwargs:
             kwargs['is_not_spent'] = True
-        return await self.txo_list(**kwargs)
+        return await self.txo_list(
+            account_id=account_id, wallet_id=wallet_id,
+            is_spent=is_spent, resolve=resolve,
+            include_received_tips=include_received_tips,
+            **kwargs
+        )
 
     async def claim_search(
         self,
@@ -1631,9 +1636,11 @@ class API:
         amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
         holding_account = wallet.accounts.get_or_default(channel_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
         await wallet.verify_duplicate(name, allow_duplicate_name)
         tx = await wallet.channels.create(
-            name=name, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
+            name=name, amount=amount, holding_account=holding_account,
+            funding_accounts=funding_accounts, change_account=change_account,
             save_key=not tx_dict['preview'], **remove_nulls(channel_dict)
         )
         await self.service.maybe_broadcast_or_release(tx, **tx_dict)
@@ -2113,15 +2120,19 @@ class API:
         List my stream claims.
 
         Usage:
-            stream list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
+            stream list [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                         [--is_spent] [--resolve]
                         {kwargs}
 
         """
-        kwargs['type'] = 'stream'
-        if 'is_spent' not in kwargs:
-            kwargs['is_not_spent'] = True
-        return await self.txo_list(*args, **kwargs)
+        claim_filter_and_pagination_kwargs['type'] = 'stream'
+        if 'is_spent' not in claim_filter_and_pagination_kwargs:
+            claim_filter_and_pagination_kwargs['is_not_spent'] = True
+        return await self.txo_list(
+            account_id=account_id, wallet_id=wallet_id,
+            is_spent=is_spent, resolve=resolve,
+            **claim_filter_and_pagination_kwargs
+        )
 
     async def stream_cost_estimate(
         self,
@@ -2410,6 +2421,7 @@ class API:
                          {kwargs}
 
         """
+        kwargs = pagination_kwargs
         kwargs['type'] = 'support'
         if 'is_spent' not in kwargs:
             kwargs['is_not_spent'] = True
@@ -2425,7 +2437,9 @@ class API:
         elif staked:
             kwargs['is_my_input'] = True
             kwargs['is_my_output'] = True
-        return await self.txo_list(*args, **kwargs)
+        return await self.txo_list(
+            account_id=account_id, wallet_id=wallet_id, is_spent=is_spent, **kwargs
+        )
 
     async def support_search(
         self,
@@ -2722,7 +2736,7 @@ class API:
             else:
                 raise ValueError(f"'{order_by}' is not a valid --order_by value.")
         self._constrain_txo_from_kwargs(constraints, **txo_dict)
-        return await paginate_rows(
+        return await Paginated.from_getter(
             self.service.get_txos,
             wallet=wallet, accounts=accounts,
             **pagination, **constraints
@@ -2820,13 +2834,13 @@ class API:
         List unspent transaction outputs
 
         Usage:
-            utxo_list
+            utxo list
                       {kwargs}
 
         """
-        kwargs['type'] = ['other', 'purchase']
-        kwargs['is_not_spent'] = True
-        return await self.txo_list(*args, **kwargs)
+        txo_filter_and_pagination_kwargs['type'] = ['other', 'purchase']
+        txo_filter_and_pagination_kwargs['is_not_spent'] = True
+        return await self.txo_list(**txo_filter_and_pagination_kwargs)
 
     async def utxo_release(
         self,

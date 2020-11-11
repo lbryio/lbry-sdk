@@ -458,23 +458,6 @@ class Account:
             self._channel_keys_deserialized[channel_pubkey_hash] = private_key
             return private_key
 
-    async def maybe_migrate_certificates(self):
-        def to_der(private_key_pem):
-            return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256).get_verifying_key().to_der()
-
-        if not self.channel_keys:
-            return
-        channel_keys = {}
-        for private_key_pem in self.channel_keys.values():
-            if not isinstance(private_key_pem, str):
-                continue
-            if "-----BEGIN EC PRIVATE KEY-----" not in private_key_pem:
-                continue
-            public_key_der = await asyncio.get_running_loop().run_in_executor(None, to_der, private_key_pem)
-            channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
-        if self.channel_keys != channel_keys:
-            self.channel_keys = channel_keys
-
     async def save_max_gap(self):
         gap_changed = False
         if issubclass(self.address_generator, HierarchicalDeterministic):
