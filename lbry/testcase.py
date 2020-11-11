@@ -810,6 +810,9 @@ class CommandTestCase(IntegrationTestCase):
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.api.file_list(*args, **kwargs)))['items']
 
+    async def utxo_list(self, *args, **kwargs):
+        return (await self.out(self.api.utxo_list(*args, **kwargs)))['items']
+
     async def txo_list(self, *args, **kwargs):
         return (await self.out(self.api.txo_list(*args, **kwargs)))['items']
 
@@ -833,6 +836,9 @@ class CommandTestCase(IntegrationTestCase):
 
     async def collection_resolve(self, *args, **kwargs):
         return (await self.out(self.api.collection_resolve(*args, **kwargs)))['items']
+
+    async def support_list(self, *args, **kwargs):
+        return (await self.out(self.api.support_list(*args, **kwargs)))['items']
 
     async def transaction_list(self, *args, **kwargs):
         return (await self.out(self.api.transaction_list(*args, **kwargs)))['items']

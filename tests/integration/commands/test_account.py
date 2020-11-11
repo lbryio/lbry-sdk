@@ -65,79 +65,63 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(len(accounts), 1)
         self.assertEqual(accounts[0]['name'], 'recreated account')
 
-    async def test_wallet_migration(self):
-        # null certificates should get deleted
-        await self.channel_create('@foo1')
-        await self.channel_create('@foo2')
-        await self.channel_create('@foo3')
-        keys = list(self.account.channel_keys.keys())
-        self.account.channel_keys[keys[0]] = None
-        self.account.channel_keys[keys[1]] = "some invalid junk"
-        await self.account.maybe_migrate_certificates()
-        self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])
-
     async def assertFindsClaims(self, claim_names, awaitable):
-        self.assertEqual(claim_names, [txo.claim_name for txo in (await awaitable)['items']])
+        self.assertEqual(claim_names, [txo["name"] for txo in await awaitable])
 
     async def assertOutputAmount(self, amounts, awaitable):
-        self.assertEqual(amounts, [dewies_to_lbc(txo.amount) for txo in (await awaitable)['items']])
+        self.assertEqual(amounts, [txo["amount"] for txo in await awaitable])
 
     async def test_commands_across_accounts(self):
-        channel_list = self.daemon.jsonrpc_channel_list
-        stream_list = self.daemon.jsonrpc_stream_list
-        support_list = self.daemon.jsonrpc_support_list
-        utxo_list = self.daemon.jsonrpc_utxo_list
-        default_account = self.wallet.default_account
-        second_account = await self.daemon.jsonrpc_account_create('second account')
+        account1 = self.wallet.accounts.default.id
+        account2 = (await self.account_create('second account'))["id"]
 
-        tx = await self.daemon.jsonrpc_account_send(
-            '0.05', await self.daemon.jsonrpc_address_unused(account_id=second_account.id)
-        )
-        await self.confirm_tx(tx.id)
-        await self.assertOutputAmount(['0.05', '9.949876'], utxo_list())
-        await self.assertOutputAmount(['0.05'], utxo_list(account_id=second_account.id))
-        await self.assertOutputAmount(['9.949876'], utxo_list(account_id=default_account.id))
+        address2 = await self.address_unused(account2)
+        await self.wallet_send('0.05', address2, fund_account_id=self.account.id)
+        await self.generate(1)
+        await self.assertOutputAmount(['0.05', '9.949876'], self.utxo_list())
+        await self.assertOutputAmount(['9.949876'], self.utxo_list(account_id=account1))
+        await self.assertOutputAmount(['0.05'], self.utxo_list(account_id=account2))
 
         channel1 = await self.channel_create('@channel-in-account1', '0.01')
         channel2 = await self.channel_create(
-            '@channel-in-account2', '0.01', account_id=second_account.id, funding_account_ids=[default_account.id]
+            '@channel-in-account2', '0.01', account_id=account2, fund_account_id=[account1]
         )
 
-        await self.assertFindsClaims(['@channel-in-account2', '@channel-in-account1'], channel_list())
-        await self.assertFindsClaims(['@channel-in-account1'], channel_list(account_id=default_account.id))
-        await self.assertFindsClaims(['@channel-in-account2'], channel_list(account_id=second_account.id))
+        await self.assertFindsClaims(['@channel-in-account2', '@channel-in-account1'], self.channel_list())
+        await self.assertFindsClaims(['@channel-in-account1'], self.channel_list(account_id=account1))
+        await self.assertFindsClaims(['@channel-in-account2'], self.channel_list(account_id=account2))
 
         stream1 = await self.stream_create('stream-in-account1', '0.01', channel_id=self.get_claim_id(channel1))
         stream2 = await self.stream_create(
             'stream-in-account2', '0.01', channel_id=self.get_claim_id(channel2),
-            account_id=second_account.id, funding_account_ids=[default_account.id]
+            account_id=account2, fund_account_id=[account1]
         )
-        await self.assertFindsClaims(['stream-in-account2', 'stream-in-account1'], stream_list())
-        await self.assertFindsClaims(['stream-in-account1'], stream_list(account_id=default_account.id))
-        await self.assertFindsClaims(['stream-in-account2'], stream_list(account_id=second_account.id))
+        await self.assertFindsClaims(['stream-in-account2', 'stream-in-account1'], self.stream_list())
+        await self.assertFindsClaims(['stream-in-account1'], self.stream_list(account_id=account1))
+        await self.assertFindsClaims(['stream-in-account2'], self.stream_list(account_id=account2))
 
         await self.assertFindsClaims(
             ['stream-in-account2', 'stream-in-account1', '@channel-in-account2', '@channel-in-account1'],
-            self.daemon.jsonrpc_claim_list()
+            self.claim_list()
         )
         await self.assertFindsClaims(
             ['stream-in-account1', '@channel-in-account1'],
-            self.daemon.jsonrpc_claim_list(account_id=default_account.id)
+            self.claim_list(account_id=account1)
         )
         await self.assertFindsClaims(
             ['stream-in-account2', '@channel-in-account2'],
-            self.daemon.jsonrpc_claim_list(account_id=second_account.id)
+            self.claim_list(account_id=account2)
         )
 
         support1 = await self.support_create(self.get_claim_id(stream1), '0.01')
         support2 = await self.support_create(
-            self.get_claim_id(stream2), '0.01', account_id=second_account.id, funding_account_ids=[default_account.id]
+            self.get_claim_id(stream2), '0.01', account_id=account2, fund_account_id=[account1]
         )
-        self.assertEqual([support2['txid'], support1['txid']], [txo.tx_ref.id for txo in (await support_list())['items']])
-        self.assertEqual([support1['txid']], [txo.tx_ref.id for txo in (await support_list(account_id=default_account.id))['items']])
-        self.assertEqual([support2['txid']], [txo.tx_ref.id for txo in (await support_list(account_id=second_account.id))['items']])
+        self.assertEqual([support2['txid'], support1['txid']], [txo['txid'] for txo in await self.support_list()])
+        self.assertEqual([support1['txid']], [txo['txid'] for txo in await self.support_list(account_id=account1)])
+        self.assertEqual([support2['txid']], [txo['txid'] for txo in await self.support_list(account_id=account2)])
 
-        history = await self.daemon.jsonrpc_transaction_list()
+        history = await self.transaction_list()
         self.assertItemCount(history, 8)
         history = history['items']
         self.assertEqual(extract(history[0]['support_info'][0], ['claim_name', 'is_tip', 'amount', 'balance_delta']), {
