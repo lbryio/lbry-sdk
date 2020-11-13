@@ -243,24 +243,15 @@ def get_raw_transactions(tx_hashes):
     )
 
 
-def get_transactions(**constraints) -> Tuple[List[Transaction], Optional[int]]:
-    txs = []
-    sql = select(TX.c.raw, TX.c.height, TX.c.position).select_from(TX)
-    rows = context().fetchall(query([TX], sql, **constraints))
-    for row in rows:
-        txs.append(Transaction(row['raw'], height=row['height'], position=row['position']))
-    return txs, 0
-
-
-def _get_transactions(
-    wallet=None, include_total=False, **constraints
-) -> Tuple[List[Transaction], Optional[int]]:
+def get_transactions(include_total=False, **constraints) -> Tuple[List[Transaction], Optional[int]]:
+    account_ids = constraints.pop('account_ids', None)
     include_is_my_input = constraints.pop('include_is_my_input', False)
     include_is_my_output = constraints.pop('include_is_my_output', False)
 
     tx_rows = select_transactions(
-        [TX.c.tx_hash, TX.c.raw, TX.c.height, TX.c.position, TX.c.is_verified],
+        [TX.c.tx_hash, TX.c.raw, TX.c.height, TX.c.position, TX.c.timestamp, TX.c.is_verified],
         order_by=constraints.pop('order_by', ["height=0 DESC", "height DESC", "position DESC"]),
+        account_ids=account_ids,
         **constraints
     )
 
@@ -269,7 +260,7 @@ def _get_transactions(
         txids.append(row['tx_hash'])
         txs.append(Transaction(
             raw=row['raw'], height=row['height'], position=row['position'],
-            is_verified=bool(row['is_verified'])
+            timestamp=row['timestamp'], is_verified=bool(row['is_verified'])
         ))
         for txi in txs[-1].inputs:
             txi_txoids.append(txi.txo_ref.hash)
@@ -279,7 +270,7 @@ def _get_transactions(
         annotated_txos.update({
             txo.id: txo for txo in
             get_txos(
-                wallet=wallet,
+                wallet_account_ids=account_ids,
                 tx_hash__in=txids[offset:offset + MAX_QUERY_VARIABLES], order_by='txo.tx_hash',
                 include_is_my_input=include_is_my_input,
                 include_is_my_output=include_is_my_output,
@@ -291,7 +282,7 @@ def _get_transactions(
         referenced_txos.update({
             txo.id: txo for txo in
             get_txos(
-                wallet=wallet,
+                wallet_account_ids=account_ids,
                 txo_hash__in=txi_txoids[offset:offset + MAX_QUERY_VARIABLES], order_by='txo.txo_hash',
                 include_is_my_output=include_is_my_output,
             )[0]

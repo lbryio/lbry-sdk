@@ -2644,13 +2644,11 @@ class API:
 
         """
         wallet = self.wallets.get_or_default(wallet_id)
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            transactions = account.get_transaction_history
-        else:
-            transactions = partial(
-                self.ledger.get_transaction_history, wallet=wallet, accounts=wallet.accounts)
-        return await paginate_rows(transactions, page, page_size)
+        return await Paginated.from_getter(
+            wallet.list_transactions,
+            accounts=wallet.accounts.get_or_all(account_id),
+            **pagination_kwargs
+        )
 
     async def transaction_search(
         self,
