@@ -103,7 +103,7 @@ def search_support_count(**constraints) -> int:
 
 
 CHANNEL_CLAIM = Claim.alias('channel')
-BASE_SELECT_CLAIM_COLUMNS = [Claim.c.claim_hash.distinct()] + BASE_SELECT_TXO_COLUMNS + [
+BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.activation_height,
     Claim.c.takeover_height,
     Claim.c.creation_height,
@@ -149,7 +149,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
             if column == 'name':
                 column = 'claim_name'
             nulls_last = ''
-            if column == 'release_time':
+            if column in ('trending_group', 'trending_mixed', 'release_time'):
                 nulls_last = ' NULLs LAST'
             table = "trend" if column.startswith('trend') else "claim"
             sql_order_by.append(
