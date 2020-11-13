@@ -24,12 +24,11 @@ def set_reference(reference, claim_hash, rows):
 
 class Censor:
 
-    __slots__ = 'level', 'censored', 'total'
+    __slots__ = 'level', 'censored'
 
     def __init__(self, level=1):
         self.level = level
         self.censored = {}
-        self.total = 0
 
     def apply(self, rows):
         return [row for row in rows if not self.censor(row)]
@@ -38,16 +37,15 @@ class Censor:
         was_censored = row['censor_type'] >= self.level
         if was_censored:
             censoring_channel_hash = row['censor_owner_hash']
-            self.censored.setdefault(censoring_channel_hash, 0)
-            self.censored[censoring_channel_hash] += 1
-            self.total += 1
+            self.censored.setdefault(censoring_channel_hash, set())
+            self.censored[censoring_channel_hash].add(row['tx_hash'])
         return was_censored
 
     def to_message(self, outputs: OutputsMessage, extra_txo_rows):
-        outputs.blocked_total = self.total
+        outputs.blocked_total = len(self.censored)
         for censoring_channel_hash, count in self.censored.items():
             blocked = outputs.blocked.add()
-            blocked.count = count
+            blocked.count = len(count)
             set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
 
 
