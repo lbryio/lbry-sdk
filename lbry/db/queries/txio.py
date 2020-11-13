@@ -20,7 +20,7 @@ from ..constants import TXO_TYPES, CLAIM_TYPE_CODES, MAX_QUERY_VARIABLES
 log = logging.getLogger(__name__)
 
 
-MINIMIUM_TXO_COLUMNS = (
+minimum_txo_columns = (
     TXO.c.amount, TXO.c.position.label('txo_position'),
     TX.c.tx_hash, TX.c.height, TX.c.timestamp,
     func.substr(TX.c.raw, TXO.c.script_offset + 1, TXO.c.script_length).label('src'),
