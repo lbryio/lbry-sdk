@@ -122,8 +122,7 @@ class AccountManagement(CommandTestCase):
         self.assertEqual([support2['txid']], [txo['txid'] for txo in await self.support_list(account_id=account2)])
 
         history = await self.transaction_list()
-        self.assertItemCount(history, 8)
-        history = history['items']
+        self.assertEqual(len(history), 8)
         self.assertEqual(extract(history[0]['support_info'][0], ['claim_name', 'is_tip', 'amount', 'balance_delta']), {
             'claim_name': 'stream-in-account2',
             'is_tip': False,
@@ -160,7 +159,7 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(history[7]['value'], '10.0')
 
     async def test_address_validation(self):
-        address = await self.daemon.jsonrpc_address_unused()
+        address = await self.address_unused()
         bad_address = address[0:20] + '9999999' + address[27:]
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
-            await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
+            await self.wallet_send('0.1', bad_address)

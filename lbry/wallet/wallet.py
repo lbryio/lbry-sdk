@@ -262,7 +262,7 @@ class Wallet:
     async def list_transactions(self, **constraints):
         return txs_to_dict(await self.db.get_transactions(
             include_is_my_output=True, **constraints
-        ), self.ledger)
+        ), self.ledger, await self.db.get_best_block_height())
 
     async def create_transaction(
             self, inputs: Iterable[Input], outputs: Iterable[Output],
@@ -870,15 +870,14 @@ class PurchaseListManager(BaseListManager):
         raise NotImplementedError
 
 
-def txs_to_dict(txs, ledger):
+def txs_to_dict(txs, ledger, tip_height):
     history = []
     for tx in txs:  # pylint: disable=too-many-nested-blocks
-        ts = ledger.headers.estimated_timestamp(tx.height)
         item = {
             'txid': tx.id,
-            'timestamp': ts,
-            'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-            'confirmations': (ledger.headers.height + 1) - tx.height if tx.height > 0 else 0,
+            'timestamp': tx.timestamp,
+            'date': datetime.fromtimestamp(tx.timestamp).isoformat(' ')[:-3] if tx.height > 0 else None,
+            'confirmations': (tip_height + 1) - tx.height if tx.height > 0 else 0,
             'claim_info': [],
             'update_info': [],
             'support_info': [],
@@ -976,4 +975,5 @@ def txs_to_dict(txs, ledger):
                 'is_spent': txo.is_spent,
             })
         history.append(item)
-    return history
+    txs.rows = history
+    return txs
