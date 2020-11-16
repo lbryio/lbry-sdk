@@ -1676,6 +1676,7 @@ class API:
         wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
         holding_account = wallet.accounts.get_or_none(channel_edit_dict.pop('account_id'))
         funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
 
         old = await wallet.claims.get(claim_id=claim_id)
         if not old.claim.is_channel:
@@ -1690,8 +1691,12 @@ class API:
             amount = old.amount
 
         tx = await wallet.channels.update(
-            old=old, amount=amount, holding_account=holding_account, funding_accounts=funding_accounts,
-            save_key=not tx_dict['preview'], **remove_nulls(channel_edit_dict)
+            old=old, amount=amount,
+            holding_account=holding_account,
+            funding_accounts=funding_accounts,
+            change_account=change_account,
+            save_key=not tx_dict['preview'],
+            **remove_nulls(channel_edit_dict)
         )
 
         await self.service.maybe_broadcast_or_release(tx, **tx_dict)
@@ -1884,47 +1889,33 @@ class API:
         claim_id: str,               # id of the claim being reposted
         allow_duplicate_name=False,  # create new repost even if one already exists with given name
         account_id: str = None,      # account to hold the repost
-        claim_address: str = None,   # specific address where the repost is held, if not specified
-                                     # it will be determined automatically from the account
-        ** signed_and_tx_kwargs
+        **signed_and_tx_kwargs
     ) -> Transaction:  # transaction for the repost
         """
         Creates a claim that references an existing stream by its claim id.
 
         Usage:
             stream repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)
-                          [--allow_duplicate_name] [--account_id=<account_id>] [--claim_address=<claim_address>]
+                          [--allow_duplicate_name] [--account_id=<account_id>]
                           {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        self.valid_stream_name_or_error(name)
-        account = wallet.accounts.get_or_default(account_id)
-        funding_accounts = wallet.accounts.get_or_all(fund_account_id)
-        channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        claim_address = await self.get_receiving_address(claim_address, account)
-        claims = await account.get_claims(claim_name=name)
-        if len(claims) > 0:
-            if not allow_duplicate_name:
-                raise Exception(
-                    f"You already have a stream claim published under the name '{name}'. "
-                    f"Use --allow-duplicate-name flag to override."
-                )
-        if not VALID_FULL_CLAIM_ID.fullmatch(claim_id):
-            raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
-
-        claim = Claim()
-        claim.repost.reference.claim_id = claim_id
-        tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+        signed_dict, kwargs = pop_kwargs('signed', extract_signed(**signed_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        self.ledger.valid_stream_name_or_error(name)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        amount = self.ledger.get_dewies_or_error('bid', bid, positive_value=True)
+        holding_account = wallet.accounts.get_or_default(account_id)
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
+        await wallet.verify_duplicate(name, allow_duplicate_name)
+        tx = await wallet.streams.repost(
+            name=name, amount=amount, claim_id=claim_id,
+            holding_account=holding_account,
+            funding_accounts=funding_accounts,
+            change_account=change_account,
         )
-        new_txo = tx.outputs[0]
-
-        if channel:
-            new_txo.sign(channel)
-        await tx.sign(funding_accounts)
-
         await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 

@@ -493,7 +493,7 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
-        self.assertEqual(dewies_to_lbc(balance), expected_balance)
+        self.assertEqual(dewies_to_lbc(balance['available']), expected_balance)
 
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)

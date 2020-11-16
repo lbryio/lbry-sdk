@@ -283,7 +283,7 @@ class ClaimSearchCommand(ClaimTestCase):
         claim4 = await self.stream_create('claim4', channel_id=chan2_id)
         claim5 = await self.stream_create('claim5', channel_id=chan2_id)
         claim6 = await self.stream_create('claim6', channel_id=chan3_id)
-        await self.channel_abandon(chan3_id)
+        await self.channel_abandon(claim_id=chan3_id)
 
         # {has/valid/invalid}_channel_signature
         await match([claim6, claim5, claim4, claim3, claim2], has_channel_signature=True)
@@ -329,8 +329,9 @@ class ClaimSearchCommand(ClaimTestCase):
         address = await self.account.receiving.get_or_create_usable_address()
         tx = await self.wallet.claims.create(
             'unknown', b'{"sources":{"lbry_sd_hash":""}}', 1, address, [self.account], self.account)
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.service.broadcast(tx)
+        await self.generate(1)
+        await self.service.wait(tx)
 
         octet = await self.stream_create()
         video = await self.stream_create('chrome', file_path=self.video_file_name)
@@ -961,11 +962,12 @@ class ChannelCommands(CommandTestCase):
         self.assertEqual(len(await self.channel_list(account_id=self.account.id)), 2)
         self.assertEqual(len(await self.channel_list(account_id=account2.id)), 1)
 
+    @skip
     async def test_channel_export_import_before_sending_channel(self):
         # export
         tx = await self.channel_create('@foo', '1.0')
         claim_id = self.get_claim_id(tx)
-        channels, _ = await self.wallet.channels.list()
+        channels = await self.wallet.channels.list()
         channel_private_key = channels[0].private_key
         exported_data = await self.out(self.api.channel_export(claim_id))
 
