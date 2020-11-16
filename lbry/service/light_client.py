@@ -1,19 +1,11 @@
 import asyncio
 import logging
-from typing import List, Dict
-#from io import StringIO
-#from functools import partial
-#from operator import itemgetter
-from collections import defaultdict
-#from binascii import hexlify, unhexlify
-from typing import List, Optional, DefaultDict, NamedTuple
+from typing import Dict
+from typing import List, Optional, NamedTuple
+from binascii import unhexlify
 
-#from lbry.crypto.hash import double_sha256, sha256
-
-from lbry.tasks import TaskGroup
-from lbry.blockchain import Transaction
 from lbry.blockchain.block import Block, get_address_filter
-from lbry.event import BroadcastSubscription, EventController
+from lbry.event import BroadcastSubscription
 from lbry.wallet.account import AddressManager
 from lbry.blockchain import Ledger, Transaction
 from lbry.db import Database
@@ -119,30 +111,31 @@ class FilterManager:
     async def download(self):
         filters_response = await self.client.get_address_filters(0, 500)
         filters = await filters_response.first
+        address = None
         address_array = [bytearray(self.client.ledger.address_to_hash160(address))]
-        for filter in filters:
-            print(filter)
-            filter = get_address_filter(unhexlify(filter['filter']))
-            print(filter.MatchAny(address_array))
+        for address_filter in filters:
+            print(address_filter)
+            address_filter = get_address_filter(unhexlify(address_filter['filter']))
+            print(address_filter.MatchAny(address_array))
 
 
-        address_array = [
-            bytearray(a['address'].encode())
-            for a in await self.service.db.get_all_addresses()
-        ]
-        block_filters = await self.service.get_block_address_filters()
-        for block_hash, block_filter in block_filters.items():
-            bf = get_address_filter(block_filter)
-            if bf.MatchAny(address_array):
-                print(f'match: {block_hash} - {block_filter}')
-                tx_filters = await self.service.get_transaction_address_filters(block_hash=block_hash)
-                for txid, tx_filter in tx_filters.items():
-                    tf = get_address_filter(tx_filter)
-                    if tf.MatchAny(address_array):
-                        print(f'  match: {txid} - {tx_filter}')
-                        txs = await self.service.search_transactions([txid])
-                        tx = Transaction(unhexlify(txs[txid]))
-                        await self.service.db.insert_transaction(tx)
+#        address_array = [
+#            bytearray(a['address'].encode())
+#            for a in await self.service.db.get_all_addresses()
+#        ]
+#        block_filters = await self.service.get_block_address_filters()
+#        for block_hash, block_filter in block_filters.items():
+#            bf = get_address_filter(block_filter)
+#            if bf.MatchAny(address_array):
+#                print(f'match: {block_hash} - {block_filter}')
+#                tx_filters = await self.service.get_transaction_address_filters(block_hash=block_hash)
+#                for txid, tx_filter in tx_filters.items():
+#                    tf = get_address_filter(tx_filter)
+#                    if tf.MatchAny(address_array):
+#                        print(f'  match: {txid} - {tx_filter}')
+#                        txs = await self.service.search_transactions([txid])
+#                        tx = Transaction(unhexlify(txs[txid]))
+#                        await self.service.db.insert_transaction(tx)
 
     async def get_filters(self, start_height, end_height, granularity):
         return await self.client.address_filter(

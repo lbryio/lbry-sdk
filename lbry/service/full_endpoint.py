@@ -1,10 +1,9 @@
 import logging
+from typing import Optional, List, Dict
 from binascii import hexlify, unhexlify
 
-from lbry.blockchain.lbrycrd import Lbrycrd
-from lbry.blockchain.sync import BlockchainSync
-from lbry.blockchain.ledger import Ledger
-from lbry.blockchain.transaction import Transaction
+from lbry.blockchain import Ledger, Transaction
+from lbry.event import BroadcastSubscription
 
 from .base import Service, Sync
 from .api import Client as APIClient
@@ -24,27 +23,17 @@ class NoSync(Sync):
         self.on_mempool = client.get_event_stream('blockchain.mempool')
         self.on_mempool_subscription: Optional[BroadcastSubscription] = None
 
-    async def wait_for_client_ready(self):
-        await self.client.connect()
-
     async def start(self):
-        self.db.stop_event.clear()
-        await self.wait_for_client_ready()
-        self.advance_loop_task = asyncio.create_task(self.advance())
-        await self.advance_loop_task
-        await self.client.subscribe()
-        self.advance_loop_task = asyncio.create_task(self.advance_loop())
-        self.on_block_subscription = self.on_block.listen(
-            lambda e: self.on_block_event.set()
-        )
-        self.on_mempool_subscription = self.on_mempool.listen(
-            lambda e: self.on_mempool_event.set()
-        )
-        await self.download_filters()
-        await self.download_headers()
+        pass
 
     async def stop(self):
-        await self.client.disconnect()
+        pass
+
+    async def get_block_headers(self, start_height: int, end_height: int = None):
+        return await self.db.get_block_headers(start_height, end_height)
+
+    async def get_best_block_height(self) -> int:
+        return await self.db.get_best_block_height()
 
 
 class FullEndpoint(Service):
@@ -59,3 +48,36 @@ class FullEndpoint(Service):
             f"http://{ledger.conf.full_nodes[0][0]}:{ledger.conf.full_nodes[0][1]}/api"
         )
         self.sync = NoSync(self, self.client)
+
+    async def get_block_headers(self, first, last=None):
+        return await self.db.get_block_headers(first, last)
+
+    async def get_address_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
+        return await self.db.get_filters(
+            start_height=start_height, end_height=end_height, granularity=granularity
+        )
+
+    async def search_transactions(self, txids):
+        tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
+        return {
+            hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
+            for tx in await self.db.get_transactions(tx_hashes=tx_hashes)
+        }
+
+    async def broadcast(self, tx):
+        pass
+
+    async def wait(self, tx: Transaction, height=-1, timeout=1):
+        pass
+
+    async def resolve(self, urls, **kwargs):
+        pass
+
+    async def search_claims(self, accounts, **kwargs):
+        pass
+
+    async def search_supports(self, accounts, **kwargs):
+        pass
+
+    async def sum_supports(self, claim_hash: bytes, include_channel_content=False) -> List[Dict]:
+        return await self.db.sum_supports(claim_hash, include_channel_content)

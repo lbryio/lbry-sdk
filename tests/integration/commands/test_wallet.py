@@ -150,6 +150,7 @@ class WalletCommands(CommandTestCase):
         })
 
 
+@skip
 class WalletEncryptionAndSynchronization(CommandTestCase):
 
     SEED = (

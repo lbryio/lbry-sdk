@@ -515,6 +515,9 @@ class IntegrationTestCase(AsyncioTestCase):
             lambda e: e.tx.hash == tx_hash
         )
 
+    async def on_transaction_dict(self, tx):
+        await self.service.wait(Transaction(unhexlify(tx['hex'])))
+
     def on_address_update(self, address):
         return self.ledger.on_transaction.where(
             lambda e: e.address == address
@@ -605,9 +608,6 @@ class CommandTestCase(IntegrationTestCase):
         await self.on_transaction_id(txid, ledger)
         return txid
 
-    async def on_transaction_dict(self, tx):
-        await self.ledger.wait(Transaction(unhexlify(tx['hex'])))
-
     @staticmethod
     def get_all_addresses(tx):
         addresses = set()
@@ -672,9 +672,6 @@ class CommandTestCase(IntegrationTestCase):
     async def account_remove(self, *args, **kwargs):
         return await self.out(self.api.account_remove(*args, **kwargs))
 
-    async def account_send(self, *args, **kwargs):
-        return await self.out(self.api.account_send(*args, **kwargs))
-
     async def account_balance(self, *args, **kwargs):
         return await self.out(self.api.account_balance(*args, **kwargs))
 
@@ -716,8 +713,6 @@ class CommandTestCase(IntegrationTestCase):
         )
 
     async def stream_abandon(self, *args, confirm=True, **kwargs):
-        if 'blocking' not in kwargs:
-            kwargs['blocking'] = False
         return await self.confirm_and_render(
             self.api.stream_abandon(*args, **kwargs), confirm
         )
@@ -743,8 +738,6 @@ class CommandTestCase(IntegrationTestCase):
         )
 
     async def channel_abandon(self, *args, confirm=True, **kwargs):
-        if 'blocking' not in kwargs:
-            kwargs['blocking'] = False
         return await self.confirm_and_render(
             self.api.channel_abandon(*args, **kwargs), confirm
         )
@@ -762,8 +755,6 @@ class CommandTestCase(IntegrationTestCase):
         )
 
     async def collection_abandon(self, *args, confirm=True, **kwargs):
-        if 'blocking' not in kwargs:
-            kwargs['blocking'] = False
         return await self.confirm_and_render(
             self.api.stream_abandon(*args, **kwargs), confirm
         )
@@ -781,11 +772,6 @@ class CommandTestCase(IntegrationTestCase):
     async def account_fund(self, *args, confirm=True, **kwargs):
         return await self.confirm_and_render(
             self.api.account_fund(*args, **kwargs), confirm
-        )
-
-    async def account_send(self, *args, confirm=True, **kwargs):
-        return await self.confirm_and_render(
-            self.api.account_send(*args, **kwargs), confirm
         )
 
     async def wallet_send(self, *args, confirm=True, **kwargs):

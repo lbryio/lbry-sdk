@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from typing import Tuple, List, Optional, Union
 
-from sqlalchemy import union, func, text, between, distinct, case
+from sqlalchemy import union, func, text, between, distinct, case, false
 from sqlalchemy.future import select, Select
 
 from ...blockchain.transaction import (
@@ -372,7 +372,7 @@ def select_txos(
             )
     joins = TXO.join(TX)
     if constraints.pop('is_spent', None) is False:
-        s = s.where((TXO.c.spent_height == 0) & (TXO.c.is_reserved == False))
+        s = s.where((TXO.c.spent_height == 0) & (TXO.c.is_reserved == false()))
     if include_is_my_input:
         joins = joins.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
     if claim_id_not_in_claim_table:
@@ -534,7 +534,7 @@ def get_balance(account_ids):
     else:
         txo_address_check = TXO.c.address.in_(my_addresses)
         txi_address_check = TXI.c.address.in_(my_addresses)
-    query = (
+    s: Select = (
         select(
             func.coalesce(func.sum(TXO.c.amount), 0).label("total"),
             func.coalesce(func.sum(case(
@@ -557,7 +557,7 @@ def get_balance(account_ids):
             TXO.join(TXI, (TXI.c.position == 0) & (TXI.c.tx_hash == TXO.c.tx_hash), isouter=True)
         )
     )
-    result = ctx.fetchone(query)
+    result = ctx.fetchone(s)
     return {
         "total": result["total"],
         "available": result["total"] - result["reserved"],

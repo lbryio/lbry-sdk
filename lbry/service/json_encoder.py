@@ -300,13 +300,19 @@ class JSONResponseEncoder(JSONEncoder):
                         output['purchase_receipt'] = self.encode_output(txo.purchase_receipt)
                     if txo.claim.is_channel:
                         output['has_signing_key'] = txo.has_private_key
-                    if check_signature and txo.claim.is_signed:
+                    if check_signature and txo.claim.is_signed and 'is_signature_valid' in txo.meta:
                         if txo.channel is not None:
                             output['signing_channel'] = self.encode_output(txo.channel)
-                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.service.ledger)
                         else:
                             output['signing_channel'] = {'channel_id': txo.claim.signing_channel_id}
-                            output['is_channel_signature_valid'] = False
+                        output['is_channel_signature_valid'] = txo.meta.get('is_signature_valid', False)
+#                    if check_signature and txo.claim.is_signed:
+#                        if txo.channel is not None:
+#                            output['signing_channel'] = self.encode_output(txo.channel)
+#                            output['is_channel_signature_valid'] = txo.is_signed_by(txo.channel, self.service.ledger)
+#                        else:
+#                            output['signing_channel'] = {'channel_id': txo.claim.signing_channel_id}
+#                            output['is_channel_signature_valid'] = txo.meta.get('is_signature_valid', False)
                 except DecodeError:
                     pass
         return output
