@@ -40,7 +40,7 @@ class FullNode(Service):
         return 'everything is wonderful'
 
     async def get_block_headers(self, first, last=None):
-        return await self.db.get_blocks(first, last)
+        return await self.db.get_block_headers(first, last)
 
     async def get_address_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
         return await self.db.get_filters(

@@ -8,6 +8,7 @@ from typing import Awaitable, Callable, List, Tuple, Optional, Iterable, Union
 from hashlib import sha256
 from operator import attrgetter
 from decimal import Decimal
+from binascii import unhexlify
 
 from lbry.db import Database, SPENDABLE_TYPE_CODES, Result
 from lbry.event import EventController
@@ -518,9 +519,10 @@ class ClaimListManager(BaseListManager):
         return tx
 
     async def update(
-            self, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List[Account], change_account: Account,
-            signing_channel: Output = None) -> Transaction:
+        self, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
+        funding_accounts: List[Account], change_account: Account,
+        signing_channel: Output = None
+    ) -> Transaction:
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
             claim, self.wallet.ledger.address_to_hash160(holding_address)
@@ -533,18 +535,27 @@ class ClaimListManager(BaseListManager):
             [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account
         )
 
-    async def delete(self, claim_id=None, txid=None, nout=None):
+    async def delete(
+        self, claim_id=None, txid=None, nout=None,
+        funding_accounts: List[Account] = None, change_account: Account = None
+    ):
         claim = await self.get(claim_id=claim_id, txid=txid, nout=nout)
-        return await self.wallet.create_transaction(
-            [Input.spend(claim)], [], self.wallet._accounts, self.wallet._accounts[0]
+        tx = await self.wallet.create_transaction(
+            [Input.spend(claim)], [],
+            funding_accounts or self.wallet._accounts,
+            change_account or self.wallet._accounts[0]
         )
+        await self.wallet.sign(tx)
+        return tx
 
     async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_claims(wallet=self.wallet, **constraints)
 
     async def get(self, claim_id=None, claim_name=None, txid=None, nout=None) -> Output:
         if txid is not None and nout is not None:
-            key, value, constraints = 'txid:nout', f'{txid}:{nout}', {'tx_hash': '', 'position': nout}
+            key, value, constraints = 'txid:nout', f'{txid}:{nout}', {
+                'tx_hash': unhexlify(txid)[::-1], 'position': nout
+            }
         elif claim_id is not None:
             key, value, constraints = 'id', claim_id, {'claim_id': claim_id}
         elif claim_name is not None:

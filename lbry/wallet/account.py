@@ -4,14 +4,13 @@ import json
 import logging
 import asyncio
 import random
-from functools import partial
 from hashlib import sha256
 from typing import Type, Dict, Tuple, Optional, Any, List
 
 import ecdsa
 
 from lbry.constants import COIN
-from lbry.db import Database, CLAIM_TYPE_CODES, TXO_TYPES
+from lbry.db import Database
 from lbry.db.tables import AccountAddress
 from lbry.blockchain import Ledger
 from lbry.error import InvalidPasswordError

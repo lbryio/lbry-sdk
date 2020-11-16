@@ -177,7 +177,8 @@ class Daemon:
                 subscribers = self.app["subscriptions"][event_name]["subscribers"]
             subscribers.add(web_socket)
 
-    def broadcast_event(self, event_name, subscribers, payload):
+    @staticmethod
+    def broadcast_event(event_name, subscribers, payload):
         for web_socket in subscribers:
             asyncio.create_task(web_socket.send_json({
                 'event': event_name, 'payload': payload

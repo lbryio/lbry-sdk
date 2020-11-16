@@ -1098,8 +1098,9 @@ class API:
             raise ValueError("--outputs must be an integer.")
         if everything and outputs > 1:
             raise ValueError("Using --everything along with --outputs is not supported.")
-        return await from_account.fund(
-            to_account=to_account, amount=amount, everything=everything,
+        return await wallet.fund(
+            from_account=from_account, to_account=to_account,
+            amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
         )
 
@@ -1518,7 +1519,7 @@ class API:
         claim_type: str = None,          # claim type: channel, stream, repost, collection
         include_purchase_receipt=False,  # lookup and include a receipt if this wallet has purchased the claim
         include_is_my_output=False,      # lookup and include a boolean indicating if claim being resolved is yours
-        is_controlling=False,            # winning claims of their respective name
+        is_controlling: bool = None,     # winning claims of their respective name
         activation_height: int = None,   # height at which claim starts competing for name
                                          # (supports equality constraints)
         expiration_height: int = None,   # height at which claim will expire (supports equality constraints)
@@ -1578,16 +1579,23 @@ class API:
         claim_filter_dict, kwargs = pop_kwargs('claim_filter', extract_claim_filter(
             **claim_filter_and_stream_filter_and_pagination_kwargs
         ))
+        stream_filter_dict, kwargs = pop_kwargs('stream_filter', extract_stream_filter(**kwargs))
         pagination, kwargs = pop_kwargs('pagination', extract_pagination(**kwargs))
+        assert_consumed_kwargs(kwargs)
         wallet = self.wallets.get_or_default(wallet_id)
 #        if {'claim_id', 'claim_ids'}.issubset(kwargs):
 #            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
-#        if kwargs.pop('valid_channel_signature', False):
-#            kwargs['signature_valid'] = 1
-#        if kwargs.pop('invalid_channel_signature', False):
-#            kwargs['signature_valid'] = 0
+        if stream_filter_dict.pop('valid_channel_signature', False):
+            stream_filter_dict['is_signature_valid'] = True
+        if stream_filter_dict.pop('invalid_channel_signature', False):
+            stream_filter_dict['is_signature_valid'] = False
+        if is_controlling is not None:
+            claim_filter_dict["is_controlling"] = is_controlling
+        if public_key_id is not None:
+            claim_filter_dict["public_key_id"] = public_key_id
         page_num = abs(pagination['page'] or 1)
         page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
+        claim_filter_dict.update(stream_filter_dict)
         claim_filter_dict.update({
             'offset': page_size * (page_num - 1), 'limit': page_size,
             'include_total': pagination['include_total'],
@@ -1701,31 +1709,18 @@ class API:
                             {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            accounts = [account]
-        else:
-            account = wallet.default_account
-            accounts = wallet.accounts
-
-        if txid is not None and nout is not None:
-            claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
-            )
-        elif claim_id is not None:
-            claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, claim_id=claim_id
-            )
-        else:
-            raise Exception('Must specify claim_id, or txid and nout')
-
-        if not claims:
-            raise Exception('No claim found for the specified claim_id or txid:nout')
-
-        tx = await Transaction.create(
-            [Input.spend(txo) for txo in claims], [], [account], account
+        abandon_dict, kwargs = pop_kwargs('abandon', extract_abandon(**abandon_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
+        tx = await wallet.channels.delete(
+            claim_id=abandon_dict.pop('claim_id'),
+            txid=abandon_dict.pop('txid'),
+            nout=abandon_dict.pop('nout'),
+            funding_accounts=funding_accounts,
+            change_account=change_account
         )
         await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
@@ -2078,34 +2073,20 @@ class API:
                            {kwargs}
 
         """
-        wallet = self.wallets.get_or_default(wallet_id)
-        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
-        if account_id:
-            account = wallet.get_account_or_error(account_id)
-            accounts = [account]
-        else:
-            account = wallet.default_account
-            accounts = wallet.accounts
-
-        if txid is not None and nout is not None:
-            claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, tx_hash=unhexlify(txid)[::-1], position=nout
-            )
-        elif claim_id is not None:
-            claims = await self.ledger.get_claims(
-                wallet=wallet, accounts=accounts, claim_id=claim_id
-            )
-        else:
-            raise Exception('Must specify claim_id, or txid and nout')
-
-        if not claims:
-            raise Exception('No claim found for the specified claim_id or txid:nout')
-
-        tx = await Transaction.create(
-            [Input.spend(txo) for txo in claims], [], accounts, account
+        abandon_dict, kwargs = pop_kwargs('abandon', extract_abandon(**abandon_and_tx_kwargs))
+        tx_dict, kwargs = pop_kwargs('tx', extract_tx(**kwargs))
+        assert_consumed_kwargs(kwargs)
+        wallet = self.wallets.get_or_default_for_spending(tx_dict.pop('wallet_id'))
+        funding_accounts = wallet.accounts.get_or_all(tx_dict.pop('fund_account_id'))
+        change_account = wallet.accounts.get_or_default(tx_dict.pop('change_account_id'))
+        tx = await wallet.streams.delete(
+            claim_id=abandon_dict.pop('claim_id'),
+            txid=abandon_dict.pop('txid'),
+            nout=abandon_dict.pop('nout'),
+            funding_accounts=funding_accounts,
+            change_account=change_account
         )
-
-        await self.service.maybe_broadcast_or_release(tx, tx_dict)
+        await self.service.maybe_broadcast_or_release(tx, **tx_dict)
         return tx
 
     async def stream_list(

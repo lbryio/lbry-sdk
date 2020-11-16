@@ -1,11 +1,9 @@
-import os
 import asyncio
 import logging
-from typing import List, Optional, Tuple, NamedTuple, Dict
+from typing import List, Optional, NamedTuple, Dict
 
 from lbry.db import Database, Result
 from lbry.db.constants import TXO_TYPES
-from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Transaction, Output
 from lbry.blockchain.ledger import Ledger
 from lbry.wallet import WalletManager

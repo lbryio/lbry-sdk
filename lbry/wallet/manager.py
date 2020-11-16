@@ -6,6 +6,7 @@ import logging
 from typing import Optional, Dict
 
 from lbry.db import Database
+from lbry.blockchain.dewies import dict_values_to_lbc
 
 from .wallet import Wallet
 from .account import SingleKey, HierarchicalDeterministic
@@ -106,21 +107,22 @@ class WalletManager:
 
     async def _report_state(self):
         try:
-            for account in self.accounts:
-                balance = dewies_to_lbc(await account.get_balance(include_claims=True))
-                _, channel_count = await account.get_channels(limit=1)
-                claim_count = await account.get_claim_count()
-                if isinstance(account.receiving, SingleKey):
-                    log.info("Loaded single key account %s with %s LBC. "
-                             "%d channels, %d certificates and %d claims",
-                        account.id, balance, channel_count, len(account.channel_keys), claim_count)
-                else:
-                    total_receiving = len(await account.receiving.get_addresses())
-                    total_change = len(await account.change.get_addresses())
-                    log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
-                             "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
-                        account.id, balance, total_receiving, account.receiving.gap, total_change,
-                        account.change.gap, channel_count, len(account.channel_keys), claim_count)
+            for wallet in self.wallets.values():
+                for account in wallet.accounts:
+                    balance = dict_values_to_lbc(await account.get_balance(include_claims=True))
+                    _, channel_count = await account.get_channels(limit=1)
+                    claim_count = await account.get_claim_count()
+                    if isinstance(account.receiving, SingleKey):
+                        log.info("Loaded single key account %s with %s LBC. "
+                                 "%d channels, %d certificates and %d claims",
+                            account.id, balance, channel_count, len(account.channel_keys), claim_count)
+                    else:
+                        total_receiving = len(await account.receiving.get_addresses())
+                        total_change = len(await account.change.get_addresses())
+                        log.info("Loaded account %s with %s LBC, %d receiving addresses (gap: %d), "
+                                 "%d change addresses (gap: %d), %d channels, %d certificates and %d claims. ",
+                            account.id, balance, total_receiving, account.receiving.gap, total_change,
+                            account.change.gap, channel_count, len(account.channel_keys), claim_count)
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
                 raise
@@ -135,7 +137,7 @@ class WalletStorage:
     async def prepare(self):
         raise NotImplementedError
 
-    async def exists(self, walllet_id: str) -> bool:
+    async def exists(self, wallet_id: str) -> bool:
         raise NotImplementedError
 
     async def get(self, wallet_id: str) -> Wallet:

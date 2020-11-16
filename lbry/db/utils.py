@@ -1,7 +1,7 @@
 from itertools import islice
 from typing import List, Union
 
-from sqlalchemy import text, and_
+from sqlalchemy import text, and_, or_
 from sqlalchemy.sql.expression import Select, FunctionElement
 from sqlalchemy.types import Numeric
 from sqlalchemy.ext.compiler import compiles
@@ -98,9 +98,7 @@ def query(table, s: Select, **constraints) -> Select:
         s = s.where(in_account_ids(account_ids))
 
     if constraints:
-        s = s.where(
-            constraints_to_clause(table, constraints)
-        )
+        s = s.where(and_(*constraints_to_clause(table, constraints)))
 
     return s
 
@@ -148,6 +146,9 @@ def constraints_to_clause(tables, constraints):
                     raise ValueError(f"{col} requires a list, set or string as constraint value.")
             else:
                 continue
+        elif key.endswith('__or'):
+            clause.append(or_(*constraints_to_clause(tables, constraint)))
+            continue
         else:
             col, op = key, '__eq__'
         attr = None
@@ -170,4 +171,4 @@ def constraints_to_clause(tables, constraints):
         if attr is None:
             raise ValueError(f"Attribute '{col}' not found on tables: {', '.join([t.name for t in tables])}.")
         clause.append(getattr(attr, op)(constraint))
-    return and_(*clause)
+    return clause

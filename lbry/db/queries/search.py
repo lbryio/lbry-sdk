@@ -191,16 +191,16 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
     if 'public_key_id' in constraints:
         constraints['public_key_hash'] = (
             context().ledger.address_to_hash160(constraints.pop('public_key_id')))
-    if 'channel_hash' in constraints:
-        constraints['channel_hash'] = constraints.pop('channel_hash')
-    if 'channel_ids' in constraints:
-        channel_ids = constraints.pop('channel_ids')
-        if channel_ids:
+    if 'channel_id' in constraints:
+        channel_id = constraints.pop('channel_id')
+        if channel_id:
+            if isinstance(channel_id, str):
+                channel_id = [channel_id]
             constraints['channel_hash__in'] = {
-                unhexlify(cid)[::-1] for cid in channel_ids
+                unhexlify(cid)[::-1] for cid in channel_id
             }
-    if 'not_channel_ids' in constraints:
-        not_channel_ids = constraints.pop('not_channel_ids')
+    if 'not_channel_id' in constraints:
+        not_channel_ids = constraints.pop('not_channel_id')
         if not_channel_ids:
             not_channel_ids_binary = {
                 unhexlify(ncid)[::-1] for ncid in not_channel_ids
@@ -213,17 +213,18 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
                     'signature_valid__is_null': True,
                     'channel_hash__not_in': not_channel_ids_binary
                 }
-    if 'signature_valid' in constraints:
+    if 'is_signature_valid' in constraints:
         has_channel_signature = constraints.pop('has_channel_signature', False)
+        is_signature_valid = constraints.pop('is_signature_valid')
         if has_channel_signature:
-            constraints['signature_valid'] = constraints.pop('signature_valid')
+            constraints['is_signature_valid'] = is_signature_valid
         else:
             constraints['null_or_signature__or'] = {
-                'signature_valid__is_null': True,
-                'signature_valid': constraints.pop('signature_valid')
+                'is_signature_valid__is_null': True,
+                'is_signature_valid': is_signature_valid
             }
     elif constraints.pop('has_channel_signature', False):
-        constraints['signature_valid__is_not_null'] = True
+        constraints['is_signature_valid__is_not_null'] = True
 
     if 'txid' in constraints:
         tx_hash = unhexlify(constraints.pop('txid'))[::-1]
@@ -261,7 +262,7 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
         constraints["search"] = constraints.pop("text")
 
     return query(
-        [Claim],
+        [Claim, TXO],
         select(*cols)
         .select_from(
             Claim.join(TXO).join(TX)
@@ -276,16 +277,45 @@ def protobuf_search_claims(**constraints) -> str:
 
 
 def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[Censor]]:
+    ctx = context()
+    search_censor = ctx.get_search_censor()
+
     total = None
     if constraints.pop('include_total', False):
         total = search_claim_count(**constraints)
+
     constraints['offset'] = abs(constraints.get('offset', 0))
     constraints['limit'] = min(abs(constraints.get('limit', 10)), 50)
-    ctx = context()
-    search_censor = ctx.get_search_censor()
-    rows = context().fetchall(select_claims(**constraints))
+
+    channel_url = constraints.pop('channel', None)
+    if channel_url:
+        from .resolve import resolve_url
+        channel = resolve_url(channel_url)
+        if isinstance(channel, Output):
+            constraints['channel_hash'] = channel.claim_hash
+        else:
+            return [], total, search_censor
+
+    rows = ctx.fetchall(select_claims(**constraints))
     txos = rows_to_txos(rows, include_tx=False)
+    annotate_with_channels(txos)
     return txos, total, search_censor
+
+
+def annotate_with_channels(txos):
+    channel_hashes = set()
+    for txo in txos:
+        if txo.can_decode_claim and txo.claim.is_signed:
+            channel_hashes.add(txo.claim.signing_channel_hash)
+    if channel_hashes:
+        rows = context().fetchall(select_claims(claim_hash__in=channel_hashes))
+        channels = {
+            txo.claim_hash: txo for txo in
+            rows_to_txos(rows, include_tx=False)
+        }
+        for txo in txos:
+            if txo.can_decode_claim and txo.claim.is_signed:
+                txo.channel = channels.get(txo.claim.signing_channel_hash, None)
 
 
 def search_claim_count(**constraints) -> int:
@@ -305,9 +335,9 @@ END
 
 
 def _apply_constraints_for_array_attributes(constraints, attr, cleaner, for_count=False):
-    any_items = set(cleaner(constraints.pop(f'any_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
-    all_items = set(cleaner(constraints.pop(f'all_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
-    not_items = set(cleaner(constraints.pop(f'not_{attr}s', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    any_items = set(cleaner(constraints.pop(f'any_{attr}', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    all_items = set(cleaner(constraints.pop(f'all_{attr}', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
+    not_items = set(cleaner(constraints.pop(f'not_{attr}', []))[:ATTRIBUTE_ARRAY_MAX_LENGTH])
 
     all_items = {item for item in all_items if item not in not_items}
     any_items = {item for item in any_items if item not in not_items}
