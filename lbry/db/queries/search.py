@@ -289,7 +289,7 @@ def search_claims(**constraints) -> Tuple[List[Output], Optional[int], Optional[
 
     channel_url = constraints.pop('channel', None)
     if channel_url:
-        from .resolve import resolve_url
+        from .resolve import resolve_url  # pylint: disable=import-outside-toplevel
         channel = resolve_url(channel_url)
         if isinstance(channel, Output):
             constraints['channel_hash'] = channel.claim_hash
