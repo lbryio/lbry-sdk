@@ -1039,7 +1039,7 @@ class StreamCommands(ClaimTestCase):
 
         # fail to claim duplicate
         with self.assertRaisesRegex(
-                Exception, "You already have a stream claim published under the name 'foo'."):
+                Exception, "You already have a claim published under the name 'foo'."):
             await self.stream_create('foo')
 
         # fail claim starting with @
@@ -1738,7 +1738,7 @@ class StreamCommands(ClaimTestCase):
         await self.assertBalance(self.account, '10.0')
         tx = await self.stream_create(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
-        await self.stream_abandon(self.get_claim_id(tx))
+        await self.stream_abandon(claim_id=self.get_claim_id(tx))
         await self.assertBalance(self.account, '9.97968399')
 
     async def test_publish(self):
