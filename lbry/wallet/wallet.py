@@ -610,7 +610,7 @@ class ChannelListManager(ClaimListManager):
 
     async def update(
         self, old: Output, amount: int, new_signing_key: bool, replace: bool,
-        holding_account: Account, funding_accounts: List[Account],
+        holding_account: Account, funding_accounts: List[Account], change_account: Account,
         save_key=True, **kwargs
     ) -> Transaction:
 
@@ -642,7 +642,7 @@ class ChannelListManager(ClaimListManager):
             txo.private_key = old.private_key
 
         tx = await self.wallet.create_transaction(
-            [Input.spend(old)], [txo], funding_accounts, funding_accounts[0]
+            [Input.spend(old)], [txo], funding_accounts, change_account
         )
 
         await self.wallet.sign(tx)
@@ -769,6 +769,21 @@ class StreamListManager(ClaimListManager):
 
     async def list(self, **constraints) -> Result[Output]:
         return await self.wallet.db.get_streams(wallet=self.wallet, **constraints)
+
+    async def repost(
+        self, name: str, amount: int, claim_id: str,
+        holding_account: Account, funding_accounts: List[Account], change_account: Account,
+        signing_channel: Optional[Output] = None
+    ) -> Transaction:
+        holding_address = await holding_account.receiving.get_or_create_usable_address()
+        claim = Claim()
+        claim.repost.reference.claim_id = claim_id
+        tx = await super().create(
+            name=name, claim=claim, amount=amount, holding_address=holding_address,
+            funding_accounts=funding_accounts, change_account=change_account,
+            signing_channel=signing_channel
+        )
+        return tx
 
 
 class CollectionListManager(ClaimListManager):
