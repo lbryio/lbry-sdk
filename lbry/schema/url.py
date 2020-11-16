@@ -6,7 +6,7 @@ from typing import NamedTuple, Tuple
 def _create_url_regex():
     # see https://spec.lbry.com/ and test_url.py
     invalid_names_regex = \
-        r"[^=&#:$@%*?;\"/\\<>%{}|^~`\[\]" \
+        r"[^=&#:$@%?;\"/\\<>%{}|^~`\[\]" \
         r"\u0000-\u0020\uD800-\uDFFF\uFFFE-\uFFFF]+"
 
     def _named(name, regex):
