@@ -426,19 +426,6 @@ class LevelDB:
 
         return await asyncio.get_event_loop().run_in_executor(self.executor, read_headers)
 
-    async def fs_block_tx_hashes(self, height):
-        def _get_tx_hashes():
-            return self.tx_db.get(BLOCK_HASH_PREFIX + util.pack_be_uint64(height)).hex().decode(), list(map(
-                    lambda tx_hash: hash_to_hex_str(tx_hash).decode(),
-                    self.tx_db.iterator(
-                        start=TX_HASH_PREFIX + util.pack_be_uint64(self.tx_counts[height - 1]),
-                        stop=None if height + 1 == len(self.tx_counts) else TX_HASH_PREFIX + util.pack_be_uint64(self.tx_counts[height]),
-                        include_key=False
-                    )
-                ))
-
-        return await asyncio.get_event_loop().run_in_executor(self.executor, _get_tx_hashes)
-
     def fs_tx_hash(self, tx_num):
         """Return a par (tx_hash, tx_height) for the given tx number.
 

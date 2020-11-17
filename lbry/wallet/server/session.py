@@ -1585,15 +1585,6 @@ class LBRYElectrumX(SessionBase):
 
         return await self.daemon_request('getrawtransaction', tx_hash, verbose)
 
-    async def _block_hash_and_tx_hashes(self, height):
-        """Returns a pair (block_hash, tx_hashes) for the main chain block at
-        the given height.
-
-        block_hash is a hexadecimal string, and tx_hashes is an
-        ordered list of hexadecimal strings.
-        """
-        return await self.db.fs_block_tx_hashes(height)
-
     def _get_merkle_branch(self, tx_hashes, tx_pos):
         """Return a merkle branch to a transaction.
 
