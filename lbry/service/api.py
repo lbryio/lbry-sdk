@@ -1593,6 +1593,8 @@ class API:
             claim_filter_dict["is_controlling"] = is_controlling
         if public_key_id is not None:
             claim_filter_dict["public_key_id"] = public_key_id
+        if claim_type is not None:
+            claim_filter_dict["claim_type"] = claim_type
         page_num = abs(pagination['page'] or 1)
         page_size = min(abs(pagination['page_size'] or DEFAULT_PAGE_SIZE), 50)
         claim_filter_dict.update(stream_filter_dict)

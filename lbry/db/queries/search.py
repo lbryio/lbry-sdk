@@ -234,19 +234,23 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
     if 'claim_type' in constraints:
         claim_types = constraints.pop('claim_type')
         if isinstance(claim_types, str):
-            claim_types = [claim_types]
+            claim_types = {claim_types}
         if claim_types:
             constraints['claim_type__in'] = {
                 TXO_TYPES[claim_type] for claim_type in claim_types
             }
-    if 'stream_types' in constraints:
-        stream_types = constraints.pop('stream_types')
+    if 'stream_type' in constraints:
+        stream_types = constraints.pop('stream_type')
+        if isinstance(stream_types, str):
+            stream_types = {stream_types}
         if stream_types:
             constraints['stream_type__in'] = {
                 STREAM_TYPES[stream_type] for stream_type in stream_types
             }
-    if 'media_types' in constraints:
-        media_types = constraints.pop('media_types')
+    if 'media_type' in constraints:
+        media_types = constraints.pop('media_type')
+        if isinstance(media_types, str):
+            media_types = {media_types}
         if media_types:
             constraints['media_type__in'] = set(media_types)
 
