@@ -1,5 +1,5 @@
 import logging
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Tuple
 from binascii import hexlify, unhexlify
 
 from lbry.blockchain import Ledger, Transaction
@@ -79,5 +79,7 @@ class FullEndpoint(Service):
     async def search_supports(self, accounts, **kwargs):
         pass
 
-    async def sum_supports(self, claim_hash: bytes, include_channel_content=False) -> List[Dict]:
-        return await self.db.sum_supports(claim_hash, include_channel_content)
+    async def sum_supports(
+        self, claim_hash: bytes, include_channel_content=False, exclude_own_supports=False
+    ) -> Tuple[List[Dict], int]:
+        return await self.db.sum_supports(claim_hash, include_channel_content, exclude_own_supports)

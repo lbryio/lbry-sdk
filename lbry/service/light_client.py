@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from typing import Dict
-from typing import List, Optional, NamedTuple
+from typing import List, Optional, NamedTuple, Tuple
 from binascii import unhexlify
 
 from lbry.blockchain.block import Block, get_address_filter
@@ -62,8 +62,10 @@ class LightClient(Service):
     async def search_supports(self, accounts, **kwargs):
         pass
 
-    async def sum_supports(self, claim_hash: bytes, include_channel_content=False) -> List[Dict]:
-        return await self.client.sum_supports(claim_hash, include_channel_content)
+    async def sum_supports(
+        self, claim_hash: bytes, include_channel_content=False, exclude_own_supports=False
+    ) -> Tuple[List[Dict], int]:
+        return await self.client.sum_supports(claim_hash, include_channel_content, exclude_own_supports)
 
 
 class TransactionEvent(NamedTuple):
