@@ -75,7 +75,7 @@ class ReconnectTests(IntegrationTestCase):
             session.trigger_urgent_reconnect.set()
         await asyncio.wait_for(self.ledger.network.session_pool.new_connection_event.wait(), timeout=1)
         self.assertEqual(2, len(list(self.ledger.network.session_pool.available_sessions)))
-        self.assertTrue(self.ledger.network.is_connected)
+        self.assertTrue(self.ledger.network.is_connected())
         switch_event = self.ledger.network.on_connected.first
         await node2.stop(True)
         # secondary down, but primary is ok, do not switch! (switches trigger new on_connected events)
@@ -99,7 +99,7 @@ class ReconnectTests(IntegrationTestCase):
         address1 = await self.account.receiving.get_or_create_usable_address()
         # disconnect and send a new tx, should reconnect and get it
         self.ledger.network.client.connection_lost(Exception())
-        self.assertFalse(self.ledger.network.is_connected)
+        self.assertFalse(self.ledger.network.is_connected())
         sendtxid = await self.blockchain.send_to_address(address1, 1.1337)
         await asyncio.wait_for(self.on_transaction_id(sendtxid), 1.0)  # mempool
         await self.blockchain.generate(1)
@@ -122,7 +122,7 @@ class ReconnectTests(IntegrationTestCase):
         sendtxid = await self.blockchain.send_to_address(address1, 42)
         await self.blockchain.generate(1)
         # (this is just so the test doesn't hang forever if it doesn't reconnect)
-        if not self.ledger.network.is_connected:
+        if not self.ledger.network.is_connected():
             await asyncio.wait_for(self.ledger.network.on_connected.first, timeout=1.0)
         # omg, the burned cable still works! torba is fire proof!
         await self.ledger.network.get_transaction(sendtxid)
@@ -130,11 +130,11 @@ class ReconnectTests(IntegrationTestCase):
     async def test_timeout_then_reconnect(self):
         # tests that it connects back after some failed attempts
         await self.conductor.spv_node.stop()
-        self.assertFalse(self.ledger.network.is_connected)
+        self.assertFalse(self.ledger.network.is_connected())
         await asyncio.sleep(0.2)  # let it retry and fail once
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
-        self.assertTrue(self.ledger.network.is_connected)
+        self.assertTrue(self.ledger.network.is_connected())
 
     async def test_online_but_still_unavailable(self):
         # Edge case. See issue #2445 for context
@@ -184,7 +184,7 @@ class ServerPickingTestCase(AsyncioTestCase):
         self.addCleanup(network.stop)
         asyncio.ensure_future(network.start())
         await asyncio.wait_for(network.on_connected.first, timeout=1)
-        self.assertTrue(network.is_connected)
+        self.assertTrue(network.is_connected())
         self.assertTupleEqual(network.client.server, ('127.0.0.1', 1337))
         self.assertTrue(all([not session.is_closing() for session in network.session_pool.available_sessions]))
         # ensure we are connected to all of them after a while

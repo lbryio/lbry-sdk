@@ -8,16 +8,14 @@ from lbry.wallet.dewies import dict_values_to_lbc
 
 
 class WalletCommands(CommandTestCase):
-
     async def test_wallet_create_and_add_subscribe(self):
-        session = next(iter(self.conductor.spv_node.server.session_mgr.sessions))
-        self.assertEqual(len(session.hashX_subs), 27)
+        self.assertSetEqual({0, 27}, {len(session.hashX_subs) for session in self.conductor.spv_node.server.session_mgr.sessions})
         wallet = await self.daemon.jsonrpc_wallet_create('foo', create_account=True, single_key=True)
-        self.assertEqual(len(session.hashX_subs), 28)
+        self.assertSetEqual({0, 27, 1}, {len(session.hashX_subs) for session in self.conductor.spv_node.server.session_mgr.sessions})
         await self.daemon.jsonrpc_wallet_remove(wallet.id)
-        self.assertEqual(len(session.hashX_subs), 27)
+        self.assertSetEqual({0, 27}, {len(session.hashX_subs) for session in self.conductor.spv_node.server.session_mgr.sessions})
         await self.daemon.jsonrpc_wallet_add(wallet.id)
-        self.assertEqual(len(session.hashX_subs), 28)
+        self.assertSetEqual({0, 27, 1}, {len(session.hashX_subs) for session in self.conductor.spv_node.server.session_mgr.sessions})
 
     async def test_wallet_syncing_status(self):
         address = await self.daemon.jsonrpc_address_unused()
