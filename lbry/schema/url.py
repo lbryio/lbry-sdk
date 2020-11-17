@@ -23,7 +23,6 @@ def _create_url_regex():
             _named(name+"_name", prefix + invalid_names_regex) +
             _oneof(
                 _group('[:#]' + _named(name+"_claim_id", "[0-9a-f]{1,40}")),
-                _group(r'\*' + _named(name+"_sequence", '[1-9][0-9]*')),
                 _group(r'\$' + _named(name+"_amount_order", '[1-9][0-9]*'))
             ) + '?'
         )
@@ -50,7 +49,6 @@ def normalize_name(name):
 class PathSegment(NamedTuple):
     name: str
     claim_id: str = None
-    sequence: int = None
     amount_order: int = None
 
     @property
@@ -61,8 +59,6 @@ class PathSegment(NamedTuple):
         q = {'name': self.name}
         if self.claim_id is not None:
             q['claim_id'] = self.claim_id
-        if self.sequence is not None:
-            q['sequence'] = self.sequence
         if self.amount_order is not None:
             q['amount_order'] = self.amount_order
         return q
@@ -70,8 +66,6 @@ class PathSegment(NamedTuple):
     def __str__(self):
         if self.claim_id is not None:
             return f"{self.name}:{self.claim_id}"
-        elif self.sequence is not None:
-            return f"{self.name}*{self.sequence}"
         elif self.amount_order is not None:
             return f"{self.name}${self.amount_order}"
         return self.name
@@ -118,7 +112,6 @@ class URL(NamedTuple):
                 segments[segment] = PathSegment(
                     parts[f'{segment}_name'],
                     parts[f'{segment}_claim_id'],
-                    parts[f'{segment}_sequence'],
                     parts[f'{segment}_amount_order']
                 )
 
