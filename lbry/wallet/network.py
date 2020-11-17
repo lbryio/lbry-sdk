@@ -6,7 +6,6 @@ from operator import itemgetter
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Dict, Optional, Tuple
-import typing
 import aiohttp
 
 from lbry import __version__
