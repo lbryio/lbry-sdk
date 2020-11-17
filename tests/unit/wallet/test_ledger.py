@@ -16,12 +16,12 @@ class MockNetwork:
         self.address = None
         self.get_history_called = []
         self.get_transaction_called = []
-        self.is_connected = False
+        self.is_connected = lambda _: False
 
     def retriable_call(self, function, *args, **kwargs):
         return function(*args, **kwargs)
 
-    async def get_history(self, address):
+    async def get_history(self, address, session=None):
         self.get_history_called.append(address)
         self.address = address
         return self.history
@@ -40,7 +40,7 @@ class MockNetwork:
             merkle = await self.get_merkle(tx_hash, known_height)
         return tx, merkle
 
-    async def get_transaction_batch(self, txids):
+    async def get_transaction_batch(self, txids, session=None):
         return {
             txid: await self.get_transaction_and_merkle(txid)
             for txid in txids
@@ -111,7 +111,7 @@ class TestSynchronization(LedgerTestCase):
             txid2: hexlify(get_transaction(get_output(2)).raw),
             txid3: hexlify(get_transaction(get_output(3)).raw),
         })
-        await self.ledger.update_history(address, '')
+        await self.ledger.update_history(None, address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [txid1, txid2, txid3])
 
@@ -129,7 +129,7 @@ class TestSynchronization(LedgerTestCase):
         self.assertFalse(self.ledger._tx_cache[txid1].tx.is_verified)
         self.assertFalse(self.ledger._tx_cache[txid2].tx.is_verified)
         self.assertFalse(self.ledger._tx_cache[txid3].tx.is_verified)
-        await self.ledger.update_history(address, '')
+        await self.ledger.update_history(None, address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [])
 
@@ -137,7 +137,7 @@ class TestSynchronization(LedgerTestCase):
         self.ledger.network.transaction[txid4] = hexlify(get_transaction(get_output(4)).raw)
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        await self.ledger.update_history(address, '')
+        await self.ledger.update_history(None, address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [txid4])
         address_details = await self.ledger.db.get_address(address=address)
