@@ -122,7 +122,7 @@ class Ledger(metaclass=LedgerRegistry):
         self.headers.checkpoints = self.checkpoints
         self.network: Network = self.config.get('network') or Network(self)
         self.network.on_header.listen(self.receive_header)
-        self.network.on_status.listen(self.process_status_update)
+        # self.network.on_status.listen(self.process_status_update)
         self.network.on_connected.listen(self.join_network)
 
         self.accounts = []
@@ -324,12 +324,15 @@ class Ledger(metaclass=LedgerRegistry):
             self.db.open(),
             self.headers.open()
         ])
+
         fully_synced = self.on_ready.first
+
         asyncio.create_task(self.network.start())
         await self.network.on_connected.first
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
         await fully_synced
+
         await self.db.release_all_outputs()
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
         await asyncio.gather(*(a.save_max_gap() for a in self.accounts))
@@ -448,11 +451,13 @@ class Ledger(metaclass=LedgerRegistry):
             )
 
     async def subscribe_accounts(self):
-        if self.network.is_connected and self.accounts:
-            log.info("Subscribe to %i accounts", len(self.accounts))
-            await asyncio.wait([
-                self.subscribe_account(a) for a in self.accounts
-            ])
+        wallet_ids = {account.wallet.id for account in self.accounts}
+        await self.network.connect_wallets(*wallet_ids)
+        # if self.network.is_connected and self.accounts:
+        log.info("Subscribe to %i accounts", len(self.accounts))
+        await asyncio.wait([
+            self.subscribe_account(a) for a in self.accounts
+        ])
 
     async def subscribe_account(self, account: Account):
         for address_manager in account.address_managers.values():
@@ -460,8 +465,10 @@ class Ledger(metaclass=LedgerRegistry):
         await account.ensure_address_gap()
 
     async def unsubscribe_account(self, account: Account):
+        session = self.network.get_wallet_session(account.wallet)
         for address in await account.get_addresses():
-            await self.network.unsubscribe_address(address)
+            await self.network.unsubscribe_address(address, session=session)
+        await self.network.close_wallet_session(account.wallet)
 
     async def announce_addresses(self, address_manager: AddressManager, addresses: List[str]):
         await self.subscribe_addresses(address_manager, addresses)
@@ -470,28 +477,29 @@ class Ledger(metaclass=LedgerRegistry):
         )
 
     async def subscribe_addresses(self, address_manager: AddressManager, addresses: List[str], batch_size: int = 1000):
-        if self.network.is_connected and addresses:
+        if self.network.is_connected(address_manager.account.wallet.id) and addresses:
+            session = self.network.get_wallet_session(address_manager.account.wallet)
             addresses_remaining = list(addresses)
             while addresses_remaining:
                 batch = addresses_remaining[:batch_size]
-                results = await self.network.subscribe_address(*batch)
+                results = await self.network.subscribe_address(session, *batch)
                 for address, remote_status in zip(batch, results):
-                    self._update_tasks.add(self.update_history(address, remote_status, address_manager))
+                    self._update_tasks.add(self.update_history(session, address, remote_status, address_manager))
                 addresses_remaining = addresses_remaining[batch_size:]
-                if self.network.client and self.network.client.server_address_and_port:
+                if session and session.server_address_and_port:
                     log.info("subscribed to %i/%i addresses on %s:%i", len(addresses) - len(addresses_remaining),
-                             len(addresses), *self.network.client.server_address_and_port)
-            if self.network.client and self.network.client.server_address_and_port:
+                             len(addresses), *session.server_address_and_port)
+            if session and session.server_address_and_port:
                 log.info(
                     "finished subscribing to %i addresses on %s:%i", len(addresses),
-                    *self.network.client.server_address_and_port
+                    *session.server_address_and_port
                 )
 
-    def process_status_update(self, update):
+    def process_status_update(self, client, update):
         address, remote_status = update
-        self._update_tasks.add(self.update_history(address, remote_status))
+        self._update_tasks.add(self.update_history(client, address, remote_status))
 
-    async def update_history(self, address, remote_status, address_manager: AddressManager = None,
+    async def update_history(self, client, address, remote_status, address_manager: AddressManager = None,
                              reattempt_update: bool = True):
         async with self._address_update_locks[address]:
             self._known_addresses_out_of_sync.discard(address)
@@ -500,7 +508,9 @@ class Ledger(metaclass=LedgerRegistry):
             if local_status == remote_status:
                 return True
 
-            remote_history = await self.network.retriable_call(self.network.get_history, address)
+            # remote_history = await self.network.retriable_call(self.network.get_history, address, client)
+            remote_history = await self.network.get_history(address, session=client)
+
             remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
             we_need = set(remote_history) - set(local_history)
             if not we_need:
@@ -563,7 +573,7 @@ class Ledger(metaclass=LedgerRegistry):
                 "request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs),
                 len(remote_history), address
             )
-            requested_txes = await self._request_transaction_batch(to_request, len(remote_history), address)
+            requested_txes = await self._request_transaction_batch(to_request, len(remote_history), address, client)
             for tx in requested_txes:
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 synced_txs.append(tx)
@@ -603,7 +613,7 @@ class Ledger(metaclass=LedgerRegistry):
                 if self._tx_cache.get(txid) is not cache_item:
                     log.warning("tx cache corrupted while syncing %s, reattempt sync=%s", address, reattempt_update)
                     if reattempt_update:
-                        return await self.update_history(address, remote_status, address_manager, False)
+                        return await self.update_history(client, address, remote_status, address_manager, False)
                     return False
 
             local_status, local_history = \
@@ -741,7 +751,7 @@ class Ledger(metaclass=LedgerRegistry):
             await _single_batch(batch)
         return transactions
 
-    async def _request_transaction_batch(self, to_request, remote_history_size, address):
+    async def _request_transaction_batch(self, to_request, remote_history_size, address, session):
         header_cache = {}
         batches = [[]]
         remote_heights = {}
@@ -766,7 +776,8 @@ class Ledger(metaclass=LedgerRegistry):
 
         async def _single_batch(batch):
             this_batch_synced = []
-            batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch)
+            # batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch, session)
+            batch_result = await self.network.get_transaction_batch(batch, session)
             for txid, (raw, merkle) in batch_result.items():
                 remote_height = remote_heights[txid]
                 merkle_height = merkle['block_height']

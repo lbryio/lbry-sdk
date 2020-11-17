@@ -6,13 +6,14 @@ from operator import itemgetter
 from contextlib import asynccontextmanager
 from functools import partial
 from typing import Dict, Optional, Tuple
-
+import typing
 import aiohttp
 
 from lbry import __version__
 from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
+
 
 log = logging.getLogger(__name__)
 
@@ -33,10 +34,25 @@ class ClientSession(BaseClientSession):
         self.pending_amount = 0
         self._on_connect_cb = on_connect_callback or (lambda: None)
         self.trigger_urgent_reconnect = asyncio.Event()
+        self._connected = asyncio.Event()
+        self._disconnected = asyncio.Event()
+        self._disconnected.set()
+
+        self._on_status_controller = StreamController(merge_repeated_events=True)
+        self.on_status = self._on_status_controller.stream
+        self.on_status.listen(partial(self.network.ledger.process_status_update, self))
+        self.subscription_controllers = {
+            'blockchain.headers.subscribe': self.network._on_header_controller,
+            'blockchain.address.subscribe': self._on_status_controller,
+        }
 
     @property
     def available(self):
         return not self.is_closing() and self.response_time is not None
+
+    @property
+    def is_connected(self) -> bool:
+        return self._connected.is_set()
 
     @property
     def server_address_and_port(self) -> Optional[Tuple[str, int]]:
@@ -144,7 +160,7 @@ class ClientSession(BaseClientSession):
         self.connection_latency = perf_counter() - start
 
     async def handle_request(self, request):
-        controller = self.network.subscription_controllers[request.method]
+        controller = self.subscription_controllers[request.method]
         controller.add(request.args)
 
     def connection_lost(self, exc):
@@ -154,6 +170,13 @@ class ClientSession(BaseClientSession):
         self.connection_latency = None
         self._response_samples = 0
         self._on_disconnect_controller.add(True)
+        self._connected.clear()
+        self._disconnected.set()
+
+    def connection_made(self, transport):
+        super(ClientSession, self).connection_made(transport)
+        self._disconnected.clear()
+        self._connected.set()
 
 
 class Network:
@@ -165,6 +188,7 @@ class Network:
         self.ledger = ledger
         self.session_pool = SessionPool(network=self, timeout=self.config.get('connect_timeout', 6))
         self.client: Optional[ClientSession] = None
+        self.clients: Dict[str, ClientSession] = {}
         self.server_features = None
         self._switch_task: Optional[asyncio.Task] = None
         self.running = False
@@ -177,15 +201,18 @@ class Network:
         self._on_header_controller = StreamController(merge_repeated_events=True)
         self.on_header = self._on_header_controller.stream
 
-        self._on_status_controller = StreamController(merge_repeated_events=True)
-        self.on_status = self._on_status_controller.stream
 
         self.subscription_controllers = {
             'blockchain.headers.subscribe': self._on_header_controller,
-            'blockchain.address.subscribe': self._on_status_controller,
         }
 
         self.aiohttp_session: Optional[aiohttp.ClientSession] = None
+
+    def get_wallet_session(self, wallet):
+        return self.clients[wallet.id]
+
+    async def close_wallet_session(self, wallet):
+        await self.clients.pop(wallet.id).close()
 
     @property
     def config(self):
@@ -193,11 +220,12 @@ class Network:
 
     async def switch_forever(self):
         while self.running:
-            if self.is_connected:
+            if self.is_connected():
                 await self.client.on_disconnected.first
                 self.server_features = None
                 self.client = None
                 continue
+
             self.client = await self.session_pool.wait_for_fastest_session()
             log.info("Switching to SPV wallet server: %s:%d", *self.client.server)
             try:
@@ -220,6 +248,11 @@ class Network:
         self._switch_task.add_done_callback(lambda _: log.info("Wallet client switching task stopped."))
         self.session_pool.start(self.config['default_servers'])
         self.on_header.listen(self._update_remote_height)
+        await self.connect_wallets(*{a.wallet.id for a in self.ledger.accounts})
+        await self.ledger.subscribe_accounts()
+
+    async def connect_wallets(self, *wallet_ids):
+        await asyncio.wait([self.session_pool.connect_wallet(wallet_id) for wallet_id in wallet_ids])
 
     async def stop(self):
         if self.running:
@@ -228,9 +261,19 @@ class Network:
             self._switch_task.cancel()
             self.session_pool.stop()
 
-    @property
-    def is_connected(self):
-        return self.client and not self.client.is_closing()
+    def is_connected(self, wallet_id: str = None):
+        if wallet_id is None:
+            if not self.client:
+                return False
+            return self.client.is_connected
+        if wallet_id not in self.clients:
+            return False
+        return self.clients[wallet_id].is_connected
+
+    def connect_wallet_client(self, wallet_id: str, server: Tuple[str, int]):
+        client = ClientSession(network=self, server=server)
+        self.clients[wallet_id] = client
+        return client
 
     def rpc(self, list_or_method, args, restricted=True, session=None):
         session = session or (self.client if restricted else self.session_pool.fastest_session)
@@ -256,8 +299,41 @@ class Network:
         raise asyncio.CancelledError()  # if we got here, we are shutting down
 
     @asynccontextmanager
-    async def single_call_context(self, function, *args, **kwargs):
+    async def fastest_connection_context(self):
+
         if not self.is_connected:
+            log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+            await self.on_connected.first
+        await self.session_pool.wait_for_fastest_session()
+        server = self.session_pool.fastest_session.server
+        session = ClientSession(network=self, server=server)
+
+        async def call_with_reconnect(function, *args, **kwargs):
+            nonlocal session
+
+            while self.running:
+                if not session.is_connected:
+                    try:
+                        await session.create_connection()
+                    except asyncio.TimeoutError:
+                        if not session.is_connected:
+                            log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                            await self.on_connected.first
+                        await self.session_pool.wait_for_fastest_session()
+                        server = self.session_pool.fastest_session.server
+                        session = ClientSession(network=self, server=server)
+                try:
+                    return await partial(function, *args, session_override=session, **kwargs)(*args, **kwargs)
+                except asyncio.TimeoutError:
+                    log.warning("'%s' failed, retrying", function.__name__)
+        try:
+            yield call_with_reconnect
+        finally:
+            await session.close()
+
+    @asynccontextmanager
+    async def single_call_context(self, function, *args, **kwargs):
+        if not self.is_connected():
             log.warning("Wallet server unavailable, waiting for it to come back and retry.")
             await self.on_connected.first
         await self.session_pool.wait_for_fastest_session()
@@ -280,71 +356,71 @@ class Network:
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
 
-    def get_transaction(self, tx_hash, known_height=None):
+    def get_transaction(self, tx_hash, known_height=None, session=None):
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.get', [tx_hash], restricted, session=session)
 
     def get_transaction_batch(self, txids, restricted=True, session=None):
         # use any server if its old, otherwise restrict to who gave us the history
-        return self.rpc('blockchain.transaction.get_batch', txids, restricted, session)
+        return self.rpc('blockchain.transaction.get_batch', txids, restricted, session=session)
 
-    def get_transaction_and_merkle(self, tx_hash, known_height=None):
+    def get_transaction_and_merkle(self, tx_hash, known_height=None, session=None):
         # use any server if its old, otherwise restrict to who gave us the history
         restricted = known_height in (None, -1, 0) or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.info', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.info', [tx_hash], restricted, session=session)
 
-    def get_transaction_height(self, tx_hash, known_height=None):
+    def get_transaction_height(self, tx_hash, known_height=None, session=None):
         restricted = not known_height or 0 > known_height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted)
+        return self.rpc('blockchain.transaction.get_height', [tx_hash], restricted, session=session)
 
-    def get_merkle(self, tx_hash, height):
+    def get_merkle(self, tx_hash, height, session=None):
         restricted = 0 > height > self.remote_height - 10
-        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted)
+        return self.rpc('blockchain.transaction.get_merkle', [tx_hash, height], restricted, session=session)
 
     def get_headers(self, height, count=10000, b64=False):
         restricted = height >= self.remote_height - 100
         return self.rpc('blockchain.block.headers', [height, count, 0, b64], restricted)
 
     #  --- Subscribes, history and broadcasts are always aimed towards the master client directly
-    def get_history(self, address):
-        return self.rpc('blockchain.address.get_history', [address], True)
+    def get_history(self, address, session=None):
+        return self.rpc('blockchain.address.get_history', [address], True, session=session)
 
-    def broadcast(self, raw_transaction):
-        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], True)
+    def broadcast(self, raw_transaction, session=None):
+        return self.rpc('blockchain.transaction.broadcast', [raw_transaction], True, session=session)
 
     def subscribe_headers(self):
         return self.rpc('blockchain.headers.subscribe', [True], True)
 
-    async def subscribe_address(self, address, *addresses):
+    async def subscribe_address(self, session, address, *addresses):
         addresses = list((address, ) + addresses)
-        server_addr_and_port = self.client.server_address_and_port  # on disconnect client will be None
+        server_addr_and_port = session.server_address_and_port  # on disconnect client will be None
         try:
-            return await self.rpc('blockchain.address.subscribe', addresses, True)
+            return await self.rpc('blockchain.address.subscribe', addresses, True, session=session)
         except asyncio.TimeoutError:
             log.warning(
                 "timed out subscribing to addresses from %s:%i",
                 *server_addr_and_port
             )
             # abort and cancel, we can't lose a subscription, it will happen again on reconnect
-            if self.client:
-                self.client.abort()
+            if session:
+                session.abort()
             raise asyncio.CancelledError()
 
-    def unsubscribe_address(self, address):
-        return self.rpc('blockchain.address.unsubscribe', [address], True)
+    def unsubscribe_address(self, address, session=None):
+        return self.rpc('blockchain.address.unsubscribe', [address], True, session=session)
 
-    def get_server_features(self):
-        return self.rpc('server.features', (), restricted=True)
+    def get_server_features(self, session=None):
+        return self.rpc('server.features', (), restricted=True, session=session)
 
     def get_claims_by_ids(self, claim_ids):
         return self.rpc('blockchain.claimtrie.getclaimsbyids', claim_ids)
 
     def resolve(self, urls, session_override=None):
-        return self.rpc('blockchain.claimtrie.resolve', urls, False, session_override)
+        return self.rpc('blockchain.claimtrie.resolve', urls, False, session=session_override)
 
     def claim_search(self, session_override=None, **kwargs):
-        return self.rpc('blockchain.claimtrie.search', kwargs, False, session_override)
+        return self.rpc('blockchain.claimtrie.search', kwargs, False, session=session_override)
 
     async def new_resolve(self, server, urls):
         message = {"method": "resolve", "params": {"urls": urls, "protobuf": True}}
@@ -371,6 +447,7 @@ class SessionPool:
     def __init__(self, network: Network, timeout: float):
         self.network = network
         self.sessions: Dict[ClientSession, Optional[asyncio.Task]] = dict()
+        self.wallet_session_tasks: Dict[ClientSession, Optional[asyncio.Task]] = dict()
         self.timeout = timeout
         self.new_connection_event = asyncio.Event()
 
@@ -429,6 +506,19 @@ class SessionPool:
             task = asyncio.create_task(session.ensure_session())
             task.add_done_callback(lambda _: self.ensure_connections())
             self.sessions[session] = task
+
+    async def connect_wallet(self, wallet_id: str):
+        fastest = await self.wait_for_fastest_session()
+        if not self.network.is_connected(wallet_id):
+            session = self.network.connect_wallet_client(wallet_id, fastest.server)
+            # session._on_connect_cb = self._get_session_connect_callback(session)
+        else:
+            session = self.network.clients[wallet_id]
+        task = self.wallet_session_tasks.get(session, None)
+        if not task or task.done():
+            task = asyncio.create_task(session.ensure_session())
+            # task.add_done_callback(lambda _: self.ensure_connections())
+            self.wallet_session_tasks[session] = task
 
     def start(self, default_servers):
         for server in default_servers:
