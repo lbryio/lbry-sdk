@@ -555,8 +555,8 @@ class BulkLoader:
 
         if claim.is_stream:
             d['claim_type'] = TXO_TYPES['stream']
-            d['stream_type'] = STREAM_TYPES[guess_stream_type(d['media_type'])]
             d['media_type'] = claim.stream.source.media_type
+            d['stream_type'] = STREAM_TYPES[guess_stream_type(d['media_type'])]
             d['title'] = claim.stream.title.replace('\x00', '')
             d['description'] = claim.stream.description.replace('\x00', '')
             d['author'] = claim.stream.author.replace('\x00', '')

@@ -239,7 +239,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tag=['def', 'ghi'])
 
     async def test_order_by(self):
-        height = self.ledger.sync.network.remote_height
+        height = await self.api.block_tip()
         claims = [await self.stream_create(f'claim{i}') for i in range(5)]
 
         await self.assertFindsClaims(claims, order_by=["^height"])
@@ -346,16 +346,16 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([repost], claim_type='repost')
 
         # stream_type
-        await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
-        await self.assertFindsClaims([video], stream_types=['video'])
-        await self.assertFindsClaims([image], stream_types=['image'])
-        await self.assertFindsClaims([image, video], stream_types=['video', 'image'])
+        await self.assertFindsClaims([octet, unknown], stream_type=['binary'])
+        await self.assertFindsClaims([video], stream_type=['video'])
+        await self.assertFindsClaims([image], stream_type=['image'])
+        await self.assertFindsClaims([image, video], stream_type=['video', 'image'])
 
         # media_type
-        await self.assertFindsClaims([octet, unknown], media_types=['application/octet-stream'])
-        await self.assertFindsClaims([video], media_types=['video/mp4'])
-        await self.assertFindsClaims([image], media_types=['image/png'])
-        await self.assertFindsClaims([image, video], media_types=['video/mp4', 'image/png'])
+        await self.assertFindsClaims([octet, unknown], media_type=['application/octet-stream'])
+        await self.assertFindsClaims([video], media_type=['video/mp4'])
+        await self.assertFindsClaims([image], media_type=['image/png'])
+        await self.assertFindsClaims([image, video], media_type=['video/mp4', 'image/png'])
 
         # duration
         await self.assertFindsClaim(video, duration='>14')
