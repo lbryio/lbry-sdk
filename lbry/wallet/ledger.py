@@ -722,7 +722,7 @@ class Ledger(metaclass=LedgerRegistry):
                 if cache_item is None:
                     cache_item = TransactionCacheItem()
                     self._tx_cache[txid] = cache_item
-                tx = cache_item.tx or Transaction(unhexlify(raw), height=remote_height)
+                tx = cache_item.tx or Transaction(bytes.fromhex(raw), height=remote_height)
                 tx.height = remote_height
                 cache_item.tx = tx
                 if 'merkle' in merkle and remote_heights[txid] > 0:

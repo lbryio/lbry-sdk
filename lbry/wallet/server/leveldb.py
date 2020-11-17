@@ -18,6 +18,7 @@ from asyncio import sleep
 from bisect import bisect_right
 from collections import namedtuple
 from functools import partial
+from binascii import unhexlify, hexlify
 from glob import glob
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -35,6 +36,10 @@ UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
 HEADER_PREFIX = b'H'
 TX_COUNT_PREFIX = b'T'
 TX_HASH_PREFIX = b'X'
+TX_PREFIX = b'B'
+TX_NUM_PREFIX = b'N'
+BLOCK_HASH_PREFIX = b'C'
+
 
 
 @attr.s(slots=True)
@@ -42,7 +47,8 @@ class FlushData:
     height = attr.ib()
     tx_count = attr.ib()
     headers = attr.ib()
-    block_tx_hashes = attr.ib()
+    block_hashes = attr.ib()
+    block_txs = attr.ib()
     # The following are flushed to the UTXO DB if undo_infos is not None
     undo_infos = attr.ib()
     adds = attr.ib()
@@ -82,9 +88,8 @@ class LevelDB:
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
-        self.hashes_db = None
         self.headers_db = None
-        self.tx_count_db = None
+        self.tx_db = None
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
@@ -95,7 +100,7 @@ class LevelDB:
         def get_counts():
             return tuple(
                 util.unpack_be_uint64(tx_count)
-                for tx_count in self.tx_count_db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)
+                for tx_count in self.tx_db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)
             )
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(self.executor, get_counts)
@@ -123,17 +128,11 @@ class LevelDB:
             self.logger.info('created new headers db')
         self.logger.info(f'opened headers DB (for sync: {for_sync})')
 
-        assert self.tx_count_db is None
-        self.tx_count_db = self.db_class('tx_count', for_sync)
-        if self.tx_count_db.is_new:
-            self.logger.info('created new tx count db')
-        self.logger.info(f'opened tx count DB (for sync: {for_sync})')
-
-        assert self.hashes_db is None
-        self.hashes_db = self.db_class('hashes', for_sync)
-        if self.hashes_db.is_new:
-            self.logger.info('created new tx hashes db')
-        self.logger.info(f'opened tx hashes DB (for sync: {for_sync})')
+        assert self.tx_db is None
+        self.tx_db = self.db_class('tx', for_sync)
+        if self.tx_db.is_new:
+            self.logger.info('created new tx db')
+        self.logger.info(f'opened tx DB (for sync: {for_sync})')
 
         assert self.utxo_db is None
         # First UTXO DB
@@ -156,8 +155,7 @@ class LevelDB:
         self.utxo_db.close()
         self.history.close_db()
         self.headers_db.close()
-        self.tx_count_db.close()
-        self.hashes_db.close()
+        self.tx_db.close()
         self.executor.shutdown(wait=True)
         self.executor = None
 
@@ -187,12 +185,9 @@ class LevelDB:
         if self.headers_db:
             self.headers_db.close()
             self.headers_db = None
-        if self.tx_count_db:
-            self.tx_count_db.close()
-            self.tx_count_db = None
-        if self.hashes_db:
-            self.hashes_db.close()
-            self.hashes_db = None
+        if self.tx_db:
+            self.tx_db.close()
+            self.tx_db = None
 
         await self._open_dbs(False, False)
         self.logger.info("opened for serving")
@@ -217,7 +212,7 @@ class LevelDB:
         assert flush_data.height == self.fs_height == self.db_height
         assert flush_data.tip == self.db_tip
         assert not flush_data.headers
-        assert not flush_data.block_tx_hashes
+        assert not flush_data.block_txs
         assert not flush_data.adds
         assert not flush_data.deletes
         assert not flush_data.undo_infos
@@ -275,30 +270,38 @@ class LevelDB:
         """
         prior_tx_count = (self.tx_counts[self.fs_height]
                           if self.fs_height >= 0 else 0)
-        assert len(flush_data.block_tx_hashes) == len(flush_data.headers)
+        assert len(flush_data.block_txs) == len(flush_data.headers)
         assert flush_data.height == self.fs_height + len(flush_data.headers)
         assert flush_data.tx_count == (self.tx_counts[-1] if self.tx_counts
                                        else 0)
         assert len(self.tx_counts) == flush_data.height + 1
-        assert len(b''.join(flush_data.block_tx_hashes)) // 32 == flush_data.tx_count - prior_tx_count
+        assert len(
+            b''.join(hashes for hashes, _ in flush_data.block_txs)
+        ) // 32 == flush_data.tx_count - prior_tx_count
 
         # Write the headers, tx counts, and tx hashes
         start_time = time.perf_counter()
         height_start = self.fs_height + 1
         tx_num = prior_tx_count
 
-        for header, tx_hashes in zip(flush_data.headers, flush_data.block_tx_hashes):
+        for header, block_hash, (tx_hashes, txs) in zip(
+                flush_data.headers, flush_data.block_hashes, flush_data.block_txs):
             tx_count = self.tx_counts[height_start]
             self.headers_db.put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
-            self.tx_count_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
+            self.tx_db.put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
+            self.tx_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
             height_start += 1
             offset = 0
             while offset < len(tx_hashes):
-                self.hashes_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
+                self.tx_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
+                self.tx_db.put(TX_NUM_PREFIX + tx_hashes[offset:offset+32], util.pack_be_uint64(tx_num))
+                self.tx_db.put(TX_PREFIX + tx_hashes[offset:offset+32], txs[offset // 32])
                 tx_num += 1
                 offset += 32
 
-        flush_data.block_tx_hashes.clear()
+        flush_data.block_txs.clear()
+        flush_data.block_hashes.clear()
+
         self.fs_height = flush_data.height
         self.fs_tx_count = flush_data.tx_count
         flush_data.headers.clear()
@@ -362,7 +365,7 @@ class LevelDB:
     def flush_backup(self, flush_data, touched):
         """Like flush_dbs() but when backing up.  All UTXOs are flushed."""
         assert not flush_data.headers
-        assert not flush_data.block_tx_hashes
+        assert not flush_data.block_txs
         assert flush_data.height < self.db_height
         self.history.assert_flushed()
 
@@ -431,8 +434,53 @@ class LevelDB:
         if tx_height > self.db_height:
             tx_hash = None
         else:
-            tx_hash = self.hashes_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
+            tx_hash = self.tx_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
         return tx_hash, tx_height
+
+    def _fs_transactions(self, txids):
+        def _iter_transactions():
+            block_txs = {}
+            branch_and_root = self.merkle.branch_and_root
+            tx_iterator = self.tx_db.iterator
+            tx_counts = self.tx_counts
+            tx_db_get = self.tx_db.get
+            unpack_be_uint64 = util.unpack_be_uint64
+            pack_be_uint64 = util.pack_be_uint64
+
+            for tx_hash in txids:
+                tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
+                tx_num = tx_db_get(TX_NUM_PREFIX + tx_hash_bytes)
+                if tx_num is not None:
+                    tx_num = unpack_be_uint64(tx_num)
+                    tx_height = bisect_right(tx_counts, tx_num)
+                else:
+                    yield tx_hash, (None, {'block_height': -1})
+                    continue
+                if tx_height >= self.db_height:
+                    yield tx_hash, (None, {'block_height': -1})
+                    continue
+                tx = tx_db_get(TX_PREFIX + tx_hash_bytes)
+                if tx_height not in block_txs:
+                    block_txs[tx_height] = list(tx_iterator(
+                        start=TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height - 1]),
+                        stop=None if tx_height + 1 == len(tx_counts) else
+                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height]),
+                        include_key=False
+                    ))
+                tx_pos = tx_counts[tx_height] - tx_num
+                branch, root = branch_and_root(block_txs[tx_height], tx_pos)
+                merkle = {
+                    'block_height': tx_height,
+                    'merkle': [hash_to_hex_str(hash) for hash in branch],
+                    'pos': tx_pos
+                }
+                yield tx_hash, (None if not tx else tx.hex(), merkle)
+        return {
+            _tx_hash: _val for (_tx_hash, _val) in _iter_transactions()
+        }
+
+    async def fs_transactions(self, txids):
+        return await asyncio.get_event_loop().run_in_executor(self.executor, self._fs_transactions, txids)
 
     async def fs_block_hashes(self, height, count):
         headers_concat, headers_count = await self.read_headers(height, count)
@@ -453,25 +501,54 @@ class LevelDB:
         transactions.  By default returns at most 1000 entries.  Set
         limit to None to get them all.
         """
-        def read_history():
-            hashx_history = []
+        # def read_history():
+        #     hashx_history = []
+        #     for key, hist in self.history.db.iterator(prefix=hashX):
+        #         a = array.array('I')
+        #         a.frombytes(hist)
+        #         for tx_num in a:
+        #             tx_height = bisect_right(self.tx_counts, tx_num)
+        #             if tx_height > self.db_height:
+        #                 tx_hash = None
+        #             else:
+        #                 tx_hash = self.tx_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
+        #
+        #             hashx_history.append((tx_hash, tx_height))
+        #             if limit and len(hashx_history) >= limit:
+        #                 return hashx_history
+        #     return hashx_history
+
+        def iter_tx_heights():
+            db_height = self.db_height
+            tx_counts = self.tx_counts
+            tx_db_get = self.tx_db.get
+            pack_be_uint64 = util.pack_be_uint64
+
+            cnt = 0
+
             for key, hist in self.history.db.iterator(prefix=hashX):
                 a = array.array('I')
                 a.frombytes(hist)
                 for tx_num in a:
-                    tx_height = bisect_right(self.tx_counts, tx_num)
-                    if tx_height > self.db_height:
-                        tx_hash = None
-                    else:
-                        tx_hash = self.hashes_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
-                    hashx_history.append((tx_hash, tx_height))
-                    if limit and len(hashx_history) >= limit:
-                        return hashx_history
-            return hashx_history
+                    tx_height = bisect_right(tx_counts, tx_num)
+                    if tx_height > db_height:
+                        yield None, tx_height
+                        return
+                    yield tx_db_get(TX_HASH_PREFIX + pack_be_uint64(tx_num)), tx_height
+                    cnt += 1
+                    if limit and cnt >= limit:
+                        return
+                if limit and cnt >= limit:
+                    return
+
+        def read_history():
+            return [
+                (tx_num, tx_height) for (tx_num, tx_height) in iter_tx_heights()
+            ]
 
         while True:
             history = await asyncio.get_event_loop().run_in_executor(self.executor, read_history)
-            if all(hash is not None for hash, height in history):
+            if not history or history[-1][0] is not None:
                 return history
             self.logger.warning(f'limited_history: tx hash '
                                 f'not found (reorg?), retrying...')
@@ -629,13 +706,14 @@ class LevelDB:
             utxos = []
             utxos_append = utxos.append
             s_unpack = unpack
+            fs_tx_hash = self.fs_tx_hash
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
             prefix = b'u' + hashX
             for db_key, db_value in self.utxo_db.iterator(prefix=prefix):
                 tx_pos, tx_num = s_unpack('<HI', db_key[-6:])
                 value, = unpack('<Q', db_value)
-                tx_hash, height = self.fs_tx_hash(tx_num)
+                tx_hash, height = fs_tx_hash(tx_num)
                 utxos_append(UTXO(tx_num, tx_pos, tx_hash, height, value))
             return utxos
 

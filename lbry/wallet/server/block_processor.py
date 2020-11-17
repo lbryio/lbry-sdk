@@ -171,7 +171,8 @@ class BlockProcessor:
 
         # Caches of unflushed items.
         self.headers = []
-        self.tx_hashes = []
+        self.block_hashes = []
+        self.block_txs = []
         self.undo_infos = []
 
         # UTXO cache
@@ -336,8 +337,8 @@ class BlockProcessor:
     def flush_data(self):
         """The data for a flush.  The lock must be taken."""
         assert self.state_lock.locked()
-        return FlushData(self.height, self.tx_count, self.headers,
-                         self.tx_hashes, self.undo_infos, self.utxo_cache,
+        return FlushData(self.height, self.tx_count, self.headers, self.block_hashes,
+                         self.block_txs, self.undo_infos, self.utxo_cache,
                          self.db_deletes, self.tip)
 
     async def flush(self, flush_utxos):
@@ -392,7 +393,8 @@ class BlockProcessor:
         for block in blocks:
             height += 1
             undo_info = self.advance_txs(
-                height, block.transactions, self.coin.electrum_header(block.header, height)
+                height, block.transactions, self.coin.electrum_header(block.header, height),
+                self.coin.header_hash(block.header)
             )
             if height >= min_height:
                 self.undo_infos.append((undo_info, height))
@@ -403,25 +405,26 @@ class BlockProcessor:
         self.headers.extend(headers)
         self.tip = self.coin.header_hash(headers[-1])
 
-    def advance_txs(self, height, txs, header):
-        self.tx_hashes.append(b''.join(tx_hash for tx, tx_hash in txs))
+    def advance_txs(self, height, txs, header, block_hash):
+        self.block_hashes.append(block_hash)
+        self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx.raw for tx, _ in txs]))
 
-        # Use local vars for speed in the loops
         undo_info = []
         tx_num = self.tx_count
-        script_hashX = self.coin.hashX_from_script
-        s_pack = pack
+        hashXs_by_tx = []
+
+        # Use local vars for speed in the loops
         put_utxo = self.utxo_cache.__setitem__
         spend_utxo = self.spend_utxo
         undo_info_append = undo_info.append
         update_touched = self.touched.update
-        hashXs_by_tx = []
-        append_hashXs = hashXs_by_tx.append
+        append_hashX_by_tx = hashXs_by_tx.append
+        hashX_from_script = self.coin.hashX_from_script
 
         for tx, tx_hash in txs:
             hashXs = []
             append_hashX = hashXs.append
-            tx_numb = s_pack('<I', tx_num)
+            tx_numb = pack('<I', tx_num)
 
             # Spend the inputs
             for txin in tx.inputs:
@@ -434,18 +437,16 @@ class BlockProcessor:
             # Add the new UTXOs
             for idx, txout in enumerate(tx.outputs):
                 # Get the hashX.  Ignore unspendable outputs
-                hashX = script_hashX(txout.pk_script)
+                hashX = hashX_from_script(txout.pk_script)
                 if hashX:
                     append_hashX(hashX)
-                    put_utxo(tx_hash + s_pack('<H', idx),
-                             hashX + tx_numb + s_pack('<Q', txout.value))
+                    put_utxo(tx_hash + pack('<H', idx), hashX + tx_numb + pack('<Q', txout.value))
 
-            append_hashXs(hashXs)
+            append_hashX_by_tx(hashXs)
             update_touched(hashXs)
             tx_num += 1
 
         self.db.history.add_unflushed(hashXs_by_tx, self.tx_count)
-
         self.tx_count = tx_num
         self.db.tx_counts.append(tx_num)
 
@@ -487,20 +488,16 @@ class BlockProcessor:
 
         # Use local vars for speed in the loops
         s_pack = pack
-        put_utxo = self.utxo_cache.__setitem__
-        spend_utxo = self.spend_utxo
-        script_hashX = self.coin.hashX_from_script
-        touched = self.touched
         undo_entry_len = 12 + HASHX_LEN
 
         for tx, tx_hash in reversed(txs):
             for idx, txout in enumerate(tx.outputs):
                 # Spend the TX outputs.  Be careful with unspendable
                 # outputs - we didn't save those in the first place.
-                hashX = script_hashX(txout.pk_script)
+                hashX = self.coin.hashX_from_script(txout.pk_script)
                 if hashX:
-                    cache_value = spend_utxo(tx_hash, idx)
-                    touched.add(cache_value[:-12])
+                    cache_value = self.spend_utxo(tx_hash, idx)
+                    self.touched.add(cache_value[:-12])
 
             # Restore the inputs
             for txin in reversed(tx.inputs):
@@ -508,9 +505,8 @@ class BlockProcessor:
                     continue
                 n -= undo_entry_len
                 undo_item = undo_info[n:n + undo_entry_len]
-                put_utxo(txin.prev_hash + s_pack('<H', txin.prev_idx),
-                         undo_item)
-                touched.add(undo_item[:-12])
+                self.utxo_cache[txin.prev_hash + s_pack('<H', txin.prev_idx)] = undo_item
+                self.touched.add(undo_item[:-12])
 
         assert n == 0
         self.tx_count -= len(txs)
@@ -770,9 +766,9 @@ class LBRYBlockProcessor(BlockProcessor):
                 self.timer.run(self.sql.execute, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
             self.timer.run(self.sql.execute, self.sql.LANGUAGE_INDEXES, timer_name='executing LANGUAGE_INDEXES')
 
-    def advance_txs(self, height, txs, header):
+    def advance_txs(self, height, txs, header, block_hash):
         timer = self.timer.sub_timers['advance_blocks']
-        undo = timer.run(super().advance_txs, height, txs, header, timer_name='super().advance_txs')
+        undo = timer.run(super().advance_txs, height, txs, header, block_hash, timer_name='super().advance_txs')
         timer.run(self.sql.advance_txs, height, txs, header, self.daemon.cached_height(), forward_timer=True)
         if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(10):
             self.timer.show(height=height)
