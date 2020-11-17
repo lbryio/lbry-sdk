@@ -179,6 +179,12 @@ class ServerPickingTestCase(AsyncioTestCase):
             ],
             'connect_timeout': 3
         })
+        ledger.accounts = []
+
+        async def subscribe_accounts():
+            pass
+
+        ledger.subscribe_accounts = subscribe_accounts
 
         network = Network(ledger)
         self.addCleanup(network.stop)

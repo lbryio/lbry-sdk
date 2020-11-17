@@ -1303,8 +1303,9 @@ class Daemon(metaclass=JSONRPCServerType):
                     'name': SingleKey.name if single_key else HierarchicalDeterministic.name
                 }
             )
-            await self.ledger.network.connect_wallets(wallet.id)
-            await self.ledger.subscribe_account(account)
+            await self.ledger._subscribe_accounts([account])
+        elif wallet.accounts:
+            await self.ledger._subscribe_accounts(wallet.accounts)
         wallet.save()
         if not skip_on_startup:
             with self.conf.update_config() as c:
@@ -1331,8 +1332,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if not os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' was not found.")
         wallet = self.wallet_manager.import_wallet(wallet_path)
+
         if not self.ledger.network.is_connected(wallet.id):
-            await self.ledger.network.connect_wallets(wallet.id)
+            await self.ledger._subscribe_accounts(wallet.accounts)
         return wallet
 
     @requires("wallet")
