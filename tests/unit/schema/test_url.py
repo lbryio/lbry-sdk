@@ -9,7 +9,7 @@ claim_id = "63f2da17b0d90042c559cc73b6b17f853945c43e"
 class TestURLParsing(unittest.TestCase):
 
     segments = 'stream', 'channel'
-    fields = 'name', 'claim_id', 'sequence', 'amount_order'
+    fields = 'name', 'claim_id', 'amount_order'
 
     def _assert_url(self, url_string, strictly=True, **kwargs):
         url = URL.parse(url_string)
@@ -43,25 +43,22 @@ class TestURLParsing(unittest.TestCase):
         url = self._assert_url
         # stream
         url('test', stream_name='test')
-        url('test*1', stream_name='test', stream_sequence='1')
+        url('test*1', stream_name='test*1')
         url('test$1', stream_name='test', stream_amount_order='1')
         url(f'test#{claim_id}', stream_name='test', stream_claim_id=claim_id, strictly=False)
         url(f'test:{claim_id}', stream_name='test', stream_claim_id=claim_id)
         # channel
         url('@test', channel_name='@test')
-        url('@test*1', channel_name='@test', channel_sequence='1')
         url('@test$1', channel_name='@test', channel_amount_order='1')
         url(f'@test#{claim_id}', channel_name='@test', channel_claim_id=claim_id, strictly=False)
         url(f'@test:{claim_id}', channel_name='@test', channel_claim_id=claim_id)
         # channel/stream
         url('lbry://@test/stuff', channel_name='@test', stream_name='stuff')
-        url('lbry://@test*1/stuff', channel_name='@test', channel_sequence='1', stream_name='stuff')
         url('lbry://@test$1/stuff', channel_name='@test', channel_amount_order='1', stream_name='stuff')
         url(f'lbry://@test#{claim_id}/stuff', channel_name='@test', channel_claim_id=claim_id, stream_name='stuff', strictly=False)
         url(f'lbry://@test:{claim_id}/stuff', channel_name='@test', channel_claim_id=claim_id, stream_name='stuff')
         # combined legacy and new
         url('@test:1/stuff#2', channel_claim_id='1', stream_claim_id='2', channel_name='@test', stream_name='stuff', strictly=False)
-        url('@test*1/stuff#2', channel_sequence='1', stream_claim_id='2', channel_name='@test', stream_name='stuff', strictly=False)
         # unicode regex edges
         _url = lambda name: url(name, stream_name=name)
         _url('\uD799')
@@ -111,10 +108,8 @@ class TestURLParsing(unittest.TestCase):
         fail("lbry://test@")
         fail("lbry://tes@t")
         fail(f"lbry://test:1#{claim_id}")
-        fail("lbry://test*0")
         fail("lbry://test$0")
         fail("lbry://test/path")
-        fail("lbry://@test1*1ab/fakepath")
         fail("lbry://test:1:1:1")
         fail("whatever/lbry://test")
         fail("lbry://lbry://test")
@@ -122,5 +117,4 @@ class TestURLParsing(unittest.TestCase):
         fail("lbry://abc:0x123")
         fail("lbry://abc:0x123/page")
         fail("lbry://@test1#ABCDEF/fakepath")
-        fail("test*0001")
         fail("lbry://@test1$1/fakepath?arg1&arg2&arg3")
