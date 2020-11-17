@@ -451,13 +451,17 @@ class Ledger(metaclass=LedgerRegistry):
             )
 
     async def subscribe_accounts(self):
-        wallet_ids = {account.wallet.id for account in self.accounts}
+        return await self._subscribe_accounts(self.accounts)
+
+    async def _subscribe_accounts(self, accounts):
+        wallet_ids = {account.wallet.id for account in accounts}
         await self.network.connect_wallets(*wallet_ids)
         # if self.network.is_connected and self.accounts:
-        log.info("Subscribe to %i accounts", len(self.accounts))
-        await asyncio.wait([
-            self.subscribe_account(a) for a in self.accounts
-        ])
+        if accounts:
+            log.info("Subscribe to %i accounts", len(accounts))
+            await asyncio.wait([
+                self.subscribe_account(a) for a in accounts
+            ])
 
     async def subscribe_account(self, account: Account):
         for address_manager in account.address_managers.values():
