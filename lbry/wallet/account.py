@@ -564,7 +564,7 @@ class Account:
                 self.change.gap = new_change_gap
                 gap_changed = True
             if gap_changed:
-                self.wallet.save()
+                await asyncio.get_event_loop().run_in_executor(None, self.wallet.save)
 
     async def get_detailed_balance(self, confirmations=0, reserved_subtotals=False, read_only=False):
         tips_balance, supports_balance, claims_balance = 0, 0, 0

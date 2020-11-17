@@ -1303,8 +1303,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     'name': SingleKey.name if single_key else HierarchicalDeterministic.name
                 }
             )
-            if self.ledger.network.is_connected:
-                await self.ledger.subscribe_account(account)
+            await self.ledger.network.connect_wallets(wallet.id)
+            await self.ledger.subscribe_account(account)
         wallet.save()
         if not skip_on_startup:
             with self.conf.update_config() as c:
@@ -1331,9 +1331,8 @@ class Daemon(metaclass=JSONRPCServerType):
         if not os.path.exists(wallet_path):
             raise Exception(f"Wallet at path '{wallet_path}' was not found.")
         wallet = self.wallet_manager.import_wallet(wallet_path)
-        if self.ledger.network.is_connected:
-            for account in wallet.accounts:
-                await self.ledger.subscribe_account(account)
+        if not self.ledger.network.is_connected(wallet.id):
+            await self.ledger.network.connect_wallets(wallet.id)
         return wallet
 
     @requires("wallet")
@@ -1619,7 +1618,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         )
         wallet.save()
-        if self.ledger.network.is_connected:
+        if self.ledger.network.is_connected(wallet.id):
             await self.ledger.subscribe_account(account)
         return account
 
@@ -1647,7 +1646,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         )
         wallet.save()
-        if self.ledger.network.is_connected:
+        if self.ledger.network.is_connected(wallet.id):
             await self.ledger.subscribe_account(account)
         return account
 
@@ -1863,7 +1862,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet_changed = False
         if data is not None:
             added_accounts = wallet.merge(self.wallet_manager, password, data)
-            if added_accounts and self.ledger.network.is_connected:
+            if added_accounts and self.ledger.network.is_connected(wallet.id):
                 if blocking:
                     await asyncio.wait([
                         a.ledger.subscribe_account(a) for a in added_accounts
@@ -2957,7 +2956,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     'public_key': data['holding_public_key'],
                     'address_generator': {'name': 'single-address'}
                 })
-                if self.ledger.network.is_connected:
+                if self.ledger.network.is_connected(wallet.id):
                     await self.ledger.subscribe_account(account)
                     await self.ledger._update_tasks.done.wait()
             # Case 3: the holding address has changed and we can't create or find an account for it
