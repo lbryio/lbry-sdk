@@ -4,24 +4,30 @@ import lbry
 import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
-from lbry.testcase import IntegrationTestCase, CommandTestCase
+from lbry.testcase import CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
 
 
-class TestSessions(IntegrationTestCase):
+class MockNetwork:
+    def __init__(self, ledger):
+        self.ledger = ledger
+        self._on_header_controller = None
+
+
+class TestSessions(CommandTestCase):
     """
     Tests that server cleans up stale connections after session timeout and client times out too.
     """
-
-    LEDGER = lbry.wallet
 
     async def test_session_bloat_from_socket_timeout(self):
         await self.conductor.stop_spv()
         await self.ledger.stop()
         self.conductor.spv_node.session_timeout = 1
         await self.conductor.start_spv()
+
         session = ClientSession(
-            network=None, server=(self.conductor.spv_node.hostname, self.conductor.spv_node.port), timeout=0.2
+            network=MockNetwork(self.ledger), server=(self.conductor.spv_node.hostname, self.conductor.spv_node.port),
+            timeout=0.2
         )
         await session.create_connection()
         await session.send_request('server.banner', ())
