@@ -1532,17 +1532,7 @@ class LBRYElectrumX(SessionBase):
                                         f'network rules.\n\n{message}\n[{raw_tx}]')
 
     async def transaction_info(self, tx_hash: str):
-        assert_tx_hash(tx_hash)
-        self.session_mgr.tx_request_count_metric.inc()
-        tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
-        raw_tx = tx_info['hex']
-        block_hash = tx_info.get('blockhash')
-        if not block_hash:
-            return raw_tx, {'block_height': -1}
-        merkle_height = (await self.daemon.deserialised_block(block_hash))['height']
-        merkle = await self.transaction_merkle(tx_hash, merkle_height)
-        self.session_mgr.tx_replied_count_metric.inc()
-        return raw_tx, merkle
+        return (await self.transaction_get_batch(tx_hash))[tx_hash]
 
     async def transaction_get_batch(self, *tx_hashes):
         self.session_mgr.tx_request_count_metric.inc(len(tx_hashes))
@@ -1551,13 +1541,13 @@ class LBRYElectrumX(SessionBase):
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
         batch_result = await self.db.fs_transactions(tx_hashes)
+        needed_merkles = {}
         for tx_hash in tx_hashes:
             if tx_hash in batch_result and batch_result[tx_hash][0]:
                 continue
             tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
             raw_tx = tx_info['hex']
             block_hash = tx_info.get('blockhash')
-            merkle = {}
             if block_hash:
                 block = await self.daemon.deserialised_block(block_hash)
                 height = block['height']
@@ -1566,12 +1556,20 @@ class LBRYElectrumX(SessionBase):
                 except ValueError:
                     raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
                                                 f'block {block_hash} at height {height:,d}')
-                merkle["merkle"] = self._get_merkle_branch(block['tx'], pos)
-                merkle["pos"] = pos
+                needed_merkles[tx_hash] = raw_tx, block['tx'], pos, height
             else:
-                height = -1
-            merkle['block_height'] = height
-            batch_result[tx_hash] = [raw_tx, merkle]
+                batch_result[tx_hash] = [raw_tx, {'block_height': -1}]
+
+        def threaded_get_merkle():
+            for tx_hash, (raw_tx, block_txs, pos, block_height) in needed_merkles.items():
+                batch_result[tx_hash] = raw_tx, {
+                    'merkle': self._get_merkle_branch(block_txs, pos),
+                    'pos': pos,
+                    'block_height': block_height
+                }
+        if needed_merkles:
+            await asyncio.get_running_loop().run_in_executor(self.db.executor, threaded_get_merkle)
+
         self.session_mgr.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
 
@@ -1615,35 +1613,11 @@ class LBRYElectrumX(SessionBase):
         height: the height of the block it is in
         """
         assert_tx_hash(tx_hash)
-        block_hash, tx_hashes = await self._block_hash_and_tx_hashes(height)
-        try:
-            pos = tx_hashes.index(tx_hash)
-        except ValueError:
+        result = await self.transaction_get_batch(tx_hash)
+        if tx_hash not in result or result[tx_hash][1]['block_height'] <= 0:
             raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
-                                        f'block {block_hash} at height {height:,d}')
-        branch = self._get_merkle_branch(tx_hashes, pos)
-        return {"block_height": height, "merkle": branch, "pos": pos}
-
-    async def transaction_id_from_pos(self, height, tx_pos, merkle=False):
-        """Return the txid and optionally a merkle proof, given
-        a block height and position in the block.
-        """
-        tx_pos = non_negative_integer(tx_pos)
-        if merkle not in (True, False):
-            raise RPCError(BAD_REQUEST, f'"merkle" must be a boolean')
-
-        block_hash, tx_hashes = await self._block_hash_and_tx_hashes(height)
-        try:
-            tx_hash = tx_hashes[tx_pos]
-        except IndexError:
-            raise RPCError(BAD_REQUEST, f'no tx at position {tx_pos:,d} in '
-                                        f'block {block_hash} at height {height:,d}')
-
-        if merkle:
-            branch = self._get_merkle_branch(tx_hashes, tx_pos)
-            return {"tx_hash": tx_hash, "merkle": branch}
-        else:
-            return tx_hash
+                                        f'block at height {height:,d}')
+        return result[tx_hash][1]
 
 
 class LocalRPC(SessionBase):
