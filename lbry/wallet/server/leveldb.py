@@ -464,10 +464,9 @@ class LevelDB:
                     block_txs[tx_height] = list(tx_iterator(
                         start=TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height - 1]),
                         stop=None if tx_height + 1 == len(tx_counts) else
-                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height]),
-                        include_key=False
+                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height] + 1), include_key=False
                     ))
-                tx_pos = tx_counts[tx_height] - tx_num
+                tx_pos = tx_num - tx_counts[tx_height - 1]
                 branch, root = branch_and_root(block_txs[tx_height], tx_pos)
                 merkle = {
                     'block_height': tx_height,

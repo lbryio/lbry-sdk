@@ -9,17 +9,32 @@ class BlockchainReorganizationTests(CommandTestCase):
     VERBOSITY = logging.WARN
 
     async def assertBlockHash(self, height):
-        self.assertEqual(
-            (await self.ledger.headers.hash(height)).decode(),
-            await self.blockchain.get_block_hash(height)
-        )
+        bp = self.conductor.spv_node.server.bp
+
+        def get_txids():
+            return [
+                bp.db.fs_tx_hash(tx_num)[0][::-1].hex()
+                for tx_num in range(bp.db.tx_counts[height - 1], bp.db.tx_counts[height])
+            ]
+
+        block_hash = await self.blockchain.get_block_hash(height)
+
+        self.assertEqual(block_hash, (await self.ledger.headers.hash(height)).decode())
+        self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
+
+        txids = await asyncio.get_event_loop().run_in_executor(bp.db.executor, get_txids)
+        txs = await bp.db.fs_transactions(txids)
+        block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
+        self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
+        self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')
 
     async def test_reorg(self):
         bp = self.conductor.spv_node.server.bp
         bp.reorg_count_metric.set(0)
         # invalidate current block, move forward 2
-        self.assertEqual(self.ledger.headers.height, 206)
-        await self.assertBlockHash(206)
+        height = 206
+        self.assertEqual(self.ledger.headers.height, height)
+        await self.assertBlockHash(height)
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
         await self.blockchain.generate(2)
         await self.ledger.on_header.where(lambda e: e.height == 207)
@@ -37,6 +52,11 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         self.assertEqual(2, bp.reorg_count_metric._samples()[0][2])
+        await self.blockchain.generate(3)
+        await self.ledger.on_header.where(lambda e: e.height == 211)
+        await self.assertBlockHash(209)
+        await self.assertBlockHash(210)
+        await self.assertBlockHash(211)
 
     async def test_reorg_change_claim_height(self):
         # sanity check
@@ -51,6 +71,8 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # create a claim and verify it's returned by claim_search
         self.assertEqual(self.ledger.headers.height, 207)
+        await self.assertBlockHash(207)
+
         broadcast_tx = await self.daemon.jsonrpc_stream_create(
             'hovercraft', '1.0', file_path=self.create_upload_file(data=b'hi!')
         )
@@ -58,6 +80,8 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.generate(1)
         await self.ledger.wait(broadcast_tx, self.blockchain.block_expected)
         self.assertEqual(self.ledger.headers.height, 208)
+        await self.assertBlockHash(208)
+
         txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
         self.assertEqual(1, len(txos))
         txo = txos[0]
