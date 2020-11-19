@@ -37,7 +37,9 @@ class Env:
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
-        self.trending_algorithms = list(set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')))
+        self.trending_algorithms = [
+            trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
+        ]
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
         self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
