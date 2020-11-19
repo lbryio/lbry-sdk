@@ -279,32 +279,38 @@ class LevelDB:
             b''.join(hashes for hashes, _ in flush_data.block_txs)
         ) // 32 == flush_data.tx_count - prior_tx_count
 
-        # Write the headers, tx counts, and tx hashes
+        # Write the headers
         start_time = time.perf_counter()
+
+        with self.headers_db.write_batch() as batch:
+            batch_put = batch.put
+            for i, header in enumerate(flush_data.headers):
+                batch_put(HEADER_PREFIX + util.pack_be_uint64(self.fs_height + i + 1), header)
+        flush_data.headers.clear()
+
         height_start = self.fs_height + 1
         tx_num = prior_tx_count
 
-        for header, block_hash, (tx_hashes, txs) in zip(
-                flush_data.headers, flush_data.block_hashes, flush_data.block_txs):
-            tx_count = self.tx_counts[height_start]
-            self.headers_db.put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
-            self.tx_db.put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
-            self.tx_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
-            height_start += 1
-            offset = 0
-            while offset < len(tx_hashes):
-                self.tx_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
-                self.tx_db.put(TX_NUM_PREFIX + tx_hashes[offset:offset+32], util.pack_be_uint64(tx_num))
-                self.tx_db.put(TX_PREFIX + tx_hashes[offset:offset+32], txs[offset // 32])
-                tx_num += 1
-                offset += 32
+        with self.tx_db.write_batch() as batch:
+            batch_put = batch.put
+            for block_hash, (tx_hashes, txs) in zip(flush_data.block_hashes, flush_data.block_txs):
+                tx_count = self.tx_counts[height_start]
+                batch_put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
+                batch_put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
+                height_start += 1
+                offset = 0
+                while offset < len(tx_hashes):
+                    batch_put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
+                    batch_put(TX_NUM_PREFIX + tx_hashes[offset:offset+32], util.pack_be_uint64(tx_num))
+                    batch_put(TX_PREFIX + tx_hashes[offset:offset+32], txs[offset // 32])
+                    tx_num += 1
+                    offset += 32
 
         flush_data.block_txs.clear()
         flush_data.block_hashes.clear()
 
         self.fs_height = flush_data.height
         self.fs_tx_count = flush_data.tx_count
-        flush_data.headers.clear()
         elapsed = time.perf_counter() - start_time
         self.logger.info(f'flushed filesystem data in {elapsed:.2f}s')
 
