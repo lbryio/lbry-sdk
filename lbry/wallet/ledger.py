@@ -977,10 +977,10 @@ class Ledger(metaclass=LedgerRegistry):
         else:
             claim_search = self.network.claim_search
         return await self._inflate_outputs(
-                claim_search(**kwargs), accounts,
-                include_purchase_receipt=include_purchase_receipt,
-                include_is_my_output=include_is_my_output,
-            )
+            claim_search(**kwargs), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output,
+        )
 
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
         for claim in (await self.claim_search(accounts, claim_id=claim_id, **kwargs))[0]:
