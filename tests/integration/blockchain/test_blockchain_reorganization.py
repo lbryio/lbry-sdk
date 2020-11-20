@@ -99,17 +99,18 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.blockchain.clear_mempool()
         await self.blockchain.generate(2)
 
+        # wait for the client to catch up and verify the reorg
+        await asyncio.wait_for(self.on_header(209), 3.0)
+        await self.assertBlockHash(207)
+        await self.assertBlockHash(208)
+        await self.assertBlockHash(209)
+
         # verify the claim was dropped from block 208 as returned by lbrycrdd
         reorg_block_hash = await self.blockchain.get_block_hash(208)
         self.assertNotEqual(invalidated_block_hash, reorg_block_hash)
         block_207 = await self.blockchain.get_block(reorg_block_hash)
         self.assertNotIn(txo.tx_ref.id, block_207['tx'])
 
-        # wait for the client to catch up and verify the reorg
-        await asyncio.wait_for(self.on_header(209), 3.0)
-        await self.assertBlockHash(207)
-        await self.assertBlockHash(208)
-        await self.assertBlockHash(209)
         client_reorg_block_hash = (await self.ledger.headers.hash(208)).decode()
         self.assertEqual(client_reorg_block_hash, reorg_block_hash)
 
