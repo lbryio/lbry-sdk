@@ -3,10 +3,7 @@ import asyncio
 import json
 from time import perf_counter
 from operator import itemgetter
-from contextlib import asynccontextmanager
-from functools import partial
 from typing import Dict, Optional, Tuple
-
 import aiohttp
 
 from lbry import __version__
@@ -254,28 +251,6 @@ class Network:
                 except ConnectionError:
                     pass
         raise asyncio.CancelledError()  # if we got here, we are shutting down
-
-    @asynccontextmanager
-    async def single_call_context(self, function, *args, **kwargs):
-        if not self.is_connected:
-            log.warning("Wallet server unavailable, waiting for it to come back and retry.")
-            await self.on_connected.first
-        await self.session_pool.wait_for_fastest_session()
-        server = self.session_pool.fastest_session.server
-        session = ClientSession(network=self, server=server)
-
-        async def call_with_reconnect(*a, **kw):
-            while self.running:
-                if not session.available:
-                    await session.create_connection()
-                try:
-                    return await partial(function, *args, session_override=session, **kwargs)(*a, **kw)
-                except asyncio.TimeoutError:
-                    log.warning("'%s' failed, retrying", function.__name__)
-        try:
-            yield (call_with_reconnect, session)
-        finally:
-            await session.close()
 
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
