@@ -14,11 +14,11 @@ import array
 import ast
 import os
 import time
+import zlib
+import base64
 from asyncio import sleep
 from bisect import bisect_right
 from collections import namedtuple
-from functools import partial
-from binascii import unhexlify, hexlify
 from glob import glob
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -279,32 +279,38 @@ class LevelDB:
             b''.join(hashes for hashes, _ in flush_data.block_txs)
         ) // 32 == flush_data.tx_count - prior_tx_count
 
-        # Write the headers, tx counts, and tx hashes
+        # Write the headers
         start_time = time.perf_counter()
+
+        with self.headers_db.write_batch() as batch:
+            batch_put = batch.put
+            for i, header in enumerate(flush_data.headers):
+                batch_put(HEADER_PREFIX + util.pack_be_uint64(self.fs_height + i + 1), header)
+        flush_data.headers.clear()
+
         height_start = self.fs_height + 1
         tx_num = prior_tx_count
 
-        for header, block_hash, (tx_hashes, txs) in zip(
-                flush_data.headers, flush_data.block_hashes, flush_data.block_txs):
-            tx_count = self.tx_counts[height_start]
-            self.headers_db.put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
-            self.tx_db.put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
-            self.tx_db.put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
-            height_start += 1
-            offset = 0
-            while offset < len(tx_hashes):
-                self.tx_db.put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
-                self.tx_db.put(TX_NUM_PREFIX + tx_hashes[offset:offset+32], util.pack_be_uint64(tx_num))
-                self.tx_db.put(TX_PREFIX + tx_hashes[offset:offset+32], txs[offset // 32])
-                tx_num += 1
-                offset += 32
+        with self.tx_db.write_batch() as batch:
+            batch_put = batch.put
+            for block_hash, (tx_hashes, txs) in zip(flush_data.block_hashes, flush_data.block_txs):
+                tx_count = self.tx_counts[height_start]
+                batch_put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
+                batch_put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
+                height_start += 1
+                offset = 0
+                while offset < len(tx_hashes):
+                    batch_put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset+32])
+                    batch_put(TX_NUM_PREFIX + tx_hashes[offset:offset+32], util.pack_be_uint64(tx_num))
+                    batch_put(TX_PREFIX + tx_hashes[offset:offset+32], txs[offset // 32])
+                    tx_num += 1
+                    offset += 32
 
         flush_data.block_txs.clear()
         flush_data.block_hashes.clear()
 
         self.fs_height = flush_data.height
         self.fs_tx_count = flush_data.tx_count
-        flush_data.headers.clear()
         elapsed = time.perf_counter() - start_time
         self.logger.info(f'flushed filesystem data in {elapsed:.2f}s')
 
@@ -398,7 +404,7 @@ class LevelDB:
             raise IndexError(f'height {height:,d} out of range')
         return header
 
-    async def read_headers(self, start_height, count):
+    async def read_headers(self, start_height, count, b16=False, b64=False):
         """Requires start_height >= 0, count >= 0.  Reads as many headers as
         are available starting at start_height up to count.  This
         would be zero if start_height is beyond self.db_height, for
@@ -407,6 +413,7 @@ class LevelDB:
         Returns a (binary, n) pair where binary is the concatenated
         binary headers, and n is the count of headers returned.
         """
+
         if start_height < 0 or count < 0:
             raise self.DBError(f'{count:,d} headers starting at '
                                f'{start_height:,d} not on disk')
@@ -415,13 +422,19 @@ class LevelDB:
             # Read some from disk
             disk_count = max(0, min(count, self.db_height + 1 - start_height))
             if disk_count:
-                return b''.join(
+                headers = b''.join(
                     self.headers_db.iterator(
                         start=HEADER_PREFIX + util.pack_be_uint64(start_height),
                         stop=HEADER_PREFIX + util.pack_be_uint64(start_height + disk_count),
                         include_key=False
                     )
-                ), disk_count
+                )
+                if b16:
+                    return headers.hex().encode(), disk_count
+                elif b64:
+                    compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+                    return base64.b64encode(compressobj.compress(headers) + compressobj.flush()), disk_count
+                return headers, disk_count
             return b'', 0
 
         return await asyncio.get_event_loop().run_in_executor(self.executor, read_headers)
@@ -464,10 +477,9 @@ class LevelDB:
                     block_txs[tx_height] = list(tx_iterator(
                         start=TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height - 1]),
                         stop=None if tx_height + 1 == len(tx_counts) else
-                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height]),
-                        include_key=False
+                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height] + 1), include_key=False
                     ))
-                tx_pos = tx_counts[tx_height] - tx_num
+                tx_pos = tx_num - tx_counts[tx_height - 1]
                 branch, root = branch_and_root(block_txs[tx_height], tx_pos)
                 merkle = {
                     'block_height': tx_height,
