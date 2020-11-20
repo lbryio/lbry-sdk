@@ -1370,11 +1370,9 @@ class LBRYElectrumX(SessionBase):
 
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
-        headers, count = await self.db.read_headers(start_height, count)
-        compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-        headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode() if b64 else headers.hex()
+        headers, count = await self.db.read_headers(start_height, count, b16=not b64, b64=b64)
         result = {
-            'base64' if b64 else 'hex': headers,
+            'base64' if b64 else 'hex': headers.decode(),
             'count': count,
             'max': max_size
         }
