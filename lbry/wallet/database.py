@@ -121,7 +121,12 @@ class AIOSQLite:
         if self._closing:
             return
         self._closing = True
-        await asyncio.get_event_loop().run_in_executor(self.writer_executor, self.writer_connection.close)
+
+        def __checkpoint_and_close(conn: sqlite3.Connection):
+            conn.execute("PRAGMA WAL_CHECKPOINT(FULL);")
+            conn.close()
+        await asyncio.get_event_loop().run_in_executor(
+            self.writer_executor, __checkpoint_and_close, self.writer_connection)
         self.writer_executor.shutdown(wait=True)
         self.reader_executor.shutdown(wait=True)
         self.read_ready.clear()
