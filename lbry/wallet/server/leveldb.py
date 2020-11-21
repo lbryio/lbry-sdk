@@ -415,14 +415,14 @@ class LevelDB:
         # Truncate header_mc: header count is 1 more than the height.
         self.header_mc.truncate(height + 1)
 
-    async def raw_header(self, height):
+    def raw_header(self, height):
         """Return the binary header at the given height."""
-        header, n = await self.read_headers(height, 1)
+        header, n = self.read_headers(height, 1)
         if n != 1:
             raise IndexError(f'height {height:,d} out of range')
         return header
 
-    async def read_headers(self, start_height, count, b16=False, b64=False):
+    def read_headers(self, start_height, count) -> typing.Tuple[bytes, int]:
         """Requires start_height >= 0, count >= 0.  Reads as many headers as
         are available starting at start_height up to count.  This
         would be zero if start_height is beyond self.db_height, for
@@ -436,24 +436,10 @@ class LevelDB:
             raise self.DBError(f'{count:,d} headers starting at '
                                f'{start_height:,d} not on disk')
 
-        def read_headers():
-            # Read some from disk
-            disk_count = max(0, min(count, self.db_height + 1 - start_height))
-            if disk_count:
-                headers = b''.join(self.headers[start_height:start_height+disk_count])
-                if b16:
-                    return headers.hex().encode(), disk_count
-                elif b64:
-                    compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-                    return base64.b64encode(compressobj.compress(headers) + compressobj.flush()), disk_count
-                return headers, disk_count
-            return b'', 0
-
-        if not b16 and not b64:
-            disk_count = max(0, min(count, self.db_height + 1 - start_height))
-            return b''.join(header for header in self.headers[start_height:start_height + disk_count]), disk_count
-
-        return await asyncio.get_event_loop().run_in_executor(self.executor, read_headers)
+        disk_count = max(0, min(count, self.db_height + 1 - start_height))
+        if disk_count:
+            return b''.join(self.headers[start_height:start_height + disk_count]), disk_count
+        return b'', 0
 
     def fs_tx_hash(self, tx_num):
         """Return a par (tx_hash, tx_height) for the given tx number.

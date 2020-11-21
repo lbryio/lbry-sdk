@@ -607,7 +607,7 @@ class SessionManager:
     async def raw_header(self, height):
         """Return the binary header at the given height."""
         try:
-            return await self.db.raw_header(height)
+            return self.db.raw_header(height)
         except IndexError:
             raise RPCError(BAD_REQUEST, f'height {height:,d} '
                                         'out of range') from None
@@ -1329,30 +1329,11 @@ class LBRYElectrumX(SessionBase):
                            f'require header height {height:,d} <= '
                            f'cp_height {cp_height:,d} <= '
                            f'chain height {max_height:,d}')
-        branch, root = await self.db.header_branch_and_root(cp_height + 1,
-                                                            height)
+        branch, root = await self.db.header_branch_and_root(cp_height + 1, height)
         return {
             'branch': [hash_to_hex_str(elt) for elt in branch],
             'root': hash_to_hex_str(root),
         }
-
-    async def block_header(self, height, cp_height=0):
-        """Return a raw block header as a hexadecimal string, or as a
-        dictionary with a merkle proof."""
-        height = non_negative_integer(height)
-        cp_height = non_negative_integer(cp_height)
-        raw_header_hex = (await self.session_mgr.raw_header(height)).hex()
-        if cp_height == 0:
-            return raw_header_hex
-        result = {'header': raw_header_hex}
-        result.update(await self._merkle_proof(cp_height, height))
-        return result
-
-    async def block_header_13(self, height):
-        """Return a raw block header as a hexadecimal string.
-
-        height: the header's height"""
-        return await self.block_header(height)
 
     async def block_headers(self, start_height, count, cp_height=0, b64=False):
         """Return count concatenated block headers as hex for the main chain;
@@ -1367,9 +1348,15 @@ class LBRYElectrumX(SessionBase):
 
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
-        headers, count = await self.db.read_headers(start_height, count, b16=not b64, b64=b64)
+        headers, count = self.db.read_headers(start_height, count)
+
+        if b64:
+            compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+            headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode()
+        else:
+            headers = headers.hex()
         result = {
-            'base64' if b64 else 'hex': headers.decode(),
+            'base64' if b64 else 'hex': headers,
             'count': count,
             'max': max_size
         }
@@ -1385,7 +1372,7 @@ class LBRYElectrumX(SessionBase):
         index = non_negative_integer(index)
         size = self.coin.CHUNK_SIZE
         start_height = index * size
-        headers, _ = await self.db.read_headers(start_height, size)
+        headers, _ = self.db.read_headers(start_height, size)
         return headers.hex()
 
     async def block_get_header(self, height):
@@ -1537,6 +1524,7 @@ class LBRYElectrumX(SessionBase):
             assert_tx_hash(tx_hash)
         batch_result = await self.db.fs_transactions(tx_hashes)
         needed_merkles = {}
+
         for tx_hash in tx_hashes:
             if tx_hash in batch_result and batch_result[tx_hash][0]:
                 continue
