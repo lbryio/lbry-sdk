@@ -319,7 +319,7 @@ class PeerManager:
 
         # Check prior header too in case of hard fork.
         check_height = min(our_height, their_height)
-        raw_header = await self.db.raw_header(check_height)
+        raw_header = self.db.raw_header(check_height)
         if ptuple >= (1, 4):
             ours = raw_header.hex()
             message = 'blockchain.block.header'

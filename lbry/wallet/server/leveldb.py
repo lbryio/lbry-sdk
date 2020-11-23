@@ -15,7 +15,9 @@ import ast
 import os
 import time
 import zlib
-import base64
+import pylru
+import typing
+from typing import Optional, List, Tuple, Iterable
 from asyncio import sleep
 from bisect import bisect_right
 from collections import namedtuple
@@ -91,6 +93,9 @@ class LevelDB:
 
         self.headers_db = None
         self.tx_db = None
+
+        self._block_txs_cache = pylru.lrucache(50000)
+        self._merkle_tx_cache = pylru.lrucache(100000)
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
@@ -415,14 +420,14 @@ class LevelDB:
         # Truncate header_mc: header count is 1 more than the height.
         self.header_mc.truncate(height + 1)
 
-    async def raw_header(self, height):
+    def raw_header(self, height):
         """Return the binary header at the given height."""
-        header, n = await self.read_headers(height, 1)
+        header, n = self.read_headers(height, 1)
         if n != 1:
             raise IndexError(f'height {height:,d} out of range')
         return header
 
-    async def read_headers(self, start_height, count, b16=False, b64=False):
+    def read_headers(self, start_height, count) -> typing.Tuple[bytes, int]:
         """Requires start_height >= 0, count >= 0.  Reads as many headers as
         are available starting at start_height up to count.  This
         would be zero if start_height is beyond self.db_height, for
@@ -436,24 +441,10 @@ class LevelDB:
             raise self.DBError(f'{count:,d} headers starting at '
                                f'{start_height:,d} not on disk')
 
-        def read_headers():
-            # Read some from disk
-            disk_count = max(0, min(count, self.db_height + 1 - start_height))
-            if disk_count:
-                headers = b''.join(self.headers[start_height:start_height+disk_count])
-                if b16:
-                    return headers.hex().encode(), disk_count
-                elif b64:
-                    compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-                    return base64.b64encode(compressobj.compress(headers) + compressobj.flush()), disk_count
-                return headers, disk_count
-            return b'', 0
-
-        if not b16 and not b64:
-            disk_count = max(0, min(count, self.db_height + 1 - start_height))
-            return b''.join(header for header in self.headers[start_height:start_height + disk_count]), disk_count
-
-        return await asyncio.get_event_loop().run_in_executor(self.executor, read_headers)
+        disk_count = max(0, min(count, self.db_height + 1 - start_height))
+        if disk_count:
+            return b''.join(self.headers[start_height:start_height + disk_count]), disk_count
+        return b'', 0
 
     def fs_tx_hash(self, tx_num):
         """Return a par (tx_hash, tx_height) for the given tx number.
@@ -466,49 +457,75 @@ class LevelDB:
             tx_hash = self.tx_db.get(TX_HASH_PREFIX + util.pack_be_uint64(tx_num))
         return tx_hash, tx_height
 
-    def _fs_transactions(self, txids):
-        def _iter_transactions():
-            block_txs = {}
-            branch_and_root = self.merkle.branch_and_root
-            tx_iterator = self.tx_db.iterator
-            tx_counts = self.tx_counts
-            tx_db_get = self.tx_db.get
-            unpack_be_uint64 = util.unpack_be_uint64
-            pack_be_uint64 = util.pack_be_uint64
+    async def tx_merkle(self, tx_num, tx_height):
+        if tx_height == -1:
+            return {
+                'block_height': -1
+            }
+        tx_counts = self.tx_counts
+        tx_pos = tx_num - tx_counts[tx_height - 1]
 
-            for tx_hash in txids:
-                tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = tx_db_get(TX_NUM_PREFIX + tx_hash_bytes)
-                if tx_num is not None:
-                    tx_num = unpack_be_uint64(tx_num)
-                    tx_height = bisect_right(tx_counts, tx_num)
-                else:
-                    yield tx_hash, (None, {'block_height': -1})
-                    continue
-                if tx_height >= self.db_height:
-                    yield tx_hash, (None, {'block_height': -1})
-                    continue
-                tx = tx_db_get(TX_PREFIX + tx_hash_bytes)
-                if tx_height not in block_txs:
-                    block_txs[tx_height] = list(tx_iterator(
-                        start=TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height - 1]),
-                        stop=None if tx_height + 1 == len(tx_counts) else
-                        TX_HASH_PREFIX + pack_be_uint64(tx_counts[tx_height] + 1), include_key=False
-                    ))
-                tx_pos = tx_num - tx_counts[tx_height - 1]
-                branch, root = branch_and_root(block_txs[tx_height], tx_pos)
-                merkle = {
-                    'block_height': tx_height,
-                    'merkle': [hash_to_hex_str(hash) for hash in branch],
-                    'pos': tx_pos
-                }
-                yield tx_hash, (None if not tx else tx.hex(), merkle)
-        return {
-            _tx_hash: _val for (_tx_hash, _val) in _iter_transactions()
+        def _update_block_txs_cache():
+            block_txs = list(self.tx_db.iterator(
+                start=TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height - 1]),
+                stop=None if tx_height + 1 == len(tx_counts) else
+                TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height] + 1), include_key=False
+            ))
+            if tx_height + 100 > self.db_height:
+                return block_txs
+            self._block_txs_cache[tx_height] = block_txs
+
+        uncached = None
+        if (tx_num, tx_height) in self._merkle_tx_cache:
+            return self._merkle_tx_cache[(tx_num, tx_height)]
+        if tx_height not in self._block_txs_cache:
+            uncached = await asyncio.get_event_loop().run_in_executor(self.executor, _update_block_txs_cache)
+        merkle = {
+            'block_height': tx_height,
+            'merkle': [
+                hash_to_hex_str(hash) for hash in self.merkle.branch_and_root(
+                    self._block_txs_cache.get(tx_height, uncached), tx_pos
+                )[0]
+            ],
+            'pos': tx_pos
         }
+        if tx_height + 100 < self.db_height:
+            self._merkle_tx_cache[(tx_num, tx_height)] = merkle
+        return merkle
+
+    def _fs_transactions(self, txids: Iterable[str]) -> List[Tuple[str, Optional[str], int, int]]:
+        unpack_be_uint64 = util.unpack_be_uint64
+        tx_counts = self.tx_counts
+        tx_db_get = self.tx_db.get
+        tx_infos = []
+
+        for tx_hash in txids:
+            tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
+            tx_num = tx_db_get(TX_NUM_PREFIX + tx_hash_bytes)
+            tx = None
+            tx_height = -1
+            if tx_num is not None:
+                tx_num = unpack_be_uint64(tx_num)
+                tx_height = bisect_right(tx_counts, tx_num)
+                if tx_height < self.db_height:
+                    tx = tx_db_get(TX_PREFIX + tx_hash_bytes)
+            tx_infos.append((tx_hash, None if not tx else tx.hex(), tx_num, tx_height))
+
+        return tx_infos
 
     async def fs_transactions(self, txids):
-        return await asyncio.get_event_loop().run_in_executor(self.executor, self._fs_transactions, txids)
+        txs = await asyncio.get_event_loop().run_in_executor(
+            self.executor, self._fs_transactions, txids
+        )
+
+        async def add_result(item):
+            _txid, _tx, _tx_num, _tx_height = item
+            result[_txid] = (_tx, await self.tx_merkle(_tx_num, _tx_height))
+
+        result = {}
+        if txs:
+            await asyncio.gather(*map(add_result, txs))
+        return result
 
     async def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
