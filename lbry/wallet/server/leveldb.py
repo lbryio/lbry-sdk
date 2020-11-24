@@ -469,7 +469,7 @@ class LevelDB:
             block_txs = list(self.tx_db.iterator(
                 start=TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height - 1]),
                 stop=None if tx_height + 1 == len(tx_counts) else
-                TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height] + 1), include_key=False
+                TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height]), include_key=False
             ))
             if tx_height + 100 > self.db_height:
                 return block_txs
@@ -480,12 +480,13 @@ class LevelDB:
             return self._merkle_tx_cache[(tx_num, tx_height)]
         if tx_height not in self._block_txs_cache:
             uncached = await asyncio.get_event_loop().run_in_executor(self.executor, _update_block_txs_cache)
+        block_txs = self._block_txs_cache.get(tx_height, uncached)
+        branch, root = self.merkle.branch_and_root(block_txs, tx_pos)
         merkle = {
             'block_height': tx_height,
             'merkle': [
-                hash_to_hex_str(hash) for hash in self.merkle.branch_and_root(
-                    self._block_txs_cache.get(tx_height, uncached), tx_pos
-                )[0]
+                hash_to_hex_str(hash)
+                for hash in branch
             ],
             'pos': tx_pos
         }
