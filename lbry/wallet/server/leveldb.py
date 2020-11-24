@@ -518,15 +518,15 @@ class LevelDB:
         txs = await asyncio.get_event_loop().run_in_executor(
             self.executor, self._fs_transactions, txids
         )
+        unsorted_result = {}
 
         async def add_result(item):
             _txid, _tx, _tx_num, _tx_height = item
-            result[_txid] = (_tx, await self.tx_merkle(_tx_num, _tx_height))
+            unsorted_result[_txid] = (_tx, await self.tx_merkle(_tx_num, _tx_height))
 
-        result = {}
         if txs:
             await asyncio.gather(*map(add_result, txs))
-        return result
+        return {txid: unsorted_result[txid] for txid, _, _, _ in txs}
 
     async def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
