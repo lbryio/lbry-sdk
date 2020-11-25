@@ -82,9 +82,9 @@ class TestHierarchicalDeterministicAccount(AccountTestCase):
     async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
         account = await Account.generate(self.db)
         async with account.receiving.address_generator_lock:
-            await account.receiving._generate_keys(0, 200)
+            await account.receiving._generate_keys(0, 1000)
         records = await account.receiving.get_address_records()
-        self.assertEqual(len(records), 201)
+        self.assertEqual(len(records), 1001)
 
     async def test_get_or_create_usable_address(self):
         account = await Account.generate(self.db)
