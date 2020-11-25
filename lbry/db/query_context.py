@@ -57,6 +57,7 @@ class QueryContext:
     current_progress: Optional['ProgressContext'] = None
 
     copy_managers: Dict[str, CopyManager] = field(default_factory=dict)
+    _variable_limit: Optional[int] = None
 
     @property
     def is_postgres(self):
@@ -65,6 +66,19 @@ class QueryContext:
     @property
     def is_sqlite(self):
         return self.engine.dialect.name == 'sqlite'
+
+    @property
+    def variable_limit(self):
+        if self._variable_limit is not None:
+            return self._variable_limit
+        if self.is_sqlite:
+            for result in self.fetchall('PRAGMA COMPILE_OPTIONS;'):
+                for _, value in result.items():
+                    if value.startswith('MAX_VARIABLE_NUMBER'):
+                        self._variable_limit = int(value.split('=')[1])
+                        return self._variable_limit
+        self._variable_limit = 32766  # default for 3.32.0 and large enough for other cases
+        return self._variable_limit
 
     def raise_unsupported_dialect(self):
         raise RuntimeError(f'Unsupported database dialect: {self.engine.dialect.name}.')

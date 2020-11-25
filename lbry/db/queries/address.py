@@ -60,5 +60,7 @@ def get_all_addresses(self):
 
 def add_keys(pubkeys):
     c = context()
-    c.execute(c.insert_or_ignore(PubkeyAddress).values([{'address': k['address']} for k in pubkeys]))
-    c.execute(c.insert_or_ignore(AccountAddress).values(pubkeys))
+    for start in range(0, len(pubkeys), c.variable_limit - 1):
+        batch = pubkeys[start:(start + c.variable_limit - 1)]
+        c.execute(c.insert_or_ignore(PubkeyAddress).values([{'address': k['address']} for k in batch]))
+        c.execute(c.insert_or_ignore(AccountAddress).values(batch))
