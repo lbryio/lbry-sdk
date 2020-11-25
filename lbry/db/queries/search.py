@@ -148,12 +148,12 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
                 raise NameError(f'{column} is not a valid order_by field')
             if column == 'name':
                 column = 'claim_name'
-            nulls_last = ''
-            if column in ('trending_group', 'trending_mixed', 'release_time'):
-                nulls_last = ' NULLs LAST'
             table = "trend" if column.startswith('trend') else "claim"
+            column = f"{table}.{column}"
+            if column in ('trending_group', 'trending_mixed', 'release_time'):
+                column = f"COALESCE({column}, {1<<32})"
             sql_order_by.append(
-                f"{table}.{column} ASC{nulls_last}" if is_asc else f"{table}.{column} DESC{nulls_last}"
+                f"{column} {'ASC' if is_asc else 'DESC'}"
             )
         constraints['order_by'] = sql_order_by
 
