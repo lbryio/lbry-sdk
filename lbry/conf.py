@@ -631,6 +631,8 @@ class Config(CLIConfig):
         "light client to synchronize with a full node.",
         True
     )
+    spv_filtering_channel_ids = Strings("List of channel claim ids for filtering claim search results out.", [])
+    spv_blocking_channel_ids = Strings("List of channel claim ids for blocking resolve results.", [])
 
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)

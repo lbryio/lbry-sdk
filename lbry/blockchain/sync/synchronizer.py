@@ -55,11 +55,11 @@ class BlockchainSync(Sync):
         self.tx_hash_event = asyncio.Event()
         self.mempool = []
         self.filtering_channel_hashes = {
-            unhexlify(channel_id)[::-1] for channel_id in
-            os.getenv('FILTERING_CHANNEL_IDS', '').split(' ') if channel_id}
+            unhexlify(channel_id)[::-1] for channel_id in self.conf.spv_filtering_channel_ids
+        }
         self.blocking_channel_hashes = {
-            unhexlify(channel_id)[::-1] for channel_id in
-            os.getenv('BLOCKING_CHANNEL_IDS', '').split(' ') if channel_id}
+            unhexlify(channel_id)[::-1] for channel_id in self.conf.spv_blocking_channel_ids
+        }
 
     async def wait_for_chain_ready(self):
         while True:
