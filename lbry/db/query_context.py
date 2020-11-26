@@ -77,7 +77,9 @@ class QueryContext:
                     if value.startswith('MAX_VARIABLE_NUMBER'):
                         self._variable_limit = int(value.split('=')[1])
                         return self._variable_limit
-        self._variable_limit = 32766  # default for 3.32.0 and large enough for other cases
+            self._variable_limit = 999  # todo: default for 3.32.0 is 32766, but we are still hitting 999 somehow
+        else:
+            self._variable_limit = 32766
         return self._variable_limit
 
     def raise_unsupported_dialect(self):
