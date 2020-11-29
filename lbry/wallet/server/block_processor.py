@@ -586,7 +586,7 @@ class BlockProcessor:
         # Value: hashX
         prefix = b'h' + tx_hash[:4] + idx_packed
         candidates = {db_key: hashX for db_key, hashX
-                      in self.db.utxo_db.iterator(prefix=prefix)}
+                      in self.db.db.iterator(prefix=prefix)}
 
         for hdb_key, hashX in candidates.items():
             tx_num_packed = hdb_key[-4:]
@@ -601,7 +601,7 @@ class BlockProcessor:
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
             udb_key = b'u' + hashX + hdb_key[-6:]
-            utxo_value_packed = self.db.utxo_db.get(udb_key)
+            utxo_value_packed = self.db.db.get(udb_key)
             if utxo_value_packed:
                 # Remove both entries for this UTXO
                 self.db_deletes.append(hdb_key)

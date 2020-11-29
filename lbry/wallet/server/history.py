@@ -20,6 +20,10 @@ from lbry.wallet.server.util import pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 
 
+HASHX_HISTORY_PREFIX = b'x'
+HIST_STATE = b'state-hist'
+
+
 class History:
 
     DB_VERSIONS = [0]
@@ -32,8 +36,8 @@ class History:
         self.unflushed_count = 0
         self.db = None
 
-    def open_db(self, db_class, for_sync, utxo_flush_count, compacting):
-        self.db = db_class('hist', for_sync)
+    def open_db(self, db, for_sync, utxo_flush_count, compacting):
+        self.db = db  #db_class('hist', for_sync)
         self.read_state()
         self.clear_excess(utxo_flush_count)
         # An incomplete compaction needs to be cancelled otherwise
@@ -44,11 +48,11 @@ class History:
 
     def close_db(self):
         if self.db:
-            self.db.close()
+            # self.db.close()
             self.db = None
 
     def read_state(self):
-        state = self.db.get(b'state\0\0')
+        state = self.db.get(HIST_STATE)
         if state:
             state = ast.literal_eval(state.decode())
             if not isinstance(state, dict):
@@ -80,17 +84,18 @@ class History:
                          'excess history flushes...')
 
         keys = []
-        for key, hist in self.db.iterator(prefix=b''):
-            flush_id, = unpack_be_uint16_from(key[-2:])
+        for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX):
+            k = key[1:]
+            flush_id, = unpack_be_uint16_from(k[-2:])
             if flush_id > utxo_flush_count:
-                keys.append(key)
+                keys.append(k)
 
         self.logger.info(f'deleting {len(keys):,d} history entries')
 
         self.flush_count = utxo_flush_count
         with self.db.write_batch() as batch:
             for key in keys:
-                batch.delete(key)
+                batch.delete(HASHX_HISTORY_PREFIX + key)
             self.write_state(batch)
 
         self.logger.info('deleted excess history entries')
@@ -105,7 +110,7 @@ class History:
         }
         # History entries are not prefixed; the suffix \0\0 ensures we
         # look similar to other entries and aren't interfered with
-        batch.put(b'state\0\0', repr(state).encode())
+        batch.put(HIST_STATE, repr(state).encode())
 
     def add_unflushed(self, hashXs_by_tx, first_tx_num):
         unflushed = self.unflushed
@@ -132,7 +137,7 @@ class History:
         with self.db.write_batch() as batch:
             for hashX in sorted(unflushed):
                 key = hashX + flush_id
-                batch.put(key, unflushed[hashX].tobytes())
+                batch.put(HASHX_HISTORY_PREFIX + key, unflushed[hashX].tobytes())
             self.write_state(batch)
 
         count = len(unflushed)
@@ -154,16 +159,17 @@ class History:
             for hashX in sorted(hashXs):
                 deletes = []
                 puts = {}
-                for key, hist in self.db.iterator(prefix=hashX, reverse=True):
+                for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, reverse=True):
+                    k = key[1:]
                     a = array.array('I')
                     a.frombytes(hist)
                     # Remove all history entries >= tx_count
                     idx = bisect_left(a, tx_count)
                     nremoves += len(a) - idx
                     if idx > 0:
-                        puts[key] = a[:idx].tobytes()
+                        puts[k] = a[:idx].tobytes()
                         break
-                    deletes.append(key)
+                    deletes.append(k)
 
                 for key in deletes:
                     batch.delete(key)
@@ -221,9 +227,9 @@ class History:
         with self.db.write_batch() as batch:
             # Important: delete first!  The keyspace may overlap.
             for key in keys_to_delete:
-                batch.delete(key)
+                batch.delete(HASHX_HISTORY_PREFIX + key)
             for key, value in write_items:
-                batch.put(key, value)
+                batch.put(HASHX_HISTORY_PREFIX + key, value)
             self.write_state(batch)
 
     def _compact_hashX(self, hashX, hist_map, hist_list,
@@ -271,11 +277,12 @@ class History:
 
         key_len = HASHX_LEN + 2
         write_size = 0
-        for key, hist in self.db.iterator(prefix=prefix):
+        for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + prefix):
+            k = key[1:]
             # Ignore non-history entries
-            if len(key) != key_len:
+            if len(k) != key_len:
                 continue
-            hashX = key[:-2]
+            hashX = k[:-2]
             if hashX != prior_hashX and prior_hashX:
                 write_size += self._compact_hashX(prior_hashX, hist_map,
                                                   hist_list, write_items,
@@ -283,7 +290,7 @@ class History:
                 hist_map.clear()
                 hist_list.clear()
             prior_hashX = hashX
-            hist_map[key] = hist
+            hist_map[k] = hist
             hist_list.append(hist)
 
         if prior_hashX:
