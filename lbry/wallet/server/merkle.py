@@ -43,10 +43,12 @@ class Merkle:
     def __init__(self, hash_func=double_sha256):
         self.hash_func = hash_func
 
-    def tree_depth(self, hash_count):
-        return self.branch_length(hash_count) + 1
+    @staticmethod
+    def tree_depth(hash_count):
+        return Merkle.branch_length(hash_count) + 1
 
-    def branch_length(self, hash_count):
+    @staticmethod
+    def branch_length(hash_count):
         """Return the length of a merkle branch given the number of hashes."""
         if not isinstance(hash_count, int):
             raise TypeError('hash_count must be an integer')
@@ -54,7 +56,8 @@ class Merkle:
             raise ValueError('hash_count must be at least 1')
         return ceil(log(hash_count, 2))
 
-    def branch_and_root(self, hashes, index, length=None):
+    @staticmethod
+    def branch_and_root(hashes, index, length=None, hash_func=double_sha256):
         """Return a (merkle branch, merkle_root) pair given hashes, and the
         index of one of those hashes.
         """
@@ -64,7 +67,7 @@ class Merkle:
         # This also asserts hashes is not empty
         if not 0 <= index < len(hashes):
             raise ValueError(f"index '{index}/{len(hashes)}' out of range")
-        natural_length = self.branch_length(len(hashes))
+        natural_length = Merkle.branch_length(len(hashes))
         if length is None:
             length = natural_length
         else:
@@ -73,7 +76,6 @@ class Merkle:
             if length < natural_length:
                 raise ValueError('length out of range')
 
-        hash_func = self.hash_func
         branch = []
         for _ in range(length):
             if len(hashes) & 1:
@@ -85,44 +87,47 @@ class Merkle:
 
         return branch, hashes[0]
 
-    def root(self, hashes, length=None):
+    @staticmethod
+    def root(hashes, length=None):
         """Return the merkle root of a non-empty iterable of binary hashes."""
-        branch, root = self.branch_and_root(hashes, 0, length)
+        branch, root = Merkle.branch_and_root(hashes, 0, length)
         return root
 
-    def root_from_proof(self, hash, branch, index):
-        """Return the merkle root given a hash, a merkle branch to it, and
-        its index in the hashes array.
+    # @staticmethod
+    # def root_from_proof(hash, branch, index, hash_func=double_sha256):
+    #     """Return the merkle root given a hash, a merkle branch to it, and
+    #     its index in the hashes array.
+    #
+    #     branch is an iterable sorted deepest to shallowest.  If the
+    #     returned root is the expected value then the merkle proof is
+    #     verified.
+    #
+    #     The caller should have confirmed the length of the branch with
+    #     branch_length().  Unfortunately this is not easily done for
+    #     bitcoin transactions as the number of transactions in a block
+    #     is unknown to an SPV client.
+    #     """
+    #     for elt in branch:
+    #         if index & 1:
+    #             hash = hash_func(elt + hash)
+    #         else:
+    #             hash = hash_func(hash + elt)
+    #         index >>= 1
+    #     if index:
+    #         raise ValueError('index out of range for branch')
+    #     return hash
 
-        branch is an iterable sorted deepest to shallowest.  If the
-        returned root is the expected value then the merkle proof is
-        verified.
-
-        The caller should have confirmed the length of the branch with
-        branch_length().  Unfortunately this is not easily done for
-        bitcoin transactions as the number of transactions in a block
-        is unknown to an SPV client.
-        """
-        hash_func = self.hash_func
-        for elt in branch:
-            if index & 1:
-                hash = hash_func(elt + hash)
-            else:
-                hash = hash_func(hash + elt)
-            index >>= 1
-        if index:
-            raise ValueError('index out of range for branch')
-        return hash
-
-    def level(self, hashes, depth_higher):
+    @staticmethod
+    def level(hashes, depth_higher):
         """Return a level of the merkle tree of hashes the given depth
         higher than the bottom row of the original tree."""
         size = 1 << depth_higher
-        root = self.root
+        root = Merkle.root
         return [root(hashes[n: n + size], depth_higher)
                 for n in range(0, len(hashes), size)]
 
-    def branch_and_root_from_level(self, level, leaf_hashes, index,
+    @staticmethod
+    def branch_and_root_from_level(level, leaf_hashes, index,
                                    depth_higher):
         """Return a (merkle branch, merkle_root) pair when a merkle-tree has a
         level cached.
@@ -146,10 +151,10 @@ class Merkle:
         if not isinstance(leaf_hashes, list):
             raise TypeError("leaf_hashes must be a list")
         leaf_index = (index >> depth_higher) << depth_higher
-        leaf_branch, leaf_root = self.branch_and_root(
+        leaf_branch, leaf_root = Merkle.branch_and_root(
             leaf_hashes, index - leaf_index, depth_higher)
         index >>= depth_higher
-        level_branch, root = self.branch_and_root(level, index)
+        level_branch, root = Merkle.branch_and_root(level, index)
         # Check last so that we know index is in-range
         if leaf_root != level[index]:
             raise ValueError('leaf hashes inconsistent with level')
