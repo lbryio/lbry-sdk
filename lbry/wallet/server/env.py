@@ -36,7 +36,7 @@ class Env:
         self.loop_policy = self.set_event_loop_policy()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
-        self.db_engine = self.default('DB_ENGINE', 'leveldb')
+        self.db_engine = self.default('DB_ENGINE', 'rocksdb')
         self.trending_algorithms = [
             trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
         ]
