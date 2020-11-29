@@ -10,7 +10,7 @@ from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
-from lbry.wallet.server.leveldb import FlushData
+from lbry.wallet.server.leveldb import FlushData, reopen_rocksdb_ctx
 
 
 class Prefetcher:
@@ -346,6 +346,7 @@ class BlockProcessor:
             self.db.flush_dbs(self.flush_data(), flush_utxos,
                               self.estimate_txs_remaining)
         await self.run_in_thread_with_lock(flush)
+        await reopen_rocksdb_ctx(self.db.executor)
 
     async def _maybe_flush(self):
         # If caught up, flush everything as client queries are
