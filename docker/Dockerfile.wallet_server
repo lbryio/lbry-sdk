@@ -10,6 +10,9 @@ ENV DOCKER_TAG=$DOCKER_TAG DOCKER_COMMIT=$DOCKER_COMMIT
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
+      liblz4-dev \
+      libsnappy-dev \
+      librocksdb-dev \
       wget \
       tar unzip \
       build-essential \
