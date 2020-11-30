@@ -574,7 +574,7 @@ def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: L
 
 class Database(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.3"
+    SCHEMA_VERSION = "1.4"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
