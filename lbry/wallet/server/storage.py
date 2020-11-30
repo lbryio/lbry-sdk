@@ -77,18 +77,16 @@ class LevelDB(Storage):
         import plyvel
         cls.module = plyvel
 
-    def open(self, name, create):
-        mof = 512 if self.for_sync else 128
+    def open(self, name, create, lru_cache_size=None):
+        mof = 10000
         path = os.path.join(self.db_dir, name)
         # Use snappy compression (the default)
-        self.db = self.module.DB(path, create_if_missing=create,
-                                 max_open_files=mof)
+        self.db = self.module.DB(path, create_if_missing=create, max_open_files=mof)
         self.close = self.db.close
         self.get = self.db.get
         self.put = self.db.put
         self.iterator = self.db.iterator
-        self.write_batch = partial(self.db.write_batch, transaction=True,
-                                   sync=True)
+        self.write_batch = partial(self.db.write_batch, transaction=True, sync=True)
 
 
 class RocksDB(Storage):

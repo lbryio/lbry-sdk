@@ -17,7 +17,7 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from binascii import hexlify
+from binascii import hexlify, unhexlify
 from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from prometheus_client import Counter, Info, Histogram, Gauge
@@ -141,7 +141,11 @@ class SessionManager:
     session_count_metric = Gauge("session_count", "Number of connected client sessions", namespace=NAMESPACE,
                                       labelnames=("version",))
     request_count_metric = Counter("requests_count", "Number of requests received", namespace=NAMESPACE,
-                                        labelnames=("method", "version"))
+                                   labelnames=("method", "version"))
+    tx_request_count_metric = Counter("requested_transaction", "Number of transactions requested", namespace=NAMESPACE)
+    tx_replied_count_metric = Counter("replied_transaction", "Number of transactions responded", namespace=NAMESPACE)
+    urls_to_resolve_count_metric = Counter("urls_to_resolve", "Number of urls to resolve", namespace=NAMESPACE)
+    resolved_url_count_metric = Counter("resolved_url", "Number of resolved urls", namespace=NAMESPACE)
 
     interrupt_count_metric = Counter("interrupt", "Number of interrupted queries", namespace=NAMESPACE)
     db_operational_error_metric = Counter(
@@ -603,7 +607,7 @@ class SessionManager:
     async def raw_header(self, height):
         """Return the binary header at the given height."""
         try:
-            return await self.db.raw_header(height)
+            return self.db.raw_header(height)
         except IndexError:
             raise RPCError(BAD_REQUEST, f'height {height:,d} '
                                         'out of range') from None
@@ -1045,7 +1049,12 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_resolve(self, *urls):
         if urls:
-            return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+            count = len(urls)
+            try:
+                self.session_mgr.urls_to_resolve_count_metric.inc(count)
+                return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+            finally:
+                self.session_mgr.resolved_url_count_metric.inc(count)
 
     async def get_server_height(self):
         return self.bp.height
@@ -1218,10 +1227,7 @@ class LBRYElectrumX(SessionBase):
         return await self.address_status(hashX)
 
     async def hashX_unsubscribe(self, hashX, alias):
-        try:
-            del self.hashX_subs[hashX]
-        except ValueError:
-            pass
+        self.hashX_subs.pop(hashX, None)
 
     def address_to_hashX(self, address):
         try:
@@ -1323,30 +1329,11 @@ class LBRYElectrumX(SessionBase):
                            f'require header height {height:,d} <= '
                            f'cp_height {cp_height:,d} <= '
                            f'chain height {max_height:,d}')
-        branch, root = await self.db.header_branch_and_root(cp_height + 1,
-                                                            height)
+        branch, root = await self.db.header_branch_and_root(cp_height + 1, height)
         return {
             'branch': [hash_to_hex_str(elt) for elt in branch],
             'root': hash_to_hex_str(root),
         }
-
-    async def block_header(self, height, cp_height=0):
-        """Return a raw block header as a hexadecimal string, or as a
-        dictionary with a merkle proof."""
-        height = non_negative_integer(height)
-        cp_height = non_negative_integer(cp_height)
-        raw_header_hex = (await self.session_mgr.raw_header(height)).hex()
-        if cp_height == 0:
-            return raw_header_hex
-        result = {'header': raw_header_hex}
-        result.update(await self._merkle_proof(cp_height, height))
-        return result
-
-    async def block_header_13(self, height):
-        """Return a raw block header as a hexadecimal string.
-
-        height: the header's height"""
-        return await self.block_header(height)
 
     async def block_headers(self, start_height, count, cp_height=0, b64=False):
         """Return count concatenated block headers as hex for the main chain;
@@ -1361,9 +1348,13 @@ class LBRYElectrumX(SessionBase):
 
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
-        headers, count = await self.db.read_headers(start_height, count)
-        compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-        headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode() if b64 else headers.hex()
+        headers, count = self.db.read_headers(start_height, count)
+
+        if b64:
+            compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+            headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode()
+        else:
+            headers = headers.hex()
         result = {
             'base64' if b64 else 'hex': headers,
             'count': count,
@@ -1381,7 +1372,7 @@ class LBRYElectrumX(SessionBase):
         index = non_negative_integer(index)
         size = self.coin.CHUNK_SIZE
         start_height = index * size
-        headers, _ = await self.db.read_headers(start_height, size)
+        headers, _ = self.db.read_headers(start_height, size)
         return headers.hex()
 
     async def block_get_header(self, height):
@@ -1523,27 +1514,23 @@ class LBRYElectrumX(SessionBase):
                                         f'network rules.\n\n{message}\n[{raw_tx}]')
 
     async def transaction_info(self, tx_hash: str):
-        assert_tx_hash(tx_hash)
-        tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
-        raw_tx = tx_info['hex']
-        block_hash = tx_info.get('blockhash')
-        if not block_hash:
-            return raw_tx, {'block_height': -1}
-        merkle_height = (await self.daemon.deserialised_block(block_hash))['height']
-        merkle = await self.transaction_merkle(tx_hash, merkle_height)
-        return raw_tx, merkle
+        return (await self.transaction_get_batch(tx_hash))[tx_hash]
 
     async def transaction_get_batch(self, *tx_hashes):
+        self.session_mgr.tx_request_count_metric.inc(len(tx_hashes))
         if len(tx_hashes) > 100:
             raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
-        batch_result = {}
+        batch_result = await self.db.fs_transactions(tx_hashes)
+        needed_merkles = {}
+
         for tx_hash in tx_hashes:
+            if tx_hash in batch_result and batch_result[tx_hash][0]:
+                continue
             tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
             raw_tx = tx_info['hex']
             block_hash = tx_info.get('blockhash')
-            merkle = {}
             if block_hash:
                 block = await self.daemon.deserialised_block(block_hash)
                 height = block['height']
@@ -1552,12 +1539,21 @@ class LBRYElectrumX(SessionBase):
                 except ValueError:
                     raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
                                                 f'block {block_hash} at height {height:,d}')
-                merkle["merkle"] = self._get_merkle_branch(block['tx'], pos)
-                merkle["pos"] = pos
+                needed_merkles[tx_hash] = raw_tx, block['tx'], pos, height
             else:
-                height = -1
-            merkle['block_height'] = height
-            batch_result[tx_hash] = [raw_tx, merkle]
+                batch_result[tx_hash] = [raw_tx, {'block_height': -1}]
+
+        def threaded_get_merkle():
+            for tx_hash, (raw_tx, block_txs, pos, block_height) in needed_merkles.items():
+                batch_result[tx_hash] = raw_tx, {
+                    'merkle': self._get_merkle_branch(block_txs, pos),
+                    'pos': pos,
+                    'block_height': block_height
+                }
+        if needed_merkles:
+            await asyncio.get_running_loop().run_in_executor(self.db.executor, threaded_get_merkle)
+
+        self.session_mgr.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
 
     async def transaction_get(self, tx_hash, verbose=False):
@@ -1571,19 +1567,6 @@ class LBRYElectrumX(SessionBase):
             raise RPCError(BAD_REQUEST, f'"verbose" must be a boolean')
 
         return await self.daemon_request('getrawtransaction', tx_hash, verbose)
-
-    async def _block_hash_and_tx_hashes(self, height):
-        """Returns a pair (block_hash, tx_hashes) for the main chain block at
-        the given height.
-
-        block_hash is a hexadecimal string, and tx_hashes is an
-        ordered list of hexadecimal strings.
-        """
-        height = non_negative_integer(height)
-        hex_hashes = await self.daemon_request('block_hex_hashes', height, 1)
-        block_hash = hex_hashes[0]
-        block = await self.daemon.deserialised_block(block_hash)
-        return block_hash, block['tx']
 
     def _get_merkle_branch(self, tx_hashes, tx_pos):
         """Return a merkle branch to a transaction.
@@ -1604,35 +1587,11 @@ class LBRYElectrumX(SessionBase):
         height: the height of the block it is in
         """
         assert_tx_hash(tx_hash)
-        block_hash, tx_hashes = await self._block_hash_and_tx_hashes(height)
-        try:
-            pos = tx_hashes.index(tx_hash)
-        except ValueError:
+        result = await self.transaction_get_batch(tx_hash)
+        if tx_hash not in result or result[tx_hash][1]['block_height'] <= 0:
             raise RPCError(BAD_REQUEST, f'tx hash {tx_hash} not in '
-                                        f'block {block_hash} at height {height:,d}')
-        branch = self._get_merkle_branch(tx_hashes, pos)
-        return {"block_height": height, "merkle": branch, "pos": pos}
-
-    async def transaction_id_from_pos(self, height, tx_pos, merkle=False):
-        """Return the txid and optionally a merkle proof, given
-        a block height and position in the block.
-        """
-        tx_pos = non_negative_integer(tx_pos)
-        if merkle not in (True, False):
-            raise RPCError(BAD_REQUEST, f'"merkle" must be a boolean')
-
-        block_hash, tx_hashes = await self._block_hash_and_tx_hashes(height)
-        try:
-            tx_hash = tx_hashes[tx_pos]
-        except IndexError:
-            raise RPCError(BAD_REQUEST, f'no tx at position {tx_pos:,d} in '
-                                        f'block {block_hash} at height {height:,d}')
-
-        if merkle:
-            branch = self._get_merkle_branch(tx_hashes, tx_pos)
-            return {"tx_hash": tx_hash, "merkle": branch}
-        else:
-            return tx_hash
+                                        f'block at height {height:,d}')
+        return result[tx_hash][1]
 
 
 class LocalRPC(SessionBase):
