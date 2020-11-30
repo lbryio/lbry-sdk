@@ -156,7 +156,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_ready_controller = StreamController()
         self.on_ready = self._on_ready_controller.stream
 
-        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 100_000))
+        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 10_000_000))
         self._update_tasks = TaskGroup()
         self._other_tasks = TaskGroup()  # that we dont need to start
         self._utxo_reservation_lock = asyncio.Lock()
@@ -578,7 +578,7 @@ class Ledger(metaclass=LedgerRegistry):
                     log.warning("history mismatch: %s vs %s", remote_history[remote_i], pending_synced_history[i])
                 synced_history += pending_synced_history[i]
 
-            cache_size = self.config.get("tx_cache_size", 100_000)
+            cache_size = self.config.get("tx_cache_size", 10_000_000)
             for txid, cache_item in updated_cached_items.items():
                 cache_item.pending_verifications -= 1
                 if cache_item.pending_verifications < 0:
