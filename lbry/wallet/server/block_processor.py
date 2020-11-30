@@ -275,6 +275,7 @@ class BlockProcessor:
         await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
         await self.prefetcher.reset_height(self.height)
         self.reorg_count_metric.inc()
+        await reopen_rocksdb_ctx(self.db.executor)
 
     async def reorg_hashes(self, count):
         """Return a pair (start, last, hashes) of blocks to back up during a
@@ -289,7 +290,7 @@ class BlockProcessor:
         self.logger.info(f'chain was reorganised replacing {count:,d} '
                          f'block{s} at heights {start:,d}-{last:,d}')
 
-        return start, last, await self.db.fs_block_hashes(start, count)
+        return start, last, self.db.fs_block_hashes(start, count)
 
     async def calc_reorg_range(self, count: Optional[int]):
         """Calculate the reorg range"""
@@ -307,7 +308,7 @@ class BlockProcessor:
             start = self.height - 1
             count = 1
             while start > 0:
-                hashes = await self.db.fs_block_hashes(start, count)
+                hashes = self.db.fs_block_hashes(start, count)
                 hex_hashes = [hash_to_hex_str(hash) for hash in hashes]
                 d_hex_hashes = await self.daemon.block_hex_hashes(start, count)
                 n = diff_pos(hex_hashes, d_hex_hashes)

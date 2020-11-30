@@ -2,6 +2,15 @@ import logging
 import asyncio
 from binascii import hexlify
 from lbry.testcase import CommandTestCase
+from lbry.wallet.server.leveldb import proc_ctx
+
+
+def get_txids(height):
+    ctx = proc_ctx.get()
+    return [
+        ctx.ctx_tx_hash(tx_num)[0][::-1].hex()
+        for tx_num in range(ctx.tx_counts[height - 1], ctx.tx_counts[height])
+    ]
 
 
 class BlockchainReorganizationTests(CommandTestCase):
@@ -11,18 +20,12 @@ class BlockchainReorganizationTests(CommandTestCase):
     async def assertBlockHash(self, height):
         bp = self.conductor.spv_node.server.bp
 
-        def get_txids():
-            return [
-                bp.db.fs_tx_hash(tx_num)[0][::-1].hex()
-                for tx_num in range(bp.db.tx_counts[height - 1], bp.db.tx_counts[height])
-            ]
-
         block_hash = await self.blockchain.get_block_hash(height)
 
         self.assertEqual(block_hash, (await self.ledger.headers.hash(height)).decode())
-        self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
+        self.assertEqual(block_hash, (bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
 
-        txids = await asyncio.get_event_loop().run_in_executor(bp.db.executor, get_txids)
+        txids = await asyncio.get_event_loop().run_in_executor(bp.db.executor, get_txids, height)
         txs = await bp.db.fs_transactions(txids)
         block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')

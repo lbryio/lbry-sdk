@@ -226,6 +226,11 @@ def read_headers():
     ]
 
 
+def read_block_file(path):
+    with util.open_file(path) as f:
+        return f.read(-1)
+
+
 def tx_hash(self, tx_num):
     """Return a par (tx_hash, tx_height) for the given tx number.
 
@@ -773,8 +778,9 @@ class LevelDB:
             self.executor, transaction_info_get_batch, txids
         )
 
-    async def fs_block_hashes(self, height, count):
+    def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
+            print("boom")
             raise self.DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
         return [self.coin.header_hash(header) for header in self.headers[height:height + count]]
 
@@ -823,11 +829,7 @@ class LevelDB:
         """Returns a raw block read from disk.  Raises FileNotFoundError
         if the block isn't on-disk."""
 
-        def read():
-            with util.open_file(self.raw_block_path(height)) as f:
-                return f.read(-1)
-
-        return await asyncio.get_event_loop().run_in_executor(self.executor, read)
+        return await asyncio.get_event_loop().run_in_executor(self.executor, read_block_file, self.raw_block_path(height))
 
     def write_raw_block(self, block, height):
         """Write a raw block to disk."""

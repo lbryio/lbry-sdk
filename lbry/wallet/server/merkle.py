@@ -196,7 +196,7 @@ class MerkleCache:
         # Start from the beginning of any final partial segment.
         # Retain the value of depth_higher; in practice this is fine
         start = self._leaf_start(self.length)
-        hashes = await self.source_func(start, length - start)
+        hashes = self.source_func(start, length - start)
         self.level[start >> self.depth_higher:] = self._level(hashes)
         self.length = length
 
@@ -208,7 +208,7 @@ class MerkleCache:
         level = self.level[:length >> self.depth_higher]
         leaf_start = self._leaf_start(length)
         count = min(self._segment_length(), length - leaf_start)
-        hashes = await self.source_func(leaf_start, count)
+        hashes = self.source_func(leaf_start, count)
         level += self._level(hashes)
         return level
 
@@ -216,7 +216,7 @@ class MerkleCache:
         """Call to initialize the cache to a source of given length."""
         self.length = length
         self.depth_higher = self.merkle.tree_depth(length) // 2
-        self.level = self._level(await self.source_func(0, length))
+        self.level = self._level(self.source_func(0, length))
         self.initialized.set()
 
     def truncate(self, length):
@@ -250,7 +250,7 @@ class MerkleCache:
         await self._extend_to(length)
         leaf_start = self._leaf_start(index)
         count = min(self._segment_length(), length - leaf_start)
-        leaf_hashes = await self.source_func(leaf_start, count)
+        leaf_hashes = self.source_func(leaf_start, count)
         if length < self._segment_length():
             return self.merkle.branch_and_root(leaf_hashes, index)
         level = await self._level_for(length)
