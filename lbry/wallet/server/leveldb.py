@@ -178,7 +178,7 @@ def lookup_hashXs_utxos(prevouts):
             idx_packed = pack('<H', tx_idx)
             # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
             # Value: hashX
-            prefix = b'h' + tx_hash[:4] + idx_packed
+            prefix = HASHX_UTXO_PREFIX + tx_hash[:4] + idx_packed
             # Find which entry, if any, the TX_HASH matches.
             for db_key, hashX in iterator(prefix=prefix):
                 tx_num_packed = db_key[-4:]
@@ -198,7 +198,7 @@ def lookup_hashXs_utxos(prevouts):
             return None
         # Key: b'u' + address_hashX + tx_idx + tx_num
         # Value: the UTXO value as a 64-bit unsigned integer
-        db_value = get(b'u' + hashX + suffix)
+        db_value = get(UTXO_PREFIX + hashX + suffix)
         if not db_value:
             # This can happen if the DB was updated between
             # getting the hashXs and getting the UTXOs

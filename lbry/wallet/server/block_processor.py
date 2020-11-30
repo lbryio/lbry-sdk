@@ -10,7 +10,7 @@ from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
-from lbry.wallet.server.leveldb import FlushData, reopen_rocksdb_ctx
+from lbry.wallet.server.leveldb import FlushData, reopen_rocksdb_ctx, UTXO_PREFIX, HASHX_UTXO_PREFIX
 
 
 class Prefetcher:
@@ -586,7 +586,7 @@ class BlockProcessor:
 
         # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
         # Value: hashX
-        prefix = b'h' + tx_hash[:4] + idx_packed
+        prefix = HASHX_UTXO_PREFIX + tx_hash[:4] + idx_packed
         candidates = {db_key: hashX for db_key, hashX
                       in self.db.db.iterator(prefix=prefix)}
 
@@ -602,7 +602,7 @@ class BlockProcessor:
 
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
-            udb_key = b'u' + hashX + hdb_key[-6:]
+            udb_key = UTXO_PREFIX + hashX + hdb_key[-6:]
             utxo_value_packed = self.db.db.get(udb_key)
             if utxo_value_packed:
                 # Remove both entries for this UTXO
