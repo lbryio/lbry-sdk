@@ -28,24 +28,32 @@ stages:
 test:lint:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y liblz4-dev libsnappy-dev librocksdb-dev
     - make install tools
     - make lint
 
 test:unit:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y liblz4-dev libsnappy-dev librocksdb-dev
     - make install tools
     - HOME=/tmp coverage run -p --source=lbry -m unittest discover -vv tests.unit
 
 test:datanetwork-integration:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y liblz4-dev libsnappy-dev librocksdb-dev
     - pip install tox-travis
     - tox -e datanetwork --recreate
 
 test:blockchain-integration:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y liblz4-dev libsnappy-dev librocksdb-dev
     - pip install tox-travis
     - tox -e blockchain
 
@@ -53,13 +61,15 @@ test:other-integration:
   stage: test
   script:
     - apt-get update
-    - apt-get install -y --no-install-recommends ffmpeg
+    - apt-get install -y --no-install-recommends ffmpeg liblz4-dev libsnappy-dev librocksdb-dev
     - pip install tox-travis
     - tox -e other
 
 test:json-api:
   stage: test
   script:
+    - apt-get update
+    - apt-get install -y liblz4-dev libsnappy-dev librocksdb-dev
     - make install tools
     - HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
 
