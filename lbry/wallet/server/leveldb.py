@@ -448,6 +448,7 @@ class LevelDB:
         self.history.close_db()
         self.executor.shutdown(wait=True)
         self.executor = None
+        self.db = None
 
     async def open_for_compacting(self):
         await self._open_dbs(True, True)
