@@ -726,43 +726,6 @@ class LevelDB:
             return None, tx_height
         return self.total_transactions[tx_num], tx_height
 
-    async def tx_merkle(self, tx_num, tx_height):
-        if tx_height == -1:
-            return {
-                'block_height': -1
-            }
-        tx_counts = self.tx_counts
-        tx_pos = tx_num - tx_counts[tx_height - 1]
-
-        def _update_block_txs_cache():
-            block_txs = list(self.db.iterator(
-                start=TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height - 1]),
-                stop=None if tx_height + 1 == len(tx_counts) else
-                TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height]), include_key=False
-            ))
-            if tx_height + 100 > self.db_height:
-                return block_txs
-            self._block_txs_cache[tx_height] = block_txs
-
-        uncached = None
-        if (tx_num, tx_height) in self._merkle_tx_cache:
-            return self._merkle_tx_cache[(tx_num, tx_height)]
-        if tx_height not in self._block_txs_cache:
-            uncached = await asyncio.get_event_loop().run_in_executor(self.executor, _update_block_txs_cache)
-        block_txs = self._block_txs_cache.get(tx_height, uncached)
-        branch, root = self.merkle.branch_and_root(block_txs, tx_pos)
-        merkle = {
-            'block_height': tx_height,
-            'merkle': [
-                hash_to_hex_str(hash)
-                for hash in branch
-            ],
-            'pos': tx_pos
-        }
-        if tx_height + 100 < self.db_height:
-            self._merkle_tx_cache[(tx_num, tx_height)] = merkle
-        return merkle
-
     async def fs_transactions(self, txids):
         return await asyncio.get_event_loop().run_in_executor(
             self.executor, transaction_info_get_batch, txids
