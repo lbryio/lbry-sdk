@@ -285,7 +285,7 @@ def tx_merkle(tx_num, tx_height):
             prefix=TX_HASH_PREFIX,
             start=TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height - 1]),
             stop=None if tx_height + 1 == len(tx_counts) else
-            TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height]), include_key=False
+            TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height] - 1), include_key=False
         ))
         if tx_height + 100 <= db_height:
             ctx.block_txs_cache[tx_height] = block_txs
