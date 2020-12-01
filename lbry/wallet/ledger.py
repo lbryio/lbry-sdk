@@ -131,7 +131,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_transaction_controller = StreamController()
         self.on_transaction = self._on_transaction_controller.stream
         self.on_transaction.listen(
-            lambda e: log.info(
+            lambda e: log.debug(
                 '(%s) on_transaction: address=%s, height=%s, is_verified=%s, tx.id=%s',
                 self.get_id(), e.address, e.tx.height, e.tx.is_verified, e.tx.id
             )

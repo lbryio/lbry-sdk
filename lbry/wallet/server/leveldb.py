@@ -74,9 +74,11 @@ class RocksReaderContext:
     def update_state(self):
         tx_counts = array.array("L")
         counts = self.db.get(TX_COUNTS_STATE)
-        if counts:
+        if not counts:
+            self.tx_counts = list(map(unpack_be_uint64, self.db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)))
+        else:
             tx_counts.frombytes(counts)
-        self.tx_counts = tx_counts.tolist()
+            self.tx_counts = tx_counts.tolist()
 
     def ctx_tx_hash(self, tx_num):
         tx_height = bisect_right(self.tx_counts, tx_num)
