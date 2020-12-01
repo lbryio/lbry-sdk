@@ -50,6 +50,7 @@ HASHX_HISTORY_PREFIX = b'x'
 UNDO_PREFIX = b'U'
 UTXO_STATE = b'state-utxo'
 HIST_STATE = b'state-hist'
+TX_COUNTS_STATE = b'state-tx-counts'
 
 
 @dataclass
@@ -71,10 +72,11 @@ class RocksReaderContext:
         self.db.open(self.name, create=False, read_only=True)
 
     def update_state(self):
-        self.tx_counts = [
-            unpack_be_uint64(tx_count)
-            for tx_count in self.db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)
-        ]
+        tx_counts = array.array("L")
+        counts = self.db.get(TX_COUNTS_STATE)
+        if counts:
+            tx_counts.frombytes(counts)
+        self.tx_counts = tx_counts.tolist()
 
     def ctx_tx_hash(self, tx_num):
         tx_height = bisect_right(self.tx_counts, tx_num)
@@ -195,10 +197,9 @@ def lookup_hashXs_utxos(prevouts):
 
 
 def get_counts():
-    return tuple(
-        util.unpack_be_uint64(tx_count)
-        for tx_count in proc_ctx.get().db.iterator(prefix=TX_COUNT_PREFIX, include_key=False)
-    )
+    ctx = proc_ctx.get()
+    return ctx.tx_counts
+
 
 
 def read_txids():
@@ -393,7 +394,7 @@ class LevelDB:
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(self.executor, get_counts)
         assert len(tx_counts) == self.db_height + 1, f"{len(tx_counts)} vs {self.db_height + 1}"
-        self.tx_counts = array.array('I', tx_counts)
+        self.tx_counts = tx_counts
 
         if self.tx_counts:
             assert self.db_tx_count == self.tx_counts[-1], \
@@ -590,6 +591,9 @@ class LevelDB:
                     tx_num += 1
                     offset += 32
 
+            batch_put(TX_COUNTS_STATE, b''.join(map(util.pack_le_int64, self.tx_counts)))
+
+
         flush_data.block_txs.clear()
         flush_data.block_hashes.clear()
 
@@ -766,7 +770,6 @@ class LevelDB:
 
     def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
-            print("boom")
             raise self.DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
         return [self.coin.header_hash(header) for header in self.headers[height:height + count]]
 
