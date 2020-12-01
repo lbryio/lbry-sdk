@@ -287,6 +287,7 @@ def tx_merkle(tx_num, tx_height):
             stop=None if tx_height + 1 == len(tx_counts) else
             TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height] - 1), include_key=False
         ))
+        # print("rocks txs", tx_height, list(map(hash_to_hex_str, block_txs)))
         if tx_height + 100 <= db_height:
             ctx.block_txs_cache[tx_height] = block_txs
     else:
@@ -595,8 +596,9 @@ class LevelDB:
                     tx_num += 1
                     offset += 32
 
-            batch_put(TX_COUNTS_STATE, b''.join(map(util.pack_le_int64, self.tx_counts)))
-
+            a = array.array('L')
+            a.fromlist(self.tx_counts)
+            batch_put(TX_COUNTS_STATE, a.tobytes())
 
         flush_data.block_txs.clear()
         flush_data.block_hashes.clear()

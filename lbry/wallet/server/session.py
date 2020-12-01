@@ -1534,6 +1534,7 @@ class LBRYElectrumX(SessionBase):
             if block_hash:
                 block = await self.daemon.deserialised_block(block_hash)
                 height = block['height']
+                # print('lbrycrd txs', height, block['tx'])
                 try:
                     pos = block['tx'].index(tx_hash)
                 except ValueError:
