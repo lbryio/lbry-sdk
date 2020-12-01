@@ -27,6 +27,10 @@ With the daemon running, `lbrynet commands` will show you a list of commands.
 
 The full API is documented [here](https://lbry.tech/api/sdk).
 
+## Recommended hardware
+
+The minimum hardware for a full node is 16cpus, 92gb of RAM, and 160gb of NVMe storage. The recommended hardware is 32cpus, 128gb of RAM, and 160gb of NVMe storage.
+
 ## Running from source
 
 Installing from source is also relatively painless. Full instructions are in [INSTALL.md](INSTALL.md)
