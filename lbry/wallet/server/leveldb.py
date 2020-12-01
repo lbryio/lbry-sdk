@@ -280,6 +280,7 @@ def tx_merkle(tx_num, tx_height):
         return ctx.merkle_tx_cache[(tx_num, tx_height)]
     if tx_height not in ctx.block_txs_cache:
         block_txs = list(db.iterator(
+            prefix=TX_HASH_PREFIX,
             start=TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height - 1]),
             stop=None if tx_height + 1 == len(tx_counts) else
             TX_HASH_PREFIX + util.pack_be_uint64(tx_counts[tx_height]), include_key=False
@@ -288,6 +289,7 @@ def tx_merkle(tx_num, tx_height):
             ctx.block_txs_cache[tx_height] = block_txs
     else:
         block_txs = ctx.block_txs_cache.get(tx_height, uncached)
+
     branch, root = ctx.merkle.branch_and_root(block_txs, tx_pos)
     merkle = {
         'block_height': tx_height,

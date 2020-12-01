@@ -153,12 +153,11 @@ class RocksDBIterator:
     ]
 
     def __init__(self, db, prefix=None, start=None, stop=None, include_key=True, include_value=True, reverse=False):
-        assert (start is None and stop is None) or (prefix is None), 'cannot use start/stop and prefix'
         self.start = start
         self.prefix = prefix
         self.stop = stop
         self.iterator = db.iteritems() if not reverse else reversed(db.iteritems())
-        if prefix is not None:
+        if prefix is not None and start is None:
             self.iterator.seek(prefix)
         elif start is not None:
             self.iterator.seek(start)
