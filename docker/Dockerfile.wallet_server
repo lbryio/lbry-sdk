@@ -11,6 +11,7 @@ ENV DOCKER_TAG=$DOCKER_TAG DOCKER_COMMIT=$DOCKER_COMMIT
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       liblz4-dev \
+      libbz2-dev \
       libsnappy-dev \
       librocksdb-dev \
       wget \
@@ -34,7 +35,8 @@ RUN chown -R $user:$user $projects_dir
 USER $user
 WORKDIR $projects_dir
 
-RUN pip install uvloop
+RUN pip install uvloop cython
+RUN pip install python-rocksdb
 RUN make install
 RUN python3 docker/set_build.py
 RUN rm ~/.cache -rf
@@ -51,5 +53,6 @@ ENV DB_DIRECTORY=$db_dir
 ENV MAX_SESSIONS=1000000000
 ENV MAX_SEND=1000000000000000000
 ENV EVENT_LOOP_POLICY=uvloop
+ENV DB_ENGINE=rocksdb
 COPY ./docker/wallet_server_entrypoint.sh /entrypoint.sh
 ENTRYPOINT ["/entrypoint.sh"]
