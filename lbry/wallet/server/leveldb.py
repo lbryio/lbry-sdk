@@ -52,21 +52,6 @@ UTXO_STATE = b'state-utxo'
 HIST_STATE = b'state-hist'
 
 
-class RocksDBState(typing.NamedTuple):
-    db_version: int
-    genesis_hash: str
-    height: int
-    tx_count: int
-    tip: bytes
-    utxo_flush_count: int
-    wall_time: int
-    first_sync: bool
-
-    flush_count: int
-    comp_flush_count: int
-    comp_cursor: int
-
-
 @dataclass
 class RocksReaderContext:
     db: 'RocksDB'
@@ -140,7 +125,7 @@ def _teardown():
     proc_ctx.set(None)
 
 
-async def initialize_executor(workers, db_dir='/media/jack/evo970/spv_data', for_sync=False, name='lbryrocks'):
+async def initialize_executor(workers, db_dir, for_sync, name):
     executor = ProcessPoolExecutor(workers, initializer=_initializer, initargs=(db_dir, name))
     try:
         writer = RocksDB(db_dir, name, for_sync=for_sync, read_only=False)
