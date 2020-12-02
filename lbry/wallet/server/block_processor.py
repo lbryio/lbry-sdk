@@ -444,6 +444,7 @@ class BlockProcessor:
 
             append_hashX_by_tx(hashXs)
             update_touched(hashXs)
+            self.db.total_transactions.append(tx_hash)
             tx_num += 1
 
         self.db.history.add_unflushed(hashXs_by_tx, self.tx_count)
@@ -491,6 +492,7 @@ class BlockProcessor:
         undo_entry_len = 12 + HASHX_LEN
 
         for tx, tx_hash in reversed(txs):
+            self.db.total_transactions.pop()
             for idx, txout in enumerate(tx.outputs):
                 # Spend the TX outputs.  Be careful with unspendable
                 # outputs - we didn't save those in the first place.
