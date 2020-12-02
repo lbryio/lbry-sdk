@@ -994,7 +994,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(resolutions.txos[0].error.text, "Could not find channel in \"@notfound#ab/notfound\".")
 
     async def test_claim_search_effective_amount(self):
-        claim = await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True, amount='0.42'))
+        claim = await self.get_claim(await self.create_claim(is_channel=True, amount='0.42'))
         await self.generate(1)
         results = await self.db.search_claims(staked_amount=42000000)
         self.assertEqual(claim.claim_id, results[0].claim_id)
@@ -1383,12 +1383,12 @@ class TestClaimtrieSync(SyncingBlockchainTestCase):
 
     async def test_content_filtering(self):
         user_chan = await self.get_claim(
-            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@some_channel"))
-        await self.create_claim(claim_id_startswith='cd', sign=user_chan, name="good_content")
+            await self.create_claim(is_channel=True, name="@some_channel"))
+        await self.create_claim(sign=user_chan, name="good_content")
         bad_content = await self.get_claim(
-            await self.create_claim(claim_id_startswith='ef', sign=user_chan, name="bad_content"))
+            await self.create_claim(sign=user_chan, name="bad_content"))
         moderator_chan = await self.get_claim(
-            await self.create_claim(claim_id_startswith='ab', is_channel=True, name="@filters"))
+            await self.create_claim(is_channel=True, name="@filters"))
         await self.create_claim(sign=moderator_chan, name="blocking_bad", repost=bad_content.claim_id)
         self.sync.filtering_channel_hashes.add(moderator_chan.claim_hash)
         await self.generate(1)
