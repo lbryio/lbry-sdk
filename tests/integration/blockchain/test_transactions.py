@@ -138,8 +138,8 @@ class BasicTransactionTests(IntegrationTestCase):
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
         original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
 
-        async def random_summary(*args, **kwargs):
-            summary = await original_summary(*args, **kwargs)
+        def random_summary(*args, **kwargs):
+            summary = original_summary(*args, **kwargs)
             if summary and len(summary) > 2:
                 ordered = summary.copy()
                 while summary == ordered:
