@@ -71,7 +71,7 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.network.session_pool.new_connection_event.clear()
         await node2.start(self.blockchain)
         # this is only to speed up the test as retrying would take 4+ seconds
-        for session in self.ledger.network.session_pool.sessions.values():
+        for session in self.ledger.network.session_pool.sessions:
             session.trigger_urgent_reconnect.set()
         await asyncio.wait_for(self.ledger.network.session_pool.new_connection_event.wait(), timeout=1)
         self.assertEqual(2, len(list(self.ledger.network.session_pool.available_sessions)))
@@ -139,7 +139,7 @@ class ReconnectTests(IntegrationTestCase):
     async def test_online_but_still_unavailable(self):
         # Edge case. See issue #2445 for context
         self.assertIsNotNone(self.ledger.network.session_pool.fastest_session)
-        for session in self.ledger.network.session_pool.sessions.values():
+        for session in self.ledger.network.session_pool.sessions:
             session.response_time = None
         self.assertIsNone(self.ledger.network.session_pool.fastest_session)
 

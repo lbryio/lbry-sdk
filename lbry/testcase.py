@@ -340,6 +340,7 @@ class CommandTestCase(IntegrationTestCase):
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
         self.server_config = Config()
+        self.server_config.transaction_cache_size = 10000
         self.server_storage = SQLiteStorage(self.server_config, ':memory:')
         await self.server_storage.open()
 
@@ -389,6 +390,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.fixed_peers = [('127.0.0.1', 5567)]
         conf.known_dht_nodes = []
         conf.blob_lru_cache_size = self.blob_lru_cache_size
+        conf.transaction_cache_size = 10000
         conf.components_to_skip = [
             DHT_COMPONENT, UPNP_COMPONENT, HASH_ANNOUNCER_COMPONENT,
             PEER_PROTOCOL_SERVER_COMPONENT
