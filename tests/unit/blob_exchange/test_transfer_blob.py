@@ -36,12 +36,14 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.addCleanup(shutil.rmtree, self.server_dir)
         self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
                                     fixed_peers=[])
+        self.server_config.transaction_cache_size = 10000
         self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
         self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir,
                                     wallet=self.client_wallet_dir, fixed_peers=[])
+        self.client_config.transaction_cache_size = 10000
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
         self.client_peer_manager = PeerManager(self.loop)

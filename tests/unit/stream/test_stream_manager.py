@@ -98,12 +98,14 @@ async def get_mock_wallet(sd_hash, storage, wallet_dir, balance=10.0, fee=None):
     wallet = Wallet()
     ledger = Ledger({
         'db': Database(os.path.join(wallet_dir, 'blockchain.db')),
-        'headers': FakeHeaders(514082)
+        'headers': FakeHeaders(514082),
+        'tx_cache_size': 10000
     })
     await ledger.db.open()
     wallet.generate_account(ledger)
     manager = WalletManager()
     manager.config = Config()
+    manager.config.transaction_cache_size = 10000
     manager.wallets.append(wallet)
     manager.ledgers[Ledger] = ledger
     manager.ledger.network.client = ClientSession(

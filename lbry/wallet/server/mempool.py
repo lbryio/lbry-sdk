@@ -366,7 +366,7 @@ class MemPool:
             result.update(tx.prevouts)
         return result
 
-    async def transaction_summaries(self, hashX):
+    def transaction_summaries(self, hashX):
         """Return a list of MemPoolTxSummary objects for the hashX."""
         result = []
         for tx_hash in self.hashXs.get(hashX, ()):
