@@ -12,9 +12,13 @@ from lbry.db.queries.txio import (
     where_claims_with_changed_reposts,
 )
 from lbry.db.query_context import ProgressContext, event_emitter
-from lbry.db.tables import TX, TXO, Claim, Support, pg_add_claim_and_tag_constraints_and_indexes, ClaimFilter
+from lbry.db.tables import (
+    TX, TXO, Claim, Support, CensoredClaim,
+    pg_add_claim_and_tag_constraints_and_indexes
+)
 from lbry.db.utils import least
 from lbry.db.constants import TXO_TYPES, CLAIM_TYPE_CODES
+from lbry.schema.result import Censor
 from lbry.blockchain.transaction import Output
 
 from .context import get_or_initialize_lbrycrd
@@ -283,7 +287,7 @@ def update_channel_stats(blocks: Tuple[int, int], initial_sync: int, p: Progress
     p.step(result.rowcount)
 
 
-def select_reposts(channel_hashes, filter_type=0):
+def select_reposts(channel_hashes, filter_type):
     return (
         select(Claim.c.reposted_claim_hash, filter_type, Claim.c.channel_hash).where(
             (Claim.c.channel_hash.in_(channel_hashes)) &
@@ -293,13 +297,15 @@ def select_reposts(channel_hashes, filter_type=0):
 
 
 @event_emitter("blockchain.sync.claims.filters", "claim_filters")
-def update_claim_filters(blocking_channel_hashes, filtering_channel_hashes, p: ProgressContext):
-    p.ctx.execute(ClaimFilter.delete())
-    # order matters: first we insert the blocked ones. Then the filtered ones.
-    # If there is already a block in place, that takes priority because a block is just a harder filter
-    p.ctx.execute(ClaimFilter.insert().from_select(
-        ['claim_hash', 'filter_type', 'owner_channel_hash'], select_reposts(blocking_channel_hashes, 2))
-    )
-    p.ctx.execute(p.ctx.insert_or_ignore(ClaimFilter).from_select(
-        ['claim_hash', 'filter_type', 'owner_channel_hash'], select_reposts(filtering_channel_hashes, 1))
-    )
+def update_claim_filters(resolve_censor_channel_hashes, search_censor_channel_hashes, p: ProgressContext):
+    p.ctx.execute(CensoredClaim.delete())
+    # order matters: first we insert the resolve filters; then the search ones.
+    # a claim that's censored in resolve is automatically also censored in search results.
+    p.ctx.execute(CensoredClaim.insert().from_select(
+        ['claim_hash', 'censor_type', 'censoring_channel_hash'],
+        select_reposts(resolve_censor_channel_hashes, Censor.RESOLVE)
+    ))
+    p.ctx.execute(p.ctx.insert_or_ignore(CensoredClaim).from_select(
+        ['claim_hash', 'censor_type', 'censoring_channel_hash'],
+        select_reposts(search_censor_channel_hashes, Censor.SEARCH)
+    ))

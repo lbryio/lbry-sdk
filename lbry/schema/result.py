@@ -24,19 +24,22 @@ def set_reference(reference, claim_hash, rows):
 
 class Censor:
 
-    __slots__ = 'level', 'censored'
+    SEARCH = 1
+    RESOLVE = 2
 
-    def __init__(self, level=1):
-        self.level = level
+    __slots__ = 'censor_type', 'censored'
+
+    def __init__(self, censor_type):
+        self.censor_type = censor_type
         self.censored = {}
 
     def apply(self, rows):
         return [row for row in rows if not self.censor(row)]
 
     def censor(self, row) -> bool:
-        was_censored = row['censor_type'] >= self.level
+        was_censored = (row['censor_type'] or 0) >= self.censor_type
         if was_censored:
-            censoring_channel_hash = row['censor_owner_hash']
+            censoring_channel_hash = row['censoring_channel_hash']
             self.censored.setdefault(censoring_channel_hash, set())
             self.censored[censoring_channel_hash].add(row['tx_hash'])
         return was_censored
@@ -110,10 +113,10 @@ class Outputs:
                 'expiration_height': claim.expiration_height,
                 'effective_amount': claim.effective_amount,
                 'support_amount': claim.support_amount,
-                'trending_group': claim.trending_group,
-                'trending_mixed': claim.trending_mixed,
-                'trending_local': claim.trending_local,
-                'trending_global': claim.trending_global,
+                'trend_group': claim.trend_group,
+                'trend_mixed': claim.trend_mixed,
+                'trend_local': claim.trend_local,
+                'trend_global': claim.trend_global,
             }
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]

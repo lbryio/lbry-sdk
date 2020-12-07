@@ -326,18 +326,20 @@ Stake = Table(
     Column('stake_unique', Integer),
 )
 
-Trending = Table(
+
+Trend = Table(
     'trend', metadata,
     Column('claim_hash', LargeBinary, primary_key=True),
-    Column('trending_group', BigInteger, server_default='0'),
-    Column('trending_mixed', BigInteger, server_default='0'),
-    Column('trending_local', BigInteger, server_default='0'),
-    Column('trending_global', BigInteger, server_default='0'),
+    Column('trend_group', BigInteger, server_default='0'),
+    Column('trend_mixed', BigInteger, server_default='0'),
+    Column('trend_local', BigInteger, server_default='0'),
+    Column('trend_global', BigInteger, server_default='0'),
 )
 
-ClaimFilter = Table(
-    'claim_filter', metadata,
+
+CensoredClaim = Table(
+    'censored_claim', metadata,
     Column('claim_hash', LargeBinary, primary_key=True),
-    Column('owner_channel_hash', LargeBinary),
-    Column('filter_type', SmallInteger),
+    Column('censor_type', SmallInteger),
+    Column('censoring_channel_hash', LargeBinary),
 )

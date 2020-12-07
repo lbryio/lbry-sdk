@@ -87,11 +87,11 @@ class QueryContext:
 
     @classmethod
     def get_resolve_censor(cls) -> Censor:
-        return Censor(level=2)
+        return Censor(Censor.RESOLVE)
 
     @classmethod
     def get_search_censor(cls) -> Censor:
-        return Censor(level=1)
+        return Censor(Censor.SEARCH)
 
     def pg_copy(self, table, rows):
         with self.engine.begin() as c:
