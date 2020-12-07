@@ -54,11 +54,11 @@ class BlockchainSync(Sync):
         self.block_hash_event = asyncio.Event()
         self.tx_hash_event = asyncio.Event()
         self.mempool = []
-        self.filtering_channel_hashes = {
-            unhexlify(channel_id)[::-1] for channel_id in self.conf.spv_filtering_channel_ids
+        self.search_censor_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in self.conf.search_censor_channel_ids
         }
-        self.blocking_channel_hashes = {
-            unhexlify(channel_id)[::-1] for channel_id in self.conf.spv_blocking_channel_ids
+        self.resolve_censor_channel_hashes = {
+            unhexlify(channel_id)[::-1] for channel_id in self.conf.resolve_censor_channel_ids
         }
 
     async def wait_for_chain_ready(self):
@@ -178,8 +178,6 @@ class BlockchainSync(Sync):
                 return starting_height, best_height_processed
 
     async def sync_filters(self):
-        if not self.conf.spv_address_filters:
-            return
         with Progress(self.db.message_queue, FILTER_INIT_EVENT) as p:
             p.start(2)
             initial_sync = not await self.db.has_filters()
@@ -361,7 +359,10 @@ class BlockchainSync(Sync):
 
     async def sync_claim_filtering(self):
         await self.db.run(
-            claim_phase.update_claim_filters, self.blocking_channel_hashes, self.filtering_channel_hashes)
+            claim_phase.update_claim_filters,
+            self.resolve_censor_channel_hashes,
+            self.search_censor_channel_hashes
+        )
 
     async def advance(self):
         blocks_added = await self.sync_blocks()

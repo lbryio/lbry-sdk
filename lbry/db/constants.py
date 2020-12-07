@@ -54,8 +54,7 @@ SEARCH_INTEGER_PARAMS = {
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
     'tx_position', 'channel_join', 'reposted',
     'amount', 'staked_amount', 'support_amount',
-    'trending_group', 'trending_mixed',
-    'trending_local', 'trending_global',
+    'trend_group', 'trend_mixed', 'trend_local', 'trend_global',
 }
 
 SEARCH_PARAMS = {

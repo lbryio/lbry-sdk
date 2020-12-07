@@ -626,13 +626,8 @@ class Config(CLIConfig):
     lbrycrd_peer_port = Integer("Peer port for lbrycrd.", 9246)
     lbrycrd_zmq = String("ZMQ events address.")
     lbrycrd_dir = Path("Directory containing lbrycrd data.", metavar='DIR')
-    spv_address_filters = Toggle(
-        "Generate Golomb-Rice coding filters for blocks and transactions. Enables "
-        "light client to synchronize with a full node.",
-        True
-    )
-    spv_filtering_channel_ids = Strings("List of channel claim ids for filtering claim search results out.", [])
-    spv_blocking_channel_ids = Strings("List of channel claim ids for blocking resolve results.", [])
+    search_censor_channel_ids = Strings("List of channel ids for filtering out search results.", [])
+    resolve_censor_channel_ids = Strings("List of channel ids for filtering out resolve results.", [])
 
     # daemon
     save_files = Toggle("Save downloaded files when calling `get` by default", True)
