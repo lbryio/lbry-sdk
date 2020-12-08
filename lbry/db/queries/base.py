@@ -107,7 +107,8 @@ def check_version_and_create_tables():
         for table in metadata.sorted_tables:
             disable_trigger_and_constraints(table.name)
         if ctx.is_postgres:
-            ctx.execute(text(pg_add_account_address_constraints_and_indexes))
+            for statement in pg_add_account_address_constraints_and_indexes:
+                ctx.execute(text(statement))
 
 
 def disable_trigger_and_constraints(table_name):
