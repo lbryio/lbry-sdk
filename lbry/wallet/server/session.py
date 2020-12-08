@@ -651,7 +651,7 @@ class SessionManager:
             ]
             if header_tasks:
                 self.logger.info(f'notify {len(header_tasks)} sessions of new header')
-                await asyncio.wait(header_tasks)
+                asyncio.create_task(asyncio.wait(header_tasks))
             for hashX in touched.intersection(self.mempool_statuses.keys()):
                 self.mempool_statuses.pop(hashX, None)
 
