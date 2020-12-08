@@ -113,10 +113,10 @@ class Outputs:
                 'expiration_height': claim.expiration_height,
                 'effective_amount': claim.effective_amount,
                 'support_amount': claim.support_amount,
-                'trend_group': claim.trend_group,
-                'trend_mixed': claim.trend_mixed,
-                'trend_local': claim.trend_local,
-                'trend_global': claim.trend_global,
+                'trend_group': claim.trending_group,
+                'trend_mixed': claim.trending_mixed,
+                'trend_local': claim.trending_local,
+                'trend_global': claim.trending_global,
             }
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
