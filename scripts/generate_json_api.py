@@ -337,7 +337,8 @@ class Examples(CommandTestCase):
             'Use the parent_id param to make replies',
             'comment', 'create',
             '--comment="I have photographic evidence confirming Sasquatch exists"',
-            f'--channel_name=@channel', f'--parent_id={comment["comment_id"]}'
+            f'--channel_name=@channel', f'--parent_id={comment["comment_id"]}',
+            f'--claim_id={stream_id}'
         )
 
         await r(

@@ -5134,7 +5134,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             comment_create  (<comment> | --comment=<comment>)
-                            (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)
+                            (<claim_id> | --claim_id=<claim_id>) [--parent_id=<parent_id>]
                             (--channel_id=<channel_id> | --channel_name=<channel_name>)
                             [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
