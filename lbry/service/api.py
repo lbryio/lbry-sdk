@@ -1603,7 +1603,7 @@ class API:
             'include_total': pagination['include_total'],
             'order_by': order_by
         })
-        _, kwargs = pop_kwargs("no_totals", kwargs)  # deprecated, ignoring
+        kwargs.pop("no_totals", None)  # deprecated, ignoring
         claim_filter_dict.update(kwargs)
         if protobuf:
             return await self.service.protobuf_search_claims(**remove_nulls(claim_filter_dict))
