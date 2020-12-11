@@ -34,7 +34,12 @@ BASE_SELECT_SUPPORT_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
 
 def compat_layer(**constraints):
     # for old sdk, to be removed later
-    replacements = {"effective_amount": "staked_amount"}
+    replacements = {
+        "effective_amount": "staked_amount",
+        "trending_mixed": "trend_mixed",
+        "trending_group": "trend_group",
+        "trending_local": "trend_local"
+    }
     for old_key, new_key in replacements.items():
         if old_key in constraints:
             constraints[new_key] = constraints.pop(old_key)
@@ -150,8 +155,8 @@ def select_claims(cols: List = None, for_count=False, **constraints) -> Select:
                 column = 'claim_name'
             table = "trend" if column.startswith('trend') else "claim"
             column = f"{table}.{column}"
-            if column in ('trend_group', 'trend_mixed', 'release_time'):
-                column = f"COALESCE({column}, {1<<32})"
+            if column in ('trend.trend_group', 'trend.trend_mixed', 'claim.release_time'):
+                column = f"COALESCE({column}, {-1 * (1<<32)})"
             sql_order_by.append(
                 f"{column} {'ASC' if is_asc else 'DESC'}"
             )
