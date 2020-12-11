@@ -1149,7 +1149,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         claim1 = await self.get_claim(await self.create_claim(name="one"))
         claim2 = await self.get_claim(await self.create_claim(name="two"))
         await self.generate(1)
-        results = await self.db.search_claims(order_by=["trend_group", "trend_mixed"])
+        results = await self.db.search_claims(order_by=["trending_group", "trending_mixed"])  # test compat layer
         self.assertEqual(0, results.rows[0].meta['trend_mixed'])
         self.assertEqual(0, results.rows[1].meta['trend_mixed'])
         self.assertEqual(0, results.rows[0].meta['trend_group'])
