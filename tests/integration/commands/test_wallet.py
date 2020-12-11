@@ -6,7 +6,7 @@ from sqlalchemy import event
 
 from lbry.wallet.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
-from lbry.testcase import CommandTestCase
+from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.blockchain.dewies import dict_values_to_lbc
 
 
@@ -150,8 +150,7 @@ class WalletCommands(CommandTestCase):
         })
 
 
-@skip
-class WalletEncryptionAndSynchronization(CommandTestCase):
+class WalletEncryptionAndSynchronization(IntegrationTestCase):
 
     SEED = (
         "carbon smart garage balance margin twelve chest "
@@ -160,6 +159,17 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
+        self.full_node_daemon, self.daemon1 = await self.make_daemons_from_environment(
+            create_default_wallet=False
+        )
+        self.daemon2 = await self.make_light_client_daemon(
+            self.full_node_daemon, create_default_wallet=False
+        )
+        self.other_wallet = self.other_node.service.wallets.default
+        self.other_account = self.other_wallet.accounts.default
+        address = await self.other_account.receiving.get_or_create_usable_address()
+        await self.chain.send_to_address(address, '10.0')
+        await self.generate(5)
         self.daemon2 = await self.add_full_node(
             seed="chest sword toast envelope bottom stomach absent "
                  "carbon smart garage balance margin twelve"
