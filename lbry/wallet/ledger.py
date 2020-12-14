@@ -503,6 +503,9 @@ class Ledger(metaclass=LedgerRegistry):
             remote_history = await self.network.retriable_call(self.network.get_history, address)
             remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
             we_need = set(remote_history) - set(local_history)
+            for height in sorted({height for _, height in remote_history if height > 0}):
+                if not self.headers.has_header(height):
+                    await self.headers.ensure_chunk_at(height)
             if not we_need:
                 remote_missing = set(local_history) - set(remote_history)
                 if remote_missing:
