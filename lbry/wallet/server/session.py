@@ -666,7 +666,8 @@ class SessionManager:
                     asyncio.create_task(self.sessions[session_id].send_history_notification(hashX))
                     notified_sessions += 1
                 notified_hashxs += 1
-            self.logger.info(f'notified {notified_sessions} sessions/{notified_hashxs:,d} touched addresses')
+            if notified_sessions:
+                self.logger.info(f'notified {notified_sessions} sessions/{notified_hashxs:,d} touched addresses')
 
     def add_session(self, session):
         self.sessions[id(session)] = session
