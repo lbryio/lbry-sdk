@@ -143,28 +143,35 @@ def distribute_unspent_txos(
     return total, buckets
 
 
-def where_changed_support_txos(blocks: Optional[Tuple[int, int]]):
+def claims_with_changed_supports(blocks: Optional[Tuple[int, int]]) -> Select:
+    has_changed_supports = (
+        select(Claim.c.claim_hash.label("claim_hash"), Claim.c.channel_hash.label("channel_hash"))
+        .join(Claim, Claim.c.claim_hash == TXO.c.claim_hash)
+        .where(
+            (TXO.c.txo_type == TXO_TYPES['support']) &
+            (between(TXO.c.height, blocks[0], blocks[-1]) | between(TXO.c.spent_height, blocks[0], blocks[-1]))
+        )
+        .cte("has_changed_supports")
+    )
+
     return (
-        (TXO.c.txo_type == TXO_TYPES['support']) & (
-            between(TXO.c.height, blocks[0], blocks[-1]) |
-            between(TXO.c.spent_height, blocks[0], blocks[-1])
+        select(has_changed_supports.c.claim_hash.label("claim_hash"))
+        .union_all(  # UNION ALL is faster than UNION because it does not remove duplicates
+            select(has_changed_supports.c.channel_hash)
+            .where(has_changed_supports.c.channel_hash.isnot(None))
         )
     )
 
 
-def where_claims_with_changed_supports(blocks: Optional[Tuple[int, int]]):
+def where_claims_with_changed_supports(blocks: Optional[Tuple[int, int]]) -> Select:
     return Claim.c.claim_hash.in_(
-        select(TXO.c.claim_hash).where(
-            where_changed_support_txos(blocks)
-        )
+        claims_with_changed_supports(blocks)
     )
 
 
 def count_claims_with_changed_supports(blocks: Optional[Tuple[int, int]]) -> int:
-    sql = (
-        select(func.count(distinct(TXO.c.claim_hash)).label('total'))
-        .where(where_changed_support_txos(blocks))
-    )
+    sub_query = claims_with_changed_supports(blocks).subquery()
+    sql = select(func.count(distinct(sub_query.c.claim_hash)).label('total')).select_from(sub_query)
     return context().fetchone(sql)['total']
 
 

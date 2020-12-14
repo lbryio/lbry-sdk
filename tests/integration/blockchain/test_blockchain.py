@@ -1032,7 +1032,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual(total, 1600000000)
 
         # create a claim in channel A and have channel B support that claim
-        claim_a = await self.get_claim(await self.create_claim(name="bob", amount='2.0', sign=channel_a))
+        claim_a = await self.get_claim(await self.create_claim(name="alfred", amount='2.0', sign=channel_a))
         await self.support_claim(claim_a, '1.0', sign=channel_b)
         await self.generate(1)
 
@@ -1096,6 +1096,22 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
             {'supporter': ch_b.meta['short_url'], 'staked': 500000000},
         ])
         self.assertEqual(total, 1100000000)
+
+        # add a few supports and make sure `staked_amount` is right
+        claim_b = await self.get_claim(await self.create_claim(name="bob", amount='0.7', sign=channel_a))
+        await self.generate(1)
+        await self.support_claim(claim_b, '1.3', sign=channel_b)
+        await self.support_claim(claim_b, '1.3', sign=channel_c)
+        await self.support_claim(channel_b, '1.7', sign=channel_c)  # this should not be counted for channel a
+        await self.generate(1)
+
+        ch_c, ch_b, ch_a = await self.db.search_claims(order_by=['name'], claim_type="channel", limit=3)
+        _, total = await self.db.sum_supports(channel_a.claim_hash, include_channel_content=True, exclude_own_supports=False)
+        self.assertEqual('@A', ch_a.claim_name)
+        self.assertEqual(1000000, ch_a.amount)
+        self.assertEqual(2460000000, total)  # sum just the supports, including unlocked (abandoned) tips
+        self.assertEqual(2031000000, ch_a.meta['staked_amount'])  # sum claims and supports
+
 
     async def test_meta_fields_are_translated_to_protobuf(self):
         chan_ab = await self.get_claim(

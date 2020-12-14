@@ -120,7 +120,7 @@ BASE_SELECT_CLAIM_COLUMNS = BASE_SELECT_TXO_COLUMNS + [
     Claim.c.short_url,
     Claim.c.signed_claim_count,
     Claim.c.signed_support_count,
-    (Claim.c.amount + Claim.c.staked_support_amount).label('staked_amount'),
+    Claim.c.staked_amount,
     Claim.c.staked_support_amount,
     Claim.c.staked_support_count,
     Claim.c.is_signature_valid,

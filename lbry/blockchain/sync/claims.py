@@ -38,26 +38,46 @@ def channel_content_count_calc(signable):
 support = TXO.alias('support')
 
 
-def staked_support_aggregation(aggregate):
+def staked_support_subquery(claim_hash_column, aggregate):
+    """Return a query that selects unspent supports"""
+    content = Claim.alias("content")
     return (
-        select(aggregate).where(
-            (support.c.txo_type == TXO_TYPES['support']) &
+        select(
+            aggregate
+        ).select_from(
+            support
+            .join(content, support.c.claim_hash == content.c.claim_hash)
+        ).where(
+            ((content.c.claim_hash == claim_hash_column) | (content.c.channel_hash == claim_hash_column)) &
+            (support.c.txo_type == TXO_TYPES["support"]) &
             (support.c.spent_height == 0)
-        ).scalar_subquery()
+        )
+        .scalar_subquery()
     )
 
 
-def staked_support_amount_calc(other):
-    return (
-        staked_support_aggregation(func.coalesce(func.sum(support.c.amount), 0))
-        .where(support.c.claim_hash == other.c.claim_hash)
-    )
+def staked_support_amount_calc(claim_hash):
+    """Return a query that sums unspent supports for a claim"""
+    return staked_support_subquery(claim_hash, func.coalesce(func.sum(support.c.amount), 0))
 
 
-def staked_support_count_calc(other):
+def staked_support_count_calc(claim_hash):
+    """Return a query that counts unspent supports for a claim"""
+    return staked_support_subquery(claim_hash, func.coalesce(func.count('*'), 0))
+
+
+def claims_in_channel_amount_calc(claim_hash):
+    """Return a query that sums the amount of all the claims in a channel"""
+    content = Claim.alias("content")
     return (
-        staked_support_aggregation(func.coalesce(func.count('*'), 0))
-        .where(support.c.claim_hash == other.c.claim_hash)
+        select(
+            func.coalesce(func.sum(content.c.amount), 0)
+        ).select_from(
+            content
+        ).where(
+            content.c.channel_hash == claim_hash
+        )
+        .scalar_subquery()
     )
 
 
@@ -87,8 +107,9 @@ def select_claims_for_saving(
     channel_txo = TXO.alias('channel_txo')
     return select(
         *minimum_txo_columns, TXO.c.claim_hash,
-        staked_support_amount_calc(TXO).label('staked_support_amount'),
-        staked_support_count_calc(TXO).label('staked_support_count'),
+        claims_in_channel_amount_calc(TXO.c.claim_hash).label('claims_in_channel_amount'),
+        staked_support_amount_calc(TXO.c.claim_hash).label('staked_support_amount'),
+        staked_support_count_calc(TXO.c.claim_hash).label('staked_support_count'),
         reposted_claim_count_calc(TXO).label('reposted_count'),
         TXO.c.signature, TXO.c.signature_digest,
         case([(
@@ -110,6 +131,7 @@ def select_claims_for_saving(
 
 def row_to_claim_for_saving(row) -> Tuple[Output, dict]:
     return row_to_txo(row), {
+        'claims_in_channel_amount': int(row.claims_in_channel_amount),
         'staked_support_amount': int(row.staked_support_amount),
         'staked_support_count': int(row.staked_support_count),
         'reposted_count': int(row.reposted_count),
@@ -247,8 +269,13 @@ def update_stakes(blocks: Tuple[int, int], claims: int, p: ProgressContext):
         Claim.update()
         .where(where_claims_with_changed_supports(blocks))
         .values(
-            staked_support_amount=staked_support_amount_calc(Claim),
-            staked_support_count=staked_support_count_calc(Claim),
+            staked_amount=(
+                    Claim.c.amount +
+                    claims_in_channel_amount_calc(Claim.c.claim_hash) +
+                    staked_support_amount_calc(Claim.c.claim_hash)
+            ),
+            staked_support_amount=staked_support_amount_calc(Claim.c.claim_hash),
+            staked_support_count=staked_support_count_calc(Claim.c.claim_hash),
         )
     )
     result = p.ctx.execute(sql)

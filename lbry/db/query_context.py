@@ -532,8 +532,8 @@ class BulkLoader:
         return row
 
     def claim_to_rows(
-        self, txo: Output, staked_support_amount: int, staked_support_count: int, reposted_count: int,
-        signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
+        self, txo: Output, claims_in_channel_amount: int, staked_support_amount: int, staked_support_count: int,
+        reposted_count: int, signature: bytes = None, signature_digest: bytes = None, channel_public_key: bytes = None,
     ) -> Tuple[dict, List]:
 
         tx = txo.tx_ref
@@ -545,7 +545,7 @@ class BulkLoader:
             'height': tx.height,
             'timestamp': tx.timestamp,
             # support
-            'staked_amount': txo.amount + staked_support_amount,
+            'staked_amount': txo.amount + claims_in_channel_amount + staked_support_amount,
             'staked_support_amount': staked_support_amount,
             'staked_support_count': staked_support_count,
             # basic metadata
