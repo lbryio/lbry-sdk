@@ -72,7 +72,7 @@ class MemPoolAPI(ABC):
         """
 
     @abstractmethod
-    async def on_mempool(self, touched, height):
+    async def on_mempool(self, touched, new_touched, height):
         """Called each time the mempool is synchronized.  touched is a set of
         hashXs touched since the previous call.  height is the
         daemon's height at the time the mempool was obtained."""
@@ -116,6 +116,7 @@ class MemPool:
         self.lock = asyncio.Lock()
         self.wakeup = asyncio.Event()
         self.mempool_process_time_metric = mempool_process_time_metric
+        self.notified_mempool_txs = set()
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
@@ -219,10 +220,15 @@ class MemPool:
                 continue
             hashes = {hex_str_to_hash(hh) for hh in hex_hashes}
             async with self.lock:
+                new_hashes = hashes.difference(self.notified_mempool_txs)
                 touched = await self._process_mempool(hashes)
+                self.notified_mempool_txs.update(new_hashes)
+                new_touched = {
+                    touched_hashx for touched_hashx, txs in self.hashXs.items() if txs.intersection(new_hashes)
+                }
             synchronized_event.set()
             synchronized_event.clear()
-            await self.api.on_mempool(touched, height)
+            await self.api.on_mempool(touched, new_touched, height)
             duration = time.perf_counter() - start
             self.mempool_process_time_metric.observe(duration)
             try:
@@ -236,7 +242,8 @@ class MemPool:
     async def _process_mempool(self, all_hashes):
         # Re-sync with the new set of hashes
         txs = self.txs
-        hashXs = self.hashXs
+
+        hashXs = self.hashXs  # hashX: [tx_hash, ...]
         touched = set()
 
         # First handle txs that have disappeared
@@ -267,8 +274,8 @@ class MemPool:
             # FIXME: this is not particularly efficient
             while tx_map and len(tx_map) != prior_count:
                 prior_count = len(tx_map)
-                tx_map, utxo_map = self._accept_transactions(tx_map, utxo_map,
-                                                             touched)
+                tx_map, utxo_map = self._accept_transactions(tx_map, utxo_map, touched)
+
             if tx_map:
                 self.logger.info(f'{len(tx_map)} txs dropped')
 
