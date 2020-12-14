@@ -25,9 +25,10 @@ class Notifications:
     def __init__(self):
         self._touched_mp = {}
         self._touched_bp = {}
+        self.notified_mempool_txs = set()
         self._highest_block = -1
 
-    async def _maybe_notify(self):
+    async def _maybe_notify(self, new_touched):
         tmp, tbp = self._touched_mp, self._touched_bp
         common = set(tmp).intersection(tbp)
         if common:
@@ -44,24 +45,24 @@ class Notifications:
             del tmp[old]
         for old in [h for h in tbp if h <= height]:
             touched.update(tbp.pop(old))
-        await self.notify(height, touched)
+        await self.notify(height, touched, new_touched)
 
-    async def notify(self, height, touched):
+    async def notify(self, height, touched, new_touched):
         pass
 
     async def start(self, height, notify_func):
         self._highest_block = height
         self.notify = notify_func
-        await self.notify(height, set())
+        await self.notify(height, set(), set())
 
-    async def on_mempool(self, touched, height):
+    async def on_mempool(self, touched, new_touched, height):
         self._touched_mp[height] = touched
-        await self._maybe_notify()
+        await self._maybe_notify(new_touched)
 
     async def on_block(self, touched, height):
         self._touched_bp[height] = touched
         self._highest_block = height
-        await self._maybe_notify()
+        await self._maybe_notify(set())
 
 
 class Server:
@@ -84,8 +85,11 @@ class Server:
         notifications.mempool_hashes = daemon.mempool_hashes
         notifications.raw_transactions = daemon.getrawtransactions
         notifications.lookup_utxos = db.lookup_utxos
+
         MemPoolAPI.register(Notifications)
         self.mempool = mempool = MemPool(env.coin, notifications)
+
+        notifications.notified_mempool_txs = self.mempool.notified_mempool_txs
 
         self.session_mgr = env.coin.SESSION_MANAGER(
             env, db, bp, daemon, mempool, self.shutdown_event

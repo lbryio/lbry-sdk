@@ -216,6 +216,7 @@ class BlockProcessor:
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
+            self.notifications.notified_mempool_txs.clear()
             await self._maybe_flush()
             processed_time = time.perf_counter() - start
             self.block_count_metric.set(self.height)

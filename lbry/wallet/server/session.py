@@ -635,7 +635,7 @@ class SessionManager:
             self.history_cache[hashX] = await self.db.limited_history(hashX, limit=limit)
         return self.history_cache[hashX]
 
-    async def _notify_sessions(self, height, touched):
+    async def _notify_sessions(self, height, touched, new_touched):
         """Notify sessions about height changes and touched addresses."""
         height_changed = height != self.notified_height
         if height_changed:
@@ -660,12 +660,14 @@ class SessionManager:
         if touched or (height_changed and self.mempool_statuses):
             notified_hashxs = 0
             notified_sessions = 0
-            for hashX in touched.union(self.mempool_statuses.keys()):
+            to_notify = touched if height_changed else new_touched
+            for hashX in to_notify:
                 for session_id in self.hashx_subscriptions_by_session[hashX]:
                     asyncio.create_task(self.sessions[session_id].send_history_notification(hashX))
                     notified_sessions += 1
                 notified_hashxs += 1
-            self.logger.info(f'notified {notified_sessions} sessions/{notified_hashxs:,d} touched addresses')
+            if notified_sessions:
+                self.logger.info(f'notified {notified_sessions} sessions/{notified_hashxs:,d} touched addresses')
 
     def add_session(self, session):
         self.sessions[id(session)] = session
