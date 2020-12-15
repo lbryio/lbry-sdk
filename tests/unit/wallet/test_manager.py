@@ -189,16 +189,18 @@ class TestFileBasedWalletManager(AsyncioTestCase):
         manager = WalletManager(self.db)
         await manager.storage.prepare()
 
-        with tempfile.NamedTemporaryFile(suffix='.json') as wallet_file:
+        wallet_file_name = None
+        with tempfile.NamedTemporaryFile(suffix='.json', delete=False) as wallet_file:
             wallet_file.write(b'{"version": 1}')
             wallet_file.seek(0)
+            wallet_file_name = wallet_file.name
 
-            # create and write wallet to a file
-            wallet = await manager.load(wallet_file.name)
-            account = await wallet.accounts.generate()
-            await manager.storage.save(wallet)
+        # create and write wallet to a file
+        wallet = await manager.load(wallet_file_name)
+        account = await wallet.accounts.generate()
+        await manager.storage.save(wallet)
 
-            # read wallet from file
-            wallet = await manager.load(wallet_file.name)
+        # read wallet from file
+        wallet = await manager.load(wallet_file_name)
 
-            self.assertEqual(account.public_key.address, wallet.accounts.default.public_key.address)
+        self.assertEqual(account.public_key.address, wallet.accounts.default.public_key.address)
