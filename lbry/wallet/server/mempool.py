@@ -327,7 +327,7 @@ class MemPool:
         """Keep the mempool synchronized with the daemon."""
         await asyncio.wait([
             self._refresh_hashes(synchronized_event),
-            self._refresh_histogram(synchronized_event),
+            # self._refresh_histogram(synchronized_event),
             self._logging(synchronized_event)
         ])
 
