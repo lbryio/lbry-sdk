@@ -505,7 +505,6 @@ class BlockProcessor:
         undo_entry_len = 12 + HASHX_LEN
 
         for tx, tx_hash in reversed(txs):
-            self.db.total_transactions.pop()
             for idx, txout in enumerate(tx.outputs):
                 # Spend the TX outputs.  Be careful with unspendable
                 # outputs - we didn't save those in the first place.
@@ -522,6 +521,8 @@ class BlockProcessor:
                 undo_item = undo_info[n:n + undo_entry_len]
                 self.utxo_cache[txin.prev_hash + s_pack('<H', txin.prev_idx)] = undo_item
                 self.touched.add(undo_item[:-12])
+
+            self.db.total_transactions.pop()
 
         assert n == 0
         self.tx_count -= len(txs)
