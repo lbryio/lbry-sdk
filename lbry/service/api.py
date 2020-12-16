@@ -14,7 +14,7 @@ from aiohttp import ClientSession
 from lbry.conf import Setting, NOT_SET
 from lbry.db import TXO_TYPES, CLAIM_TYPE_NAMES
 from lbry.db.utils import constrain_single_or_list
-from lbry.wallet import Wallet, Account, SingleKey, HierarchicalDeterministic
+from lbry.wallet import Wallet, Account, SingleKey, HierarchicalDeterministic, ENCRYPT_ON_DISK
 from lbry.blockchain import Transaction, Output, dewies_to_lbc, dict_values_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 from lbry.event import EventController, EventStream
@@ -675,7 +675,7 @@ class API:
         if value and isinstance(value, str) and value[0] in ('[', '{'):
             value = json.loads(value)
         wallet.preferences[key] = value
-        wallet.save()
+        await wallet.notify_change('preference.set')
         return {key: value}
 
     WALLET_DOC = """
@@ -1151,23 +1151,23 @@ class API:
         wallet_changed = False
         if data is not None:
             added_accounts = await wallet.merge(password, data)
-            if added_accounts and self.ledger.sync.network.is_connected:
-                if blocking:
-                    await asyncio.wait([
-                        a.ledger.subscribe_account(a) for a in added_accounts
-                    ])
-                else:
-                    for new_account in added_accounts:
-                        asyncio.create_task(self.ledger.subscribe_account(new_account))
+            # if added_accounts and self.ledger.sync.network.is_connected:
+            #     if blocking:
+            #         await asyncio.wait([
+            #             a.ledger.subscribe_account(a) for a in added_accounts
+            #         ])
+            #     else:
+            #         for new_account in added_accounts:
+            #             asyncio.create_task(self.ledger.subscribe_account(new_account))
             wallet_changed = True
         if wallet.preferences.get(ENCRYPT_ON_DISK, False) and password != wallet.encryption_password:
             wallet.encryption_password = password
             wallet_changed = True
         if wallet_changed:
-            wallet.save()
+            await wallet.notify_change('sync')
         encrypted = wallet.pack(password)
         return {
-            'hash': self.sync_hash(wallet_id),
+            'hash': await self.sync_hash(wallet_id),
             'data': encrypted.decode()
         }
 
@@ -2545,9 +2545,15 @@ class API:
         Usage:
             block list <start_height> [<end_height>]
         """
-        return await self.service.sync.get_block_headers(
+        headers = await self.service.sync.get_block_headers(
             start_height=start_height, end_height=end_height
         )
+        for header in headers:
+            header.update({
+                'block_hash': hexlify(header['block_hash']),
+                'previous_hash': hexlify(header['previous_hash'])
+            })
+        return headers
 
     async def block_tip(self) -> int:  # block number at the tip of the blockchain
         """
@@ -3457,7 +3463,12 @@ class Client(API):
             else:
                 raise ValueError(f'Unknown message received: {d}')
 
-    async def send(self, method, **kwargs) -> EventStream:
+    async def send(self, method, *args, **kwargs) -> EventStream:
+        if args:
+            raise TypeError(
+                f"API client requires all named parameter arguments, "
+                f"received positional arguments instead: {args}"
+            )
         self.message_id += 1
         self.requests[self.message_id] = ec = EventController()
         await self.ws.send_json({'id': self.message_id, 'method': method, 'params': kwargs})

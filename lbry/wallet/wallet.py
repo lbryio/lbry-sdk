@@ -61,10 +61,11 @@ class Wallet:
         self.supports = SupportListManager(self)
 
     async def generate_addresses(self):
-        await asyncio.wait([
-            account.ensure_address_gap()
-            for account in self.accounts
-        ])
+        if self.accounts:
+            await asyncio.wait([
+                account.ensure_address_gap()
+                for account in self.accounts
+            ])
 
     async def notify_change(self, field: str, value=None):
         await self._on_change_controller.add({

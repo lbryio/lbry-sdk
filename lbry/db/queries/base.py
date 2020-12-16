@@ -41,7 +41,7 @@ def get_best_block_height():
 
 
 def insert_block(block):
-    context().get_bulk_loader().add_block(block).flush()
+    context().get_bulk_loader().add_block(block).flush(return_row_count_for_table=None)
 
 
 def get_block_headers(first, last=None):

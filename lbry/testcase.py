@@ -27,7 +27,7 @@ from lbry.blockchain.bcd_data_stream import BCDataStream
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.dewies import lbc_to_dewies
 from lbry.constants import COIN, CENT, NULL_HASH32
-from lbry.service import Daemon, FullNode, FullEndpoint, LightClient, jsonrpc_dumps_pretty
+from lbry.service import API, Daemon, Service, FullNode, FullEndpoint, LightClient, jsonrpc_dumps_pretty
 from lbry.conf import Config
 from lbry.console import Console
 from lbry.wallet import Wallet, Account
@@ -404,15 +404,8 @@ class IntegrationTestCase(AsyncioTestCase):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.ledger: Optional[RegTestLedger] = None
-        self.chain: Optional[Lbrycrd] = None
-        self.block_expected = 0
-        self._pg_db_counter = 0
         self._api_port = 5252
-        self.service = None
-        self.api = None
-        self.wallet: Optional[Wallet] = None
-        self.account: Optional[Account] = None
+        self.chain: Lbrycrd = None
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
@@ -421,29 +414,37 @@ class IntegrationTestCase(AsyncioTestCase):
         self.addCleanup(self.chain.stop)
         await self.chain.start(*self.LBRYCRD_ARGS)
 
-    async def provision_db_from_environment(self, conf):
-        self.db_driver = os.environ.get('TEST_DB', 'sqlite')
-        if self.db_driver == 'sqlite':
+    async def provision_db_from_environment(self, conf, uid):
+        test_db = os.environ.get('TEST_DB', 'sqlite')
+        if test_db == 'sqlite':
             pass
-        elif self.db_driver.startswith('postgres') or self.db_driver.startswith('psycopg'):
-            self._pg_db_counter += 1
-            self.db_driver = 'postgresql'
-            db_name = f'lbry_test_db_{self._pg_db_counter}'
+        elif test_db.startswith('postgres') or test_db.startswith('psycopg'):
+            db_name = f'lbry_test_db_{uid}'
             db_connection = 'postgres:postgres@localhost:5432'
             meta_db = Database.from_url(f'postgresql://{db_connection}/postgres')
             await meta_db.drop(db_name)
             await meta_db.create(db_name)
             conf.db_url = f'postgresql://{db_connection}/{db_name}'
         else:
-            raise RuntimeError(f"Unsupported database driver: {self.db_driver}")
+            raise RuntimeError(
+                f"Unsupported TEST_DB: '{test_db}', "
+                f"valid options: sqlite, postgres."
+            )
 
     async def make_daemons_from_environment(self, **kwargs) -> Tuple[Daemon, Daemon]:
-        full_node_daemon = client_daemon = await self.make_full_node_daemon(**kwargs)
-        self.test_mode = os.environ.get('TEST_MODE', 'node')
-        if self.test_mode == 'client':
+        full_node_daemon = await self.make_full_node_daemon(**kwargs)
+        test_mode = os.environ.get('TEST_MODE', 'node')
+        if test_mode == 'node':
+            client_daemon = full_node_daemon
+        elif test_mode == 'client':
             client_daemon = await self.make_light_client_daemon(full_node_daemon, **kwargs)
-        elif self.test_mode == 'endpoint':
+        elif test_mode == 'endpoint':
             client_daemon = await self.make_full_endpoint_daemon(full_node_daemon, **kwargs)
+        else:
+            raise RuntimeError(
+                f"Unsupported TEST_MODE: '{test_mode}', "
+                f"valid options: node, client, endpoint."
+            )
         return full_node_daemon, client_daemon
 
     async def make_full_node_daemon(self, start=True, **conf_kwargs):
@@ -459,7 +460,7 @@ class IntegrationTestCase(AsyncioTestCase):
             lbrycrd_zmq=self.chain.ledger.conf.lbrycrd_zmq,
             **conf_kwargs
         )
-        await self.provision_db_from_environment(conf)
+        await self.provision_db_from_environment(conf, self._api_port)
         ledger = RegTestLedger(conf)
         service = FullNode(ledger)
         console = Console(service)
@@ -479,7 +480,7 @@ class IntegrationTestCase(AsyncioTestCase):
             full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)],
             **conf_kwargs
         )
-        await self.provision_db_from_environment(conf)
+        await self.provision_db_from_environment(conf, self._api_port)
         ledger = RegTestLedger(conf)
         service = FullEndpoint(ledger)
         console = Console(service)
@@ -489,14 +490,17 @@ class IntegrationTestCase(AsyncioTestCase):
             await daemon.start()
         return daemon
 
-    async def make_light_client_daemon(self, full_node, start=True):
+    async def make_light_client_daemon(self, full_node, start=True, **conf_kwargs):
+        self._api_port += 1
         path = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, path, True)
-        self._node_port += 1
-        ledger = RegTestLedger(Config.with_same_dir(path).set(
-            api=f'localhost:{self._node_port}',
-            full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)]
-        ))
+        conf = Config.with_same_dir(path).set(
+            blockchain="regtest",
+            api=f"localhost:{self._api_port}",
+            full_nodes=[(full_node.conf.api_host, full_node.conf.api_port)],
+            **conf_kwargs
+        )
+        ledger = RegTestLedger(conf)
         service = LightClient(ledger)
         console = Console(service)
         daemon = Daemon(service, console)
@@ -520,6 +524,62 @@ class IntegrationTestCase(AsyncioTestCase):
     async def assertBalance(self, account, expected_balance: str):  # pylint: disable=C0103
         balance = await account.get_balance()
         self.assertEqual(dewies_to_lbc(balance['available']), expected_balance)
+
+
+class FakeExchangeRateManager(ExchangeRateManager):
+
+    def __init__(self, market_feeds, rates):  # pylint: disable=super-init-not-called
+        self.market_feeds = market_feeds
+        for feed in self.market_feeds:
+            feed.last_check = time.time()
+            feed.rate = ExchangeRate(feed.market, rates[feed.market], time.time())
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+
+def get_fake_exchange_rate_manager(rates=None):
+    return FakeExchangeRateManager(
+        [LBRYFeed(), LBRYBTCFeed()],
+        rates or {'BTCLBC': 3.0, 'USDBTC': 2.0}
+    )
+
+
+class CommandTestCase(IntegrationTestCase):
+
+    VERBOSITY = logging.WARN
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.block_expected = 0
+        self.full_node_daemon: Daemon = None
+        self.daemon: Daemon = None
+        self.service: Service = None
+        self.conf: Config = None
+        self.api: API = None
+
+    async def asyncSetUp(self):
+        await super().asyncSetUp()
+        await self.generate(200, wait=False)
+
+        self.full_node_daemon, self.daemon = await self.make_daemons_from_environment()
+
+        self.service = self.daemon.service
+        self.conf = self.daemon.conf
+        self.api = self.daemon.api
+
+        self.wallet = self.service.wallets.default
+        self.account = self.wallet.accounts.default
+        address = await self.account.receiving.get_or_create_usable_address()
+
+        self.conf.upload_dir = os.path.join(self.conf.data_dir, 'uploads')
+        os.mkdir(self.conf.upload_dir)
+
+        await self.chain.send_to_address(address, '10.0')
+        await self.generate(5)
 
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)
@@ -553,75 +613,6 @@ class IntegrationTestCase(AsyncioTestCase):
         return self.ledger.on_transaction.where(
             lambda e: e.tx.id == tx.id and e.address == address
         )
-
-
-class FakeExchangeRateManager(ExchangeRateManager):
-
-    def __init__(self, market_feeds, rates):  # pylint: disable=super-init-not-called
-        self.market_feeds = market_feeds
-        for feed in self.market_feeds:
-            feed.last_check = time.time()
-            feed.rate = ExchangeRate(feed.market, rates[feed.market], time.time())
-
-    def start(self):
-        pass
-
-    def stop(self):
-        pass
-
-
-def get_fake_exchange_rate_manager(rates=None):
-    return FakeExchangeRateManager(
-        [LBRYFeed(), LBRYBTCFeed()],
-        rates or {'BTCLBC': 3.0, 'USDBTC': 2.0}
-    )
-
-
-class CommandTestCase(IntegrationTestCase):
-
-    VERBOSITY = logging.WARN
-    blob_lru_cache_size = 0
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.daemon_port = 5252
-        self.daemon = None
-        self.daemons = []
-        self.server_config = None
-        self.server_storage = None
-        self.extra_wallet_nodes = []
-        self.extra_wallet_node_port = 5281
-        self.server_blob_manager = None
-        self.server = None
-        self.reflector = None
-
-    async def asyncSetUp(self):
-        await super().asyncSetUp()
-        await self.generate(200, wait=False)
-
-        self.full_node_daemon, self.daemon = await self.make_daemons_from_environment()
-
-        self.service = self.daemon.service
-        self.ledger = self.service.ledger
-        self.api = self.daemon.api
-
-        self.wallet = self.service.wallets.default
-        self.account = self.wallet.accounts.default
-        address = await self.account.receiving.get_or_create_usable_address()
-
-        self.ledger.conf.upload_dir = os.path.join(self.ledger.conf.data_dir, 'uploads')
-        os.mkdir(self.ledger.conf.upload_dir)
-
-        await self.chain.send_to_address(address, '10.0')
-        await self.generate(5)
-
-    async def asyncTearDown(self):
-        await super().asyncTearDown()
-        for wallet_node in self.extra_wallet_nodes:
-            await wallet_node.stop(cleanup=True)
-        for daemon in self.daemons:
-            daemon.component_manager.get_component('wallet')._running = False
-            await daemon.stop()
 
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
@@ -702,7 +693,7 @@ class CommandTestCase(IntegrationTestCase):
 
     def create_upload_file(self, data, prefix=None, suffix=None):
         file_path = tempfile.mktemp(
-            prefix=prefix or "tmp", suffix=suffix or "", dir=self.ledger.conf.upload_dir
+            prefix=prefix or "tmp", suffix=suffix or "", dir=self.conf.upload_dir
         )
         with open(file_path, 'w+b') as file:
             file.write(data)
