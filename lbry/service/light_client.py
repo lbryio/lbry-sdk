@@ -111,14 +111,13 @@ class FilterManager:
         self.cache = {}
 
     async def download(self):
-        filters_response = await self.client.get_address_filters(0, 500)
-        filters = await filters_response.first
-        address = None
-        address_array = [bytearray(self.client.ledger.address_to_hash160(address))]
-        for address_filter in filters:
-            print(address_filter)
-            address_filter = get_address_filter(unhexlify(address_filter['filter']))
-            print(address_filter.MatchAny(address_array))
+        filters = await self.client.first.address_filter(start_height=0, end_height=500, granularity=0)
+        #address = None
+        #address_array = [bytearray(self.db.ledger.address_to_hash160(address))]
+        #for address_filter in filters:
+        #    print(address_filter)
+        #    address_filter = get_address_filter(unhexlify(address_filter['filter']))
+        #    print(address_filter.MatchAny(address_array))
 
 
 #        address_array = [
@@ -159,19 +158,19 @@ class BlockHeaderManager:
 
     async def download(self):
         our_height = await self.db.get_best_block_height()
-        best_height = await self.client.block_tip()
-        for block in await self.client.block_list(our_height+1, best_height):
+        best_height = await self.client.first.block_tip()
+        for block in await self.client.first.block_list(start_height=our_height+1, end_height=best_height):
             await self.db.insert_block(Block(
                 height=block["height"],
                 version=0,
                 file_number=0,
-                block_hash=block["block_hash"],
-                prev_block_hash=block["previous_hash"],
-                merkle_root=block["merkle_root"],
-                claim_trie_root=block["claim_trie_root"],
+                block_hash=unhexlify(block["block_hash"]),
+                prev_block_hash=unhexlify(block["previous_hash"]),
+                merkle_root=b'',  # block["merkle_root"],
+                claim_trie_root=b'',  # block["claim_trie_root"],
                 timestamp=block["timestamp"],
-                bits=block["bits"],
-                nonce=block["nonce"],
+                bits=0,  # block["bits"],
+                nonce=0,  # block["nonce"],
                 txs=[]
             ))
 
