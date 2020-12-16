@@ -601,13 +601,17 @@ class BlockProcessor:
         prefix = b'h' + tx_hash[:4] + idx_packed
         candidates = {db_key: hashX for db_key, hashX
                       in self.db.utxo_db.iterator(prefix=prefix)}
-
         for hdb_key, hashX in candidates.items():
             tx_num_packed = hdb_key[-4:]
-
             if len(candidates) > 1:
+
                 tx_num, = unpack('<I', tx_num_packed)
-                hash, height = self.db.fs_tx_hash(tx_num)
+                try:
+                    hash, height = self.db.fs_tx_hash(tx_num)
+                except IndexError:
+                    self.logger.error("data integrity error for hashx history: %s missing tx #%s (%s:%s)",
+                                      hashX.hex(), tx_num, hash_to_hex_str(tx_hash), tx_idx)
+                    continue
                 if hash != tx_hash:
                     assert hash is not None  # Should always be found
                     continue
@@ -639,7 +643,7 @@ class BlockProcessor:
                     self._caught_up_event.set()
             await self.blocks_event.wait()
             self.blocks_event.clear()
-            if self.reorg_count:
+            if self.reorg_count:  # this could only happen by calling the reorg rpc
                 await self.reorg_chain(self.reorg_count)
                 self.reorg_count = 0
             else:
