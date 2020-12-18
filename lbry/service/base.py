@@ -76,12 +76,12 @@ class Service:
 
     async def start(self):
         await self.db.open()
-        await self.wallets.storage.prepare()
-        await self.wallets.initialize()
+        await self.wallets.open()
         await self.sync.start()
 
     async def stop(self):
         await self.sync.stop()
+        await self.wallets.close()
         await self.db.close()
 
     async def get_status(self):

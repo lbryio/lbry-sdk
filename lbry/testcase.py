@@ -465,8 +465,8 @@ class IntegrationTestCase(AsyncioTestCase):
         service = FullNode(ledger)
         console = Console(service)
         daemon = Daemon(service, console)
-        self.addCleanup(daemon.stop)
         if start:
+            self.addCleanup(daemon.stop)
             await daemon.start()
         return daemon
 
@@ -485,8 +485,8 @@ class IntegrationTestCase(AsyncioTestCase):
         service = FullEndpoint(ledger)
         console = Console(service)
         daemon = Daemon(service, console)
-        self.addCleanup(daemon.stop)
         if start:
+            self.addCleanup(daemon.stop)
             await daemon.start()
         return daemon
 
@@ -504,8 +504,8 @@ class IntegrationTestCase(AsyncioTestCase):
         service = LightClient(ledger)
         console = Console(service)
         daemon = Daemon(service, console)
-        self.addCleanup(daemon.stop)
         if start:
+            self.addCleanup(daemon.stop)
             await daemon.start()
         return daemon
 

@@ -232,6 +232,9 @@ class Database:
     async def get_best_block_height(self) -> int:
         return await self.run(q.get_best_block_height)
 
+    async def get_best_block_filter(self) -> int:
+        return await self.run(q.get_best_block_filter)
+
     async def process_all_things_after_sync(self):
         return await self.run(sync.process_all_things_after_sync)
 
@@ -243,6 +246,9 @@ class Database:
 
     async def insert_block(self, block):
         return await self.run(q.insert_block, block)
+
+    async def insert_block_filter(self, height: int, address_filter: bytes):
+        return await self.run(q.insert_block_filter, height, address_filter)
 
     async def insert_transaction(self, block_hash, tx):
         return await self.run(q.insert_transaction, block_hash, tx)

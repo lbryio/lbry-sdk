@@ -27,6 +27,12 @@ class WalletManager:
         else:
             raise Exception(f"Unknown wallet storage format: {self.ledger.conf.wallet_storage}")
 
+    def __len__(self):
+        return self.wallets.__len__()
+
+    def __iter__(self):
+        return self.wallets.values().__iter__()
+
     def __getitem__(self, wallet_id: str) -> Wallet:
         try:
             return self.wallets[wallet_id]
@@ -55,6 +61,13 @@ class WalletManager:
         if wallet.is_locked:
             raise ValueError("Cannot spend funds with locked wallet, unlock first.")
         return wallet
+
+    async def open(self):
+        await self.storage.prepare()
+        await self.initialize()
+
+    async def close(self):
+        pass
 
     async def initialize(self):
         for wallet_id in self.ledger.conf.wallets:
