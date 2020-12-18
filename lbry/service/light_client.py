@@ -6,6 +6,7 @@ from binascii import unhexlify
 
 from lbry.blockchain.block import Block, get_address_filter
 from lbry.event import BroadcastSubscription
+from lbry.crypto.hash import hash160
 from lbry.wallet.account import AddressManager
 from lbry.blockchain import Ledger, Transaction
 from lbry.db import Database
@@ -110,33 +111,15 @@ class FilterManager:
         self.client = client
         self.cache = {}
 
-    async def download(self):
-        filters = await self.client.first.address_filter(start_height=0, end_height=500, granularity=0)
-        #address = None
-        #address_array = [bytearray(self.db.ledger.address_to_hash160(address))]
-        #for address_filter in filters:
-        #    print(address_filter)
-        #    address_filter = get_address_filter(unhexlify(address_filter['filter']))
-        #    print(address_filter.MatchAny(address_array))
-
-
-#        address_array = [
-#            bytearray(a['address'].encode())
-#            for a in await self.service.db.get_all_addresses()
-#        ]
-#        block_filters = await self.service.get_block_address_filters()
-#        for block_hash, block_filter in block_filters.items():
-#            bf = get_address_filter(block_filter)
-#            if bf.MatchAny(address_array):
-#                print(f'match: {block_hash} - {block_filter}')
-#                tx_filters = await self.service.get_transaction_address_filters(block_hash=block_hash)
-#                for txid, tx_filter in tx_filters.items():
-#                    tf = get_address_filter(tx_filter)
-#                    if tf.MatchAny(address_array):
-#                        print(f'  match: {txid} - {tx_filter}')
-#                        txs = await self.service.search_transactions([txid])
-#                        tx = Transaction(unhexlify(txs[txid]))
-#                        await self.service.db.insert_transaction(tx)
+    async def download(self, best_height):
+        our_height = await self.db.get_best_block_filter()
+        new_block_filters = await self.client.address_filter(
+            start_height=our_height+1, end_height=best_height, granularity=1
+        )
+        for block_filter in await new_block_filters.first:
+            await self.db.insert_block_filter(
+                block_filter["height"], unhexlify(block_filter["filter"])
+            )
 
     async def get_filters(self, start_height, end_height, granularity):
         return await self.client.address_filter(
@@ -156,9 +139,8 @@ class BlockHeaderManager:
         self.client = client
         self.cache = {}
 
-    async def download(self):
+    async def download(self, best_height):
         our_height = await self.db.get_best_block_height()
-        best_height = await self.client.first.block_tip()
         for block in await self.client.first.block_list(start_height=our_height+1, end_height=best_height):
             await self.db.insert_block(Block(
                 height=block["height"],
@@ -194,10 +176,10 @@ class FastSync(Sync):
         self.filters = FilterManager(self.db, self.client)
 
     async def get_block_headers(self, start_height: int, end_height: int = None):
-        return await self.client.block_list(start_height, end_height)
+        return await self.client.first.block_list(start_height, end_height)
 
     async def get_best_block_height(self) -> int:
-        return await self.client.block_tip()
+        return await self.client.first.block_tip()
 
     async def start(self):
         self.advance_loop_task = asyncio.create_task(self.advance())
@@ -213,10 +195,55 @@ class FastSync(Sync):
                 task.cancel()
 
     async def advance(self):
+        best_height = await self.client.first.block_tip()
         await asyncio.wait([
-            self.blocks.download(),
-            self.filters.download()
+            self.blocks.download(best_height),
+            self.filters.download(best_height),
         ])
+
+        block_filters = {}
+        for block_filter in await self.db.get_filters(0, best_height, 1):
+            block_filters[block_filter['height']] = \
+                get_address_filter(unhexlify(block_filter['filter']))
+
+        for wallet in self.service.wallets:
+            for account in wallet.accounts:
+                for address_manager in account.address_managers.values():
+                    i = gap = 0
+                    while gap < 20:
+                        key, i = address_manager.public_key.child(i), i+1
+                        address = bytearray(hash160(key.pubkey_bytes))
+                        for block, matcher in block_filters.items():
+                            if matcher.Match(address):
+                                gap = 0
+                                continue
+                        gap += 1
+
+    # address = None
+    # address_array = [bytearray(self.db.ledger.address_to_hash160(address))]
+    # for address_filter in filters:
+    #    print(address_filter)
+    #    address_filter = get_address_filter(unhexlify(address_filter['filter']))
+    #    print(address_filter.MatchAny(address_array))
+
+
+#        address_array = [
+#            bytearray(a['address'].encode())
+#            for a in await self.service.db.get_all_addresses()
+#        ]
+#        block_filters = await self.service.get_block_address_filters()
+#        for block_hash, block_filter in block_filters.items():
+#            bf = get_address_filter(block_filter)
+#            if bf.MatchAny(address_array):
+#                print(f'match: {block_hash} - {block_filter}')
+#                tx_filters = await self.service.get_transaction_address_filters(block_hash=block_hash)
+#                for txid, tx_filter in tx_filters.items():
+#                    tf = get_address_filter(tx_filter)
+#                    if tf.MatchAny(address_array):
+#                        print(f'  match: {txid} - {tx_filter}')
+#                        txs = await self.service.search_transactions([txid])
+#                        tx = Transaction(unhexlify(txs[txid]))
+#                        await self.service.db.insert_transaction(tx)
 
     async def loop(self):
         while True:

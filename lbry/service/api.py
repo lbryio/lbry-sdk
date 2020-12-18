@@ -3458,6 +3458,10 @@ class Client(API):
                     raise ValueError(f'Unknown message received: {d}')
                 await controller.close()
                 del self.requests[d['id']]
+            elif 'event' in d:
+                controller = self.subscriptions.get(d['event'])
+                if controller is not None:
+                    await controller.add(d['payload'])
             elif 'method' in d and d['method'].startswith('event'):
                 print(d)
             else:
