@@ -165,6 +165,8 @@ def claims_insert(
 
 @event_emitter("blockchain.sync.claims.indexes", "steps")
 def claims_constraints_and_indexes(p: ProgressContext):
+    if p.ctx.is_postgres and pg_has_claim_primary_key(p):
+        return
     p.start(2 + len(pg_add_claim_and_tag_constraints_and_indexes))
     if p.ctx.is_postgres:
         p.ctx.execute_notx(text("VACUUM ANALYZE claim;"))
@@ -309,3 +311,11 @@ def update_claim_filters(resolve_censor_channel_hashes, search_censor_channel_ha
         ['claim_hash', 'censor_type', 'censoring_channel_hash'],
         select_reposts(search_censor_channel_hashes, Censor.SEARCH)
     ))
+
+
+def pg_has_claim_primary_key(p: ProgressContext):
+    claim_constraints = p.ctx.execute(
+        "select * from information_schema.table_constraints as tc "
+        "where tc.table_name='claim' and constraint_type='PRIMARY KEY'"
+    ).fetchall()
+    return len(claim_constraints) > 0
