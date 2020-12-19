@@ -123,7 +123,6 @@ class Ledger(metaclass=LedgerRegistry):
         self.network: Network = self.config.get('network') or Network(self)
         self.network.on_header.listen(self.receive_header)
         self.network.on_status.listen(self.process_status_update)
-        self.network.on_connected.listen(self.join_network)
 
         self.accounts = []
         self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
@@ -329,6 +328,8 @@ class Ledger(metaclass=LedgerRegistry):
         await self.network.on_connected.first
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
+        self.network.on_connected.listen(self.join_network)
+        asyncio.ensure_future(self.join_network())
         await fully_synced
         await self.db.release_all_outputs()
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
