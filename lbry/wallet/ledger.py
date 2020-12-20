@@ -560,9 +560,7 @@ class Ledger(metaclass=LedgerRegistry):
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 synced_txs.append(tx)
                 if len(synced_txs) >= 100:
-                    await self._save_sync_batch(synced_txs, address)
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
-            await self._save_sync_batch(synced_txs, address)
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
@@ -574,7 +572,11 @@ class Ledger(metaclass=LedgerRegistry):
                 if f"{txid}:{height}:" != pending_synced_history[i]:
                     log.warning("history mismatch: %s vs %s", remote_history[remote_i], pending_synced_history[i])
                 synced_history += pending_synced_history[i]
-            await self.db.set_address_history(address, synced_history)
+            await self.db.save_transaction_io_batch(
+                synced_txs, address, self.address_to_hash160(address), synced_history
+            )
+            while synced_txs:
+                self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
 
             cache_size = self.config.get("tx_cache_size", 100_000)
             for txid, cache_item in updated_cached_items.items():
@@ -670,10 +672,12 @@ class Ledger(metaclass=LedgerRegistry):
             cached = TransactionCacheItem()
             self._tx_cache[tx.id] = cached
         cached.tx = tx
-        if 0 < remote_height < len(self.headers) and cached.pending_verifications <= 1:
+        if 0 < remote_height < len(self.headers):
             # can't be tx.pending_verifications == 1 because we have to handle the transaction_show case
             if not merkle:
                 merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
+            if 'merkle' not in merkle:
+                return
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
@@ -696,21 +700,14 @@ class Ledger(metaclass=LedgerRegistry):
                 yield tx
 
     async def request_synced_transactions(self, to_request, remote_history, address):
+        pending_sync = []
         async for tx in self.request_transactions(((txid, height) for txid, height in to_request.values())):
-            await self._sync(tx, remote_history)
+            pending_sync.append(asyncio.ensure_future(self._sync(tx, remote_history)))
             yield tx
-
-    async def _save_sync_batch(self, synced_txs, address):
-        await self.db.save_transaction_io_batch(
-            synced_txs, address, self.address_to_hash160(address), ""
-        )
-        while synced_txs:
-            self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
+        await asyncio.gather(*pending_sync)
 
     async def _single_batch(self, batch, remote_heights):
-        restricted = max(remote_heights.values()) > (self.network.remote_height - 10)
-        restricted = restricted or min(remote_heights.values()) < 0
-        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch, restricted)
+        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch)
         for txid, (raw, merkle) in batch_result.items():
             remote_height = remote_heights[txid]
             tx = Transaction(unhexlify(raw), height=remote_height)
@@ -726,13 +723,14 @@ class Ledger(metaclass=LedgerRegistry):
             if wanted_txid not in remote_history:
                 continue
             if wanted_txid in self._tx_cache:
+                await self._tx_cache[wanted_txid].has_tx.wait()
                 txi.txo_ref = self._tx_cache[wanted_txid].tx.outputs[txi.txo_ref.position].ref
             else:
                 check_db_for_txos[txi] = txi.txo_ref.id
 
         referenced_txos = {} if not check_db_for_txos else {
             txo.id: txo for txo in await self.db.get_txos(
-                txoid__in=check_db_for_txos.values(), order_by='txo.txoid', no_tx=True
+                txoid__in=list(check_db_for_txos.values()), order_by='txo.txoid', no_tx=True
             )
         }
 
