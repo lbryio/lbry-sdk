@@ -12,7 +12,7 @@ from contextvars import ContextVar
 from sqlalchemy import create_engine, inspect, bindparam, func, exists, event as sqlalchemy_event
 from sqlalchemy.future import select
 from sqlalchemy.engine import Engine
-from sqlalchemy.sql import Insert
+from sqlalchemy.sql import Insert, text
 try:
     from pgcopy import CopyManager
 except ImportError:
@@ -103,6 +103,13 @@ class QueryContext:
             copy_manager.conn = c.connection
             copy_manager.copy(map(dict.values, rows), BytesIO)
             copy_manager.conn = None
+
+    def pg_has_pk_constraint(self, table_name):
+        claim_constraints = self.fetchall(text(
+            f"select * from information_schema.table_constraints as tc "
+            f"where tc.table_name='{table_name}' and constraint_type='PRIMARY KEY'"
+        ))
+        return len(claim_constraints) > 0
 
     def connect_without_transaction(self):
         return self.engine.connect().execution_options(isolation_level="AUTOCOMMIT")

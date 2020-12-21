@@ -883,7 +883,7 @@ class EventGenerator:
             yield from self.claims_main_start()
             yield from self.claims_insert(self.claims)
             if self.initial_sync:
-                yield from self.generate("blockchain.sync.claims.indexes", ("steps",), 0, None, (10,), (1,))
+                yield from self.generate("blockchain.sync.claims.indexes", ("steps",), 0, None, (11,), (1,))
             else:
                 yield from self.claims_takeovers(self.takeovers)
                 yield from self.claims_stakes()
@@ -1011,7 +1011,7 @@ class EventGenerator:
     def spends_steps(self):
         yield from self.generate(
             "blockchain.sync.spends.main", ("steps",), 0, None,
-            (20 if self.initial_sync else 5,),
+            (23 if self.initial_sync else 5,),
             (1,)
         )
 
