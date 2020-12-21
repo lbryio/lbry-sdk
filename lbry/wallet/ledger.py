@@ -770,18 +770,13 @@ class Ledger(metaclass=LedgerRegistry):
             include_is_my_output=False,
             include_sent_supports=False,
             include_sent_tips=False,
-            include_received_tips=False,
-            session_override=None) -> Tuple[List[Output], dict, int, int]:
+            include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
-        txs = []
+        txs: List[Transaction] = []
         if len(outputs.txs) > 0:
-            txs: List[Transaction] = []
-            if session_override:
-                async for tx in self.request_transactions(tuple(outputs.txs), session_override):
-                    txs.append(tx)
-            else:
-                txs.extend((await asyncio.gather(*(self.cache_transaction(*tx) for tx in outputs.txs))))
+            async for tx in self.request_transactions(tuple(outputs.txs)):
+                txs.append(tx)
 
         _txos, blocked = outputs.inflate(txs)
 
@@ -856,25 +851,17 @@ class Ledger(metaclass=LedgerRegistry):
     async def resolve(self, accounts, urls, new_sdk_server=None, **kwargs):
         txos = []
         urls_copy = list(urls)
-
         if new_sdk_server:
             resolve = partial(self.network.new_resolve, new_sdk_server)
-            while urls_copy:
-                batch, urls_copy = urls_copy[:500], urls_copy[500:]
-                txos.extend(
-                    (await self._inflate_outputs(
-                        resolve(batch), accounts, **kwargs
-                    ))[0]
-                )
         else:
-            async with self.network.single_call_context(self.network.resolve) as (resolve, session):
-                while urls_copy:
-                    batch, urls_copy = urls_copy[:500], urls_copy[500:]
-                    txos.extend(
-                        (await self._inflate_outputs(
-                            resolve(batch), accounts, session_override=session, **kwargs
-                        ))[0]
-                    )
+            resolve = partial(self.network.retriable_call, self.network.resolve)
+        while urls_copy:
+            batch, urls_copy = urls_copy[:100], urls_copy[100:]
+            txos.extend(
+                (await self._inflate_outputs(
+                    resolve(batch), accounts, **kwargs
+                ))[0]
+            )
 
         assert len(urls) == len(txos), "Mismatch between urls requested for resolve and responses received."
         result = {}
@@ -896,17 +883,13 @@ class Ledger(metaclass=LedgerRegistry):
             new_sdk_server=None, **kwargs) -> Tuple[List[Output], dict, int, int]:
         if new_sdk_server:
             claim_search = partial(self.network.new_claim_search, new_sdk_server)
-            return await self._inflate_outputs(
-                claim_search(**kwargs), accounts,
-                include_purchase_receipt=include_purchase_receipt,
-                include_is_my_output=include_is_my_output,
-            )
-        async with self.network.single_call_context(self.network.claim_search) as (claim_search, session):
-            return await self._inflate_outputs(
-                claim_search(**kwargs), accounts, session_override=session,
-                include_purchase_receipt=include_purchase_receipt,
-                include_is_my_output=include_is_my_output,
-            )
+        else:
+            claim_search = self.network.claim_search
+        return await self._inflate_outputs(
+            claim_search(**kwargs), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output,
+        )
 
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
         for claim in (await self.claim_search(accounts, claim_id=claim_id, **kwargs))[0]:
@@ -1011,7 +994,7 @@ class Ledger(metaclass=LedgerRegistry):
         return self.db.get_channel_count(**constraints)
 
     async def resolve_collection(self, collection, offset=0, page_size=1):
-        claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
+        claim_ids = collection.claim.collection.claims.ids[offset:page_size + offset]
         try:
             resolve_results, _, _, _ = await self.claim_search([], claim_ids=claim_ids)
         except Exception as err:
@@ -1060,7 +1043,7 @@ class Ledger(metaclass=LedgerRegistry):
                 'txid': tx.id,
                 'timestamp': ts,
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
+                'confirmations': (headers.height + 1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
@@ -1070,7 +1053,7 @@ class Ledger(metaclass=LedgerRegistry):
             is_my_inputs = all([txi.is_my_input for txi in tx.inputs])
             if is_my_inputs:
                 # fees only matter if we are the ones paying them
-                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
+                item['value'] = dewies_to_lbc(tx.net_account_balance + tx.fee)
                 item['fee'] = dewies_to_lbc(-tx.fee)
             else:
                 # someone else paid the fees
@@ -1093,13 +1076,13 @@ class Ledger(metaclass=LedgerRegistry):
                         if txi.txo_ref.txo is not None:
                             other_txo = txi.txo_ref.txo
                             if (other_txo.is_claim or other_txo.script.is_support_claim) \
-                                    and other_txo.claim_id == txo.claim_id:
+                                and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
                     if previous is not None:
                         item['update_info'].append({
                             'address': txo.get_address(self),
-                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                            'balance_delta': dewies_to_lbc(previous.amount - txo.amount),
                             'amount': dewies_to_lbc(txo.amount),
                             'claim_id': txo.claim_id,
                             'claim_name': txo.claim_name,
@@ -1177,7 +1160,7 @@ class Ledger(metaclass=LedgerRegistry):
         for account in accounts:
             balance = self._balance_cache.get(account.id)
             if not balance:
-                balance = self._balance_cache[account.id] =\
+                balance = self._balance_cache[account.id] = \
                     await account.get_detailed_balance(confirmations, reserved_subtotals=True)
             for key, value in balance.items():
                 if key == 'reserved_subtotals':
@@ -1187,7 +1170,6 @@ class Ledger(metaclass=LedgerRegistry):
                     result[key] += value
         return result
 
-
 class TestNetLedger(Ledger):
     network_name = 'testnet'
     pubkey_address_prefix = bytes((111,))
@@ -1195,7 +1177,6 @@ class TestNetLedger(Ledger):
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
     checkpoints = {}
-
 
 class RegTestLedger(Ledger):
     network_name = 'regtest'
