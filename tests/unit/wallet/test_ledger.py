@@ -40,7 +40,7 @@ class MockNetwork:
             merkle = await self.get_merkle(tx_hash, known_height)
         return tx, merkle
 
-    async def get_transaction_batch(self, txids):
+    async def get_transaction_batch(self, txids, restricted):
         return {
             txid: await self.get_transaction_and_merkle(txid)
             for txid in txids

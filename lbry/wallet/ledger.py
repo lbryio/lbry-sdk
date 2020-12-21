@@ -155,7 +155,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_ready_controller = StreamController()
         self.on_ready = self._on_ready_controller.stream
 
-        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 10_000))
+        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 1024))
         self._update_tasks = TaskGroup()
         self._other_tasks = TaskGroup()  # that we dont need to start
         self._utxo_reservation_lock = asyncio.Lock()
@@ -516,7 +516,6 @@ class Ledger(metaclass=LedgerRegistry):
             synced_txs = []
             to_request = {}
             pending_synced_history = {}
-            updated_cached_items = {}
             already_synced = set()
 
             already_synced_offset = 0
@@ -526,10 +525,6 @@ class Ledger(metaclass=LedgerRegistry):
                     already_synced.add((txid, remote_height))
                     already_synced_offset += 1
                     continue
-                cache_item = self._tx_cache.get(txid)
-                if cache_item is None:
-                    cache_item = TransactionCacheItem()
-                    self._tx_cache[txid] = cache_item
 
             tx_indexes = {}
 
@@ -537,18 +532,6 @@ class Ledger(metaclass=LedgerRegistry):
                 tx_indexes[txid] = i
                 if (txid, remote_height) in already_synced:
                     continue
-                cache_item = self._tx_cache.get(txid)
-                cache_item.pending_verifications += 1
-                updated_cached_items[txid] = cache_item
-
-                assert cache_item is not None, 'cache item is none'
-                # tx = cache_item.tx
-                # if cache_item.tx is not None and \
-                #      cache_item.tx.height >= remote_height and \
-                #      (cache_item.tx.is_verified or remote_height < 1):
-                #     synced_txs.append(cache_item.tx)  # cached tx is already up-to-date
-                #     pending_synced_history[i] = f'{tx.id}:{tx.height}:'
-                #     continue
                 to_request[i] = (txid, remote_height)
 
             log.debug(
@@ -561,6 +544,12 @@ class Ledger(metaclass=LedgerRegistry):
                 synced_txs.append(tx)
                 if len(synced_txs) >= 100:
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
+                    await self.db.save_transaction_io_batch(
+                        synced_txs, address, self.address_to_hash160(address), ""
+                    )
+                    while synced_txs:
+                        tx = synced_txs.pop()
+                        self._on_transaction_controller.add(TransactionEvent(address, tx))
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
@@ -578,26 +567,11 @@ class Ledger(metaclass=LedgerRegistry):
             while synced_txs:
                 self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
 
-            cache_size = self.config.get("tx_cache_size", 10_000)
-            for txid, cache_item in updated_cached_items.items():
-                cache_item.pending_verifications -= 1
-                if cache_item.pending_verifications < 0:
-                    log.warning("config value tx cache size %i needs to be increased", cache_size)
-                    cache_item.pending_verifications = 0
-
-
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
 
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
-
-            for txid, cache_item in updated_cached_items.items():
-                if self._tx_cache.get(txid) is not cache_item:
-                    log.warning("tx cache corrupted while syncing %s, reattempt sync=%s", address, reattempt_update)
-                    if reattempt_update:
-                        return await self.update_history(address, remote_status, address_manager, False)
-                    return False
 
             local_status, local_history = \
                 await self.get_local_status_and_history(address, synced_history)
@@ -654,6 +628,12 @@ class Ledger(metaclass=LedgerRegistry):
         remote_heights = {}
 
         for txid, height in sorted(to_request, key=lambda x: x[1]):
+            if txid in self._tx_cache:
+                if self._tx_cache[txid].tx is not None and self._tx_cache[txid].tx.is_verified:
+                    yield self._tx_cache[txid].tx
+                    continue
+            else:
+                self._tx_cache[txid] = TransactionCacheItem()
             remote_heights[txid] = height
             if len(batches[-1]) == 100:
                 batches.append([])
@@ -673,7 +653,9 @@ class Ledger(metaclass=LedgerRegistry):
         await asyncio.gather(*pending_sync)
 
     async def _single_batch(self, batch, remote_heights):
-        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch)
+        heights = {remote_heights[txid] for txid in batch}
+        unrestriced = 0 < min(heights) < max(heights) < max(self.headers.checkpoints or [0])
+        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch, not unrestriced)
         for txid, (raw, merkle) in batch_result.items():
             remote_height = remote_heights[txid]
             tx = Transaction(unhexlify(raw), height=remote_height)
