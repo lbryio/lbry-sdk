@@ -683,7 +683,7 @@ class Ledger(metaclass=LedgerRegistry):
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
 
-    async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...]):
+    async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...], session=None):
         batches = [[]]
         remote_heights = {}
 
@@ -696,7 +696,7 @@ class Ledger(metaclass=LedgerRegistry):
             batches.pop()
 
         for batch in batches:
-            async for tx in self._single_batch(batch, remote_heights):
+            async for tx in self._single_batch(batch, remote_heights, session):
                 yield tx
 
     async def request_synced_transactions(self, to_request, remote_history, address):
@@ -706,8 +706,8 @@ class Ledger(metaclass=LedgerRegistry):
             yield tx
         await asyncio.gather(*pending_sync)
 
-    async def _single_batch(self, batch, remote_heights):
-        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch)
+    async def _single_batch(self, batch, remote_heights, session):
+        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch, session)
         for txid, (raw, merkle) in batch_result.items():
             remote_height = remote_heights[txid]
             tx = Transaction(unhexlify(raw), height=remote_height)
