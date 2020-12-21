@@ -513,10 +513,8 @@ class Ledger(metaclass=LedgerRegistry):
                     )
                 return True
 
-            synced_txs = []
             to_request = {}
             pending_synced_history = {}
-            updated_cached_items = {}
             already_synced = set()
 
             already_synced_offset = 0
@@ -526,40 +524,22 @@ class Ledger(metaclass=LedgerRegistry):
                     already_synced.add((txid, remote_height))
                     already_synced_offset += 1
                     continue
-                cache_item = self._tx_cache.get(txid)
-                if cache_item is None:
-                    cache_item = TransactionCacheItem()
-                    self._tx_cache[txid] = cache_item
-
             tx_indexes = {}
 
             for i, (txid, remote_height) in enumerate(remote_history):
                 tx_indexes[txid] = i
                 if (txid, remote_height) in already_synced:
                     continue
-                cache_item = self._tx_cache.get(txid)
-                cache_item.pending_verifications += 1
-                updated_cached_items[txid] = cache_item
-
-                assert cache_item is not None, 'cache item is none'
-                # tx = cache_item.tx
-                # if cache_item.tx is not None and \
-                #      cache_item.tx.height >= remote_height and \
-                #      (cache_item.tx.is_verified or remote_height < 1):
-                #     synced_txs.append(cache_item.tx)  # cached tx is already up-to-date
-                #     pending_synced_history[i] = f'{tx.id}:{tx.height}:'
-                #     continue
                 to_request[i] = (txid, remote_height)
 
             log.debug(
-                "request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs),
+                "request %i transactions, %i/%i for %s are already synced", len(to_request), len(already_synced),
                 len(remote_history), address
             )
             remote_history_txids = set(txid for txid, _ in remote_history)
             async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
-                synced_txs.append(tx)
-                if len(synced_txs) >= 100:
+                if len(pending_synced_history) % 100 == 0:
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
@@ -572,32 +552,13 @@ class Ledger(metaclass=LedgerRegistry):
                 if f"{txid}:{height}:" != pending_synced_history[i]:
                     log.warning("history mismatch: %s vs %s", remote_history[remote_i], pending_synced_history[i])
                 synced_history += pending_synced_history[i]
-            await self.db.save_transaction_io_batch(
-                synced_txs, address, self.address_to_hash160(address), synced_history
-            )
-            while synced_txs:
-                self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
-
-            cache_size = self.config.get("tx_cache_size", 10_000)
-            for txid, cache_item in updated_cached_items.items():
-                cache_item.pending_verifications -= 1
-                if cache_item.pending_verifications < 0:
-                    log.warning("config value tx cache size %i needs to be increased", cache_size)
-                    cache_item.pending_verifications = 0
-
+            await self.db.set_address_history(address, synced_history)
 
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
 
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
-
-            for txid, cache_item in updated_cached_items.items():
-                if self._tx_cache.get(txid) is not cache_item:
-                    log.warning("tx cache corrupted while syncing %s, reattempt sync=%s", address, reattempt_update)
-                    if reattempt_update:
-                        return await self.update_history(address, remote_status, address_manager, False)
-                    return False
 
             local_status, local_history = \
                 await self.get_local_status_and_history(address, synced_history)
@@ -654,6 +615,13 @@ class Ledger(metaclass=LedgerRegistry):
         remote_heights = {}
 
         for txid, height in sorted(to_request, key=lambda x: x[1]):
+            if txid in self._tx_cache:
+                tx = self._tx_cache[txid].tx
+                if tx is not None and tx.is_verified:
+                    yield tx
+                    continue
+            else:
+                self._tx_cache[txid] = TransactionCacheItem()
             remote_heights[txid] = height
             if len(batches[-1]) == 100:
                 batches.append([])
@@ -671,7 +639,12 @@ class Ledger(metaclass=LedgerRegistry):
             pending_sync.append(asyncio.ensure_future(self._sync(tx, remote_history)))
             log.info("%d/%d", len(pending_sync), len(to_request))
             yield tx
-        await asyncio.gather(*pending_sync)
+        pending_sync = await asyncio.gather(*pending_sync)
+        await self.db.save_transaction_io_batch(
+            pending_sync, address, self.address_to_hash160(address), ""
+        )
+        while pending_sync:
+            self._on_transaction_controller.add(TransactionEvent(address, pending_sync.pop()))
 
     async def _single_batch(self, batch, remote_heights):
         heights = {remote_heights[txid] for txid in batch}
