@@ -668,7 +668,7 @@ class Ledger(metaclass=LedgerRegistry):
             if wanted_txid not in remote_history:
                 continue
             if wanted_txid in pending_txs:
-                tx = pending_txs[wanted_txid]
+                txi.txo_ref = pending_txs[wanted_txid].outputs[txi.txo_ref.position].ref
             else:
                 check_db_for_txos[txi] = txi.txo_ref.id
 
