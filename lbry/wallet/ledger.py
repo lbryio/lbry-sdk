@@ -415,6 +415,7 @@ class Ledger(metaclass=LedgerRegistry):
                     "Blockchain Reorganization: attempting rewind to height %s from starting height %s",
                     height, height+rewound
                 )
+                self._tx_cache.clear()
 
             else:
                 raise IndexError(f"headers.connect() returned negative number ({added})")
@@ -646,8 +647,8 @@ class Ledger(metaclass=LedgerRegistry):
         pending_sync = {}
         async for tx in self.request_transactions(((txid, height) for txid, height in to_request.values())):
             pending_sync[tx.id] = tx
-            yield tx
-        await asyncio.gather(*(self._sync(tx, remote_history, pending_sync) for tx in pending_sync.values()))
+        for f in asyncio.as_completed([self._sync(tx, remote_history, pending_sync) for tx in pending_sync.values()]):
+            yield await f
 
     async def _single_batch(self, batch, remote_heights):
         heights = {remote_heights[txid] for txid in batch}
@@ -682,11 +683,12 @@ class Ledger(metaclass=LedgerRegistry):
             if txi.txo_ref.id in referenced_txos:
                 txi.txo_ref = referenced_txos[txi.txo_ref.id].ref
             else:
-                tx = await self.db.get_transaction(txid=wanted_txid)
-                if tx is None:
+                tx_from_db = await self.db.get_transaction(txid=txi.txo_ref.tx_ref.id)
+                if tx_from_db is None:
                     log.warning("%s not on db, not on cache, but on remote history!", txi.txo_ref.id)
                 else:
-                    txi.txo_ref = tx.outputs[txi.txo_ref.position].ref
+                    txi.txo_ref = tx_from_db.outputs[txi.txo_ref.position].ref
+        return tx
 
     async def get_address_manager_for_address(self, address) -> Optional[AddressManager]:
         details = await self.db.get_address(address=address)
