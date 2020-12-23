@@ -514,7 +514,6 @@ class Ledger(metaclass=LedgerRegistry):
                     )
                 return True
 
-            synced_txs = []
             to_request = {}
             pending_synced_history = {}
             already_synced = set()
@@ -536,21 +535,14 @@ class Ledger(metaclass=LedgerRegistry):
                 to_request[i] = (txid, remote_height)
 
             log.debug(
-                "request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs),
+                "request %i transactions, %i/%i for %s are already synced", len(to_request), len(already_synced),
                 len(remote_history), address
             )
             remote_history_txids = set(txid for txid, _ in remote_history)
             async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
-                synced_txs.append(tx)
-                if len(synced_txs) >= 100:
+                if len(pending_synced_history) % 100 == 0:
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
-                    await self.db.save_transaction_io_batch(
-                        synced_txs, address, self.address_to_hash160(address), ""
-                    )
-                    while synced_txs:
-                        tx = synced_txs.pop()
-                        self._on_transaction_controller.add(TransactionEvent(address, tx))
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
@@ -562,11 +554,7 @@ class Ledger(metaclass=LedgerRegistry):
                 if f"{txid}:{height}:" != pending_synced_history[i]:
                     log.warning("history mismatch: %s vs %s", remote_history[remote_i], pending_synced_history[i])
                 synced_history += pending_synced_history[i]
-            await self.db.save_transaction_io_batch(
-                synced_txs, address, self.address_to_hash160(address), synced_history
-            )
-            while synced_txs:
-                self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
+            await self.db.set_address_history(address, synced_history)
 
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
@@ -647,8 +635,10 @@ class Ledger(metaclass=LedgerRegistry):
         pending_sync = {}
         async for tx in self.request_transactions(((txid, height) for txid, height in to_request.values())):
             pending_sync[tx.id] = tx
-        for f in asyncio.as_completed([self._sync(tx, remote_history, pending_sync) for tx in pending_sync.values()]):
-            yield await f
+            yield tx
+            if len(pending_sync) > 10:
+                await self._sync_and_save_batch(address, remote_history, pending_sync)
+        await self._sync_and_save_batch(address, remote_history, pending_sync)
 
     async def _single_batch(self, batch, remote_heights):
         heights = {remote_heights[txid] for txid in batch}
@@ -659,6 +649,14 @@ class Ledger(metaclass=LedgerRegistry):
             tx = Transaction(unhexlify(raw), height=remote_height)
             await self.maybe_verify_transaction(tx, remote_height, merkle)
             yield tx
+
+    async def _sync_and_save_batch(self, address, remote_history, pending_txs):
+        await asyncio.gather(*(self._sync(tx, remote_history, pending_txs) for tx in pending_txs.values()))
+        await self.db.save_transaction_io_batch(
+            pending_txs.values(), address, self.address_to_hash160(address), ""
+        )
+        while pending_txs:
+            self._on_transaction_controller.add(TransactionEvent(address, pending_txs.popitem()[1]))
 
     async def _sync(self, tx, remote_history, pending_txs):
         check_db_for_txos = {}
