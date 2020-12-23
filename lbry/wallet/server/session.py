@@ -4,7 +4,6 @@ import math
 import time
 import json
 import zlib
-import pylru
 import base64
 import codecs
 import typing
@@ -18,11 +17,11 @@ from collections import defaultdict
 from functools import partial
 
 from binascii import hexlify, unhexlify
-from pylru import lrucache
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
+from lbry.utils import LRUCache
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
@@ -811,8 +810,8 @@ class LBRYSessionManager(SessionManager):
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
         self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = lrucache(10000)
-        self.search_cache['resolve'] = lrucache(10000)
+        self.search_cache['search'] = LRUCache(10000, metric_name='search', namespace=NAMESPACE)
+        self.search_cache['resolve'] = LRUCache(10000, metric_name='resolve', namespace=NAMESPACE)
 
     async def process_metrics(self):
         while self.running:

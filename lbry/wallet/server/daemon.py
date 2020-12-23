@@ -3,11 +3,10 @@ import itertools
 import json
 import time
 from functools import wraps
-from pylru import lrucache
 
 import aiohttp
 from prometheus_client import Gauge, Histogram
-
+from lbry.utils import LRUCache
 from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.util import hex_to_bytes, class_logger
 from lbry.wallet.rpc import JSONRPC
@@ -55,8 +54,8 @@ class Daemon:
         self._height = None
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
-        self._block_hash_cache = lrucache(100000)
-        self._block_cache = lrucache(10000)
+        self._block_hash_cache = LRUCache(100000)
+        self._block_cache = LRUCache(10000)
 
     async def close(self):
         if self.connector:

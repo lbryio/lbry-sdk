@@ -215,7 +215,7 @@ class LRUCache:
         'misses'
     ]
 
-    def __init__(self, capacity: int, metric_name: typing.Optional[str] = None):
+    def __init__(self, capacity: int, metric_name: typing.Optional[str] = None, namespace: str = "daemon_cache"):
         self.capacity = capacity
         self.cache = collections.OrderedDict()
         if metric_name is None:
@@ -225,10 +225,10 @@ class LRUCache:
             self._track_metrics = True
             try:
                 self.hits = Counter(
-                    f"{metric_name}_cache_hit_count", "Number of cache hits", namespace="daemon_cache"
+                    f"{metric_name}_cache_hit_count", "Number of cache hits", namespace=namespace
                 )
                 self.misses = Counter(
-                    f"{metric_name}_cache_miss_count", "Number of cache misses", namespace="daemon_cache"
+                    f"{metric_name}_cache_miss_count", "Number of cache misses", namespace=namespace
                 )
             except ValueError as err:
                 log.warning("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)

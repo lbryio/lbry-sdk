@@ -15,7 +15,6 @@ import ast
 import os
 import time
 import zlib
-import pylru
 import typing
 from typing import Optional, List, Tuple, Iterable
 from asyncio import sleep
@@ -25,7 +24,7 @@ from glob import glob
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 import attr
-
+from lbry.utils import LRUCache
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.merkle import Merkle, MerkleCache
@@ -94,7 +93,7 @@ class LevelDB:
         self.headers_db = None
         self.tx_db = None
 
-        self._tx_and_merkle_cache = pylru.lrucache(100000)
+        self._tx_and_merkle_cache = LRUCache(100000, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
 
     async def _read_tx_counts(self):
