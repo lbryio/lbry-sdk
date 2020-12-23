@@ -10,11 +10,11 @@ from collections import defaultdict
 from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict, NamedTuple
 
-import pylru
 from lbry.schema.result import Outputs, INVALID, NOT_FOUND
 from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
+from lbry.utils import LRUCache
 
 from .tasks import TaskGroup
 from .database import Database
@@ -155,7 +155,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_ready_controller = StreamController()
         self.on_ready = self._on_ready_controller.stream
 
-        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 1024))
+        self._tx_cache = LRUCache(self.config.get("tx_cache_size", 1024), metric_name='tx')
         self._update_tasks = TaskGroup()
         self._other_tasks = TaskGroup()  # that we dont need to start
         self._utxo_reservation_lock = asyncio.Lock()
@@ -167,7 +167,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._known_addresses_out_of_sync = set()
 
         self.fee_per_name_char = self.config.get('fee_per_name_char', self.default_fee_per_name_char)
-        self._balance_cache = pylru.lrucache(100000)
+        self._balance_cache = LRUCache(2 ** 15)
 
     @classmethod
     def get_id(cls):
@@ -614,8 +614,9 @@ class Ledger(metaclass=LedgerRegistry):
 
         for txid, height in sorted(to_request, key=lambda x: x[1]):
             if cached:
-                if txid in self._tx_cache:
-                    if self._tx_cache[txid].tx is not None and self._tx_cache[txid].tx.is_verified:
+                cached_tx = self._tx_cache.get(txid)
+                if cached_tx is not None:
+                    if cached_tx.tx is not None and cached_tx.tx.is_verified:
                         cache_hits.add(txid)
                         continue
                 else:

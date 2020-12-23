@@ -40,7 +40,7 @@ class StreamDownloader:
         async def cached_read_blob(blob_info: 'BlobInfo') -> bytes:
             return await self.read_blob(blob_info, 2)
 
-        if self.blob_manager.decrypted_blob_lru_cache:
+        if self.blob_manager.decrypted_blob_lru_cache is not None:
             cached_read_blob = lru_cache_concurrent(override_lru_cache=self.blob_manager.decrypted_blob_lru_cache)(
                 cached_read_blob
             )
