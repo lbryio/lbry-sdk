@@ -93,7 +93,7 @@ class LevelDB:
         self.headers_db = None
         self.tx_db = None
 
-        self._tx_and_merkle_cache = LRUCache(100000, metric_name='tx_and_merkle', namespace="wallet_server")
+        self._tx_and_merkle_cache = LRUCache(2**17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
 
     async def _read_tx_counts(self):

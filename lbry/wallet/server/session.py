@@ -810,8 +810,8 @@ class LBRYSessionManager(SessionManager):
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
         self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = LRUCache(10000, metric_name='search', namespace=NAMESPACE)
-        self.search_cache['resolve'] = LRUCache(10000, metric_name='resolve', namespace=NAMESPACE)
+        self.search_cache['search'] = LRUCache(2**14, metric_name='search', namespace=NAMESPACE)
+        self.search_cache['resolve'] = LRUCache(2**16, metric_name='resolve', namespace=NAMESPACE)
 
     async def process_metrics(self):
         while self.running:
