@@ -40,7 +40,7 @@ class MockNetwork:
             merkle = await self.get_merkle(tx_hash, known_height)
         return tx, merkle
 
-    async def get_transaction_batch(self, txids):
+    async def get_transaction_batch(self, txids, restricted):
         return {
             txid: await self.get_transaction_and_merkle(txid)
             for txid in txids
@@ -126,9 +126,7 @@ class TestSynchronization(LedgerTestCase):
 
         self.ledger.network.get_history_called = []
         self.ledger.network.get_transaction_called = []
-        self.assertFalse(self.ledger._tx_cache[txid1].tx.is_verified)
-        self.assertFalse(self.ledger._tx_cache[txid2].tx.is_verified)
-        self.assertFalse(self.ledger._tx_cache[txid3].tx.is_verified)
+        self.assertEqual(0, len(self.ledger._tx_cache))
         await self.ledger.update_history(address, '')
         self.assertListEqual(self.ledger.network.get_history_called, [address])
         self.assertListEqual(self.ledger.network.get_transaction_called, [])

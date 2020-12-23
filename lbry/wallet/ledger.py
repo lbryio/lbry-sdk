@@ -123,7 +123,6 @@ class Ledger(metaclass=LedgerRegistry):
         self.network: Network = self.config.get('network') or Network(self)
         self.network.on_header.listen(self.receive_header)
         self.network.on_status.listen(self.process_status_update)
-        self.network.on_connected.listen(self.join_network)
 
         self.accounts = []
         self.fee_per_byte: int = self.config.get('fee_per_byte', self.default_fee_per_byte)
@@ -156,7 +155,7 @@ class Ledger(metaclass=LedgerRegistry):
         self._on_ready_controller = StreamController()
         self.on_ready = self._on_ready_controller.stream
 
-        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 10_000))
+        self._tx_cache = pylru.lrucache(self.config.get("tx_cache_size", 1024))
         self._update_tasks = TaskGroup()
         self._other_tasks = TaskGroup()  # that we dont need to start
         self._utxo_reservation_lock = asyncio.Lock()
@@ -329,6 +328,8 @@ class Ledger(metaclass=LedgerRegistry):
         await self.network.on_connected.first
         async with self._header_processing_lock:
             await self._update_tasks.add(self.initial_headers_sync())
+        self.network.on_connected.listen(self.join_network)
+        asyncio.ensure_future(self.join_network())
         await fully_synced
         await self.db.release_all_outputs()
         await asyncio.gather(*(a.maybe_migrate_certificates() for a in self.accounts))
@@ -414,6 +415,7 @@ class Ledger(metaclass=LedgerRegistry):
                     "Blockchain Reorganization: attempting rewind to height %s from starting height %s",
                     height, height+rewound
                 )
+                self._tx_cache.clear()
 
             else:
                 raise IndexError(f"headers.connect() returned negative number ({added})")
@@ -512,10 +514,9 @@ class Ledger(metaclass=LedgerRegistry):
                     )
                 return True
 
-            acquire_lock_tasks = []
+            synced_txs = []
             to_request = {}
             pending_synced_history = {}
-            updated_cached_items = {}
             already_synced = set()
 
             already_synced_offset = 0
@@ -525,24 +526,6 @@ class Ledger(metaclass=LedgerRegistry):
                     already_synced.add((txid, remote_height))
                     already_synced_offset += 1
                     continue
-                cache_item = self._tx_cache.get(txid)
-                if cache_item is None:
-                    cache_item = TransactionCacheItem()
-                    self._tx_cache[txid] = cache_item
-
-            unsynced_offset = already_synced_offset
-            for txid, remote_height in remote_history[already_synced_offset:]:
-                cache_item = self._tx_cache[txid]
-                if cache_item.tx is not None and cache_item.tx.height >= remote_height \
-                        and (not cache_item.tx.is_verified or remote_height < 1):
-                    pending_synced_history[unsynced_offset] = f'{txid}:{cache_item.tx.height}:'
-                    already_synced.add((txid, cache_item.tx.height))
-                else:
-                    acquire_lock_tasks.append(asyncio.create_task(cache_item.lock.acquire()))
-                unsynced_offset += 1
-
-            if acquire_lock_tasks:
-                await asyncio.wait(acquire_lock_tasks)
 
             tx_indexes = {}
 
@@ -550,22 +533,25 @@ class Ledger(metaclass=LedgerRegistry):
                 tx_indexes[txid] = i
                 if (txid, remote_height) in already_synced:
                     continue
-                cache_item = self._tx_cache.get(txid)
-                cache_item.pending_verifications += 1
-                updated_cached_items[txid] = cache_item
-
-                assert cache_item is not None, 'cache item is none'
-                assert cache_item.lock.locked(), 'cache lock is not held?'
-
                 to_request[i] = (txid, remote_height)
 
             log.debug(
-                "request %i transactions, %i/%i for %s are already synced", len(to_request),
-                len(pending_synced_history), len(remote_history), address
+                "request %i transactions, %i/%i for %s are already synced", len(to_request), len(synced_txs),
+                len(remote_history), address
             )
-            requested_txes = await self._request_transaction_batch(to_request, len(remote_history), address)
-            for tx in requested_txes:
+            remote_history_txids = set(txid for txid, _ in remote_history)
+            async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
+                synced_txs.append(tx)
+                if len(synced_txs) >= 100:
+                    log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
+                    await self.db.save_transaction_io_batch(
+                        synced_txs, address, self.address_to_hash160(address), ""
+                    )
+                    while synced_txs:
+                        tx = synced_txs.pop()
+                        self._on_transaction_controller.add(TransactionEvent(address, tx))
+            log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
                 f"{len(pending_synced_history)} vs {len(remote_history)}"
@@ -576,34 +562,17 @@ class Ledger(metaclass=LedgerRegistry):
                 if f"{txid}:{height}:" != pending_synced_history[i]:
                     log.warning("history mismatch: %s vs %s", remote_history[remote_i], pending_synced_history[i])
                 synced_history += pending_synced_history[i]
-
-            cache_size = self.config.get("tx_cache_size", 10_000)
-            for txid, cache_item in updated_cached_items.items():
-                cache_item.pending_verifications -= 1
-                if cache_item.pending_verifications < 0:
-                    log.warning("config value tx cache size %i needs to be increased", cache_size)
-                    cache_item.pending_verifications = 0
-                try:
-                    cache_item.lock.release()
-                except RuntimeError:
-                    log.warning("lock was already released?")
-
             await self.db.save_transaction_io_batch(
-                [], address, self.address_to_hash160(address), synced_history
+                synced_txs, address, self.address_to_hash160(address), synced_history
             )
+            while synced_txs:
+                self._on_transaction_controller.add(TransactionEvent(address, synced_txs.pop()))
 
             if address_manager is None:
                 address_manager = await self.get_address_manager_for_address(address)
 
             if address_manager is not None:
                 await address_manager.ensure_address_gap()
-
-            for txid, cache_item in updated_cached_items.items():
-                if self._tx_cache.get(txid) is not cache_item:
-                    log.warning("tx cache corrupted while syncing %s, reattempt sync=%s", address, reattempt_update)
-                    if reattempt_update:
-                        return await self.update_history(address, remote_status, address_manager, False)
-                    return False
 
             local_status, local_history = \
                 await self.get_local_status_and_history(address, synced_history)
@@ -638,151 +607,88 @@ class Ledger(metaclass=LedgerRegistry):
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
         tx.height = remote_height
-        cached = self._tx_cache.get(tx.id)
-        if not cached:
-            # cache txs looked up by transaction_show too
-            cached = TransactionCacheItem()
-            self._tx_cache[tx.id] = cached
-        cached.tx = tx
-        if 0 < remote_height < len(self.headers) and cached.pending_verifications <= 1:
+        if 0 < remote_height < len(self.headers):
             # can't be tx.pending_verifications == 1 because we have to handle the transaction_show case
             if not merkle:
                 merkle = await self.network.retriable_call(self.network.get_merkle, tx.id, remote_height)
+            if 'merkle' not in merkle:
+                return
             merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
             header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
 
-    async def _single_batch(self, batch, remote_heights, header_cache, transactions):
-        batch_result = await self.network.retriable_call(
-            self.network.get_transaction_batch, batch
-        )
-        for txid, (raw, merkle) in batch_result.items():
-            remote_height = remote_heights[txid]
-            merkle_height = merkle['block_height']
-            cache_item = self._tx_cache.get(txid)
-            if cache_item is None:
-                cache_item = TransactionCacheItem()
-                self._tx_cache[txid] = cache_item
-            tx = cache_item.tx or Transaction(bytes.fromhex(raw.decode() if isinstance(raw, bytes) else raw),
-                                              height=remote_height)
-            tx.height = remote_height
-            cache_item.tx = tx
-            if 'merkle' in merkle and remote_heights[txid] > 0:
-                merkle_root = self.get_root_of_merkle_tree(merkle['merkle'], merkle['pos'], tx.hash)
-                try:
-                    header = header_cache.get(remote_heights[txid]) or (await self.headers.get(merkle_height))
-                except IndexError:
-                    log.warning("failed to verify %s at height %i", tx.id, merkle_height)
-                else:
-                    header_cache[remote_heights[txid]] = header
-                    tx.position = merkle['pos']
-                    tx.is_verified = merkle_root == header['merkle_root']
-            transactions.append(tx)
-        return transactions
-
-    async def request_transactions_for_inflate(self, to_request: Tuple[Tuple[str, int], ...]):
-        header_cache = {}
+    async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...], cached=False):
         batches = [[]]
         remote_heights = {}
-        transactions = []
-        heights_in_batch = 0
-        last_height = 0
 
         for txid, height in sorted(to_request, key=lambda x: x[1]):
+            if cached:
+                if txid in self._tx_cache:
+                    if self._tx_cache[txid].tx is not None and self._tx_cache[txid].tx.is_verified:
+                        yield self._tx_cache[txid].tx
+                        continue
+                else:
+                    self._tx_cache[txid] = TransactionCacheItem()
             remote_heights[txid] = height
-            if height != last_height:
-                heights_in_batch += 1
-            last_height = height
-            if len(batches[-1]) == 100 or heights_in_batch == 20:
+            if len(batches[-1]) == 100:
                 batches.append([])
-                heights_in_batch = 1
             batches[-1].append(txid)
         if not batches[-1]:
             batches.pop()
 
         for batch in batches:
-            await self._single_batch(batch, remote_heights, header_cache, transactions)
-        return transactions
+            async for tx in self._single_batch(batch, remote_heights):
+                if cached:
+                    self._tx_cache[tx.id].tx = tx
+                yield tx
 
-    async def _request_transaction_batch(self, to_request, remote_history_size, address):
-        header_cache = {}
-        batches = [[]]
-        remote_heights = {}
-        synced_txs = []
-        heights_in_batch = 0
-        last_height = 0
-        for idx in sorted(to_request):
-            txid = to_request[idx][0]
-            height = to_request[idx][1]
-            remote_heights[txid] = height
-            if height != last_height:
-                heights_in_batch += 1
-            last_height = height
-            if len(batches[-1]) == 100 or heights_in_batch == 20:
-                batches.append([])
-                heights_in_batch = 1
-            batches[-1].append(txid)
-        if not batches[-1]:
-            batches.pop()
+    async def request_synced_transactions(self, to_request, remote_history, address):
+        pending_sync = {}
+        async for tx in self.request_transactions(((txid, height) for txid, height in to_request.values())):
+            pending_sync[tx.id] = tx
+        for f in asyncio.as_completed([self._sync(tx, remote_history, pending_sync) for tx in pending_sync.values()]):
+            yield await f
 
-        last_showed_synced_count = 0
+    async def _single_batch(self, batch, remote_heights):
+        heights = {remote_heights[txid] for txid in batch}
+        unrestriced = 0 < min(heights) < max(heights) < max(self.headers.checkpoints or [0])
+        batch_result = await self.network.retriable_call(self.network.get_transaction_batch, batch, not unrestriced)
+        for txid, (raw, merkle) in batch_result.items():
+            remote_height = remote_heights[txid]
+            tx = Transaction(unhexlify(raw), height=remote_height)
+            await self.maybe_verify_transaction(tx, remote_height, merkle)
+            yield tx
 
-        async def _single_batch(batch):
-            transactions = await self._single_batch(batch, remote_heights, header_cache, [])
-            this_batch_synced = []
+    async def _sync(self, tx, remote_history, pending_txs):
+        check_db_for_txos = {}
+        for txi in tx.inputs:
+            if txi.txo_ref.txo is not None:
+                continue
+            wanted_txid = txi.txo_ref.tx_ref.id
+            if wanted_txid not in remote_history:
+                continue
+            if wanted_txid in pending_txs:
+                txi.txo_ref = pending_txs[wanted_txid].outputs[txi.txo_ref.position].ref
+            else:
+                check_db_for_txos[txi] = txi.txo_ref.id
 
-            for tx in transactions:
-                check_db_for_txos = []
-
-                for txi in tx.inputs:
-                    if txi.txo_ref.txo is not None:
-                        continue
-                    cache_item = self._tx_cache.get(txi.txo_ref.tx_ref.id)
-                    if cache_item is not None:
-                        if cache_item.tx is not None:
-                            txi.txo_ref = cache_item.tx.outputs[txi.txo_ref.position].ref
-                    else:
-                        check_db_for_txos.append(txi.txo_ref.id)
-
-                referenced_txos = {} if not check_db_for_txos else {
-                    txo.id: txo for txo in await self.db.get_txos(
-                        txoid__in=check_db_for_txos, order_by='txo.txoid', no_tx=True
-                    )
-                }
-
-                for txi in tx.inputs:
-                    if txi.txo_ref.txo is not None:
-                        continue
-                    referenced_txo = referenced_txos.get(txi.txo_ref.id)
-                    if referenced_txo is not None:
-                        txi.txo_ref = referenced_txo.ref
-                        continue
-                    cache_item = self._tx_cache.get(txi.txo_ref.id)
-                    if cache_item is None:
-                        cache_item = self._tx_cache[txi.txo_ref.id] = TransactionCacheItem()
-                    if cache_item.tx is not None:
-                        txi.txo_ref = cache_item.tx.ref
-
-                synced_txs.append(tx)
-                this_batch_synced.append(tx)
-
-            await self.db.save_transaction_io_batch(
-                this_batch_synced, address, self.address_to_hash160(address), ""
+        referenced_txos = {} if not check_db_for_txos else {
+            txo.id: txo for txo in await self.db.get_txos(
+                txoid__in=list(check_db_for_txos.values()), order_by='txo.txoid', no_tx=True
             )
-            await asyncio.wait([
-                self._on_transaction_controller.add(TransactionEvent(address, tx))
-                for tx in this_batch_synced
-            ])
-            nonlocal last_showed_synced_count
-            if last_showed_synced_count + 100 < len(synced_txs):
-                log.info("synced %i/%i transactions for %s", len(synced_txs), remote_history_size, address)
-                last_showed_synced_count = len(synced_txs)
+        }
 
-        for batch in batches:
-            await _single_batch(batch)
-
-        return synced_txs
+        for txi in check_db_for_txos:
+            if txi.txo_ref.id in referenced_txos:
+                txi.txo_ref = referenced_txos[txi.txo_ref.id].ref
+            else:
+                tx_from_db = await self.db.get_transaction(txid=txi.txo_ref.tx_ref.id)
+                if tx_from_db is None:
+                    log.warning("%s not on db, not on cache, but on remote history!", txi.txo_ref.id)
+                else:
+                    txi.txo_ref = tx_from_db.outputs[txi.txo_ref.position].ref
+        return tx
 
     async def get_address_manager_for_address(self, address) -> Optional[AddressManager]:
         details = await self.db.get_address(address=address)
@@ -850,10 +756,10 @@ class Ledger(metaclass=LedgerRegistry):
             include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
-        txs = []
+        txs: List[Transaction] = []
         if len(outputs.txs) > 0:
-            txs: List[Transaction] = []
-            txs.extend((await self.request_transactions_for_inflate(tuple(outputs.txs))))
+            async for tx in self.request_transactions(tuple(outputs.txs), cached=True):
+                txs.append(tx)
 
         _txos, blocked = outputs.inflate(txs)
 
@@ -1071,7 +977,7 @@ class Ledger(metaclass=LedgerRegistry):
         return self.db.get_channel_count(**constraints)
 
     async def resolve_collection(self, collection, offset=0, page_size=1):
-        claim_ids = collection.claim.collection.claims.ids[offset:page_size+offset]
+        claim_ids = collection.claim.collection.claims.ids[offset:page_size + offset]
         try:
             resolve_results, _, _, _ = await self.claim_search([], claim_ids=claim_ids)
         except Exception as err:
@@ -1120,7 +1026,7 @@ class Ledger(metaclass=LedgerRegistry):
                 'txid': tx.id,
                 'timestamp': ts,
                 'date': datetime.fromtimestamp(ts).isoformat(' ')[:-3] if tx.height > 0 else None,
-                'confirmations': (headers.height+1) - tx.height if tx.height > 0 else 0,
+                'confirmations': (headers.height + 1) - tx.height if tx.height > 0 else 0,
                 'claim_info': [],
                 'update_info': [],
                 'support_info': [],
@@ -1130,7 +1036,7 @@ class Ledger(metaclass=LedgerRegistry):
             is_my_inputs = all([txi.is_my_input for txi in tx.inputs])
             if is_my_inputs:
                 # fees only matter if we are the ones paying them
-                item['value'] = dewies_to_lbc(tx.net_account_balance+tx.fee)
+                item['value'] = dewies_to_lbc(tx.net_account_balance + tx.fee)
                 item['fee'] = dewies_to_lbc(-tx.fee)
             else:
                 # someone else paid the fees
@@ -1153,13 +1059,13 @@ class Ledger(metaclass=LedgerRegistry):
                         if txi.txo_ref.txo is not None:
                             other_txo = txi.txo_ref.txo
                             if (other_txo.is_claim or other_txo.script.is_support_claim) \
-                                    and other_txo.claim_id == txo.claim_id:
+                                and other_txo.claim_id == txo.claim_id:
                                 previous = other_txo
                                 break
                     if previous is not None:
                         item['update_info'].append({
                             'address': txo.get_address(self),
-                            'balance_delta': dewies_to_lbc(previous.amount-txo.amount),
+                            'balance_delta': dewies_to_lbc(previous.amount - txo.amount),
                             'amount': dewies_to_lbc(txo.amount),
                             'claim_id': txo.claim_id,
                             'claim_name': txo.claim_name,
@@ -1237,7 +1143,7 @@ class Ledger(metaclass=LedgerRegistry):
         for account in accounts:
             balance = self._balance_cache.get(account.id)
             if not balance:
-                balance = self._balance_cache[account.id] =\
+                balance = self._balance_cache[account.id] = \
                     await account.get_detailed_balance(confirmations, reserved_subtotals=True)
             for key, value in balance.items():
                 if key == 'reserved_subtotals':
@@ -1247,7 +1153,6 @@ class Ledger(metaclass=LedgerRegistry):
                     result[key] += value
         return result
 
-
 class TestNetLedger(Ledger):
     network_name = 'testnet'
     pubkey_address_prefix = bytes((111,))
@@ -1255,7 +1160,6 @@ class TestNetLedger(Ledger):
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
     checkpoints = {}
-
 
 class RegTestLedger(Ledger):
     network_name = 'regtest'
