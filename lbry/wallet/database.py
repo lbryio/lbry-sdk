@@ -430,7 +430,7 @@ class SQLiteMixin:
                         return
                 await self.db.executescript('\n'.join(
                     f"DROP TABLE {table};" for table in tables
-                ))
+                ) + '\n' + 'PRAGMA WAL_CHECKPOINT(FULL);' + '\n' + 'VACUUM;')
             await self.db.execute(self.CREATE_VERSION_TABLE)
             await self.db.execute("INSERT INTO version VALUES (?)", (self.SCHEMA_VERSION,))
         await self.db.executescript(self.CREATE_TABLES_QUERY)
@@ -574,7 +574,7 @@ def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: L
 
 class Database(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.4"
+    SCHEMA_VERSION = "1.5"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
