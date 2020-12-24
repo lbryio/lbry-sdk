@@ -122,8 +122,7 @@ build:windows:
   before_script:
     - ./docker/install_choco.ps1
     - choco uninstall python
-    - choco uninstall python3
-    - choco install -y --x64 python3 7zip checksum
+    - choco install -y --x64 python --version=3.7.9 7zip checksum
     - python --version # | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
     - pip --version # | findstr /E '\(python 3\.7\)'
     - python -c "import sys;print(f'{str(64 if sys.maxsize > 2**32 else 32)} bit python\n{sys.platform}')"
