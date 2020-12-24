@@ -121,6 +121,7 @@ build:windows:
     GIT_DEPTH: 5
   before_script:
     - ./docker/install_choco.ps1
+    - choco uninstall python
     - choco uninstall python3
     - choco install -y --x64 python3 7zip checksum
     - python --version # | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
