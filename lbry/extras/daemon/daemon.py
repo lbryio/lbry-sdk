@@ -21,6 +21,8 @@ import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
 from google.protobuf.message import DecodeError
+
+from lbry.crypto.hash import sha256
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
     Transaction, Output, Input, Account, database
@@ -2787,6 +2789,40 @@ class Daemon(metaclass=JSONRPCServerType):
             await account.ledger.release_tx(tx)
 
         return tx
+
+    @requires(WALLET_COMPONENT)
+    async def jsonrpc_channel_sign(
+            self, channel_name=None, channel_id=None, hexdata=None, channel_account_id=None, wallet_id=None):
+        """
+        Signs data using the specified channel signing key.
+
+        Usage:
+            channel_sign [<channel_name> | --channel_name=<channel_name>]
+                         [<channel_id> | --channel_id=<channel_id>] [<hexdata> | --hexdata=<hexdata>]
+                         [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
+
+        Options:
+            --channel_name=<channel_name>            : (str) name of channel used to sign (or use channel id)
+            --channel_id=<channel_id>                : (str) claim id of channel used to sign (or use channel name)
+            --hexdata=<hexdata>                      : (str) data to sign, encoded as hexadecimal
+            --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+                                                             for channel certificates, defaults to all accounts.
+            --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
+
+        Returns: {}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
+        signing_channel = await self.get_channel_or_error(
+            wallet, channel_account_id, channel_id, channel_name, for_signing=True
+        )
+        digest = sha256(unhexlify(hexdata))
+        signature = signing_channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        return {
+            "signature": hexlify(signature),
+            "digest": hexlify(digest),
+            "signing_channel": signing_channel
+        }
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_abandon(

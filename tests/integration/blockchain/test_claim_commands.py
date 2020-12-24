@@ -5,11 +5,13 @@ import asyncio
 from binascii import unhexlify
 from urllib.request import urlopen
 
+import ecdsa
+
 from lbry.error import InsufficientFundsError
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
-from lbry.wallet.transaction import Transaction
+from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.util import satoshis_to_coins as lbc
 
 
@@ -1003,6 +1005,22 @@ class ChannelCommands(CommandTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 3)
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(account_id=self.account.id), 2)
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(account_id=account2_id), 1)
+
+    async def test_sign_hex_encoded_data(self):
+        data_to_sign = "CAFEBABE"
+        # claim new name
+        await self.channel_create('@someotherchan')
+        channel_tx = await self.channel_create('@signer')
+        channel_id = self.get_claim_id(channel_tx)
+        signature1 = await self.out(self.daemon.jsonrpc_channel_sign(channel_name='@signer', hexdata=data_to_sign))
+        signature2 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel_id, hexdata=data_to_sign))
+        self.assertEqual(signature2, signature1)
+        key = unhexlify(channel_tx['outputs'][0]['value']['public_key'])
+        signature = signature1["signature"]
+        r = int(signature[:int(len(signature)/2)], 16)
+        s = int(signature[int(len(signature)/2):], 16)
+        signature = ecdsa.util.sigencode_der(r, s, len(signature)*4)
+        self.assertTrue(Output.is_signature_valid(signature, unhexlify(signature1["digest"]), key))
 
     async def test_channel_export_import_before_sending_channel(self):
         # export
