@@ -22,7 +22,6 @@ from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
 from google.protobuf.message import DecodeError
 
-from lbry.crypto.hash import sha256
 from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
     Transaction, Output, Input, Account, database
@@ -2816,13 +2815,7 @@ class Daemon(metaclass=JSONRPCServerType):
         signing_channel = await self.get_channel_or_error(
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
-        digest = sha256(unhexlify(hexdata))
-        signature = signing_channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
-        return {
-            "signature": hexlify(signature),
-            "digest": hexlify(digest),
-            "signing_channel": signing_channel
-        }
+        return comment_client.sign(signing_channel, unhexlify(hexdata))
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_abandon(
