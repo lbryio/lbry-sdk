@@ -20,7 +20,10 @@ import pkg_resources
 
 import certifi
 import aiohttp
+from prometheus_client import Counter
+from prometheus_client.registry import REGISTRY
 from lbry.schema.claim import Claim
+
 
 log = logging.getLogger(__name__)
 
@@ -206,15 +209,41 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
 class LRUCache:
     __slots__ = [
         'capacity',
-        'cache'
+        'cache',
+        '_track_metrics',
+        'hits',
+        'misses'
     ]
 
-    def __init__(self, capacity):
+    def __init__(self, capacity: int, metric_name: typing.Optional[str] = None, namespace: str = "daemon_cache"):
         self.capacity = capacity
         self.cache = collections.OrderedDict()
+        if metric_name is None:
+            self._track_metrics = False
+            self.hits = self.misses = None
+        else:
+            self._track_metrics = True
+            try:
+                self.hits = Counter(
+                    f"{metric_name}_cache_hit_count", "Number of cache hits", namespace=namespace
+                )
+                self.misses = Counter(
+                    f"{metric_name}_cache_miss_count", "Number of cache misses", namespace=namespace
+                )
+            except ValueError as err:
+                log.warning("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)
+                self._track_metrics = False
+                self.hits = self.misses = None
 
-    def get(self, key):
-        value = self.cache.pop(key)
+    def get(self, key, default=None):
+        try:
+            value = self.cache.pop(key)
+            if self._track_metrics:
+                self.hits.inc()
+        except KeyError:
+            if self._track_metrics:
+                self.misses.inc()
+            return default
         self.cache[key] = value
         return value
 
@@ -226,8 +255,35 @@ class LRUCache:
                 self.cache.popitem(last=False)
         self.cache[key] = value
 
+    def clear(self):
+        self.cache.clear()
+
+    def pop(self, key):
+        return self.cache.pop(key)
+
+    def __setitem__(self, key, value):
+        return self.set(key, value)
+
+    def __getitem__(self, item):
+        return self.get(item)
+
     def __contains__(self, item) -> bool:
         return item in self.cache
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __delitem__(self, key):
+        self.cache.pop(key)
+
+    def __del__(self):
+        self.clear()
+        if self._track_metrics:  # needed for tests
+            try:
+                REGISTRY.unregister(self.hits)
+                REGISTRY.unregister(self.misses)
+            except AttributeError:
+                pass
 
 
 def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
@@ -235,7 +291,7 @@ def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
     if not cache_size and override_lru_cache is None:
         raise ValueError("invalid cache size")
     concurrent_cache = {}
-    lru_cache = override_lru_cache or LRUCache(cache_size)
+    lru_cache = override_lru_cache if override_lru_cache is not None else LRUCache(cache_size)
 
     def wrapper(async_fn):
 
