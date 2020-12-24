@@ -121,7 +121,7 @@ build:windows:
     GIT_DEPTH: 5
   before_script:
     - ./docker/install_choco.ps1
-    - choco install -y --x86 python3 7zip checksum
+    - choco install -y --x64 python3 7zip checksum
     - python --version # | findstr /B "Python 3\.7\." # dont upgrade python on every run. just make sure we're on the right Python
     - pip --version # | findstr /E '\(python 3\.7\)'
     - pip install virtualenv pywin32
