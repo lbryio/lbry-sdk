@@ -610,13 +610,13 @@ class Ledger(metaclass=LedgerRegistry):
     async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...], cached=False):
         batches = [[]]
         remote_heights = {}
+        cache_hits = set()
 
         for txid, height in sorted(to_request, key=lambda x: x[1]):
             if cached:
                 if txid in self._tx_cache:
                     if self._tx_cache[txid].tx is not None and self._tx_cache[txid].tx.is_verified:
-                        tx = self._tx_cache[txid].tx
-                        yield {tx.id: self._tx_cache[txid].tx}
+                        cache_hits.add(txid)
                         continue
                 else:
                     self._tx_cache[txid] = TransactionCacheItem()
@@ -626,6 +626,8 @@ class Ledger(metaclass=LedgerRegistry):
             batches[-1].append(txid)
         if not batches[-1]:
             batches.pop()
+        if cached and cache_hits:
+            yield {txid: self._tx_cache[txid].tx for txid in cache_hits}
 
         for batch in batches:
             txs = await self._single_batch(batch, remote_heights)
