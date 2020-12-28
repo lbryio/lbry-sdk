@@ -2,6 +2,7 @@ import os
 import asyncio
 import tempfile
 import multiprocessing as mp
+from binascii import hexlify
 from typing import List, Optional, Iterable, Iterator, TypeVar, Generic, TYPE_CHECKING, Dict, Tuple
 from concurrent.futures import Executor, ThreadPoolExecutor, ProcessPoolExecutor
 from functools import partial
@@ -232,9 +233,6 @@ class Database:
     async def get_best_block_height(self) -> int:
         return await self.run(q.get_best_block_height)
 
-    async def get_best_block_filter(self) -> int:
-        return await self.run(q.get_best_block_filter)
-
     async def process_all_things_after_sync(self):
         return await self.run(sync.process_all_things_after_sync)
 
@@ -242,13 +240,25 @@ class Database:
         return await self.run(q.get_block_headers, start_height, end_height)
 
     async def get_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
-        return await self.run(q.get_filters, start_height, end_height, granularity)
+        filters = []
+        for row in await self.run(q.get_filters, start_height, end_height, granularity):
+            record = {
+                "height": row["height"],
+                "filter": hexlify(row["address_filter"]).decode(),
+            }
+            if granularity == 0:
+                record["txid"] = hexlify(row["tx_hash"][::-1]).decode()
+            filters.append(record)
+        return filters
+
+    async def get_missing_required_filters(self, height) -> Dict[int, Tuple[int, int]]:
+        return await self.run(q.get_missing_required_filters, height)
 
     async def insert_block(self, block):
         return await self.run(q.insert_block, block)
 
-    async def insert_block_filter(self, height: int, address_filter: bytes):
-        return await self.run(q.insert_block_filter, height, address_filter)
+    async def insert_block_filter(self, height: int, factor: int, address_filter: bytes):
+        return await self.run(q.insert_block_filter, height, factor, address_filter)
 
     async def insert_transaction(self, block_hash, tx):
         return await self.run(q.insert_transaction, block_hash, tx)

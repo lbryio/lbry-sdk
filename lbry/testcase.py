@@ -11,6 +11,7 @@ import asyncio
 import time
 from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
+import multiprocessing as mp
 from unittest.case import _Outcome
 from typing import Optional, List, Union, Tuple
 from binascii import unhexlify, hexlify
@@ -18,9 +19,10 @@ from distutils.dir_util import remove_tree
 
 import ecdsa
 
-from lbry.db import Database
+from lbry.db import Database, queries as q
+from lbry.db.query_context import initialize, uninitialize
 from lbry.blockchain import (
-    RegTestLedger, Transaction, Input, Output, dewies_to_lbc
+    Ledger, RegTestLedger, Transaction, Input, Output, dewies_to_lbc
 )
 from lbry.blockchain.block import Block
 from lbry.blockchain.bcd_data_stream import BCDataStream
@@ -229,7 +231,17 @@ class AdvanceTimeTestCase(AsyncioTestCase):
             await asyncio.sleep(0)
 
 
-class UnitDBTestCase(AsyncioTestCase):
+class UnitDBTestCase(unittest.TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.ledger = Ledger(Config.with_null_dir().set(db_url='sqlite:///:memory:'))
+        initialize(self.ledger, mp.Queue(), mp.Event())
+        q.check_version_and_create_tables()
+        self.addCleanup(uninitialize)
+
+
+class AsyncUnitDBTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
