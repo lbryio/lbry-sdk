@@ -27,7 +27,7 @@ from lbry.schema.mime_types import guess_stream_type
 
 from .utils import pg_insert
 from .tables import (
-    Block, BlockFilter, BlockGroupFilter,
+    Block, BlockFilter,
     TX, TXFilter, TXO, TXI, Claim, Tag, Support
 )
 from .constants import TXO_TYPES, STREAM_TYPES
@@ -444,7 +444,6 @@ class BulkLoader:
         self.delete_tags = []
         self.tx_filters = []
         self.block_filters = []
-        self.group_filters = []
 
     @staticmethod
     def block_to_row(block: Block) -> dict:
@@ -656,14 +655,8 @@ class BulkLoader:
             self.add_transaction(block.block_hash, tx)
         return self
 
-    def add_block_filter(self, height: int, address_filter: bytes):
+    def add_block_filter(self, height: int, factor: int, address_filter: bytes):
         self.block_filters.append({
-            'height': height,
-            'address_filter': address_filter
-        })
-
-    def add_group_filter(self, height: int, factor: int, address_filter: bytes):
-        self.group_filters.append({
             'height': height,
             'factor': factor,
             'address_filter': address_filter
@@ -725,7 +718,6 @@ class BulkLoader:
         return (
             (Block.insert(), self.blocks),
             (BlockFilter.insert(), self.block_filters),
-            (BlockGroupFilter.insert(), self.group_filters),
             (TX.insert(), self.txs),
             (TXFilter.insert(), self.tx_filters),
             (TXO.insert(), self.txos),

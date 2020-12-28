@@ -66,23 +66,14 @@ pg_add_block_constraints_and_indexes = [
 
 BlockFilter = Table(
     'block_filter', metadata,
-    Column('height', Integer, primary_key=True),
-    Column('address_filter', LargeBinary),
-)
-
-pg_add_block_filter_constraints_and_indexes = [
-    "ALTER TABLE block_filter ADD PRIMARY KEY (height);",
-    "ALTER TABLE block_filter ADD CONSTRAINT fk_block_filter"
-    " FOREIGN KEY (height) REFERENCES block (height) ON DELETE CASCADE;",
-]
-
-
-BlockGroupFilter = Table(
-    'block_group_filter', metadata,
     Column('height', Integer),
     Column('factor', SmallInteger),
     Column('address_filter', LargeBinary),
 )
+
+pg_add_block_filter_constraints_and_indexes = [
+    "ALTER TABLE block_filter ADD PRIMARY KEY (height, factor);",
+]
 
 
 TX = Table(
@@ -114,13 +105,6 @@ pg_add_tx_filter_constraints_and_indexes = [
     "ALTER TABLE tx_filter ADD CONSTRAINT fk_tx_filter"
     " FOREIGN KEY (tx_hash) REFERENCES tx (tx_hash) ON DELETE CASCADE;"
 ]
-
-
-MempoolFilter = Table(
-    'mempool_filter', metadata,
-    Column('filter_number', Integer),
-    Column('mempool_filter', LargeBinary),
-)
 
 
 TXO = Table(

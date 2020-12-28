@@ -1248,8 +1248,8 @@ class API:
         start_height: int,        # starting height of block range or just single block
         end_height: int = None,   # return a range of blocks from start_height to end_height
         granularity: int = None,  # 0 - individual tx filters, 1 - block per filter,
-                                  # 1000, 10000, 100000 blocks per filter
-    ) -> list:  # blocks
+                                  # 2 or 100, 3 or 1000, 4 or 10000 blocks per filter
+    ) -> list:  # filters
         """
         List address filters
 

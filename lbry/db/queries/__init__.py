@@ -4,3 +4,4 @@ from .search import *
 from .resolve import *
 from .address import *
 from .wallet import *
+from .filters import *

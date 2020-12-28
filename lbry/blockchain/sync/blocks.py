@@ -7,8 +7,8 @@ from sqlalchemy.future import select
 from sqlalchemy.schema import CreateTable
 
 from lbry.db.tables import (
-    Block as BlockTable, BlockFilter, BlockGroupFilter,
-    TX, TXFilter, MempoolFilter, TXO, TXI, Claim, Tag, Support
+    Block as BlockTable, BlockFilter,
+    TX, TXFilter, TXO, TXI, Claim, Tag, Support
 )
 from lbry.db.tables import (
     pg_add_block_constraints_and_indexes,
@@ -232,12 +232,12 @@ def sync_filters(start, end, p: ProgressContext):
 
         for height, addresses in fp.block_filters.items():
             loader.add_block_filter(
-                height, create_address_filter(list(addresses))
+                height, 1, create_address_filter(list(addresses))
             )
 
         for group_filter in fp.group_filters:
             for height, addresses in group_filter.groups.items():
-                loader.add_group_filter(
+                loader.add_block_filter(
                     height, group_filter.factor, create_address_filter(list(addresses))
                 )
 
@@ -281,7 +281,12 @@ def get_block_range_without_filters() -> Tuple[int, int]:
             func.coalesce(func.max(BlockTable.c.height), -1).label('end_height'),
         )
         .select_from(
-            BlockTable.join(BlockFilter, BlockTable.c.height == BlockFilter.c.height, isouter=True)
+            BlockTable.join(
+                BlockFilter,
+                (BlockTable.c.height == BlockFilter.c.height) &
+                (BlockFilter.c.factor == 1),
+                isouter=True
+            )
         )
         .where(BlockFilter.c.height.is_(None))
     )
@@ -323,13 +328,11 @@ def delete_all_the_things(height: int, p: ProgressContext):
         ),
         Claim.delete().where(constrain(Claim.c.height)),
         Support.delete().where(constrain(Support.c.height)),
-        MempoolFilter.delete(),
     ]
     if height > 0:
         deletes.extend([
+            # TODO: block and tx filters need where() clauses (below actually breaks things)
             BlockFilter.delete().where(BlockFilter.c.height >= height),
-            # TODO: group and tx filters need where() clauses (below actually breaks things)
-            BlockGroupFilter.delete(),
             TXFilter.delete(),
         ])
     for delete in p.iter(deletes):
