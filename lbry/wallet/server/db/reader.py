@@ -283,7 +283,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
         channel_ids = constraints.pop('channel_ids')
         if channel_ids:
             constraints['claim.channel_hash__in'] = {
-                unhexlify(cid)[::-1] for cid in channel_ids
+                unhexlify(cid)[::-1] for cid in channel_ids if cid
             }
     if 'not_channel_ids' in constraints:
         not_channel_ids = constraints.pop('not_channel_ids')
