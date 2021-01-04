@@ -2635,7 +2635,7 @@ class API:
     async def transaction_search(
         self,
         txids: StrOrList,  # transaction ids to find
-    ) -> List[Transaction]:
+    ) -> Dict[str, str]:
         """
         Search for transaction(s) in the entire blockchain.
 
@@ -3435,6 +3435,9 @@ class Client(API):
         self.receive_messages_task = asyncio.create_task(self.receive_messages())
 
     async def disconnect(self):
+        if self.ws is not None:
+            await self.ws.close()
+        self.ws = None
         if self.session is not None:
             await self.session.close()
         self.session = None

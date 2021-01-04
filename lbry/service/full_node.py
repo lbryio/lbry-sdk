@@ -56,8 +56,9 @@ class FullNode(Service):
     async def search_transactions(self, txids):
         tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
         return {
-            hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
-            for tx in await self.db.get_transactions(tx_hashes=tx_hashes)
+            #hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
+            tx.id: hexlify(tx.raw).decode()
+            for tx in await self.db.get_transactions(tx_hash__in=tx_hashes)
         }
 
     async def broadcast(self, tx):

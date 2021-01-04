@@ -10,7 +10,10 @@ from lbry.crypto.bip32 import PubKey
 from ..utils import query
 from ..query_context import context
 from ..tables import TXO, PubkeyAddress, AccountAddress
-from .filters import get_filter_matchers, get_filter_matchers_at_granularity, has_sub_filters
+from .filters import (
+    get_filter_matchers, get_filter_matchers_at_granularity, has_filter_range,
+    get_tx_matchers_for_missing_txs,
+)
 
 
 log = logging.getLogger(__name__)
@@ -87,15 +90,14 @@ def generate_addresses_using_filters(best_height, allowed_gap, address_manager) 
         for address_hash, n, is_new in addresses:
             gap += 1
             address_bytes = bytearray(address_hash)
-            for granularity, height, matcher in matchers:
+            for granularity, height, matcher, filter_range in matchers:
                 if matcher.Match(address_bytes):
                     gap = 0
-                    match = (granularity, height)
-                    if match not in need and match not in have:
-                        if has_sub_filters(granularity, height):
-                            have.add(match)
+                    if filter_range not in need and filter_range not in have:
+                        if has_filter_range(*filter_range):
+                            have.add(filter_range)
                         else:
-                            need.add(match)
+                            need.add(filter_range)
             if gap >= allowed_gap:
                 break
     return need
@@ -103,13 +105,23 @@ def generate_addresses_using_filters(best_height, allowed_gap, address_manager) 
 
 def get_missing_sub_filters_for_addresses(granularity, address_manager):
     need = set()
-    with DatabaseAddressIterator(*address_manager) as addresses:
-        for height, matcher in get_filter_matchers_at_granularity(granularity):
-            for address_hash, n, is_new in addresses:
-                address_bytes = bytearray(address_hash)
-                if matcher.Match(address_bytes) and not has_sub_filters(granularity, height):
-                    need.add((height, granularity))
-                    break
+    for height, matcher, filter_range in get_filter_matchers_at_granularity(granularity):
+        for address_hash, n, is_new in DatabaseAddressIterator(*address_manager):
+            address_bytes = bytearray(address_hash)
+            if matcher.Match(address_bytes) and not has_filter_range(*filter_range):
+                need.add(filter_range)
+                break
+    return need
+
+
+def get_missing_tx_for_addresses(address_manager):
+    need = set()
+    for tx_hash, matcher in get_tx_matchers_for_missing_txs():
+        for address_hash, n, is_new in DatabaseAddressIterator(*address_manager):
+            address_bytes = bytearray(address_hash)
+            if matcher.Match(address_bytes):
+                need.add(tx_hash)
+                break
     return need
 
 
