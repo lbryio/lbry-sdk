@@ -5,7 +5,7 @@ from lbry.crypto.hash import hash160
 from lbry.crypto.bip32 import from_extended_key_string
 from lbry.blockchain.block import create_address_filter
 from lbry.db import queries as q
-from lbry.db.tables import AccountAddress
+from lbry.db.tables import AccountAddress, TX
 from lbry.db.query_context import context
 from lbry.testcase import UnitDBTestCase
 
@@ -13,16 +13,16 @@ from lbry.testcase import UnitDBTestCase
 class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
 
     def test_get_missing_required_filters(self):
-        self.assertEqual(q.get_missing_required_filters(99), {1: (0, 99)})
-        self.assertEqual(q.get_missing_required_filters(100), {100: (0, 0)})
-        self.assertEqual(q.get_missing_required_filters(199), {100: (0, 0), 1: (100, 199)})
-        self.assertEqual(q.get_missing_required_filters(201), {100: (0, 100), 1: (200, 201)})
+        self.assertEqual(q.get_missing_required_filters(99), {(1, 0, 99)})
+        self.assertEqual(q.get_missing_required_filters(100), {(2, 0, 0)})
+        self.assertEqual(q.get_missing_required_filters(199), {(2, 0, 0), (1, 100, 199)})
+        self.assertEqual(q.get_missing_required_filters(201), {(2, 0, 100), (1, 200, 201)})
         # all filters missing
         self.assertEqual(q.get_missing_required_filters(134_567), {
-            10_000: (0, 120_000),
-            1_000: (130_000, 133_000),
-            100: (134_000, 134_400),
-            1: (134_500, 134_567)
+            (4, 0, 120_000),
+            (3, 130_000, 133_000),
+            (2, 134_000, 134_400),
+            (1, 134_500, 134_567)
         })
 
         q.insert_block_filter(110_000, 4, b'beef')
@@ -31,10 +31,10 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
         q.insert_block_filter(134_499, 1, b'beef')
         # we we have some filters, but not recent enough (all except 10k are adjusted)
         self.assertEqual(q.get_missing_required_filters(134_567), {
-            10_000: (120_000, 120_000),  # 0 -> 120_000
-            1_000: (130_000, 133_000),
-            100: (134_000, 134_400),
-            1: (134_500, 134_567)
+            (4, 120_000, 120_000),  # 0 -> 120_000
+            (3, 130_000, 133_000),
+            (2, 134_000, 134_400),
+            (1, 134_500, 134_567)
         })
 
         q.insert_block_filter(132_000, 3, b'beef')
@@ -42,10 +42,10 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
         q.insert_block_filter(134_550, 1, b'beef')
         # all filters get adjusted because we have recent of each
         self.assertEqual(q.get_missing_required_filters(134_567), {
-            10_000: (120_000, 120_000),  # 0       -> 120_000
-            1_000: (133_000, 133_000),   # 130_000 -> 133_000
-            100: (134_400, 134_400),     # 134_000 -> 134_400
-            1: (134_551, 134_567)        # 134_500 -> 134_551
+            (4, 120_000, 120_000),  # 0       -> 120_000
+            (3, 133_000, 133_000),  # 130_000 -> 133_000
+            (2, 134_400, 134_400),  # 134_000 -> 134_400
+            (1, 134_551, 134_567)   # 134_500 -> 134_551
         })
 
         q.insert_block_filter(120_000, 4, b'beef')
@@ -54,15 +54,15 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
         q.insert_block_filter(134_566, 1, b'beef')
         # we have latest filters for all except latest single block
         self.assertEqual(q.get_missing_required_filters(134_567), {
-            1: (134_567, 134_567)   # 134_551 -> 134_567
+            (1, 134_567, 134_567)   # 134_551 -> 134_567
         })
 
         q.insert_block_filter(134_567, 1, b'beef')
         # we have all latest filters
-        self.assertEqual(q.get_missing_required_filters(134_567), {})
+        self.assertEqual(q.get_missing_required_filters(134_567), set())
 
 
-class TestAddressGeneration(UnitDBTestCase):
+class TestAddressGenerationAndTXSync(UnitDBTestCase):
 
     RECEIVING_KEY_N = 0
 
@@ -119,7 +119,7 @@ class TestAddressGeneration(UnitDBTestCase):
         elif granularity == 1:
             q.insert_tx_filter(hexlify(f'tx{height}'.encode()), height, create_address_filter(addresses))
 
-    def test_generate_from_filters(self):
+    def test_generate_from_filters_and_download_txs(self):
         # 15 addresses will get generated, 9 due to filters and 6 due to gap
         pubkeys = [self.receiving_pubkey.child(n) for n in range(15)]
         hashes = [hash160(key.pubkey_bytes) for key in pubkeys]
@@ -144,7 +144,10 @@ class TestAddressGeneration(UnitDBTestCase):
         q.insert_block_filter(134_567, 1, create_address_filter(hashes[8:9]))
 
         # check that all required filters did get created
-        self.assertEqual(q.get_missing_required_filters(134_567), {})
+        self.assertEqual(q.get_missing_required_filters(134_567), set())
+
+        # no addresses
+        self.assertEqual([], self.get_ordered_addresses())
 
         # generate addresses with 6 address gap, returns new sub filters needed
         self.assertEqual(
@@ -154,15 +157,15 @@ class TestAddressGeneration(UnitDBTestCase):
                     self.receiving_pubkey.chain_code,
                     self.receiving_pubkey.depth
             )), {
-                (1, 134500),
-                (1, 134567),
-                (2, 134000),
-                (2, 134400),
-                (3, 130000),
-                (3, 133000),
-                (4, 0),
-                (4, 100000),
-                (4, 120000)
+                (0, 134500, 134500),
+                (0, 134567, 134567),
+                (1, 134000, 134099),
+                (1, 134400, 134499),
+                (2, 130000, 130900),
+                (2, 133000, 133900),
+                (3, 0, 9000),
+                (3, 100000, 109000),
+                (3, 120000, 129000)
             }
         )
 
@@ -189,15 +192,108 @@ class TestAddressGeneration(UnitDBTestCase):
                 self.receiving_pubkey.depth
             )), set()
         )
-
-        # no new addresses should have been generated
+        # no new addresses should have been generated either
         self.assertEqual([key.address for key in pubkeys], self.get_ordered_addresses())
 
+        # check sub filters at 1,000
         self.assertEqual(
-            q.generate_addresses_using_filters(134_567, 6, (
+            q.get_missing_sub_filters_for_addresses(3, (
                 self.root_pubkey.address, self.RECEIVING_KEY_N,
-                self.receiving_pubkey.pubkey_bytes,
-                self.receiving_pubkey.chain_code,
-                self.receiving_pubkey.depth
+            )), {
+                (2, 3000, 3900),
+                (2, 103000, 103900),
+                (2, 123000, 123900),
+            }
+        )
+        # "download" missing 1,000 sub filters
+        self.insert_sub_filters(3, hashes[0:1], 3000)
+        self.insert_sub_filters(3, hashes[1:2], 103_000)
+        self.insert_sub_filters(3, hashes[2:3], 123_000)
+        # no more missing sub filters at 1,000
+        self.assertEqual(
+            q.get_missing_sub_filters_for_addresses(3, (
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), set()
+        )
+
+        # check sub filters at 100
+        self.assertEqual(
+            q.get_missing_sub_filters_for_addresses(2, (
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), {
+                (1, 3300, 3399),
+                (1, 103300, 103399),
+                (1, 123300, 123399),
+                (1, 130300, 130399),
+                (1, 133300, 133399),
+            }
+        )
+        # "download" missing 100 sub filters
+        self.insert_sub_filters(2, hashes[0:1], 3300)
+        self.insert_sub_filters(2, hashes[1:2], 103_300)
+        self.insert_sub_filters(2, hashes[2:3], 123_300)
+        self.insert_sub_filters(2, hashes[3:4], 130_300)
+        self.insert_sub_filters(2, hashes[4:5], 133_300)
+        # no more missing sub filters at 100
+        self.assertEqual(
+            q.get_missing_sub_filters_for_addresses(2, (
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), set()
+        )
+
+        # check tx filters
+        self.assertEqual(
+            q.get_missing_sub_filters_for_addresses(1, (
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), {
+                (0, 3303, 3303),
+                (0, 103303, 103303),
+                (0, 123303, 123303),
+                (0, 130303, 130303),
+                (0, 133303, 133303),
+                (0, 134003, 134003),
+                (0, 134403, 134403),
+            }
+        )
+        # "download" missing tx filters
+        self.insert_sub_filters(1, hashes[0:1], 3303)
+        self.insert_sub_filters(1, hashes[1:2], 103_303)
+        self.insert_sub_filters(1, hashes[2:3], 123_303)
+        self.insert_sub_filters(1, hashes[3:4], 130_303)
+        self.insert_sub_filters(1, hashes[4:5], 133_303)
+        self.insert_sub_filters(1, hashes[5:6], 134_003)
+        self.insert_sub_filters(1, hashes[6:7], 134_403)
+        # no more missing tx filters
+        self.assertEqual(
+            q.get_missing_sub_filters_for_addresses(1, (
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), set()
+        )
+
+        # find TXs we need to download
+        missing_txs = {
+            b'7478313033333033',
+            b'7478313233333033',
+            b'7478313330333033',
+            b'7478313333333033',
+            b'7478313334303033',
+            b'7478313334343033',
+            b'7478313334353030',
+            b'7478313334353637',
+            b'747833333033'
+        }
+        self.assertEqual(
+            q.get_missing_tx_for_addresses((
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
+            )), missing_txs
+        )
+        # "download" missing TXs
+        ctx = context()
+        for tx_hash in missing_txs:
+            ctx.execute(TX.insert().values(tx_hash=tx_hash))
+        # check we have everything
+        self.assertEqual(
+            q.get_missing_tx_for_addresses((
+                self.root_pubkey.address, self.RECEIVING_KEY_N,
             )), set()
         )

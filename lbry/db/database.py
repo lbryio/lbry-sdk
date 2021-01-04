@@ -254,11 +254,20 @@ class Database:
     async def get_missing_required_filters(self, height) -> Dict[int, Tuple[int, int]]:
         return await self.run(q.get_missing_required_filters, height)
 
+    async def get_missing_sub_filters_for_addresses(self, granularity, address_manager):
+        return await self.run(q.get_missing_sub_filters_for_addresses, granularity, address_manager)
+
+    async def get_missing_tx_for_addresses(self, address_manager):
+        return await self.run(q.get_missing_tx_for_addresses, address_manager)
+
     async def insert_block(self, block):
         return await self.run(q.insert_block, block)
 
     async def insert_block_filter(self, height: int, factor: int, address_filter: bytes):
         return await self.run(q.insert_block_filter, height, factor, address_filter)
+
+    async def insert_tx_filter(self, tx_hash: bytes, height: int, address_filter: bytes):
+        return await self.run(q.insert_tx_filter, tx_hash, height, address_filter)
 
     async def insert_transaction(self, block_hash, tx):
         return await self.run(q.insert_transaction, block_hash, tx)
@@ -315,6 +324,11 @@ class Database:
             'n': k.n,
             'depth': k.depth
         } for k in pubkeys])
+
+    async def generate_addresses_using_filters(self, best_height, allowed_gap, address_manager):
+        return await self.run(
+            q.generate_addresses_using_filters, best_height, allowed_gap, address_manager
+        )
 
     async def get_transactions(self, **constraints) -> Result[Transaction]:
         return await self.fetch_result(q.get_transactions, **constraints)

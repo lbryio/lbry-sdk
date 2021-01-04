@@ -1,5 +1,5 @@
 from math import log10
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Set, Optional
 
 from sqlalchemy import between, func, or_
 from sqlalchemy.future import select
@@ -7,29 +7,32 @@ from sqlalchemy.future import select
 from lbry.blockchain.block import PyBIP158, get_address_filter
 
 from ..query_context import context
-from ..tables import BlockFilter, TXFilter
+from ..tables import BlockFilter, TXFilter, TX
 
 
 def has_filters():
     return context().has_records(BlockFilter)
 
 
-def has_sub_filters(granularity: int, height: int):
+def get_sub_filter_range(granularity: int, height: int):
+    end = height
     if granularity >= 3:
-        sub_filter_size = 10**(granularity-1)
-        sub_filters_count = context().fetchtotal(
-            (BlockFilter.c.factor == granularity-1) &
-            between(BlockFilter.c.height, height, height + sub_filter_size * 9)
-        )
-        return sub_filters_count == 10
+        end = height + 10**(granularity-1) * 9
     elif granularity == 2:
-        sub_filters_count = context().fetchtotal(
-            (BlockFilter.c.factor == 1) &
-            between(BlockFilter.c.height, height, height + 99)
+        end = height + 99
+    return granularity - 1, height, end
+
+
+def has_filter_range(factor: int, start: int, end: int):
+    if factor >= 1:
+        filters = context().fetchtotal(
+            (BlockFilter.c.factor == factor) &
+            between(BlockFilter.c.height, start, end)
         )
-        return sub_filters_count == 100
-    elif granularity == 1:
-        tx_filters_count = context().fetchtotal(TXFilter.c.height == height)
+        expected = 10 if factor >= 2 else 100
+        return filters == expected
+    elif factor == 0:
+        tx_filters_count = context().fetchtotal(TXFilter.c.height == start)
         return tx_filters_count > 0
 
 
@@ -93,9 +96,9 @@ def get_maximum_known_filters() -> Dict[str, Optional[int]]:
     return context().fetchone(query)
 
 
-def get_missing_required_filters(height) -> Dict[int, Tuple[int, int]]:
+def get_missing_required_filters(height) -> Set[Tuple[int, int, int]]:
     known_filters = get_maximum_known_filters()
-    missing_filters = {}
+    missing_filters = set()
     for granularity, (start, end) in get_minimal_required_filter_ranges(height).items():
         known_height = known_filters.get(str(granularity))
         if known_height is not None and known_height > start:
@@ -104,9 +107,9 @@ def get_missing_required_filters(height) -> Dict[int, Tuple[int, int]]:
             else:
                 adjusted_height = known_height + 10**granularity
             if adjusted_height <= end:
-                missing_filters[granularity] = (adjusted_height, end)
+                missing_filters.add((granularity, adjusted_height, end))
         else:
-            missing_filters[granularity] = (start, end)
+            missing_filters.add((granularity, start, end))
     return missing_filters
 
 
@@ -123,20 +126,33 @@ def get_filter_matchers(height) -> List[Tuple[int, int, PyBIP158]]:
         .where(or_(*conditions))
         .order_by(BlockFilter.c.height.desc())
     )
-    return [
-        (bf["factor"], bf["height"], get_address_filter(bf["address_filter"]))
-        for bf in context().fetchall(query)
-    ]
+    return [(
+        bf["factor"], bf["height"],
+        get_address_filter(bf["address_filter"]),
+        get_sub_filter_range(bf["factor"], bf["height"])
+    ) for bf in context().fetchall(query)]
 
 
-def get_filter_matchers_at_granularity(granularity) -> List[Tuple[int, PyBIP158]]:
+def get_filter_matchers_at_granularity(granularity) -> List[Tuple[int, PyBIP158, Tuple]]:
     query = (
         select(BlockFilter.c.height, BlockFilter.c.address_filter)
         .where(BlockFilter.c.factor == granularity)
         .order_by(BlockFilter.c.height.desc())
     )
+    return [(
+        bf["height"],
+        get_address_filter(bf["address_filter"]),
+        get_sub_filter_range(granularity, bf["height"])
+    ) for bf in context().fetchall(query)]
+
+
+def get_tx_matchers_for_missing_txs() -> List[Tuple[int, PyBIP158]]:
+    query = (
+        select(TXFilter.c.tx_hash, TXFilter.c.address_filter)
+        .where(TXFilter.c.tx_hash.notin_(select(TX.c.tx_hash)))
+    )
     return [
-        (bf["height"], get_address_filter(bf["address_filter"]))
+        (bf["tx_hash"], get_address_filter(bf["address_filter"]))
         for bf in context().fetchall(query)
     ]
 
