@@ -6,6 +6,7 @@ from binascii import unhexlify
 from urllib.request import urlopen
 
 from lbry.error import InsufficientFundsError
+from lbry.extras.daemon.comment_client import verify
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
@@ -1003,6 +1004,18 @@ class ChannelCommands(CommandTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 3)
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(account_id=self.account.id), 2)
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(account_id=account2_id), 1)
+
+    async def test_sign_hex_encoded_data(self):
+        data_to_sign = "CAFEBABE"
+        # claim new name
+        await self.channel_create('@someotherchan')
+        channel_tx = await self.daemon.jsonrpc_channel_create('@signer', '0.1')
+        await self.confirm_tx(channel_tx.id)
+        channel = channel_tx.outputs[0]
+        signature1 = await self.out(self.daemon.jsonrpc_channel_sign(channel_name='@signer', hexdata=data_to_sign))
+        signature2 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=data_to_sign))
+        self.assertTrue(verify(channel, unhexlify(data_to_sign), signature1))
+        self.assertTrue(verify(channel, unhexlify(data_to_sign), signature2))
 
     async def test_channel_export_import_before_sending_channel(self):
         # export
