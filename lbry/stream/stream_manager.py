@@ -160,13 +160,13 @@ class StreamManager(SourceManager):
 
     async def reflect_streams(self):
         try:
-            return await self._reflact_streams()
+            return await self._reflect_streams()
         except asyncio.CancelledError:
             raise
         except Exception:
             log.exception("reflector task encountered an unexpected error!")
 
-    async def _reflact_streams(self):
+    async def _reflect_streams(self):
         # todo: those debug statements are temporary for #2987 - remove them if its closed
         while True:
             if self.config.reflect_streams and self.config.reflector_servers:
