@@ -249,6 +249,9 @@ class BlockchainSync(Sync):
     async def count_claims_with_changed_reposts(self, blocks) -> int:
         return await self.db.run(q.count_claims_with_changed_reposts, blocks)
 
+    async def count_claims_with_stale_signatures(self, blocks) -> int:
+        return await self.db.run(q.count_claims_with_stale_signatures, blocks)
+
     async def count_channels_with_changed_content(self, blocks) -> int:
         return await self.db.run(q.count_channels_with_changed_content, blocks)
 
@@ -258,13 +261,14 @@ class BlockchainSync(Sync):
         )
 
     async def sync_claims(self, blocks) -> bool:
-        delete_claims = takeovers = claims_with_changed_supports = claims_with_changed_reposts = 0
+        delete_claims = takeovers = claims_with_changed_supports =\
+            claims_with_changed_reposts = claims_with_stale_signatures = 0
         initial_sync = not await self.db.has_claims()
         with Progress(self.db.message_queue, CLAIMS_INIT_EVENT) as p:
             if initial_sync:
                 total, batches = await self.distribute_unspent_txos(CLAIM_TYPE_CODES)
             elif blocks:
-                p.start(5)
+                p.start(6)
                 # 1. content claims to be inserted or updated
                 total = await self.count_unspent_txos(
                     CLAIM_TYPE_CODES, blocks, missing_or_stale_in_claims_table=True
@@ -287,6 +291,10 @@ class BlockchainSync(Sync):
                 takeovers = await self.count_takeovers(blocks)
                 total += takeovers
                 p.step()
+                # 6. claims where channel signature changed and claim was not re-signed in time
+                claims_with_stale_signatures = await self.count_claims_with_stale_signatures(blocks)
+                total += claims_with_stale_signatures
+                p.step()
             else:
                 return initial_sync
         with Progress(self.db.message_queue, CLAIMS_MAIN_EVENT) as p:
@@ -308,6 +316,8 @@ class BlockchainSync(Sync):
                 await self.db.run(claim_phase.update_stakes, blocks, claims_with_changed_supports)
             if claims_with_changed_reposts:
                 await self.db.run(claim_phase.update_reposts, blocks, claims_with_changed_reposts)
+            if claims_with_stale_signatures:
+                await self.db.run(claim_phase.update_stale_signatures, blocks, claims_with_stale_signatures)
             if initial_sync:
                 await self.db.run(claim_phase.claims_constraints_and_indexes)
             else:
@@ -398,10 +408,10 @@ class BlockchainSync(Sync):
                 ], return_when=asyncio.FIRST_COMPLETED)
                 if self.block_hash_event.is_set():
                     self.block_hash_event.clear()
-                    await self.clear_mempool()
+                    #await self.clear_mempool()
                     await self.advance()
                 self.tx_hash_event.clear()
-                await self.sync_mempool()
+                #await self.sync_mempool()
             except asyncio.CancelledError:
                 return
             except Exception as e:

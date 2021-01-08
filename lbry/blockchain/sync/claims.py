@@ -1,7 +1,7 @@
 import logging
 from typing import Tuple
 
-from sqlalchemy import case, func, desc, text
+from sqlalchemy import case, func, text
 from sqlalchemy.future import select
 
 from lbry.db.queries.txio import (
@@ -9,7 +9,7 @@ from lbry.db.queries.txio import (
     where_unspent_txos, where_claims_with_changed_supports,
     count_unspent_txos, where_channels_with_changed_content,
     where_abandoned_claims, count_channels_with_changed_content,
-    where_claims_with_changed_reposts,
+    where_claims_with_changed_reposts, where_claims_with_stale_signatures
 )
 from lbry.db.query_context import ProgressContext, event_emitter
 from lbry.db.tables import (
@@ -94,10 +94,10 @@ def select_claims_for_saving(
         case([(
             TXO.c.channel_hash.isnot(None),
             select(channel_txo.c.public_key).select_from(channel_txo).where(
+                (channel_txo.c.spent_height == 0) &
                 (channel_txo.c.txo_type == TXO_TYPES['channel']) &
-                (channel_txo.c.claim_hash == TXO.c.channel_hash) &
-                (channel_txo.c.height <= TXO.c.height)
-            ).order_by(desc(channel_txo.c.height)).limit(1).scalar_subquery()
+                (channel_txo.c.claim_hash == TXO.c.channel_hash)
+            ).limit(1).scalar_subquery()
         )]).label('channel_public_key')
     ).where(
         where_unspent_txos(
@@ -266,6 +266,29 @@ def update_reposts(blocks: Tuple[int, int], claims: int, p: ProgressContext):
     )
     result = p.ctx.execute(sql)
     p.step(result.rowcount)
+
+
+@event_emitter("blockchain.sync.claims.invalidate", "claims")
+def update_stale_signatures(blocks: Tuple[int, int], claims: int, p: ProgressContext):
+    p.start(claims)
+    with p.ctx.connect_streaming() as c:
+        loader = p.ctx.get_bulk_loader()
+        stream = Claim.alias('stream')
+        sql = (
+            select_claims_for_saving(None)
+            .where(TXO.c.claim_hash.in_(
+                where_claims_with_stale_signatures(
+                    select(stream.c.claim_hash), blocks, stream
+                )
+            ))
+        )
+        cursor = c.execute(sql)
+        for row in cursor:
+            txo, extra = row_to_claim_for_saving(row)
+            loader.update_claim(txo, public_key_height=blocks[1], **extra)
+            if len(loader.update_claims) >= 25:
+                p.add(loader.flush(Claim))
+        p.add(loader.flush(Claim))
 
 
 @event_emitter("blockchain.sync.claims.channels", "channels")

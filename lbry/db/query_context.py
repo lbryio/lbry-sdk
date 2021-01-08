@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 from contextvars import ContextVar
 
-from sqlalchemy import create_engine, inspect, bindparam, func, exists, event as sqlalchemy_event
+from sqlalchemy import create_engine, inspect, bindparam, func, case, exists, event as sqlalchemy_event
 from sqlalchemy.future import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql import Insert, text
@@ -571,6 +571,9 @@ class BulkLoader:
             # signed claims
             'channel_hash': None,
             'is_signature_valid': None,
+            # channels (on last change) and streams (on last re-validation)
+            'public_key_hash': None,
+            'public_key_height': None,
         }
 
         claim = txo.can_decode_claim
@@ -601,6 +604,9 @@ class BulkLoader:
             d['reposted_claim_hash'] = claim.repost.reference.claim_hash
         elif claim.is_channel:
             d['claim_type'] = TXO_TYPES['channel']
+            d['public_key_hash'] = self.ledger.address_to_hash160(
+                self.ledger.public_key_to_address(claim.channel.public_key_bytes)
+            )
         if claim.is_signed:
             d['channel_hash'] = claim.signing_channel_hash
             d['is_signature_valid'] = (
@@ -609,6 +615,10 @@ class BulkLoader:
                     signature, signature_digest, channel_public_key
                 )
             )
+            if channel_public_key:
+                d['public_key_hash'] = self.ledger.address_to_hash160(
+                    self.ledger.public_key_to_address(channel_public_key)
+                )
 
         tags = []
         if claim.message.tags:
@@ -702,13 +712,17 @@ class BulkLoader:
         d['expiration_height'] = expiration_height
         d['takeover_height'] = takeover_height
         d['is_controlling'] = takeover_height is not None
+        if d['public_key_hash'] is not None:
+            d['public_key_height'] = d['height']
         self.claims.append(d)
         self.tags.extend(tags)
         return self
 
-    def update_claim(self, txo: Output, **extra):
+    def update_claim(self, txo: Output, public_key_height=None, **extra):
         d, tags = self.claim_to_rows(txo, **extra)
         d['pk'] = txo.claim_hash
+        d['_public_key_height'] = public_key_height or d['height']
+        d['_public_key_hash'] = d['public_key_hash']
         self.update_claims.append(d)
         self.delete_tags.append({'pk': txo.claim_hash})
         self.tags.extend(tags)
@@ -724,7 +738,15 @@ class BulkLoader:
             (TXI.insert(), self.txis),
             (Claim.insert(), self.claims),
             (Tag.delete().where(Tag.c.claim_hash == bindparam('pk')), self.delete_tags),
-            (Claim.update().where(Claim.c.claim_hash == bindparam('pk')), self.update_claims),
+            (Claim.update()
+             .values(public_key_height=case([
+                (bindparam('_public_key_hash').is_(None), None),
+                (Claim.c.public_key_hash.is_(None) |
+                 (Claim.c.public_key_hash != bindparam('_public_key_hash')),
+                 bindparam('_public_key_height')),
+             ], else_=Claim.c.public_key_height))
+             .where(Claim.c.claim_hash == bindparam('pk')),
+             self.update_claims),
             (Tag.insert(), self.tags),
             (Support.insert(), self.supports),
         )
