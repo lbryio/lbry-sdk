@@ -203,7 +203,7 @@ Claim = Table(
     Column('staked_amount', BigInteger),
     Column('timestamp', Integer),  # last updated timestamp
     Column('creation_timestamp', Integer),
-    Column('release_time', Integer, nullable=True),
+    Column('release_time', BigInteger, nullable=True),
     Column('height', Integer),  # last updated height
     Column('creation_height', Integer),
     Column('activation_height', Integer),

@@ -114,14 +114,14 @@ class SyncingBlockchainTestCase(BasicBlockchainTestCase):
 
     async def create_claim(
             self, title='', amount='0.01', name=None, author='', desc='',
-            claim_id_startswith='', sign=None, is_channel=False, repost=None) -> str:
+            claim_id_startswith='', sign=None, is_channel=False, repost=None, **claim_kwargs) -> str:
         name = name or ('@foo' if is_channel else 'foo')
         if not claim_id_startswith and sign is None and not is_channel:
             if repost:
                 claim = Claim()
                 claim.repost.reference.claim_id = repost
             else:
-                claim = Stream().update(title=title, author=author, description=desc).claim
+                claim = Stream().update(title=title, author=author, description=desc, **claim_kwargs).claim
             return await self.chain.claim_name(
                 name, hexlify(claim.to_bytes()).decode(), amount
             )
@@ -988,6 +988,13 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         resolutions = resolutions.inflate(txs)
         claim = resolutions[0][0]
         self.assertTrue(claim.is_signed_by(claim.channel, self.chain.ledger))
+
+    async def test_bad_fields_on_sync(self):
+        claim = await self.get_claim(await self.create_claim(release_time=1<<62, name="future"))
+        await self.generate(1)
+        results = await self.db.search_claims(name='future')
+        self.assertEqual(1, len(results))
+        self.assertEqual(claim.claim_id, results[0].claim_id)
 
     async def test_resolve_not_found(self):
         await self.get_claim(await self.create_claim(claim_id_startswith='ab', is_channel=True))
