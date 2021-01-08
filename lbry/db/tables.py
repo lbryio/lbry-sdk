@@ -238,6 +238,8 @@ Claim = Table(
     # claims which are channels
     Column('signed_claim_count', Integer, server_default='0'),
     Column('signed_support_count', Integer, server_default='0'),
+    Column('public_key_hash', LargeBinary, nullable=True),  # included for claims in channel as well
+    Column('public_key_height', Integer, nullable=True),  # last updated height
 
     # claims which are inside channels
     Column('channel_hash', LargeBinary, nullable=True),

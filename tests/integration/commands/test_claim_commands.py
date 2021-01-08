@@ -364,6 +364,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], duration='>100')
         await self.assertFindsClaims([], duration='<14')
 
+    @skip
     async def test_search_by_text(self):
         chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))
         chan2_id = self.get_claim_id(await self.channel_create('@Bitcoin'))

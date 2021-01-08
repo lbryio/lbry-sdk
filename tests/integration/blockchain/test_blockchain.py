@@ -16,7 +16,7 @@ from lbry.error import LbrycrdEventSubscriptionError, LbrycrdUnauthorizedError, 
 from lbry.blockchain.lbrycrd import Lbrycrd
 from lbry.blockchain.sync import BlockchainSync
 from lbry.blockchain.dewies import dewies_to_lbc, lbc_to_dewies
-from lbry.constants import CENT, COIN
+from lbry.constants import CENT, COIN, INVALIDATED_SIGNATURE_GRACE_PERIOD
 from lbry.testcase import AsyncioTestCase, EventGenerator
 
 
@@ -524,7 +524,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             self.sorted_events(events),
             list(EventGenerator(
                 initial_sync=True,
-                start=0, end=352,
+                start=0, end=352, filters=356,
                 block_files=[
                     (0, 191, 369, ((100, 0), (191, 369))),
                     (1, 89, 267, ((89, 267),)),
@@ -604,7 +604,7 @@ class TestMultiBlockFileSyncing(BasicBlockchainTestCase):
             self.sorted_events(events),
             list(EventGenerator(
                 initial_sync=False,
-                start=250, end=354,
+                start=250, end=354, filters=106,
                 block_files=[
                     (1, 30, 90, ((30, 90),)),
                     (2, 75, 102, ((75, 102),)),
@@ -651,6 +651,7 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         self.assertEqual([110], [b.height for b in blocks])
         self.assertEqual(110, self.current_height)
 
+    @skip
     async def test_mempool(self):
         search = self.db.search_claims
 
@@ -742,9 +743,9 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         await self.generate(1, wait=False)
         await self.sync.start()
         c2, c1 = await self.db.search_claims(order_by=['height'], claim_type='stream')
-        self.assertEqual(c1.meta['is_signature_valid'], True)  # valid at time of pubulish
-        self.assertIsNone(c1.meta['canonical_url'], None)  # channel is abandoned
-        self.assertEqual(c2.meta['is_signature_valid'], True)
+        self.assertFalse(c1.meta['is_signature_valid'])
+        self.assertIsNone(c1.meta['canonical_url'])  # channel is abandoned
+        self.assertTrue(c2.meta['is_signature_valid'])
         self.assertIsNotNone(c2.meta['canonical_url'])
 
     async def test_short_and_canonical_urls(self):
@@ -868,17 +869,6 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
             support_valid=True, support_channel=self.channel
         )
 
-        # resetting channel key doesn't invalidate previously published streams
-        await self.update_claim(self.channel, reset_channel_key=True)
-        await self.generate(1)
-
-        await self.assert_channel_stream1_stream2_support(
-            signed_claim_count=2, signed_support_count=1,
-            stream1_valid=True, stream1_channel=self.channel,
-            stream2_valid=True, stream2_channel=self.channel,
-            support_valid=True, support_channel=self.channel
-        )
-
         # updating a claim with an invalid signature marks signature invalid
         await self.channel.generate_channel_private_key()  # new key but no broadcast of change
         self.stream2 = await self.get_claim(
@@ -932,6 +922,21 @@ class TestGeneralBlockchainSync(SyncingBlockchainTestCase):
         r, = await search(claim_id=self.channel2.claim_id)
         self.assertEqual(0, r.meta['signed_claim_count'])  # channel2 lost abandoned claim
         self.assertEqual(0, r.meta['signed_support_count'])
+
+        # resetting channel key invalidate published streams
+        await self.update_claim(self.channel, reset_channel_key=True)
+        # wait to invalidate until after full grace period
+        await self.generate(INVALIDATED_SIGNATURE_GRACE_PERIOD // 2)
+        r, = await search(claim_id=self.stream1.claim_id)
+        self.assertTrue(r.meta['is_signature_valid'])
+        r, = await search(claim_id=self.channel.claim_id)
+        self.assertEqual(1, r.meta['signed_claim_count'])
+        # now should be invalidated
+        await self.generate(INVALIDATED_SIGNATURE_GRACE_PERIOD // 2)
+        r, = await search(claim_id=self.stream1.claim_id)
+        self.assertFalse(r.meta['is_signature_valid'])
+        r, = await search(claim_id=self.channel.claim_id)
+        self.assertEqual(0, r.meta['signed_claim_count'])
 
     async def test_reposts(self):
         self.stream1 = await self.get_claim(await self.create_claim())

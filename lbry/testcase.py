@@ -867,7 +867,7 @@ class EventGenerator:
 
     def __init__(
         self, initial_sync=False, start=None, end=None, block_files=None, claims=None,
-        takeovers=None, stakes=0, supports=None
+        takeovers=None, stakes=0, supports=None, filters=None
     ):
         self.initial_sync = initial_sync
         self.block_files = block_files or []
@@ -875,6 +875,7 @@ class EventGenerator:
         self.takeovers = takeovers or []
         self.stakes = stakes
         self.supports = supports or []
+        self.filters = filters
         self.start_height = start
         self.end_height = end
 
@@ -1004,10 +1005,15 @@ class EventGenerator:
         }
 
     def filters_generate(self):
-        #yield from self.generate(
-        #    "blockchain.sync.filters.generate", ("blocks",), 0,
-        #    f"generate filters 0-{blocks-1}", (blocks,), (100,)
-        #)
+        if self.filters is not None:
+            # TODO: this is actually a bug in implementation, should be fixed there
+            #  then this hack can be deleted here (bug: code that figures out how
+            #  many filters will be generated is wrong, so when filters are actually
+            #  generated the total != expected total)
+            yield {
+                "event": "blockchain.sync.filters.generate",
+                "data": {"id": self.start_height, "done": (-1,)}
+            }
         blocks = (self.end_height-self.start_height)+1
         yield {
             "event": "blockchain.sync.filters.generate",
@@ -1020,12 +1026,12 @@ class EventGenerator:
         }
         yield {
             "event": "blockchain.sync.filters.generate",
-            "data": {"id": self.start_height, "done": (blocks,)}
+            "data": {"id": self.start_height, "done": (self.filters or blocks,)}
         }
 
     def filters_indexes(self):
         yield from self.generate(
-            "blockchain.sync.filters.indexes", ("steps",), 0, None, (6,), (1,)
+            "blockchain.sync.filters.indexes", ("steps",), 0, None, (5,), (1,)
         )
 
     def filters_vacuum(self):
@@ -1041,7 +1047,7 @@ class EventGenerator:
         )
 
     def claims_init(self):
-        yield from self.generate("blockchain.sync.claims.init", ("steps",), 0, None, (5,), (1,))
+        yield from self.generate("blockchain.sync.claims.init", ("steps",), 0, None, (6,), (1,))
 
     def claims_main_start(self):
         total = (

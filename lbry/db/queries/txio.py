@@ -15,6 +15,7 @@ from ..tables import (
 from ..utils import query, in_account_ids
 from ..query_context import context
 from ..constants import TXO_TYPES, CLAIM_TYPE_CODES, MAX_QUERY_VARIABLES
+from lbry.constants import INVALIDATED_SIGNATURE_GRACE_PERIOD
 
 
 log = logging.getLogger(__name__)
@@ -168,6 +169,18 @@ def count_claims_with_changed_supports(blocks: Optional[Tuple[int, int]]) -> int
     return context().fetchone(sql)['total']
 
 
+def where_channels_changed(blocks: Optional[Tuple[int, int]]):
+    channel = TXO.alias('channel')
+    return TXO.c.channel_hash.in_(
+        select(channel.c.claim_hash).where(
+            (channel.c.txo_type == TXO_TYPES['channel']) & (
+                between(channel.c.height, blocks[0], blocks[-1]) |
+                between(channel.c.spent_height, blocks[0], blocks[-1])
+            )
+        )
+    )
+
+
 def where_changed_content_txos(blocks: Optional[Tuple[int, int]]):
     return (
         (TXO.c.channel_hash.isnot(None)) & (
@@ -178,19 +191,22 @@ def where_changed_content_txos(blocks: Optional[Tuple[int, int]]):
 
 
 def where_channels_with_changed_content(blocks: Optional[Tuple[int, int]]):
+    content = Claim.alias("content")
     return Claim.c.claim_hash.in_(
-        select(TXO.c.channel_hash).where(
-            where_changed_content_txos(blocks)
+        union(
+            select(TXO.c.channel_hash).where(where_changed_content_txos(blocks)),
+            select(content.c.channel_hash).where(
+                content.c.channel_hash.isnot(None) &
+                # content.c.public_key_height is updated when
+                # channel signature is revalidated
+                between(content.c.public_key_height, blocks[0], blocks[-1])
+            )
         )
     )
 
 
 def count_channels_with_changed_content(blocks: Optional[Tuple[int, int]]):
-    sql = (
-        select(func.count(distinct(TXO.c.channel_hash)).label('total'))
-        .where(where_changed_content_txos(blocks))
-    )
-    return context().fetchone(sql)['total']
+    return context().fetchtotal(where_channels_with_changed_content(blocks))
 
 
 def where_changed_repost_txos(blocks: Optional[Tuple[int, int]]):
@@ -216,6 +232,24 @@ def count_claims_with_changed_reposts(blocks: Optional[Tuple[int, int]]):
         .where(where_changed_repost_txos(blocks))
     )
     return context().fetchone(sql)['total']
+
+
+def where_claims_with_stale_signatures(s, blocks: Optional[Tuple[int, int]], stream=None):
+    stream = Claim.alias('stream') if stream is None else stream
+    channel = Claim.alias('channel')
+    return (
+        s.select_from(stream.join(channel, stream.c.channel_hash == channel.c.claim_hash))
+        .where(
+            (stream.c.public_key_height < channel.c.public_key_height) &
+            (stream.c.public_key_height <= blocks[1]-INVALIDATED_SIGNATURE_GRACE_PERIOD)
+        )
+    )
+
+
+def count_claims_with_stale_signatures(blocks: Optional[Tuple[int, int]]):
+    return context().fetchone(
+        where_claims_with_stale_signatures(select(func.count('*').label('total')), blocks)
+    )['total']
 
 
 def select_transactions(cols, account_ids=None, **constraints):
