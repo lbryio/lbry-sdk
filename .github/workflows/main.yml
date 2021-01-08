@@ -145,7 +145,7 @@ jobs:
       - name: Setup
         run: |
           pip install --user --upgrade pip wheel
-          pip install sqlalchemy@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
+          pip install pyinstaller@git+https://github.com/eukreign/pyinstaller.git@sqlalchemy
       - if: startsWith(runner.os, 'linux')
         run: |
           sudo apt-get install libzmq3-dev
