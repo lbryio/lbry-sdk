@@ -87,10 +87,10 @@ def generate_addresses_using_filters(best_height, allowed_gap, address_manager) 
     matchers = get_filter_matchers(best_height)
     with PersistingAddressIterator(*address_manager) as addresses:
         gap = 0
-        for address_hash, n, is_new in addresses:
+        for address_hash, n, is_new in addresses:  # pylint: disable=unused-variable
             gap += 1
             address_bytes = bytearray(address_hash)
-            for granularity, height, matcher, filter_range in matchers:
+            for matcher, filter_range in matchers:
                 if matcher.Match(address_bytes):
                     gap = 0
                     if filter_range not in need and filter_range not in have:
@@ -105,8 +105,8 @@ def generate_addresses_using_filters(best_height, allowed_gap, address_manager) 
 
 def get_missing_sub_filters_for_addresses(granularity, address_manager):
     need = set()
-    for height, matcher, filter_range in get_filter_matchers_at_granularity(granularity):
-        for address_hash, n, is_new in DatabaseAddressIterator(*address_manager):
+    for matcher, filter_range in get_filter_matchers_at_granularity(granularity):
+        for address_hash, _, _ in DatabaseAddressIterator(*address_manager):
             address_bytes = bytearray(address_hash)
             if matcher.Match(address_bytes) and not has_filter_range(*filter_range):
                 need.add(filter_range)
@@ -117,7 +117,7 @@ def get_missing_sub_filters_for_addresses(granularity, address_manager):
 def get_missing_tx_for_addresses(address_manager):
     need = set()
     for tx_hash, matcher in get_tx_matchers_for_missing_txs():
-        for address_hash, n, is_new in DatabaseAddressIterator(*address_manager):
+        for address_hash, _, _ in DatabaseAddressIterator(*address_manager):
             address_bytes = bytearray(address_hash)
             if matcher.Match(address_bytes):
                 need.add(tx_hash)

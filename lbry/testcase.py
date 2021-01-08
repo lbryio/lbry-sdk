@@ -15,7 +15,6 @@ import multiprocessing as mp
 from unittest.case import _Outcome
 from typing import Optional, List, Union, Tuple
 from binascii import unhexlify, hexlify
-from distutils.dir_util import remove_tree
 
 import ecdsa
 
@@ -32,7 +31,6 @@ from lbry.constants import COIN, CENT, NULL_HASH32
 from lbry.service import API, Daemon, Service, FullNode, FullEndpoint, LightClient, jsonrpc_dumps_pretty
 from lbry.conf import Config
 from lbry.console import Console
-from lbry.wallet import Wallet, Account
 from lbry.schema.claim import Claim
 
 from lbry.service.exchange_rate_manager import (
@@ -594,22 +592,22 @@ class CommandTestCase(IntegrationTestCase):
         await self.generate(5)
 
     def broadcast(self, tx):
-        return self.ledger.broadcast(tx)
+        return self.service.broadcast(tx)
 
     async def on_header(self, height):
-        if self.ledger.headers.height < height:
-            await self.ledger.on_header.where(
+        if self.service.headers.height < height:
+            await self.service.on_header.where(
                 lambda e: e.height == height
             )
         return True
 
     def on_transaction_id(self, txid, ledger=None):
-        return (ledger or self.ledger).on_transaction.where(
+        return (ledger or self.service).on_transaction.where(
             lambda e: e.tx.id == txid
         )
 
     def on_transaction_hash(self, tx_hash, ledger=None):
-        return (ledger or self.ledger).on_transaction.where(
+        return (ledger or self.service).on_transaction.where(
             lambda e: e.tx.hash == tx_hash
         )
 
@@ -617,12 +615,12 @@ class CommandTestCase(IntegrationTestCase):
         await self.service.wait(Transaction(unhexlify(tx['hex'])))
 
     def on_address_update(self, address):
-        return self.ledger.on_transaction.where(
+        return self.service.on_transaction.where(
             lambda e: e.address == address
         )
 
     def on_transaction_address(self, tx, address):
-        return self.ledger.on_transaction.where(
+        return self.service.on_transaction.where(
             lambda e: e.tx.id == tx.id and e.address == address
         )
 
@@ -807,9 +805,9 @@ class CommandTestCase(IntegrationTestCase):
     async def txo_spend(self, *args, confirm=True, **kwargs):
         txs = await self.api.txo_spend(*args, **kwargs)
         if confirm:
-            await asyncio.wait([self.ledger.wait(tx) for tx in txs])
+            await asyncio.wait([self.service.wait(tx) for tx in txs])
             await self.generate(1)
-            await asyncio.wait([self.ledger.wait(tx, self.block_expected) for tx in txs])
+            await asyncio.wait([self.service.wait(tx, self.block_expected) for tx in txs])
         return self.sout(txs)
 
     async def resolve(self, uri, **kwargs):

@@ -113,7 +113,7 @@ def get_missing_required_filters(height) -> Set[Tuple[int, int, int]]:
     return missing_filters
 
 
-def get_filter_matchers(height) -> List[Tuple[int, int, PyBIP158]]:
+def get_filter_matchers(height) -> List[Tuple[PyBIP158, Tuple[int, int, int]]]:
     conditions = []
     for granularity, (start, end) in get_minimal_required_filter_ranges(height).items():
         conditions.append(
@@ -127,20 +127,18 @@ def get_filter_matchers(height) -> List[Tuple[int, int, PyBIP158]]:
         .order_by(BlockFilter.c.height.desc())
     )
     return [(
-        bf["factor"], bf["height"],
         get_address_filter(bf["address_filter"]),
         get_sub_filter_range(bf["factor"], bf["height"])
     ) for bf in context().fetchall(query)]
 
 
-def get_filter_matchers_at_granularity(granularity) -> List[Tuple[int, PyBIP158, Tuple]]:
+def get_filter_matchers_at_granularity(granularity) -> List[Tuple[PyBIP158, Tuple]]:
     query = (
         select(BlockFilter.c.height, BlockFilter.c.address_filter)
         .where(BlockFilter.c.factor == granularity)
         .order_by(BlockFilter.c.height.desc())
     )
     return [(
-        bf["height"],
         get_address_filter(bf["address_filter"]),
         get_sub_filter_range(granularity, bf["height"])
     ) for bf in context().fetchall(query)]
