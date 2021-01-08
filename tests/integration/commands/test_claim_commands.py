@@ -810,12 +810,12 @@ class ClaimCommands(ClaimTestCase):
         self.assertEqual('1.0', claims[0]['received_tips'])
         self.assertEqual('1.2', claims[1]['received_tips'])
 
-        await self.support_abandon(stream1_id)
+        await self.support_abandon(claim_id=stream1_id)
         claims = await self.claim_list(include_received_tips=True)
         self.assertEqual('1.0', claims[0]['received_tips'])
         self.assertEqual('0.0', claims[1]['received_tips'])
 
-        await self.support_abandon(stream2_id)
+        await self.support_abandon(claim_id=stream2_id)
         claims = await self.claim_list(include_received_tips=True)
         self.assertEqual('0.0', claims[0]['received_tips'])
         self.assertEqual('0.0', claims[1]['received_tips'])
