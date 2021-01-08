@@ -5,6 +5,7 @@ from typing import Tuple, List, Optional, Union
 from sqlalchemy import union, func, text, between, distinct, case, false
 from sqlalchemy.future import select, Select
 
+from lbry.constants import INVALIDATED_SIGNATURE_GRACE_PERIOD
 from ...blockchain.transaction import (
     Transaction, Output, OutputScript, TXRefImmutable
 )
@@ -15,7 +16,6 @@ from ..tables import (
 from ..utils import query, in_account_ids
 from ..query_context import context
 from ..constants import TXO_TYPES, CLAIM_TYPE_CODES, MAX_QUERY_VARIABLES
-from lbry.constants import INVALIDATED_SIGNATURE_GRACE_PERIOD
 
 
 log = logging.getLogger(__name__)

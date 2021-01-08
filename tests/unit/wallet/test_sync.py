@@ -97,7 +97,7 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
         )]
 
     def test_generator_persisting(self):
-        expected = [self.receiving_pubkey.child(n).addresses for n in range(30)]
+        expected = [self.receiving_pubkey.child(n).address for n in range(30)]
         self.assertEqual([], self.get_ordered_addresses())
         self.generate(5, 0)
         self.assertEqual(expected[:6], self.get_ordered_addresses())
