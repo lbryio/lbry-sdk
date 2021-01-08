@@ -249,8 +249,10 @@ def main(argv=None):
             args.start_parser.print_help()
         elif args.service == FullNode.name:
             return Daemon.from_config(FullNode, conf).run()
+        elif args.service == LightClient.name:
+            return Daemon.from_config(LightClient, conf).run()
         else:
-            print(f'Only `start {FullNode.name}` is currently supported.')
+            print(f'Only `start {FullNode.name}` or `start {LightClient.name}` is currently supported.')
     elif args.command == 'install':
         if args.help:
             args.install_parser.print_help()

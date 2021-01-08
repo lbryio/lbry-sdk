@@ -597,8 +597,8 @@ class Config(CLIConfig):
     reflector_servers = Servers("Reflector re-hosting servers", [
         ('reflector.lbry.com', 5566)
     ])
-    known_full_nodes = Servers("Full blockchain nodes", [
-        ('spv11.lbry.com', 50001),
+    full_nodes = Servers("Full blockchain nodes", [
+        ('sdk.lbry.tech', 50001),
         ('spv12.lbry.com', 50001),
         ('spv13.lbry.com', 50001),
         ('spv14.lbry.com', 50001),
