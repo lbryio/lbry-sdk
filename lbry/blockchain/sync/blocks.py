@@ -246,19 +246,20 @@ def sync_filters(start, end, p: ProgressContext):
 
 @event_emitter("blockchain.sync.filters.indexes", "steps")
 def filters_constraints_and_indexes(p: ProgressContext):
+    is_postgres = p.ctx.is_postgres and p.ctx.pg_has_pk_constraint('block_filter')
     constraints = (
         pg_add_tx_filter_constraints_and_indexes +
         pg_add_block_filter_constraints_and_indexes
     )
     p.start(2 + len(constraints))
-    if p.ctx.is_postgres:
+    if is_postgres:
         p.ctx.execute_notx(text("VACUUM ANALYZE block_filter;"))
     p.step()
-    if p.ctx.is_postgres:
+    if is_postgres:
         p.ctx.execute_notx(text("VACUUM ANALYZE tx_filter;"))
     p.step()
     for constraint in constraints:
-        if p.ctx.is_postgres:
+        if is_postgres:
             p.ctx.execute(text(constraint))
         p.step()
 
@@ -331,7 +332,7 @@ def delete_all_the_things(height: int, p: ProgressContext):
     ]
     if height > 0:
         deletes.extend([
-            # TODO: block and tx filters need where() clauses (below actually breaks things)
+            # TODO: block and tx filters need better where() clauses (below actually breaks things)
             BlockFilter.delete().where(BlockFilter.c.height >= height),
             TXFilter.delete(),
         ])
