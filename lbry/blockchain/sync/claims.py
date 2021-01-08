@@ -165,16 +165,16 @@ def claims_insert(
 
 @event_emitter("blockchain.sync.claims.indexes", "steps")
 def claims_constraints_and_indexes(p: ProgressContext):
-    is_postgres = p.ctx.is_postgres and p.ctx.pg_has_pk_constraint('claim')
+    should_run = p.ctx.is_postgres and not p.ctx.pg_has_pk_constraint('claim')
     p.start(2 + len(pg_add_claim_and_tag_constraints_and_indexes))
-    if is_postgres:
+    if should_run:
         p.ctx.execute_notx(text("VACUUM ANALYZE claim;"))
     p.step()
-    if is_postgres:
+    if should_run:
         p.ctx.execute_notx(text("VACUUM ANALYZE tag;"))
     p.step()
     for constraint in pg_add_claim_and_tag_constraints_and_indexes:
-        if is_postgres:
+        if should_run:
             p.ctx.execute(text(constraint))
         p.step()
 
