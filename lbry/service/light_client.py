@@ -83,9 +83,14 @@ class FilterManager:
 
     async def download_and_save_filters(self, needed_filters):
         for factor, start, end in needed_filters:
+            print(f'=> address_filter(granularity={factor}, start_height={start}, end_height={end})')
+            if factor > 3:
+                print('skipping')
+                continue
             filters = await self.client.first.address_filter(
                 granularity=factor, start_height=start, end_height=end
             )
+            print(f'<= address_filter(granularity={factor}, start_height={start}, end_height={end})')
             if factor == 0:
                 for tx_filter in filters:
                     await self.db.insert_tx_filter(
@@ -143,11 +148,17 @@ class FilterManager:
                     await self.download_and_save_txs(missing)
 
     async def download(self, best_height: int, wallets: WalletManager):
+        print('download_initial_filters')
         await self.download_initial_filters(best_height)
+        print('generate_addresses')
         await self.generate_addresses(best_height, wallets)
+        print('download_sub_filters 3')
         await self.download_sub_filters(3, wallets)
+        print('download_sub_filters 2')
         await self.download_sub_filters(2, wallets)
+        print('download_sub_filters 1')
         await self.download_sub_filters(1, wallets)
+        print('download_transactions')
         await self.download_transactions(wallets)
 
     @staticmethod
@@ -193,8 +204,14 @@ class BlockHeaderManager:
         self.cache = {}
 
     async def download(self, best_height):
+        print('downloading blocks...')
         our_height = await self.db.get_best_block_height()
-        for block in await self.client.first.block_list(start_height=our_height+1, end_height=best_height):
+        print(f'=> block_list(start_height={our_height+1}, end_height={best_height})')
+        blocks = await self.client.first.block_list(start_height=our_height+1, end_height=best_height)
+        print(f'<= block_list(start_height={our_height+1}, end_height={best_height})')
+        for block in blocks:
+            if block["height"] % 10000 == 0 or block["height"] < 2:
+                print(f'block {block["height"]}')
             await self.db.insert_block(Block(
                 height=block["height"],
                 version=0,
