@@ -2,7 +2,7 @@ import logging
 from datetime import date
 from typing import Tuple, List, Optional, Union
 
-from sqlalchemy import union, func, text, between, distinct, case, false
+from sqlalchemy import union, func, text, between, distinct, case, false, not_, exists
 from sqlalchemy.future import select, Select
 
 from lbry.constants import INVALIDATED_SIGNATURE_GRACE_PERIOD
@@ -60,11 +60,17 @@ def where_unspent_txos(
     if blocks is not None:
         condition &= between(TXO.c.height, *blocks)
     if missing_in_supports_table:
-        condition &= TXO.c.txo_hash.notin_(select(Support.c.txo_hash))
+        condition &= not_(
+            exists(select(1).where(Support.c.txo_hash == TXO.c.txo_hash))
+        )
     elif missing_or_stale_in_claims_table:
-        condition &= TXO.c.txo_hash.notin_(select(Claim.c.txo_hash))
+        condition &= not_(
+            exists(select(1).where(Claim.c.txo_hash == TXO.c.txo_hash))
+        )
     elif missing_in_claims_table:
-        condition &= TXO.c.claim_hash.notin_(select(Claim.c.claim_hash))
+        condition &= not_(
+            exists(select(1).where(Claim.c.claim_hash == TXO.c.claim_hash))
+        )
     return condition
 
 
