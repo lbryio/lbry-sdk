@@ -38,15 +38,27 @@ def insert_block(block):
 
 
 def get_block_headers(first, last=None):
+    q = (
+        select(
+            Block.c.height,
+            Block.c.block_hash,
+            Block.c.previous_hash,
+            Block.c.timestamp,
+        )
+        .select_from(Block)
+    )
     if last is not None:
         query = (
-            select('*').select_from(Block)
-            .where(between(Block.c.height, first, last))
+            q.where(between(Block.c.height, first, last))
             .order_by(Block.c.height)
         )
     else:
-        query = select('*').select_from(Block).where(Block.c.height == first)
-    return context().fetchall(query)
+        query = q.where(Block.c.height == first)
+    rows = context().fetchall(query)
+    for row in rows:
+        row['block_hash'] = bytes(row['block_hash'])
+        row['previous_hash'] = bytes(row['previous_hash'])
+    return rows
 
 
 def insert_transaction(block_hash, tx):
