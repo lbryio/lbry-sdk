@@ -5,6 +5,7 @@ interface = {
         "account": "Create, modify and inspect wallet accounts.",
         "address": "List, generate and verify addresses. Golomb-Rice coding filters for addresses.",
         "blob": "Blob management.",
+        "block": "Block information.",
         "channel": "Create, update, abandon and list your channel claims.",
         "claim": "List and search all types of claims.",
         "collection": "Create, update, list, resolve, and abandon collections.",
@@ -111,7 +112,7 @@ interface = {
                     "Return the balance of an account"
                 ],
                 "usage": [
-                    "    account balance [<account_id>] [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]"
+                    "    account balance [<account_id>] [--wallet_id=<wallet_id>]"
                 ]
             },
             "arguments": [
@@ -128,23 +129,18 @@ interface = {
                         "restrict operation to specific wallet"
                     ],
                     "type": "str"
-                },
-                {
-                    "name": "confirmations",
-                    "desc": [
-                        "required confirmations of transactions included"
-                    ],
-                    "default": 0,
-                    "type": "int"
                 }
             ],
             "returns": {
                 "desc": [],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "account",
             "cli": "account balance",
-            "help": "Return the balance of an account\n\nUsage:\n    account balance [<account_id>] [--wallet_id=<wallet_id>] [--confirmations=<confirmations>]\n\nOptions:\n    --account_id=<account_id>        : (str) balance for specific account, default\n                                        otherwise\n    --wallet_id=<wallet_id>          : (str) restrict operation to specific wallet\n    --confirmations=<confirmations>  : (int) required confirmations of transactions\n                                        included [default: 0]\n\nReturns:\n    (dict) "
+            "help": "Return the balance of an account\n\nUsage:\n    account balance [<account_id>] [--wallet_id=<wallet_id>]\n\nOptions:\n    --account_id=<account_id>  : (str) balance for specific account, default otherwise\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) \n    {\n        \"json\": \"json\"\n    }"
         },
         "account_create": {
             "name": "create",
@@ -492,11 +488,14 @@ interface = {
                 "desc": [
                     "maximum gap for change and receiving addresses"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "account",
             "cli": "account max_address_gap",
-            "help": "Finds ranges of consecutive addresses that are unused and returns the length\nof the longest such range: for change and receiving address chains. This is\nuseful to figure out ideal values to set for 'receiving_gap' and 'change_gap'\naccount settings.\n\nUsage:\n    account max_address_gap (<account_id> | --account_id=<account_id>)\n                            [--wallet_id=<wallet_id>]\n\nOptions:\n    --account_id=<account_id>  : (str) account for which to get max gaps\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) maximum gap for change and receiving addresses\n    {\n        'max_change_gap': (int),\n        'max_receiving_gap': (int),\n    }"
+            "help": "Finds ranges of consecutive addresses that are unused and returns the length\nof the longest such range: for change and receiving address chains. This is\nuseful to figure out ideal values to set for 'receiving_gap' and 'change_gap'\naccount settings.\n\nUsage:\n    account max_address_gap (<account_id> | --account_id=<account_id>)\n                            [--wallet_id=<wallet_id>]\n\nOptions:\n    --account_id=<account_id>  : (str) account for which to get max gaps\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) maximum gap for change and receiving addresses\n    {\n        'max_change_gap': (int),\n        'max_receiving_gap': (int),\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "account_remove": {
             "name": "remove",
@@ -640,17 +639,51 @@ interface = {
             "cli": "account set",
             "help": "Change various settings on an account.\n\nUsage:\n    account set (<account_id> | --account_id=<account_id>) [--wallet_id=<wallet_id>]\n        [--default] [--new_name=<new_name>]\n        [--change_gap=<change_gap>] [--change_max_uses=<change_max_uses>]\n        [--receiving_gap=<receiving_gap>] [--receiving_max_uses=<receiving_max_uses>]\n\nOptions:\n    --account_id=<account_id>                  : (str) id of account to modify\n    --wallet_id=<wallet_id>                    : (str) restrict operation to specific\n                                                  wallet\n    --default                                  : (bool) make this account the default\n    --new_name=<new_name>                      : (str) new name for the account\n    --change_gap=<change_gap>                  : (int) set the gap for change addresses\n    --change_max_uses=<change_max_uses>        : (int) set the maximum number of times to\n    --receiving_gap=<receiving_gap>            : (int) set the gap for receiving addresses\n                                                  use a change address\n    --receiving_max_uses=<receiving_max_uses>  : (int) set the maximum number of times to\n                                                  use a receiving address\n\nReturns:\n    (Account) modified account\n    {\n        \"id\": \"account_id\",\n        \"is_default\": \"this account is used by default\",\n        \"ledger\": \"name of crypto currency and network\",\n        \"name\": \"optional account name\",\n        \"seed\": \"human friendly words from which account can be recreated\",\n        \"encrypted\": \"if account is encrypted\",\n        \"private_key\": \"extended private key\",\n        \"public_key\": \"extended public key\",\n        \"address_generator\": \"settings for generating addresses\",\n        \"modified_on\": \"date of last modification to account settings\"\n    }"
         },
-        "address_block_filters": {
-            "name": "block_filters",
-            "desc": {},
-            "arguments": [],
+        "address_filter": {
+            "name": "filter",
+            "desc": {
+                "text": [
+                    "List address filters"
+                ],
+                "usage": [
+                    "    address_filter <start_height>",
+                    "                   [--end_height=<end_height>]",
+                    "                   [--granularity=<granularity>]"
+                ]
+            },
+            "arguments": [
+                {
+                    "name": "start_height",
+                    "desc": [
+                        "starting height of block range or just single block"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "end_height",
+                    "desc": [
+                        "return a range of blocks from start_height to end_height"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "granularity",
+                    "desc": [
+                        "0 - individual tx filters, 1 - block per filter,",
+                        "2 or 100, 3 or 1000, 4 or 10000 blocks per filter"
+                    ],
+                    "type": "int"
+                }
+            ],
             "returns": {
-                "desc": [],
-                "type": None
+                "desc": [
+                    "filters"
+                ],
+                "type": "list"
             },
             "group": "address",
-            "cli": "address block_filters",
-            "help": "\nUsage:\n    address block_filters\n"
+            "cli": "address filter",
+            "help": "List address filters\n\nUsage:\n    address_filter <start_height>\n                   [--end_height=<end_height>]\n                   [--granularity=<granularity>]\n\nOptions:\n    --start_height=<start_height>  : (int) starting height of block range or just single\n                                      block\n    --end_height=<end_height>      : (int) return a range of blocks from start_height to\n                                      end_height\n    --granularity=<granularity>    : (int) 0 - individual tx filters, 1 - block per\n                                      filter, 2 or 100, 3 or 1000, 4 or 10000 blocks per\n                                      filter\n\nReturns:\n    (list) filters"
         },
         "address_is_mine": {
             "name": "is_mine",
@@ -794,24 +827,6 @@ interface = {
             "group": "address",
             "cli": "address list",
             "help": "List account addresses or details of single address.\n\nUsage:\n    address list [--address=<address>] [--account_id=<account_id>] [--wallet_id=<wallet_id>]\n                 [--page=<page>] [--page_size=<page_size>] [--include_total]\n\nOptions:\n    --address=<address>        : (str) just show details for single address\n    --account_id=<account_id>  : (str) id of the account to use\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n    --page=<page>              : (int) page to return for paginating\n    --page_size=<page_size>    : (int) number of items on page for pagination\n    --include_total            : (bool) calculate total number of items and pages\n\nReturns:\n    (Paginated[Address]) \n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"address\": \"(str)\"\n            }\n        ]\n    }"
-        },
-        "address_transaction_filters": {
-            "name": "transaction_filters",
-            "desc": {},
-            "arguments": [
-                {
-                    "name": "block_hash",
-                    "desc": [],
-                    "type": "str"
-                }
-            ],
-            "returns": {
-                "desc": [],
-                "type": None
-            },
-            "group": "address",
-            "cli": "address transaction_filters",
-            "help": "\nUsage:\n    address transaction_filters\n\nOptions:\n    --block_hash=<block_hash>  : (str)\n"
         },
         "address_unused": {
             "name": "unused",
@@ -1040,6 +1055,63 @@ interface = {
             "group": "blob",
             "cli": "blob list",
             "help": "Returns blob hashes. If not given filters, returns all blobs known by the blob manager\n\nUsage:\n    blob list [--needed] [--finished] [<uri> | --uri=<uri>]\n              [<stream_hash> | --stream_hash=<stream_hash>]\n              [<sd_hash> | --sd_hash=<sd_hash>]\n              [--page=<page>] [--page_size=<page_size>]\n\nOptions:\n    --uri=<uri>                  : (str) filter blobs by stream in a uri\n    --stream_hash=<stream_hash>  : (str) filter blobs by stream hash\n    --sd_hash=<sd_hash>          : (str) filter blobs by sd hash\n    --needed                     : (bool) only return needed blobs\n    --finished                   : (bool) only return finished blobs\n    --page=<page>                : (int) page to return during paginating\n    --page_size=<page_size>      : (int) number of items on page during pagination\n\nReturns:\n    (list) List of blob hashes"
+        },
+        "block_list": {
+            "name": "list",
+            "desc": {
+                "text": [
+                    "List block info"
+                ],
+                "usage": [
+                    "    block list <start_height> [<end_height>]"
+                ]
+            },
+            "arguments": [
+                {
+                    "name": "start_height",
+                    "desc": [
+                        "starting height of block range or just single block"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "end_height",
+                    "desc": [
+                        "return a range of blocks from start_height to end_height"
+                    ],
+                    "type": "int"
+                }
+            ],
+            "returns": {
+                "desc": [
+                    "blocks"
+                ],
+                "type": "list"
+            },
+            "group": "block",
+            "cli": "block list",
+            "help": "List block info\n\nUsage:\n    block list <start_height> [<end_height>]\n\nOptions:\n    --start_height=<start_height>  : (int) starting height of block range or just single\n                                      block\n    --end_height=<end_height>      : (int) return a range of blocks from start_height to\n                                      end_height\n\nReturns:\n    (list) blocks"
+        },
+        "block_tip": {
+            "name": "tip",
+            "desc": {
+                "text": [
+                    "Retrieve the last confirmed block (tip) of the blockchain."
+                ],
+                "usage": [
+                    "    block tip"
+                ]
+            },
+            "arguments": [],
+            "returns": {
+                "desc": [
+                    "block number at the tip of the blockchain"
+                ],
+                "type": "int"
+            },
+            "group": "block",
+            "cli": "block tip",
+            "help": "Retrieve the last confirmed block (tip) of the blockchain.\n\nUsage:\n    block tip\n\nReturns:\n    (int) block number at the tip of the blockchain"
         },
         "channel_abandon": {
             "name": "abandon",
@@ -3298,7 +3370,6 @@ interface = {
                     "desc": [
                         "winning claims of their respective name"
                     ],
-                    "default": False,
                     "type": "bool"
                 },
                 {
@@ -5499,11 +5570,14 @@ interface = {
                 "desc": [
                     "Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "comment",
             "cli": "comment abandon",
-            "help": "Abandon a comment published under your channel identity.\n\nUsage:\n    comment abandon  (<comment_id> | --comment_id=<comment_id>) [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment_id=<comment_id>  : (str) The ID of the comment to be abandoned.\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned\n    {\n        <comment_id> (str): {\n            \"abandoned\": (bool)\n        }\n    }"
+            "help": "Abandon a comment published under your channel identity.\n\nUsage:\n    comment abandon  (<comment_id> | --comment_id=<comment_id>) [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment_id=<comment_id>  : (str) The ID of the comment to be abandoned.\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) Object with the `comment_id` passed in as the key, and a flag indicating if it was abandoned\n    {\n        <comment_id> (str): {\n            \"abandoned\": (bool)\n        }\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "comment_create": {
             "name": "create",
@@ -5579,7 +5653,10 @@ interface = {
                 "desc": [
                     "Comment object if successfully made, (None) otherwise"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "kwargs": [
                 {
@@ -5599,7 +5676,7 @@ interface = {
             ],
             "group": "comment",
             "cli": "comment create",
-            "help": "Create and associate a comment with a claim using your channel identity.\n\nUsage:\n    comment create  (<comment> | --comment=<comment>)\n                    (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)\n                    [--wallet_id=<wallet_id>]\n                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]\n\nOptions:\n    --comment=<comment>            : (str) Comment to be made, should be at most 2000\n                                      characters.\n    --claim_id=<claim_id>          : (str) The ID of the claim to comment on\n    --parent_id=<parent_id>        : (str) The ID of a comment to make a response to\n    --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet\n    --channel_id=<channel_id>      : (str) claim id of the publishing channel\n    --channel_name=<channel_name>  : (str) name of publishing channel\n\nReturns:\n    (dict) Comment object if successfully made, (None) otherwise\n    {\n        \"comment\":      (str) The actual string as inputted by the user,\n        \"comment_id\":   (str) The Comment's unique identifier,\n        \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n        \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n        \"signature\":    (str) The signature of the comment,\n        \"signing_ts\":   (str) The timestamp used to sign the comment,\n        \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n        \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n        \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n    }"
+            "help": "Create and associate a comment with a claim using your channel identity.\n\nUsage:\n    comment create  (<comment> | --comment=<comment>)\n                    (<claim_id> | --claim_id=<claim_id> | --parent_id=<parent_id>)\n                    [--wallet_id=<wallet_id>]\n                    [--channel_id=<channel_id>] [--channel_name=<channel_name>]\n\nOptions:\n    --comment=<comment>            : (str) Comment to be made, should be at most 2000\n                                      characters.\n    --claim_id=<claim_id>          : (str) The ID of the claim to comment on\n    --parent_id=<parent_id>        : (str) The ID of a comment to make a response to\n    --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet\n    --channel_id=<channel_id>      : (str) claim id of the publishing channel\n    --channel_name=<channel_name>  : (str) name of publishing channel\n\nReturns:\n    (dict) Comment object if successfully made, (None) otherwise\n    {\n        \"comment\":      (str) The actual string as inputted by the user,\n        \"comment_id\":   (str) The Comment's unique identifier,\n        \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n        \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n        \"signature\":    (str) The signature of the comment,\n        \"signing_ts\":   (str) The timestamp used to sign the comment,\n        \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n        \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n        \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "comment_hide": {
             "name": "hide",
@@ -5636,11 +5713,14 @@ interface = {
                 "desc": [
                     "keyed by comment_id, containing success info"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "comment",
             "cli": "comment hide",
-            "help": "Hide a comment published to a claim you control.\n\nUsage:\n    comment hide  <comment_ids>... [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment_ids=<comment_ids>  : (str, list) one or more comment_id to hide.\n    --wallet_id=<wallet_id>      : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) keyed by comment_id, containing success info\n    '<comment_id>': {\n        \"hidden\": (bool)  flag indicating if comment_id was hidden\n    }"
+            "help": "Hide a comment published to a claim you control.\n\nUsage:\n    comment hide  <comment_ids>... [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment_ids=<comment_ids>  : (str, list) one or more comment_id to hide.\n    --wallet_id=<wallet_id>      : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) keyed by comment_id, containing success info\n    '<comment_id>': {\n        \"hidden\": (bool)  flag indicating if comment_id was hidden\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "comment_list": {
             "name": "list",
@@ -5743,11 +5823,14 @@ interface = {
                 "desc": [
                     "Containing the list, and information about the paginated content"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "comment",
             "cli": "comment list",
-            "help": "List comments associated with a claim.\n\nUsage:\n    comment list (<claim_id> | --claim_id=<claim_id>)\n                 [(--page=<page> --page_size=<page_size>)]\n                 [--parent_id=<parent_id>] [--include_replies]\n                 [--is_channel_signature_valid]\n                 [--visible | --hidden]\n\nOptions:\n    --claim_id=<claim_id>         : (str) The claim on which the comment will be made on\n    --parent_id=<parent_id>       : (str) CommentId of a specific thread you'd like to see\n    --include_replies             : (bool) Whether or not you want to include replies in\n                                     list\n    --is_channel_signature_valid  : (bool) Only include comments with valid signatures.\n                                     [Warning: Paginated total size will not change, even\n                                     if list reduces]\n    --hidden                      : (bool) Select only Hidden Comments\n    --visible                     : (bool) Select only Visible Comments\n    --page=<page>                 : (int)  [default: 1]\n    --page_size=<page_size>       : (int)  [default: 50]\n\nReturns:\n    (dict) Containing the list, and information about the paginated content\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": \"A List of dict objects representing comments.\"\n        [\n            {\n                \"comment\":      (str) The actual string as inputted by the user,\n                \"comment_id\":   (str) The Comment's unique identifier,\n                \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n                \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n                \"signature\":    (str) The signature of the comment,\n                \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n                \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n                \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n            },\n            ...\n        ]\n    }"
+            "help": "List comments associated with a claim.\n\nUsage:\n    comment list (<claim_id> | --claim_id=<claim_id>)\n                 [(--page=<page> --page_size=<page_size>)]\n                 [--parent_id=<parent_id>] [--include_replies]\n                 [--is_channel_signature_valid]\n                 [--visible | --hidden]\n\nOptions:\n    --claim_id=<claim_id>         : (str) The claim on which the comment will be made on\n    --parent_id=<parent_id>       : (str) CommentId of a specific thread you'd like to see\n    --include_replies             : (bool) Whether or not you want to include replies in\n                                     list\n    --is_channel_signature_valid  : (bool) Only include comments with valid signatures.\n                                     [Warning: Paginated total size will not change, even\n                                     if list reduces]\n    --hidden                      : (bool) Select only Hidden Comments\n    --visible                     : (bool) Select only Visible Comments\n    --page=<page>                 : (int)  [default: 1]\n    --page_size=<page_size>       : (int)  [default: 50]\n\nReturns:\n    (dict) Containing the list, and information about the paginated content\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": \"A List of dict objects representing comments.\"\n        [\n            {\n                \"comment\":      (str) The actual string as inputted by the user,\n                \"comment_id\":   (str) The Comment's unique identifier,\n                \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n                \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n                \"signature\":    (str) The signature of the comment,\n                \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n                \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n                \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n            },\n            ...\n        ]\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "comment_update": {
             "name": "update",
@@ -5801,11 +5884,14 @@ interface = {
                 "desc": [
                     "Comment object if edit was successful, (None) otherwise"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "comment",
             "cli": "comment update",
-            "help": "Edit a comment published as one of your channels.\n\nUsage:\n    comment update (<comment> | --comment=<comment>)\n                 (<comment_id> | --comment_id=<comment_id>)\n                 [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment=<comment>        : (str) New comment replacing the old one\n    --comment_id=<comment_id>  : (str) Hash identifying the comment to edit\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) Comment object if edit was successful, (None) otherwise\n    {\n        \"comment\":      (str) The actual string as inputted by the user,\n        \"comment_id\":   (str) The Comment's unique identifier,\n        \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n        \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n        \"signature\":    (str) The signature of the comment,\n        \"signing_ts\":   (str) Timestamp used to sign the most recent signature,\n        \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n        \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n        \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n    }"
+            "help": "Edit a comment published as one of your channels.\n\nUsage:\n    comment update (<comment> | --comment=<comment>)\n                 (<comment_id> | --comment_id=<comment_id>)\n                 [--wallet_id=<wallet_id>]\n\nOptions:\n    --comment=<comment>        : (str) New comment replacing the old one\n    --comment_id=<comment_id>  : (str) Hash identifying the comment to edit\n    --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) Comment object if edit was successful, (None) otherwise\n    {\n        \"comment\":      (str) The actual string as inputted by the user,\n        \"comment_id\":   (str) The Comment's unique identifier,\n        \"channel_name\": (str) Name of the channel this was posted under, prepended with a '@',\n        \"channel_id\":   (str) The Channel Claim ID that this comment was posted under,\n        \"signature\":    (str) The signature of the comment,\n        \"signing_ts\":   (str) Timestamp used to sign the most recent signature,\n        \"channel_url\":  (str) Channel's URI in the ClaimTrie,\n        \"parent_id\":    (str) Comment this is replying to, (None) if this is the root,\n        \"timestamp\":    (int) The time at which comment was entered into the server at, in nanoseconds.\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "ffmpeg_find": {
             "name": "ffmpeg_find",
@@ -5826,10 +5912,13 @@ interface = {
                 "desc": [
                     "ffmpeg information"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "cli": "ffmpeg_find",
-            "help": "Get ffmpeg installation information\n\nUsage:\n    ffmpeg_find\n\nReturns:\n    (dict) ffmpeg information\n    {\n        'available': (bool) found ffmpeg,\n        'which': (str) path to ffmpeg,\n        'analyze_audio_volume': (bool) should ffmpeg analyze audio\n    }"
+            "help": "Get ffmpeg installation information\n\nUsage:\n    ffmpeg_find\n\nReturns:\n    (dict) ffmpeg information\n    {\n        'available': (bool) found ffmpeg,\n        'which': (str) path to ffmpeg,\n        'analyze_audio_volume': (bool) should ffmpeg analyze audio\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "file_delete": {
             "name": "delete",
@@ -7337,11 +7426,14 @@ interface = {
                 "desc": [
                     "preferences"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "preference",
             "cli": "preference get",
-            "help": "Get preference value for key or all values if not key is passed in.\n\nUsage:\n    preference get [<key>] [--wallet_id=<wallet_id>]\n\nOptions:\n    --key=<key>              : (str) key associated with value\n    --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) preferences"
+            "help": "Get preference value for key or all values if not key is passed in.\n\nUsage:\n    preference get [<key>] [--wallet_id=<wallet_id>]\n\nOptions:\n    --key=<key>              : (str) key associated with value\n    --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) preferences\n    {\n        \"json\": \"json\"\n    }"
         },
         "preference_set": {
             "name": "set",
@@ -7380,11 +7472,14 @@ interface = {
                 "desc": [
                     "updated user preference"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "preference",
             "cli": "preference set",
-            "help": "Set preferences\n\nUsage:\n    preference set (<key>) (<value>) [--wallet_id=<wallet_id>]\n\nOptions:\n    --key=<key>              : (str) key for the value\n    --value=<value>          : (str) the value itself\n    --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) updated user preference"
+            "help": "Set preferences\n\nUsage:\n    preference set (<key>) (<value>) [--wallet_id=<wallet_id>]\n\nOptions:\n    --key=<key>              : (str) key for the value\n    --value=<value>          : (str) the value itself\n    --wallet_id=<wallet_id>  : (str) restrict operation to specific wallet\n\nReturns:\n    (dict) updated user preference\n    {\n        \"json\": \"json\"\n    }"
         },
         "publish": {
             "name": "publish",
@@ -8463,10 +8558,13 @@ interface = {
                 "desc": [
                     "resolve results, keyed by url"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "cli": "resolve",
-            "help": "Get the claim that a URL refers to.\n\nUsage:\n    resolve <urls>... [--wallet_id=<wallet_id>]\n            [--include_purchase_receipt]\n            [--include_is_my_output]\n            [--include_sent_supports]\n            [--include_sent_tips]\n            [--include_received_tips]\n            [--protobuf]\n\nOptions:\n    --urls=<urls>               : (str, list) one or more urls to resolve\n    --wallet_id=<wallet_id>     : (str) wallet to check for claim purchase reciepts\n    --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet has\n                                   purchased the claim being resolved\n    --include_is_my_output      : (bool) lookup and include a boolean indicating if claim\n                                   being resolved is yours\n    --include_sent_supports     : (bool) lookup and sum the total amount of supports\n                                   you've made to this claim\n    --include_sent_tips         : (bool) lookup and sum the total amount of tips you've\n                                   made to this claim\n    --include_received_tips     : (bool) lookup and sum the total amount of tips you've\n                                   received to this claim\n    --protobuf                  : (bool) protobuf encoded result\n\nReturns:\n    (dict) resolve results, keyed by url\n    '<url>': {\n            If a resolution error occurs:\n            'error': Error message\n            If the url resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'confirmations': (int) claim depth,\n                'timestamp': (int) timestamp of the block that included this claim tx,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n            If the url resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n            If the url resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }"
+            "help": "Get the claim that a URL refers to.\n\nUsage:\n    resolve <urls>... [--wallet_id=<wallet_id>]\n            [--include_purchase_receipt]\n            [--include_is_my_output]\n            [--include_sent_supports]\n            [--include_sent_tips]\n            [--include_received_tips]\n            [--protobuf]\n\nOptions:\n    --urls=<urls>               : (str, list) one or more urls to resolve\n    --wallet_id=<wallet_id>     : (str) wallet to check for claim purchase reciepts\n    --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet has\n                                   purchased the claim being resolved\n    --include_is_my_output      : (bool) lookup and include a boolean indicating if claim\n                                   being resolved is yours\n    --include_sent_supports     : (bool) lookup and sum the total amount of supports\n                                   you've made to this claim\n    --include_sent_tips         : (bool) lookup and sum the total amount of tips you've\n                                   made to this claim\n    --include_received_tips     : (bool) lookup and sum the total amount of tips you've\n                                   received to this claim\n    --protobuf                  : (bool) protobuf encoded result\n\nReturns:\n    (dict) resolve results, keyed by url\n    '<url>': {\n            If a resolution error occurs:\n            'error': Error message\n            If the url resolves to a channel or a claim in a channel:\n            'certificate': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'confirmations': (int) claim depth,\n                'timestamp': (int) timestamp of the block that included this claim tx,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the certificate claim,\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}],\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n            If the url resolves to a channel:\n            'claims_in_channel': (int) number of claims in the channel,\n            If the url resolves to a claim:\n            'claim': {\n                'address': (str) claim address,\n                'amount': (float) claim amount,\n                'effective_amount': (float) claim amount including supports,\n                'claim_id': (str) claim id,\n                'claim_sequence': (int) claim sequence number (or -1 if unknown),\n                'decoded_claim': (bool) whether or not the claim value was decoded,\n                'height': (int) claim height,\n                'depth': (int) claim depth,\n                'has_signature': (bool) included if decoded_claim\n                'name': (str) claim name,\n                'permanent_url': (str) permanent url of the claim,\n                'channel_name': (str) channel name if claim is in a channel\n                'supports: (list) list of supports [{'txid': (str) txid,\n                                                     'nout': (int) nout,\n                                                     'amount': (float) amount}]\n                'txid': (str) claim txid,\n                'nout': (str) claim nout,\n                'signature_is_valid': (bool), included if has_signature,\n                'value': ClaimDict if decoded, otherwise hex string\n            }\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "routing_table_get": {
             "name": "routing_table_get",
@@ -8495,10 +8593,13 @@ interface = {
                 "desc": [
                     "dictionary containing routing and peer information"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "cli": "routing_table_get",
-            "help": "Get DHT routing information\n\nUsage:\n    routing_table_get\n\nReturns:\n    (dict) dictionary containing routing and peer information\n    {\n        \"buckets\": {\n            <bucket index>: [\n                {\n                    \"address\": (str) peer address,\n                    \"udp_port\": (int) peer udp port,\n                    \"tcp_port\": (int) peer tcp port,\n                    \"node_id\": (str) peer node id,\n                }\n            ]\n        },\n        \"node_id\": (str) the local dht node id\n    }"
+            "help": "Get DHT routing information\n\nUsage:\n    routing_table_get\n\nReturns:\n    (dict) dictionary containing routing and peer information\n    {\n        \"buckets\": {\n            <bucket index>: [\n                {\n                    \"address\": (str) peer address,\n                    \"udp_port\": (int) peer udp port,\n                    \"tcp_port\": (int) peer tcp port,\n                    \"node_id\": (str) peer node id,\n                }\n            ]\n        },\n        \"node_id\": (str) the local dht node id\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "settings_clear": {
             "name": "clear",
@@ -8521,11 +8622,14 @@ interface = {
                 "desc": [
                     "updated daemon setting"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "settings",
             "cli": "settings clear",
-            "help": "Clear daemon settings\n\nUsage:\n    settings clear (<key>)\n\nOptions:\n    --key=<key>  : (str)\n\nReturns:\n    (dict) updated daemon setting"
+            "help": "Clear daemon settings\n\nUsage:\n    settings clear (<key>)\n\nOptions:\n    --key=<key>  : (str)\n\nReturns:\n    (dict) updated daemon setting\n    {\n        \"json\": \"json\"\n    }"
         },
         "settings_get": {
             "name": "get",
@@ -8539,11 +8643,14 @@ interface = {
                 "desc": [
                     "daemon settings"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "settings",
             "cli": "settings get",
-            "help": "Get daemon settings \n\nUsage:\n    settings get\n\nReturns:\n    (dict) daemon settings"
+            "help": "Get daemon settings \n\nUsage:\n    settings get\n\nReturns:\n    (dict) daemon settings\n    {\n        \"json\": \"json\"\n    }"
         },
         "settings_set": {
             "name": "set",
@@ -8571,11 +8678,14 @@ interface = {
                 "desc": [
                     "updated daemon setting"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "settings",
             "cli": "settings set",
-            "help": "Set daemon settings\n\nUsage:\n    settings set <key> <value>\n\nOptions:\n    --key=<key>      : (str)\n    --value=<value>  : (str)\n\nReturns:\n    (dict) updated daemon setting"
+            "help": "Set daemon settings\n\nUsage:\n    settings set <key> <value>\n\nOptions:\n    --key=<key>      : (str)\n    --value=<value>  : (str)\n\nReturns:\n    (dict) updated daemon setting\n    {\n        \"json\": \"json\"\n    }"
         },
         "status": {
             "name": "status",
@@ -8665,10 +8775,13 @@ interface = {
                 "desc": [
                     "lbrynet daemon status"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "cli": "status",
-            "help": "Get daemon status\n\nUsage:\n    status\n\nReturns:\n    (dict) lbrynet daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'database': (bool),\n            'dht': (bool),\n            'exchange_rate_manager': (bool),\n            'hash_announcer': (bool),\n            'peer_protocol_server': (bool),\n            'stream_manager': (bool),\n            'upnp': (bool),\n            'wallet': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'connected': (str) host and port of the connected spv server,\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n            'connected_servers': (list) [\n                {\n                    'host': (str) server hostname,\n                    'port': (int) server port,\n                    'latency': (int) milliseconds\n                }\n            ],\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n            'connections': {\n                'incoming_bps': {\n                    <source ip and tcp port>: (int) bytes per second received,\n                },\n                'outgoing_bps': {\n                    <destination ip and tcp port>: (int) bytes per second sent,\n                },\n                'total_outgoing_mps': (float) megabytes per second sent,\n                'total_incoming_mps': (float) megabytes per second received,\n                'time': (float) timestamp\n            }\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'stream_manager': {\n            'managed_files': (int) count of files in the stream manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }"
+            "help": "Get daemon status\n\nUsage:\n    status\n\nReturns:\n    (dict) lbrynet daemon status\n    {\n        'installation_id': (str) installation id - base58,\n        'is_running': (bool),\n        'skipped_components': (list) [names of skipped components (str)],\n        'startup_status': { Does not include components which have been skipped\n            'blob_manager': (bool),\n            'blockchain_headers': (bool),\n            'database': (bool),\n            'dht': (bool),\n            'exchange_rate_manager': (bool),\n            'hash_announcer': (bool),\n            'peer_protocol_server': (bool),\n            'stream_manager': (bool),\n            'upnp': (bool),\n            'wallet': (bool),\n        },\n        'connection_status': {\n            'code': (str) connection status code,\n            'message': (str) connection status message\n        },\n        'blockchain_headers': {\n            'downloading_headers': (bool),\n            'download_progress': (float) 0-100.0\n        },\n        'wallet': {\n            'connected': (str) host and port of the connected spv server,\n            'blocks': (int) local blockchain height,\n            'blocks_behind': (int) remote_height - local_height,\n            'best_blockhash': (str) block hash of most recent block,\n            'is_encrypted': (bool),\n            'is_locked': (bool),\n            'connected_servers': (list) [\n                {\n                    'host': (str) server hostname,\n                    'port': (int) server port,\n                    'latency': (int) milliseconds\n                }\n            ],\n        },\n        'dht': {\n            'node_id': (str) lbry dht node id - hex encoded,\n            'peers_in_routing_table': (int) the number of peers in the routing table,\n        },\n        'blob_manager': {\n            'finished_blobs': (int) number of finished blobs in the blob manager,\n            'connections': {\n                'incoming_bps': {\n                    <source ip and tcp port>: (int) bytes per second received,\n                },\n                'outgoing_bps': {\n                    <destination ip and tcp port>: (int) bytes per second sent,\n                },\n                'total_outgoing_mps': (float) megabytes per second sent,\n                'total_incoming_mps': (float) megabytes per second received,\n                'time': (float) timestamp\n            }\n        },\n        'hash_announcer': {\n            'announce_queue_size': (int) number of blobs currently queued to be announced\n        },\n        'stream_manager': {\n            'managed_files': (int) count of files in the stream manager,\n        },\n        'upnp': {\n            'aioupnp_version': (str),\n            'redirects': {\n                <TCP | UDP>: (int) external_port,\n            },\n            'gateway': (str) manufacturer and model,\n            'dht_redirect_set': (bool),\n            'peer_redirect_set': (bool),\n            'external_ip': (str) external ip address,\n        }\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "stop": {
             "name": "stop",
@@ -9459,7 +9572,7 @@ interface = {
                     "List my stream claims."
                 ],
                 "usage": [
-                    "    stream list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]",
+                    "    stream list [--account_id=<account_id>] [--wallet_id=<wallet_id>]",
                     "                [--is_spent] [--resolve]"
                 ],
                 "kwargs": 16
@@ -9867,7 +9980,7 @@ interface = {
             ],
             "group": "stream",
             "cli": "stream list",
-            "help": "List my stream claims.\n\nUsage:\n    stream list [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]\n                [--is_spent] [--resolve]\n                [--name=<name>...] [--claim_id=<claim_id>...] [--text=<text>]\n                [--txid=<txid>] [--nout=<nout>] [--height=<height>]\n                [--timestamp=<timestamp>] [--creation_height=<creation_height>]\n                [--creation_timestamp=<creation_timestamp>] [--amount=<amount>]\n                [--any_tag=<any_tag>...] [--all_tag=<all_tag>...] [--not_tag=<not_tag>...]\n                [--any_language=<any_language>...] [--all_language=<all_language>...]\n                [--not_language=<not_language>...] [--any_location=<any_location>...]\n                [--all_location=<all_location>...] [--not_location=<not_location>...]\n                [--release_time=<release_time>] [--page=<page>] [--page_size=<page_size>]\n                [--include_total]\n\nOptions:\n    --account_id=<account_id>                  : (str) restrict operation to specific\n                                                  account\n    --wallet_id=<wallet_id>                    : (str) restrict operation to specific\n                                                  wallet\n    --is_spent                                 : (bool) shows previous stream updates and\n                                                  abandons\n    --resolve                                  : (bool) resolves each stream to provide\n                                                  additional metadata\n    --name=<name>                              : (str, list) claim name (normalized)\n    --claim_id=<claim_id>                      : (str, list) full or partial claim id\n    --text=<text>                              : (str) full text search\n    --txid=<txid>                              : (str) transaction id\n    --nout=<nout>                              : (int) position in the transaction\n    --height=<height>                          : (int) last updated block height (supports\n                                                  equality constraints)\n    --timestamp=<timestamp>                    : (int) last updated timestamp (supports\n                                                  equality constraints)\n    --creation_height=<creation_height>        : (int) created at block height (supports\n                                                  equality constraints)\n    --creation_timestamp=<creation_timestamp>  : (int) created at timestamp (supports\n                                                  equality constraints)\n    --amount=<amount>                          : (str) claim amount (supports equality\n                                                  constraints)\n    --any_tag=<any_tag>                        : (str, list) containing any of the tags\n    --all_tag=<all_tag>                        : (str, list) containing every tag\n    --not_tag=<not_tag>                        : (str, list) not containing any of these\n                                                  tags\n    --any_language=<any_language>              : (str, list) containing any of the\n                                                  languages\n    --all_language=<all_language>              : (str, list) containing every language\n    --not_language=<not_language>              : (str, list) not containing any of these\n                                                  languages\n    --any_location=<any_location>              : (str, list) containing any of the\n                                                  locations\n    --all_location=<all_location>              : (str, list) containing every location\n    --not_location=<not_location>              : (str, list) not containing any of these\n                                                  locations\n    --release_time=<release_time>              : (int) limit to claims self-described as\n                                                  having been released to the public on or\n                                                  after this UTC timestamp, when claim does\n                                                  not provide a release time the publish\n                                                  time is used instead (supports equality\n                                                  constraints)\n    --page=<page>                              : (int) page to return for paginating\n    --page_size=<page_size>                    : (int) number of items on page for\n                                                  pagination\n    --include_total                            : (bool) calculate total number of items\n                                                  and pages\n\nReturns:\n    (Paginated[Output]) \n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ]\n    }"
+            "help": "List my stream claims.\n\nUsage:\n    stream list [--account_id=<account_id>] [--wallet_id=<wallet_id>]\n                [--is_spent] [--resolve]\n                [--name=<name>...] [--claim_id=<claim_id>...] [--text=<text>]\n                [--txid=<txid>] [--nout=<nout>] [--height=<height>]\n                [--timestamp=<timestamp>] [--creation_height=<creation_height>]\n                [--creation_timestamp=<creation_timestamp>] [--amount=<amount>]\n                [--any_tag=<any_tag>...] [--all_tag=<all_tag>...] [--not_tag=<not_tag>...]\n                [--any_language=<any_language>...] [--all_language=<all_language>...]\n                [--not_language=<not_language>...] [--any_location=<any_location>...]\n                [--all_location=<all_location>...] [--not_location=<not_location>...]\n                [--release_time=<release_time>] [--page=<page>] [--page_size=<page_size>]\n                [--include_total]\n\nOptions:\n    --account_id=<account_id>                  : (str) restrict operation to specific\n                                                  account\n    --wallet_id=<wallet_id>                    : (str) restrict operation to specific\n                                                  wallet\n    --is_spent                                 : (bool) shows previous stream updates and\n                                                  abandons\n    --resolve                                  : (bool) resolves each stream to provide\n                                                  additional metadata\n    --name=<name>                              : (str, list) claim name (normalized)\n    --claim_id=<claim_id>                      : (str, list) full or partial claim id\n    --text=<text>                              : (str) full text search\n    --txid=<txid>                              : (str) transaction id\n    --nout=<nout>                              : (int) position in the transaction\n    --height=<height>                          : (int) last updated block height (supports\n                                                  equality constraints)\n    --timestamp=<timestamp>                    : (int) last updated timestamp (supports\n                                                  equality constraints)\n    --creation_height=<creation_height>        : (int) created at block height (supports\n                                                  equality constraints)\n    --creation_timestamp=<creation_timestamp>  : (int) created at timestamp (supports\n                                                  equality constraints)\n    --amount=<amount>                          : (str) claim amount (supports equality\n                                                  constraints)\n    --any_tag=<any_tag>                        : (str, list) containing any of the tags\n    --all_tag=<all_tag>                        : (str, list) containing every tag\n    --not_tag=<not_tag>                        : (str, list) not containing any of these\n                                                  tags\n    --any_language=<any_language>              : (str, list) containing any of the\n                                                  languages\n    --all_language=<all_language>              : (str, list) containing every language\n    --not_language=<not_language>              : (str, list) not containing any of these\n                                                  languages\n    --any_location=<any_location>              : (str, list) containing any of the\n                                                  locations\n    --all_location=<all_location>              : (str, list) containing every location\n    --not_location=<not_location>              : (str, list) not containing any of these\n                                                  locations\n    --release_time=<release_time>              : (int) limit to claims self-described as\n                                                  having been released to the public on or\n                                                  after this UTC timestamp, when claim does\n                                                  not provide a release time the publish\n                                                  time is used instead (supports equality\n                                                  constraints)\n    --page=<page>                              : (int) page to return for paginating\n    --page_size=<page_size>                    : (int) number of items on page for\n                                                  pagination\n    --include_total                            : (bool) calculate total number of items\n                                                  and pages\n\nReturns:\n    (Paginated[Output]) \n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ]\n    }"
         },
         "stream_repost": {
             "name": "repost",
@@ -9877,7 +9990,7 @@ interface = {
                 ],
                 "usage": [
                     "    stream repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)",
-                    "                  [--allow_duplicate_name] [--account_id=<account_id>] [--claim_address=<claim_address>]"
+                    "                  [--allow_duplicate_name] [--account_id=<account_id>]"
                 ],
                 "kwargs": 18
             },
@@ -9915,14 +10028,6 @@ interface = {
                     "name": "account_id",
                     "desc": [
                         "account to hold the repost"
-                    ],
-                    "type": "str"
-                },
-                {
-                    "name": "claim_address",
-                    "desc": [
-                        "specific address where the repost is held, if not specified",
-                        "it will be determined automatically from the account"
                     ],
                     "type": "str"
                 },
@@ -10077,7 +10182,7 @@ interface = {
             ],
             "group": "stream",
             "cli": "stream repost",
-            "help": "Creates a claim that references an existing stream by its claim id.\n\nUsage:\n    stream repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)\n                  [--allow_duplicate_name] [--account_id=<account_id>] [--claim_address=<claim_address>]\n                  [--channel_id=<channel_id>] [--channel_name=<channel_name>]\n                  [--wallet_id=<wallet_id>] [--change_account_id=<change_account_id>]\n                  [--fund_account_id=<fund_account_id>...] [--preview] [--no_wait]\n\nOptions:\n    --name=<name>                            : (str) name of the repost (can only consist\n                                                of a-z A-Z 0-9 and -(dash))\n    --bid=<bid>                              : (str) amount to back the repost\n    --claim_id=<claim_id>                    : (str) id of the claim being reposted\n    --allow_duplicate_name                   : (bool) create new repost even if one\n                                                already exists with given name\n    --account_id=<account_id>                : (str) account to hold the repost\n    --claim_address=<claim_address>          : (str) specific address where the repost is\n                                                held, if not specified it will be\n                                                determined automatically from the account\n    --channel_id=<channel_id>                : (str) claim id of the publishing channel\n    --channel_name=<channel_name>            : (str) name of publishing channel\n    --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet\n    --change_account_id=<change_account_id>  : (str) account to send excess change (LBC)\n    --fund_account_id=<fund_account_id>      : (str, list) accounts to fund the\n                                                transaction\n    --preview                                : (bool) do not broadcast the transaction\n    --no_wait                                : (bool) do not wait for mempool confirmation\n\nReturns:\n    (Transaction) transaction for the repost\n    {\n        \"txid\": \"hash of transaction in hex\",\n        \"height\": \"block where transaction was recorded\",\n        \"inputs\": [\n            \"spent outputs...\"\n        ],\n        \"outputs\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ],\n        \"total_input\": \"sum of inputs as a decimal\",\n        \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n        \"total_fee\": \"fee amount\",\n        \"hex\": \"entire transaction encoded in hex\"\n    }"
+            "help": "Creates a claim that references an existing stream by its claim id.\n\nUsage:\n    stream repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)\n                  [--allow_duplicate_name] [--account_id=<account_id>]\n                  [--channel_id=<channel_id>] [--channel_name=<channel_name>]\n                  [--wallet_id=<wallet_id>] [--change_account_id=<change_account_id>]\n                  [--fund_account_id=<fund_account_id>...] [--preview] [--no_wait]\n\nOptions:\n    --name=<name>                            : (str) name of the repost (can only consist\n                                                of a-z A-Z 0-9 and -(dash))\n    --bid=<bid>                              : (str) amount to back the repost\n    --claim_id=<claim_id>                    : (str) id of the claim being reposted\n    --allow_duplicate_name                   : (bool) create new repost even if one\n                                                already exists with given name\n    --account_id=<account_id>                : (str) account to hold the repost\n    --channel_id=<channel_id>                : (str) claim id of the publishing channel\n    --channel_name=<channel_name>            : (str) name of publishing channel\n    --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet\n    --change_account_id=<change_account_id>  : (str) account to send excess change (LBC)\n    --fund_account_id=<fund_account_id>      : (str, list) accounts to fund the\n                                                transaction\n    --preview                                : (bool) do not broadcast the transaction\n    --no_wait                                : (bool) do not wait for mempool confirmation\n\nReturns:\n    (Transaction) transaction for the repost\n    {\n        \"txid\": \"hash of transaction in hex\",\n        \"height\": \"block where transaction was recorded\",\n        \"inputs\": [\n            \"spent outputs...\"\n        ],\n        \"outputs\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ],\n        \"total_input\": \"sum of inputs as a decimal\",\n        \"total_output\": \"sum of outputs, sans fee, as a decimal\",\n        \"total_fee\": \"fee amount\",\n        \"hex\": \"entire transaction encoded in hex\"\n    }"
         },
         "stream_update": {
             "name": "update",
@@ -11451,6 +11556,114 @@ interface = {
             "cli": "support search",
             "help": "Search for supports on the blockchain.\nArguments marked with \"supports equality constraints\" allow prepending the\nvalue with an equality constraint such as '>', '>=', '<' and '<='\neg. --height=\">400000\" would limit results to only supports above 400k block height.\n\nUsage:\n    support search [--wallet_id=<wallet_id>] [--order_by=<order_by>...]\n                   [--claim_id=<claim_id>...] [--txid=<txid>] [--nout=<nout>]\n                   [--height=<height>] [--timestamp=<timestamp>] [--amount=<amount>]\n                   [--page=<page>] [--page_size=<page_size>] [--include_total]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) wallet to check if support is owned by user\n    --order_by=<order_by>    : (str, list) field to order by\n    --claim_id=<claim_id>    : (str, list) full claim id\n    --txid=<txid>            : (str) transaction id\n    --nout=<nout>            : (int) position in the transaction\n    --height=<height>        : (int) last updated block height (supports equality\n                                constraints)\n    --timestamp=<timestamp>  : (int) last updated timestamp (supports equality\n                                constraints)\n    --amount=<amount>        : (str) claim amount (supports equality constraints)\n    --page=<page>            : (int) page to return for paginating\n    --page_size=<page_size>  : (int) number of items on page for pagination\n    --include_total          : (bool) calculate total number of items and pages\n\nReturns:\n    (Paginated[Output]) search results\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ]\n    }"
         },
+        "support_sum": {
+            "name": "sum",
+            "desc": {
+                "text": [
+                    "List total staked supports for a claim, grouped by the channel that signed the support.",
+                    "If claim_id is a channel claim:",
+                    "    Use --include_channel_content to include supports for content claims in the channel.",
+                    "    Use --exclude_own_supports to exclude supports from the channel to itself."
+                ],
+                "usage": [
+                    "    support sum <claim_id> [--include_channel_content] [--exclude_own_supports]"
+                ],
+                "kwargs": 16
+            },
+            "arguments": [
+                {
+                    "name": "claim_id",
+                    "desc": [
+                        "id of claim to calculate support stats for"
+                    ],
+                    "type": "str"
+                },
+                {
+                    "name": "include_channel_content",
+                    "desc": [
+                        "if claim_id is for a channel, include supports for",
+                        "claims in that channel"
+                    ],
+                    "type": "bool",
+                    "default": False
+                },
+                {
+                    "name": "exclude_own_supports",
+                    "desc": [
+                        "exclude supports signed by claim_id (i.e. self-supports)"
+                    ],
+                    "type": "bool",
+                    "default": False
+                },
+                {
+                    "name": "page",
+                    "desc": [
+                        "page to return for paginating"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "page_size",
+                    "desc": [
+                        "number of items on page for pagination"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "include_total",
+                    "desc": [
+                        "calculate total number of items and pages"
+                    ],
+                    "default": False,
+                    "type": "bool"
+                }
+            ],
+            "returns": {
+                "desc": [
+                    "supports grouped by channel",
+                    "TODO: add unsigned supports to the output so the numbers add up. just a left join on identity"
+                ],
+                "type": "Paginated[Dict]",
+                "json": {
+                    "page": "Page number of the current items.",
+                    "page_size": "Number of items to show on a page.",
+                    "total_pages": "Total number of pages.",
+                    "total_items": "Total number of items.",
+                    "items": [
+                        {
+                            "json": "json"
+                        }
+                    ]
+                }
+            },
+            "kwargs": [
+                {
+                    "name": "page",
+                    "desc": [
+                        "page to return for paginating"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "page_size",
+                    "desc": [
+                        "number of items on page for pagination"
+                    ],
+                    "type": "int"
+                },
+                {
+                    "name": "include_total",
+                    "desc": [
+                        "calculate total number of items and pages"
+                    ],
+                    "default": False,
+                    "type": "bool"
+                }
+            ],
+            "group": "support",
+            "cli": "support sum",
+            "help": "List total staked supports for a claim, grouped by the channel that signed the support.\nIf claim_id is a channel claim:\n    Use --include_channel_content to include supports for content claims in the channel.\n    Use --exclude_own_supports to exclude supports from the channel to itself.\n\nUsage:\n    support sum <claim_id> [--include_channel_content] [--exclude_own_supports]\n                [--page=<page>] [--page_size=<page_size>] [--include_total]\n\nOptions:\n    --claim_id=<claim_id>      : (str) id of claim to calculate support stats for\n    --include_channel_content  : (bool) if claim_id is for a channel, include supports for\n                                  claims in that channel\n    --exclude_own_supports     : (bool) exclude supports signed by claim_id (i.e. self-\n                                  supports)\n    --page=<page>              : (int) page to return for paginating\n    --page_size=<page_size>    : (int) number of items on page for pagination\n    --include_total            : (bool) calculate total number of items and pages\n\nReturns:\n    (Paginated[Dict]) supports grouped by channel TODO: add unsigned supports to the output so the numbers add up. just a left join on identity\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"json\": \"json\"\n            }\n        ]\n    }"
+        },
         "sync_apply": {
             "name": "apply",
             "desc": {
@@ -11506,11 +11719,14 @@ interface = {
                 "desc": [
                     "sync hash and data"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "sync",
             "cli": "sync apply",
-            "help": "Apply incoming synchronization data, if provided, and return a sync hash and update wallet data.\nWallet must be unlocked to perform this operation.\nIf \"encrypt-on-disk\" preference is True and supplied password is different from local password,\nor there is no local password (because local wallet was not encrypted), then the supplied password\nwill be used for local encryption (overwriting previous local encryption password).\n\nUsage:\n    sync apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]\n\nOptions:\n    --password=<password>    : (str) password to decrypt incoming and encrypt outgoing\n                                data\n    --data=<data>            : (str) incoming sync data, if any\n    --wallet_id=<wallet_id>  : (str) wallet being sync'ed\n    --blocking               : (bool) wait until any new accounts have sync'ed\n\nReturns:\n    (dict) sync hash and data\n    {\n        'hash': (str) hash of wallet,\n        'data': (str) encrypted wallet\n    }"
+            "help": "Apply incoming synchronization data, if provided, and return a sync hash and update wallet data.\nWallet must be unlocked to perform this operation.\nIf \"encrypt-on-disk\" preference is True and supplied password is different from local password,\nor there is no local password (because local wallet was not encrypted), then the supplied password\nwill be used for local encryption (overwriting previous local encryption password).\n\nUsage:\n    sync apply <password> [--data=<data>] [--wallet_id=<wallet_id>] [--blocking]\n\nOptions:\n    --password=<password>    : (str) password to decrypt incoming and encrypt outgoing\n                                data\n    --data=<data>            : (str) incoming sync data, if any\n    --wallet_id=<wallet_id>  : (str) wallet being sync'ed\n    --blocking               : (bool) wait until any new accounts have sync'ed\n\nReturns:\n    (dict) sync hash and data\n    {\n        'hash': (str) hash of wallet,\n        'data': (str) encrypted wallet\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "sync_hash": {
             "name": "hash",
@@ -11609,11 +11825,41 @@ interface = {
                 "desc": [
                     "dictionary containing most common objects in memory"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "tracemalloc",
             "cli": "tracemalloc top",
-            "help": "Show most common objects, the place that created them and their size.\n\nUsage:\n    tracemalloc top [(<items> | --items=<items>)]\n\nOptions:\n    --items=<items>  : (int) maximum items to return, from the most common [default: 10]\n\nReturns:\n    (dict) dictionary containing most common objects in memory\n    {\n        \"line\": (str) filename and line number where it was created,\n        \"code\": (str) code that created it,\n        \"size\": (int) size in bytes, for each \"memory block\",\n        \"count\" (int) number of memory blocks\n    }"
+            "help": "Show most common objects, the place that created them and their size.\n\nUsage:\n    tracemalloc top [(<items> | --items=<items>)]\n\nOptions:\n    --items=<items>  : (int) maximum items to return, from the most common [default: 10]\n\nReturns:\n    (dict) dictionary containing most common objects in memory\n    {\n        \"line\": (str) filename and line number where it was created,\n        \"code\": (str) code that created it,\n        \"size\": (int) size in bytes, for each \"memory block\",\n        \"count\" (int) number of memory blocks\n    }\n    {\n        \"json\": \"json\"\n    }"
+        },
+        "transaction_broadcast": {
+            "name": "broadcast",
+            "desc": {
+                "text": [
+                    "Broadcast transaction(s) to the blockchain."
+                ],
+                "usage": [
+                    "    transaction_broadcast <tx>..."
+                ]
+            },
+            "arguments": [
+                {
+                    "name": "tx",
+                    "desc": [
+                        "transaction to broadcast"
+                    ],
+                    "type": "str"
+                }
+            ],
+            "returns": {
+                "desc": [],
+                "type": "str"
+            },
+            "group": "transaction",
+            "cli": "transaction broadcast",
+            "help": "Broadcast transaction(s) to the blockchain.\n\nUsage:\n    transaction_broadcast <tx>...\n\nOptions:\n    --tx=<tx>  : (str) transaction to broadcast\n\nReturns:\n    (str) "
         },
         "transaction_list": {
             "name": "list",
@@ -11758,15 +12004,23 @@ interface = {
                         "transaction ids to find"
                     ],
                     "type": "str, list"
+                },
+                {
+                    "name": "raw",
+                    "desc": [
+                        "raw tx"
+                    ],
+                    "type": "bool",
+                    "default": False
                 }
             ],
             "returns": {
                 "desc": [],
-                "type": "List[Transaction]"
+                "type": "Dict[str,str]"
             },
             "group": "transaction",
             "cli": "transaction search",
-            "help": "Search for transaction(s) in the entire blockchain.\n\nUsage:\n    transaction_search <txid>...\n\nOptions:\n    --txids=<txids>  : (str, list) transaction ids to find\n\nReturns:\n    (List[Transaction]) "
+            "help": "Search for transaction(s) in the entire blockchain.\n\nUsage:\n    transaction_search <txid>...\n\nOptions:\n    --txids=<txids>  : (str, list) transaction ids to find\n    --raw            : (bool) raw tx\n\nReturns:\n    (Dict[str,str]) "
         },
         "txo_list": {
             "name": "list",
@@ -13035,7 +13289,7 @@ interface = {
                     "List unspent transaction outputs"
                 ],
                 "usage": [
-                    "    utxo_list"
+                    "    utxo list"
                 ],
                 "kwargs": 14
             },
@@ -13364,7 +13618,7 @@ interface = {
             ],
             "group": "utxo",
             "cli": "utxo list",
-            "help": "List unspent transaction outputs\n\nUsage:\n    utxo_list\n              [--type=<type>...] [--txid=<txid>...] [--claim_id=<claim_id>...]\n              [--channel_id=<channel_id>...] [--name=<name>...] [--is_spent]\n              [--is_not_spent] [--is_my_input_or_output] [--is_my_output]\n              [--is_not_my_output] [--is_my_input] [--is_not_my_input]\n              [--exclude_internal_transfers] [--account_id=<account_id>...]\n              [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]\n              [--include_total]\n\nOptions:\n    --type=<type>                 : (str, list) claim type: stream, channel, support,\n                                     purchase, collection, repost, other\n    --txid=<txid>                 : (str, list) transaction id of outputs\n    --claim_id=<claim_id>         : (str, list) claim id\n    --channel_id=<channel_id>     : (str, list) claims in this channel\n    --name=<name>                 : (str, list) claim name\n    --is_spent                    : (bool) only show spent txos\n    --is_not_spent                : (bool) only show not spent txos\n    --is_my_input_or_output       : (bool) txos which have your inputs or your outputs, if\n                                     using this flag the other related flags are ignored.\n                                     (\"--is_my_output\", \"--is_my_input\", etc)\n    --is_my_output                : (bool) show outputs controlled by you\n    --is_not_my_output            : (bool) show outputs not controlled by you\n    --is_my_input                 : (bool) show outputs created by you\n    --is_not_my_input             : (bool) show outputs not created by you\n    --exclude_internal_transfers  : (bool) excludes any outputs that are exactly this\n                                     combination: \"--is_my_input\" + \"--is_my_output\" + \"--\n                                     type=other\" this allows to exclude \"change\" payments,\n                                     this flag can be used in combination with any of the\n                                     other flags\n    --account_id=<account_id>     : (str, list) id(s) of the account(s) to query\n    --wallet_id=<wallet_id>       : (str) restrict results to specific wallet\n    --page=<page>                 : (int) page to return for paginating\n    --page_size=<page_size>       : (int) number of items on page for pagination\n    --include_total               : (bool) calculate total number of items and pages\n\nReturns:\n    (Paginated[Output]) unspent outputs\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ]\n    }"
+            "help": "List unspent transaction outputs\n\nUsage:\n    utxo list\n              [--type=<type>...] [--txid=<txid>...] [--claim_id=<claim_id>...]\n              [--channel_id=<channel_id>...] [--name=<name>...] [--is_spent]\n              [--is_not_spent] [--is_my_input_or_output] [--is_my_output]\n              [--is_not_my_output] [--is_my_input] [--is_not_my_input]\n              [--exclude_internal_transfers] [--account_id=<account_id>...]\n              [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]\n              [--include_total]\n\nOptions:\n    --type=<type>                 : (str, list) claim type: stream, channel, support,\n                                     purchase, collection, repost, other\n    --txid=<txid>                 : (str, list) transaction id of outputs\n    --claim_id=<claim_id>         : (str, list) claim id\n    --channel_id=<channel_id>     : (str, list) claims in this channel\n    --name=<name>                 : (str, list) claim name\n    --is_spent                    : (bool) only show spent txos\n    --is_not_spent                : (bool) only show not spent txos\n    --is_my_input_or_output       : (bool) txos which have your inputs or your outputs, if\n                                     using this flag the other related flags are ignored.\n                                     (\"--is_my_output\", \"--is_my_input\", etc)\n    --is_my_output                : (bool) show outputs controlled by you\n    --is_not_my_output            : (bool) show outputs not controlled by you\n    --is_my_input                 : (bool) show outputs created by you\n    --is_not_my_input             : (bool) show outputs not created by you\n    --exclude_internal_transfers  : (bool) excludes any outputs that are exactly this\n                                     combination: \"--is_my_input\" + \"--is_my_output\" + \"--\n                                     type=other\" this allows to exclude \"change\" payments,\n                                     this flag can be used in combination with any of the\n                                     other flags\n    --account_id=<account_id>     : (str, list) id(s) of the account(s) to query\n    --wallet_id=<wallet_id>       : (str) restrict results to specific wallet\n    --page=<page>                 : (int) page to return for paginating\n    --page_size=<page_size>       : (int) number of items on page for pagination\n    --include_total               : (bool) calculate total number of items and pages\n\nReturns:\n    (Paginated[Output]) unspent outputs\n    {\n        \"page\": \"Page number of the current items.\",\n        \"page_size\": \"Number of items to show on a page.\",\n        \"total_pages\": \"Total number of pages.\",\n        \"total_items\": \"Total number of items.\",\n        \"items\": [\n            {\n                \"txid\": \"hash of transaction in hex\",\n                \"nout\": \"position in the transaction\",\n                \"height\": \"block where transaction was recorded\",\n                \"amount\": \"value of the txo as a decimal\",\n                \"address\": \"address of who can spend the txo\",\n                \"confirmations\": \"number of confirmed blocks\",\n                \"is_change\": \"payment to change address, only available when it can be determined\",\n                \"is_received\": \"true if txo was sent from external account to this account\",\n                \"is_spent\": \"true if txo is spent\",\n                \"is_mine\": \"payment to one of your accounts, only available when it can be determined\",\n                \"type\": \"one of 'claim', 'support' or 'purchase'\",\n                \"name\": \"when type is 'claim' or 'support', this is the claim name\",\n                \"claim_id\": \"when type is 'claim', 'support' or 'purchase', this is the claim id\",\n                \"claim_op\": \"when type is 'claim', this determines if it is 'create' or 'update'\",\n                \"value\": \"when type is 'claim' or 'support' with payload, this is the decoded protobuf payload\",\n                \"value_type\": \"determines the type of the 'value' field: 'channel', 'stream', etc\",\n                \"protobuf\": \"hex encoded raw protobuf version of 'value' field\",\n                \"permanent_url\": \"when type is 'claim' or 'support', this is the long permanent claim URL\",\n                \"claim\": \"for purchase outputs only, metadata of purchased claim\",\n                \"reposted_claim\": \"for repost claims only, metadata of claim being reposted\",\n                \"signing_channel\": \"for signed claims only, metadata of signing channel\",\n                \"is_channel_signature_valid\": \"for signed claims only, whether signature is valid\",\n                \"purchase_receipt\": \"metadata for the purchase transaction associated with this claim\"\n            }\n        ]\n    }"
         },
         "utxo_release": {
             "name": "release",
@@ -13427,10 +13681,13 @@ interface = {
                 "desc": [
                     "lbrynet version information"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "cli": "version",
-            "help": "Get lbrynet API server version information\n\nUsage:\n    version\n\nReturns:\n    (dict) lbrynet version information\n    {\n        'processor': (str) processor type,\n        'python_version': (str) python version,\n        'platform': (str) platform string,\n        'os_release': (str) os release string,\n        'os_system': (str) os name,\n        'version': (str) lbrynet version,\n        'build': (str) \"dev\" | \"qa\" | \"rc\" | \"release\",\n    }"
+            "help": "Get lbrynet API server version information\n\nUsage:\n    version\n\nReturns:\n    (dict) lbrynet version information\n    {\n        'processor': (str) processor type,\n        'python_version': (str) python version,\n        'platform': (str) platform string,\n        'os_release': (str) os release string,\n        'os_system': (str) os name,\n        'version': (str) lbrynet version,\n        'build': (str) \"dev\" | \"qa\" | \"rc\" | \"release\",\n    }\n    {\n        \"json\": \"json\"\n    }"
         },
         "wallet_add": {
             "name": "add",
@@ -13472,7 +13729,7 @@ interface = {
                     "Return the balance of a wallet"
                 ],
                 "usage": [
-                    "    wallet balance [<wallet_id>] [--confirmations=<confirmations>]"
+                    "    wallet balance [<wallet_id>]"
                 ]
             },
             "arguments": [
@@ -13482,23 +13739,18 @@ interface = {
                         "balance for specific wallet, other than default wallet"
                     ],
                     "type": "str"
-                },
-                {
-                    "name": "confirmations",
-                    "desc": [
-                        "only include transactions with this many confirmed blocks."
-                    ],
-                    "default": 0,
-                    "type": "int"
                 }
             ],
             "returns": {
                 "desc": [],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "wallet",
             "cli": "wallet balance",
-            "help": "Return the balance of a wallet\n\nUsage:\n    wallet balance [<wallet_id>] [--confirmations=<confirmations>]\n\nOptions:\n    --wallet_id=<wallet_id>          : (str) balance for specific wallet, other than\n                                        default wallet\n    --confirmations=<confirmations>  : (int) only include transactions with this many\n                                        confirmed blocks. [default: 0]\n\nReturns:\n    (dict) "
+            "help": "Return the balance of a wallet\n\nUsage:\n    wallet balance [<wallet_id>]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) balance for specific wallet, other than default\n                                wallet\n\nReturns:\n    (dict) \n    {\n        \"json\": \"json\"\n    }"
         },
         "wallet_create": {
             "name": "create",
@@ -13507,8 +13759,8 @@ interface = {
                     "Create a new wallet."
                 ],
                 "usage": [
-                    "    wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]",
-                    "                  [--create_account] [--single_key]"
+                    "    wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--name=<name>]",
+                    "                  [--skip_on_startup] [--create_account] [--single_key]"
                 ]
             },
             "arguments": [
@@ -13518,6 +13770,14 @@ interface = {
                         "wallet file name"
                     ],
                     "type": "str"
+                },
+                {
+                    "name": "name",
+                    "desc": [
+                        ""
+                    ],
+                    "type": "str",
+                    "default": "\"\""
                 },
                 {
                     "name": "skip_on_startup",
@@ -13556,7 +13816,7 @@ interface = {
             },
             "group": "wallet",
             "cli": "wallet create",
-            "help": "Create a new wallet.\n\nUsage:\n    wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--skip_on_startup]\n                  [--create_account] [--single_key]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) wallet file name\n    --skip_on_startup        : (bool) don't add wallet to daemon_settings.yml\n    --create_account         : (bool) generates the default account\n    --single_key             : (bool) used with --create_account, creates single-key\n                                account\n\nReturns:\n    (Wallet) newly created wallet\n    {\n        \"id\": \"wallet_id\",\n        \"name\": \"optional wallet name\"\n    }"
+            "help": "Create a new wallet.\n\nUsage:\n    wallet create (<wallet_id> | --wallet_id=<wallet_id>) [--name=<name>]\n                  [--skip_on_startup] [--create_account] [--single_key]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) wallet file name\n    --name=<name>            : (str)  [default: \"\"]\n    --skip_on_startup        : (bool) don't add wallet to daemon_settings.yml\n    --create_account         : (bool) generates the default account\n    --single_key             : (bool) used with --create_account, creates single-key\n                                account\n\nReturns:\n    (Wallet) newly created wallet\n    {\n        \"id\": \"wallet_id\",\n        \"name\": \"optional wallet name\"\n    }"
         },
         "wallet_decrypt": {
             "name": "decrypt",
@@ -13963,11 +14223,14 @@ interface = {
                 "desc": [
                     "status of the wallet"
                 ],
-                "type": "dict"
+                "type": "dict",
+                "json": {
+                    "json": "json"
+                }
             },
             "group": "wallet",
             "cli": "wallet status",
-            "help": "Status of wallet including encryption/lock state.\n\nUsage:\n    wallet status [<wallet_id> | --wallet_id=<wallet_id>]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) status of specific wallet\n\nReturns:\n    (dict) status of the wallet\n    {'is_encrypted': (bool), 'is_syncing': (bool), 'is_locked': (bool)}"
+            "help": "Status of wallet including encryption/lock state.\n\nUsage:\n    wallet status [<wallet_id> | --wallet_id=<wallet_id>]\n\nOptions:\n    --wallet_id=<wallet_id>  : (str) status of specific wallet\n\nReturns:\n    (dict) status of the wallet\n    {'is_encrypted': (bool), 'is_syncing': (bool), 'is_locked': (bool)}\n    {\n        \"json\": \"json\"\n    }"
         },
         "wallet_unlock": {
             "name": "unlock",

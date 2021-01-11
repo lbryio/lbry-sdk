@@ -117,6 +117,11 @@ address_doc = {
 }
 
 
+dict_doc = {
+    "json": "json"
+}
+
+
 def encode_pagination_doc(items):
     return {
         "page": "Page number of the current items.",
