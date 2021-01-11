@@ -85,8 +85,6 @@ class FilterManager:
         self.cache = {}
 
     async def download_and_save_filters(self, needed_filters):
-        if not needed_filters:
-            print('  nothing to download')
         for factor, filter_start, filter_end in needed_filters:
             if factor == 0:
                 print(
@@ -153,6 +151,10 @@ class FilterManager:
         for wallet in wallets:
             for account in wallet.accounts:
                 for address_manager in account.address_managers.values():
+                    print(
+                        f"  matching addresses for account {account.id} "
+                        f"address group {address_manager.chain_number}..."
+                    )
                     missing = await self.db.generate_addresses_using_filters(
                         best_height, address_manager.gap, (
                             account.id,
@@ -162,7 +164,9 @@ class FilterManager:
                             address_manager.public_key.depth
                         )
                     )
-                    await self.download_and_save_filters(missing)
+                    if missing:
+                        print("downloading level 3 filters")
+                        await self.download_and_save_filters(missing)
 
     async def download_sub_filters(self, granularity: int, wallets: WalletManager):
         for wallet in wallets:
@@ -189,13 +193,13 @@ class FilterManager:
         await self.download_initial_filters(best_height)
         print('generating addresses...')
         await self.generate_addresses(best_height, wallets)
-        print('downloading level 3 filters...')
+        print("downloading level 2 filters...")
         await self.download_sub_filters(3, wallets)
-        print('downloading level 2 filters...')
+        print("downloading level 1 filters...")
         await self.download_sub_filters(2, wallets)
-        print('downloading level 1 filters...')
+        print("downloading tx filters...")
         await self.download_sub_filters(1, wallets)
-        print('downloading transactions...')
+        print("downloading transactions...")
         await self.download_transactions(wallets)
         print(f" = finished sync'ing up-to block {best_height} = ")
 
