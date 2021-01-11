@@ -277,9 +277,9 @@ def select_transactions(cols, account_ids=None, **constraints):
 TXO_NOT_MINE = Output(None, None, is_my_output=False)
 
 
-def get_raw_transactions(tx_hashes):
+def get_raw_transactions(tx_hash__in):
     return context().fetchall(
-        select(TX.c.tx_hash, TX.c.raw).where(TX.c.tx_hash.in_(tx_hashes))
+        select(TX.c.tx_hash, TX.c.raw).where(TX.c.tx_hash.in_(tx_hash__in))
     )
 
 

@@ -260,8 +260,8 @@ class Database:
     async def get_missing_tx_for_addresses(self, address_manager):
         return await self.run(q.get_missing_tx_for_addresses, address_manager)
 
-    async def insert_block(self, block):
-        return await self.run(q.insert_block, block)
+    async def insert_blocks(self, blocks):
+        return await self.run(q.insert_blocks, blocks)
 
     async def insert_block_filter(self, height: int, factor: int, address_filter: bytes):
         return await self.run(q.insert_block_filter, height, factor, address_filter)
@@ -329,6 +329,9 @@ class Database:
         return await self.run(
             q.generate_addresses_using_filters, best_height, allowed_gap, address_manager
         )
+
+    async def get_raw_transactions(self, **constraints):
+        return await self.run(q.get_raw_transactions, **constraints)
 
     async def get_transactions(self, **constraints) -> Result[Transaction]:
         return await self.fetch_result(q.get_transactions, **constraints)

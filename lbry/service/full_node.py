@@ -53,10 +53,14 @@ class FullNode(Service):
 #            for f in await self.db.get_block_address_filters()
 #        }
 
-    async def search_transactions(self, txids):
+    async def search_transactions(self, txids, raw: bool = False):
         tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
+        if raw:
+            return {
+                hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
+                for tx in await self.db.get_raw_transactions(tx_hash__in=tx_hashes)
+            }
         return {
-            #hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
             tx.id: hexlify(tx.raw).decode()
             for tx in await self.db.get_transactions(tx_hash__in=tx_hashes)
         }

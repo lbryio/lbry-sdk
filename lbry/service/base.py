@@ -149,7 +149,7 @@ class Service:
         #     await self.ledger.maybe_verify_transaction(tx, height, merkle)
         # return tx
 
-    async def search_transactions(self, txids):
+    async def search_transactions(self, txids, raw: bool = False):
         raise NotImplementedError
 
     async def sum_supports(

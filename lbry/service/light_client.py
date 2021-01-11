@@ -40,8 +40,8 @@ class LightClient(Service):
         await super().stop()
         await self.client.disconnect()
 
-    async def search_transactions(self, txids):
-        return await self.client.transaction_search(txids=txids)
+    async def search_transactions(self, txids, raw: bool = False):
+        return await self.client.first.transaction_search(txids=txids, raw=raw)
 
     async def get_address_filters(self, start_height: int, end_height: int = None, granularity: int = 0):
         return await self.client.first.address_filter(
@@ -49,7 +49,7 @@ class LightClient(Service):
         )
 
     async def broadcast(self, tx):
-        pass
+        return await self.client.first.transaction_broadcast(tx=hexlify(tx.raw).decode())
 
     async def wait(self, tx: Transaction, height=-1, timeout=1):
         pass
@@ -82,33 +82,44 @@ class FilterManager:
         self.cache = {}
 
     async def download_and_save_filters(self, needed_filters):
-        for factor, start, end in needed_filters:
-            print(f'=> address_filter(granularity={factor}, start_height={start}, end_height={end})')
-            if factor > 3:
-                print('skipping')
-                continue
-            filters = await self.client.first.address_filter(
-                granularity=factor, start_height=start, end_height=end
-            )
-            print(f'<= address_filter(granularity={factor}, start_height={start}, end_height={end})')
+        for factor, filter_start, filter_end in needed_filters:
+            print(f'loop, factor: {factor}, filter start: {filter_start}, filter end: {filter_end}')
             if factor == 0:
+                filters = await self.client.first.address_filter(
+                    granularity=factor, start_height=filter_start, end_height=filter_end
+                )
+                print(f'tx_filters: {len(filters)}')
                 for tx_filter in filters:
                     await self.db.insert_tx_filter(
-                        unhexlify(tx_filter["txid"])[::-1], tx_filter["height"], unhexlify(tx_filter["filter"])
+                        unhexlify(tx_filter["txid"])[::-1], tx_filter["height"],
+                        unhexlify(tx_filter["filter"])
                     )
             else:
-                for block_filter in filters:
-                    await self.db.insert_block_filter(
-                        block_filter["height"], factor, unhexlify(block_filter["filter"])
+                if factor > 1:
+                    step = 10**factor
+                else:
+                    step = 1
+                for start in range(filter_start, filter_end+1, step):
+                    print(f'=> address_filter(granularity={factor}, start_height={start})')
+                    filters = await self.client.first.address_filter(
+                        granularity=factor, start_height=start
                     )
+                    print(f'<= address_filter(granularity={factor}, start_height={start})')
+                    for block_filter in filters:
+                        await self.db.insert_block_filter(
+                            block_filter["height"], factor, unhexlify(block_filter["filter"])
+                        )
 
     async def download_and_save_txs(self, tx_hashes):
         if not tx_hashes:
             return
         txids = [hexlify(tx_hash[::-1]).decode() for tx_hash in tx_hashes]
-        txs = await self.client.first.transaction_search(txids=txids)
+        print(f'=> transaction_search(len(txids): {len(txids)})')
+        txs = await self.client.first.transaction_search(txids=txids, raw=True)
+        print(f' @ transaction_search(len(txids): {len(txids)})')
         for raw_tx in txs.values():
             await self.db.insert_transaction(None, Transaction(unhexlify(raw_tx)))
+        print(f' # transaction_search(len(txids): {len(txids)})')
 
     async def download_initial_filters(self, best_height):
         missing = await self.db.get_missing_required_filters(best_height)
@@ -142,9 +153,11 @@ class FilterManager:
         for wallet in wallets:
             for account in wallet.accounts:
                 for address_manager in account.address_managers.values():
+                    print(f'get_missing_tx_for_addresses({account.id})')
                     missing = await self.db.get_missing_tx_for_addresses(
                         (account.id, address_manager.chain_number)
                     )
+                    print(f'  len(missing): {len(missing)}')
                     await self.download_and_save_txs(missing)
 
     async def download(self, best_height: int, wallets: WalletManager):
@@ -206,13 +219,12 @@ class BlockHeaderManager:
     async def download(self, best_height):
         print('downloading blocks...')
         our_height = await self.db.get_best_block_height()
-        print(f'=> block_list(start_height={our_height+1}, end_height={best_height})')
-        blocks = await self.client.first.block_list(start_height=our_height+1, end_height=best_height)
-        print(f'<= block_list(start_height={our_height+1}, end_height={best_height})')
-        for block in blocks:
-            if block["height"] % 10000 == 0 or block["height"] < 2:
-                print(f'block {block["height"]}')
-            await self.db.insert_block(Block(
+        for start in range(our_height+1, best_height, 10000):
+            end = min(start+9999, best_height)
+            print(f'=> block_list(start_height={start}, end_height={end})')
+            blocks = await self.client.first.block_list(start_height=start, end_height=end)
+            print(f'<= block_list(start_height={start}, end_height={end})')
+            await self.db.insert_blocks([Block(
                 height=block["height"],
                 version=0,
                 file_number=0,
@@ -224,7 +236,7 @@ class BlockHeaderManager:
                 bits=0,  # block["bits"],
                 nonce=0,  # block["nonce"],
                 txs=[]
-            ))
+            ) for block in blocks])
 
     async def get_header(self, height):
         blocks = await self.client.first.block_list(height=height)

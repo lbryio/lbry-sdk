@@ -255,7 +255,7 @@ class AsyncUnitDBTestCase(AsyncioTestCase):
 
     async def add(self, block_or_tx: Union[Block, Transaction], block_hash: Optional[bytes] = None):
         if isinstance(block_or_tx, Block):
-            await self.db.insert_block(block_or_tx)
+            await self.db.insert_blocks([block_or_tx])
             for tx in block_or_tx.txs:
                 self.outputs.extend(tx.outputs)
             return block_or_tx

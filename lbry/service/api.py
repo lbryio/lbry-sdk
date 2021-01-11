@@ -2635,6 +2635,7 @@ class API:
     async def transaction_search(
         self,
         txids: StrOrList,  # transaction ids to find
+        raw: bool = False,  # raw tx
     ) -> Dict[str, str]:
         """
         Search for transaction(s) in the entire blockchain.
@@ -2643,7 +2644,22 @@ class API:
             transaction_search <txid>...
 
         """
-        return await self.service.search_transactions(txids)
+        return await self.service.search_transactions(txids, raw)
+
+    async def transaction_broadcast(
+        self,
+        tx: str,  # transaction to broadcast
+    ) -> str:
+        """
+        Broadcast transaction(s) to the blockchain.
+
+        Usage:
+            transaction_broadcast <tx>...
+
+        """
+        return await self.service.broadcast(
+            Transaction(unhexlify(tx))
+        )
 
     TXO_DOC = """
     List and sum transaction outputs.
@@ -3431,7 +3447,7 @@ class Client(API):
 
     async def connect(self):
         self.session = ClientSession()
-        self.ws = await self.session.ws_connect(self.url)
+        self.ws = await self.session.ws_connect(self.url, max_msg_size=20*1024*1024)
         self.receive_messages_task = asyncio.create_task(self.receive_messages())
 
     async def disconnect(self):
