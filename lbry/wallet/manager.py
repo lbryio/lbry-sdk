@@ -116,9 +116,9 @@ class WalletManager:
     def add(self, wallet: Wallet) -> Wallet:
         self.wallets[wallet.id] = wallet
 
-        def wallet_change_handler(event):
-            self.storage.save(wallet)
-            asyncio.create_task(self._on_change_controller.add(event))
+        async def wallet_change_handler(event):
+            await self.storage.save(wallet)
+            await self._on_change_controller.add(event)
         wallet.on_change.listen(wallet_change_handler)
 
         return wallet
