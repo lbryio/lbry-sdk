@@ -263,11 +263,11 @@ class Database:
     async def insert_blocks(self, blocks):
         return await self.run(q.insert_blocks, blocks)
 
-    async def insert_block_filter(self, height: int, factor: int, address_filter: bytes):
-        return await self.run(q.insert_block_filter, height, factor, address_filter)
+    async def insert_block_filters(self, filters):
+        return await self.run(q.insert_block_filters, filters)
 
-    async def insert_tx_filter(self, tx_hash: bytes, height: int, address_filter: bytes):
-        return await self.run(q.insert_tx_filter, tx_hash, height, address_filter)
+    async def insert_tx_filters(self, filters):
+        return await self.run(q.insert_tx_filters, filters)
 
     async def insert_transaction(self, block_hash, tx):
         return await self.run(q.insert_transaction, block_hash, tx)
