@@ -19,7 +19,7 @@ import zlib
 import typing
 from typing import Optional, List, Tuple, Iterable
 from asyncio import sleep
-from bisect import bisect_right
+from bisect import bisect_right, bisect_left
 from collections import namedtuple
 from glob import glob
 from struct import pack, unpack
@@ -29,7 +29,7 @@ from lbry.utils import LRUCacheWithMetrics
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.merkle import Merkle, MerkleCache
-from lbry.wallet.server.util import formatted_time, pack_be_uint16
+from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.storage import db_class
 from lbry.wallet.server.history import History
 
@@ -41,6 +41,7 @@ BLOCK_HASH_PREFIX = b'C'
 HEADER_PREFIX = b'H'
 TX_NUM_PREFIX = b'N'
 TX_COUNT_PREFIX = b'T'
+UNDO_PREFIX = b'U'
 TX_HASH_PREFIX = b'X'
 
 HASHX_UTXO_PREFIX = b'h'
@@ -48,9 +49,6 @@ HIST_STATE = b'state-hist'
 UTXO_STATE = b'state-utxo'
 UTXO_PREFIX = b'u'
 HASHX_HISTORY_PREFIX = b'x'
-
-
-
 
 
 @attr.s(slots=True)
@@ -106,6 +104,19 @@ class LevelDB:
 
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
+
+    # def add_unflushed(self, hashXs_by_tx, first_tx_num):
+    #     unflushed = self.history.unflushed
+    #     count = 0
+    #     for tx_num, hashXs in enumerate(hashXs_by_tx, start=first_tx_num):
+    #         hashXs = set(hashXs)
+    #         for hashX in hashXs:
+    #             unflushed[hashX].append(tx_num)
+    #         count += len(hashXs)
+    #     self.history.unflushed_count += count
+
+    # def unflushed_memsize(self):
+    #     return len(self.history.unflushed) * 180 + self.history.unflushed_count * 4
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
@@ -172,10 +183,88 @@ class LevelDB:
         self.read_utxo_state()
 
         # Then history DB
-        self.utxo_flush_count = self.history.open_db(
-            self.db, for_sync, self.utxo_flush_count, compacting
-        )
-        self.clear_excess_undo_info()
+        state = self.db.get(HIST_STATE)
+        if state:
+            state = ast.literal_eval(state.decode())
+            if not isinstance(state, dict):
+                raise RuntimeError('failed reading state from history DB')
+            self.history.flush_count = state['flush_count']
+            self.history.comp_flush_count = state.get('comp_flush_count', -1)
+            self.history.comp_cursor = state.get('comp_cursor', -1)
+            self.history.db_version = state.get('db_version', 0)
+        else:
+            self.history.flush_count = 0
+            self.history.comp_flush_count = -1
+            self.history.comp_cursor = -1
+            self.history.db_version = max(self.DB_VERSIONS)
+
+        self.logger.info(f'history DB version: {self.history.db_version}')
+        if self.history.db_version not in self.DB_VERSIONS:
+            msg = f'this software only handles DB versions {self.DB_VERSIONS}'
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+        self.logger.info(f'flush count: {self.history.flush_count:,d}')
+
+        # self.history.clear_excess(self.utxo_flush_count)
+        # < might happen at end of compaction as both DBs cannot be
+        # updated atomically
+        if self.history.flush_count > self.utxo_flush_count:
+            self.logger.info('DB shut down uncleanly.  Scanning for '
+                             'excess history flushes...')
+
+            keys = []
+            for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX):
+                k = key[1:]
+                flush_id, = unpack_be_uint16_from(k[-2:])
+                if flush_id > self.utxo_flush_count:
+                    keys.append(k)
+
+            self.logger.info(f'deleting {len(keys):,d} history entries')
+
+            self.history.flush_count = self.utxo_flush_count
+            with self.db.write_batch() as batch:
+                for key in keys:
+                    batch.delete(HASHX_HISTORY_PREFIX + key)
+                state = {
+                    'flush_count': self.history.flush_count,
+                    'comp_flush_count': self.history.comp_flush_count,
+                    'comp_cursor': self.history.comp_cursor,
+                    'db_version': self.history.db_version,
+                }
+                # History entries are not prefixed; the suffix \0\0 ensures we
+                # look similar to other entries and aren't interfered with
+                batch.put(HIST_STATE, repr(state).encode())
+
+            self.logger.info('deleted excess history entries')
+
+        self.utxo_flush_count = self.history.flush_count
+
+        min_height = self.min_undo_height(self.db_height)
+        keys = []
+        for key, hist in self.db.iterator(prefix=UNDO_PREFIX):
+            height, = unpack('>I', key[-4:])
+            if height >= min_height:
+                break
+            keys.append(key)
+
+        if keys:
+            with self.db.write_batch() as batch:
+                for key in keys:
+                    batch.delete(key)
+            self.logger.info(f'deleted {len(keys):,d} stale undo entries')
+
+        # delete old block files
+        prefix = self.raw_block_prefix()
+        paths = [path for path in glob(f'{prefix}[0-9]*')
+                 if len(path) > len(prefix)
+                 and int(path[len(prefix):]) < min_height]
+        if paths:
+            for path in paths:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
+            self.logger.info(f'deleted {len(paths):,d} stale block files')
 
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
@@ -185,7 +274,6 @@ class LevelDB:
 
     def close(self):
         self.db.close()
-        self.history.close_db()
         self.executor.shutdown(wait=True)
         self.executor = None
 
@@ -240,7 +328,7 @@ class LevelDB:
         assert not flush_data.adds
         assert not flush_data.deletes
         assert not flush_data.undo_infos
-        self.history.assert_flushed()
+        assert not self.history.unflushed
 
     def flush_utxo_db(self, batch, flush_data):
         """Flush the cached DB writes and UTXO set to the batch."""
@@ -263,12 +351,13 @@ class LevelDB:
             # suffix = tx_idx + tx_num
             hashX = value[:-12]
             suffix = key[-2:] + value[-12:-8]
-            batch_put(b'h' + key[:4] + suffix, hashX)
-            batch_put(b'u' + hashX + suffix, value[-8:])
+            batch_put(HASHX_UTXO_PREFIX + key[:4] + suffix, hashX)
+            batch_put(UTXO_PREFIX + hashX + suffix, value[-8:])
         flush_data.adds.clear()
 
         # New undo information
-        self.flush_undo_infos(batch_put, flush_data.undo_infos)
+        for undo_info, height in flush_data.undo_infos:
+            batch_put(self.undo_key(height), b''.join(undo_info))
         flush_data.undo_infos.clear()
 
         if self.db.for_sync:
@@ -284,6 +373,17 @@ class LevelDB:
         self.db_height = flush_data.height
         self.db_tx_count = flush_data.tx_count
         self.db_tip = flush_data.tip
+
+    def write_history_state(self, batch):
+        state = {
+            'flush_count': self.history.flush_count,
+            'comp_flush_count': self.history.comp_flush_count,
+            'comp_cursor': self.history.comp_cursor,
+            'db_version': self.db_version,
+        }
+        # History entries are not prefixed; the suffix \0\0 ensures we
+        # look similar to other entries and aren't interfered with
+        batch.put(HIST_STATE, repr(state).encode())
 
     def flush_dbs(self, flush_data, flush_utxos, estimate_txs_remaining):
         """Flush out cached state.  History is always flushed; UTXOs are
@@ -351,7 +451,7 @@ class LevelDB:
             for hashX in sorted(unflushed):
                 key = hashX + flush_id
                 batch_put(HASHX_HISTORY_PREFIX + key, unflushed[hashX].tobytes())
-            self.history.write_state(batch)
+            self.write_history_state(batch)
 
             unflushed.clear()
             self.history.unflushed_count = 0
@@ -396,44 +496,73 @@ class LevelDB:
             self.logger.info(f'sync time: {formatted_time(self.wall_time)}  '
                              f'ETA: {formatted_time(eta)}')
 
-    def flush_state(self, batch):
-        """Flush chain state to the batch."""
-        now = time.time()
-        self.wall_time += now - self.last_flush
-        self.last_flush = now
-        self.last_flush_tx_count = self.fs_tx_count
-        self.write_utxo_state(batch)
+    # def flush_state(self, batch):
+    #     """Flush chain state to the batch."""
+    #     now = time.time()
+    #     self.wall_time += now - self.last_flush
+    #     self.last_flush = now
+    #     self.last_flush_tx_count = self.fs_tx_count
+    #     self.write_utxo_state(batch)
 
     def flush_backup(self, flush_data, touched):
         """Like flush_dbs() but when backing up.  All UTXOs are flushed."""
         assert not flush_data.headers
         assert not flush_data.block_txs
         assert flush_data.height < self.db_height
-        self.history.assert_flushed()
+        assert not self.history.unflushed
 
         start_time = time.time()
         tx_delta = flush_data.tx_count - self.last_flush_tx_count
+        ###
+        while self.fs_height > flush_data.height:
+            self.fs_height -= 1
+            self.headers.pop()
+        self.fs_tx_count = flush_data.tx_count
+        # Truncate header_mc: header count is 1 more than the height.
+        self.header_mc.truncate(flush_data.height + 1)
 
-        self.backup_fs(flush_data.height, flush_data.tx_count)
-        self.history.backup(touched, flush_data.tx_count)
+        ###
+        # Not certain this is needed, but it doesn't hurt
+        self.history.flush_count += 1
+        nremoves = 0
+
         with self.db.write_batch() as batch:
+            tx_count = flush_data.tx_count
+            for hashX in sorted(touched):
+                deletes = []
+                puts = {}
+                for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, reverse=True):
+                    k = key[1:]
+                    a = array.array('I')
+                    a.frombytes(hist)
+                    # Remove all history entries >= tx_count
+                    idx = bisect_left(a, tx_count)
+                    nremoves += len(a) - idx
+                    if idx > 0:
+                        puts[k] = a[:idx].tobytes()
+                        break
+                    deletes.append(k)
+
+                for key in deletes:
+                    batch.delete(key)
+                for key, value in puts.items():
+                    batch.put(key, value)
+            self.write_history_state(batch)
+
             self.flush_utxo_db(batch, flush_data)
             # Flush state last as it reads the wall time.
-            self.flush_state(batch)
+            now = time.time()
+            self.wall_time += now - self.last_flush
+            self.last_flush = now
+            self.last_flush_tx_count = self.fs_tx_count
+            self.write_utxo_state(batch)
 
+
+        self.logger.info(f'backing up removed {nremoves:,d} history entries')
         elapsed = self.last_flush - start_time
         self.logger.info(f'backup flush #{self.history.flush_count:,d} took '
                          f'{elapsed:.1f}s.  Height {flush_data.height:,d} '
                          f'txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
-
-    def backup_fs(self, height, tx_count):
-        """Back up during a reorg.  This just updates our pointers."""
-        while self.fs_height > height:
-            self.fs_height -= 1
-            self.headers.pop()
-        self.fs_tx_count = tx_count
-        # Truncate header_mc: header count is 1 more than the height.
-        self.header_mc.truncate(height + 1)
 
     def raw_header(self, height):
         """Return the binary header at the given height."""
@@ -555,7 +684,7 @@ class LevelDB:
             cnt = 0
             txs = []
 
-            for hist in self.history.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, include_key=False):
+            for hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, include_key=False):
                 a = array.array('I')
                 a.frombytes(hist)
                 for tx_num in a:
@@ -586,16 +715,11 @@ class LevelDB:
 
     def undo_key(self, height):
         """DB key for undo information at the given height."""
-        return b'U' + pack('>I', height)
+        return UNDO_PREFIX + pack('>I', height)
 
     def read_undo_info(self, height):
         """Read undo information from a file for the current height."""
         return self.db.get(self.undo_key(height))
-
-    def flush_undo_infos(self, batch_put, undo_infos):
-        """undo_infos is a list of (undo_info, height) pairs."""
-        for undo_info, height in undo_infos:
-            batch_put(self.undo_key(height), b''.join(undo_info))
 
     def raw_block_prefix(self):
         return 'block'
@@ -626,10 +750,9 @@ class LevelDB:
 
     def clear_excess_undo_info(self):
         """Clear excess undo info.  Only most recent N are kept."""
-        prefix = b'U'
         min_height = self.min_undo_height(self.db_height)
         keys = []
-        for key, hist in self.db.iterator(prefix=prefix):
+        for key, hist in self.db.iterator(prefix=UNDO_PREFIX):
             height, = unpack('>I', key[-4:])
             if height >= min_height:
                 break
@@ -733,7 +856,7 @@ class LevelDB:
             fs_tx_hash = self.fs_tx_hash
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
-            prefix = b'u' + hashX
+            prefix = UTXO_PREFIX + hashX
             for db_key, db_value in self.db.iterator(prefix=prefix):
                 tx_pos, tx_num = s_unpack('<HI', db_key[-6:])
                 value, = unpack('<Q', db_value)
@@ -764,7 +887,7 @@ class LevelDB:
 
                 # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
                 # Value: hashX
-                prefix = b'h' + tx_hash[:4] + idx_packed
+                prefix = HASHX_UTXO_PREFIX + tx_hash[:4] + idx_packed
 
                 # Find which entry, if any, the TX_HASH matches.
                 for db_key, hashX in self.db.iterator(prefix=prefix):
@@ -785,7 +908,7 @@ class LevelDB:
                     return None
                 # Key: b'u' + address_hashX + tx_idx + tx_num
                 # Value: the UTXO value as a 64-bit unsigned integer
-                key = b'u' + hashX + suffix
+                key = UTXO_PREFIX + hashX + suffix
                 db_value = self.db.get(key)
                 if not db_value:
                     # This can happen if the DB was updated between

@@ -384,7 +384,7 @@ class BlockProcessor:
         one_MB = 1000*1000
         utxo_cache_size = len(self.utxo_cache) * 205
         db_deletes_size = len(self.db_deletes) * 57
-        hist_cache_size = self.db.history.unflushed_memsize()
+        hist_cache_size = len(self.db.history.unflushed) * 180 + self.db.history.unflushed_count * 4
         # Roughly ntxs * 32 + nblocks * 42
         tx_hash_size = ((self.tx_count - self.db.fs_tx_count) * 32
                         + (self.height - self.db.fs_height) * 42)
@@ -475,7 +475,16 @@ class BlockProcessor:
             self.db.total_transactions.append(tx_hash)
             tx_num += 1
 
-        self.db.history.add_unflushed(hashXs_by_tx, self.tx_count)
+        # self.db.add_unflushed(hashXs_by_tx, self.tx_count)
+        first_tx_num = self.tx_count
+        _unflushed = self.db.history.unflushed
+        _count = 0
+        for _tx_num, _hashXs in enumerate(hashXs_by_tx, start=first_tx_num):
+            for _hashX in set(_hashXs):
+                _unflushed[_hashX].append(_tx_num)
+            _count += len(_hashXs)
+        self.db.history.unflushed_count += _count
+
         self.tx_count = tx_num
         self.db.tx_counts.append(tx_num)
 
