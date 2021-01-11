@@ -2,14 +2,17 @@ import time
 import asyncio
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Optional
+from typing import Optional, List, Tuple
 from prometheus_client import Gauge, Histogram
 import lbry
+from lbry.schema.claim import Claim
+from lbry.wallet.server.tx import Tx
 from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
+from lbry.wallet.transaction import Transaction
 from lbry.wallet.server.udp import StatusServer
 
 
@@ -212,15 +215,15 @@ class BlockProcessor:
         chain = [self.tip] + [self.coin.header_hash(h) for h in headers[:-1]]
 
         if hprevs == chain:
+
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             if self.sql:
                 await self.db.search_index.claim_consumer(self.sql.claim_producer())
             for cache in self.search_cache.values():
                 cache.clear()
-            self.history_cache.clear()
+            self.history_cache.clear()  # TODO: is this needed?
             self.notifications.notified_mempool_txs.clear()
-            await self._maybe_flush()
             processed_time = time.perf_counter() - start
             self.block_count_metric.set(self.height)
             self.block_update_time_metric.observe(processed_time)
@@ -423,7 +426,14 @@ class BlockProcessor:
         self.headers.extend(headers)
         self.tip = self.coin.header_hash(headers[-1])
 
-    def advance_txs(self, height, txs, header, block_hash):
+        self.db.flush_dbs(self.flush_data(), True, self.estimate_txs_remaining)
+
+        for cache in self.search_cache.values():
+            cache.clear()
+        self.history_cache.clear()
+        self.notifications.notified_mempool_txs.clear()
+
+    def advance_txs(self, height, txs: List[Tuple[Tx, bytes]], header, block_hash):
         self.block_hashes.append(block_hash)
         self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx.raw for tx, _ in txs]))
 
@@ -611,7 +621,6 @@ class BlockProcessor:
         for hdb_key, hashX in candidates.items():
             tx_num_packed = hdb_key[-4:]
             if len(candidates) > 1:
-
                 tx_num, = unpack('<I', tx_num_packed)
                 try:
                     hash, height = self.db.fs_tx_hash(tx_num)
@@ -635,6 +644,7 @@ class BlockProcessor:
             # Remove both entries for this UTXO
             self.db_deletes.append(hdb_key)
             self.db_deletes.append(udb_key)
+
             return hashX + tx_num_packed + utxo_value_packed
 
         self.logger.error('UTXO {hash_to_hex_str(tx_hash)} / {tx_idx} not found in "h" table')
