@@ -25,10 +25,10 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
             (1, 134_500, 134_567)
         })
 
-        q.insert_block_filter(110_000, 4, b'beef')
-        q.insert_block_filter(129_000, 3, b'beef')
-        q.insert_block_filter(133_900, 2, b'beef')
-        q.insert_block_filter(134_499, 1, b'beef')
+        q.insert_block_filters([(110_000, 4, b'beef')])
+        q.insert_block_filters([(129_000, 3, b'beef')])
+        q.insert_block_filters([(133_900, 2, b'beef')])
+        q.insert_block_filters([(134_499, 1, b'beef')])
         # we we have some filters, but not recent enough (all except 10k are adjusted)
         self.assertEqual(q.get_missing_required_filters(134_567), {
             (4, 120_000, 120_000),  # 0 -> 120_000
@@ -37,9 +37,9 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
             (1, 134_500, 134_567)
         })
 
-        q.insert_block_filter(132_000, 3, b'beef')
-        q.insert_block_filter(134_300, 2, b'beef')
-        q.insert_block_filter(134_550, 1, b'beef')
+        q.insert_block_filters([(132_000, 3, b'beef')])
+        q.insert_block_filters([(134_300, 2, b'beef')])
+        q.insert_block_filters([(134_550, 1, b'beef')])
         # all filters get adjusted because we have recent of each
         self.assertEqual(q.get_missing_required_filters(134_567), {
             (4, 120_000, 120_000),  # 0       -> 120_000
@@ -48,16 +48,16 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
             (1, 134_551, 134_567)   # 134_500 -> 134_551
         })
 
-        q.insert_block_filter(120_000, 4, b'beef')
-        q.insert_block_filter(133_000, 3, b'beef')
-        q.insert_block_filter(134_400, 2, b'beef')
-        q.insert_block_filter(134_566, 1, b'beef')
+        q.insert_block_filters([(120_000, 4, b'beef')])
+        q.insert_block_filters([(133_000, 3, b'beef')])
+        q.insert_block_filters([(134_400, 2, b'beef')])
+        q.insert_block_filters([(134_566, 1, b'beef')])
         # we have latest filters for all except latest single block
         self.assertEqual(q.get_missing_required_filters(134_567), {
             (1, 134_567, 134_567)   # 134_551 -> 134_567
         })
 
-        q.insert_block_filter(134_567, 1, b'beef')
+        q.insert_block_filters([(134_567, 1, b'beef')])
         # we have all latest filters
         self.assertEqual(q.get_missing_required_filters(134_567), set())
 
@@ -113,11 +113,11 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
             step = 1 if granularity == 2 else 10 ** (granularity - 1)
             for i, height in enumerate(range(height, end, step)):
                 if i == 3:
-                    q.insert_block_filter(height, granularity - 1, create_address_filter(addresses))
+                    q.insert_block_filters([(height, granularity - 1, create_address_filter(addresses))])
                 else:
-                    q.insert_block_filter(height, granularity - 1, create_address_filter([b'beef']))
+                    q.insert_block_filters([(height, granularity - 1, create_address_filter([b'beef']))])
         elif granularity == 1:
-            q.insert_tx_filter(hexlify(f'tx{height}'.encode()), height, create_address_filter(addresses))
+            q.insert_tx_filters([(hexlify(f'tx{height}'.encode()), height, create_address_filter(addresses))])
 
     def test_generate_from_filters_and_download_txs(self):
         # 15 addresses will get generated, 9 due to filters and 6 due to gap
@@ -126,22 +126,22 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
 
         # create all required filters (include 9 of the addresses in the filters)
 
-        q.insert_block_filter(0,       4, create_address_filter(hashes[0:1]))
-        q.insert_block_filter(100_000, 4, create_address_filter(hashes[1:2]))
-        q.insert_block_filter(110_000, 4, create_address_filter([b'beef']))
-        q.insert_block_filter(120_000, 4, create_address_filter(hashes[2:3]))
+        q.insert_block_filters([(0,       4, create_address_filter(hashes[0:1]))])
+        q.insert_block_filters([(100_000, 4, create_address_filter(hashes[1:2]))])
+        q.insert_block_filters([(110_000, 4, create_address_filter([b'beef']))])
+        q.insert_block_filters([(120_000, 4, create_address_filter(hashes[2:3]))])
 
-        q.insert_block_filter(130_000, 3, create_address_filter(hashes[3:4]))
-        q.insert_block_filter(131_000, 3, create_address_filter([b'beef']))
-        q.insert_block_filter(133_000, 3, create_address_filter(hashes[4:5]))
+        q.insert_block_filters([(130_000, 3, create_address_filter(hashes[3:4]))])
+        q.insert_block_filters([(131_000, 3, create_address_filter([b'beef']))])
+        q.insert_block_filters([(133_000, 3, create_address_filter(hashes[4:5]))])
 
-        q.insert_block_filter(134_000, 2, create_address_filter(hashes[5:6]))
-        q.insert_block_filter(134_200, 2, create_address_filter([b'beef']))
-        q.insert_block_filter(134_400, 2, create_address_filter(hashes[6:7]))
+        q.insert_block_filters([(134_000, 2, create_address_filter(hashes[5:6]))])
+        q.insert_block_filters([(134_200, 2, create_address_filter([b'beef']))])
+        q.insert_block_filters([(134_400, 2, create_address_filter(hashes[6:7]))])
 
-        q.insert_block_filter(134_500, 1, create_address_filter(hashes[7:8]))
-        q.insert_block_filter(134_566, 1, create_address_filter([b'beef']))
-        q.insert_block_filter(134_567, 1, create_address_filter(hashes[8:9]))
+        q.insert_block_filters([(134_500, 1, create_address_filter(hashes[7:8]))])
+        q.insert_block_filters([(134_566, 1, create_address_filter([b'beef']))])
+        q.insert_block_filters([(134_567, 1, create_address_filter(hashes[8:9]))])
 
         # check that all required filters did get created
         self.assertEqual(q.get_missing_required_filters(134_567), set())
