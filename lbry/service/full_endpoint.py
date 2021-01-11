@@ -57,11 +57,16 @@ class FullEndpoint(Service):
             start_height=start_height, end_height=end_height, granularity=granularity
         )
 
-    async def search_transactions(self, txids):
+    async def search_transactions(self, txids, raw: bool = False):
         tx_hashes = [unhexlify(txid)[::-1] for txid in txids]
+        if raw:
+            return {
+                hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
+                for tx in await self.db.get_raw_transactions(tx_hash__in=tx_hashes)
+            }
         return {
-            hexlify(tx['tx_hash'][::-1]).decode(): hexlify(tx['raw']).decode()
-            for tx in await self.db.get_transactions(tx_hashes=tx_hashes)
+            tx.id: hexlify(tx.raw).decode()
+            for tx in await self.db.get_transactions(tx_hash__in=tx_hashes)
         }
 
     async def broadcast(self, tx):
