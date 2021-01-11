@@ -155,13 +155,15 @@ def get_tx_matchers_for_missing_txs() -> List[Tuple[int, PyBIP158]]:
     ]
 
 
-def insert_block_filter(height: int, factor: int, address_filter: bytes):
+def insert_block_filters(filters):
     loader = context().get_bulk_loader()
-    loader.add_block_filter(height, factor, address_filter)
+    for height, factor, address_filter in filters:
+        loader.add_block_filter(height, factor, address_filter)
     loader.flush(return_row_count_for_table=None)
 
 
-def insert_tx_filter(tx_hash: bytes, height: int, address_filter: bytes):
+def insert_tx_filters(filters):
     loader = context().get_bulk_loader()
-    loader.add_transaction_filter(tx_hash, height, address_filter)
+    for tx_hash, height, address_filter in filters:
+        loader.add_transaction_filter(tx_hash, height, address_filter)
     loader.flush(return_row_count_for_table=None)
