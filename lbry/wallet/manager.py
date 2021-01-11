@@ -7,6 +7,7 @@ from typing import Optional, Dict
 
 from lbry.db import Database
 from lbry.blockchain.dewies import dict_values_to_lbc
+from lbry.event import EventController
 
 from .wallet import Wallet
 from .account import SingleKey, HierarchicalDeterministic
@@ -19,6 +20,8 @@ class WalletManager:
     def __init__(self, db: Database):
         self.db = db
         self.ledger = db.ledger
+        self._on_change_controller = EventController()
+        self.on_change = self._on_change_controller.stream
         self.wallets: Dict[str, Wallet] = {}
         if self.ledger.conf.wallet_storage == "file":
             self.storage = FileWallet(self.db, self.ledger.conf.wallet_dir)
@@ -112,7 +115,12 @@ class WalletManager:
 
     def add(self, wallet: Wallet) -> Wallet:
         self.wallets[wallet.id] = wallet
-        wallet.on_change.listen(lambda _: self.storage.save(wallet))
+
+        def wallet_change_handler(event):
+            asyncio.create_task(self.storage.save(wallet))
+            asyncio.create_task(self._on_change_controller.add(event))
+        wallet.on_change.listen(wallet_change_handler)
+
         return wallet
 
     def remove(self, wallet_id: str) -> Wallet:
