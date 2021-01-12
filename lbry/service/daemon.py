@@ -70,6 +70,7 @@ class Daemon:
         self.app['subscriptions']: Dict[str, Tuple[BroadcastSubscription, WeakSet]] = {}
         self.app.router.add_get('/ws', self.on_connect)
         self.app.router.add_post('/api', self.on_rpc)
+        self.app.router.add_post('/', self.on_rpc)
         self.app.on_shutdown.append(self.on_shutdown)
         self.runner = AppRunner(self.app)
 
@@ -116,8 +117,8 @@ class Daemon:
     async def on_rpc(self, request):
         data = await request.json()
         params = data.get('params', {})
-        method = getattr(self.api, data['method'])
         try:
+            method = getattr(self.api, data['method'])
             result = await method(**params)
             encoded_result = jsonrpc_dumps_pretty(result, service=self.service)
             return Response(
@@ -125,6 +126,7 @@ class Daemon:
                 content_type='application/json'
             )
         except Exception as e:
+            print(e, method, params)
             log.exception("RPC error")
             raise e
 

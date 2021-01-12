@@ -36,6 +36,7 @@ class Sync:
 
         self._on_ready_controller = EventController()
         self.on_ready = self._on_ready_controller.stream
+        self.done = asyncio.Event()
 
     def on_bulk_started(self):
         return self.on_progress.where()  # filter for bulk started event
@@ -85,10 +86,122 @@ class Service:
         await self.db.close()
 
     async def get_status(self):
-        pass
+        synced = True
+        return {
+            "blob_manager": {
+                "connections": {
+                    "incoming_bps": {},
+                    "max_incoming_mbs": 0.0,
+                    "max_outgoing_mbs": 0.0,
+                    "outgoing_bps": {},
+                    "total_incoming_mbs": 0.0,
+                    "total_outgoing_mbs": 0.0,
+                    "total_received": 0,
+                    "total_sent": 0
+                },
+                "finished_blobs": 0
+            },
+            "connection_status": {
+                "code": "connected",
+                "message": "No connection problems detected"
+            },
+            "dht": {
+                "node_id": "9ceb289bec5357cf259cb353666cbb0c5852492dd1294bc17fe70d44c4c8ac07bd5c7e3b6c5df467e5f1e2151ad7e48a",
+                "peers_in_routing_table": 36
+            },
+            "ffmpeg_status": {
+                "analyze_audio_volume": True,
+                "available": True,
+                "which": "/usr/bin/ffmpeg"
+            },
+            "hash_announcer": {
+                "announce_queue_size": 0
+            },
+            "installation_id": "9TFNje8mcbZ2y7jg6e3915roopqdNq34NpUZP5qWxczMmqvAjJBesdVsRpECBeUmPr",
+            "is_running": True,
+            "skipped_components": [],
+            "startup_status": {
+                "blob_manager": True,
+                "database": True,
+                "dht": True,
+                "exchange_rate_manager": True,
+                "file_manager": synced,
+                "hash_announcer": synced,
+                "libtorrent_component": True,
+                "peer_protocol_server": True,
+                "upnp": True,
+                "wallet": synced,
+                "wallet_server_payments": True
+            },
+            "upnp": {
+                "aioupnp_version": "0.0.18",
+                "dht_redirect_set": False,
+                "external_ip": "45.162.228.190",
+                "gateway": "No gateway found",
+                "peer_redirect_set": False,
+                "redirects": {}
+            },
+            "wallet": {
+                "available_servers": 5,
+                "best_blockhash": "c114dc272f3851580bc801dbcdf9cd58320b99bf0f069cea58edd3689de30760",
+                "blocks": 894990,
+                "blocks_behind": 0,
+                "connected": "18.229.92.202:50001",
+                "connected_features": {
+                    "daily_fee": "0",
+                    "description": "",
+                    "donation_address": "",
+                    "genesis_hash": "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463",
+                    "hash_function": "sha256",
+                    "hosts": {},
+                    "payment_address": "",
+                    "protocol_max": "0.99.0",
+                    "protocol_min": "0.54.0",
+                    "pruning": None,
+                    "server_version": "0.86.1",
+                    "trending_algorithm": "ar"
+                },
+                "headers_synchronization_progress": 100,
+                "known_servers": 1,
+                "servers": [
+                    {
+                        "availability": True,
+                        "host": "spv.lbry.tech",
+                        "latency": 0,
+                        "port": 5279
+                    },
+                ]
+            },
+            "wallet_server_payments": {
+                "max_fee": "0.0",
+                "running": False
+            }
+        }
 
     def get_version(self):
-        pass
+        # fixme: get real
+        return {
+            "build": "release",
+            "desktop": "Unknown",
+            "distro": {
+                "codename": "buster",
+                "id": "debian",
+                "like": "",
+                "version": "10",
+                "version_parts": {
+                    "build_number": "",
+                    "major": "10",
+                    "minor": ""
+                }
+            },
+            "lbrynet_version": "0.87.0",
+            "os_release": "4.19.155-1.pvops.qubes.x86_64",
+            "os_system": "Linux",
+            "platform": "Linux-4.19.155-1.pvops.qubes.x86_64-x86_64-with-debian-10.7",
+            "processor": "",
+            "python_version": "3.7.9",
+            "version": "0.87.0"
+        }
 
     async def find_ffmpeg(self):
         pass

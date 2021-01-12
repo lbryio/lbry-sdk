@@ -477,7 +477,7 @@ class API:
                 'build': (str) "dev" | "qa" | "rc" | "release",
             }
         """
-        return await self.service.get_version()
+        return self.service.get_version()
 
     async def resolve(
         self,
@@ -784,9 +784,11 @@ class API:
             return {'is_encrypted': None, 'is_syncing': None, 'is_locked': None}
         wallet = self.wallets.get_or_default(wallet_id)
         return {
-            'is_encrypted': wallet.is_encrypted,
-            'is_syncing': len(self.ledger._update_tasks) > 0,
-            'is_locked': wallet.is_locked
+            #'is_encrypted': wallet.is_encrypted,
+            #'is_locked': wallet.is_locked,
+            'is_encrypted': False,
+            'is_locked': False,
+            'is_syncing': not self.service.sync.done.is_set(),
         }
 
     async def wallet_unlock(
@@ -1581,7 +1583,6 @@ class API:
         ))
         stream_filter_dict, kwargs = pop_kwargs('stream_filter', extract_stream_filter(**kwargs))
         pagination, kwargs = pop_kwargs('pagination', extract_pagination(**kwargs))
-        assert_consumed_kwargs(kwargs)
         wallet = self.wallets.get_or_default(wallet_id)
 #        if {'claim_id', 'claim_ids'}.issubset(kwargs):
 #            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
@@ -1604,8 +1605,14 @@ class API:
             'order_by': order_by
         })
         kwargs.pop("no_totals", None)  # deprecated, ignoring
+        kwargs.pop("any_tags", None)  # deprecated, ignoring
+        kwargs.pop("not_tags", None)  # deprecated, ignoring
+        kwargs.pop("limit_claims_per_channel", None)  # deprecated, ignoring
+        claim_filter_dict['channel_ids'] = kwargs.pop('channel_ids')
+        claim_filter_dict['not_channel_ids'] = kwargs.pop('not_channel_ids')
+        assert_consumed_kwargs(kwargs)
         claim_filter_dict.update(kwargs)
-        if protobuf:
+        if protobuf or 1:
             return await self.service.protobuf_search_claims(**remove_nulls(claim_filter_dict))
         result = await self.service.search_claims(
             wallet.accounts, **remove_nulls(claim_filter_dict)

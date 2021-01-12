@@ -61,7 +61,11 @@ class LightClient(Service):
         pass
 
     async def search_claims(self, accounts, **kwargs):
-        pass
+        kwargs.pop('offset', None)
+        kwargs.pop('limit', None)
+        kwargs.pop('channel_ids', None)
+        kwargs.pop('not_channel_ids', None)
+        return await self.client.first.claim_search(**kwargs)
 
     async def search_supports(self, accounts, **kwargs):
         pass
@@ -320,6 +324,7 @@ class FastSync(Sync):
         #     self.filters.download(height, self.service.wallets),
         # ])
         await self._on_synced_controller.add(height)
+        self.done.set()
 
     async def loop(self):
         while True:
