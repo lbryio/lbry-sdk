@@ -18,9 +18,10 @@ import time
 import zlib
 import typing
 from typing import Optional, List, Tuple, Iterable
+from functools import partial
 from asyncio import sleep
 from bisect import bisect_right, bisect_left
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 from glob import glob
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
@@ -31,7 +32,6 @@ from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.storage import db_class
-from lbry.wallet.server.history import History
 
 
 UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
@@ -73,6 +73,7 @@ class LevelDB:
     """
 
     DB_VERSIONS = [6]
+    HIST_DB_VERSIONS = [0]
 
     class DBError(Exception):
         """Raised on general DB errors generally indicating corruption."""
@@ -86,8 +87,14 @@ class LevelDB:
         self.logger.info(f'switching current directory to {env.db_dir}')
 
         self.db_class = db_class(env.db_dir, self.env.db_engine)
-        self.history = History()
         self.db = None
+
+        self.hist_unflushed = defaultdict(partial(array.array, 'I'))
+        self.hist_unflushed_count = 0
+        self.hist_flush_count = 0
+        self.hist_comp_flush_count = -1
+        self.hist_comp_cursor = -1
+
         self.tx_counts = None
         self.headers = None
         self.encoded_headers = LRUCacheWithMetrics(1 << 21, metric_name='encoded_headers', namespace='wallet_server')
@@ -188,27 +195,27 @@ class LevelDB:
             state = ast.literal_eval(state.decode())
             if not isinstance(state, dict):
                 raise RuntimeError('failed reading state from history DB')
-            self.history.flush_count = state['flush_count']
-            self.history.comp_flush_count = state.get('comp_flush_count', -1)
-            self.history.comp_cursor = state.get('comp_cursor', -1)
-            self.history.db_version = state.get('db_version', 0)
+            self.hist_flush_count = state['flush_count']
+            self.hist_comp_flush_count = state.get('comp_flush_count', -1)
+            self.hist_comp_cursor = state.get('comp_cursor', -1)
+            self.hist_db_version = state.get('db_version', 0)
         else:
-            self.history.flush_count = 0
-            self.history.comp_flush_count = -1
-            self.history.comp_cursor = -1
-            self.history.db_version = max(self.DB_VERSIONS)
+            self.hist_flush_count = 0
+            self.hist_comp_flush_count = -1
+            self.hist_comp_cursor = -1
+            self.hist_db_version = max(self.HIST_DB_VERSIONS)
 
-        self.logger.info(f'history DB version: {self.history.db_version}')
-        if self.history.db_version not in self.DB_VERSIONS:
-            msg = f'this software only handles DB versions {self.DB_VERSIONS}'
+        self.logger.info(f'history DB version: {self.hist_db_version}')
+        if self.hist_db_version not in self.HIST_DB_VERSIONS:
+            msg = f'this software only handles DB versions {self.HIST_DB_VERSIONS}'
             self.logger.error(msg)
             raise RuntimeError(msg)
-        self.logger.info(f'flush count: {self.history.flush_count:,d}')
+        self.logger.info(f'flush count: {self.hist_flush_count:,d}')
 
         # self.history.clear_excess(self.utxo_flush_count)
         # < might happen at end of compaction as both DBs cannot be
         # updated atomically
-        if self.history.flush_count > self.utxo_flush_count:
+        if self.hist_flush_count > self.utxo_flush_count:
             self.logger.info('DB shut down uncleanly.  Scanning for '
                              'excess history flushes...')
 
@@ -221,15 +228,15 @@ class LevelDB:
 
             self.logger.info(f'deleting {len(keys):,d} history entries')
 
-            self.history.flush_count = self.utxo_flush_count
+            self.hist_flush_count = self.utxo_flush_count
             with self.db.write_batch() as batch:
                 for key in keys:
                     batch.delete(HASHX_HISTORY_PREFIX + key)
                 state = {
-                    'flush_count': self.history.flush_count,
-                    'comp_flush_count': self.history.comp_flush_count,
-                    'comp_cursor': self.history.comp_cursor,
-                    'db_version': self.history.db_version,
+                    'flush_count': self.hist_flush_count,
+                    'comp_flush_count': self.hist_comp_flush_count,
+                    'comp_cursor': self.hist_comp_cursor,
+                    'db_version': self.hist_db_version,
                 }
                 # History entries are not prefixed; the suffix \0\0 ensures we
                 # look similar to other entries and aren't interfered with
@@ -237,7 +244,7 @@ class LevelDB:
 
             self.logger.info('deleted excess history entries')
 
-        self.utxo_flush_count = self.history.flush_count
+        self.utxo_flush_count = self.hist_flush_count
 
         min_height = self.min_undo_height(self.db_height)
         keys = []
@@ -328,7 +335,7 @@ class LevelDB:
         assert not flush_data.adds
         assert not flush_data.deletes
         assert not flush_data.undo_infos
-        assert not self.history.unflushed
+        assert not self.hist_unflushed
 
     def flush_utxo_db(self, batch, flush_data):
         """Flush the cached DB writes and UTXO set to the batch."""
@@ -369,23 +376,23 @@ class LevelDB:
                              f'{spend_count:,d} spends in '
                              f'{elapsed:.1f}s, committing...')
 
-        self.utxo_flush_count = self.history.flush_count
+        self.utxo_flush_count = self.hist_flush_count
         self.db_height = flush_data.height
         self.db_tx_count = flush_data.tx_count
         self.db_tip = flush_data.tip
 
     def write_history_state(self, batch):
         state = {
-            'flush_count': self.history.flush_count,
-            'comp_flush_count': self.history.comp_flush_count,
-            'comp_cursor': self.history.comp_cursor,
+            'flush_count': self.hist_flush_count,
+            'comp_flush_count': self.hist_comp_flush_count,
+            'comp_cursor': self.hist_comp_cursor,
             'db_version': self.db_version,
         }
         # History entries are not prefixed; the suffix \0\0 ensures we
         # look similar to other entries and aren't interfered with
         batch.put(HIST_STATE, repr(state).encode())
 
-    def flush_dbs(self, flush_data, flush_utxos, estimate_txs_remaining):
+    def flush_dbs(self, flush_data: FlushData, estimate_txs_remaining):
         """Flush out cached state.  History is always flushed; UTXOs are
         flushed if flush_utxos."""
         if flush_data.height == self.db_height:
@@ -444,9 +451,9 @@ class LevelDB:
 
 
             # Then history
-            self.history.flush_count += 1
-            flush_id = pack_be_uint16(self.history.flush_count)
-            unflushed = self.history.unflushed
+            self.hist_flush_count += 1
+            flush_id = pack_be_uint16(self.hist_flush_count)
+            unflushed = self.hist_unflushed
 
             for hashX in sorted(unflushed):
                 key = hashX + flush_id
@@ -454,14 +461,13 @@ class LevelDB:
             self.write_history_state(batch)
 
             unflushed.clear()
-            self.history.unflushed_count = 0
+            self.hist_unflushed_count = 0
 
 
             #########################
 
             # Flush state last as it reads the wall time.
-            if flush_utxos:
-                self.flush_utxo_db(batch, flush_data)
+            self.flush_utxo_db(batch, flush_data)
 
             # self.flush_state(batch)
             #
@@ -481,7 +487,7 @@ class LevelDB:
         # self.write_utxo_state(batch)
 
         elapsed = self.last_flush - start_time
-        self.logger.info(f'flush #{self.history.flush_count:,d} took '
+        self.logger.info(f'flush #{self.hist_flush_count:,d} took '
                          f'{elapsed:.1f}s.  Height {flush_data.height:,d} '
                          f'txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
 
@@ -509,7 +515,7 @@ class LevelDB:
         assert not flush_data.headers
         assert not flush_data.block_txs
         assert flush_data.height < self.db_height
-        assert not self.history.unflushed
+        assert not self.hist_unflushed
 
         start_time = time.time()
         tx_delta = flush_data.tx_count - self.last_flush_tx_count
@@ -523,7 +529,7 @@ class LevelDB:
 
         ###
         # Not certain this is needed, but it doesn't hurt
-        self.history.flush_count += 1
+        self.hist_flush_count += 1
         nremoves = 0
 
         with self.db.write_batch() as batch:
@@ -556,13 +562,10 @@ class LevelDB:
             self.last_flush = now
             self.last_flush_tx_count = self.fs_tx_count
             self.write_utxo_state(batch)
-
-
         self.logger.info(f'backing up removed {nremoves:,d} history entries')
         elapsed = self.last_flush - start_time
-        self.logger.info(f'backup flush #{self.history.flush_count:,d} took '
-                         f'{elapsed:.1f}s.  Height {flush_data.height:,d} '
-                         f'txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
+        self.logger.info(f'backup flush #{self.hist_flush_count:,d} took {elapsed:.1f}s. '
+                         f'Height {flush_data.height:,d} txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
 
     def raw_header(self, height):
         """Return the binary header at the given height."""
