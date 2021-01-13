@@ -17,49 +17,55 @@ class TestMissingRequiredFiltersCalculation(UnitDBTestCase):
         self.assertEqual(q.get_missing_required_filters(100), {(2, 0, 0)})
         self.assertEqual(q.get_missing_required_filters(199), {(2, 0, 0), (1, 100, 199)})
         self.assertEqual(q.get_missing_required_filters(201), {(2, 0, 100), (1, 200, 201)})
+
         # all filters missing
-        self.assertEqual(q.get_missing_required_filters(134_567), {
-            (4, 0, 120_000),
-            (3, 130_000, 133_000),
-            (2, 134_000, 134_400),
-            (1, 134_500, 134_567)
+        self.assertEqual(q.get_missing_required_filters(234_567), {
+            (5, 0, 100_000),
+            (4, 200_000, 220_000),
+            (3, 230_000, 233_000),
+            (2, 234_000, 234_400),
+            (1, 234_500, 234_567)
         })
 
-        q.insert_block_filters([(110_000, 4, b'beef')])
-        q.insert_block_filters([(129_000, 3, b'beef')])
-        q.insert_block_filters([(133_900, 2, b'beef')])
-        q.insert_block_filters([(134_499, 1, b'beef')])
-        # we we have some filters, but not recent enough (all except 10k are adjusted)
-        self.assertEqual(q.get_missing_required_filters(134_567), {
-            (4, 120_000, 120_000),  # 0 -> 120_000
-            (3, 130_000, 133_000),
-            (2, 134_000, 134_400),
-            (1, 134_500, 134_567)
+        q.insert_block_filters([(0, 5, b'beef')])
+        q.insert_block_filters([(190_000, 4, b'beef')])
+        q.insert_block_filters([(229_000, 3, b'beef')])
+        q.insert_block_filters([(233_900, 2, b'beef')])
+        q.insert_block_filters([(234_499, 1, b'beef')])
+        # we have some old filters but none useable as initial required (except one 100k filter)
+        self.assertEqual(q.get_missing_required_filters(234_567), {
+            (5, 100_000, 100_000),
+            (4, 200_000, 220_000),
+            (3, 230_000, 233_000),
+            (2, 234_000, 234_400),
+            (1, 234_500, 234_567)
         })
 
-        q.insert_block_filters([(132_000, 3, b'beef')])
-        q.insert_block_filters([(134_300, 2, b'beef')])
-        q.insert_block_filters([(134_550, 1, b'beef')])
-        # all filters get adjusted because we have recent of each
-        self.assertEqual(q.get_missing_required_filters(134_567), {
-            (4, 120_000, 120_000),  # 0       -> 120_000
-            (3, 133_000, 133_000),  # 130_000 -> 133_000
-            (2, 134_400, 134_400),  # 134_000 -> 134_400
-            (1, 134_551, 134_567)   # 134_500 -> 134_551
+        q.insert_block_filters([(100_000, 5, b'beef')])
+        q.insert_block_filters([(210_000, 4, b'beef')])
+        q.insert_block_filters([(232_000, 3, b'beef')])
+        q.insert_block_filters([(234_300, 2, b'beef')])
+        q.insert_block_filters([(234_550, 1, b'beef')])
+        # we have some useable initial filters, but not all
+        self.assertEqual(q.get_missing_required_filters(234_567), {
+            (4, 220_000, 220_000),
+            (3, 233_000, 233_000),
+            (2, 234_400, 234_400),
+            (1, 234_551, 234_567)
         })
 
-        q.insert_block_filters([(120_000, 4, b'beef')])
-        q.insert_block_filters([(133_000, 3, b'beef')])
-        q.insert_block_filters([(134_400, 2, b'beef')])
-        q.insert_block_filters([(134_566, 1, b'beef')])
+        q.insert_block_filters([(220_000, 4, b'beef')])
+        q.insert_block_filters([(233_000, 3, b'beef')])
+        q.insert_block_filters([(234_400, 2, b'beef')])
+        q.insert_block_filters([(234_566, 1, b'beef')])
         # we have latest filters for all except latest single block
-        self.assertEqual(q.get_missing_required_filters(134_567), {
-            (1, 134_567, 134_567)   # 134_551 -> 134_567
+        self.assertEqual(q.get_missing_required_filters(234_567), {
+            (1, 234_567, 234_567)
         })
 
-        q.insert_block_filters([(134_567, 1, b'beef')])
+        q.insert_block_filters([(234_567, 1, b'beef')])
         # we have all latest filters
-        self.assertEqual(q.get_missing_required_filters(134_567), set())
+        self.assertEqual(q.get_missing_required_filters(234_567), set())
 
 
 class TestAddressGenerationAndTXSync(UnitDBTestCase):

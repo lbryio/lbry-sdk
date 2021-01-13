@@ -193,6 +193,8 @@ class FilterManager:
         await self.download_initial_filters(best_height)
         print('generating addresses...')
         await self.generate_addresses(best_height, wallets)
+        print("downloading level 3 filters...")
+        await self.download_sub_filters(4, wallets)
         print("downloading level 2 filters...")
         await self.download_sub_filters(3, wallets)
         print("downloading level 1 filters...")

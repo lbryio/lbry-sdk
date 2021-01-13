@@ -16,7 +16,7 @@ from lbry.error import LbrycrdEventSubscriptionError
 
 from . import blocks as block_phase, claims as claim_phase, supports as support_phase
 from .context import uninitialize
-from .filter_builder import split_range_into_10k_batches
+from .filter_builder import split_range_into_batches
 
 log = logging.getLogger(__name__)
 
@@ -187,7 +187,7 @@ class BlockchainSync(Sync):
             else:
                 blocks = await self.db.run(block_phase.get_block_range_without_filters)
             if blocks != (-1, -1):
-                batches = split_range_into_10k_batches(*blocks)
+                batches = split_range_into_batches(*blocks)
                 p.step()
             else:
                 p.step()

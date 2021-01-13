@@ -12,7 +12,7 @@ class LightClientTests(IntegrationTestCase):
     async def asyncSetUp(self):
         await super().asyncSetUp()
         await self.chain.generate(200)
-        self.full_node_daemon = await self.make_full_node_daemon()
+        self.full_node_daemon = await self.make_full_node_daemon(workers=2)
         self.full_node: FullNode = self.full_node_daemon.service
         self.light_client_daemon = await self.make_light_client_daemon(self.full_node_daemon, start=False)
         self.light_client: LightClient = self.light_client_daemon.service
@@ -25,6 +25,7 @@ class LightClientTests(IntegrationTestCase):
         await self.light_client.wallets.open()
         await self.light_client.client.start_event_streams()
         self.db = self.light_client.db
+        self.api = self.light_client_daemon.api
         self.sync = self.light_client.sync
         self.client = self.light_client.client
         self.account = self.light_client.wallets.default.accounts.default
@@ -44,3 +45,9 @@ class LightClientTests(IntegrationTestCase):
         await self.assertBalance(self.account, '0.0')
         await self.sync.on_synced.first
         await self.assertBalance(self.account, '5.0')
+
+        await self.api.channel_create('@foo', '1.0')
+        await self.chain.generate(1)
+        await self.sync.on_synced.first
+        channels = await self.api.channel_list()
+        self.assertEqual(len(channels), 1)

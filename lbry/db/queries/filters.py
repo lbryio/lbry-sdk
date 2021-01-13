@@ -46,7 +46,7 @@ def get_filters(start_height, end_height=None, granularity=0):
             .order_by(TXFilter.c.height)
         )
     else:
-        factor = granularity if granularity <= 4 else log10(granularity)
+        factor = granularity if granularity < 100 else log10(granularity)
         if end_height is None:
             height_condition = (BlockFilter.c.height == start_height)
         elif end_height == -1:
@@ -64,8 +64,11 @@ def get_filters(start_height, end_height=None, granularity=0):
 
 def get_minimal_required_filter_ranges(height) -> Dict[int, Tuple[int, int]]:
     minimal = {}
+    if height >= 100_000:
+        minimal[5] = (0, ((height // 100_000)-1) * 100_000)
     if height >= 10_000:
-        minimal[4] = (0, ((height // 10_000)-1) * 10_000)
+        start = height - height % 100_000
+        minimal[4] = (start, start + (((height - start) // 10_000) - 1) * 10_000)
     if height >= 1_000:
         start = height - height % 10_000
         minimal[3] = (start, start+(((height-start) // 1_000)-1) * 1_000)
@@ -92,6 +95,9 @@ def get_maximum_known_filters() -> Dict[str, Optional[int]]:
         select(func.max(BlockFilter.c.height))
             .where(BlockFilter.c.factor == 4)
             .scalar_subquery().label('4'),
+        select(func.max(BlockFilter.c.height))
+            .where(BlockFilter.c.factor == 5)
+            .scalar_subquery().label('5'),
     )
     return context().fetchone(query)
 
@@ -101,7 +107,7 @@ def get_missing_required_filters(height) -> Set[Tuple[int, int, int]]:
     missing_filters = set()
     for granularity, (start, end) in get_minimal_required_filter_ranges(height).items():
         known_height = known_filters.get(str(granularity))
-        if known_height is not None and known_height > start:
+        if known_height is not None and known_height >= start:
             if granularity == 1:
                 adjusted_height = known_height + 1
             else:

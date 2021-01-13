@@ -1,11 +1,11 @@
 from typing import Dict
 
 
-def split_range_into_10k_batches(start, end):
+def split_range_into_batches(start, end, batch_size=100_000):
     batch = [start, end]
     batches = [batch]
     for block in range(start, end+1):
-        if 0 < block != batch[0] and block % 10_000 == 0:
+        if 0 < block != batch[0] and block % batch_size == 0:
             batch = [block, block]
             batches.append(batch)
         else:
@@ -50,6 +50,7 @@ class FilterBuilder:
         self.start = start
         self.end = end
         self.group_filters = [
+            GroupFilter(start, end, 5),
             GroupFilter(start, end, 4),
             GroupFilter(start, end, 3),
             GroupFilter(start, end, 2),

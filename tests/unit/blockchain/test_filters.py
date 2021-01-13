@@ -1,12 +1,13 @@
 from unittest import TestCase
 from lbry.blockchain.sync.filter_builder import (
-    FilterBuilder as FB, GroupFilter as GF, split_range_into_10k_batches as split
+    FilterBuilder as FB, GroupFilter as GF, split_range_into_batches
 )
 
 
 class TestFilterGenerationComponents(TestCase):
 
     def test_split_range_into_10k_batches(self):
+        def split(a, b): return split_range_into_batches(a, b, 10_000)
         # single block (same start-end)
         self.assertEqual(split(901_123, 901_123), [[901_123, 901_123]])
         # spans a 10k split
@@ -70,37 +71,42 @@ class TestFilterGenerationComponents(TestCase):
         self.assertEqual(FB(819_913, 819_999).query_heights, (810_000, 819_999))
 
     def test_filter_builder_add(self):
-        fb = FB(818_813, 819_999)
-        self.assertEqual(fb.query_heights, (810_000, 819_999))
-        self.assertEqual(fb.group_filters[0].coverage, [810_000])
-        self.assertEqual(fb.group_filters[1].coverage, [818_000, 819_000])
-        self.assertEqual(fb.group_filters[2].coverage, [
-            818_800, 818_900, 819_000, 819_100, 819_200, 819_300,
-            819_400, 819_500, 819_600, 819_700, 819_800, 819_900
-        ])
-        fb.add(b'beef0', 810_000, ['a'])
-        fb.add(b'beef1', 815_001, ['b'])
-        fb.add(b'beef2', 818_412, ['c'])
-        fb.add(b'beef3', 818_812, ['d'])
-        fb.add(b'beef4', 818_813, ['e'])
-        fb.add(b'beef5', 819_000, ['f'])
-        fb.add(b'beef6', 819_999, ['g'])
-        fb.add(b'beef7', 819_999, ['h'])
+        fb = FB(798_813, 809_999)
+        self.assertEqual(fb.query_heights, (700_000, 809_999))
+        self.assertEqual(fb.group_filters[0].coverage, [700_000])
+        self.assertEqual(fb.group_filters[1].coverage, [790_000, 800_000])
+        self.assertEqual(fb.group_filters[2].coverage, list(range(798_000, 809_000+1, 1_000)))
+        self.assertEqual(fb.group_filters[3].coverage, list(range(798_800, 809_900+1, 100)))
+        fb.add(b'beef0', 787_111, ['a'])
+        fb.add(b'beef1', 798_222, ['b'])
+        fb.add(b'beef2', 798_812, ['c'])
+        fb.add(b'beef3', 798_813, ['d'])
+        fb.add(b'beef4', 798_814, ['e'])
+        fb.add(b'beef5', 809_000, ['f'])
+        fb.add(b'beef6', 809_999, ['g'])
+        fb.add(b'beef7', 809_999, ['h'])
         fb.add(b'beef8', 820_000, ['i'])
         self.assertEqual(fb.group_filters[0].groups, {
-            810_000: {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'}
+            700_000: {'a', 'b', 'c', 'd', 'e'}
         })
         self.assertEqual(fb.group_filters[1].groups, {
-            818_000: {'c', 'd', 'e'},
-            819_000: {'f', 'g', 'h'}
+            790_000: {'b', 'c', 'd', 'e'},
+            800_000: {'f', 'g', 'h'}
         })
-        self.assertEqual(fb.group_filters[2].groups[818_800], {'d', 'e'})
-        self.assertEqual(fb.group_filters[2].groups[819_000], {'f'})
-        self.assertEqual(fb.group_filters[2].groups[819_900], {'g', 'h'})
-        self.assertEqual(fb.block_filters, {818813: {'e'}, 819000: {'f'}, 819999: {'g', 'h'}})
+        self.assertEqual(fb.group_filters[2].groups, {
+            798_000: {'b', 'c', 'd', 'e'}, 799_000: set(),
+            800_000: set(), 801_000: set(), 802_000: set(), 803_000: set(), 804_000: set(),
+            805_000: set(), 806_000: set(), 807_000: set(), 808_000: set(),
+            809_000: {'f', 'g', 'h'}
+        })
+        self.assertEqual(fb.group_filters[3].groups[798_800], {'c', 'd', 'e'})
+        self.assertEqual(fb.group_filters[3].groups[809_000], {'f'})
+        self.assertEqual(fb.group_filters[3].groups[809_900], {'g', 'h'})
+        self.assertEqual(fb.block_filters, {798813: {'d'}, 798814: {'e'}, 809000: {'f'}, 809999: {'h', 'g'}})
         self.assertEqual(fb.tx_filters, [
-            (b'beef4', 818813, ['e']),
-            (b'beef5', 819000, ['f']),
-            (b'beef6', 819999, ['g']),
-            (b'beef7', 819999, ['h'])
+            (b'beef3', 798813, ['d']),
+            (b'beef4', 798814, ['e']),
+            (b'beef5', 809000, ['f']),
+            (b'beef6', 809999, ['g']),
+            (b'beef7', 809999, ['h'])
         ])
