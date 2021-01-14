@@ -511,18 +511,17 @@ class Daemon(metaclass=JSONRPCServerType):
             retries = 10
             while retries:
                 retries -= 1
-                if sock.connect_ex((socket.gethostbyname(self.conf.streaming_host), self.conf.streaming_port)):
-                    break
-                else:
-                    print('%i is open', self.conf.streaming_port)
-                    log.warn('Address %s:%i is already in use, trying next port', self.conf.streaming_host, self.conf.streaming_port)
+                if not sock.connect_ex((socket.gethostbyname(self.conf.streaming_host), self.conf.streaming_port)):
+                    log.info('Address %s:%i is already in use, trying next port',
+                             self.conf.streaming_host,
+                             self.conf.streaming_port)
                     self.conf.streaming_port += 1
                     sock.settimeout(0.2)
+                break
             sock.close()
 
             streaming_site = web.TCPSite(self.streaming_runner, self.conf.streaming_host, self.conf.streaming_port,
                                          shutdown_timeout=.5)
-            streaming_site.start
             await streaming_site.start()
             log.info('media server listening on TCP %s:%i', *streaming_site._server.sockets[0].getsockname()[:2])
 
