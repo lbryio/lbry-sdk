@@ -646,15 +646,23 @@ class Config(CLIConfig):
 
     @property
     def streaming_host(self):
-        return self.streaming_server.split(':')[0]
+        return self._streaming_host
 
     @property
     def streaming_port(self):
-        return int(self.streaming_server.split(':')[1])
+        return int(self._streaming_port)
+
+    @streaming_port.setter
+    def streaming_port(self, port):
+        self._streaming_port = port
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_default_paths()
+        self.set_default_host_port()
+
+    def set_default_host_port(self):
+        self._streaming_host, self._streaming_port = self.streaming_server.split(':')
 
     def set_default_paths(self):
         if 'darwin' in sys.platform.lower():
