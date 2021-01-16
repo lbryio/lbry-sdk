@@ -32,18 +32,17 @@ class NetworkTests(IntegrationTestCase):
             'server_version': lbry.__version__,
             'trending_algorithm': 'zscore',
             }, await self.ledger.network.get_server_features())
-        await self.conductor.spv_node.stop()
+        # await self.conductor.spv_node.stop()
         payment_address, donation_address = await self.account.get_addresses(limit=2)
-        await self.conductor.spv_node.start(
-            self.conductor.blockchain_node,
-            extraconf={
-                'DESCRIPTION': 'Fastest server in the west.',
-                'PAYMENT_ADDRESS': payment_address,
-                'DONATION_ADDRESS': donation_address,
-                'DAILY_FEE': '42'
-            }
-        )
-        await self.ledger.network.on_connected.first
+        self.conductor.spv_node.server.env.payment_address = payment_address
+        self.conductor.spv_node.server.env.donation_address = donation_address
+        self.conductor.spv_node.server.env.description = 'Fastest server in the west.'
+        self.conductor.spv_node.server.env.daily_fee = '42'
+
+        from lbry.wallet.server.session import LBRYElectrumX
+        LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
+
+        # await self.ledger.network.on_connected.first
         self.assertDictEqual({
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',

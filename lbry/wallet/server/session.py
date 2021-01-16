@@ -864,6 +864,7 @@ class LBRYElectrumX(SessionBase):
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
     session_mgr: LBRYSessionManager
     version = lbry.__version__
+    cached_server_features = {}
 
     @classmethod
     def initialize_request_handlers(cls):
@@ -910,6 +911,8 @@ class LBRYElectrumX(SessionBase):
         super().__init__(*args, **kwargs)
         if not LBRYElectrumX.request_handlers:
             LBRYElectrumX.initialize_request_handlers()
+        if not LBRYElectrumX.cached_server_features:
+            LBRYElectrumX.set_server_features(self.env)
         self.subscribe_headers = False
         self.subscribe_headers_raw = False
         self.connection.max_response_size = self.env.max_send
@@ -927,10 +930,10 @@ class LBRYElectrumX(SessionBase):
                 for ver in (cls.PROTOCOL_MIN, cls.PROTOCOL_MAX)]
 
     @classmethod
-    def server_features(cls, env):
+    def set_server_features(cls, env):
         """Return the server features dictionary."""
         min_str, max_str = cls.protocol_min_max_strings()
-        return {
+        cls.cached_server_features.update({
             'hosts': env.hosts_dict(),
             'pruning': None,
             'server_version': cls.version,
@@ -943,10 +946,10 @@ class LBRYElectrumX(SessionBase):
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
             'trending_algorithm': env.trending_algorithms[0]
-        }
+        })
 
     async def server_features_async(self):
-        return self.server_features(self.env)
+        return self.cached_server_features
 
     @classmethod
     def server_version_args(cls):
