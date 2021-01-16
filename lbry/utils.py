@@ -206,7 +206,7 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
     ))[0][4][0]
 
 
-class LRUCache:
+class LRUCacheWithMetrics:
     __slots__ = [
         'capacity',
         'cache',
@@ -286,12 +286,63 @@ class LRUCache:
                 pass
 
 
+class LRUCache:
+    __slots__ = [
+        'capacity',
+        'cache'
+    ]
+
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.cache = collections.OrderedDict()
+
+    def get(self, key, default=None):
+        try:
+            value = self.cache.pop(key)
+        except KeyError:
+            return default
+        self.cache[key] = value
+        return value
+
+    def set(self, key, value):
+        try:
+            self.cache.pop(key)
+        except KeyError:
+            if len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)
+        self.cache[key] = value
+
+    def clear(self):
+        self.cache.clear()
+
+    def pop(self, key):
+        return self.cache.pop(key)
+
+    def __setitem__(self, key, value):
+        return self.set(key, value)
+
+    def __getitem__(self, item):
+        return self.get(item)
+
+    def __contains__(self, item) -> bool:
+        return item in self.cache
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __delitem__(self, key):
+        self.cache.pop(key)
+
+    def __del__(self):
+        self.clear()
+
+
 def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
-                         override_lru_cache: typing.Optional[LRUCache] = None):
+                         override_lru_cache: typing.Optional[LRUCacheWithMetrics] = None):
     if not cache_size and override_lru_cache is None:
         raise ValueError("invalid cache size")
     concurrent_cache = {}
-    lru_cache = override_lru_cache if override_lru_cache is not None else LRUCache(cache_size)
+    lru_cache = override_lru_cache if override_lru_cache is not None else LRUCacheWithMetrics(cache_size)
 
     def wrapper(async_fn):
 
