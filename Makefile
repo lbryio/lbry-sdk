@@ -6,6 +6,7 @@ install:
 		--global-option=fetch \
 		--global-option=--version --global-option=3.30.1 --global-option=--all \
 		--global-option=build --global-option=--enable --global-option=fts5
+	python -m pip install elasticsearch[async]
 	pip install -e .
 
 tools:

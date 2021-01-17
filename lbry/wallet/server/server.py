@@ -5,6 +5,7 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import typing
 
 import lbry
+from lbry.wallet.server.db.elastic_search import indexer_task
 from lbry.wallet.server.mempool import MemPool, MemPoolAPI
 from lbry.prometheus import PrometheusServer
 
@@ -94,6 +95,7 @@ class Server:
         self.session_mgr = env.coin.SESSION_MANAGER(
             env, db, bp, daemon, mempool, self.shutdown_event
         )
+        self._indexer_task = None
 
     async def start(self):
         env = self.env
@@ -121,6 +123,7 @@ class Server:
         await self.db.populate_header_merkle_cache()
         await _start_cancellable(self.mempool.keep_synchronized)
         await _start_cancellable(self.session_mgr.serve, self.notifications)
+        self.cancellable_tasks.append(asyncio.create_task(indexer_task(self.bp.sql.claim_queue)))
 
     async def stop(self):
         for task in reversed(self.cancellable_tasks):

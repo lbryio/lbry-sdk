@@ -4,7 +4,7 @@ from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
-from multiprocessing import Manager
+from multiprocessing import Manager, Queue
 from binascii import unhexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
@@ -19,7 +19,6 @@ from lbry.wallet.server.db.full_text_search import update_full_text_search, CREA
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 
@@ -217,6 +216,7 @@ class SQLDB:
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
         self.trending = trending
+        self.claim_queue = Queue(maxsize=10)
 
     def open(self):
         self.db = apsw.Connection(
@@ -804,6 +804,22 @@ class SQLDB:
             f"SELECT claim_hash, normalized FROM claim WHERE expiration_height = {height}"
         )
 
+    def enqueue_changes(self, changed_claim_hashes, deleted_claims):
+        if not changed_claim_hashes and not deleted_claims:
+            return
+        for claim_hash in deleted_claims:
+            if not self.claim_queue.full():
+                self.claim_queue.put_nowait(('delete', claim_hash))
+        for claim in self.execute(f"""
+        SELECT claimtrie.claim_hash as is_controlling,
+               claimtrie.last_take_over_height,
+               claim.*
+        FROM claim LEFT JOIN claimtrie USING (claim_hash)
+        WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
+        """, changed_claim_hashes):
+            if not self.claim_queue.full():
+                self.claim_queue.put_nowait(('update', dict(claim._asdict())))
+
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
         update_claims = []
@@ -899,6 +915,7 @@ class SQLDB:
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
+        r(self.enqueue_changes, recalculate_claim_hashes, delete_claim_hashes)
 
 
 class LBRYLevelDB(LevelDB):
