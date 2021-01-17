@@ -328,7 +328,7 @@ class HashAnnouncerComponent(Component):
 
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, LIBTORRENT_COMPONENT]
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -351,7 +351,10 @@ class FileManagerComponent(Component):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
-        torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
+        try:
+            torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
+        except NameError:
+            torrent = None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.file_manager = FileManager(
@@ -360,7 +363,7 @@ class FileManagerComponent(Component):
         self.file_manager.source_managers['stream'] = StreamManager(
             loop, self.conf, blob_manager, wallet, storage, node,
         )
-        if TorrentSession:
+        if TorrentSession and LIBTORRENT_COMPONENT not in self.conf.components_to_skip:
             self.file_manager.source_managers['torrent'] = TorrentManager(
                 loop, self.conf, torrent, storage, self.component_manager.analytics_manager
             )
