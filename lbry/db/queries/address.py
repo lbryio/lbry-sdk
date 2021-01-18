@@ -26,17 +26,29 @@ class DatabaseAddressIterator:
         self.chain = chain
         self.n = -1
 
+    @staticmethod
+    def get_sql(account_id, chain):
+        return (
+            select(
+                AccountAddress.c.pubkey,
+                AccountAddress.c.n
+            ).where(
+                (AccountAddress.c.account == account_id) &
+                (AccountAddress.c.chain == chain)
+            ).order_by(AccountAddress.c.n)
+        )
+
+    @staticmethod
+    def get_address_hash_bytes(account_id, chain):
+        return [
+            bytearray(hash160(row['pubkey'])) for row in context().fetchall(
+                DatabaseAddressIterator.get_sql(account_id, chain)
+            )
+        ]
+
     def __iter__(self) -> Iterator[Tuple[bytes, int, bool]]:
         with context().connect_streaming() as c:
-            sql = (
-                select(
-                    AccountAddress.c.pubkey,
-                    AccountAddress.c.n
-                ).where(
-                    (AccountAddress.c.account == self.account_id) &
-                    (AccountAddress.c.chain == self.chain)
-                ).order_by(AccountAddress.c.n)
-            )
+            sql = self.get_sql(self.account_id, self.chain)
             for row in c.execute(sql):
                 self.n = row['n']
                 yield hash160(row['pubkey']), self.n, False
@@ -105,12 +117,11 @@ def generate_addresses_using_filters(best_height, allowed_gap, address_manager) 
 
 def get_missing_sub_filters_for_addresses(granularity, address_manager):
     need = set()
-    for matcher, filter_range in get_filter_matchers_at_granularity(granularity):
-        for address_hash, _, _ in DatabaseAddressIterator(*address_manager):
-            address_bytes = bytearray(address_hash)
-            if matcher.Match(address_bytes) and not has_filter_range(*filter_range):
-                need.add(filter_range)
-                break
+    filters = get_filter_matchers_at_granularity(granularity)
+    addresses = DatabaseAddressIterator.get_address_hash_bytes(*address_manager)
+    for matcher, filter_range in filters:
+        if matcher.MatchAny(addresses) and not has_filter_range(*filter_range):
+            need.add(filter_range)
     return need
 
 

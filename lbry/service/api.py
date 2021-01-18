@@ -3447,7 +3447,7 @@ class Client(API):
 
     async def connect(self):
         self.session = ClientSession()
-        self.ws = await self.session.ws_connect(self.url, max_msg_size=20*1024*1024)
+        self.ws = await self.session.ws_connect(self.url, max_msg_size=50*1024*1024)
         self.receive_messages_task = asyncio.create_task(self.receive_messages())
 
     async def disconnect(self):

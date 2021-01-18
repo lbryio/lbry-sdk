@@ -1,3 +1,4 @@
+import time
 import asyncio
 import logging
 from typing import Dict
@@ -155,6 +156,7 @@ class FilterManager:
                         f"  matching addresses for account {account.id} "
                         f"address group {address_manager.chain_number}..."
                     )
+                    start = time.perf_counter()
                     missing = await self.db.generate_addresses_using_filters(
                         best_height, address_manager.gap, (
                             account.id,
@@ -164,6 +166,7 @@ class FilterManager:
                             address_manager.public_key.depth
                         )
                     )
+                    print(f"  {time.perf_counter()-start}s")
                     if missing:
                         print("downloading level 3 filters")
                         await self.download_and_save_filters(missing)
