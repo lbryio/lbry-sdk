@@ -1271,7 +1271,7 @@ class LBRYElectrumX(SessionBase):
         hashXes = [
             (self.address_to_hashX(address), address) for address in addresses
         ]
-        return await asyncio.gather(*(self.hashX_subscribe(*args) for args in hashXes))
+        return [await self.hashX_subscribe(*args) for args in hashXes]
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
