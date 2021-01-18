@@ -17,6 +17,16 @@ if typing.TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
+class NodeState:
+    def __init__(self,
+                 routing_table_peers: typing.List[typing.Tuple[bytes, str, int, int]],
+                 datastore: typing.List[typing.Tuple[bytes, str, int, int, bytes]]):
+        # List[Tuple[node_id, address, udp_port, tcp_port]]
+        self.routing_table_peers = routing_table_peers
+        # List[Tuple[node_id, address, udp_port, tcp_port, blob_hash]]
+        self.datastore = datastore
+
+
 class Node:
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
@@ -31,6 +41,7 @@ class Node:
         self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
         self._storage = storage
+        self.started_listening = asyncio.Event()
 
     async def refresh_node(self, force_once=False):
         while True:
@@ -103,6 +114,7 @@ class Node:
         return stored_to
 
     def stop(self) -> None:
+        self.started_listening.clear()
         if self.joined.is_set():
             self.joined.clear()
         if self._join_task:
@@ -118,18 +130,32 @@ class Node:
         self.listening_port = None
         log.info("Stopped DHT node")
 
+    def get_state(self) -> NodeState:
+        return NodeState(
+            routing_table_peers=[(p.node_id, p.address, p.udp_port, p.tcp_port)
+                                 for p in self.protocol.routing_table.get_peers()],
+            datastore=self.protocol.data_store.dump()
+        )
+
+    def load_state(self, state: NodeState):
+        for node_id, address, udp_port, tcp_port, blob_hash in state.datastore:
+            p = make_kademlia_peer(node_id, address, udp_port, tcp_port)
+            self.protocol.data_store.add_peer_to_blob(p, blob_hash)
+
     async def start_listening(self, interface: str = '0.0.0.0') -> None:
         if not self.listening_port:
             self.listening_port, _ = await self.loop.create_datagram_endpoint(
                 lambda: self.protocol, (interface, self.internal_udp_port)
             )
+            self.started_listening.set()
             log.info("DHT node listening on UDP %s:%i", interface, self.internal_udp_port)
             self.protocol.start()
         else:
             log.warning("Already bound to port %s", self.listening_port)
 
     async def join_network(self, interface: str = '0.0.0.0',
-                           known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
+                           known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
+                           persisted_peers: typing.List[typing.Tuple[bytes, str, int, int]] = []):
         def peers_from_urls(urls: typing.Optional[typing.List[typing.Tuple[bytes, str, int, int]]]):
             peer_addresses = []
             for node_id, address, udp_port, tcp_port in urls:
@@ -154,9 +180,7 @@ class Node:
             else:
                 if self.joined.is_set():
                     self.joined.clear()
-                seed_peers = peers_from_urls(
-                    await self._storage.get_persisted_kademlia_peers()
-                ) if self._storage else []
+                seed_peers = peers_from_urls(persisted_peers) if persisted_peers else []
                 if not seed_peers:
                     try:
                         seed_peers.extend(peers_from_urls([
@@ -173,8 +197,11 @@ class Node:
 
             await asyncio.sleep(1, loop=self.loop)
 
-    def start(self, interface: str, known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
-        self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))
+    def start(self, interface: str,
+              known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
+              persisted_peers: typing.List[typing.Tuple[bytes, str, int, int]] = []):
+
+        self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls, persisted_peers))
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                   bottom_out_limit: int = constants.BOTTOM_OUT_LIMIT,

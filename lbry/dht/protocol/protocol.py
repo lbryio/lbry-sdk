@@ -287,6 +287,7 @@ class KademliaProtocol(DatagramProtocol):
         self._to_add: typing.Set['KademliaPeer'] = set()
         self._wakeup_routing_task = asyncio.Event(loop=self.loop)
         self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
+        self.event_queue = asyncio.Queue(maxsize=100)
 
     @functools.lru_cache(128)
     def get_rpc_peer(self, peer: 'KademliaPeer') -> RemoteKademliaRPC:
@@ -427,6 +428,9 @@ class KademliaProtocol(DatagramProtocol):
             args, kwargs = self._migrate_incoming_rpc_args(sender_contact, message.method, *message.args)
         log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
                   sender_contact.address, sender_contact.udp_port)
+
+        if not self.event_queue.full():
+            self.event_queue.put_nowait((sender_contact.node_id, sender_contact.address, method, args))
 
         if method == b'ping':
             result = self.node_rpc.ping()

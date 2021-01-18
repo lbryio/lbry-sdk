@@ -68,3 +68,9 @@ class DictDataStore:
         for _, stored in self._data_store.items():
             peers.update(set(map(lambda tup: tup[0], stored)))
         return list(peers)
+
+    def dump(self) -> typing.List[typing.Tuple[bytes, str, int, int, bytes]]:
+        data = []
+        for k, peers in self._data_store.items():
+            data.extend([(p.node_id, p.address, p.udp_port, p.tcp_port, k) for p in map(lambda t: t[0], peers)])
+        return data
