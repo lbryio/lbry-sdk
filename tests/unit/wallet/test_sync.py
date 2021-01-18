@@ -208,6 +208,7 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
             q.get_missing_sub_filters_for_addresses(3, (
                 self.root_pubkey.address, self.RECEIVING_KEY_N,
             )), {
+                (2, 203000, 203900),
                 (2, 223000, 223900),
             }
         )
@@ -226,6 +227,9 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
             q.get_missing_sub_filters_for_addresses(2, (
                 self.root_pubkey.address, self.RECEIVING_KEY_N,
             )), {
+                (1, 203300, 203399),
+                (1, 223300, 223399),
+                (1, 230300, 230399),
                 (1, 233300, 233399),
             }
         )
@@ -247,6 +251,12 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
             q.get_missing_sub_filters_for_addresses(1, (
                 self.root_pubkey.address, self.RECEIVING_KEY_N,
             )), {
+                (0, 3303, 3303),
+                (0, 203303, 203303),
+                (0, 223303, 223303),
+                (0, 230303, 230303),
+                (0, 233303, 233303),
+                (0, 234003, 234003),
                 (0, 234403, 234403),
             }
         )
