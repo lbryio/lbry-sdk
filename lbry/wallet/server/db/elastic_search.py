@@ -29,7 +29,7 @@ class SearchIndex:
                 self.index,
                 {"settings":
                      {"analysis":
-                          {"analyzer": {"porter": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem" ]}}}
+                          {"analyzer": {"default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem" ]}}}
                       }
                  }
             )
@@ -274,10 +274,10 @@ def expand_query(**kwargs):
         query['should'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
     if 'text' in kwargs:
         return {"query":
-                    {"query_string":
+                    {"simple_query_string":
                          {"query": kwargs["text"], "fields": [
-                             "claim_name", "channel_name", "title", "description", "author", "tags"
-                         ], "analyzer": "porter"}}}
+                             "claim_name^4", "channel_name^8", "title^1", "description^.5", "author^1", "tags^.5"
+                         ]}}}
     query = {
         'query': {'bool': query},
         "sort": [],
