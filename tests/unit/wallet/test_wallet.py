@@ -255,7 +255,7 @@ class TransactionIOBalancing(WalletTestCase):
             .add_inputs([self.txi(self.txo(sum(amounts)+0.1))]) \
             .add_outputs(utxos)
 
-        await self.db.insert_transaction(b'beef', self.funding_tx)
+        await self.db.insert_transactions([(b'beef', self.funding_tx)])
 
         return utxos
 

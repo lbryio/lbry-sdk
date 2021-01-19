@@ -269,8 +269,8 @@ class Database:
     async def insert_tx_filters(self, filters):
         return await self.run(q.insert_tx_filters, filters)
 
-    async def insert_transaction(self, block_hash, tx):
-        return await self.run(q.insert_transaction, block_hash, tx)
+    async def insert_transactions(self, txs):
+        return await self.run(q.insert_transactions, txs)
 
     async def update_address_used_times(self, addresses):
         return await self.run(q.update_address_used_times, addresses)

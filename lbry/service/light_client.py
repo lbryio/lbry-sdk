@@ -136,13 +136,17 @@ class FilterManager:
     async def download_and_save_txs(self, tx_hashes):
         if not tx_hashes:
             return
-        txids = [hexlify(tx_hash[::-1]).decode() for tx_hash in tx_hashes]
-        print(f'=> transaction_search(len(txids): {len(txids)})')
-        txs = await self.client.first.transaction_search(txids=txids, raw=True)
-        print(f' @ transaction_search(len(txids): {len(txids)})')
-        for raw_tx in txs.values():
-            await self.db.insert_transaction(None, Transaction(unhexlify(raw_tx)))
-        print(f' # transaction_search(len(txids): {len(txids)})')
+        all_txids = [hexlify(tx_hash[::-1]).decode() for tx_hash in tx_hashes]
+        chunk_size = 10
+        for i in range(0, len(all_txids), chunk_size):
+            txids = all_txids[i:i + chunk_size]
+            print(f'  => transaction_search(len(txids): {len(txids)})')
+            txs = await self.client.first.transaction_search(txids=txids, raw=True)
+            print(f'  <= transaction_search(len(txids): {len(txids)})')
+            await self.db.insert_transactions([
+                (None, Transaction(unhexlify(raw_tx))) for raw_tx in txs.values()
+            ])
+            print(f'  saved {len(txids)}) transactions')
 
     async def download_initial_filters(self, best_height):
         missing = await self.db.get_missing_required_filters(best_height)

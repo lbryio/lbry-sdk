@@ -260,7 +260,7 @@ class AsyncUnitDBTestCase(AsyncioTestCase):
                 self.outputs.extend(tx.outputs)
             return block_or_tx
         elif isinstance(block_or_tx, Transaction):
-            await self.db.insert_transaction(block_hash, block_or_tx)
+            await self.db.insert_transactions([(block_hash, block_or_tx)])
             self.outputs.extend(block_or_tx.outputs)
             return block_or_tx.outputs[0]
         else:

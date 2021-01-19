@@ -94,23 +94,33 @@ class PersistingAddressIterator(DatabaseAddressIterator):
             yield hash160(pubkey_child.pubkey_bytes), self.n, True
 
 
+class BatchAddressIterator:
+
+    def __init__(self, iterator: PersistingAddressIterator, size):
+        self.iterator = iterator
+        self.size = size
+
+    def __iter__(self) -> Iterator[bytearray]:
+        i = iter(self.iterator)
+        while True:
+            yield [bytearray(next(i)[0]) for _ in range(self.size)]
+
+
 def generate_addresses_using_filters(best_height, allowed_gap, address_manager) -> Set:
     need, have = set(), set()
     matchers = get_filter_matchers(best_height)
-    with PersistingAddressIterator(*address_manager) as addresses:
-        gap = 0
-        for address_hash, n, is_new in addresses:  # pylint: disable=unused-variable
-            gap += 1
-            address_bytes = bytearray(address_hash)
+    with PersistingAddressIterator(*address_manager) as address_iterator:
+        for addresses in BatchAddressIterator(address_iterator, allowed_gap):
+            has_match = False
             for matcher, filter_range in matchers:
-                if matcher.Match(address_bytes):
-                    gap = 0
+                if matcher.MatchAny(addresses):
+                    has_match = True
                     if filter_range not in need and filter_range not in have:
                         if has_filter_range(*filter_range):
                             have.add(filter_range)
                         else:
                             need.add(filter_range)
-            if gap >= allowed_gap:
+            if not has_match:
                 break
     return need
 
@@ -127,12 +137,16 @@ def get_missing_sub_filters_for_addresses(granularity, address_manager):
 
 def get_missing_tx_for_addresses(address_manager):
     need = set()
-    for tx_hash, matcher in get_tx_matchers_for_missing_txs():
-        for address_hash, _, _ in DatabaseAddressIterator(*address_manager):
-            address_bytes = bytearray(address_hash)
-            if matcher.Match(address_bytes):
-                need.add(tx_hash)
-                break
+    filters = get_tx_matchers_for_missing_txs()
+    print(f'  loaded tx filters ({len(filters)})')
+    addresses = DatabaseAddressIterator.get_address_hash_bytes(*address_manager)
+    print(f'  loaded addresses ({len(addresses)})')
+    print('  matching...')
+    for i, (tx_hash, matcher) in enumerate(filters):
+        if i > 0 and i % 1000 == 0:
+            print(f'  {i} of {len(filters)} processed')
+        if matcher.MatchAny(addresses):
+            need.add(tx_hash)
     return need
 
 

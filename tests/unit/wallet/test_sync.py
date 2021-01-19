@@ -126,8 +126,8 @@ class TestAddressGenerationAndTXSync(UnitDBTestCase):
             q.insert_tx_filters([(hexlify(f'tx{height}'.encode()), height, create_address_filter(addresses))])
 
     def test_generate_from_filters_and_download_txs(self):
-        # 15 addresses will get generated, 9 due to filters and 6 due to gap
-        pubkeys = [self.receiving_pubkey.child(n) for n in range(15)]
+        # 18 addresses will get generated
+        pubkeys = [self.receiving_pubkey.child(n) for n in range(18)]
         hashes = [hash160(key.pubkey_bytes) for key in pubkeys]
 
         # create all required filters (include 9 of the addresses in the filters)

@@ -64,8 +64,11 @@ def get_block_headers(first, last=None):
     return rows
 
 
-def insert_transaction(block_hash, tx):
-    context().get_bulk_loader().add_transaction(block_hash, tx).flush(TX)
+def insert_transactions(txs):
+    loader = context().get_bulk_loader()
+    for block_hash, tx in txs:
+        loader.add_transaction(block_hash, tx)
+    loader.flush(return_row_count_for_table=None)
 
 
 def check_version_and_create_tables():
