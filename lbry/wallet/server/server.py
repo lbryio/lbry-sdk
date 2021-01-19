@@ -5,7 +5,6 @@ from concurrent.futures.thread import ThreadPoolExecutor
 import typing
 
 import lbry
-from lbry.wallet.server.db.elastic_search import indexer_task
 from lbry.wallet.server.mempool import MemPool, MemPoolAPI
 from lbry.prometheus import PrometheusServer
 

@@ -1041,9 +1041,7 @@ class LBRYElectrumX(SessionBase):
             return cache_item.result
         async with cache_item.lock:
             if cache_item.result is None:
-                cache_item.result = await self.run_in_executor(
-                    query_name, function, kwargs
-                )
+                cache_item.result = await self.db.search_index.session_query(query_name, function, kwargs)
             else:
                 metrics = self.get_metrics_or_placeholder_for_api(query_name)
                 metrics.cache_response()

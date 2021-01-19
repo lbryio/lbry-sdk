@@ -6,6 +6,7 @@ from typing import Optional
 from prometheus_client import Gauge, Histogram
 import lbry
 from lbry.schema.claim import Claim
+from lbry.wallet.server.db.elastic_search import SearchIndex
 from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
@@ -215,6 +216,7 @@ class BlockProcessor:
         if hprevs == chain:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+            await self.db.search_index.sync_queue(self.sql.claim_queue)
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
@@ -651,7 +653,11 @@ class BlockProcessor:
                 self.reorg_count = 0
             else:
                 blocks = self.prefetcher.get_prefetched_blocks()
-                await self.check_and_advance_blocks(blocks)
+                try:
+                    await self.check_and_advance_blocks(blocks)
+                except Exception:
+                    self.logger.exception("error while processing txs")
+                    raise
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')
@@ -803,18 +809,3 @@ class LBRYBlockProcessor(BlockProcessor):
         if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(10):
             self.timer.show(height=height)
         return undo
-
-    def _checksig(self, value, address):
-        try:
-            claim_dict = Claim.from_bytes(value)
-            cert_id = claim_dict.signing_channel_hash
-            if not self.should_validate_signatures:
-                return cert_id
-            if cert_id:
-                cert_claim = self.db.get_claim_info(cert_id)
-                if cert_claim:
-                    certificate = Claim.from_bytes(cert_claim.value)
-                    claim_dict.validate_signature(address, certificate)
-                    return cert_id
-        except Exception:
-            pass

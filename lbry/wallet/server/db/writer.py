@@ -5,7 +5,7 @@ from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
 from multiprocessing import Manager, Queue
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
 from lbry.wallet.database import query, constraints_to_sql
@@ -19,6 +19,7 @@ from lbry.wallet.server.db.full_text_search import update_full_text_search, CREA
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
+from .elastic_search import SearchIndex
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 
@@ -807,9 +808,18 @@ class SQLDB:
     def enqueue_changes(self, changed_claim_hashes, deleted_claims):
         if not changed_claim_hashes and not deleted_claims:
             return
-        for claim_hash in deleted_claims:
-            if not self.claim_queue.full():
-                self.claim_queue.put_nowait(('delete', claim_hash))
+        tags = {}
+        langs = {}
+        for claim_hash, tag in self.execute(
+            f"select claim_hash, tag from tag "
+            f"WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})", changed_claim_hashes):
+            tags.setdefault(claim_hash, [])
+            tags[claim_hash].append(tag)
+        for claim_hash, lang in self.execute(
+            f"select claim_hash, language from language "
+            f"WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})", changed_claim_hashes):
+            langs.setdefault(claim_hash, [])
+            langs[claim_hash].append(lang)
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
@@ -817,8 +827,14 @@ class SQLDB:
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
         """, changed_claim_hashes):
+            claim = dict(claim._asdict())
+            claim['tags'] = tags.get(claim['claim_hash'], [])
+            claim['languages'] = langs.get(claim['claim_hash'], [])
             if not self.claim_queue.full():
-                self.claim_queue.put_nowait(('update', dict(claim._asdict())))
+                self.claim_queue.put_nowait(('update', claim))
+        for claim_hash in deleted_claims:
+            if not self.claim_queue.full():
+                self.claim_queue.put_nowait(('delete', hexlify(claim_hash[::-1]).decode()))
 
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
@@ -915,7 +931,7 @@ class SQLDB:
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
-        r(self.enqueue_changes, recalculate_claim_hashes, delete_claim_hashes)
+        r(self.enqueue_changes, recalculate_claim_hashes | affected_channels, delete_claim_hashes)
 
 
 class LBRYLevelDB(LevelDB):
@@ -934,10 +950,14 @@ class LBRYLevelDB(LevelDB):
             trending
         )
 
+        # Search index
+        self.search_index = SearchIndex(self.env.es_index_prefix)
+
     def close(self):
         super().close()
         self.sql.close()
 
     async def _open_dbs(self, *args, **kwargs):
+        await self.search_index.start()
         await super()._open_dbs(*args, **kwargs)
         self.sql.open()
