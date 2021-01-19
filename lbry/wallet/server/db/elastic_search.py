@@ -67,7 +67,7 @@ class SearchIndex:
         if not claim_ids:
             return
         actions = [{'_index': self.index, '_op_type': 'delete', '_id': claim_id} for claim_id in claim_ids]
-        await async_bulk(self.client, actions)
+        await async_bulk(self.client, actions, raise_on_error=False)
         update = expand_query(channel_id__in=claim_ids)
         update['script'] = {
             "source": "ctx._source.signature_valid=false",
