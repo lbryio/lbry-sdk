@@ -429,8 +429,10 @@ class KademliaProtocol(DatagramProtocol):
         log.debug("%s:%i RECV CALL %s %s:%i", self.external_ip, self.udp_port, message.method.decode(),
                   sender_contact.address, sender_contact.udp_port)
 
-        if not self.event_queue.full():
+        try:
             self.event_queue.put_nowait((sender_contact.node_id, sender_contact.address, method, args))
+        except asyncio.QueueFull:
+            pass
 
         if method == b'ping':
             result = self.node_rpc.ping()
