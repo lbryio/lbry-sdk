@@ -187,11 +187,12 @@ FIELDS = ['is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
           'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'reposted_claim_hash',
           'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
-          'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags']
+          'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
+          'reposted_claim_id']
 TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_id', 'claim_name', 'description',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
-               'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency']
-RANGE_FIELDS = ['height', 'fee_amount', 'duration']
+               'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags']
+RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted']
 REPLACEMENTS = {
     'name': 'claim_name',
     'txid': 'tx_id',
@@ -204,7 +205,7 @@ def expand_query(**kwargs):
     collapse = None
     for key, value in kwargs.items():
         key = key.replace('claim.', '')
-        many = key.endswith('__in')
+        many = key.endswith('__in') or isinstance(value, list)
         if many:
             key = key.replace('__in', '')
         key = REPLACEMENTS.get(key, key)
@@ -256,11 +257,11 @@ def expand_query(**kwargs):
         elif key == 'all_languages':
             query['must'].extend([{"term": {'languages': tag}} for tag in value])
         elif key == 'any_tags':
-            query['must'].append({"terms": {'tags': clean_tags(value)}})
+            query['must'].append({"terms": {'tags.keyword': clean_tags(value)}})
         elif key == 'all_tags':
-            query['must'].extend([{"term": {'tags': tag}} for tag in clean_tags(value)])
+            query['must'].extend([{"term": {'tags.keyword': tag}} for tag in clean_tags(value)])
         elif key == 'not_tags':
-            query['must_not'].extend([{"term": {'tags': tag}} for tag in clean_tags(value)])
+            query['must_not'].extend([{"term": {'tags.keyword': tag}} for tag in clean_tags(value)])
         elif key == 'limit_claims_per_channel':
             collapse = ('channel_id.keyword', value)
     if kwargs.get('has_channel_signature'):

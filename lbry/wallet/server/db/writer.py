@@ -532,6 +532,7 @@ class SQLDB:
                 WHERE claim_hash = ?
                 """, targets
             )
+        return set(target[0] for target in targets)
 
     def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:
@@ -828,7 +829,7 @@ class SQLDB:
         WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
         """, changed_claim_hashes):
             claim = dict(claim._asdict())
-            claim['tags'] = tags.get(claim['claim_hash'], [])
+            claim['tags'] = tags.get(claim['claim_hash']) or tags.get(claim['reposted_claim_hash'])
             claim['languages'] = langs.get(claim['claim_hash'], [])
             if not self.claim_queue.full():
                 self.claim_queue.put_nowait(('update', claim))
@@ -914,7 +915,7 @@ class SQLDB:
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
-        r(self.calculate_reposts, insert_claims)
+        reposted = r(self.calculate_reposts, insert_claims)
         r(update_full_text_search, 'after-insert',
           [txo.claim_hash for txo in insert_claims], self.db.cursor(), self.main.first_sync)
         r(update_full_text_search, 'before-update',
@@ -931,7 +932,7 @@ class SQLDB:
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
-        r(self.enqueue_changes, recalculate_claim_hashes | affected_channels, delete_claim_hashes)
+        r(self.enqueue_changes, recalculate_claim_hashes | affected_channels | reposted, delete_claim_hashes)
 
 
 class LBRYLevelDB(LevelDB):

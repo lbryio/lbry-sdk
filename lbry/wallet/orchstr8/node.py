@@ -202,6 +202,7 @@ class SPVNode:
     async def stop(self, cleanup=True):
         try:
             await self.server.db.search_index.delete_index()
+            await self.server.db.search_index.stop()
             await self.server.stop()
         finally:
             cleanup and self.cleanup()

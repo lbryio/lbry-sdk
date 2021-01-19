@@ -73,7 +73,8 @@ class ClaimSearchCommand(ClaimTestCase):
         for claim, result in zip(claims, results):
             self.assertEqual(
                 (claim['txid'], self.get_claim_id(claim)),
-                (result['txid'], result['claim_id'])
+                (result['txid'], result['claim_id']),
+                f"{claim['outputs'][0]['name']} != {result['name']}"
             )
 
     @skip("doesnt happen on ES...?")
