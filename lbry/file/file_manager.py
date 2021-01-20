@@ -85,8 +85,11 @@ class FileManager:
                 raise ResolveError("cannot download a channel claim, specify a /path")
             try:
                 resolved_result = await asyncio.wait_for(
-                    self.wallet_manager.ledger.resolve(wallet.accounts, [uri], include_purchase_receipt=True),
-                    resolve_timeout
+                    self.wallet_manager.ledger.resolve(
+                        wallet.accounts, [uri],
+                        include_purchase_receipt=True,
+                        include_is_my_output=True
+                    ), resolve_timeout
                 )
             except asyncio.TimeoutError:
                 raise ResolveTimeoutError(uri)
@@ -170,7 +173,14 @@ class FileManager:
             # pay fee
             ####################
 
-            if not to_replace and txo.has_price and not txo.purchase_receipt:
+            needs_purchasing = (
+                not to_replace and
+                not txo.is_my_output and
+                txo.has_price and
+                not txo.purchase_receipt
+            )
+
+            if needs_purchasing:
                 payment = await self.wallet_manager.create_purchase_transaction(
                     wallet.accounts, txo, exchange_rate_manager
                 )
