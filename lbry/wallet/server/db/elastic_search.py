@@ -63,6 +63,14 @@ class SearchIndex:
         if not claims:
             return
         actions = [extract_doc(claim, self.index) for claim in claims]
+        for claim in claims:
+            if claim['is_controlling']:
+                update = expand_query(name=claim['claim_name'])
+                update['script'] = {
+                    "source": "ctx._source.is_controlling=false",
+                    "lang": "painless"
+                }
+                await self.client.update_by_query(self.index, body=update)
         await async_bulk(self.client, actions)
 
     async def delete(self, claim_ids):
