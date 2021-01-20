@@ -12,7 +12,7 @@ from lbry.crypto.base58 import Base58
 from lbry.error import ResolveCensoredError
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
-from lbry.schema.url import URL
+from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
 
 
@@ -226,6 +226,8 @@ REPLACEMENTS = {
 
 
 def expand_query(**kwargs):
+    if 'name' in kwargs:
+        kwargs['name'] = normalize_name(kwargs.pop('name'))
     query = {'must': [], 'must_not': []}
     collapse = None
     for key, value in kwargs.items():
