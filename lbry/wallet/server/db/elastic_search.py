@@ -219,7 +219,7 @@ TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_id', 'claim_name'
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags']
 RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted']
 REPLACEMENTS = {
-    'name': 'normalized_name',
+    'name': 'normalized',
     'txid': 'tx_id',
     'claim_hash': '_id',
 }
