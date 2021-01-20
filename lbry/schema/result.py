@@ -25,45 +25,32 @@ def set_reference(reference, claim_hash, rows):
 
 class Censor:
 
-    __slots__ = 'streams', 'channels', 'limit_claims_per_channel', 'censored', 'claims_in_channel', 'total'
+    SEARCH = 1
+    RESOLVE = 2
 
-    def __init__(self, streams: dict = None, channels: dict = None, limit_claims_per_channel: int = None):
-        self.streams = streams or {}
-        self.channels = channels or {}
-        self.limit_claims_per_channel = limit_claims_per_channel  # doesn't count as censored
+    __slots__ = 'censor_type', 'censored'
+
+    def __init__(self, censor_type):
+        self.censor_type = censor_type
         self.censored = {}
-        self.claims_in_channel = {}
-        self.total = 0
+
+    def apply(self, rows):
+        return [row for row in rows if not self.censor(row)]
 
     def censor(self, row) -> bool:
-        was_censored = False
-        for claim_hash, lookup in (
-                (row['claim_hash'], self.streams),
-                (row['claim_hash'], self.channels),
-                (row['channel_hash'], self.channels),
-                (row['reposted_claim_hash'], self.streams),
-                (row['reposted_claim_hash'], self.channels)):
-            censoring_channel_hash = lookup.get(claim_hash)
-            if censoring_channel_hash:
-                was_censored = True
-                self.censored.setdefault(censoring_channel_hash, 0)
-                self.censored[censoring_channel_hash] += 1
-                break
+        was_censored = (row['censor_type'] or 0) >= self.censor_type
         if was_censored:
-            self.total += 1
-        if not was_censored and self.limit_claims_per_channel is not None and row['channel_hash']:
-            self.claims_in_channel.setdefault(row['channel_hash'], 0)
-            self.claims_in_channel[row['channel_hash']] += 1
-            if self.claims_in_channel[row['channel_hash']] > self.limit_claims_per_channel:
-                return True
+            censoring_channel_hash = row['censoring_channel_hash']
+            self.censored.setdefault(censoring_channel_hash, set())
+            self.censored[censoring_channel_hash].add(row['tx_hash'])
         return was_censored
 
     def to_message(self, outputs: OutputsMessage, extra_txo_rows):
-        outputs.blocked_total = self.total
         for censoring_channel_hash, count in self.censored.items():
             blocked = outputs.blocked.add()
-            blocked.count = count
+            blocked.count = len(count)
             set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
+            outputs.blocked_total += len(count)
 
 
 class Outputs:

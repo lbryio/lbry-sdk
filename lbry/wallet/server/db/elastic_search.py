@@ -9,7 +9,8 @@ from elasticsearch import AsyncElasticsearch, NotFoundError
 from elasticsearch.helpers import async_bulk
 
 from lbry.crypto.base58 import Base58
-from lbry.schema.result import Outputs
+from lbry.error import ResolveCensoredError
+from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
 from lbry.schema.url import URL
 from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
@@ -37,8 +38,9 @@ class SearchIndex:
             raise
 
     def stop(self):
-        asyncio.ensure_future(self.client.close())
+        client = self.client
         self.client = None
+        return asyncio.ensure_future(client.close())
 
     def delete_index(self):
         return self.client.indices.delete(self.index)
@@ -78,14 +80,22 @@ class SearchIndex:
     async def session_query(self, query_name, function, kwargs):
         offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
         if query_name == 'resolve':
-            response = await self.resolve(*kwargs)
+            response, censored, censor = await self.resolve(*kwargs)
         else:
+            censor = Censor(Censor.SEARCH)
             response, offset, total = await self.search(**kwargs)
-        return Outputs.to_base64(response, await self._get_referenced_rows(response), offset, total)
+            censored = censor.apply(response)
+        return Outputs.to_base64(censored, await self._get_referenced_rows(response), offset, total, censor)
 
     async def resolve(self, *urls):
+        censor = Censor(Censor.RESOLVE)
         results = await asyncio.gather(*(self.resolve_url(url) for url in urls))
-        return results
+        censored = [
+            result if not isinstance(result, dict) or not censor.censor(result)
+            else ResolveCensoredError(url, result['censoring_channel_hash'])
+            for url, result in zip(urls, results)
+        ]
+        return results, censored, censor
 
     async def search(self, **kwargs):
         if 'channel' in kwargs:
@@ -94,7 +104,7 @@ class SearchIndex:
                 return [], 0, 0
             kwargs['channel_id'] = result['_id']
         try:
-            result = await self.client.search(expand_query(**kwargs), self.index)
+            result = await self.client.search(expand_query(**kwargs), index=self.index)
         except NotFoundError:
             # index has no docs, fixme: log something
             return [], 0, 0
@@ -144,6 +154,7 @@ class SearchIndex:
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
         repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
         channel_hashes = set(filter(None, (row['channel_hash'] for row in txo_rows)))
+        channel_hashes |= set(filter(None, (row['censoring_channel_hash'] for row in txo_rows)))
 
         reposted_txos = []
         if repost_hashes:
@@ -166,6 +177,8 @@ def extract_doc(doc, index):
         doc['reposted_claim_id'] = None
     channel_hash = doc.pop('channel_hash')
     doc['channel_id'] = hexlify(channel_hash[::-1]).decode() if channel_hash else channel_hash
+    channel_hash = doc.pop('censoring_channel_hash')
+    doc['censoring_channel_hash'] = hexlify(channel_hash[::-1]).decode() if channel_hash else channel_hash
     txo_hash = doc.pop('txo_hash')
     doc['tx_id'] = hexlify(txo_hash[:32][::-1]).decode()
     doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
@@ -322,6 +335,9 @@ def expand_result(results):
             result['reposted_claim_hash'] = None
         result['channel_hash'] = unhexlify(result['channel_id'])[::-1] if result['channel_id'] else None
         result['txo_hash'] = unhexlify(result['tx_id'])[::-1] + struct.pack('<I', result['tx_nout'])
+        result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
+        if result['censoring_channel_hash']:
+            result['censoring_channel_hash'] = unhexlify(result['censoring_channel_hash'])[::-1]
     if inner_hits:
         return expand_result(inner_hits)
     return results

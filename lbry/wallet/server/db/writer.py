@@ -809,28 +809,39 @@ class SQLDB:
     def enqueue_changes(self, changed_claim_hashes, deleted_claims):
         if not changed_claim_hashes and not deleted_claims:
             return
-        tags = {}
-        langs = {}
-        for claim_hash, tag in self.execute(
-            f"select claim_hash, tag from tag "
-            f"WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})", changed_claim_hashes):
-            tags.setdefault(claim_hash, [])
-            tags[claim_hash].append(tag)
-        for claim_hash, lang in self.execute(
-            f"select claim_hash, language from language "
-            f"WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})", changed_claim_hashes):
-            langs.setdefault(claim_hash, [])
-            langs[claim_hash].append(lang)
+        blocklist = set(self.blocked_streams.keys()) | set(self.filtered_streams.keys())
+        blocked_channels = set(self.blocked_channels.keys()) | set(self.filtered_channels.keys())
+        changed_claim_hashes |= blocklist | blocked_channels
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
+               (select group_concat(tag, ' ') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
+               (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
-        """, changed_claim_hashes):
+        OR channel_hash IN ({','.join('?' for _ in blocked_channels)})
+        """, list(changed_claim_hashes) + list(blocked_channels)):
             claim = dict(claim._asdict())
-            claim['tags'] = tags.get(claim['claim_hash']) or tags.get(claim['reposted_claim_hash'])
-            claim['languages'] = langs.get(claim['claim_hash'], [])
+            id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
+            claim['censor_type'] = 0
+            claim['censoring_channel_hash'] = None
+            for reason_id in id_set.intersection(blocklist | blocked_channels):
+                if reason_id in self.blocked_streams:
+                    claim['censor_type'] = 2
+                    claim['censoring_channel_hash'] = self.blocked_streams.get(reason_id)
+                elif reason_id in self.blocked_channels:
+                    claim['censor_type'] = 2
+                    claim['censoring_channel_hash'] = self.blocked_channels.get(reason_id)
+                elif reason_id in self.filtered_streams:
+                    claim['censor_type'] = 1
+                    claim['censoring_channel_hash'] = self.filtered_streams.get(reason_id)
+                elif reason_id in self.filtered_channels:
+                    claim['censor_type'] = 1
+                    claim['censoring_channel_hash'] = self.filtered_channels.get(reason_id)
+
+            claim['tags'] = claim['tags'].split(' ') if claim['tags'] else []
+            claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
             if not self.claim_queue.full():
                 self.claim_queue.put_nowait(('update', claim))
         for claim_hash in deleted_claims:
