@@ -439,4 +439,3 @@ class Network:
         async with self.aiohttp_session.post(server, json=message) as r:
             result = await r.json()
             return result['result']
-
