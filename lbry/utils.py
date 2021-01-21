@@ -231,7 +231,7 @@ class LRUCacheWithMetrics:
                     f"{metric_name}_cache_miss_count", "Number of cache misses", namespace=namespace
                 )
             except ValueError as err:
-                log.warning("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)
+                log.debug("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)
                 self._track_metrics = False
                 self.hits = self.misses = None
 

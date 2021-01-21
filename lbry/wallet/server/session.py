@@ -582,6 +582,7 @@ class SessionManager:
             ])
         finally:
             await self._close_servers(list(self.servers.keys()))
+            log.warning("disconnect %i sessions", len(self.sessions))
             if self.sessions:
                 await asyncio.wait([
                     session.close(force_after=1) for session in self.sessions.values()

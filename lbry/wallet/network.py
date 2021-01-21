@@ -67,7 +67,7 @@ class ClientSession(BaseClientSession):
                     log.debug("Time since last packet: %s", perf_counter() - self.last_packet_received)
                     if (perf_counter() - self.last_packet_received) < self.timeout:
                         continue
-                    log.info("timeout sending %s to %s:%i", method, *self.server)
+                    log.warning("timeout sending %s to %s:%i", method, *self.server)
                     raise asyncio.TimeoutError
                 if done:
                     try:
@@ -87,7 +87,7 @@ class ClientSession(BaseClientSession):
             self.synchronous_close()
             raise
         except asyncio.CancelledError:
-            log.info("cancelled sending %s to %s:%i", method, *self.server)
+            log.warning("cancelled sending %s to %s:%i", method, *self.server)
             # self.synchronous_close()
             raise
         finally:
@@ -145,7 +145,7 @@ class ClientSession(BaseClientSession):
         controller.add(request.args)
 
     def connection_lost(self, exc):
-        log.debug("Connection lost: %s:%d", *self.server)
+        log.warning("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
         self.connection_latency = None
