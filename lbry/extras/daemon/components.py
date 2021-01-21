@@ -275,7 +275,7 @@ class DHTComponent(Component):
         external_ip = upnp_component.external_ip
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         if not external_ip:
-            external_ip = await utils.get_external_ip()
+            external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -476,7 +476,7 @@ class UPnPComponent(Component):
                 pass
         if external_ip and not is_valid_public_ipv4(external_ip):
             log.warning("UPnP returned a private/reserved ip - %s, checking lbry.com fallback", external_ip)
-            external_ip = await utils.get_external_ip()
+            external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         if external_ip:
@@ -534,7 +534,7 @@ class UPnPComponent(Component):
     async def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = await utils.get_external_ip()
+            self.external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
             return
         success = False
         await self._maintain_redirects()
@@ -549,9 +549,9 @@ class UPnPComponent(Component):
         else:
             log.error("failed to setup upnp")
         if not self.external_ip:
-            self.external_ip = await utils.get_external_ip()
+            self.external_ip, probed_url = await utils.get_external_ip(self.conf.lbryum_servers)
             if self.external_ip:
-                log.info("detected external ip using lbry.com fallback")
+                log.info("detected external ip using %s fallback", probed_url)
         if self.component_manager.analytics_manager:
             self.component_manager.loop.create_task(
                 self.component_manager.analytics_manager.send_upnp_setup_success_fail(
