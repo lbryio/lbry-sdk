@@ -192,6 +192,8 @@ def cache_concurrent(async_fn):
 async def resolve_host(url: str, port: int, proto: str) -> str:
     if proto not in ['udp', 'tcp']:
         raise Exception("invalid protocol")
+    if url.lower() == 'localhost':
+        return '127.0.0.1'
     try:
         if ipaddress.ip_address(url):
             return url

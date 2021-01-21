@@ -247,11 +247,12 @@ class SessionManager:
     async def _manage_servers(self):
         paused = False
         max_sessions = self.env.max_sessions
-        low_watermark = max_sessions * 19 // 20
+        low_watermark = int(max_sessions * 0.95)
         while True:
             await self.session_event.wait()
             self.session_event.clear()
             if not paused and len(self.sessions) >= max_sessions:
+                self.bp.status_server.set_unavailable()
                 self.logger.info(f'maximum sessions {max_sessions:,d} '
                                  f'reached, stopping new connections until '
                                  f'count drops to {low_watermark:,d}')
@@ -260,6 +261,7 @@ class SessionManager:
             # Start listening for incoming connections if paused and
             # session count has fallen
             if paused and len(self.sessions) <= low_watermark:
+                self.bp.status_server.set_available()
                 self.logger.info('resuming listening for incoming connections')
                 await self._start_external_servers()
                 paused = False
@@ -572,6 +574,7 @@ class SessionManager:
             await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
+            self.bp.status_server.set_available()
             # Peer discovery should start after the external servers
             # because we connect to ourself
             await asyncio.wait([
