@@ -119,13 +119,14 @@ class WalletComponent(Component):
     async def get_status(self):
         if self.wallet_manager is None:
             return
-        session_pool = self.wallet_manager.ledger.network.session_pool
-        sessions = session_pool.sessions
+        is_connected = self.wallet_manager.ledger.network.is_connected
+        sessions = []
         connected = None
-        if self.wallet_manager.ledger.network.client:
-            addr_and_port = self.wallet_manager.ledger.network.client.server_address_and_port
-            if addr_and_port:
-                connected = f"{addr_and_port[0]}:{addr_and_port[1]}"
+        if is_connected:
+            addr, port = self.wallet_manager.ledger.network.client.server
+            connected = f"{addr}:{port}"
+            sessions.append(self.wallet_manager.ledger.network.client)
+
         result = {
             'connected': connected,
             'connected_features': self.wallet_manager.ledger.network.server_features,
@@ -137,8 +138,8 @@ class WalletComponent(Component):
                     'availability': session.available,
                 } for session in sessions
             ],
-            'known_servers': len(sessions),
-            'available_servers': len(list(session_pool.available_sessions))
+            'known_servers': len(self.wallet_manager.ledger.network.config['default_servers']),
+            'available_servers': 1 if is_connected else 0
         }
 
         if self.wallet_manager.ledger.network.remote_height:
