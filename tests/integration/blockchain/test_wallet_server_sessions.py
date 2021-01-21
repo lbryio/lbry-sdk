@@ -68,14 +68,13 @@ class TestUsagePayment(CommandTestCase):
         await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
         self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
-        # await self.daemon.jsonrpc_wallet_reconnect()
+        await self.daemon.jsonrpc_wallet_reconnect()
         LBRYElectrumX.set_server_features(node.server.env)
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
         self.assertEqual(features["daily_fee"], "1.1")
         with self.assertRaises(ServerPaymentFeeAboveMaxAllowedError):
-            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=8)
-
+            await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=30)
         node.server.env.daily_fee = "1.0"
         node.server.env.payment_address = address
         LBRYElectrumX.set_server_features(node.server.env)
