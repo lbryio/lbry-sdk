@@ -4342,7 +4342,8 @@ class Daemon(metaclass=JSONRPCServerType):
     @staticmethod
     def _constrain_txo_from_kwargs(
             constraints, type=None, txid=None,  # pylint: disable=redefined-builtin
-            claim_id=None, channel_id=None, name=None, reposted_claim_id=None,
+            claim_id=None, channel_id=None, not_channel_id=None,
+            name=None, reposted_claim_id=None,
             is_spent=False, is_not_spent=False,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
@@ -4365,6 +4366,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 constraints['is_my_output'] = False
         database.constrain_single_or_list(constraints, 'txo_type', type, lambda x: TXO_TYPES[x])
         database.constrain_single_or_list(constraints, 'channel_id', channel_id)
+        database.constrain_single_or_list(constraints, 'channel_id', not_channel_id, negate=True)
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
         database.constrain_single_or_list(constraints, 'claim_name', name)
         database.constrain_single_or_list(constraints, 'txid', txid)
@@ -4379,9 +4381,9 @@ class Daemon(metaclass=JSONRPCServerType):
         List my transaction outputs.
 
         Usage:
-            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                     [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
-                     [--is_spent | --is_not_spent]
+            txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--claim_id=<claim_id>...]
+                     [--channel_id=<channel_id>...] [--not_channel_id=<not_channel_id>...]
+                     [--name=<name>...] [--is_spent | --is_not_spent]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4395,6 +4397,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
+      --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --name=<name>              : (str or list) claim name
             --is_spent                 : (bool) only show spent txos
             --is_not_spent             : (bool) only show not spent txos
@@ -4454,9 +4457,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Spend transaction outputs, batching into multiple transactions as necessary.
 
         Usage:
-            txo_spend [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
-                      [--claim_id=<claim_id>...] [--channel_id=<channel_id>...] [--name=<name>...]
-                      [--is_my_input | --is_not_my_input]
+            txo_spend [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...] [--claim_id=<claim_id>...]
+                      [--channel_id=<channel_id>...] [--not_channel_id=<not_channel_id>...]
+                      [--name=<name>...] [--is_my_input | --is_not_my_input]
                       [--exclude_internal_transfers] [--wallet_id=<wallet_id>]
                       [--preview] [--blocking] [--batch_size=<batch_size>] [--include_full_tx]
 
@@ -4466,6 +4469,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
+      --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --name=<name>              : (str or list) claim name
             --is_my_input              : (bool) show outputs created by you
             --is_not_my_input          : (bool) show outputs not created by you
@@ -4510,6 +4514,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             txo_list [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
+                     [--channel_id=<channel_id>...] [--not_channel_id=<not_channel_id>...]
                      [--claim_id=<claim_id>...] [--name=<name>...]
                      [--is_spent] [--is_not_spent]
                      [--is_my_input_or_output |
@@ -4523,6 +4528,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
+            --channel_id=<channel_id>  : (str or list) claims in this channel
+      --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --is_spent                 : (bool) only show spent txos
             --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
@@ -4557,6 +4564,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             txo_plot [--account_id=<account_id>] [--type=<type>...] [--txid=<txid>...]
                      [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent] [--is_not_spent]
+                     [--channel_id=<channel_id>...] [--not_channel_id=<not_channel_id>...]
                      [--is_my_input_or_output |
                          [[--is_my_output | --is_not_my_output] [--is_my_input | --is_not_my_input]]
                      ]
@@ -4571,6 +4579,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
             --name=<name>              : (str or list) claim name
+            --channel_id=<channel_id>  : (str or list) claims in this channel
+      --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --is_spent                 : (bool) only show spent txos
             --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
