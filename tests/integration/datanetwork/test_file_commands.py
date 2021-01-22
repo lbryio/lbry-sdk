@@ -358,7 +358,8 @@ class FileCommands(CommandTestCase):
         # FAIL: beyond available balance
         await self.stream_create(
             'expensive', '0.01', data=b'pay me if you can',
-            fee_currency='LBC', fee_amount='11.0', fee_address=target_address
+            fee_currency='LBC', fee_amount='11.0',
+            fee_address=target_address, claim_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='expensive')
         response = await self.out(self.daemon.jsonrpc_get('lbry://expensive'))
@@ -368,7 +369,8 @@ class FileCommands(CommandTestCase):
         # FAIL: beyond maximum key fee
         await self.stream_create(
             'maxkey', '0.01', data=b'no pay me, no',
-            fee_currency='LBC', fee_amount='111.0', fee_address=target_address
+            fee_currency='LBC', fee_amount='111.0',
+            fee_address=target_address, claim_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='maxkey')
         response = await self.out(self.daemon.jsonrpc_get('lbry://maxkey'))
@@ -380,7 +382,8 @@ class FileCommands(CommandTestCase):
         # PASS: purchase is successful
         await self.stream_create(
             'icanpay', '0.01', data=b'I got the power!',
-            fee_currency='LBC', fee_amount='1.0', fee_address=target_address
+            fee_currency='LBC', fee_amount='1.0',
+            fee_address=target_address, claim_address=target_address
         )
         await self.daemon.jsonrpc_file_delete(claim_name='icanpay')
         await self.assertBalance(self.account, '9.925679')
@@ -431,7 +434,8 @@ class FileCommands(CommandTestCase):
 
         await self.stream_create(
             'somename', '0.5', data=b'Yes, please',
-            fee_currency='LBC', fee_amount='1.0', fee_address=target_address
+            fee_currency='LBC', fee_amount='1.0',
+            fee_address=target_address, claim_address=target_address
         )
         self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='somename'))
         # Assert the fee and bid are subtracted
