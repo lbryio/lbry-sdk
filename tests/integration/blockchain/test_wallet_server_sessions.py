@@ -47,7 +47,7 @@ class TestSessions(IntegrationTestCase):
 
 
 class TestUsagePayment(CommandTestCase):
-    async def test_single_server_payment(self):
+    async def _test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
         wallet_pay_service.payment_period = 1
         # only starts with a positive max key fee
