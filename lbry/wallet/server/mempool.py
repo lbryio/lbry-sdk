@@ -344,7 +344,7 @@ class MemPool:
                 value += sum(v for h168, v in tx.out_pairs if h168 == hashX)
         return value
 
-    async def compact_fee_histogram(self):
+    def compact_fee_histogram(self):
         """Return a compact fee histogram of the current mempool."""
         return self.cached_compact_histogram
 

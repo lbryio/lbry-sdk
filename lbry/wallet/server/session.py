@@ -923,7 +923,7 @@ class LBRYElectrumX(SessionBase):
         self.hashX_subs = {}
         self.sv_seen = False
         self.protocol_tuple = self.PROTOCOL_MIN
-
+        self.protocol_string = None
         self.daemon = self.session_mgr.daemon
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYLevelDB = self.bp.db
@@ -1474,7 +1474,8 @@ class LBRYElectrumX(SessionBase):
         client_name: a string identifying the client
         protocol_version: the protocol version spoken by the client
         """
-
+        if self.protocol_string is not None:
+            return self.version, self.protocol_string
         if self.sv_seen and self.protocol_tuple >= (1, 4):
             raise RPCError(BAD_REQUEST, f'server.version already sent')
         self.sv_seen = True
@@ -1484,8 +1485,7 @@ class LBRYElectrumX(SessionBase):
             if self.env.drop_client is not None and \
                     self.env.drop_client.match(client_name):
                 self.close_after_send = True
-                raise RPCError(BAD_REQUEST,
-                               f'unsupported client: {client_name}')
+                raise RPCError(BAD_REQUEST, f'unsupported client: {client_name}')
             if self.client_version != client_name[:17]:
                 self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
                 self.client_version = client_name[:17]
@@ -1494,19 +1494,16 @@ class LBRYElectrumX(SessionBase):
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.
-        ptuple, client_min = util.protocol_version(
-            protocol_version, self.PROTOCOL_MIN, self.PROTOCOL_MAX)
+        ptuple, client_min = util.protocol_version(protocol_version, self.PROTOCOL_MIN, self.PROTOCOL_MAX)
         if ptuple is None:
-            # FIXME: this fills the logs
-            # if client_min > self.PROTOCOL_MIN:
-            #     self.logger.info(f'client requested future protocol version '
-            #                      f'{util.version_string(client_min)} '
-            #                      f'- is your software out of date?')
-            self.close_after_send = True
-            raise RPCError(BAD_REQUEST,
-                           f'unsupported protocol version: {protocol_version}')
+            ptuple, client_min = util.protocol_version(protocol_version, (1, 1, 0), (1, 4, 0))
+            if ptuple is None:
+                self.close_after_send = True
+                raise RPCError(BAD_REQUEST, f'unsupported protocol version: {protocol_version}')
+
         self.protocol_tuple = ptuple
-        return self.version, self.protocol_version_string()
+        self.protocol_string = util.version_string(ptuple)
+        return self.version, self.protocol_string
 
     async def transaction_broadcast(self, raw_tx):
         """Broadcast a raw transaction to the network.
