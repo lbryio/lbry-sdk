@@ -6,7 +6,7 @@ import sqlite3
 import pickle
 from os import path
 from pprint import pprint
-import aioupnp
+from aioupnp import upnp, fault as upnpfault
 from aiohttp import web
 import json
 
@@ -30,12 +30,12 @@ async def main():
         pass  # Not implemented on Windows
 
     peer_manager = peer.PeerManager(loop)
-    u = await aioupnp.upnp.UPnP.discover()
+    u = await upnp.UPnP.discover()
 
     db = sqlite3.connect(data_dir + "/tracker.sqlite3")
-    db.execute(
-        'CREATE TABLE IF NOT EXISTS log (local_id TEXT, hash TEXT, node_id TEXT, ip TEXT, port INT, timestamp INT)'
-    )
+    db.execute('CREATE TABLE IF NOT EXISTS announce (local_id TEXT, hash TEXT, node_id TEXT, ip TEXT, port INT, timestamp INT)')
+    db.execute('CREATE UNIQUE INDEX IF NOT EXISTS node_id_hash_idx ON announce (node_id, hash)')
+
     # curr = db.cursor()
     # res = curr.execute("SELECT 1, 2, 3")
     # for items in res:
@@ -97,8 +97,14 @@ async def main():
 
             try:
                 cur = db.cursor()
-                cur.execute('INSERT INTO log (local_id, hash, node_id, ip, port, timestamp) VALUES (?,?,?,?,?,?)',
-                            (local_node_id, bytes.hex(blob_hash), bytes.hex(node_id), ip, port, int(time.time())))
+                cur.execute(
+                    '''
+                    INSERT INTO announce (local_id, hash, node_id, ip, port, timestamp) VALUES (?,?,?,?,?,?)
+                    ON CONFLICT (node_id, hash) DO UPDATE SET 
+                    local_id=excluded.local_id, ip=excluded.ip, port=excluded.port, timestamp=excluded.timestamp
+                    ''',
+                    (local_node_id, bytes.hex(blob_hash), bytes.hex(node_id), ip, port, int(time.time()))
+                )
                 db.commit()
                 cur.close()
             except sqlite3.Error as err:
@@ -111,9 +117,8 @@ async def main():
             # print(f'deleting upnp port mapping {n.protocol.udp_port}')
             try:
                 await u.delete_port_mapping(n.protocol.udp_port, "UDP")
-            except aioupnp.fault.UPnPError:
+            except upnpfault.UPnPError:
                 pass
-
 
             state = n.get_state()
             # keep existing rt if there is one
@@ -183,7 +188,7 @@ async def seeds_handler(request):
     try:
         cur = db.cursor()
         c = cur.execute("""
-            select count(distinct(node_id)) from log where hash = ? and timestamp > strftime('%s','now','-1 day')
+            select count(distinct(node_id)) from announce where hash = ? and timestamp > strftime('%s','now','-1 day')
         """, (blobhash,)).fetchone()[0]
         cur.close()
         return web.Response(text=json.dumps({'seeds': c})+"\n")
