@@ -174,7 +174,9 @@ class Node:
                 if not self.joined.is_set():
                     self.joined.set()
                     log.info(
-                        "joined dht, %i peers known in %i buckets", len(self.protocol.routing_table.get_peers()),
+                        "%s: joined dht, %i peers known in %i buckets",
+                        bytes.fromhex(self.protocol.node_id)[:8],
+                        len(self.protocol.routing_table.get_peers()),
                         self.protocol.routing_table.buckets_with_contacts()
                     )
             else:

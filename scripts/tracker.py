@@ -2,11 +2,11 @@ import asyncio
 import logging
 import signal
 import time
-from aioupnp import upnp
 import sqlite3
 import pickle
 from os import path
 from pprint import pprint
+import aioupnp
 from aiohttp import web
 import json
 
@@ -30,7 +30,7 @@ async def main():
         pass  # Not implemented on Windows
 
     peer_manager = peer.PeerManager(loop)
-    u = await upnp.UPnP.discover()
+    u = await aioupnp.upnp.UPnP.discover()
 
     db = sqlite3.connect(data_dir + "/tracker.sqlite3")
     db.execute(
@@ -43,7 +43,7 @@ async def main():
 
     asyncio.create_task(run_web_api(loop, db))
 
-    num_nodes = 16
+    num_nodes = 128
     start_port = 4444
     known_node_urls = [("lbrynet1.lbry.com", 4444), ("lbrynet2.lbry.com", 4444), ("lbrynet3.lbry.com", 4444)]
     external_ip = await u.get_external_ip()
@@ -52,12 +52,11 @@ async def main():
 
     try:
         for i in range(num_nodes):
-            assert i < 16  # my ghetto int -> node_id converter requires this
-            node_id = '0123456789abcdef'[i] + '0' * 95
+            node_id = make_node_id(i, num_nodes)
             # pprint(node_id)
 
             port = start_port + i
-            await u.get_next_mapping(port, "UDP", "lbry dht tracker")
+            # await u.get_next_mapping(port, "UDP", "lbry dht tracker")
             # SOMETHING ABOUT THIS DOESNT WORK
             # port = await u.get_next_mapping(start_port, "UDP", "lbry dht tracker")
 
@@ -109,8 +108,12 @@ async def main():
         for n in nodes:
             node_id = bytes.hex(n.protocol.node_id)
             n.stop()
-            print(f'deleting upnp port mapping {n.protocol.udp_port}')
-            await u.delete_port_mapping(n.protocol.udp_port, "UDP")
+            # print(f'deleting upnp port mapping {n.protocol.udp_port}')
+            try:
+                await u.delete_port_mapping(n.protocol.udp_port, "UDP")
+            except aioupnp.fault.UPnPError:
+                pass
+
 
             state = n.get_state()
             # keep existing rt if there is one
@@ -135,6 +138,17 @@ class ShutdownErr(BaseException):
 def shutdown():
     print("got interrupt signal...")
     raise ShutdownErr()
+
+
+def make_node_id(i: int, n: int) -> str:
+    """
+    split dht address space into N chunks and return the first id of the i'th chunk
+    make_node_id(0,n) returns 000...000 for any n
+    """
+    if not 0 <= i < n:
+        raise ValueError("i must be between 0 (inclusive) and n (exclusive)")
+    bytes_in_id = 48
+    return "{0:0{1}x}".format(i * ((2**8)**bytes_in_id // n), bytes_in_id*2)
 
 
 async def drain(n, q):
