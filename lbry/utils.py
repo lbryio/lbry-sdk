@@ -192,6 +192,8 @@ def cache_concurrent(async_fn):
 async def resolve_host(url: str, port: int, proto: str) -> str:
     if proto not in ['udp', 'tcp']:
         raise Exception("invalid protocol")
+    if url.lower() == 'localhost':
+        return '127.0.0.1'
     try:
         if ipaddress.ip_address(url):
             return url
@@ -206,7 +208,7 @@ async def resolve_host(url: str, port: int, proto: str) -> str:
     ))[0][4][0]
 
 
-class LRUCache:
+class LRUCacheWithMetrics:
     __slots__ = [
         'capacity',
         'cache',
@@ -231,7 +233,7 @@ class LRUCache:
                     f"{metric_name}_cache_miss_count", "Number of cache misses", namespace=namespace
                 )
             except ValueError as err:
-                log.warning("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)
+                log.debug("failed to set up prometheus %s_cache_miss_count metric: %s", metric_name, err)
                 self._track_metrics = False
                 self.hits = self.misses = None
 
@@ -286,12 +288,63 @@ class LRUCache:
                 pass
 
 
+class LRUCache:
+    __slots__ = [
+        'capacity',
+        'cache'
+    ]
+
+    def __init__(self, capacity: int):
+        self.capacity = capacity
+        self.cache = collections.OrderedDict()
+
+    def get(self, key, default=None):
+        try:
+            value = self.cache.pop(key)
+        except KeyError:
+            return default
+        self.cache[key] = value
+        return value
+
+    def set(self, key, value):
+        try:
+            self.cache.pop(key)
+        except KeyError:
+            if len(self.cache) >= self.capacity:
+                self.cache.popitem(last=False)
+        self.cache[key] = value
+
+    def clear(self):
+        self.cache.clear()
+
+    def pop(self, key):
+        return self.cache.pop(key)
+
+    def __setitem__(self, key, value):
+        return self.set(key, value)
+
+    def __getitem__(self, item):
+        return self.get(item)
+
+    def __contains__(self, item) -> bool:
+        return item in self.cache
+
+    def __len__(self):
+        return len(self.cache)
+
+    def __delitem__(self, key):
+        self.cache.pop(key)
+
+    def __del__(self):
+        self.clear()
+
+
 def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
-                         override_lru_cache: typing.Optional[LRUCache] = None):
+                         override_lru_cache: typing.Optional[LRUCacheWithMetrics] = None):
     if not cache_size and override_lru_cache is None:
         raise ValueError("invalid cache size")
     concurrent_cache = {}
-    lru_cache = override_lru_cache if override_lru_cache is not None else LRUCache(cache_size)
+    lru_cache = override_lru_cache if override_lru_cache is not None else LRUCacheWithMetrics(cache_size)
 
     def wrapper(async_fn):
 
@@ -326,14 +379,80 @@ async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[a
             yield response
 
 
-async def get_external_ip() -> typing.Optional[str]:  # used if upnp is disabled or non-functioning
+# the ipaddress module does not show these subnets as reserved
+CARRIER_GRADE_NAT_SUBNET = ipaddress.ip_network('100.64.0.0/10')
+IPV4_TO_6_RELAY_SUBNET = ipaddress.ip_network('192.88.99.0/24')
+
+
+def is_valid_public_ipv4(address, allow_localhost: bool = False):
+    try:
+        parsed_ip = ipaddress.ip_address(address)
+        if parsed_ip.is_loopback and allow_localhost:
+            return True
+        if any((parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local, parsed_ip.is_loopback,
+                parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private, parsed_ip.is_reserved)):
+            return False
+        else:
+            return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
+                            IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
+    except (ipaddress.AddressValueError, ValueError):
+        return False
+
+
+async def fallback_get_external_ip():  # used if spv servers can't be used for ip detection
     try:
         async with aiohttp_request("get", "https://api.lbry.com/ip") as resp:
             response = await resp.json()
             if response['success']:
-                return response['data']['ip']
+                return response['data']['ip'], None
     except Exception:
-        return
+        return None, None
+
+
+async def _get_external_ip(default_servers) -> typing.Tuple[typing.Optional[str], typing.Optional[str]]:
+    # used if upnp is disabled or non-functioning
+    from lbry.wallet.server.udp import SPVStatusClientProtocol  # pylint: disable=C0415
+
+    hostname_to_ip = {}
+    ip_to_hostnames = collections.defaultdict(list)
+
+    async def resolve_spv(server, port):
+        try:
+            server_addr = await resolve_host(server, port, 'udp')
+            hostname_to_ip[server] = (server_addr, port)
+            ip_to_hostnames[(server_addr, port)].append(server)
+        except Exception:
+            log.exception("error looking up dns for spv servers")
+
+    # accumulate the dns results
+    await asyncio.gather(*(resolve_spv(server, port) for (server, port) in default_servers))
+
+    loop = asyncio.get_event_loop()
+    pong_responses = asyncio.Queue()
+    connection = SPVStatusClientProtocol(pong_responses)
+    try:
+        await loop.create_datagram_endpoint(lambda: connection, ('0.0.0.0', 0))
+        # could raise OSError if it cant bind
+        randomized_servers = list(ip_to_hostnames.keys())
+        random.shuffle(randomized_servers)
+        for server in randomized_servers:
+            connection.ping(server)
+            try:
+                _, pong = await asyncio.wait_for(pong_responses.get(), 1)
+                if is_valid_public_ipv4(pong.ip_address):
+                    return pong.ip_address, ip_to_hostnames[server][0]
+            except asyncio.TimeoutError:
+                pass
+        return None, None
+    finally:
+        connection.close()
+
+
+async def get_external_ip(default_servers) -> typing.Tuple[typing.Optional[str], typing.Optional[str]]:
+    ip_from_spv_servers = await _get_external_ip(default_servers)
+    if not ip_from_spv_servers[1]:
+        return await fallback_get_external_ip()
+    return ip_from_spv_servers
 
 
 def is_running_from_bundle():

@@ -2,7 +2,7 @@ import os
 import typing
 import asyncio
 import logging
-from lbry.utils import LRUCache
+from lbry.utils import LRUCacheWithMetrics
 from lbry.blob.blob_file import is_valid_blobhash, BlobFile, BlobBuffer, AbstractBlob
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.connection_manager import ConnectionManager
@@ -32,7 +32,7 @@ class BlobManager:
             else self._node_data_store.completed_blobs
         self.blobs: typing.Dict[str, AbstractBlob] = {}
         self.config = config
-        self.decrypted_blob_lru_cache = None if not self.config.blob_lru_cache_size else LRUCache(
+        self.decrypted_blob_lru_cache = None if not self.config.blob_lru_cache_size else LRUCacheWithMetrics(
             self.config.blob_lru_cache_size)
         self.connection_manager = ConnectionManager(loop)
 

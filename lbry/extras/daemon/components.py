@@ -119,13 +119,14 @@ class WalletComponent(Component):
     async def get_status(self):
         if self.wallet_manager is None:
             return
-        session_pool = self.wallet_manager.ledger.network.session_pool
-        sessions = session_pool.sessions
+        is_connected = self.wallet_manager.ledger.network.is_connected
+        sessions = []
         connected = None
-        if self.wallet_manager.ledger.network.client:
-            addr_and_port = self.wallet_manager.ledger.network.client.server_address_and_port
-            if addr_and_port:
-                connected = f"{addr_and_port[0]}:{addr_and_port[1]}"
+        if is_connected:
+            addr, port = self.wallet_manager.ledger.network.client.server
+            connected = f"{addr}:{port}"
+            sessions.append(self.wallet_manager.ledger.network.client)
+
         result = {
             'connected': connected,
             'connected_features': self.wallet_manager.ledger.network.server_features,
@@ -137,8 +138,8 @@ class WalletComponent(Component):
                     'availability': session.available,
                 } for session in sessions
             ],
-            'known_servers': len(sessions),
-            'available_servers': len(list(session_pool.available_sessions))
+            'known_servers': len(self.wallet_manager.ledger.network.config['default_servers']),
+            'available_servers': 1 if is_connected else 0
         }
 
         if self.wallet_manager.ledger.network.remote_height:
@@ -274,7 +275,7 @@ class DHTComponent(Component):
         external_ip = upnp_component.external_ip
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         if not external_ip:
-            external_ip = await utils.get_external_ip()
+            external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
             if not external_ip:
                 log.warning("failed to get external ip")
 
@@ -328,7 +329,7 @@ class HashAnnouncerComponent(Component):
 
 class FileManagerComponent(Component):
     component_name = FILE_MANAGER_COMPONENT
-    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT, LIBTORRENT_COMPONENT]
+    depends_on = [BLOB_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -351,7 +352,10 @@ class FileManagerComponent(Component):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
-        torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
+        try:
+            torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
+        except NameError:
+            torrent = None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.file_manager = FileManager(
@@ -360,7 +364,7 @@ class FileManagerComponent(Component):
         self.file_manager.source_managers['stream'] = StreamManager(
             loop, self.conf, blob_manager, wallet, storage, node,
         )
-        if TorrentSession:
+        if TorrentSession and LIBTORRENT_COMPONENT not in self.conf.components_to_skip:
             self.file_manager.source_managers['torrent'] = TorrentManager(
                 loop, self.conf, torrent, storage, self.component_manager.analytics_manager
             )
@@ -472,7 +476,7 @@ class UPnPComponent(Component):
                 pass
         if external_ip and not is_valid_public_ipv4(external_ip):
             log.warning("UPnP returned a private/reserved ip - %s, checking lbry.com fallback", external_ip)
-            external_ip = await utils.get_external_ip()
+            external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
         if self.external_ip and self.external_ip != external_ip:
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         if external_ip:
@@ -530,7 +534,7 @@ class UPnPComponent(Component):
     async def start(self):
         log.info("detecting external ip")
         if not self.use_upnp:
-            self.external_ip = await utils.get_external_ip()
+            self.external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
             return
         success = False
         await self._maintain_redirects()
@@ -545,9 +549,9 @@ class UPnPComponent(Component):
         else:
             log.error("failed to setup upnp")
         if not self.external_ip:
-            self.external_ip = await utils.get_external_ip()
+            self.external_ip, probed_url = await utils.get_external_ip(self.conf.lbryum_servers)
             if self.external_ip:
-                log.info("detected external ip using lbry.com fallback")
+                log.info("detected external ip using %s fallback", probed_url)
         if self.component_manager.analytics_manager:
             self.component_manager.loop.create_task(
                 self.component_manager.analytics_manager.send_upnp_setup_success_fail(

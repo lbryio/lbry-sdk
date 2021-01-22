@@ -132,7 +132,7 @@ class AnalyticsManager:
     async def run(self):
         while True:
             if self.enabled:
-                self.external_ip = await utils.get_external_ip()
+                self.external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
                 await self._send_heartbeat()
             await asyncio.sleep(1800)
 
