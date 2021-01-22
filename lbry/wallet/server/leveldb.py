@@ -24,7 +24,7 @@ from glob import glob
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 import attr
-from lbry.utils import LRUCache
+from lbry.utils import LRUCacheWithMetrics
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.merkle import Merkle, MerkleCache
@@ -93,7 +93,7 @@ class LevelDB:
         self.headers_db = None
         self.tx_db = None
 
-        self._tx_and_merkle_cache = LRUCache(2**17, metric_name='tx_and_merkle', namespace="wallet_server")
+        self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
 
     async def _read_tx_counts(self):

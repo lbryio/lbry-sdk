@@ -21,7 +21,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
-from lbry.utils import LRUCache
+from lbry.utils import LRUCacheWithMetrics
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
@@ -247,11 +247,12 @@ class SessionManager:
     async def _manage_servers(self):
         paused = False
         max_sessions = self.env.max_sessions
-        low_watermark = max_sessions * 19 // 20
+        low_watermark = int(max_sessions * 0.95)
         while True:
             await self.session_event.wait()
             self.session_event.clear()
             if not paused and len(self.sessions) >= max_sessions:
+                self.bp.status_server.set_unavailable()
                 self.logger.info(f'maximum sessions {max_sessions:,d} '
                                  f'reached, stopping new connections until '
                                  f'count drops to {low_watermark:,d}')
@@ -260,6 +261,7 @@ class SessionManager:
             # Start listening for incoming connections if paused and
             # session count has fallen
             if paused and len(self.sessions) <= low_watermark:
+                self.bp.status_server.set_available()
                 self.logger.info('resuming listening for incoming connections')
                 await self._start_external_servers()
                 paused = False
@@ -572,6 +574,7 @@ class SessionManager:
             await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
+            self.bp.status_server.set_available()
             # Peer discovery should start after the external servers
             # because we connect to ourself
             await asyncio.wait([
@@ -582,6 +585,7 @@ class SessionManager:
             ])
         finally:
             await self._close_servers(list(self.servers.keys()))
+            log.warning("disconnect %i sessions", len(self.sessions))
             if self.sessions:
                 await asyncio.wait([
                     session.close(force_after=1) for session in self.sessions.values()
@@ -810,8 +814,8 @@ class LBRYSessionManager(SessionManager):
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
         self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = LRUCache(2**14, metric_name='search', namespace=NAMESPACE)
-        self.search_cache['resolve'] = LRUCache(2**16, metric_name='resolve', namespace=NAMESPACE)
+        self.search_cache['search'] = LRUCacheWithMetrics(2 ** 14, metric_name='search', namespace=NAMESPACE)
+        self.search_cache['resolve'] = LRUCacheWithMetrics(2 ** 16, metric_name='resolve', namespace=NAMESPACE)
 
     async def process_metrics(self):
         while self.running:
@@ -864,6 +868,7 @@ class LBRYElectrumX(SessionBase):
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
     session_mgr: LBRYSessionManager
     version = lbry.__version__
+    cached_server_features = {}
 
     @classmethod
     def initialize_request_handlers(cls):
@@ -910,13 +915,15 @@ class LBRYElectrumX(SessionBase):
         super().__init__(*args, **kwargs)
         if not LBRYElectrumX.request_handlers:
             LBRYElectrumX.initialize_request_handlers()
+        if not LBRYElectrumX.cached_server_features:
+            LBRYElectrumX.set_server_features(self.env)
         self.subscribe_headers = False
         self.subscribe_headers_raw = False
         self.connection.max_response_size = self.env.max_send
         self.hashX_subs = {}
         self.sv_seen = False
         self.protocol_tuple = self.PROTOCOL_MIN
-
+        self.protocol_string = None
         self.daemon = self.session_mgr.daemon
         self.bp: LBRYBlockProcessor = self.session_mgr.bp
         self.db: LBRYLevelDB = self.bp.db
@@ -927,10 +934,10 @@ class LBRYElectrumX(SessionBase):
                 for ver in (cls.PROTOCOL_MIN, cls.PROTOCOL_MAX)]
 
     @classmethod
-    def server_features(cls, env):
+    def set_server_features(cls, env):
         """Return the server features dictionary."""
         min_str, max_str = cls.protocol_min_max_strings()
-        return {
+        cls.cached_server_features.update({
             'hosts': env.hosts_dict(),
             'pruning': None,
             'server_version': cls.version,
@@ -943,10 +950,10 @@ class LBRYElectrumX(SessionBase):
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
             'trending_algorithm': env.trending_algorithms[0]
-        }
+        })
 
     async def server_features_async(self):
-        return self.server_features(self.env)
+        return self.cached_server_features
 
     @classmethod
     def server_version_args(cls):
@@ -1271,7 +1278,7 @@ class LBRYElectrumX(SessionBase):
         hashXes = [
             (self.address_to_hashX(address), address) for address in addresses
         ]
-        return await asyncio.gather(*(self.hashX_subscribe(*args) for args in hashXes))
+        return [await self.hashX_subscribe(*args) for args in hashXes]
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
@@ -1467,7 +1474,8 @@ class LBRYElectrumX(SessionBase):
         client_name: a string identifying the client
         protocol_version: the protocol version spoken by the client
         """
-
+        if self.protocol_string is not None:
+            return self.version, self.protocol_string
         if self.sv_seen and self.protocol_tuple >= (1, 4):
             raise RPCError(BAD_REQUEST, f'server.version already sent')
         self.sv_seen = True
@@ -1477,8 +1485,7 @@ class LBRYElectrumX(SessionBase):
             if self.env.drop_client is not None and \
                     self.env.drop_client.match(client_name):
                 self.close_after_send = True
-                raise RPCError(BAD_REQUEST,
-                               f'unsupported client: {client_name}')
+                raise RPCError(BAD_REQUEST, f'unsupported client: {client_name}')
             if self.client_version != client_name[:17]:
                 self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
                 self.client_version = client_name[:17]
@@ -1487,19 +1494,16 @@ class LBRYElectrumX(SessionBase):
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.
-        ptuple, client_min = util.protocol_version(
-            protocol_version, self.PROTOCOL_MIN, self.PROTOCOL_MAX)
+        ptuple, client_min = util.protocol_version(protocol_version, self.PROTOCOL_MIN, self.PROTOCOL_MAX)
         if ptuple is None:
-            # FIXME: this fills the logs
-            # if client_min > self.PROTOCOL_MIN:
-            #     self.logger.info(f'client requested future protocol version '
-            #                      f'{util.version_string(client_min)} '
-            #                      f'- is your software out of date?')
-            self.close_after_send = True
-            raise RPCError(BAD_REQUEST,
-                           f'unsupported protocol version: {protocol_version}')
+            ptuple, client_min = util.protocol_version(protocol_version, (1, 1, 0), (1, 4, 0))
+            if ptuple is None:
+                self.close_after_send = True
+                raise RPCError(BAD_REQUEST, f'unsupported protocol version: {protocol_version}')
+
         self.protocol_tuple = ptuple
-        return self.version, self.protocol_version_string()
+        self.protocol_string = util.version_string(ptuple)
+        return self.version, self.protocol_string
 
     async def transaction_broadcast(self, raw_tx):
         """Broadcast a raw transaction to the network.

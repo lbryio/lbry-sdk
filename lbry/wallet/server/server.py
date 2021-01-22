@@ -110,11 +110,14 @@ class Server:
             self.cancellable_tasks.append(asyncio.ensure_future(run(*args, _flag)))
             return _flag.wait()
 
+        await self.start_prometheus()
+        await self.bp.status_server.start(0, bytes.fromhex(self.bp.coin.GENESIS_HASH)[::-1]
+                                          , self.env.host, self.env.tcp_port)
         await _start_cancellable(self.bp.fetch_and_process_blocks)
+
         await self.db.populate_header_merkle_cache()
         await _start_cancellable(self.mempool.keep_synchronized)
         await _start_cancellable(self.session_mgr.serve, self.notifications)
-        await self.start_prometheus()
 
     async def stop(self):
         for task in reversed(self.cancellable_tasks):

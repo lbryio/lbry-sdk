@@ -1,14 +1,14 @@
 import typing
 import asyncio
 import logging
-import ipaddress
 from binascii import hexlify
 from dataclasses import dataclass, field
 from functools import lru_cache
-
+from lbry.utils import is_valid_public_ipv4 as _is_valid_public_ipv4
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
+ALLOW_LOCALHOST = False
 log = logging.getLogger(__name__)
 
 
@@ -20,28 +20,9 @@ def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional
     return KademliaPeer(address, node_id, udp_port, tcp_port=tcp_port, allow_localhost=allow_localhost)
 
 
-# the ipaddress module does not show these subnets as reserved
-CARRIER_GRADE_NAT_SUBNET = ipaddress.ip_network('100.64.0.0/10')
-IPV4_TO_6_RELAY_SUBNET = ipaddress.ip_network('192.88.99.0/24')
-
-ALLOW_LOCALHOST = False
-
-
 def is_valid_public_ipv4(address, allow_localhost: bool = False):
     allow_localhost = bool(allow_localhost or ALLOW_LOCALHOST)
-    try:
-        parsed_ip = ipaddress.ip_address(address)
-        if parsed_ip.is_loopback and allow_localhost:
-            return True
-
-        if any((parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local, parsed_ip.is_loopback,
-                parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private, parsed_ip.is_reserved)):
-            return False
-        else:
-            return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),
-                            IPV4_TO_6_RELAY_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32"))))
-    except (ipaddress.AddressValueError, ValueError):
-        return False
+    return _is_valid_public_ipv4(address, allow_localhost)
 
 
 class PeerManager:

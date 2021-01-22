@@ -11,7 +11,9 @@ class PurchaseCommandTests(CommandTestCase):
         await super().asyncSetUp()
         self.merchant_address = await self.blockchain.get_raw_change_address()
 
-    async def priced_stream(self, name='stream', price: Optional[str] = '2.0', currency='LBC') -> Transaction:
+    async def priced_stream(
+        self, name='stream', price: Optional[str] = '2.0', currency='LBC', mine=False
+    ) -> Transaction:
         kwargs = {}
         if price and currency:
             kwargs = {
@@ -19,6 +21,8 @@ class PurchaseCommandTests(CommandTestCase):
                 'fee_currency': currency,
                 'fee_address': self.merchant_address
             }
+        if not mine:
+            kwargs['claim_address'] = self.merchant_address
         file_path = self.create_upload_file(data=b'high value content')
         tx = await self.daemon.jsonrpc_stream_create(
             name, '0.01', file_path=file_path, **kwargs
@@ -182,3 +186,12 @@ class PurchaseCommandTests(CommandTestCase):
         await self.ledger.wait(spend)
         await self.assertBalance(self.account, '0.487695')
         self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 1)
+
+    async def test_owner_not_required_purchase_own_content(self):
+        await self.priced_stream(mine=True)
+        # check that `get` doesn't purchase own claim
+        balance = await self.account.get_balance()
+        response = await self.daemon.jsonrpc_get('lbry://stream')
+        self.assertIsNone(response.content_fee)
+        self.assertEqual(await self.account.get_balance(), balance)
+        self.assertItemCount(await self.daemon.jsonrpc_purchase_list(), 0)

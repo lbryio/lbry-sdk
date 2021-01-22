@@ -11,6 +11,7 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.wallet.server.leveldb import FlushData
+from lbry.wallet.server.udp import StatusServer
 
 
 class Prefetcher:
@@ -185,6 +186,7 @@ class BlockProcessor:
 
         self.search_cache = {}
         self.history_cache = {}
+        self.status_server = StatusServer()
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -221,6 +223,7 @@ class BlockProcessor:
             processed_time = time.perf_counter() - start
             self.block_count_metric.set(self.height)
             self.block_update_time_metric.observe(processed_time)
+            self.status_server.set_height(self.db.fs_height, self.db.db_tip)
             if not self.db.first_sync:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
@@ -682,9 +685,11 @@ class BlockProcessor:
         disk before exiting, as otherwise a significant amount of work
         could be lost.
         """
+
         self._caught_up_event = caught_up_event
         try:
             await self._first_open_dbs()
+            self.status_server.set_height(self.db.fs_height, self.db.db_tip)
             await asyncio.wait([
                 self.prefetcher.main_loop(self.height),
                 self._process_prefetched_blocks()
@@ -695,6 +700,7 @@ class BlockProcessor:
             self.logger.exception("Block processing failed!")
             raise
         finally:
+            self.status_server.stop()
             # Shut down block processing
             self.logger.info('flushing to DB for a clean shutdown...')
             await self.flush(True)
@@ -714,7 +720,6 @@ class BlockProcessor:
 
 
 class Timer:
-
     def __init__(self, name):
         self.name = name
         self.total = 0
