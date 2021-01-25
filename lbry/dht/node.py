@@ -3,6 +3,7 @@ import asyncio
 import typing
 import binascii
 import socket
+import time
 from lbry.utils import resolve_host
 from lbry.dht import constants
 from lbry.dht.peer import make_kademlia_peer
@@ -20,10 +21,10 @@ log = logging.getLogger(__name__)
 class NodeState:
     def __init__(self,
                  routing_table_peers: typing.List[typing.Tuple[bytes, str, int, int]],
-                 datastore: typing.List[typing.Tuple[bytes, str, int, int, bytes]]):
+                 datastore: typing.List[typing.Tuple[bytes, str, int, int, bytes, float]]):
         # List[Tuple[node_id, address, udp_port, tcp_port]]
         self.routing_table_peers = routing_table_peers
-        # List[Tuple[node_id, address, udp_port, tcp_port, blob_hash]]
+        # List[Tuple[node_id, address, udp_port, tcp_port, blob_hash, added_at]]
         self.datastore = datastore
 
 
@@ -138,7 +139,10 @@ class Node:
         )
 
     def load_state(self, state: NodeState):
-        for node_id, address, udp_port, tcp_port, blob_hash in state.datastore:
+        now = self.loop.time()
+        for node_id, address, udp_port, tcp_port, blob_hash, added_at in state.datastore:
+            if added_at + constants.DATA_EXPIRATION < now:
+                continue
             p = make_kademlia_peer(node_id, address, udp_port, tcp_port)
             self.protocol.data_store.add_peer_to_blob(p, blob_hash)
 

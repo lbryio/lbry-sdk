@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import asyncio
 import logging
 import signal
@@ -29,61 +31,25 @@ async def main():
     except NotImplementedError:
         pass  # Not implemented on Windows
 
-    peer_manager = peer.PeerManager(loop)
-    u = await upnp.UPnP.discover()
-
     db = sqlite3.connect(data_dir + "/tracker.sqlite3")
     db.execute('CREATE TABLE IF NOT EXISTS announce (local_id TEXT, hash TEXT, node_id TEXT, ip TEXT, port INT, timestamp INT)')
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS node_id_hash_idx ON announce (node_id, hash)')
 
-    # curr = db.cursor()
-    # res = curr.execute("SELECT 1, 2, 3")
-    # for items in res:
-    #     print(items)
-
     asyncio.create_task(run_web_api(loop, db))
 
     num_nodes = 128
-    start_port = 4444
-    known_node_urls = [("lbrynet1.lbry.com", 4444), ("lbrynet2.lbry.com", 4444), ("lbrynet3.lbry.com", 4444)]
+    u = await upnp.UPnP.discover()
     external_ip = await u.get_external_ip()
 
-    nodes = []
-
     try:
-        for i in range(num_nodes):
-            node_id = make_node_id(i, num_nodes)
-            # pprint(node_id)
-
-            port = start_port + i
-            # await u.get_next_mapping(port, "UDP", "lbry dht tracker")
-            # SOMETHING ABOUT THIS DOESNT WORK
-            # port = await u.get_next_mapping(start_port, "UDP", "lbry dht tracker")
-
-            n = node.Node(loop, peer_manager, node_id=bytes.fromhex(node_id), external_ip=external_ip,
-                          udp_port=port, internal_udp_port=port, peer_port=3333)
-
-            persisted_peers = []
-            if path.exists(state_dir + node_id):
-                with open(state_dir + node_id, 'rb') as f:
-                    state = pickle.load(f)
-                    # pprint(state.routing_table_peers)
-                    # pprint(state.datastore)
-                    print(f'{node_id[:8]}: loaded {len(state.routing_table_peers)} rt peers, {len(state.datastore)} in store')
-                    n.load_state(state)
-                    persisted_peers = state.routing_table_peers
-                    if len(persisted_peers) == 0 and len(state.datastore) > 0:
-                        persisted_peers.extend(map(lambda x: (x[0], x[1], x[2], x[3]), state.datastore))
-                        print(f'{node_id[:8]}: rt is empty but we recovered {len(persisted_peers)} peers from the datastore')
-            n.start("0.0.0.0", known_node_urls, persisted_peers)
-            nodes.append(n)
+        nodes = await start_nodes(loop, num_nodes, external_ip, state_dir)
 
         await asyncio.gather(*map(lambda n: n.started_listening.wait(), nodes), loop=loop)
         print("joined")
 
         queue = asyncio.Queue(maxsize=100*num_nodes)
         for n in nodes:
-            asyncio.create_task(drain(n, queue))
+            asyncio.create_task(drain_events(n, queue))
 
         while True:
             (n, node_id, ip, method, args) = await queue.get()
@@ -156,7 +122,43 @@ def make_node_id(i: int, n: int) -> str:
     return "{0:0{1}x}".format(i * ((2**8)**bytes_in_id // n), bytes_in_id*2)
 
 
-async def drain(n, q):
+async def start_nodes(loop, num_nodes, external_ip, state_dir):
+    start_port = 4445
+    known_node_urls = [("lbrynet1.lbry.com", 4444), ("lbrynet2.lbry.com", 4444), ("lbrynet3.lbry.com", 4444)]
+    peer_manager = peer.PeerManager(loop)
+
+    nodes = []
+    for i in range(num_nodes):
+        node_id = make_node_id(i, num_nodes)
+        # pprint(node_id)
+
+        port = start_port + i
+        # await u.get_next_mapping(port, "UDP", "lbry dht tracker") # not necessary, i just opened ports in router
+
+        n = node.Node(loop, peer_manager, node_id=bytes.fromhex(node_id), external_ip=external_ip,
+                      udp_port=port, internal_udp_port=port, peer_port=3333)
+
+        persisted_peers = []
+        if path.exists(state_dir + node_id):
+            with open(state_dir + node_id, 'rb') as f:
+                state = pickle.load(f)
+                # pprint(state.routing_table_peers)
+                # pprint(state.datastore)
+                print(f'{node_id[:8]}: loaded {len(state.routing_table_peers)} rt peers, {len(state.datastore)} in store')
+                n.load_state(state)
+                persisted_peers = state.routing_table_peers
+                # if len(persisted_peers) == 0 and len(state.datastore) > 0:
+                #     peers_to_import = map(lambda p: (p[0], p[1], p[2], p[3]), n.get_state().datastore)
+                #     persisted_peers.extend(peers_to_import)
+                #     print(f'{node_id[:8]}: rt is empty but we recovered {len(state.datastore)} '
+                #           f'peers from the datastore. {len(peers_to_import)} of those were recent enough to import')
+
+        n.start("0.0.0.0", known_node_urls, persisted_peers)
+        nodes.append(n)
+    return nodes
+
+
+async def drain_events(n, q):
     print(f'drain started on {bytes.hex(n.protocol.node_id)[:8]}')
     while True:
         (node_id, ip, method, args) = await n.protocol.event_queue.get()
