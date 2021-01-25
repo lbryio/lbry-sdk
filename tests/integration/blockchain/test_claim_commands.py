@@ -468,12 +468,19 @@ class TransactionOutputCommands(ClaimTestCase):
         stream_b = self.get_claim_id(await self.stream_create('b', channel_id=channel_foo))
         stream_c = self.get_claim_id(await self.stream_create('c', channel_id=channel_bar))
         stream_d = self.get_claim_id(await self.stream_create('d'))
+        support_c = await self.support_create(stream_c, '0.3', channel_id=channel_foo)
+        support_d = await self.support_create(stream_d, '0.3', channel_id=channel_bar)
 
         r = await self.txo_list(type='stream')
         self.assertEqual({stream_a, stream_b, stream_c, stream_d}, {c['claim_id'] for c in r})
 
         r = await self.txo_list(type='stream', channel_id=channel_foo)
         self.assertEqual({stream_a, stream_b}, {c['claim_id'] for c in r})
+
+        r = await self.txo_list(type='support', channel_id=channel_foo)
+        self.assertEqual({support_c['txid']}, {s['txid'] for s in r})
+        r = await self.txo_list(type='support', channel_id=channel_bar)
+        self.assertEqual({support_d['txid']}, {s['txid'] for s in r})
 
         r = await self.txo_list(type='stream', channel_id=[channel_foo, channel_bar])
         self.assertEqual({stream_a, stream_b, stream_c}, {c['claim_id'] for c in r})
