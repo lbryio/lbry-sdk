@@ -704,6 +704,9 @@ class Database(SQLiteMixin):
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
             row['txo_type'] = TXO_TYPES['support']
+            support = txo.can_decode_support
+            if support and support.is_signed:
+                row['channel_id'] = support.signing_channel_id
         elif txo.purchase is not None:
             row['txo_type'] = TXO_TYPES['purchase']
             row['claim_id'] = txo.purchased_claim_id
