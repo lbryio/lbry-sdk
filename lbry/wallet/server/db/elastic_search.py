@@ -29,10 +29,15 @@ class SearchIndex:
             await self.client.indices.create(
                 self.index,
                 {"settings":
-                     {"analysis":
-                          {"analyzer": {"default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem" ]}}}
-                      }
-                 }
+                    {"analysis":
+                        {"analyzer": {
+                            "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
+                        "index":
+                            {"refresh_interval": -1,
+                             "number_of_shards": 3}
+                    },
+
+                }
             )
         except Exception as e:
             raise
