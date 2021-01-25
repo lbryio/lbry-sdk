@@ -8,7 +8,6 @@ from elasticsearch.helpers import async_bulk
 
 from lbry.wallet.server.db.elastic_search import extract_doc, SearchIndex
 
-es = AsyncElasticsearch()
 INDEX = 'claims'
 
 
@@ -37,15 +36,23 @@ FROM claim LEFT JOIN claimtrie USING (claim_hash)
         yield extract_doc(claim, INDEX)
 
 
+async def consume(producer):
+    es = AsyncElasticsearch()
+    await async_bulk(es, producer)
+    await es.close()
+
+
 async def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("db_path", type=str)
+    parser.add_argument("-c", "--clients", type=int, default=16)
     args = parser.parse_args()
     db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
     index = SearchIndex('')
     await index.start()
     await index.stop()
-    await async_bulk(es, get_all(db.cursor()))
+    producer = get_all(db.cursor())
+    await asyncio.gather(*(consume(producer) for _ in range(args.clients)))
 
 
 if __name__ == '__main__':
