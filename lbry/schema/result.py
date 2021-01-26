@@ -5,8 +5,10 @@ from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError
-from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
-from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
+from lbry.schema.types.v2.result_pb2 import \
+    Outputs as OutputsMessage, \
+    Output as OutputMessage, \
+    Error as ErrorMessage
 
 INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
 NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
@@ -70,7 +72,7 @@ class Outputs:
 
     __slots__ = 'txos', 'extra_txos', 'txs', 'offset', 'total', 'blocked', 'blocked_total'
 
-    def __init__(self, txos: List, extra_txos: List, txs: set,
+    def __init__(self, txos: List[OutputMessage], extra_txos: List, txs: set,
                  offset: int, total: int, blocked: List, blocked_total: int):
         self.txos = txos
         self.txs = txs

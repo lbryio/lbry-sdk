@@ -286,7 +286,7 @@ class TreeRoutingTable:
         to_pop = [i for i, bucket in enumerate(self.buckets) if len(bucket) == 0]
         if not to_pop:
             return
-        log.info("%s: join buckets %i", bytes.hex(self._parent_node_id)[:8], len(to_pop))
+        log.debug("%s: join buckets %i", bytes.hex(self._parent_node_id)[:8], len(to_pop))
         bucket_index_to_pop = to_pop[0]
         assert len(self.buckets[bucket_index_to_pop]) == 0
         can_go_lower = bucket_index_to_pop - 1 >= 0
