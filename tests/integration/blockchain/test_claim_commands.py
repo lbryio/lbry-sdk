@@ -461,6 +461,17 @@ class TransactionCommands(ClaimTestCase):
 
 class TransactionOutputCommands(ClaimTestCase):
 
+    async def test_txo_list_resolve_supports(self):
+        channel = self.get_claim_id(await self.channel_create('@identity'))
+        stream = self.get_claim_id(await self.stream_create())
+        support = await self.support_create(stream, channel_id=channel)
+        r, = await self.txo_list(type='support')
+        self.assertEqual(r['txid'], support['txid'])
+        self.assertNotIn('name', r['signing_channel'])
+        r, = await self.txo_list(type='support', resolve=True)
+        self.assertIn('name', r['signing_channel'])
+        self.assertEqual(r['signing_channel']['name'], '@identity')
+
     async def test_txo_list_by_channel_filtering(self):
         channel_foo = self.get_claim_id(await self.channel_create('@foo'))
         channel_bar = self.get_claim_id(await self.channel_create('@bar'))
