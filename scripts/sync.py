@@ -32,7 +32,8 @@ FROM claim LEFT JOIN claimtrie USING (claim_hash)
         claim['censoring_channel_hash'] = None
         claim['tags'] = claim['tags'].split(' ') if claim['tags'] else []
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
-        print(num, total)
+        if num % 10_000 == 0:
+            print(num, total)
         yield extract_doc(claim, INDEX)
 
 

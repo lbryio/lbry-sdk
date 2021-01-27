@@ -34,7 +34,7 @@ class SearchIndex:
                             "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
                         "index":
                             {"refresh_interval": -1,
-                             "number_of_shards": 3}
+                             "number_of_shards": 1}
                     },
 
                 }
@@ -222,11 +222,10 @@ FIELDS = ['is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
 TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_id', 'claim_name', 'description',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags']
-RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted']
+RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted', 'release_time']
 REPLACEMENTS = {
     'name': 'normalized',
     'txid': 'tx_id',
-    'claim_hash': '_id',
 }
 
 
@@ -236,11 +235,14 @@ def expand_query(**kwargs):
     query = {'must': [], 'must_not': []}
     collapse = None
     for key, value in kwargs.items():
+        if not value:
+            continue
         key = key.replace('claim.', '')
         many = key.endswith('__in') or isinstance(value, list)
         if many:
             key = key.replace('__in', '')
         key = REPLACEMENTS.get(key, key)
+        partial_id = False
         if key in FIELDS:
             if key == 'claim_type':
                 if isinstance(value, str):
@@ -252,6 +254,8 @@ def expand_query(**kwargs):
                     value = [hexlify(item[::-1]).decode() for item in value]
                 else:
                     value = hexlify(value[::-1]).decode()
+            if key in ('_id', 'claim_id') and len(value) < 20:
+                partial_id = True
             if key == 'public_key_id':
                 key = 'public_key_hash'
                 value = hexlify(Base58.decode(value)[1:21]).decode()
@@ -260,7 +264,9 @@ def expand_query(**kwargs):
             if key in TEXT_FIELDS:
                 key += '.keyword'
             ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
-            if key in RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
+            if partial_id:
+                query['must'].append({"prefix": {key: {"value": value}}})
+            elif key in RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
                 if key == 'fee_amount':
