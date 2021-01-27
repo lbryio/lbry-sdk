@@ -332,6 +332,7 @@ def expand_query(**kwargs):
                              "claim_name^4", "channel_name^8", "title^1", "description^.5", "author^1", "tags^.5"
                          ]}}}
     query = {
+        "_source": {"excludes": ["description", "title"]},
         'query': {'bool': query},
         "sort": [],
     }

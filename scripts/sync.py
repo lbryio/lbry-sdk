@@ -41,7 +41,7 @@ WHERE claim.rowid % {shards_total} = {shard_num}
 
 async def consume(producer):
     es = AsyncElasticsearch()
-    await async_bulk(es, producer)
+    await async_bulk(es, producer, request_timeout=120)
     await es.close()
 
 
@@ -50,7 +50,8 @@ async def run(args, shard):
     index = SearchIndex('')
     await index.start()
     await index.stop()
-    await consume(get_all(db.cursor(), shard, args.clients))
+    producer = get_all(db.cursor(), shard, args.clients)
+    await asyncio.gather(*(consume(producer) for _ in range(min(8, args.clients))))
 
 def __run(args, shard):
     asyncio.run(run(args, shard))
