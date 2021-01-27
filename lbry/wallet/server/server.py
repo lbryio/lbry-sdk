@@ -122,7 +122,6 @@ class Server:
         await self.db.populate_header_merkle_cache()
         await _start_cancellable(self.mempool.keep_synchronized)
         await _start_cancellable(self.session_mgr.serve, self.notifications)
-        self.cancellable_tasks.append(asyncio.create_task(indexer_task(self.bp.sql.claim_queue)))
 
     async def stop(self):
         for task in reversed(self.cancellable_tasks):
