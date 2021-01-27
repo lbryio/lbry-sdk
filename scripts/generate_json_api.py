@@ -13,6 +13,7 @@ from lbry.extras.cli import set_kwargs, get_argument_parser
 from lbry.extras.daemon.daemon import (
     Daemon, jsonrpc_dumps_pretty, encode_pagination_doc
 )
+from tests.integration.other.test_comment_commands import MockedCommentServer
 from lbry.extras.daemon.json_response_encoder import (
     encode_tx_doc, encode_txo_doc, encode_account_doc, encode_file_doc,
     encode_wallet_doc
@@ -66,6 +67,10 @@ class Examples(CommandTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
+        self.daemon.conf.comment_server = 'http://localhost:2903/api'
+        self.comment_server = MockedCommentServer(2903)
+        await self.comment_server.start()
+        self.addCleanup(self.comment_server.stop)
         self.recorder = ExampleRecorder(self)
 
     async def play(self):
