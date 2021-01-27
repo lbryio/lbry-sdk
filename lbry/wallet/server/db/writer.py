@@ -815,7 +815,7 @@ class SQLDB:
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
-               (select group_concat(tag, ' ') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
+               (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
@@ -840,7 +840,7 @@ class SQLDB:
                     claim['censor_type'] = 1
                     claim['censoring_channel_hash'] = self.filtered_channels.get(reason_id)
 
-            claim['tags'] = claim['tags'].split(' ') if claim['tags'] else []
+            claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
             claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
             if not self.claim_queue.full():
                 self.claim_queue.put_nowait(('update', claim))

@@ -22,7 +22,7 @@ async def get_all(db):
     for num, claim in enumerate(db.execute(f"""
 SELECT claimtrie.claim_hash as is_controlling,
        claimtrie.last_take_over_height,
-       (select group_concat(tag, ' ') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
+       (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
        (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
        claim.*
 FROM claim LEFT JOIN claimtrie USING (claim_hash)
@@ -30,7 +30,7 @@ FROM claim LEFT JOIN claimtrie USING (claim_hash)
         claim = dict(claim._asdict())
         claim['censor_type'] = 0
         claim['censoring_channel_hash'] = None
-        claim['tags'] = claim['tags'].split(' ') if claim['tags'] else []
+        claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
         if num % 10_000 == 0:
             print(num, total)
