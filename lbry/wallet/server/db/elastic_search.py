@@ -28,15 +28,28 @@ class SearchIndex:
                 return
             await self.client.indices.create(
                 self.index,
-                {"settings":
-                    {"analysis":
-                        {"analyzer": {
-                            "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
-                        "index":
-                            {"refresh_interval": -1,
-                             "number_of_shards": 1}
-                    },
-
+                {
+                    "settings":
+                        {"analysis":
+                            {"analyzer": {
+                                "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
+                            "index":
+                                {"refresh_interval": -1,
+                                 "number_of_shards": 1}
+                        },
+                    "mappings": {
+                        "properties": {
+                            "claim_id": {
+                                "type": "text",
+                                "index_prefixes": {
+                                    "min_chars": 1,
+                                    "max_chars": 10
+                                }
+                            },
+                            "height": {"type": "integer"},
+                            "claim_type": {"type": "byte"},
+                        }
+                    }
                 }
             )
         except Exception as e:
@@ -219,7 +232,7 @@ FIELDS = ['is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
           'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
           'reposted_claim_id']
-TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_id', 'claim_name', 'description',
+TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_name', 'description',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags']
 RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted', 'release_time']
@@ -266,7 +279,7 @@ def expand_query(**kwargs):
                 key += '.keyword'
             ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
             if partial_id:
-                query['must'].append({"prefix": {"claim_id.keyword": value}})
+                query['must'].append({"prefix": {"claim_id": value}})
             elif key in RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
