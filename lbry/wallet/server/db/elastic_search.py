@@ -226,6 +226,7 @@ RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted', 'release_time']
 REPLACEMENTS = {
     'name': 'normalized',
     'txid': 'tx_id',
+    'claim_hash': '_id'
 }
 
 
@@ -242,8 +243,8 @@ def expand_query(**kwargs):
         if many:
             key = key.replace('__in', '')
         key = REPLACEMENTS.get(key, key)
-        partial_id = False
         if key in FIELDS:
+            partial_id = False
             if key == 'claim_type':
                 if isinstance(value, str):
                     value = CLAIM_TYPES[value]
@@ -254,7 +255,7 @@ def expand_query(**kwargs):
                     value = [hexlify(item[::-1]).decode() for item in value]
                 else:
                     value = hexlify(value[::-1]).decode()
-            if key in ('_id', 'claim_id') and len(value) < 20:
+            if not many and key in ('_id', 'claim_id') and len(value) < 20:
                 partial_id = True
             if key == 'public_key_id':
                 key = 'public_key_hash'
@@ -265,7 +266,7 @@ def expand_query(**kwargs):
                 key += '.keyword'
             ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
             if partial_id:
-                query['must'].append({"prefix": {key: {"value": value}}})
+                query['must'].append({"prefix": {"claim_id.keyword": value}})
             elif key in RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
