@@ -83,9 +83,9 @@ class SearchIndex:
             blockdict = dict(
                 (hexlify(key[::-1]).decode(), hexlify(value[::-1]).decode()) for key, value in blockdict.items())
             if channels:
-                update = expand_query(channel_id__in=list(blockdict.keys()))
+                update = expand_query(channel_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
             else:
-                update = expand_query(claim_id__in=list(blockdict.keys()))
+                update = expand_query(claim_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
             key = 'channel_id' if channels else 'claim_id'
             update['script'] = {
                 "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_hash=params[ctx._source.{key}]",
@@ -264,7 +264,7 @@ FIELDS = ['is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
 TEXT_FIELDS = ['author', 'canonical_url', 'channel_id', 'claim_name', 'description',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags']
-RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted', 'release_time']
+RANGE_FIELDS = ['height', 'fee_amount', 'duration', 'reposted', 'release_time', 'censor_type']
 REPLACEMENTS = {
     'name': 'normalized',
     'txid': 'tx_id',
