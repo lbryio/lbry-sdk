@@ -94,17 +94,17 @@ class SearchIndex:
             }
             return update
         if filtered_streams:
-            await self.client.update_by_query(self.index, body=make_query(1, filtered_streams))
-            await self.client.indices.refresh(self.index)
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_streams), request_timeout=120)
+            await self.client.indices.refresh(self.index, request_timeout=120)
         if filtered_channels:
-            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True))
-            await self.client.indices.refresh(self.index)
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True), request_timeout=120)
+            await self.client.indices.refresh(self.index, request_timeout=120)
         if blocked_streams:
-            await self.client.update_by_query(self.index, body=make_query(2, blocked_streams))
-            await self.client.indices.refresh(self.index)
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_streams), request_timeout=120)
+            await self.client.indices.refresh(self.index, request_timeout=120)
         if blocked_channels:
-            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True))
-            await self.client.indices.refresh(self.index)
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), request_timeout=120)
+            await self.client.indices.refresh(self.index, request_timeout=120)
 
     async def update(self, claims):
         if not claims:
