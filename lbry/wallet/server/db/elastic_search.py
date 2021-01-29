@@ -74,6 +74,7 @@ class SearchIndex:
             else:
                 to_update.append(doc)
         await self.delete(to_delete)
+        await self.client.indices.refresh(self.index)
         await self.update(to_update)
         await self.client.indices.refresh(self.index)
 
