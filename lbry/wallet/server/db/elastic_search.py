@@ -94,16 +94,16 @@ class SearchIndex:
             }
             return update
         if filtered_streams:
-            await self.client.update_by_query(self.index, body=make_query(1, filtered_streams), request_timeout=120)
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_streams), request_timeout=120, slices=32)
             await self.client.indices.refresh(self.index, request_timeout=120)
         if filtered_channels:
-            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True), request_timeout=120)
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True), request_timeout=120, slices=32)
             await self.client.indices.refresh(self.index, request_timeout=120)
         if blocked_streams:
-            await self.client.update_by_query(self.index, body=make_query(2, blocked_streams), request_timeout=120)
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_streams), request_timeout=120, slices=32)
             await self.client.indices.refresh(self.index, request_timeout=120)
         if blocked_channels:
-            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), request_timeout=120)
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), request_timeout=120, slices=32)
             await self.client.indices.refresh(self.index, request_timeout=120)
 
     async def update(self, claims):
@@ -256,7 +256,7 @@ def extract_doc(doc, index):
 FIELDS = ['is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', 'normalized', 'tx_position', 'amount',
           'timestamp', 'creation_timestamp', 'height', 'creation_height', 'activation_height', 'expiration_height',
           'release_time', 'short_url', 'canonical_url', 'title', 'author', 'description', 'claim_type', 'reposted',
-          'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'reposted_claim_hash',
+          'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'reposted_claim_hash', 'censor_type',
           'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
           'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
