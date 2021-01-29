@@ -809,9 +809,6 @@ class SQLDB:
     def enqueue_changes(self, changed_claim_hashes, deleted_claims):
         if not changed_claim_hashes and not deleted_claims:
             return
-        blocklist = set(self.blocked_streams.keys()) | set(self.filtered_streams.keys())
-        blocked_channels = set(self.blocked_channels.keys()) | set(self.filtered_channels.keys())
-        changed_claim_hashes |= blocklist | blocked_channels
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
@@ -820,13 +817,12 @@ class SQLDB:
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
-        OR channel_hash IN ({','.join('?' for _ in blocked_channels)})
-        """, list(changed_claim_hashes) + list(blocked_channels)):
-            claim = dict(claim._asdict())
+        """, list(changed_claim_hashes)):
+            claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
             claim['censor_type'] = 0
             claim['censoring_channel_hash'] = None
-            for reason_id in id_set.intersection(blocklist | blocked_channels):
+            for reason_id in id_set:
                 if reason_id in self.blocked_streams:
                     claim['censor_type'] = 2
                     claim['censoring_channel_hash'] = self.blocked_streams.get(reason_id)

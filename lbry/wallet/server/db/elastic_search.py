@@ -77,6 +77,34 @@ class SearchIndex:
         await self.update(to_update)
         await self.client.indices.refresh(self.index)
 
+    async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
+        def make_query(censor_type, blockdict, channels=False):
+            blockdict = dict(
+                (hexlify(key[::-1]).decode(), hexlify(value[::-1]).decode()) for key, value in blockdict.items())
+            if channels:
+                update = expand_query(channel_id__in=list(blockdict.keys()))
+            else:
+                update = expand_query(claim_id__in=list(blockdict.keys()))
+            key = 'channel_id' if channels else 'claim_id'
+            update['script'] = {
+                "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_hash=params[ctx._source.{key}]",
+                "lang": "painless",
+                "params": blockdict
+            }
+            return update
+        if filtered_streams:
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_streams))
+            await self.client.indices.refresh(self.index)
+        if filtered_channels:
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True))
+            await self.client.indices.refresh(self.index)
+        if blocked_streams:
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_streams))
+            await self.client.indices.refresh(self.index)
+        if blocked_channels:
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True))
+            await self.client.indices.refresh(self.index)
+
     async def update(self, claims):
         if not claims:
             return

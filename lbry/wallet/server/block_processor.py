@@ -217,6 +217,8 @@ class BlockProcessor:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             await self.db.search_index.sync_queue(self.sql.claim_queue)
+            await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
+                                                     self.sql.filtered_streams, self.sql.filtered_channels)
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
