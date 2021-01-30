@@ -806,18 +806,16 @@ class SQLDB:
             f"SELECT claim_hash, normalized FROM claim WHERE expiration_height = {height}"
         )
 
-    def enqueue_changes(self, changed_claim_hashes, deleted_claims):
-        if not changed_claim_hashes and not deleted_claims:
-            return
+    def enqueue_changes(self, height, deleted_claims):
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
                (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                claim.*
-        FROM claim LEFT JOIN claimtrie USING (claim_hash)
-        WHERE claim_hash IN ({','.join('?' for _ in changed_claim_hashes)})
-        """, list(changed_claim_hashes)):
+        FROM claim LEFT JOIN claimtrie USING (claim_hash) LEFT JOIN support USING (claim_hash)
+        WHERE support.height = {height} OR claim.height = {height}
+        """):
             claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
             claim['censor_type'] = 0
@@ -939,7 +937,7 @@ class SQLDB:
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
-        r(self.enqueue_changes, recalculate_claim_hashes | affected_channels | reposted, delete_claim_hashes)
+        r(self.enqueue_changes, height, delete_claim_hashes)
 
 
 class LBRYLevelDB(LevelDB):
