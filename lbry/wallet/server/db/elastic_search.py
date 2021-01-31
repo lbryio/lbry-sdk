@@ -112,11 +112,13 @@ class SearchIndex:
             return
         actions = [extract_doc(claim, self.index) for claim in claims]
         names = []
+        claim_ids = []
         for claim in claims:
             if claim['is_controlling']:
                 names.append(claim['normalized'])
+                claim_ids.append(claim['claim_id'])
         if names:
-            update = expand_query(name__in=names)
+            update = expand_query(name__in=names, not_claim_id=claim_ids, is_controlling=True)
             update['script'] = {
                 "source": "ctx._source.is_controlling=false",
                 "lang": "painless"
@@ -350,6 +352,8 @@ def expand_query(**kwargs):
             query['must'].extend([{"term": {'tags.keyword': tag}} for tag in clean_tags(value)])
         elif key == 'not_tags':
             query['must_not'].extend([{"term": {'tags.keyword': tag}} for tag in clean_tags(value)])
+        elif key == 'not_claim_id':
+            query['must_not'].extend([{"term": {'claim_id.keyword': cid}} for cid in value])
         elif key == 'limit_claims_per_channel':
             collapse = ('channel_id.keyword', value)
     if kwargs.get('has_channel_signature'):
