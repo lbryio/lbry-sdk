@@ -155,10 +155,11 @@ class SearchIndex:
             total_referenced, response, censor = await self.resolve(*kwargs)
         else:
             censor = Censor(Censor.SEARCH)
-            censored_response = asyncio.ensure_future(self.search(**kwargs, censor_type='>0'))
             response, offset, total = await self.search(**kwargs, censor_type=0)
             total_referenced.extend(response)
-            censored_response, _, _ = await censored_response
+            kwargs['limit'] = 20
+            kwargs['offset'] = 0
+            censored_response, _, _ = await self.search(**kwargs, censor_type='>0')
             censor.apply(censored_response)
             total_referenced.extend(censored_response)
         return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
