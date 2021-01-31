@@ -217,7 +217,7 @@ class SQLDB:
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
         self.trending = trending
-        self.claim_queue = Queue(maxsize=10)
+        self.claim_queue = Queue(maxsize=100_000)
 
     def open(self):
         self.db = apsw.Connection(
