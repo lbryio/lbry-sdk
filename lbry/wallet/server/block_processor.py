@@ -164,7 +164,6 @@ class BlockProcessor:
         self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event)
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.executor = ThreadPoolExecutor(1)
-        self.index_executor = ThreadPoolExecutor(os.cpu_count())
 
         # Meta
         self.next_cache_check = 0
@@ -216,10 +215,6 @@ class BlockProcessor:
         if hprevs == chain:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
-            pending = []
-            for height in range(first, first + len(blocks)):
-                pending.append(asyncio.get_event_loop().run_in_executor(self.index_executor, self.db.sql.enqueue_changes, height))
-            await asyncio.gather(*pending)
             await self.db.search_index.sync_queue(self.sql.claim_queue)
             for cache in self.search_cache.values():
                 cache.clear()
