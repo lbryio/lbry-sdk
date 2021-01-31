@@ -1,3 +1,4 @@
+import os
 import time
 import asyncio
 from struct import pack, unpack
@@ -163,7 +164,7 @@ class BlockProcessor:
         self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event)
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.executor = ThreadPoolExecutor(1)
-        self.index_executor = ThreadPoolExecutor(8)
+        self.index_executor = ThreadPoolExecutor(os.cpu_count())
 
         # Meta
         self.next_cache_check = 0
