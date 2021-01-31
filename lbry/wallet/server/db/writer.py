@@ -813,8 +813,8 @@ class SQLDB:
                (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                claim.*
-        FROM claim LEFT JOIN claimtrie USING (claim_hash) LEFT JOIN support USING (claim_hash)
-        WHERE support.height = {height} OR claim.height = {height}
+        FROM claim LEFT JOIN claimtrie USING (claim_hash)
+        WHERE claim.height = {height} OR claim.claim_hash in (SELECT claim_hash FROM support WHERE height = {height})
         """):
             claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))

@@ -135,6 +135,7 @@ class SearchIndex:
             "source": "ctx._source.signature_valid=false",
             "lang": "painless"
         }
+        await self.client.indices.refresh(self.index)
         await self.client.update_by_query(self.index, body=update)
 
     async def session_query(self, query_name, function, kwargs):
