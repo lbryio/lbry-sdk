@@ -23,6 +23,8 @@ class SearchIndex:
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
 
     async def start(self):
+        if self.client:
+            return
         self.client = AsyncElasticsearch(timeout=self.sync_timeout)
         try:
             if await self.client.indices.exists(self.index):
@@ -288,6 +290,10 @@ REPLACEMENTS = {
 
 
 def expand_query(**kwargs):
+    if "amount_order" in kwargs:
+        kwargs["limit"] = 1
+        kwargs["order_by"] = "effective_amount"
+        kwargs["offset"] = int(kwargs["amount_order"]) - 1
     if 'name' in kwargs:
         kwargs['name'] = normalize_name(kwargs.pop('name'))
     query = {'must': [], 'must_not': []}
@@ -387,6 +393,8 @@ def expand_query(**kwargs):
     if 'offset' in kwargs:
         query["from"] = kwargs["offset"]
     if 'order_by' in kwargs:
+        if isinstance(kwargs["order_by"], str):
+            kwargs["order_by"] = [kwargs["order_by"]]
         for value in kwargs['order_by']:
             is_asc = value.startswith('^')
             value = value[1:] if is_asc else value
