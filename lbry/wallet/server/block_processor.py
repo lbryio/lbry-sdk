@@ -217,8 +217,6 @@ class BlockProcessor:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             await self.db.search_index.sync_queue(self.sql.claim_queue)
-            await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
-                                                     self.sql.filtered_streams, self.sql.filtered_channels)
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
@@ -232,6 +230,8 @@ class BlockProcessor:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
+                await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
+                                                         self.sql.filtered_streams, self.sql.filtered_channels)
                 await self.notifications.on_block(self.touched, self.height)
             self.touched = set()
         elif hprevs[0] != chain[0]:

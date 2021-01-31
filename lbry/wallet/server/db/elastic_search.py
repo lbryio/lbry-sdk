@@ -99,12 +99,16 @@ class SearchIndex:
             await self.client.update_by_query(self.index, body=make_query(1, filtered_streams), slices=32)
             await self.client.indices.refresh(self.index)
         if filtered_channels:
+            await self.client.update_by_query(self.index, body=make_query(1, filtered_channels), slices=32)
+            await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=make_query(1, filtered_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
         if blocked_streams:
             await self.client.update_by_query(self.index, body=make_query(2, blocked_streams), slices=32)
             await self.client.indices.refresh(self.index)
         if blocked_channels:
+            await self.client.update_by_query(self.index, body=make_query(2, blocked_channels), slices=32)
+            await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
 
