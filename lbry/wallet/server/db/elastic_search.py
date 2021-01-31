@@ -76,7 +76,8 @@ class SearchIndex:
                 to_update.append(doc)
         await self.delete(to_delete)
         await self.client.indices.refresh(self.index)
-        await self.update(to_update)
+        for bulk in range(0, len(to_update), 400):
+            await self.update(to_update[bulk:bulk+400])
         await self.client.indices.refresh(self.index)
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
