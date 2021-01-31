@@ -124,6 +124,7 @@ class SearchIndex:
                 "source": "ctx._source.is_controlling=false",
                 "lang": "painless"
             }
+            await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=update)
         await self.client.indices.refresh(self.index)
         await async_bulk(self.client, actions)
