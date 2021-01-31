@@ -806,7 +806,7 @@ class SQLDB:
             f"SELECT claim_hash, normalized FROM claim WHERE expiration_height = {height}"
         )
 
-    def enqueue_changes(self, height, deleted_claims):
+    def enqueue_changes(self, height):
         for claim in self.execute(f"""
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
@@ -838,6 +838,8 @@ class SQLDB:
             claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
             if not self.claim_queue.full():
                 self.claim_queue.put_nowait(('update', claim))
+
+    def enqueue_deleted(self, deleted_claims):
         for claim_hash in deleted_claims:
             if not self.claim_queue.full():
                 self.claim_queue.put_nowait(('delete', hexlify(claim_hash[::-1]).decode()))
@@ -937,7 +939,7 @@ class SQLDB:
         if not self._fts_synced and self.main.first_sync and height == daemon_height:
             r(first_sync_finished, self.db.cursor())
             self._fts_synced = True
-        r(self.enqueue_changes, height, delete_claim_hashes)
+        r(self.enqueue_deleted, delete_claim_hashes)
 
 
 class LBRYLevelDB(LevelDB):
