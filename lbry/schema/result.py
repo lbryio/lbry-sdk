@@ -38,7 +38,7 @@ class Censor:
         return [row for row in rows if not self.censor(row)]
 
     def censor(self, row) -> bool:
-        was_censored = (row['censor_type'] or 0) >= self.censor_type
+        was_censored = (row.get('censor_type') or 0) >= self.censor_type
         if was_censored:
             censoring_channel_hash = row['censoring_channel_hash']
             self.censored.setdefault(censoring_channel_hash, set())
