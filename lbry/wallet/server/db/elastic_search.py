@@ -155,13 +155,12 @@ class SearchIndex:
             total_referenced, response, censor = await self.resolve(*kwargs)
         else:
             censor = Censor(Censor.SEARCH)
-            response, offset, total = await self.search(**kwargs, censor_type=0)
+            response, offset, total = await self.search(**kwargs)
+            censor.apply(response)
             total_referenced.extend(response)
-            kwargs['limit'] = 20
-            kwargs['offset'] = 0
-            censored_response, _, _ = await self.search(**kwargs, censor_type='>0')
-            censor.apply(censored_response)
-            total_referenced.extend(censored_response)
+            if censor.censored:
+                response, _, _ = await self.search(**kwargs, censor_type=0)
+                total_referenced.extend(response)
         return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
 
     async def resolve(self, *urls):
