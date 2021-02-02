@@ -3296,11 +3296,11 @@ class Daemon(metaclass=JSONRPCServerType):
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
-          --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+            --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                    for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
-          --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the claim is sent to, if not specified
                                                    it will be determined automatically from the account
             --preview                      : (bool) do not broadcast the transaction
@@ -3708,14 +3708,16 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             collection_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                   (<claims>... | --claims=<claims>...)
-                   [--allow_duplicate_name]
-                   [--title=<title>] [--description=<description>]
-                   [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
-                   [--thumbnail_url=<thumbnail_url>]
-                   [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                   [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
-                   [--preview] [--blocking]
+                    (--claims=<claims>...)
+                    [--allow_duplicate_name]
+                    [--title=<title>] [--description=<description>]
+                    [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
+                    [--thumbnail_url=<thumbnail_url>]
+                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                    [--channel_account_id=<channel_account_id>...]
+                    [--account_id=<account_id>] [--wallet_id=<wallet_id>]
+                    [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
+                    [--preview] [--blocking]
 
         Options:
             --name=<name>                  : (str) name of the collection
@@ -3766,6 +3768,10 @@ class Daemon(metaclass=JSONRPCServerType):
                                                           ... --locations="{'country': 'US', 'state': 'NH'}"
 
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --channel_name=<channel_name>  : (str) name of the publisher channel
+            --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+                                                   for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
             --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
@@ -3829,7 +3835,7 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--locations=<locations>...] [--clear_locations]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
                            [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                           [--claim_address=<claim_address>] [--new_signing_key]
+                           [--claim_address=<claim_address>]
                            [--funding_account_ids=<funding_account_ids>...]
                            [--preview] [--blocking] [--replace]
 
@@ -3887,7 +3893,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
             --claim_address=<claim_address>: (str) address where the collection is sent
-            --new_signing_key              : (bool) generate a new signing key, will invalidate all previous publishes
             --preview                      : (bool) do not broadcast the transaction
             --blocking                     : (bool) wait until transaction is in mempool
             --replace                      : (bool) instead of modifying specific values on
