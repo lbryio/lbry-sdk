@@ -2808,7 +2808,12 @@ class Daemon(metaclass=JSONRPCServerType):
                                                              for channel certificates, defaults to all accounts.
             --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
 
-        Returns: {}
+        Returns:
+            (dict) Signature if successfully made, (None) or an error otherwise
+            {
+                "signature":    (str) The signature of the comment,
+                "signing_ts":   (str) The timestamp used to sign the comment,
+            }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."

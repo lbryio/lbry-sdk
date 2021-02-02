@@ -2,6 +2,7 @@ import re
 import time
 import typing
 from math import ceil
+import secrets
 
 from aiohttp import web
 
@@ -50,7 +51,7 @@ class MockedCommentServer:
         self.server = None
         self.comments = []
         self.reacts = {}
-        self.comment_id = 0
+        self.index = 0
         self.react_id = 0
 
     @classmethod
@@ -66,14 +67,15 @@ class MockedCommentServer:
         return schema
 
     def create_comment(self, claim_id=None, parent_id=None, channel_name=None, channel_id=None, **kwargs):
-        comment_id = self.comment_id
+        comment_id = secrets.token_hex(64)
         channel_url = 'lbry://' + channel_name + '#' + channel_id if channel_id else None
 
         if parent_id:
-            claim_id = self.comments[self.get_comment_id(parent_id)]['claim_id']
+            parent_comment = list(filter(lambda c: c['comment_id'] == parent_id, self.comments))[0]
+            claim_id = parent_comment['claim_id']
 
         comment = self._create_comment(
-            comment_id=str(comment_id),
+            comment_id=comment_id,
             channel_name=channel_name,
             channel_id=channel_id,
             channel_url=channel_url,
@@ -83,15 +85,14 @@ class MockedCommentServer:
             **kwargs
         )
         self.comments.append(comment)
-        self.comment_id += 1
         return self.clean(comment)
 
-    def abandon_comment(self, comment_id: int, channel_id: str, **kwargs):
+    def abandon_comment(self, comment_id: str, channel_id: str, **kwargs):
         deleted = False
-        comment_id = self.get_comment_id(comment_id)
+        index = self.get_index_for_comment_id(comment_id)
         try:
-            if self.comments[comment_id]['channel_id'] == channel_id:
-                self.comments.pop(comment_id)
+            if index >= 0:
+                self.comments.pop(index)
                 deleted = True
         finally:
             return {
@@ -100,42 +101,41 @@ class MockedCommentServer:
                 }
             }
 
-    def edit_comment(self, comment_id: typing.Union[str, int], comment: str, channel_id: str,
+    def edit_comment(self, comment_id: str, comment: str, channel_id: str,
                        channel_name: str, signature: str, signing_ts: str) -> dict:
         edited = False
         if self.credentials_are_valid(channel_id, channel_name, signature, signing_ts) \
                 and self.is_valid_body(comment):
-            comment_id = self.get_comment_id(comment_id)
-            if self.comments[comment_id]['channel_id'] == channel_id:
-                self.comments[comment_id].update({
+            index = self.get_index_for_comment_id(comment_id)
+            if self.comments[index]['channel_id'] == channel_id:
+                self.comments[index].update({
                     'comment': comment,
                     'signature': signature,
                     'signing_ts': signing_ts
                 })
                 edited = True
 
-        return self.comments[comment_id] if edited else None
+        return self.comments[index] if edited else None
 
-    def hide_comment(self, comment_id: typing.Union[int, str], signing_ts: str, signature: str):
-        comment_id = self.get_comment_id(comment_id)
+    def hide_comment(self, comment_id: str, signing_ts: str, signature: str):
         if self.is_signable(signature, signing_ts):
-            self.comments[comment_id]['is_hidden'] = True
+            self.comments[self.get_index_for_comment_id(comment_id)]['is_hidden'] = True
             return True
         return False
 
     def pin_comment(
             self,
-            comment_id: typing.Union[int, str],
+            comment_id: str,
             channel_name: str, channel_id: str, remove: bool,
             signing_ts: str, signature: str
     ):
-        comment_id = self.get_comment_id(comment_id)
+        index = self.get_index_for_comment_id(comment_id)
         if self.is_signable(signature, signing_ts):
             if remove:
-                self.comments[comment_id]['is_pinned'] = False
+                self.comments[index]['is_pinned'] = False
             else:
-                self.comments[comment_id]['is_pinned'] = True
-            return self.comments[comment_id]
+                self.comments[index]['is_pinned'] = True
+            return self.comments[index]
         return False
 
     def hide_comments(self, pieces: list):
@@ -164,15 +164,15 @@ class MockedCommentServer:
             'has_hidden_comments': bool(list(filter(lambda x: x['is_hidden'], self.comments)))
         }
 
-    def get_comment_channel_by_id(self, comment_id: int, **kwargs):
-        comment = self.comments[self.get_comment_id(comment_id)]
+    def get_comment_channel_by_id(self, comment_id: str, **kwargs):
+        comment = self.comments[self.get_index_for_comment_id(comment_id)]
         return {
             'channel_id': comment['channel_id'],
             'channel_name': comment['channel_name'],
         }
 
     def get_comments_by_id(self, comment_ids: list):
-        comments = [self.comments[self.get_comment_id(cid)] for cid in comment_ids]
+        comments = [self.comments[self.get_index_for_comment_id(cid)] for cid in comment_ids]
         return {
             'page': 1,
             'page_size': len(comment_ids),
@@ -331,17 +331,18 @@ class MockedCommentServer:
         return 0 < len(comment) <= 2000
 
     def is_valid_comment_id(self, comment_id: typing.Union[int, str]) -> bool:
-        if isinstance(comment_id, str) and comment_id.isalnum():
-            comment_id = int(comment_id)
-
-        if isinstance(comment_id, int):
-            return 0 <= comment_id < len(self.comments)
+        if isinstance(comment_id, str):
+            return True
         return False
 
-    def get_comment_id(self, cid: typing.Union[int, str, any]) -> int:
-        if not self.is_valid_comment_id(cid):
-            raise ValueError('Comment ID is Invalid')
-        return cid if isinstance(cid, int) else int(cid)
+    def get_comment_for_id(self, cid: str) -> dict:
+        return list(filter(lambda c: c['comment_id'] == cid, self.comments))[0]
+
+    def get_index_for_comment_id(self, value: str):
+        for i, dic in enumerate(self.comments):
+            if dic['comment_id'] == value:
+                return i
+        return -1
 
     @staticmethod
     def claim_id_is_valid(claim_id: str) -> bool:
@@ -384,7 +385,6 @@ class MockedCommentServer:
                (parent_id is None or self.is_valid_comment_id(parent_id))
 
 
-
 class CommentCommands(CommandTestCase):
 
     async def asyncSetUp(self):
@@ -412,7 +412,7 @@ class CommentCommands(CommandTestCase):
         self.assertEqual(stream['claim_id'], comments[0]['claim_id'])
 
         channel2 = (await self.channel_create('@BuffettJimmy'))['outputs'][0]
-        await self.daemon.jsonrpc_comment_create(
+        comment2 = await self.daemon.jsonrpc_comment_create(
             claim_id=stream['claim_id'],
             channel_name=channel2['name'],
             comment='Let\'s all go to Margaritaville',
@@ -712,7 +712,8 @@ class CommentCommands(CommandTestCase):
             claim_id=claim_id,
             channel_id=bee['claim_id']
         )
-        all_comments = [second_comment, first_comment]
+        first_comment_id = first_comment['comment_id']
+        second_comment_id = second_comment['comment_id']
         comment_list = await self.daemon.jsonrpc_comment_list(claim_id)
         self.assertEqual(
             {'items', 'page', 'page_size', 'has_hidden_comments', 'total_items', 'total_pages'},
@@ -721,29 +722,29 @@ class CommentCommands(CommandTestCase):
         self.assertEqual(comment_list['total_items'], 2)
 
         bee_like_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             react_type='like',
         )
 
         moth_like_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
             react_type='like',
         )
         reactions = await self.daemon.jsonrpc_comment_react_list(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
         # {'my_reactions': {'0': {'like': 1}}, 'others_reactions': {'0': {'like': 1}}}
-        self.assertEqual(reactions['my_reactions']['0']['like'], 1)
-        self.assertEqual(reactions['others_reactions']['0']['like'], 1)
+        self.assertEqual(reactions['my_reactions'][first_comment_id]['like'], 1)
+        self.assertEqual(reactions['others_reactions'][first_comment_id]['like'], 1)
 
         bee_dislike_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             react_type='dislike',
@@ -751,30 +752,30 @@ class CommentCommands(CommandTestCase):
         )
 
         reactions_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
         # {'my_reactions': {'0': {'like': 1, 'dislike', 0}}, 'others_reactions': {'0': {'like': 0, 'dislike': 1}}}
-        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['like'], 1)
-        self.assertEqual(reactions_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
-        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['dislike'], 1)
-        self.assertEqual(reactions_after_bee_dislikes['others_reactions']['0']['like'], 0)
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions'][first_comment_id]['like'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['my_reactions'][first_comment_id]['dislike'], 0)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions'][first_comment_id]['dislike'], 1)
+        self.assertEqual(reactions_after_bee_dislikes['others_reactions'][first_comment_id]['like'], 0)
 
         only_likes_after_bee_dislikes = await self.daemon.jsonrpc_comment_react_list(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
             react_types='like',
         )
 
-        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['like'], 1)
-        self.assertEqual(only_likes_after_bee_dislikes['my_reactions']['0']['dislike'], 0)
-        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['dislike'], 0)
-        self.assertEqual(only_likes_after_bee_dislikes['others_reactions']['0']['like'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions'][first_comment_id]['like'], 1)
+        self.assertEqual(only_likes_after_bee_dislikes['my_reactions'][first_comment_id]['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions'][first_comment_id]['dislike'], 0)
+        self.assertEqual(only_likes_after_bee_dislikes['others_reactions'][first_comment_id]['like'], 0)
 
         bee_un_dislike_reaction = await self.daemon.jsonrpc_comment_react(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             remove=True,
@@ -782,30 +783,30 @@ class CommentCommands(CommandTestCase):
         )
 
         reactions_after_bee_absconds = await self.daemon.jsonrpc_comment_react_list(
-            comment_ids=first_comment['comment_id'],
+            comment_ids=first_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
 
-        self.assertEqual(reactions_after_bee_absconds['my_reactions']['0']['like'], 1)
-        self.assertNotIn('dislike', reactions_after_bee_absconds['my_reactions']['0'])
-        self.assertEqual(reactions_after_bee_absconds['others_reactions']['0']['like'], 0)
-        self.assertNotIn('dislike', reactions_after_bee_absconds['others_reactions']['0'])
+        self.assertEqual(reactions_after_bee_absconds['my_reactions'][first_comment_id]['like'], 1)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['my_reactions'][first_comment_id])
+        self.assertEqual(reactions_after_bee_absconds['others_reactions'][first_comment_id]['like'], 0)
+        self.assertNotIn('dislike', reactions_after_bee_absconds['others_reactions'][first_comment_id])
 
         bee_reacts_to_both_comments = await self.daemon.jsonrpc_comment_react(
-            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            comment_ids=first_comment_id + ',' + second_comment_id,
             channel_id=bee['claim_id'],
             channel_name=bee['name'],
             react_type='frozen_tom',
         )
 
         reactions_after_double_frozen_tom = await self.daemon.jsonrpc_comment_react_list(
-            comment_ids=first_comment['comment_id'] + ',' + second_comment['comment_id'],
+            comment_ids=first_comment_id + ',' + second_comment_id,
             channel_id=moth['claim_id'],
             channel_name=moth['name'],
         )
 
-        self.assertEqual(reactions_after_double_frozen_tom['my_reactions']['0']['like'], 1)
-        self.assertNotIn('dislike', reactions_after_double_frozen_tom['my_reactions']['0'])
-        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['0']['frozen_tom'], 1)
-        self.assertEqual(reactions_after_double_frozen_tom['others_reactions']['1']['frozen_tom'], 1)
+        self.assertEqual(reactions_after_double_frozen_tom['my_reactions'][first_comment_id]['like'], 1)
+        self.assertNotIn('dislike', reactions_after_double_frozen_tom['my_reactions'][first_comment_id])
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions'][first_comment_id]['frozen_tom'], 1)
+        self.assertEqual(reactions_after_double_frozen_tom['others_reactions'][second_comment_id]['frozen_tom'], 1)

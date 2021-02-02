@@ -937,6 +937,11 @@ class Ledger(metaclass=LedgerRegistry):
         return self.db.get_purchase_count(**constraints)
 
     async def _resolve_for_local_results(self, accounts, txos):
+        txos = await self._resolve_for_local_claim_results(accounts, txos)
+        txos = await self._resolve_for_local_support_results(accounts, txos)
+        return txos
+
+    async def _resolve_for_local_claim_results(self, accounts, txos):
         results = []
         response = await self.resolve(
             accounts, [txo.permanent_url for txo in txos if txo.can_decode_claim]
@@ -951,6 +956,23 @@ class Ledger(metaclass=LedgerRegistry):
                     txo.meta['error'] = resolved['error']
                 results.append(txo)
         return results
+
+    async def _resolve_for_local_support_results(self, accounts, txos):
+        channel_ids = set()
+        signed_support_txos = []
+        for txo in txos:
+            support = txo.can_decode_support
+            if support and support.signing_channel_id:
+                channel_ids.add(support.signing_channel_id)
+                signed_support_txos.append(txo)
+        if channel_ids:
+            channels = {
+                channel.claim_id: channel for channel in
+                (await self.claim_search(accounts, claim_ids=list(channel_ids)))[0]
+            }
+            for txo in signed_support_txos:
+                txo.channel = channels.get(txo.support.signing_channel_id)
+        return txos
 
     async def get_claims(self, resolve=False, **constraints):
         claims = await self.db.get_claims(**constraints)
