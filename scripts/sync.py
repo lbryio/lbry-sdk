@@ -19,7 +19,7 @@ async def get_all(db, shard_num, shards_total):
         return True
 
     db.setexectrace(exec_factory)
-    total = db.execute(f"select count(*) as total from claim where rowid % {shards_total} = {shard_num};").fetchone()[0]
+    total = db.execute(f"select count(*) as total from claim where height % {shards_total} = {shard_num};").fetchone()[0]
     for num, claim in enumerate(db.execute(f"""
 SELECT claimtrie.claim_hash as is_controlling,
        claimtrie.last_take_over_height,
@@ -27,7 +27,7 @@ SELECT claimtrie.claim_hash as is_controlling,
        (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
        claim.*
 FROM claim LEFT JOIN claimtrie USING (claim_hash)
-WHERE claim.rowid % {shards_total} = {shard_num}
+WHERE claim.height % {shards_total} = {shard_num}
 """)):
         claim = dict(claim._asdict())
         claim['censor_type'] = 0
@@ -47,6 +47,8 @@ async def consume(producer):
 
 async def run(args, shard):
     db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
+    db.cursor().execute('pragma journal_mode=wal;')
+    db.cursor().execute('pragma temp_store=memory;')
     index = SearchIndex('')
     await index.start()
     await index.stop()

@@ -1029,6 +1029,12 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def run_and_cache_query(self, query_name, function, kwargs):
+        if isinstance(kwargs, dict) and 'trending_mixed' in kwargs.get('order_by', {}):
+            # fixme: trending_mixed is 0 for all records on variable decay, making sort slow.
+            # also, release_time isnt releavant when sorting by trending but it makes cache bad
+            if 'release_time' in kwargs:
+                kwargs.pop('release_time')
+            kwargs['order_by'] = ['trending_mixed']
         metrics = self.get_metrics_or_placeholder_for_api(query_name)
         metrics.start()
         cache = self.session_mgr.search_cache[query_name]
