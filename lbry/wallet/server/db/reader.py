@@ -19,7 +19,6 @@ from lbry.schema.result import Outputs, Censor
 from lbry.wallet import Ledger, RegTestLedger
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-from .full_text_search import FTS_ORDER_BY
 
 
 class SQLiteOperationalError(apsw.Error):
@@ -342,12 +341,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, for_count)
     _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, for_count)
 
-    if 'text' in constraints:
-        constraints["search"] = constraints.pop("text")
-        constraints["order_by"] = FTS_ORDER_BY
-        select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
-    else:
-        select = f"SELECT {cols} FROM claim"
+    select = f"SELECT {cols} FROM claim"
     if not for_count:
         select += " LEFT JOIN claimtrie USING (claim_hash)"
     return query(select, **constraints)

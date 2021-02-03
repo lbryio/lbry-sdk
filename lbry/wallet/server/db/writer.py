@@ -15,7 +15,6 @@ from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet import Ledger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
-from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
@@ -201,7 +200,6 @@ class SQLDB:
 
     CREATE_TABLES_QUERY = (
         CREATE_CLAIM_TABLE +
-        CREATE_FULL_TEXT_SEARCH +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
         CREATE_TAG_TABLE +
@@ -216,7 +214,6 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
-        self._fts_synced = False
         self.state_manager = None
         self.blocked_streams = None
         self.blocked_channels = None
@@ -930,28 +927,17 @@ class SQLDB:
         expire_timer.stop()
 
         r = timer.run
-        r(update_full_text_search, 'before-delete',
-          delete_claim_hashes, self.db.cursor(), self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
-        reposted = r(self.calculate_reposts, insert_claims)
-        r(update_full_text_search, 'after-insert',
-          [txo.claim_hash for txo in insert_claims], self.db.cursor(), self.main.first_sync)
-        r(update_full_text_search, 'before-update',
-          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
+        r(self.calculate_reposts, insert_claims)
         r(self.update_claims, update_claims, header)
-        r(update_full_text_search, 'after-update',
-          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         for algorithm in self.trending:
             r(algorithm.run, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
-        if not self._fts_synced and self.main.first_sync and height == daemon_height:
-            r(first_sync_finished, self.db.cursor())
-            self._fts_synced = True
         r(self.enqueue_deleted, delete_claim_hashes)
         r(self.enqueue_changes)
 
