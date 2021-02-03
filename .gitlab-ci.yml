@@ -57,11 +57,11 @@ test:other-integration:
     - pip install tox-travis
     - tox -e other
 
-#test:json-api:
-#  stage: test
-#  script:
-#    - make install tools
-#    - HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
+test:json-api:
+  stage: test
+  script:
+    - make install tools
+    - HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
 
 
 
