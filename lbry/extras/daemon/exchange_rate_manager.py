@@ -107,22 +107,13 @@ class MarketFeed:
 class BittrexFeed(MarketFeed):
     name = "Bittrex"
     market = "BTCLBC"
-    url = "https://bittrex.com/api/v1.1/public/getmarkethistory"
-    params = {'market': 'BTC-LBC', 'count': 50}
+    url = "https://api.bittrex.com/v3/markets/LBC-BTC/ticker"
     fee = 0.0025
 
     def get_rate_from_response(self, json_response):
-        if 'result' not in json_response:
+        if 'lastTradeRate' not in json_response:
             raise InvalidExchangeRateResponseError(self.name, 'result not found')
-        trades = json_response['result']
-        if len(trades) == 0:
-            raise InvalidExchangeRateResponseError(self.name, 'trades not found')
-        totals = sum([i['Total'] for i in trades])
-        qtys = sum([i['Quantity'] for i in trades])
-        if totals <= 0 or qtys <= 0:
-            raise InvalidExchangeRateResponseError(self.name, 'quantities were not positive')
-        vwap = totals / qtys
-        return float(1.0 / vwap)
+        return 1.0 / float(json_response['lastTradeRate'])
 
 
 class LBRYFeed(MarketFeed):

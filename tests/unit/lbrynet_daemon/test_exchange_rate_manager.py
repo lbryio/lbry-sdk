@@ -117,20 +117,12 @@ class ExchangeRateTests(AsyncioTestCase):
     def test_bittrex_feed_response(self):
         feed = BittrexFeed()
         out = feed.get_rate_from_response({
-            "success": True,
-            "message": "",
-            "result": [
-                {
-                    'Id': 6902471, 'TimeStamp': '2017-02-27T23:41:52.213', 'Quantity': 56.12611239,
-                    "Price": 0.00001621, "Total": 0.00090980, "FillType": "PARTIAL_FILL", "OrderType": "SELL"
-                },
-                {
-                    "Id": 6902403, "TimeStamp": "2017-02-27t23:31:40.463", "Quantity": 430.99988180,
-                    "Price": 0.00001592, "Total": 0.00686151, "FillType": "PARTIAL_FILL", "OrderType": "SELL"
-                }
-            ]
+            "symbol": "LBC-BTC",
+            "lastTradeRate": "0.00000323",
+            "bidRate": "0.00000322",
+            "askRate": "0.00000327"
         })
-        self.assertEqual(1.0 / ((0.00090980+0.00686151) / (56.12611239+430.99988180)), out)
+        self.assertEqual(1.0 / 0.00000323, out)
         with self.assertRaises(InvalidExchangeRateResponseError):
             feed.get_rate_from_response({})
         with self.assertRaises(InvalidExchangeRateResponseError):

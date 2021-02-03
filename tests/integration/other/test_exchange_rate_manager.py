@@ -6,7 +6,6 @@ from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateM
 class TestExchangeRateManager(AsyncioTestCase):
     async def test_exchange_rate_manager(self):
         # TODO: re-enable cryptonator.com
-        # TODO: this uses real exchange rate feeds... update to use mocks
         manager = ExchangeRateManager(FEEDS)
         manager.start()
         self.addCleanup(manager.stop)
