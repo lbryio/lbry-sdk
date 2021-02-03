@@ -25,7 +25,6 @@ from lbry.utils import LRUCacheWithMetrics
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
-from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.rpc.framing import NewlineFramer
@@ -829,22 +828,11 @@ class LBRYSessionManager(SessionManager):
 
     async def start_other(self):
         self.running = True
-        path = os.path.join(self.env.db_dir, 'claims.db')
-        args = dict(
-            initializer=reader.initializer,
-            initargs=(
-                self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
-                self.env.track_metrics, (
-                    self.db.sql.blocked_streams, self.db.sql.blocked_channels,
-                    self.db.sql.filtered_streams, self.db.sql.filtered_channels
-                )
-            )
-        )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
-            self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
+            self.query_executor = ThreadPoolExecutor(max_workers=1)
         else:
             self.query_executor = ProcessPoolExecutor(
-                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
+                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4)
             )
         if self.websocket is not None:
             await self.websocket.start()
@@ -1002,16 +990,6 @@ class LBRYElectrumX(SessionBase):
             )
         except asyncio.CancelledError:
             raise
-        except reader.SQLiteInterruptedError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_interrupt(start, error.metrics)
-            self.session_mgr.interrupt_count_metric.inc()
-            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
-        except reader.SQLiteOperationalError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_error(start, error.metrics)
-            self.session_mgr.db_operational_error_metric.inc()
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except Exception:
             log.exception("dear devs, please handle this exception better")
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
@@ -1028,7 +1006,7 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    async def run_and_cache_query(self, query_name, function, kwargs):
+    async def run_and_cache_query(self, query_name, kwargs):
         if isinstance(kwargs, dict) and 'trending_mixed' in kwargs.get('order_by', {}):
             # fixme: trending_mixed is 0 for all records on variable decay, making sort slow.
             # also, release_time isnt releavant when sorting by trending but it makes cache bad
@@ -1047,7 +1025,7 @@ class LBRYElectrumX(SessionBase):
             return cache_item.result
         async with cache_item.lock:
             if cache_item.result is None:
-                cache_item.result = await self.db.search_index.session_query(query_name, function, kwargs)
+                cache_item.result = await self.db.search_index.session_query(query_name, kwargs)
             else:
                 metrics = self.get_metrics_or_placeholder_for_api(query_name)
                 metrics.cache_response()
@@ -1058,14 +1036,14 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
-            return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
+            return await self.run_and_cache_query('search', kwargs)
 
     async def claimtrie_resolve(self, *urls):
         if urls:
             count = len(urls)
             try:
                 self.session_mgr.urls_to_resolve_count_metric.inc(count)
-                return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+                return await self.run_and_cache_query('resolve', urls)
             finally:
                 self.session_mgr.resolved_url_count_metric.inc(count)
 
