@@ -11,6 +11,7 @@ from lbry.extras.daemon.comment_client import verify
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
+from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.transaction import Transaction
 from lbry.wallet.util import satoshis_to_coins as lbc
 
@@ -96,6 +97,18 @@ class ClaimSearchCommand(ClaimTestCase):
         ] * 33829
         with self.assertRaises(ConnectionResetError):
             await self.claim_search(claim_ids=claim_ids)
+
+    async def test_claim_search_as_reader_server(self):
+        node2 = SPVNode(self.conductor.spv_module, node_number=2)
+        current_prefix = self.conductor.spv_node.server.bp.env.es_index_prefix
+        await node2.start(self.blockchain, extraconf={'ES_MODE': 'reader', 'ES_INDEX_PREFIX': current_prefix})
+        self.addCleanup(node2.stop)
+        self.ledger.network.config['default_servers'] = [(node2.hostname, node2.port)]
+        await self.ledger.stop()
+        await self.ledger.start()
+        channel2 = await self.channel_create('@abc', '0.1', allow_duplicate_name=True)
+        await asyncio.sleep(1)  # fixme: find a way to block on the writer
+        await self.assertFindsClaims([channel2], name='@abc')
 
     async def test_basic_claim_search(self):
         await self.create_channel()

@@ -66,7 +66,7 @@ class SearchIndex:
         return asyncio.ensure_future(client.close())
 
     def delete_index(self):
-        return self.client.indices.delete(self.index)
+        return self.client.indices.delete(self.index, ignore_unavailable=True)
 
     async def sync_queue(self, claim_queue):
         if claim_queue.empty():

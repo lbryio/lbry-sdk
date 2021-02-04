@@ -80,7 +80,6 @@ class ReconnectTests(IntegrationTestCase):
         self.assertFalse(self.ledger.network.is_connected)
         await self.ledger.resolve([], ['derp'])
         self.assertEqual(50002, self.ledger.network.client.server[1])
-        await node2.stop(True)
 
     async def test_direct_sync(self):
         await self.ledger.stop()

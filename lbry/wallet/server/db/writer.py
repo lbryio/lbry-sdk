@@ -951,21 +951,28 @@ class LBRYLevelDB(LevelDB):
         for algorithm_name in self.env.trending_algorithms:
             if algorithm_name in TRENDING_ALGORITHMS:
                 trending.append(TRENDING_ALGORITHMS[algorithm_name])
-        self.sql = SQLDB(
-            self, path,
-            self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
-            self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
-            trending
-        )
+        if self.env.es_mode == 'writer':
+            self.logger.info('Index mode: writer. Using SQLite db to sync ES')
+            self.sql = SQLDB(
+                self, path,
+                self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
+                self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
+                trending
+            )
+        else:
+            self.logger.info('Index mode: reader')
+            self.sql = None
 
         # Search index
         self.search_index = SearchIndex(self.env.es_index_prefix)
 
     def close(self):
         super().close()
-        self.sql.close()
+        if self.sql:
+            self.sql.close()
 
     async def _open_dbs(self, *args, **kwargs):
         await self.search_index.start()
         await super()._open_dbs(*args, **kwargs)
-        self.sql.open()
+        if self.sql:
+            self.sql.open()

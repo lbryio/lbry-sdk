@@ -189,7 +189,7 @@ class SPVNode:
             'MAX_QUERY_WORKERS': '0',
             'INDIVIDUAL_TAG_INDEXES': '',
             'RPC_PORT': self.rpc_port,
-            'ES_INDEX_PREFIX': uuid4().hex
+            'ES_INDEX_PREFIX': uuid4().hex,
         }
         if extraconf:
             conf.update(extraconf)
