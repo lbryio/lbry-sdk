@@ -450,7 +450,6 @@ class Output(InputOutput):
         )
         self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
         self.script.generate()
-        self.tx_ref.tx._reset()
         return self.private_key
 
     def is_channel_private_key(self, private_key):
