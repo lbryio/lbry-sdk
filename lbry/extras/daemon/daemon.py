@@ -3343,6 +3343,7 @@ class Daemon(metaclass=JSONRPCServerType):
             file_stream = await self.file_manager.create_stream(file_path)
             claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
+            tx._reset()
 
         if channel:
             new_txo.sign(channel)
@@ -3562,6 +3563,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 file_stream = await self.file_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
+                tx._reset()
                 stream_hash = file_stream.stream_hash
             elif old_stream:
                 stream_hash = old_stream.stream_hash
