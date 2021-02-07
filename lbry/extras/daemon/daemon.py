@@ -2773,6 +2773,7 @@ class Daemon(metaclass=JSONRPCServerType):
             new_txo.private_key = old_txo.private_key
 
         new_txo.script.generate()
+        tx._reset()
 
         await tx.sign(funding_accounts)
 
@@ -3959,6 +3960,7 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo = tx.outputs[0]
 
         new_txo.script.generate()
+        tx._reset()
 
         if channel:
             new_txo.sign(channel)
