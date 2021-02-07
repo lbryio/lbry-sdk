@@ -2617,6 +2617,7 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         txo = tx.outputs[0]
         await txo.generate_channel_private_key()
+        tx._reset()
 
         await tx.sign(funding_accounts)
 
