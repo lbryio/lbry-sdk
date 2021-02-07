@@ -4461,7 +4461,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_txo_spend(
-            self, account_id=None, wallet_id=None, batch_size=500,
+            self, account_id=None, wallet_id=None, batch_size=100,
             include_full_tx=False, preview=False, blocking=False, **kwargs):
         """
         Spend transaction outputs, batching into multiple transactions as necessary.
@@ -4500,7 +4500,10 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = [wallet.get_account_or_error(account_id)] if account_id else wallet.accounts
         txos = await self.ledger.get_txos(
             wallet=wallet, accounts=accounts, read_only=True,
-            **self._constrain_txo_from_kwargs({}, is_not_spent=True, is_my_output=True, **kwargs)
+            no_tx=True, no_channel_info=True,
+            **self._constrain_txo_from_kwargs(
+                {}, is_not_spent=True, is_my_output=True, **kwargs
+            )
         )
         txs = []
         while txos:

@@ -231,7 +231,7 @@ class Ledger(metaclass=LedgerRegistry):
     async def get_effective_amount_estimators(self, funding_accounts: Iterable[Account]):
         estimators = []
         for account in funding_accounts:
-            utxos = await account.get_utxos()
+            utxos = await account.get_utxos(no_tx=True, no_channel_info=True)
             for utxo in utxos:
                 estimators.append(utxo.get_estimator(self))
         return estimators

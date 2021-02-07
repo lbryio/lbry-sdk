@@ -539,6 +539,7 @@ class Transaction:
                  height: int = -2, position: int = -1, julian_day: int = None) -> None:
         self._raw = raw
         self._raw_sans_segwit = None
+        self._raw_outputs = None
         self.is_segwit_flag = 0
         self.witnesses: List[bytes] = []
         self.ref = TXRefMutable(self)
@@ -600,6 +601,7 @@ class Transaction:
     def _reset(self):
         self._raw = None
         self._raw_sans_segwit = None
+        self._raw_outputs = None
         self.ref.reset()
 
     @property
@@ -693,9 +695,7 @@ class Transaction:
             stream.write_compact_size(len(self._inputs))
             for txin in self._inputs:
                 txin.serialize_to(stream)
-        stream.write_compact_size(len(self._outputs))
-        for txout in self._outputs:
-            txout.serialize_to(stream)
+        self._serialize_outputs(stream)
         stream.write_uint32(self.locktime)
         return stream.get_bytes()
 
@@ -709,12 +709,18 @@ class Transaction:
                 txin.serialize_to(stream, txin.txo_ref.txo.script.source)
             else:
                 txin.serialize_to(stream, b'')
-        stream.write_compact_size(len(self._outputs))
-        for txout in self._outputs:
-            txout.serialize_to(stream)
+        self._serialize_outputs(stream)
         stream.write_uint32(self.locktime)
         stream.write_uint32(self.signature_hash_type(1))  # signature hash type: SIGHASH_ALL
         return stream.get_bytes()
+
+    def _serialize_outputs(self, stream):
+        if self._raw_outputs is None:
+            self._raw_outputs = BCDataStream()
+            self._raw_outputs.write_compact_size(len(self._outputs))
+            for txout in self._outputs:
+                txout.serialize_to(self._raw_outputs)
+        stream.write(self._raw_outputs.get_bytes())
 
     def _deserialize(self):
         if self._raw is not None:
