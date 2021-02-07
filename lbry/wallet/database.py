@@ -965,16 +965,18 @@ class Database(SQLiteMixin):
             sql.append("LEFT JOIN txi ON (txi.position=0 AND txi.txid=txo.txid)")
         return await self.db.execute_fetchall(*query(' '.join(sql), **constraints), read_only=read_only)
 
-    async def get_txos(self, wallet=None, no_tx=False, read_only=False, **constraints):
+    async def get_txos(self, wallet=None, no_tx=False, no_channel_info=False, read_only=False, **constraints):
         include_is_spent = constraints.get('include_is_spent', False)
         include_is_my_input = constraints.get('include_is_my_input', False)
         include_is_my_output = constraints.pop('include_is_my_output', False)
         include_received_tips = constraints.pop('include_received_tips', False)
 
         select_columns = [
-            "tx.txid, raw, tx.height, tx.position as tx_position, tx.is_verified, "
+            "tx.txid, tx.height, tx.position as tx_position, tx.is_verified, "
             "txo_type, txo.position as txo_position, amount, script"
         ]
+        if not no_tx:
+            select_columns.append("raw")
 
         my_accounts = {a.public_key.address for a in wallet.accounts} if wallet else set()
         my_accounts_sql = ""
@@ -1052,32 +1054,33 @@ class Database(SQLiteMixin):
                 txo.received_tips = row['received_tips']
             txos.append(txo)
 
-        channel_ids = set()
-        for txo in txos:
-            if txo.is_claim and txo.can_decode_claim:
-                if txo.claim.is_signed:
-                    channel_ids.add(txo.claim.signing_channel_id)
-                if txo.claim.is_channel and wallet:
-                    for account in wallet.accounts:
-                        private_key = await account.get_channel_private_key(
-                            txo.claim.channel.public_key_bytes
-                        )
-                        if private_key:
-                            txo.private_key = private_key
-                            break
-
-        if channel_ids:
-            channels = {
-                txo.claim_id: txo for txo in
-                (await self.get_channels(
-                    wallet=wallet,
-                    claim_id__in=channel_ids,
-                    read_only=read_only
-                ))
-            }
+        if not no_channel_info:
+            channel_ids = set()
             for txo in txos:
                 if txo.is_claim and txo.can_decode_claim:
-                    txo.channel = channels.get(txo.claim.signing_channel_id, None)
+                    if txo.claim.is_signed:
+                        channel_ids.add(txo.claim.signing_channel_id)
+                    if txo.claim.is_channel and wallet:
+                        for account in wallet.accounts:
+                            private_key = await account.get_channel_private_key(
+                                txo.claim.channel.public_key_bytes
+                            )
+                            if private_key:
+                                txo.private_key = private_key
+                                break
+
+            if channel_ids:
+                channels = {
+                    txo.claim_id: txo for txo in
+                    (await self.get_channels(
+                        wallet=wallet,
+                        claim_id__in=channel_ids,
+                        read_only=read_only
+                    ))
+                }
+                for txo in txos:
+                    if txo.is_claim and txo.can_decode_claim:
+                        txo.channel = channels.get(txo.claim.signing_channel_id, None)
 
         return txos
 
