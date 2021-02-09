@@ -190,6 +190,7 @@ class SPVNode:
             'INDIVIDUAL_TAG_INDEXES': '',
             'RPC_PORT': self.rpc_port,
             'ES_INDEX_PREFIX': uuid4().hex,
+            'ES_MODE': 'writer',
         }
         if extraconf:
             conf.update(extraconf)
