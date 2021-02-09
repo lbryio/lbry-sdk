@@ -43,6 +43,12 @@ class SearchIndex:
                     "mappings": {
                         "properties": {
                             "claim_id": {
+                                "fields": {
+                                    "keyword": {
+                                        "ignore_above": 256,
+                                        "type": "keyword"
+                                    }
+                                },
                                 "type": "text",
                                 "index_prefixes": {
                                     "min_chars": 1,
