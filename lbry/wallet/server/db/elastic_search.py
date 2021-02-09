@@ -150,6 +150,10 @@ class SearchIndex:
         await self.client.indices.refresh(self.index)
         await self.client.update_by_query(self.index, body=update)
 
+    async def delete_above_height(self, height):
+        await self.client.delete_by_query(self.index, expand_query(height='>'+str(height)))
+        await self.client.indices.refresh(self.index)
+
     async def session_query(self, query_name, kwargs):
         offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
         total_referenced = []
