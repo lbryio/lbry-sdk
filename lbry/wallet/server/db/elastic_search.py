@@ -38,7 +38,8 @@ class SearchIndex:
                                 "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
                             "index":
                                 {"refresh_interval": -1,
-                                 "number_of_shards": 1}
+                                 "number_of_shards": 1,
+                                 "number_of_replicas": 0}
                         },
                     "mappings": {
                         "properties": {
@@ -89,6 +90,7 @@ class SearchIndex:
         for bulk in range(0, len(to_update), 400):
             await self.update(to_update[bulk:bulk+400])
         await self.client.indices.refresh(self.index)
+        await self.client.indices.flush(self.index)
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         def make_query(censor_type, blockdict, channels=False):
@@ -290,7 +292,7 @@ FIELDS = {'is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
           'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
           'reposted_claim_id'}
-TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description',
+TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
 RANGE_FIELDS = {
@@ -367,6 +369,8 @@ def expand_query(**kwargs):
                 query['must_not'].append({"term": {'_id': channel_id}})
         elif key == 'channel_ids':
             query['must'].append({"terms": {'channel_id.keyword': value}})
+        elif key == 'claim_ids':
+            query['must'].append({"terms": {'claim_id.keyword': value}})
         elif key == 'media_types':
             query['must'].append({"terms": {'media_type.keyword': value}})
         elif key == 'stream_types':
