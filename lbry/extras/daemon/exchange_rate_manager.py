@@ -58,9 +58,9 @@ class MarketFeed:
         raise NotImplementedError()
 
     async def get_response(self):
-        headers = {"User-Agent": "lbrynet"}
         async with aiohttp_request(
-            'get', self.url, params=self.params, timeout=self.request_timeout, headers=headers
+                'get', self.url, params=self.params,
+                timeout=self.request_timeout, headers={"User-Agent": "lbrynet"}
         ) as response:
             try:
                 self._last_response = await response.json(content_type=None)
