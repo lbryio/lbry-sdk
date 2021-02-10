@@ -4,9 +4,8 @@ from time import time
 from lbry.schema.claim import Claim
 from lbry.extras.daemon.exchange_rate_manager import (
     ExchangeRate, ExchangeRateManager, CurrencyConversionError,
-    LBRYFeed, LBRYBTCFeed,
-    CryptonatorFeed, CryptonatorBTCFeed,
-    BittrexFeed,
+    CryptonatorUSDFeed, CryptonatorBTCFeed,
+    BittrexUSDFeed, BittrexBTCFeed
 )
 from lbry.testcase import AsyncioTestCase, FakeExchangeRateManager, get_fake_exchange_rate_manager
 from lbry.error import InvalidExchangeRateResponseError
@@ -26,59 +25,21 @@ class ExchangeRateTests(AsyncioTestCase):
         fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
         manager = get_fake_exchange_rate_manager()
         result = manager.convert_currency(fee.currency, "LBC", fee.amount)
-        self.assertEqual(60.0, result)
+        self.assertEqual(20.0, result)
 
     def test_missing_feed(self):
         fee = Claim().stream.fee
         fee.usd = Decimal(1.0)
         fee.address = "bRcHraa8bYJZL7vkh5sNmGwPDERFUjGPP9"
-        manager = FakeExchangeRateManager([LBRYFeed()], {'BTCLBC': 1.0})
+        manager = FakeExchangeRateManager([BittrexBTCFeed()], {'BTCLBC': 1.0})
         with self.assertRaises(CurrencyConversionError):
             manager.convert_currency(fee.currency, "LBC", fee.amount)
 
-    def test_lbry_feed_response(self):
-        feed = LBRYFeed()
-        out = feed.get_rate_from_response({
-            'data': {
-                'fresh': 0, 'lbc_usd': 0.05863062523378918,
-                'lbc_btc': 5.065289549855739e-05, 'btc_usd': 1157.498
-            },
-            'success': True,
-            'error': None
-        })
-        self.assertEqual(1.0 / 5.065289549855739e-05, out)
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({})
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({
-                "success": True,
-                "result": []
-            })
-
-    def test_lbry_btc_feed_response(self):
-        feed = LBRYBTCFeed()
-        out = feed.get_rate_from_response({
-            'data': {
-                'fresh': 0, 'lbc_usd': 0.05863062523378918,
-                'lbc_btc': 5.065289549855739e-05, 'btc_usd': 1157.498
-            },
-            'success': True,
-            'error': None
-        })
-        self.assertEqual(1.0 / 1157.498, out)
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({})
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({
-                "success": True,
-                "result": {}
-            })
-
     def test_cryptonator_lbc_feed_response(self):
-        feed = CryptonatorFeed()
+        feed = CryptonatorUSDFeed()
         out = feed.get_rate_from_response({
             'ticker': {
-                'base': 'BTC', 'target': 'LBC', 'price': 23657.44026496,
+                'base': 'USD', 'target': 'LBC', 'price': 23657.44026496,
                 'volume': '', 'change': -5.59806916,
             },
             'timestamp': 1507470422,
@@ -115,7 +76,7 @@ class ExchangeRateTests(AsyncioTestCase):
             })
 
     def test_bittrex_feed_response(self):
-        feed = BittrexFeed()
+        feed = BittrexBTCFeed()
         out = feed.get_rate_from_response({
             "symbol": "LBC-BTC",
             "lastTradeRate": "0.00000323",
@@ -132,7 +93,7 @@ class ExchangeRateTests(AsyncioTestCase):
             })
 
 
-class BadMarketFeed(LBRYFeed):
+class BadMarketFeed(BittrexUSDFeed):
 
     def get_response(self):
         raise InvalidExchangeRateResponseError(self.name, 'bad stuff')
