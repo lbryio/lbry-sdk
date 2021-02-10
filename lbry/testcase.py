@@ -410,7 +410,7 @@ class CommandTestCase(IntegrationTestCase):
         daemon = Daemon(conf, ComponentManager(
             conf, skip_components=conf.components_to_skip, wallet=wallet_maker,
             exchange_rate_manager=partial(ExchangeRateManagerComponent, rates={
-                'BTCLBC': 1.0, 'USDBTC': 2.0
+                'BTCLBC': 1.0, 'USDLBC': 2.0
             })
         ))
         await daemon.initialize()
