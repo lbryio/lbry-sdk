@@ -375,7 +375,7 @@ def get_ssl_context() -> ssl.SSLContext:
 @contextlib.asynccontextmanager
 async def aiohttp_request(method, url, **kwargs) -> typing.AsyncContextManager[aiohttp.ClientResponse]:
     async with aiohttp.ClientSession() as session:
-        async with session.request(method, url, ssl=get_ssl_context(), **kwargs) as response:
+        async with session.request(method, url, **kwargs) as response:
             yield response
 
 
