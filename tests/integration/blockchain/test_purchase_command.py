@@ -12,7 +12,7 @@ class PurchaseCommandTests(CommandTestCase):
         self.merchant_address = await self.blockchain.get_raw_change_address()
 
     async def priced_stream(
-        self, name='stream', price: Optional[str] = '2.0', currency='LBC', mine=False
+        self, name='stream', price: Optional[str] = '0.2', currency='LBC', mine=False
     ) -> Transaction:
         kwargs = {}
         if price and currency:
@@ -120,6 +120,13 @@ class PurchaseCommandTests(CommandTestCase):
         # purchase by uri
         abc_stream = await self.priced_stream('abc')
         await self.assertStreamPurchased(abc_stream, lambda: self.daemon.jsonrpc_purchase_create(url='lbry://abc'))
+
+        # purchase without valid exchange rate fails
+        erm = self.daemon.component_manager.get_component('exchange_rate_manager')
+        for feed in erm.market_feeds:
+            feed.last_check -= 10_000
+        with self.assertRaisesRegex(Exception, "Unable to convert 50 from USD to LBC"):
+            await self.daemon.jsonrpc_purchase_create(claim_id, allow_duplicate_purchase=True)
 
     async def test_purchase_and_transaction_list(self):
         self.assertItemCount(await self.daemon.jsonrpc_purchase_list(), 0)
