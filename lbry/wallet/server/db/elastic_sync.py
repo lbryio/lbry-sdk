@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import logging
 from collections import namedtuple
 from multiprocessing import Process
 
@@ -13,6 +14,7 @@ INDEX = 'claims'
 
 
 async def get_all(db, shard_num, shards_total):
+    logging.info("shard %d starting", shard_num)
     def exec_factory(cursor, statement, bindings):
         tpl = namedtuple('row', (d[0] for d in cursor.getdescription()))
         cursor.setrowtrace(lambda cursor, row: tpl(*row))
@@ -35,7 +37,7 @@ WHERE claim.height % {shards_total} = {shard_num}
         claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
         if num % 10_000 == 0:
-            print(num, total)
+            logging.info("%d/%d", num, total)
         yield extract_doc(claim, INDEX)
 
 
@@ -49,26 +51,21 @@ async def consume(producer):
 
 
 async def make_es_index():
-    es = AsyncElasticsearch()
+    index = SearchIndex('')
     try:
-        if await es.indices.exists(index=INDEX):
-            print("already synced ES")
-            return 1
-        index = SearchIndex('')
-        await index.start()
-        await index.stop()
-        return 0
+        return await index.start()
     finally:
-        await es.close()
+        index.stop()
 
 
 async def run(args, shard):
+    def itsbusy():
+        logging.info("shard %d: db is busy, retry")
+        return True
     db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
+    db.setbusyhandler(itsbusy)
     db.cursor().execute('pragma journal_mode=wal;')
     db.cursor().execute('pragma temp_store=memory;')
-    index = SearchIndex('')
-    await index.start()
-    await index.stop()
 
     producer = get_all(db.cursor(), shard, args.clients)
     await asyncio.gather(*(consume(producer) for _ in range(min(8, args.clients))))
@@ -78,26 +75,18 @@ def __run(args, shard):
     asyncio.run(run(args, shard))
 
 
-def __make_index():
-    return asyncio.run(make_es_index())
-
-
 def run_elastic_sync():
+    logging.basicConfig(level=logging.INFO)
+    logging.info('lbry.server starting')
     parser = argparse.ArgumentParser()
     parser.add_argument("db_path", type=str)
     parser.add_argument("-c", "--clients", type=int, default=16)
     args = parser.parse_args()
     processes = []
 
-    init_proc = Process(target=__make_index, args=())
-    init_proc.start()
-    init_proc.join()
-    exitcode = init_proc.exitcode
-    init_proc.close()
-    if exitcode:
-        print("ES is already initialized")
+    if not asyncio.run(make_es_index()):
+        logging.info("ES is already initialized")
         return
-    print("bulk-loading ES")
     for i in range(args.clients):
         processes.append(Process(target=__run, args=(args, i)))
         processes[-1].start()

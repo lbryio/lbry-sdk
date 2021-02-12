@@ -35,7 +35,7 @@ class SearchIndex:
             except ConnectionError:
                 self.logger.warning("Failed to connect to Elasticsearch. Waiting for it!")
                 await asyncio.sleep(1)
-        await self.client.indices.create(
+        res = await self.client.indices.create(
             self.index,
             {
                 "settings":
@@ -70,6 +70,7 @@ class SearchIndex:
                 }
             }, ignore=400
         )
+        return res.get('acknowledged', False)
 
     def stop(self):
         client = self.client
