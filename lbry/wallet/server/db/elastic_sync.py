@@ -41,9 +41,25 @@ WHERE claim.height % {shards_total} = {shard_num}
 
 async def consume(producer):
     es = AsyncElasticsearch()
-    await async_bulk(es, producer, request_timeout=120)
-    await es.indices.refresh(index=INDEX)
-    await es.close()
+    try:
+        await async_bulk(es, producer, request_timeout=120)
+        await es.indices.refresh(index=INDEX)
+    finally:
+        await es.close()
+
+
+async def make_es_index():
+    es = AsyncElasticsearch()
+    try:
+        if await es.indices.exists(index=INDEX):
+            print("already synced ES")
+            return 1
+        index = SearchIndex('')
+        await index.start()
+        await index.stop()
+        return 0
+    finally:
+        await es.close()
 
 
 async def run(args, shard):
@@ -53,26 +69,38 @@ async def run(args, shard):
     index = SearchIndex('')
     await index.start()
     await index.stop()
+
     producer = get_all(db.cursor(), shard, args.clients)
     await asyncio.gather(*(consume(producer) for _ in range(min(8, args.clients))))
+
 
 def __run(args, shard):
     asyncio.run(run(args, shard))
 
 
-def main():
+def __make_index():
+    return asyncio.run(make_es_index())
+
+
+def run_elastic_sync():
     parser = argparse.ArgumentParser()
     parser.add_argument("db_path", type=str)
     parser.add_argument("-c", "--clients", type=int, default=16)
     args = parser.parse_args()
     processes = []
+
+    init_proc = Process(target=__make_index, args=())
+    init_proc.start()
+    init_proc.join()
+    exitcode = init_proc.exitcode
+    init_proc.close()
+    if exitcode:
+        print("ES is already initialized")
+        return
+    print("bulk-loading ES")
     for i in range(args.clients):
         processes.append(Process(target=__run, args=(args, i)))
         processes[-1].start()
     for process in processes:
         process.join()
         process.close()
-
-
-if __name__ == '__main__':
-    main()

@@ -30,6 +30,7 @@ setup(
             'lbrynet=lbry.extras.cli:main',
             'torba-server=lbry.wallet.server.cli:main',
             'orchstr8=lbry.wallet.orchstr8.cli:main',
+            'torba-elastic-sync=lbry.wallet.server.db.elastic_sync:run_elastic_sync'
         ],
     },
     install_requires=[
