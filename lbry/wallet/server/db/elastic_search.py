@@ -5,7 +5,7 @@ from decimal import Decimal
 from operator import itemgetter
 from typing import Optional, List, Iterable
 
-from elasticsearch import AsyncElasticsearch, NotFoundError
+from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_bulk
 
 from lbry.crypto.base58 import Base58
@@ -14,6 +14,7 @@ from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
 from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
+from lbry.wallet.server.util import class_logger
 
 
 class SearchIndex:
@@ -21,51 +22,54 @@ class SearchIndex:
         self.client: Optional[AsyncElasticsearch] = None
         self.index = index_prefix + 'claims'
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
+        self.logger = class_logger(__name__, self.__class__.__name__)
 
     async def start(self):
         if self.client:
             return
         self.client = AsyncElasticsearch(timeout=self.sync_timeout)
-        try:
-            if await self.client.indices.exists(self.index):
-                return
-            await self.client.indices.create(
-                self.index,
-                {
-                    "settings":
-                        {"analysis":
-                            {"analyzer": {
-                                "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
-                            "index":
-                                {"refresh_interval": -1,
-                                 "number_of_shards": 1,
-                                 "number_of_replicas": 0}
-                        },
-                    "mappings": {
-                        "properties": {
-                            "claim_id": {
-                                "fields": {
-                                    "keyword": {
-                                        "ignore_above": 256,
-                                        "type": "keyword"
-                                    }
-                                },
-                                "type": "text",
-                                "index_prefixes": {
-                                    "min_chars": 1,
-                                    "max_chars": 10
+        while True:
+            try:
+                await self.client.cluster.health(wait_for_status='yellow')
+                break
+            except ConnectionError:
+                self.logger.warning("Failed to connect to Elasticsearch. Waiting for it!")
+                await asyncio.sleep(1)
+        await self.client.indices.create(
+            self.index,
+            {
+                "settings":
+                    {"analysis":
+                        {"analyzer": {
+                            "default": {"tokenizer": "whitespace", "filter": ["lowercase", "porter_stem"]}}},
+                        "index":
+                            {"refresh_interval": -1,
+                             "number_of_shards": 1,
+                             "number_of_replicas": 0}
+                    },
+                "mappings": {
+                    "properties": {
+                        "claim_id": {
+                            "fields": {
+                                "keyword": {
+                                    "ignore_above": 256,
+                                    "type": "keyword"
                                 }
                             },
-                            "height": {"type": "integer"},
-                            "claim_type": {"type": "byte"},
-                            "censor_type": {"type": "byte"},
-                            "trending_mixed": {"type": "float"},
-                        }
+                            "type": "text",
+                            "index_prefixes": {
+                                "min_chars": 1,
+                                "max_chars": 10
+                            }
+                        },
+                        "height": {"type": "integer"},
+                        "claim_type": {"type": "byte"},
+                        "censor_type": {"type": "byte"},
+                        "trending_mixed": {"type": "float"},
                     }
                 }
-            )
-        except Exception as e:
-            raise
+            }, ignore=400
+        )
 
     def stop(self):
         client = self.client

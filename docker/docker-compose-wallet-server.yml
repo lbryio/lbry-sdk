@@ -3,6 +3,7 @@ version: "3"
 volumes:
   lbrycrd:
   wallet_server:
+  es01:
 
 services:
   lbrycrd:
@@ -34,3 +35,18 @@ services:
       # Curently not snapshot provided
       # - SNAPSHOT_URL=${WALLET_SERVER_SNAPSHOT_URL-https://lbry.com/snapshot/wallet}
       - DAEMON_URL=http://lbry:lbry@lbrycrd:9245
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.11.0
+    container_name: es01
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es01:/usr/share/elasticsearch/data
+    ports:
+      - 127.0.0.1:9200:9200
