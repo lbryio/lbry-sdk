@@ -42,6 +42,7 @@ WHERE claim.height % {shards_total} = {shard_num}
 async def consume(producer):
     es = AsyncElasticsearch()
     await async_bulk(es, producer, request_timeout=120)
+    await es.indices.refresh(index=INDEX)
     await es.close()
 
 
