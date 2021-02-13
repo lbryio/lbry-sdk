@@ -322,6 +322,8 @@ def expand_query(**kwargs):
         kwargs["offset"] = int(kwargs["amount_order"]) - 1
     if 'name' in kwargs:
         kwargs['name'] = normalize_name(kwargs.pop('name'))
+    if kwargs.get('is_controlling') is False:
+        kwargs.pop('is_controlling')
     query = {'must': [], 'must_not': []}
     collapse = None
     for key, value in kwargs.items():
