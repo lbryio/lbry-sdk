@@ -405,12 +405,12 @@ def expand_query(**kwargs):
         query["minimum_should_match"] = 1
         query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
         query['should'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
-    if 'text' in kwargs:
-        return {"query":
+    if kwargs.get('text'):
+        query['must'].append(
                     {"simple_query_string":
                          {"query": kwargs["text"], "fields": [
                              "claim_name^4", "channel_name^8", "title^1", "description^.5", "author^1", "tags^.5"
-                         ]}}}
+                         ]}})
     query = {
         "_source": {"excludes": ["description", "title"]},
         'query': {'bool': query},

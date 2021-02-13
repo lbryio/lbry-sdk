@@ -175,6 +175,8 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], channel_ids=[channel_id2])
         # resolve by claim ids
         await self.assertFindsClaims([three, two], claim_ids=[self.get_claim_id(three), self.get_claim_id(two)])
+        await self.assertFindsClaims([three], claim_id=self.get_claim_id(three))
+        await self.assertFindsClaims([three], claim_id=self.get_claim_id(three), text='*')
 
     async def test_source_filter(self):
         no_source = await self.stream_create('no_source', data=None)
@@ -451,9 +453,9 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim4], text='conspiracy')
         await self.assertFindsClaims([], text='conspiracy+history')
         await self.assertFindsClaims([claim4, claim3], text='conspiracy|history')
-        await self.assertFindsClaims([claim1, claim4, claim2, claim3], text='documentary')
+        await self.assertFindsClaims([claim1, claim4, claim2, claim3], text='documentary', order_by=[])
         # todo: check why claim1 and claim2 order changed. used to be ...claim1, claim2...
-        await self.assertFindsClaims([claim4, claim2, claim1, claim3], text='satoshi')
+        await self.assertFindsClaims([claim4, claim2, claim1, claim3], text='satoshi', order_by=[])
 
         claim2 = await self.stream_update(
             self.get_claim_id(claim2), clear_tags=True, tags=['cloud'],
