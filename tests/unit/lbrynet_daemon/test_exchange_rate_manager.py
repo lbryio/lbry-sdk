@@ -5,7 +5,8 @@ from lbry.schema.claim import Claim
 from lbry.extras.daemon.exchange_rate_manager import (
     ExchangeRate, ExchangeRateManager, CurrencyConversionError,
     CryptonatorUSDFeed, CryptonatorBTCFeed,
-    BittrexUSDFeed, BittrexBTCFeed
+    BittrexUSDFeed, BittrexBTCFeed,
+    CoinExBTCFeed
 )
 from lbry.testcase import AsyncioTestCase, FakeExchangeRateManager, get_fake_exchange_rate_manager
 from lbry.error import InvalidExchangeRateResponseError
@@ -106,3 +107,15 @@ class ExchangeRateManagerTests(AsyncioTestCase):
         manager.start()
         await asyncio.sleep(1)
         self.addCleanup(manager.stop)
+
+    async def test_median_rate_used(self):
+        manager = ExchangeRateManager([BittrexBTCFeed, CryptonatorBTCFeed, CoinExBTCFeed])
+        for feed in manager.market_feeds:
+            feed.last_check = time()
+        bittrex, cryptonator, coinex = manager.market_feeds
+        bittrex.rate = ExchangeRate(bittrex.market, 1.0, time())
+        cryptonator.rate = ExchangeRate(cryptonator.market, 2.0, time())
+        coinex.rate = ExchangeRate(coinex.market, 3.0, time())
+        self.assertEqual(14.0, manager.convert_currency("BTC", "LBC", Decimal(7.0)))
+        cryptonator.rate.spot = 4.0
+        self.assertEqual(21.0, manager.convert_currency("BTC", "LBC", Decimal(7.0)))

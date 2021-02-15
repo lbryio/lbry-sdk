@@ -2,6 +2,7 @@ import json
 import time
 import asyncio
 import logging
+from statistics import median
 from decimal import Decimal
 from typing import Optional, Iterable, Type
 from aiohttp.client_exceptions import ContentTypeError
@@ -239,20 +240,23 @@ class ExchangeRateManager:
             source.stop()
 
     def convert_currency(self, from_currency, to_currency, amount):
-        rates = [market.rate for market in self.market_feeds]
-        log.debug("Converting %f %s to %s, rates: %s", amount, from_currency, to_currency, rates)
+        log.debug(
+            "Converting %f %s to %s, rates: %s",
+            amount, from_currency, to_currency,
+            [market.rate for market in self.market_feeds]
+        )
         if from_currency == to_currency:
             return round(amount, 8)
 
+        rates = []
         for market in self.market_feeds:
             if (market.has_rate and market.is_online and
                     market.rate.currency_pair == (from_currency, to_currency)):
-                return round(amount * Decimal(market.rate.spot), 8)
-        for market in self.market_feeds:
-            if (market.has_rate and market.is_online and
-                    market.rate.currency_pair[0] == from_currency):
-                return round(self.convert_currency(
-                    market.rate.currency_pair[1], to_currency, amount * Decimal(market.rate.spot)), 8)
+                rates.append(market.rate.spot)
+
+        if rates:
+            return round(amount * Decimal(median(rates)), 8)
+
         raise CurrencyConversionError(
             f'Unable to convert {amount} from {from_currency} to {to_currency}')
 
