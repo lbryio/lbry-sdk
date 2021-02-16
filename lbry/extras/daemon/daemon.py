@@ -2451,7 +2451,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --reposted_claim_id=<reposted_claim_id>: (str) all reposts of the specified original claim id
             --reposted=<reposted>           : (int) claims reposted this many times (supports
                                                     equality constraints)
-            --claim_type=<claim_type>       : (str) filter by 'channel', 'stream' or 'unknown'
+            --claim_type=<claim_type>       : (str) filter by 'channel', 'stream', 'repost' or 'collection'
             --stream_types=<stream_types>   : (list) filter by 'video', 'image', 'document', etc
             --media_types=<media_types>     : (list) filter by 'video/mp4', 'image/png', etc
             --fee_currency=<fee_currency>   : (string) specify fee currency: LBC, BTC, USD

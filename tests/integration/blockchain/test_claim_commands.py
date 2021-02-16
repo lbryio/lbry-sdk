@@ -365,6 +365,7 @@ class ClaimSearchCommand(ClaimTestCase):
         video = await self.stream_create('chrome', file_path=self.video_file_name)
         image = await self.stream_create('blank-image', data=self.image_data, suffix='.png')
         repost = await self.stream_repost(self.get_claim_id(image))
+        collection = await self.collection_create('a-collection', claims=[self.get_claim_id(video)])
         channel = await self.channel_create()
         unknown = self.sout(tx)
 
@@ -372,6 +373,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([image, video, octet, unknown], claim_type='stream')
         await self.assertFindsClaims([channel], claim_type='channel')
         await self.assertFindsClaims([repost], claim_type='repost')
+        await self.assertFindsClaims([collection], claim_type='collection')
 
         # stream_type
         await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
