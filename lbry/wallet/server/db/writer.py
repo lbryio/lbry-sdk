@@ -393,6 +393,8 @@ class SQLDB:
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
             elif claim.is_channel:
                 claim_record['claim_type'] = CLAIM_TYPES['channel']
+            elif claim.is_collection:
+                claim_record['claim_type'] = CLAIM_TYPES['collection']
 
             languages[(language, claim_hash)] = (language, claim_hash, tx.height)
 

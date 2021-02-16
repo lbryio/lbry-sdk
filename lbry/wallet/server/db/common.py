@@ -1,7 +1,8 @@
 CLAIM_TYPES = {
     'stream': 1,
     'channel': 2,
-    'repost': 3
+    'repost': 3,
+    'collection': 4,
 }
 
 STREAM_TYPES = {
@@ -10,7 +11,7 @@ STREAM_TYPES = {
     'image': 3,
     'document': 4,
     'binary': 5,
-    'model': 6
+    'model': 6,
 }
 
 # 9/21/2020
