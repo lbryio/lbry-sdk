@@ -1,6 +1,7 @@
 import argparse
 import asyncio
 import logging
+import os
 from collections import namedtuple
 from multiprocessing import Process
 
@@ -59,8 +60,8 @@ async def make_es_index():
 
 
 async def run(args, shard):
-    def itsbusy():
-        logging.info("shard %d: db is busy, retry")
+    def itsbusy(*_):
+        logging.info("shard %d: db is busy, retry", shard)
         return True
     db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
     db.setbusyhandler(itsbusy)
@@ -83,6 +84,10 @@ def run_elastic_sync():
     parser.add_argument("-c", "--clients", type=int, default=16)
     args = parser.parse_args()
     processes = []
+
+    if not os.path.exists(args.db_path):
+        logging.info("DB path doesnt exist")
+        return
 
     if not asyncio.run(make_es_index()):
         logging.info("ES is already initialized")
