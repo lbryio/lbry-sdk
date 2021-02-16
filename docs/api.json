@@ -46,7 +46,7 @@
                     {
                         "name": "wallet_id",
                         "type": "str",
-                        "description": "wallet to check for claim purchase reciepts",
+                        "description": "wallet to check for claim purchase receipts",
                         "is_required": false
                     }
                 ],
@@ -270,7 +270,7 @@
                     {
                         "name": "wallet_id",
                         "type": "str",
-                        "description": "wallet to check for claim purchase reciepts",
+                        "description": "wallet to check for claim purchase receipts",
                         "is_required": false
                     },
                     {
@@ -1654,7 +1654,7 @@
                     {
                         "name": "include_received_tips",
                         "type": "bool",
-                        "description": "calculate the amount of tips recieved for claim outputs",
+                        "description": "calculate the amount of tips received for claim outputs",
                         "is_required": false
                     }
                 ],
@@ -1983,7 +1983,7 @@
                     {
                         "name": "wallet_id",
                         "type": "str",
-                        "description": "wallet to check for claim purchase reciepts",
+                        "description": "wallet to check for claim purchase receipts",
                         "is_required": false
                     },
                     {
@@ -4626,7 +4626,7 @@
                     {
                         "name": "include_received_tips",
                         "type": "bool",
-                        "description": "calculate the amount of tips recieved for claim outputs",
+                        "description": "calculate the amount of tips received for claim outputs",
                         "is_required": false
                     },
                     {
