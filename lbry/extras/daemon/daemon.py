@@ -119,13 +119,6 @@ STREAM_STAGES = [
     (DOWNLOAD_TIMEOUT_CODE, 'Stream timed out')
 ]
 
-CONNECTION_STATUS_CONNECTED = 'connected'
-CONNECTION_STATUS_NETWORK = 'network_connection'
-CONNECTION_MESSAGES = {
-    CONNECTION_STATUS_CONNECTED: 'No connection problems detected',
-    CONNECTION_STATUS_NETWORK: "Your internet connection appears to have been interrupted",
-}
-
 SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 DEFAULT_PAGE_SIZE = 20
@@ -339,7 +332,6 @@ class Daemon(metaclass=JSONRPCServerType):
             skip_components=conf.components_to_skip or []
         )
         self.component_startup_task = None
-        self._connection_status: typing.Tuple[float, bool] = (self.component_manager.loop.time(), False)
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         rpc_app = web.Application()
@@ -357,9 +349,6 @@ class Daemon(metaclass=JSONRPCServerType):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         self.metrics_runner = web.AppRunner(prom_app)
-
-        self.need_connection_status_refresh = asyncio.Event()
-        self._connection_status_task: Optional[asyncio.Task] = None
 
     @property
     def dht_node(self) -> typing.Optional['Node']:
@@ -465,31 +454,10 @@ class Daemon(metaclass=JSONRPCServerType):
         if not os.path.isdir(self.conf.download_dir):
             os.makedirs(self.conf.download_dir)
 
-    async def update_connection_status(self):
-        connected = await utils.async_check_connection()
-        if connected and not self._connection_status[1]:
-            log.info("detected internet connection is working")
-        elif not connected and self._connection_status[1]:
-            log.warning("detected internet connection was lost")
-        self._connection_status = (self.component_manager.loop.time(), connected)
-
-    async def keep_connection_status_up_to_date(self):
-        while True:
-            try:
-                await asyncio.wait_for(self.need_connection_status_refresh.wait(), 300)
-            except asyncio.TimeoutError:
-                pass
-            await self.update_connection_status()
-            self.need_connection_status_refresh.clear()
-
     async def start(self):
         log.info("Starting LBRYNet Daemon")
         log.debug("Settings: %s", json.dumps(self.conf.settings_dict, indent=2))
         log.info("Platform: %s", json.dumps(self.platform_info, indent=2))
-        self.need_connection_status_refresh.set()
-        self._connection_status_task = self.component_manager.loop.create_task(
-            self.keep_connection_status_up_to_date()
-        )
 
         await self.analytics_manager.send_server_startup()
         await self.rpc_runner.setup()
@@ -549,10 +517,6 @@ class Daemon(metaclass=JSONRPCServerType):
         await self.component_startup_task
 
     async def stop(self):
-        if self._connection_status_task:
-            if not self._connection_status_task.done():
-                self._connection_status_task.cancel()
-            self._connection_status_task = None
         if self.component_startup_task is not None:
             if self.component_startup_task.done():
                 await self.component_manager.stop()
@@ -936,10 +900,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 }
             }
         """
-
-        if not self._connection_status[1]:
-            self.need_connection_status_refresh.set()
-        connection_code = CONNECTION_STATUS_CONNECTED if self._connection_status[1] else CONNECTION_STATUS_NETWORK
         ffmpeg_status = await self._video_file_analyzer.status()
         running_components = self.component_manager.get_components_status()
         response = {
@@ -947,10 +907,6 @@ class Daemon(metaclass=JSONRPCServerType):
             'is_running': all(running_components.values()),
             'skipped_components': self.component_manager.skip_components,
             'startup_status': running_components,
-            'connection_status': {
-                'code': connection_code,
-                'message': CONNECTION_MESSAGES[connection_code],
-            },
             'ffmpeg_status': ffmpeg_status
         }
         for component in self.component_manager.components:

@@ -105,10 +105,6 @@ def check_connection(server="lbry.com", port=80, timeout=5) -> bool:
         return False
 
 
-async def async_check_connection(server="lbry.com", port=80, timeout=1) -> bool:
-    return await asyncio.get_event_loop().run_in_executor(None, check_connection, server, port, timeout)
-
-
 def random_string(length=10, chars=string.ascii_lowercase):
     return ''.join([random.choice(chars) for _ in range(length)])
 
