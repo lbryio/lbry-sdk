@@ -2372,7 +2372,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_languages=<not_languages>...]
                          [--any_locations=<any_locations>...] [--all_locations=<all_locations>...]
                          [--not_locations=<not_locations>...]
-                         [--order_by=<order_by>...] [--page=<page>] [--page_size=<page_size>]
+                         [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
                          [--new_sdk_server=<new_sdk_server>]
 
