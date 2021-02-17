@@ -36,4 +36,4 @@ class CLIIntegrationTest(AsyncioTestCase):
         with contextlib.redirect_stdout(actual_output):
             cli.main(["--api", "localhost:5299", "status"])
         actual_output = actual_output.getvalue()
-        self.assertIn("connection_status", actual_output)
+        self.assertIn("is_running", actual_output)
