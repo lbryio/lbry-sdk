@@ -26,7 +26,7 @@
 # and warranty status of this software.
 
 """Transaction-related classes and functions."""
-
+import typing
 from collections import namedtuple
 
 from lbry.wallet.server.hash import sha256, double_sha256, hash_to_hex_str
@@ -41,11 +41,20 @@ ZERO = bytes(32)
 MINUS_1 = 4294967295
 
 
-class Tx(namedtuple("Tx", "version inputs outputs locktime raw")):
-    """Class representing a transaction."""
+class Tx(typing.NamedTuple):
+    version: int
+    inputs: typing.List['TxInput']
+    outputs: typing.List['TxOutput']
+    locktime: int
+    raw: bytes
 
 
-class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
+class TxInput(typing.NamedTuple):
+    prev_hash: bytes
+    prev_idx: int
+    script: bytes
+    sequence: int
+
     """Class representing a transaction input."""
     def __str__(self):
         script = self.script.hex()
@@ -65,7 +74,9 @@ class TxInput(namedtuple("TxInput", "prev_hash prev_idx script sequence")):
         ))
 
 
-class TxOutput(namedtuple("TxOutput", "value pk_script")):
+class TxOutput(typing.NamedTuple):
+    value: int
+    pk_script: bytes
 
     def serialize(self):
         return b''.join((
