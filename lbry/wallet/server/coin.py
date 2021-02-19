@@ -14,7 +14,7 @@ from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-from lbry.wallet.server.db.writer import LBRYLevelDB
+# from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 
 
@@ -240,7 +240,7 @@ class LBC(Coin):
     BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DESERIALIZER = DeserializerSegWit
-    DB = LBRYLevelDB
+    DB = LevelDB
     NAME = "LBRY"
     SHORTNAME = "LBC"
     NET = "mainnet"
