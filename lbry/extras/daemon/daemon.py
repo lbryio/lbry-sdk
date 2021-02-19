@@ -3696,7 +3696,7 @@ class Daemon(metaclass=JSONRPCServerType):
     COLLECTION_DOC = """
     Create, update, list, resolve, and abandon collections.
     """
-
+    #| --claims = < claims >
     @requires(WALLET_COMPONENT)
     async def jsonrpc_collection_create(
             self, name, bid, claims, allow_duplicate_name=False,
@@ -3993,15 +3993,17 @@ class Daemon(metaclass=JSONRPCServerType):
         return await self.jsonrpc_stream_abandon(*args, **kwargs)
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_collection_list(self, resolve_claims=0, account_id=None, wallet_id=None, page=None, page_size=None):
+    def jsonrpc_collection_list(self, resolve_claims=0, resolve=False,
+                                account_id=None, wallet_id=None, page=None, page_size=None):
         """
         List my collection claims.
 
         Usage:
-            collection_list [--resolve_claims=<resolve_claims>] [<account_id> | --account_id=<account_id>]
+            collection_list [--resolve_claims=<resolve_claims>] [--resolve] [<account_id> | --account_id=<account_id>]
                 [--wallet_id=<wallet_id>] [--page=<page>] [--page_size=<page_size>]
 
         Options:
+            --resolve                         : (bool) resolve collection claim
             --resolve_claims=<resolve_claims> : (int) resolve every claim
             --account_id=<account_id>         : (str) id of the account to use
             --wallet_id=<wallet_id>           : (str) restrict results to specific wallet
@@ -4013,11 +4015,22 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if account_id:
             account = wallet.get_account_or_error(account_id)
-            collections = account.get_collections
+            collections = partial(
+                self.ledger.get_collections,
+                wallet=wallet,
+                accounts=[account],
+                resolve=resolve)
             collection_count = account.get_collection_count
         else:
-            collections = partial(self.ledger.get_collections, wallet=wallet, accounts=wallet.accounts)
-            collection_count = partial(self.ledger.get_collection_count, wallet=wallet, accounts=wallet.accounts)
+            collections = partial(
+                self.ledger.get_collections,
+                wallet=wallet,
+                accounts=wallet.accounts,
+                resolve=resolve)
+            collection_count = partial(
+                self.ledger.get_collection_count,
+                wallet=wallet,
+                accounts=wallet.accounts)
         return paginate_rows(collections, collection_count, page, page_size, resolve_claims=resolve_claims)
 
     async def jsonrpc_collection_resolve(

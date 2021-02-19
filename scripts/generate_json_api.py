@@ -365,6 +365,26 @@ class Examples(CommandTestCase):
 
         await self.daemon.jsonrpc_comment_abandon(reply['comment_id'])
 
+        # collections
+        collection = await r(
+            'Create a collection of one stream',
+            'collection', 'create',
+            '--name=tom', '--bid=1.0',
+            f'--channel_id={channel_id}',
+            f'--claims={stream_id}'
+        )
+
+        await self.on_transaction_dict(collection)
+        await self.generate(1)
+        await self.on_transaction_dict(collection)
+
+        await r(
+            'List collections',
+            'collection', 'list',
+            '--resolve', '--resolve_claims=1',
+        )
+
+
         # files
 
         file_list_result = (await r(

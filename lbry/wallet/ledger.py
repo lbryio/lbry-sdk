@@ -1022,8 +1022,10 @@ class Ledger(metaclass=LedgerRegistry):
                 claims.append(None)
         return claims
 
-    async def get_collections(self, resolve_claims=0, **constraints):
+    async def get_collections(self, resolve_claims=0, resolve=False, **constraints):
         collections = await self.db.get_collections(**constraints)
+        if resolve:
+            collections = await self._resolve_for_local_results(constraints.get('accounts', []), collections)
         if resolve_claims > 0:
             for collection in collections:
                 collection.claims = await self.resolve_collection(collection, page_size=resolve_claims)
