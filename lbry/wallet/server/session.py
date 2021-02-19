@@ -885,7 +885,8 @@ class LBRYElectrumX(SessionBase):
             'blockchain.transaction.get_height': cls.transaction_get_height,
             'blockchain.claimtrie.search': cls.claimtrie_search,
             'blockchain.claimtrie.resolve': cls.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
+            'blockchain.claimtrie.getclaimbyid': cls.claimtrie_getclaimbyid,
+            # 'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
             'blockchain.block.get_server_height': cls.get_server_height,
             'mempool.get_fee_histogram': cls.mempool_compact_histogram,
             'blockchain.block.headers': cls.block_headers,
@@ -1054,17 +1055,13 @@ class LBRYElectrumX(SessionBase):
             return -1
         return None
 
-    async def claimtrie_getclaimsbyids(self, *claim_ids):
-        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
-        return dict(zip(claim_ids, claims))
-
-    async def batched_formatted_claims_from_daemon(self, claim_ids):
-        claims = await self.daemon.getclaimsbyids(claim_ids)
-        result = []
-        for claim in claims:
-            if claim and claim.get('value'):
-                result.append(self.format_claim_from_daemon(claim))
-        return result
+    async def claimtrie_getclaimbyid(self, claim_id):
+        rows = []
+        extra = []
+        stream = await self.db.fs_getclaimbyid(claim_id)
+        rows.append(stream)
+        # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
+        return Outputs.to_base64(rows, extra, 0, None, None)
 
     def format_claim_from_daemon(self, claim, name=None):
         """Changes the returned claim data to the format expected by lbry and adds missing fields."""

@@ -889,9 +889,21 @@ class Ledger(metaclass=LedgerRegistry):
             include_is_my_output=include_is_my_output,
         )
 
-    async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
-        for claim in (await self.claim_search(accounts, claim_id=claim_id, **kwargs))[0]:
-            return claim
+    # async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
+    #     return await self.network.get_claim_by_id(claim_id)
+
+    async def get_claim_by_claim_id(self, claim_id, accounts=None, include_purchase_receipt=False,
+                                    include_is_my_output=False):
+        accounts = accounts or []
+        # return await self.network.get_claim_by_id(claim_id)
+        inflated = await self._inflate_outputs(
+            self.network.get_claim_by_id(claim_id), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output,
+        )
+        txos = inflated[0]
+        if txos:
+            return txos[0]
 
     async def _report_state(self):
         try:
