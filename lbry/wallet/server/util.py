@@ -340,7 +340,7 @@ pack_le_int64 = struct_le_q.pack
 pack_le_uint16 = struct_le_H.pack
 pack_le_uint32 = struct_le_I.pack
 pack_be_uint64 = lambda x: x.to_bytes(8, byteorder='big')
-pack_be_uint16 = struct_be_H.pack
+pack_be_uint16 = lambda x: x.to_bytes(2, byteorder='big')
 pack_be_uint32 = struct_be_I.pack
 pack_byte = structB.pack
 
