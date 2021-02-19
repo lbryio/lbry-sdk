@@ -1,23 +1,28 @@
 import base64
 import struct
-from typing import List
+from typing import List, TYPE_CHECKING, Union
 from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError
 from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
 from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
+if TYPE_CHECKING:
+    from lbry.wallet.server.leveldb import ResolveResult
 
 INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
 NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
 BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 
 
-def set_reference(reference, txo_row):
-    if txo_row:
-        reference.tx_hash = txo_row['txo_hash'][:32]
-        reference.nout = struct.unpack('<I', txo_row['txo_hash'][32:])[0]
-        reference.height = txo_row['height']
+def set_reference(reference, claim_hash, rows):
+    if claim_hash:
+        for txo in rows:
+            if claim_hash == txo.claim_hash:
+                reference.tx_hash = txo.tx_hash
+                reference.nout = txo.position
+                reference.height = txo.height
+                return
 
 
 class Censor:
@@ -161,46 +166,49 @@ class Outputs:
         page.offset = offset
         if total is not None:
             page.total = total
-        if blocked is not None:
-            blocked.to_message(page, extra_txo_rows)
+        # if blocked is not None:
+        #     blocked.to_message(page, extra_txo_rows)
+        for row in extra_txo_rows:
+            cls.encode_txo(page.extra_txos.add(), row)
+
         for row in txo_rows:
-            cls.row_to_message(row, page.txos.add(), extra_txo_rows)
-        for row in extra_txo_rows.values():
-            cls.row_to_message(row, page.extra_txos.add(), extra_txo_rows)
+            # cls.row_to_message(row, page.txos.add(), extra_txo_rows)
+            txo_message: 'OutputsMessage' = page.txos.add()
+            cls.encode_txo(txo_message, row)
+            if not isinstance(row, Exception):
+                if row.channel_hash:
+                    set_reference(txo_message.claim.channel, row.channel_hash, extra_txo_rows)
+                if row.reposted_claim_hash:
+                    set_reference(txo_message.claim.repost, row.reposted_claim_hash, extra_txo_rows)
+                # set_reference(txo_message.error.blocked.channel, row.censor_hash, extra_txo_rows)
         return page.SerializeToString()
 
     @classmethod
-    def row_to_message(cls, txo, txo_message, extra_row_dict: dict):
-        if isinstance(txo, Exception):
-            txo_message.error.text = txo.args[0]
-            if isinstance(txo, ValueError):
+    def encode_txo(cls, txo_message, resolve_result: Union['ResolveResult', Exception]):
+        if isinstance(resolve_result, Exception):
+            txo_message.error.text = resolve_result.args[0]
+            if isinstance(resolve_result, ValueError):
                 txo_message.error.code = ErrorMessage.INVALID
-            elif isinstance(txo, LookupError):
+            elif isinstance(resolve_result, LookupError):
                 txo_message.error.code = ErrorMessage.NOT_FOUND
-            elif isinstance(txo, ResolveCensoredError):
+            elif isinstance(resolve_result, ResolveCensoredError):
                 txo_message.error.code = ErrorMessage.BLOCKED
-                set_reference(txo_message.error.blocked.channel, extra_row_dict.get(txo.censor_hash))
             return
-        txo_message.tx_hash = txo['txo_hash'][:32]
-        txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
-        txo_message.height = txo['height']
-        txo_message.claim.short_url = txo['short_url']
-        txo_message.claim.reposted = txo['reposted']
-        if txo['canonical_url'] is not None:
-            txo_message.claim.canonical_url = txo['canonical_url']
-        txo_message.claim.is_controlling = bool(txo['is_controlling'])
-        if txo['last_take_over_height'] is not None:
-            txo_message.claim.take_over_height = txo['last_take_over_height']
-        txo_message.claim.creation_height = txo['creation_height']
-        txo_message.claim.activation_height = txo['activation_height']
-        txo_message.claim.expiration_height = txo['expiration_height']
-        if txo['claims_in_channel'] is not None:
-            txo_message.claim.claims_in_channel = txo['claims_in_channel']
-        txo_message.claim.effective_amount = txo['effective_amount']
-        txo_message.claim.support_amount = txo['support_amount']
-        txo_message.claim.trending_group = txo['trending_group']
-        txo_message.claim.trending_mixed = txo['trending_mixed']
-        txo_message.claim.trending_local = txo['trending_local']
-        txo_message.claim.trending_global = txo['trending_global']
-        set_reference(txo_message.claim.channel, extra_row_dict.get(txo['channel_hash']))
-        set_reference(txo_message.claim.repost, extra_row_dict.get(txo['reposted_claim_hash']))
+        txo_message.tx_hash = resolve_result.tx_hash
+        txo_message.nout = resolve_result.position
+        txo_message.height = resolve_result.height
+        txo_message.claim.short_url = resolve_result.short_url
+        txo_message.claim.reposted = 0
+        txo_message.claim.is_controlling = resolve_result.is_controlling
+        txo_message.claim.creation_height = resolve_result.creation_height
+        txo_message.claim.activation_height = resolve_result.activation_height
+        txo_message.claim.expiration_height = resolve_result.expiration_height
+        txo_message.claim.effective_amount = resolve_result.effective_amount
+        txo_message.claim.support_amount = resolve_result.support_amount
+
+        if resolve_result.canonical_url is not None:
+            txo_message.claim.canonical_url = resolve_result.canonical_url
+        if resolve_result.last_take_over_height is not None:
+            txo_message.claim.take_over_height = resolve_result.last_take_over_height
+        if resolve_result.claims_in_channel is not None:
+            txo_message.claim.claims_in_channel = resolve_result.claims_in_channel

@@ -5,6 +5,7 @@ from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional, List, Tuple
 from prometheus_client import Gauge, Histogram
+from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.server.tx import Tx
@@ -12,8 +13,11 @@ from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
+from lbry.crypto.hash import hash160
 from lbry.wallet.server.leveldb import FlushData
-from lbry.wallet.transaction import Transaction
+from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport
+
 from lbry.wallet.server.udp import StatusServer
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
@@ -185,6 +189,10 @@ class BlockProcessor:
         self.utxo_cache = {}
         self.db_deletes = []
 
+        # Claimtrie cache
+        self.claimtrie_stash = []
+        self.undo_claims = []
+
         # If the lock is successfully acquired, in-memory chain state
         # is consistent with self.height
         self.state_lock = asyncio.Lock()
@@ -192,6 +200,12 @@ class BlockProcessor:
         self.search_cache = {}
         self.history_cache = {}
         self.status_server = StatusServer()
+        self.effective_amount_changes = defaultdict(list)
+        self.pending_claims = {}
+        self.pending_claim_txos = {}
+        self.pending_supports = defaultdict(set)
+        self.pending_support_txos = {}
+        self.pending_abandon = set()
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -218,9 +232,12 @@ class BlockProcessor:
         chain = [self.tip] + [self.coin.header_hash(h) for h in headers[:-1]]
 
         if hprevs == chain:
-
             start = time.perf_counter()
-            await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+            try:
+                await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+            except:
+                self.logger.exception("advance blocks failed")
+                raise
             if self.sql:
                 await self.db.search_index.claim_consumer(self.sql.claim_producer())
             for cache in self.search_cache.values():
@@ -354,8 +371,8 @@ class BlockProcessor:
         """The data for a flush.  The lock must be taken."""
         assert self.state_lock.locked()
         return FlushData(self.height, self.tx_count, self.headers, self.block_hashes,
-                         self.block_txs, self.undo_infos, self.utxo_cache,
-                         self.db_deletes, self.tip)
+                         self.block_txs, self.claimtrie_stash, self.undo_infos, self.utxo_cache,
+                         self.db_deletes, self.tip, self.undo_claims)
 
     async def flush(self, flush_utxos):
         def flush():
@@ -404,16 +421,24 @@ class BlockProcessor:
         """
         min_height = self.db.min_undo_height(self.daemon.cached_height())
         height = self.height
+        # print("---------------------------------\nFLUSH\n---------------------------------")
 
         for block in blocks:
             height += 1
-            undo_info = self.advance_txs(
-                height, block.transactions, self.coin.electrum_header(block.header, height),
-                self.coin.header_hash(block.header)
-            )
+            # print(f"***********************************\nADVANCE {height}\n***********************************")
+            undo_info, undo_claims = self.advance_block(block, height)
             if height >= min_height:
                 self.undo_infos.append((undo_info, height))
+                self.undo_claims.append((undo_claims, height))
                 self.db.write_raw_block(block.raw, height)
+
+        for touched_claim_hash, amount_changes in self.effective_amount_changes.items():
+            new_effective_amount = sum(amount_changes)
+            assert new_effective_amount >= 0, f'{new_effective_amount}, {touched_claim_hash.hex()}'
+            self.claimtrie_stash.extend(
+                self.db.get_update_effective_amount_ops(touched_claim_hash, new_effective_amount)
+            )
+            # print("update effective amount to", touched_claim_hash.hex(), new_effective_amount)
 
         headers = [block.header for block in blocks]
         self.height = height
@@ -421,40 +446,290 @@ class BlockProcessor:
         self.tip = self.coin.header_hash(headers[-1])
 
         self.db.flush_dbs(self.flush_data(), self.estimate_txs_remaining)
+        # print("+++++++++++++++++++++++++++++++++++++++++++++\nFLUSHED\n+++++++++++++++++++++++++++++++++++++++++++++")
+
+        self.effective_amount_changes.clear()
+        self.pending_claims.clear()
+        self.pending_claim_txos.clear()
+        self.pending_supports.clear()
+        self.pending_support_txos.clear()
+        self.pending_abandon.clear()
 
         for cache in self.search_cache.values():
             cache.clear()
         self.history_cache.clear()
         self.notifications.notified_mempool_txs.clear()
 
-    def advance_txs(self, height, txs: List[Tuple[Tx, bytes]], header, block_hash):
+    def _add_claim_or_update(self, txo, script, tx_hash, idx, tx_count, txout, spent_claims):
+        try:
+            claim_name = txo.normalized_name
+        except UnicodeDecodeError:
+            claim_name = ''.join(chr(c) for c in txo.script.values['claim_name'])
+        if script.is_claim_name:
+            claim_hash = hash160(tx_hash + pack('>I', idx))[::-1]
+            # print(f"\tnew lbry://{claim_name}#{claim_hash.hex()} ({tx_count} {txout.value})")
+        else:
+            claim_hash = txo.claim_hash[::-1]
+
+        signing_channel_hash = None
+        channel_claims_count = 0
+        activation_height = 0
+        try:
+            signable = txo.signable
+        except:  # google.protobuf.message.DecodeError: Could not parse JSON.
+            signable = None
+
+        if signable and signable.signing_channel_hash:
+            signing_channel_hash = txo.signable.signing_channel_hash[::-1]
+            # if signing_channel_hash in self.pending_claim_txos:
+            #     pending_channel = self.pending_claims[self.pending_claim_txos[signing_channel_hash]]
+            #     channel_claims_count = pending_channel.
+
+            channel_claims_count = self.db.get_claims_in_channel_count(signing_channel_hash) + 1
+        if script.is_claim_name:
+            support_amount = 0
+            root_tx_num, root_idx = tx_count, idx
+        else:
+            if claim_hash not in spent_claims:
+                print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
+                return []
+            support_amount = self.db.get_support_amount(claim_hash)
+            (prev_tx_num, prev_idx, _) = spent_claims.pop(claim_hash)
+            # print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} {tx_hash[::-1].hex()} {txout.value}")
+
+            if (prev_tx_num, prev_idx) in self.pending_claims:
+                previous_claim = self.pending_claims.pop((prev_tx_num, prev_idx))
+                root_tx_num = previous_claim.root_claim_tx_num
+                root_idx = previous_claim.root_claim_tx_position
+                # prev_amount = previous_claim.amount
+            else:
+                root_tx_num, root_idx, prev_amount, _, _, _ = self.db.get_root_claim_txo_and_current_amount(
+                    claim_hash
+                )
+
+        pending = StagedClaimtrieItem(
+            claim_name, claim_hash, txout.value, support_amount + txout.value,
+            activation_height, tx_count, idx, root_tx_num, root_idx,
+            signing_channel_hash, channel_claims_count
+        )
+
+        self.pending_claims[(tx_count, idx)] = pending
+        self.pending_claim_txos[claim_hash] = (tx_count, idx)
+        self.effective_amount_changes[claim_hash].append(txout.value)
+        return pending.get_add_claim_utxo_ops()
+
+    def _add_support(self, txo, txout, idx, tx_count):
+        supported_claim_hash = txo.claim_hash[::-1]
+
+        if supported_claim_hash in self.effective_amount_changes:
+            # print(f"\tsupport claim {supported_claim_hash.hex()} {starting_amount}+{txout.value}={starting_amount + txout.value}")
+            self.effective_amount_changes[supported_claim_hash].append(txout.value)
+            self.pending_supports[supported_claim_hash].add((tx_count, idx))
+            self.pending_support_txos[(tx_count, idx)] = supported_claim_hash, txout.value
+            return StagedClaimtrieSupport(
+                supported_claim_hash, tx_count, idx, txout.value
+            ).get_add_support_utxo_ops()
+
+        elif supported_claim_hash not in self.pending_claims and supported_claim_hash not in self.pending_abandon:
+            if self.db.claim_exists(supported_claim_hash):
+                _, _, _, name, supported_tx_num, supported_pos = self.db.get_root_claim_txo_and_current_amount(
+                    supported_claim_hash
+                )
+                starting_amount = self.db.get_effective_amount(supported_claim_hash)
+                if supported_claim_hash not in self.effective_amount_changes:
+                    self.effective_amount_changes[supported_claim_hash].append(starting_amount)
+                self.effective_amount_changes[supported_claim_hash].append(txout.value)
+                self.pending_supports[supported_claim_hash].add((tx_count, idx))
+                self.pending_support_txos[(tx_count, idx)] = supported_claim_hash, txout.value
+                # print(f"\tsupport claim {supported_claim_hash.hex()} {starting_amount}+{txout.value}={starting_amount + txout.value}")
+                return StagedClaimtrieSupport(
+                    supported_claim_hash, tx_count, idx, txout.value
+                ).get_add_support_utxo_ops()
+            else:
+                print(f"\tthis is a wonky tx, contains unlinked support for non existent {supported_claim_hash.hex()}")
+        return []
+
+    def _add_claim_or_support(self, tx_hash, tx_count, idx, txo, txout, script, spent_claims):
+        if script.is_claim_name or script.is_update_claim:
+            return self._add_claim_or_update(txo, script, tx_hash, idx, tx_count, txout, spent_claims)
+        elif script.is_support_claim or script.is_support_claim_data:
+            return self._add_support(txo, txout, idx, tx_count)
+        return []
+
+    def _spend_support(self, txin):
+        txin_num = self.db.transaction_num_mapping[txin.prev_hash]
+
+        if (txin_num, txin.prev_idx) in self.pending_support_txos:
+            spent_support, support_amount = self.pending_support_txos.pop((txin_num, txin.prev_idx))
+            self.pending_supports[spent_support].remove((txin_num, txin.prev_idx))
+        else:
+            spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
+        if spent_support and support_amount is not None and spent_support not in self.pending_abandon:
+            # print(f"\tspent support for {spent_support.hex()} -{support_amount} ({txin_num}, {txin.prev_idx})")
+            if spent_support not in self.effective_amount_changes:
+                assert spent_support not in self.pending_claims
+                prev_effective_amount = self.db.get_effective_amount(spent_support)
+                self.effective_amount_changes[spent_support].append(prev_effective_amount)
+            self.effective_amount_changes[spent_support].append(-support_amount)
+            return StagedClaimtrieSupport(
+                spent_support, txin_num, txin.prev_idx, support_amount
+            ).get_spend_support_txo_ops()
+        return []
+
+    def _spend_claim(self, txin, spent_claims):
+        txin_num = self.db.transaction_num_mapping[txin.prev_hash]
+        if (txin_num, txin.prev_idx) in self.pending_claims:
+            spent = self.pending_claims[(txin_num, txin.prev_idx)]
+            name = spent.name
+            spent_claims[spent.claim_hash] = (txin_num, txin.prev_idx, name)
+            # print(f"spend lbry://{name}#{spent.claim_hash.hex()}")
+        else:
+            spent_claim_hash_and_name = self.db.claim_hash_and_name_from_txo(
+                txin_num, txin.prev_idx
+            )
+            if not spent_claim_hash_and_name:  # txo is not a claim
+                return []
+            prev_claim_hash, txi_len_encoded_name = spent_claim_hash_and_name
+
+            prev_signing_hash = self.db.get_channel_for_claim(prev_claim_hash)
+            prev_claims_in_channel_count = None
+            if prev_signing_hash:
+                prev_claims_in_channel_count = self.db.get_claims_in_channel_count(
+                    prev_signing_hash
+                )
+            prev_effective_amount = self.db.get_effective_amount(
+                prev_claim_hash
+            )
+            claim_root_tx_num, claim_root_idx, prev_amount, name, tx_num, position = self.db.get_root_claim_txo_and_current_amount(prev_claim_hash)
+            activation_height = 0
+            spent = StagedClaimtrieItem(
+                name, prev_claim_hash, prev_amount, prev_effective_amount,
+                activation_height, txin_num, txin.prev_idx, claim_root_tx_num,
+                claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
+            )
+            spent_claims[prev_claim_hash] = (txin_num, txin.prev_idx, name)
+            # print(f"spend lbry://{spent_claims[prev_claim_hash][2]}#{prev_claim_hash.hex()}")
+        if spent.claim_hash not in self.effective_amount_changes:
+            self.effective_amount_changes[spent.claim_hash].append(spent.effective_amount)
+        self.effective_amount_changes[spent.claim_hash].append(-spent.amount)
+        return spent.get_spend_claim_txo_ops()
+
+    def _spend_claim_or_support(self, txin, spent_claims):
+        spend_claim_ops = self._spend_claim(txin, spent_claims)
+        if spend_claim_ops:
+            return spend_claim_ops
+        return self._spend_support(txin)
+
+    def _abandon(self, spent_claims):
+        # Handle abandoned claims
+        ops = []
+
+        for abandoned_claim_hash, (prev_tx_num, prev_idx, name) in spent_claims.items():
+            # print(f"\tabandon lbry://{name}#{abandoned_claim_hash.hex()} {prev_tx_num} {prev_idx}")
+
+            if (prev_tx_num, prev_idx) in self.pending_claims:
+                pending = self.pending_claims.pop((prev_tx_num, prev_idx))
+                claim_root_tx_num = pending.root_claim_tx_num
+                claim_root_idx = pending.root_claim_tx_position
+                prev_amount = pending.amount
+                prev_signing_hash = pending.signing_hash
+                prev_effective_amount = pending.effective_amount
+                prev_claims_in_channel_count = pending.claims_in_channel_count
+            else:
+                claim_root_tx_num, claim_root_idx, prev_amount, _, _, _ = self.db.get_root_claim_txo_and_current_amount(
+                    abandoned_claim_hash
+                )
+                prev_signing_hash = self.db.get_channel_for_claim(abandoned_claim_hash)
+                prev_claims_in_channel_count = None
+                if prev_signing_hash:
+                    prev_claims_in_channel_count = self.db.get_claims_in_channel_count(
+                        prev_signing_hash
+                    )
+                prev_effective_amount = self.db.get_effective_amount(
+                    abandoned_claim_hash
+                )
+
+            for (support_tx_num, support_tx_idx) in self.pending_supports[abandoned_claim_hash]:
+                _, support_amount = self.pending_support_txos.pop((support_tx_num, support_tx_idx))
+                ops.extend(
+                    StagedClaimtrieSupport(
+                        abandoned_claim_hash, support_tx_num, support_tx_idx, support_amount
+                    ).get_spend_support_txo_ops()
+                )
+                # print(f"\tremove pending support for abandoned lbry://{name}#{abandoned_claim_hash.hex()} {support_tx_num} {support_tx_idx}")
+            self.pending_supports[abandoned_claim_hash].clear()
+            self.pending_supports.pop(abandoned_claim_hash)
+
+            for (support_tx_num, support_tx_idx, support_amount) in self.db.get_supports(abandoned_claim_hash):
+                ops.extend(
+                    StagedClaimtrieSupport(
+                        abandoned_claim_hash, support_tx_num, support_tx_idx, support_amount
+                    ).get_spend_support_txo_ops()
+                )
+                # print(f"\tremove support for abandoned lbry://{name}#{abandoned_claim_hash.hex()} {support_tx_num} {support_tx_idx}")
+
+            activation_height = 0
+            if abandoned_claim_hash in self.effective_amount_changes:
+                # print("pop")
+                self.effective_amount_changes.pop(abandoned_claim_hash)
+            self.pending_abandon.add(abandoned_claim_hash)
+
+            # print(f"\tabandoned lbry://{name}#{abandoned_claim_hash.hex()}")
+            ops.extend(
+                StagedClaimtrieItem(
+                name, abandoned_claim_hash, prev_amount, prev_effective_amount,
+                activation_height, prev_tx_num, prev_idx, claim_root_tx_num,
+                claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
+            ).get_abandon_ops(self.db.db))
+        return ops
+
+    def advance_block(self, block, height: int):
+        from lbry.wallet.transaction import OutputScript, Output
+
+        txs: List[Tuple[Tx, bytes]] = block.transactions
+        # header = self.coin.electrum_header(block.header, height)
+        block_hash = self.coin.header_hash(block.header)
+
         self.block_hashes.append(block_hash)
         self.block_txs.append((b''.join(tx_hash for tx, tx_hash in txs), [tx.raw for tx, _ in txs]))
 
+        first_tx_num = self.tx_count
         undo_info = []
         hashXs_by_tx = []
-        tx_num = self.tx_count
+        tx_count = self.tx_count
 
         # Use local vars for speed in the loops
         put_utxo = self.utxo_cache.__setitem__
+        claimtrie_stash = []
+        claimtrie_stash_extend = claimtrie_stash.extend
         spend_utxo = self.spend_utxo
         undo_info_append = undo_info.append
         update_touched = self.touched.update
         append_hashX_by_tx = hashXs_by_tx.append
         hashX_from_script = self.coin.hashX_from_script
 
+        unchanged_effective_amounts = {k: sum(v) for k, v in self.effective_amount_changes.items()}
+
         for tx, tx_hash in txs:
-            hashXs = []
+            # print(f"{tx_hash[::-1].hex()} @ {height}")
+            spent_claims = {}
+
+            hashXs = []  # hashXs touched by spent inputs/rx outputs
             append_hashX = hashXs.append
-            tx_numb = pack('<I', tx_num)
+            tx_numb = pack('<I', tx_count)
 
             # Spend the inputs
             for txin in tx.inputs:
                 if txin.is_generation():
                     continue
+                # spend utxo for address histories
                 cache_value = spend_utxo(txin.prev_hash, txin.prev_idx)
                 undo_info_append(cache_value)
                 append_hashX(cache_value[:-12])
+
+                spend_claim_or_support_ops = self._spend_claim_or_support(txin, spent_claims)
+                if spend_claim_or_support_ops:
+                    claimtrie_stash_extend(spend_claim_or_support_ops)
 
             # Add the new UTXOs
             for idx, txout in enumerate(tx.outputs):
@@ -464,13 +739,29 @@ class BlockProcessor:
                     append_hashX(hashX)
                     put_utxo(tx_hash + pack('<H', idx), hashX + tx_numb + pack('<Q', txout.value))
 
+                # add claim/support txo
+                script = OutputScript(txout.pk_script)
+                script.parse()
+                txo = Output(txout.value, script)
+
+                claim_or_support_ops = self._add_claim_or_support(
+                    tx_hash, tx_count, idx, txo, txout, script, spent_claims
+                )
+                if claim_or_support_ops:
+                    claimtrie_stash_extend(claim_or_support_ops)
+
+            # Handle abandoned claims
+            abandon_ops = self._abandon(spent_claims)
+            if abandon_ops:
+                claimtrie_stash_extend(abandon_ops)
+
             append_hashX_by_tx(hashXs)
             update_touched(hashXs)
             self.db.total_transactions.append(tx_hash)
-            tx_num += 1
+            self.db.transaction_num_mapping[tx_hash] = tx_count
+            tx_count += 1
 
         # self.db.add_unflushed(hashXs_by_tx, self.tx_count)
-        first_tx_num = self.tx_count
         _unflushed = self.db.hist_unflushed
         _count = 0
         for _tx_num, _hashXs in enumerate(hashXs_by_tx, start=first_tx_num):
@@ -478,10 +769,24 @@ class BlockProcessor:
                 _unflushed[_hashX].append(_tx_num)
             _count += len(_hashXs)
         self.db.hist_unflushed_count += _count
-        self.tx_count = tx_num
-        self.db.tx_counts.append(tx_num)
 
-        return undo_info
+        self.tx_count = tx_count
+        self.db.tx_counts.append(self.tx_count)
+
+        # for touched_claim_hash, amount_changes in self.effective_amount_changes.items():
+        #     new_effective_amount = sum(amount_changes)
+        #     assert new_effective_amount >= 0, f'{new_effective_amount}, {touched_claim_hash.hex()}'
+        #     if touched_claim_hash not in unchanged_effective_amounts or unchanged_effective_amounts[touched_claim_hash] != new_effective_amount:
+        #         claimtrie_stash_extend(
+        #             self.db.get_update_effective_amount_ops(touched_claim_hash, new_effective_amount)
+        #         )
+        #     # print("update effective amount to", touched_claim_hash.hex(), new_effective_amount)
+
+        undo_claims = b''.join(op.invert().pack() for op in claimtrie_stash)
+        self.claimtrie_stash.extend(claimtrie_stash)
+        # print("%i undo bytes for %i (%i claimtrie stash ops)" % (len(undo_claims), height, len(claimtrie_stash)))
+
+        return undo_info, undo_claims
 
     def backup_blocks(self, raw_blocks):
         """Backup the raw blocks and flush.
@@ -495,6 +800,7 @@ class BlockProcessor:
         coin = self.coin
         for raw_block in raw_blocks:
             self.logger.info("backup block %i", self.height)
+            print("backup", self.height)
             # Check and update self.tip
             block = coin.block(raw_block, self.height)
             header_hash = coin.header_hash(block.header)
@@ -511,13 +817,14 @@ class BlockProcessor:
         # self.touched can include other addresses which is
         # harmless, but remove None.
         self.touched.discard(None)
+
         self.db.flush_backup(self.flush_data(), self.touched)
         self.logger.info(f'backed up to height {self.height:,d}')
 
     def backup_txs(self, txs):
         # Prevout values, in order down the block (coinbase first if present)
         # undo_info is in reverse block order
-        undo_info = self.db.read_undo_info(self.height)
+        undo_info, undo_claims = self.db.read_undo_info(self.height)
         if undo_info is None:
             raise ChainError(f'no undo information found for height {self.height:,d}')
         n = len(undo_info)
@@ -548,6 +855,7 @@ class BlockProcessor:
 
         assert n == 0
         self.tx_count -= len(txs)
+        self.undo_claims.append((undo_claims, self.height))
 
     """An in-memory UTXO cache, representing all changes to UTXO state
     since the last DB flush.
@@ -610,6 +918,7 @@ class BlockProcessor:
         all UTXOs so not finding one indicates a logic error or DB
         corruption.
         """
+
         # Fast track is it being in the cache
         idx_packed = pack('<H', tx_idx)
         cache_value = self.utxo_cache.pop(tx_hash + idx_packed, None)
@@ -617,12 +926,10 @@ class BlockProcessor:
             return cache_value
 
         # Spend it from the DB.
-
         # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
         # Value: hashX
-        prefix = b'h' + tx_hash[:4] + idx_packed
-        candidates = {db_key: hashX for db_key, hashX
-                      in self.db.db.iterator(prefix=prefix)}
+        prefix = DB_PREFIXES.HASHX_UTXO_PREFIX.value + tx_hash[:4] + idx_packed
+        candidates = {db_key: hashX for db_key, hashX in self.db.db.iterator(prefix=prefix)}
 
         for hdb_key, hashX in candidates.items():
             tx_num_packed = hdb_key[-4:]
@@ -640,7 +947,7 @@ class BlockProcessor:
 
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
-            udb_key = b'u' + hashX + hdb_key[-6:]
+            udb_key = DB_PREFIXES.UTXO_PREFIX.value + hashX + hdb_key[-6:]
             utxo_value_packed = self.db.db.get(udb_key)
             if utxo_value_packed is None:
                 self.logger.warning(
@@ -802,8 +1109,8 @@ class LBRYBlockProcessor(BlockProcessor):
             self.prefetcher.polling_delay = 0.5
         self.should_validate_signatures = self.env.boolean('VALIDATE_CLAIM_SIGNATURES', False)
         self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
-        # self.sql: SQLDB = self.db.sql
-        # self.timer = Timer('BlockProcessor')
+        self.sql: SQLDB = self.db.sql
+        self.timer = Timer('BlockProcessor')
 
     def advance_blocks(self, blocks):
         if self.sql:

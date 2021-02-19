@@ -36,6 +36,7 @@ _sha512 = hashlib.sha512
 _new_hash = hashlib.new
 _new_hmac = hmac.new
 HASHX_LEN = 11
+CLAIM_HASH_LEN = 20
 
 
 def sha256(x):
