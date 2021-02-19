@@ -802,8 +802,8 @@ class LBRYBlockProcessor(BlockProcessor):
             self.prefetcher.polling_delay = 0.5
         self.should_validate_signatures = self.env.boolean('VALIDATE_CLAIM_SIGNATURES', False)
         self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
-        self.sql: SQLDB = self.db.sql
-        self.timer = Timer('BlockProcessor')
+        # self.sql: SQLDB = self.db.sql
+        # self.timer = Timer('BlockProcessor')
 
     def advance_blocks(self, blocks):
         if self.sql:
