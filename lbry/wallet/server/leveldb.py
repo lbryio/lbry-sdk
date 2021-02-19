@@ -15,9 +15,9 @@ import ast
 import base64
 import os
 import time
-import zlib
 import typing
-from typing import Optional, List, Tuple, Iterable
+import struct
+from typing import Optional, Iterable
 from functools import partial
 from asyncio import sleep
 from bisect import bisect_right, bisect_left
@@ -27,14 +27,24 @@ from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 import attr
 from lbry.utils import LRUCacheWithMetrics
+from lbry.schema.url import URL
 from lbry.wallet.server import util
-from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
+from lbry.wallet.server.hash import hash_to_hex_str, CLAIM_HASH_LEN
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.storage import db_class
-
+from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
+from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.prefixes import Prefixes
+from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, get_update_effective_amount_ops, length_encoded_name
 
 UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
+
+TXO_STRUCT = struct.Struct(b'>LH')
+TXO_STRUCT_unpack = TXO_STRUCT.unpack
+TXO_STRUCT_pack = TXO_STRUCT.pack
+
+
 HISTORY_PREFIX = b'A'
 TX_PREFIX = b'B'
 BLOCK_HASH_PREFIX = b'C'
@@ -58,11 +68,34 @@ class FlushData:
     headers = attr.ib()
     block_hashes = attr.ib()
     block_txs = attr.ib()
+    claimtrie_stash = attr.ib()
     # The following are flushed to the UTXO DB if undo_infos is not None
     undo_infos = attr.ib()
     adds = attr.ib()
     deletes = attr.ib()
     tip = attr.ib()
+    undo_claimtrie = attr.ib()
+
+
+class ResolveResult(typing.NamedTuple):
+    name: str
+    claim_hash: bytes
+    tx_num: int
+    position: int
+    tx_hash: bytes
+    height: int
+    short_url: str
+    is_controlling: bool
+    canonical_url: str
+    creation_height: int
+    activation_height: int
+    expiration_height: int
+    effective_amount: int
+    support_amount: int
+    last_take_over_height: Optional[int]
+    claims_in_channel: Optional[int]
+    channel_hash: Optional[bytes]
+    reposted_claim_hash: Optional[bytes]
 
 
 class LevelDB:
@@ -73,7 +106,7 @@ class LevelDB:
     """
 
     DB_VERSIONS = [6]
-    HIST_DB_VERSIONS = [0]
+    HIST_DB_VERSIONS = [0, 6]
 
     class DBError(Exception):
         """Raised on general DB errors generally indicating corruption."""
@@ -112,6 +145,225 @@ class LevelDB:
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
         self.transaction_num_mapping = {}
+
+    def claim_hash_and_name_from_txo(self, tx_num: int, tx_idx: int):
+        claim_hash_and_name = self.db.get(
+            DB_PREFIXES.txo_to_claim.value + TXO_STRUCT_pack(tx_num, tx_idx)
+        )
+        if not claim_hash_and_name:
+            return
+        return claim_hash_and_name[:CLAIM_HASH_LEN], claim_hash_and_name[CLAIM_HASH_LEN:]
+
+    def get_supported_claim_from_txo(self, tx_num, tx_idx: int):
+        supported_claim_hash = self.db.get(
+            DB_PREFIXES.support_to_claim.value + TXO_STRUCT_pack(tx_num, tx_idx)
+        )
+        if supported_claim_hash:
+            packed_support_amount = self.db.get(
+                Prefixes.claim_to_support.pack_key(supported_claim_hash, tx_num, tx_idx)
+            )
+            if packed_support_amount is not None:
+                return supported_claim_hash, Prefixes.claim_to_support.unpack_value(packed_support_amount).amount
+        return None, None
+
+    def get_support_amount(self, claim_hash: bytes):
+        total = 0
+        for packed in self.db.iterator(prefix=DB_PREFIXES.claim_to_support.value + claim_hash, include_key=False):
+            total += Prefixes.claim_to_support.unpack_value(packed).amount
+        return total
+
+    def get_supports(self, claim_hash: bytes):
+        supports = []
+        for k, v in self.db.iterator(prefix=DB_PREFIXES.claim_to_support.value + claim_hash):
+            unpacked_k = Prefixes.claim_to_support.unpack_key(k)
+            unpacked_v = Prefixes.claim_to_support.unpack_value(v)
+            supports.append((unpacked_k.tx_num, unpacked_k.position, unpacked_v.amount))
+
+        return supports
+
+    def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
+                                root_position: int) -> ResolveResult:
+        tx_hash = self.total_transactions[tx_num]
+        height = bisect_right(self.tx_counts, tx_num)
+        created_height = bisect_right(self.tx_counts, root_tx_num)
+        last_take_over_height = 0
+        activation_height = created_height
+        expiration_height = 0
+
+        support_amount = self.get_support_amount(claim_hash)
+        effective_amount = self.get_effective_amount(claim_hash)
+        channel_hash = self.get_channel_for_claim(claim_hash)
+
+        claims_in_channel = None
+        short_url = f'{name}#{claim_hash.hex()}'
+        canonical_url = short_url
+        if channel_hash:
+            channel_vals = self.get_root_claim_txo_and_current_amount(channel_hash)
+            if channel_vals:
+                _, _, _, channel_name, _, _ = channel_vals
+                claims_in_channel = self.get_claims_in_channel_count(channel_hash)
+                canonical_url = f'{channel_name}#{channel_hash.hex()}/{name}#{claim_hash.hex()}'
+        return ResolveResult(
+            name, claim_hash, tx_num, position, tx_hash, height, short_url=short_url,
+            is_controlling=False, canonical_url=canonical_url, last_take_over_height=last_take_over_height,
+            claims_in_channel=claims_in_channel, creation_height=created_height, activation_height=activation_height,
+            expiration_height=expiration_height, effective_amount=effective_amount, support_amount=support_amount,
+            channel_hash=channel_hash, reposted_claim_hash=None
+        )
+
+    def _resolve(self, normalized_name: str, claim_id: Optional[str] = None,
+                 amount_order: int = 1) -> Optional[ResolveResult]:
+        """
+        :param normalized_name: name
+        :param claim_id: partial or complete claim id
+        :param amount_order: '$<value>' suffix to a url, defaults to 1 (winning) if no claim id modifier is provided
+        """
+
+        encoded_name = length_encoded_name(normalized_name)
+        amount_order = max(int(amount_order or 1), 1)
+        if claim_id:
+            # resolve by partial/complete claim id
+            short_claim_hash = bytes.fromhex(claim_id)
+            prefix = DB_PREFIXES.claim_short_id_prefix.value + encoded_name + short_claim_hash
+            for k, v in self.db.iterator(prefix=prefix):
+                key = Prefixes.claim_short_id.unpack_key(k)
+                claim_txo = Prefixes.claim_short_id.unpack_value(v)
+                return self._prepare_resolve_result(claim_txo.tx_num, claim_txo.position, key.claim_hash, key.name,
+                                                    key.root_tx_num, key.root_position)
+            return
+
+        # resolve by amount ordering, 1 indexed
+        for idx, (k, v) in enumerate(self.db.iterator(prefix=DB_PREFIXES.claim_effective_amount_prefix.value + encoded_name)):
+            if amount_order > idx + 1:
+                continue
+            key = Prefixes.claim_effective_amount.unpack_key(k)
+            claim_val = Prefixes.claim_effective_amount.unpack_value(v)
+            return self._prepare_resolve_result(
+                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_val.root_tx_num,
+                claim_val.root_position
+            )
+        return
+
+    def _resolve_claim_in_channel(self, channel_hash: bytes, normalized_name: str):
+        prefix = DB_PREFIXES.channel_to_claim.value + channel_hash + length_encoded_name(normalized_name)
+        candidates = []
+        for k, v in self.db.iterator(prefix=prefix):
+            key = Prefixes.channel_to_claim.unpack_key(k)
+            stream = Prefixes.channel_to_claim.unpack_value(v)
+            if not candidates or candidates[-1][-1] == key.effective_amount:
+                candidates.append((stream.claim_hash, key.tx_num, key.position, key.effective_amount))
+            else:
+                break
+        if not candidates:
+            return
+        return list(sorted(candidates, key=lambda item: item[1]))[0]
+
+    def _fs_resolve(self, url):
+        try:
+            parsed = URL.parse(url)
+        except ValueError as e:
+            return e, None
+
+        stream = channel = resolved_channel = resolved_stream = None
+        if parsed.has_stream_in_channel:
+            channel = parsed.channel
+            stream = parsed.stream
+        elif parsed.has_channel:
+            channel = parsed.channel
+        elif parsed.has_stream:
+            stream = parsed.stream
+        if channel:
+            resolved_channel = self._resolve(channel.normalized, channel.claim_id, channel.amount_order)
+            if not resolved_channel:
+                return None, LookupError(f'Could not find channel in "{url}".')
+        if stream:
+            if resolved_channel:
+                stream_claim = self._resolve_claim_in_channel(resolved_channel.claim_hash, stream.normalized)
+                if stream_claim:
+                    stream_claim_id, stream_tx_num, stream_tx_pos, effective_amount = stream_claim
+                    resolved_stream = self._fs_get_claim_by_hash(stream_claim_id)
+            else:
+                resolved_stream = self._resolve(stream.normalized, stream.claim_id, stream.amount_order)
+                if not channel and not resolved_channel and resolved_stream and resolved_stream.channel_hash:
+                    resolved_channel = self._fs_get_claim_by_hash(resolved_stream.channel_hash)
+            if not resolved_stream:
+                return LookupError(f'Could not find claim at "{url}".'), None
+
+        return resolved_stream, resolved_channel
+
+    async def fs_resolve(self, url):
+         return await asyncio.get_event_loop().run_in_executor(self.executor, self._fs_resolve, url)
+
+    def _fs_get_claim_by_hash(self, claim_hash):
+        for k, v in self.db.iterator(prefix=DB_PREFIXES.claim_to_txo.value + claim_hash):
+            unpacked_k = Prefixes.claim_to_txo.unpack_key(k)
+            unpacked_v = Prefixes.claim_to_txo.unpack_value(v)
+            return self._prepare_resolve_result(
+                unpacked_k.tx_num, unpacked_k.position, unpacked_k.claim_hash, unpacked_v.name,
+                unpacked_v.root_tx_num, unpacked_v.root_position
+            )
+
+    async def fs_getclaimbyid(self, claim_id):
+        return await asyncio.get_event_loop().run_in_executor(
+            self.executor, self._fs_get_claim_by_hash, bytes.fromhex(claim_id)
+        )
+
+    def claim_exists(self, claim_hash: bytes):
+        for _ in self.db.iterator(prefix=DB_PREFIXES.claim_to_txo.value + claim_hash, include_value=False):
+            return True
+        return False
+
+    def get_root_claim_txo_and_current_amount(self, claim_hash):
+        for k, v in self.db.iterator(prefix=DB_PREFIXES.claim_to_txo.value + claim_hash):
+            unpacked_k = Prefixes.claim_to_txo.unpack_key(k)
+            unpacked_v = Prefixes.claim_to_txo.unpack_value(v)
+            return unpacked_v.root_tx_num, unpacked_v.root_position, unpacked_v.amount, unpacked_v.name,\
+                   unpacked_k.tx_num, unpacked_k.position
+
+    def make_staged_claim_item(self, claim_hash: bytes) -> StagedClaimtrieItem:
+        root_tx_num, root_idx, value, name, tx_num, idx = self.db.get_root_claim_txo_and_current_amount(
+            claim_hash
+        )
+        activation_height = 0
+        effective_amount = self.db.get_support_amount(claim_hash) + value
+        signing_hash = self.get_channel_for_claim(claim_hash)
+        if signing_hash:
+            count = self.get_claims_in_channel_count(signing_hash)
+        else:
+            count = 0
+        return StagedClaimtrieItem(
+            name, claim_hash, value, effective_amount, activation_height, tx_num, idx, root_tx_num, root_idx,
+            signing_hash, count
+        )
+
+    def get_effective_amount(self, claim_hash):
+        for v in self.db.iterator(prefix=DB_PREFIXES.claim_to_txo.value + claim_hash, include_key=False):
+            return Prefixes.claim_to_txo.unpack_value(v).amount + self.get_support_amount(claim_hash)
+        fnord
+        return None
+
+    def get_update_effective_amount_ops(self, claim_hash: bytes, effective_amount: int):
+        claim_info = self.get_root_claim_txo_and_current_amount(claim_hash)
+        if not claim_info:
+            return []
+        root_tx_num, root_position, amount, name, tx_num, position = claim_info
+        signing_hash = self.get_channel_for_claim(claim_hash)
+        claims_in_channel_count = None
+        if signing_hash:
+            claims_in_channel_count = self.get_claims_in_channel_count(signing_hash)
+        prev_effective_amount = self.get_effective_amount(claim_hash)
+        return get_update_effective_amount_ops(
+            name, effective_amount, prev_effective_amount, tx_num, position,
+            root_tx_num, root_position, claim_hash, signing_hash, claims_in_channel_count
+        )
+
+    def get_claims_in_channel_count(self, channel_hash) -> int:
+        for v in self.db.iterator(prefix=DB_PREFIXES.channel_to_claim.value + channel_hash, include_key=False):
+            return Prefixes.channel_to_claim.unpack_value(v).claims_in_channel
+        return 0
+
+    def get_channel_for_claim(self, claim_hash) -> Optional[bytes]:
+        return self.db.get(DB_PREFIXES.claim_to_channel.value + claim_hash)
 
     # def add_unflushed(self, hashXs_by_tx, first_tx_num):
     #     unflushed = self.history.unflushed
@@ -220,8 +472,7 @@ class LevelDB:
         # < might happen at end of compaction as both DBs cannot be
         # updated atomically
         if self.hist_flush_count > self.utxo_flush_count:
-            self.logger.info('DB shut down uncleanly.  Scanning for '
-                             'excess history flushes...')
+            self.logger.info('DB shut down uncleanly.  Scanning for excess history flushes...')
 
             keys = []
             for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX):
@@ -350,27 +601,6 @@ class LevelDB:
         add_count = len(flush_data.adds)
         spend_count = len(flush_data.deletes) // 2
 
-        # Spends
-        batch_delete = batch.delete
-        for key in sorted(flush_data.deletes):
-            batch_delete(key)
-        flush_data.deletes.clear()
-
-        # New UTXOs
-        batch_put = batch.put
-        for key, value in flush_data.adds.items():
-            # suffix = tx_idx + tx_num
-            hashX = value[:-12]
-            suffix = key[-2:] + value[-12:-8]
-            batch_put(HASHX_UTXO_PREFIX + key[:4] + suffix, hashX)
-            batch_put(UTXO_PREFIX + hashX + suffix, value[-8:])
-        flush_data.adds.clear()
-
-        # New undo information
-        for undo_info, height in flush_data.undo_infos:
-            batch_put(self.undo_key(height), b''.join(undo_info))
-        flush_data.undo_infos.clear()
-
         if self.db.for_sync:
             block_count = flush_data.height - self.db_height
             tx_count = flush_data.tx_count - self.db_tx_count
@@ -394,11 +624,12 @@ class LevelDB:
         }
         # History entries are not prefixed; the suffix \0\0 ensures we
         # look similar to other entries and aren't interfered with
-        batch.put(HIST_STATE, repr(state).encode())
+        batch.put(DB_PREFIXES.HIST_STATE.value, repr(state).encode())
 
     def flush_dbs(self, flush_data: FlushData, estimate_txs_remaining):
         """Flush out cached state.  History is always flushed; UTXOs are
         flushed if flush_utxos."""
+
         if flush_data.height == self.db_height:
             self.assert_flushed(flush_data)
             return
@@ -419,40 +650,48 @@ class LevelDB:
         assert len(self.tx_counts) == flush_data.height + 1
         assert len(
             b''.join(hashes for hashes, _ in flush_data.block_txs)
-        ) // 32 == flush_data.tx_count - prior_tx_count
-
+        ) // 32 == flush_data.tx_count - prior_tx_count, f"{len(b''.join(hashes for hashes, _ in flush_data.block_txs)) // 32} != {flush_data.tx_count}"
 
         # Write the headers
         start_time = time.perf_counter()
 
         with self.db.write_batch() as batch:
-            batch_put = batch.put
+            self.put = batch.put
+            batch_put = self.put
+            batch_delete = batch.delete
             height_start = self.fs_height + 1
             tx_num = prior_tx_count
-            for i, (header, block_hash, (tx_hashes, txs)) in enumerate(zip(flush_data.headers, flush_data.block_hashes, flush_data.block_txs)):
-                batch_put(HEADER_PREFIX + util.pack_be_uint64(height_start), header)
+            for i, (header, block_hash, (tx_hashes, txs)) in enumerate(
+                    zip(flush_data.headers, flush_data.block_hashes, flush_data.block_txs)):
+                batch_put(DB_PREFIXES.HEADER_PREFIX.value + util.pack_be_uint64(height_start), header)
                 self.headers.append(header)
                 tx_count = self.tx_counts[height_start]
-                batch_put(BLOCK_HASH_PREFIX + util.pack_be_uint64(height_start), block_hash[::-1])
-                batch_put(TX_COUNT_PREFIX + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
+                batch_put(DB_PREFIXES.BLOCK_HASH_PREFIX.value + util.pack_be_uint64(height_start), block_hash[::-1])
+                batch_put(DB_PREFIXES.TX_COUNT_PREFIX.value + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
                 height_start += 1
                 offset = 0
                 while offset < len(tx_hashes):
-                    batch_put(TX_HASH_PREFIX + util.pack_be_uint64(tx_num), tx_hashes[offset:offset + 32])
-                    batch_put(TX_NUM_PREFIX + tx_hashes[offset:offset + 32], util.pack_be_uint64(tx_num))
-                    batch_put(TX_PREFIX + tx_hashes[offset:offset + 32], txs[offset // 32])
-
+                    batch_put(DB_PREFIXES.TX_HASH_PREFIX.value + util.pack_be_uint64(tx_num), tx_hashes[offset:offset + 32])
+                    batch_put(DB_PREFIXES.TX_NUM_PREFIX.value + tx_hashes[offset:offset + 32], util.pack_be_uint64(tx_num))
+                    batch_put(DB_PREFIXES.TX_PREFIX.value + tx_hashes[offset:offset + 32], txs[offset // 32])
                     tx_num += 1
                     offset += 32
             flush_data.headers.clear()
             flush_data.block_txs.clear()
             flush_data.block_hashes.clear()
-            # flush_data.claim_txo_cache.clear()
-            # flush_data.support_txo_cache.clear()
 
+            for staged_change in flush_data.claimtrie_stash:
+                # print("ADVANCE", staged_change)
+                if staged_change.is_put:
+                    batch_put(staged_change.key, staged_change.value)
+                else:
+                    batch_delete(staged_change.key)
+            flush_data.claimtrie_stash.clear()
+            for undo_claims, height in flush_data.undo_claimtrie:
+                batch_put(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(height), undo_claims)
+            flush_data.undo_claimtrie.clear()
             self.fs_height = flush_data.height
             self.fs_tx_count = flush_data.tx_count
-
 
             # Then history
             self.hist_flush_count += 1
@@ -461,17 +700,51 @@ class LevelDB:
 
             for hashX in sorted(unflushed):
                 key = hashX + flush_id
-                batch_put(HASHX_HISTORY_PREFIX + key, unflushed[hashX].tobytes())
+                batch_put(DB_PREFIXES.HASHX_HISTORY_PREFIX.value + key, unflushed[hashX].tobytes())
             self.write_history_state(batch)
 
             unflushed.clear()
             self.hist_unflushed_count = 0
 
-
             #########################
 
+            # New undo information
+            for undo_info, height in flush_data.undo_infos:
+                batch_put(self.undo_key(height), b''.join(undo_info))
+            flush_data.undo_infos.clear()
+
+            # Spends
+            for key in sorted(flush_data.deletes):
+                batch_delete(key)
+            flush_data.deletes.clear()
+
+            # New UTXOs
+            for key, value in flush_data.adds.items():
+                # suffix = tx_idx + tx_num
+                hashX = value[:-12]
+                suffix = key[-2:] + value[-12:-8]
+                batch_put(DB_PREFIXES.HASHX_UTXO_PREFIX.value + key[:4] + suffix, hashX)
+                batch_put(DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix, value[-8:])
+            flush_data.adds.clear()
+
             # Flush state last as it reads the wall time.
-            self.flush_utxo_db(batch, flush_data)
+            start_time = time.time()
+            add_count = len(flush_data.adds)
+            spend_count = len(flush_data.deletes) // 2
+
+            if self.db.for_sync:
+                block_count = flush_data.height - self.db_height
+                tx_count = flush_data.tx_count - self.db_tx_count
+                elapsed = time.time() - start_time
+                self.logger.info(f'flushed {block_count:,d} blocks with '
+                                 f'{tx_count:,d} txs, {add_count:,d} UTXO adds, '
+                                 f'{spend_count:,d} spends in '
+                                 f'{elapsed:.1f}s, committing...')
+
+            self.utxo_flush_count = self.hist_flush_count
+            self.db_height = flush_data.height
+            self.db_tx_count = flush_data.tx_count
+            self.db_tip = flush_data.tip
 
             # self.flush_state(batch)
             #
@@ -524,24 +797,43 @@ class LevelDB:
         start_time = time.time()
         tx_delta = flush_data.tx_count - self.last_flush_tx_count
         ###
-        while self.fs_height > flush_data.height:
-            self.fs_height -= 1
-            self.headers.pop()
         self.fs_tx_count = flush_data.tx_count
         # Truncate header_mc: header count is 1 more than the height.
         self.header_mc.truncate(flush_data.height + 1)
-
         ###
         # Not certain this is needed, but it doesn't hurt
         self.hist_flush_count += 1
         nremoves = 0
 
         with self.db.write_batch() as batch:
+            batch_put = batch.put
+            batch_delete = batch.delete
+
+            claim_reorg_height = self.fs_height
+            print("flush undos", flush_data.undo_claimtrie)
+            for (ops, height) in reversed(flush_data.undo_claimtrie):
+                claimtrie_ops = RevertableOp.unpack_stack(ops)
+                print("%i undo ops for %i" % (len(claimtrie_ops), height))
+                for op in reversed(claimtrie_ops):
+                    print("REWIND", op)
+                    if op.is_put:
+                        batch_put(op.key, op.value)
+                    else:
+                        batch_delete(op.key)
+                batch_delete(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(claim_reorg_height))
+                claim_reorg_height -= 1
+
+            flush_data.undo_claimtrie.clear()
+            flush_data.claimtrie_stash.clear()
+
+            while self.fs_height > flush_data.height:
+                self.fs_height -= 1
+                self.headers.pop()
             tx_count = flush_data.tx_count
             for hashX in sorted(touched):
                 deletes = []
                 puts = {}
-                for key, hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, reverse=True):
+                for key, hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value + hashX, reverse=True):
                     k = key[1:]
                     a = array.array('I')
                     a.frombytes(hist)
@@ -554,18 +846,61 @@ class LevelDB:
                     deletes.append(k)
 
                 for key in deletes:
-                    batch.delete(key)
+                    batch_delete(key)
                 for key, value in puts.items():
-                    batch.put(key, value)
+                    batch_put(key, value)
+
+
             self.write_history_state(batch)
 
+            # New undo information
+            for undo_info, height in flush_data.undo_infos:
+                batch.put(self.undo_key(height), b''.join(undo_info))
+            flush_data.undo_infos.clear()
+
+            # Spends
+            for key in sorted(flush_data.deletes):
+                batch_delete(key)
+            flush_data.deletes.clear()
+
+            # New UTXOs
+            for key, value in flush_data.adds.items():
+                # suffix = tx_idx + tx_num
+                hashX = value[:-12]
+                suffix = key[-2:] + value[-12:-8]
+                batch_put(DB_PREFIXES.HASHX_UTXO_PREFIX.value + key[:4] + suffix, hashX)
+                batch_put(DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix, value[-8:])
+            flush_data.adds.clear()
+
             self.flush_utxo_db(batch, flush_data)
+            start_time = time.time()
+            add_count = len(flush_data.adds)
+            spend_count = len(flush_data.deletes) // 2
+
+            if self.db.for_sync:
+                block_count = flush_data.height - self.db_height
+                tx_count = flush_data.tx_count - self.db_tx_count
+                elapsed = time.time() - start_time
+                self.logger.info(f'flushed {block_count:,d} blocks with '
+                                 f'{tx_count:,d} txs, {add_count:,d} UTXO adds, '
+                                 f'{spend_count:,d} spends in '
+                                 f'{elapsed:.1f}s, committing...')
+
+            self.utxo_flush_count = self.hist_flush_count
+            self.db_height = flush_data.height
+            self.db_tx_count = flush_data.tx_count
+            self.db_tip = flush_data.tip
+
+
+
             # Flush state last as it reads the wall time.
             now = time.time()
             self.wall_time += now - self.last_flush
             self.last_flush = now
             self.last_flush_tx_count = self.fs_tx_count
             self.write_utxo_state(batch)
+
+
         self.logger.info(f'backing up removed {nremoves:,d} history entries')
         elapsed = self.last_flush - start_time
         self.logger.info(f'backup flush #{self.hist_flush_count:,d} took {elapsed:.1f}s. '
@@ -636,14 +971,14 @@ class LevelDB:
                 tx, merkle = cached_tx
             else:
                 tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = tx_db_get(TX_NUM_PREFIX + tx_hash_bytes)
+                tx_num = tx_db_get(DB_PREFIXES.TX_NUM_PREFIX.value + tx_hash_bytes)
                 tx = None
                 tx_height = -1
                 if tx_num is not None:
                     tx_num = unpack_be_uint64(tx_num)
                     tx_height = bisect_right(tx_counts, tx_num)
                     if tx_height < self.db_height:
-                        tx = tx_db_get(TX_PREFIX + tx_hash_bytes)
+                        tx = tx_db_get(DB_PREFIXES.TX_PREFIX.value + tx_hash_bytes)
                 if tx_height == -1:
                     merkle = {
                         'block_height': -1
@@ -691,7 +1026,7 @@ class LevelDB:
             cnt = 0
             txs = []
 
-            for hist in self.db.iterator(prefix=HASHX_HISTORY_PREFIX + hashX, include_key=False):
+            for hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value + hashX, include_key=False):
                 a = array.array('I')
                 a.frombytes(hist)
                 for tx_num in a:
@@ -726,7 +1061,8 @@ class LevelDB:
 
     def read_undo_info(self, height):
         """Read undo information from a file for the current height."""
-        return self.db.get(self.undo_key(height))
+        undo_claims = self.db.get(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(self.fs_height))
+        return self.db.get(self.undo_key(height)), undo_claims
 
     def raw_block_prefix(self):
         return 'block'
@@ -759,7 +1095,7 @@ class LevelDB:
         """Clear excess undo info.  Only most recent N are kept."""
         min_height = self.min_undo_height(self.db_height)
         keys = []
-        for key, hist in self.db.iterator(prefix=UNDO_PREFIX):
+        for key, hist in self.db.iterator(prefix=DB_PREFIXES.UNDO_PREFIX.value):
             height, = unpack('>I', key[-4:])
             if height >= min_height:
                 break
@@ -847,7 +1183,7 @@ class LevelDB:
             'first_sync': self.first_sync,
             'db_version': self.db_version,
         }
-        batch.put(UTXO_STATE, repr(state).encode())
+        batch.put(DB_PREFIXES.UTXO_STATE.value, repr(state).encode())
 
     def set_flush_count(self, count):
         self.utxo_flush_count = count
@@ -863,7 +1199,7 @@ class LevelDB:
             fs_tx_hash = self.fs_tx_hash
             # Key: b'u' + address_hashX + tx_idx + tx_num
             # Value: the UTXO value as a 64-bit unsigned integer
-            prefix = UTXO_PREFIX + hashX
+            prefix = DB_PREFIXES.UTXO_PREFIX.value + hashX
             for db_key, db_value in self.db.iterator(prefix=prefix):
                 tx_pos, tx_num = s_unpack('<HI', db_key[-6:])
                 value, = unpack('<Q', db_value)
@@ -894,7 +1230,7 @@ class LevelDB:
 
                 # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
                 # Value: hashX
-                prefix = HASHX_UTXO_PREFIX + tx_hash[:4] + idx_packed
+                prefix = DB_PREFIXES.HASHX_UTXO_PREFIX.value + tx_hash[:4] + idx_packed
 
                 # Find which entry, if any, the TX_HASH matches.
                 for db_key, hashX in self.db.iterator(prefix=prefix):
@@ -915,7 +1251,7 @@ class LevelDB:
                     return None
                 # Key: b'u' + address_hashX + tx_idx + tx_num
                 # Value: the UTXO value as a 64-bit unsigned integer
-                key = UTXO_PREFIX + hashX + suffix
+                key = DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix
                 db_value = self.db.get(key)
                 if not db_value:
                     # This can happen if the DB was updated between
