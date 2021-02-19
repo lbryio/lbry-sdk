@@ -544,7 +544,7 @@ class BlockProcessor:
                 self.utxo_cache[txin.prev_hash + s_pack('<H', txin.prev_idx)] = undo_item
                 self.touched.add(undo_item[:-12])
 
-            self.db.total_transactions.pop()
+            self.db.transaction_num_mapping.pop(self.db.total_transactions.pop())
 
         assert n == 0
         self.tx_count -= len(txs)
