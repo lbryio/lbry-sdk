@@ -111,6 +111,7 @@ class LevelDB:
 
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
+        self.transaction_num_mapping = {}
 
     # def add_unflushed(self, hashXs_by_tx, first_tx_num):
     #     unflushed = self.history.unflushed
@@ -156,6 +157,9 @@ class LevelDB:
         txids = await asyncio.get_event_loop().run_in_executor(self.executor, get_txids)
         assert len(txids) == len(self.tx_counts) == 0 or len(txids) == self.tx_counts[-1]
         self.total_transactions = txids
+        self.transaction_num_mapping = {
+            txid: i for i, txid in enumerate(txids)
+        }
         ts = time.perf_counter() - start
         self.logger.info("loaded %i txids in %ss", len(self.total_transactions), round(ts, 4))
 
