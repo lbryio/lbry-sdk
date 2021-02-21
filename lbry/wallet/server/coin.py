@@ -14,7 +14,6 @@ from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-# from lbry.wallet.server.db.writer import LBRYLevelDB
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 
 
@@ -213,6 +212,11 @@ class Coin:
         header = cls.block_header(raw_block, height)
         txs = cls.DESERIALIZER(raw_block, start=len(header)).read_tx_block()
         return Block(raw_block, header, txs)
+
+    @classmethod
+    def transaction(cls, raw_tx: bytes):
+        """Return a Block namedtuple given a raw block and its height."""
+        return cls.DESERIALIZER(raw_tx).read_tx()
 
     @classmethod
     def decimal_value(cls, value):
