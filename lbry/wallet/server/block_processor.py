@@ -1,6 +1,7 @@
 import time
 import asyncio
 import typing
+from bisect import bisect_right
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional, List, Tuple
@@ -16,11 +17,11 @@ from lbry.wallet.server.util import chunks, class_logger
 from lbry.crypto.hash import hash160
 from lbry.wallet.server.leveldb import FlushData
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport
-
+from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport, get_expiration_height
 from lbry.wallet.server.udp import StatusServer
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
+    from lbry.wallet.server.db.revertable import RevertableOp
 
 
 class Prefetcher:
@@ -206,6 +207,8 @@ class BlockProcessor:
         self.pending_supports = defaultdict(set)
         self.pending_support_txos = {}
         self.pending_abandon = set()
+
+
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -460,7 +463,8 @@ class BlockProcessor:
         self.history_cache.clear()
         self.notifications.notified_mempool_txs.clear()
 
-    def _add_claim_or_update(self, txo, script, tx_hash, idx, tx_count, txout, spent_claims):
+    def _add_claim_or_update(self, height: int, txo, script, tx_hash: bytes, idx: int, tx_count: int, txout,
+                             spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]) -> List['RevertableOp']:
         try:
             claim_name = txo.normalized_name
         except UnicodeDecodeError:
@@ -506,10 +510,9 @@ class BlockProcessor:
                 root_tx_num, root_idx, prev_amount, _, _, _ = self.db.get_root_claim_txo_and_current_amount(
                     claim_hash
                 )
-
         pending = StagedClaimtrieItem(
             claim_name, claim_hash, txout.value, support_amount + txout.value,
-            activation_height, tx_count, idx, root_tx_num, root_idx,
+            activation_height, get_expiration_height(height), tx_count, idx, root_tx_num, root_idx,
             signing_channel_hash, channel_claims_count
         )
 
@@ -518,7 +521,7 @@ class BlockProcessor:
         self.effective_amount_changes[claim_hash].append(txout.value)
         return pending.get_add_claim_utxo_ops()
 
-    def _add_support(self, txo, txout, idx, tx_count):
+    def _add_support(self, txo, txout, idx, tx_count) -> List['RevertableOp']:
         supported_claim_hash = txo.claim_hash[::-1]
 
         if supported_claim_hash in self.effective_amount_changes:
@@ -529,7 +532,6 @@ class BlockProcessor:
             return StagedClaimtrieSupport(
                 supported_claim_hash, tx_count, idx, txout.value
             ).get_add_support_utxo_ops()
-
         elif supported_claim_hash not in self.pending_claims and supported_claim_hash not in self.pending_abandon:
             if self.db.claim_exists(supported_claim_hash):
                 _, _, _, name, supported_tx_num, supported_pos = self.db.get_root_claim_txo_and_current_amount(
@@ -549,9 +551,10 @@ class BlockProcessor:
                 print(f"\tthis is a wonky tx, contains unlinked support for non existent {supported_claim_hash.hex()}")
         return []
 
-    def _add_claim_or_support(self, tx_hash, tx_count, idx, txo, txout, script, spent_claims):
+    def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_count: int, idx: int, txo, txout, script,
+                              spent_claims: typing.Dict[bytes, Tuple[int, int, str]]) -> List['RevertableOp']:
         if script.is_claim_name or script.is_update_claim:
-            return self._add_claim_or_update(txo, script, tx_hash, idx, tx_count, txout, spent_claims)
+            return self._add_claim_or_update(height, txo, script, tx_hash, idx, tx_count, txout, spent_claims)
         elif script.is_support_claim or script.is_support_claim_data:
             return self._add_support(txo, txout, idx, tx_count)
         return []
@@ -602,9 +605,10 @@ class BlockProcessor:
             )
             claim_root_tx_num, claim_root_idx, prev_amount, name, tx_num, position = self.db.get_root_claim_txo_and_current_amount(prev_claim_hash)
             activation_height = 0
+            height = bisect_right(self.db.tx_counts, tx_num)
             spent = StagedClaimtrieItem(
                 name, prev_claim_hash, prev_amount, prev_effective_amount,
-                activation_height, txin_num, txin.prev_idx, claim_root_tx_num,
+                activation_height, get_expiration_height(height), txin_num, txin.prev_idx, claim_root_tx_num,
                 claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
             )
             spent_claims[prev_claim_hash] = (txin_num, txin.prev_idx, name)
@@ -668,7 +672,9 @@ class BlockProcessor:
                 )
                 # print(f"\tremove support for abandoned lbry://{name}#{abandoned_claim_hash.hex()} {support_tx_num} {support_tx_idx}")
 
+            height = bisect_right(self.db.tx_counts, prev_tx_num)
             activation_height = 0
+
             if abandoned_claim_hash in self.effective_amount_changes:
                 # print("pop")
                 self.effective_amount_changes.pop(abandoned_claim_hash)
@@ -677,10 +683,22 @@ class BlockProcessor:
             # print(f"\tabandoned lbry://{name}#{abandoned_claim_hash.hex()}")
             ops.extend(
                 StagedClaimtrieItem(
-                name, abandoned_claim_hash, prev_amount, prev_effective_amount,
-                activation_height, prev_tx_num, prev_idx, claim_root_tx_num,
-                claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
-            ).get_abandon_ops(self.db.db))
+                    name, abandoned_claim_hash, prev_amount, prev_effective_amount,
+                    activation_height, get_expiration_height(height), prev_tx_num, prev_idx, claim_root_tx_num,
+                    claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
+                ).get_abandon_ops(self.db.db)
+            )
+        return ops
+
+    def _expire_claims(self, height: int):
+        expired = self.db.get_expired_by_height(height)
+        spent_claims = {}
+        ops = []
+        for expired_claim_hash, (tx_num, position, name, txi) in expired.items():
+            if (tx_num, position) not in self.pending_claims:
+                ops.extend(self._spend_claim(txi, spent_claims))
+        if expired:
+            ops.extend(self._abandon(spent_claims))
         return ops
 
     def advance_block(self, block, height: int):
@@ -708,7 +726,7 @@ class BlockProcessor:
         append_hashX_by_tx = hashXs_by_tx.append
         hashX_from_script = self.coin.hashX_from_script
 
-        unchanged_effective_amounts = {k: sum(v) for k, v in self.effective_amount_changes.items()}
+        # unchanged_effective_amounts = {k: sum(v) for k, v in self.effective_amount_changes.items()}
 
         for tx, tx_hash in txs:
             # print(f"{tx_hash[::-1].hex()} @ {height}")
@@ -745,7 +763,7 @@ class BlockProcessor:
                 txo = Output(txout.value, script)
 
                 claim_or_support_ops = self._add_claim_or_support(
-                    tx_hash, tx_count, idx, txo, txout, script, spent_claims
+                    height, tx_hash, tx_count, idx, txo, txout, script, spent_claims
                 )
                 if claim_or_support_ops:
                     claimtrie_stash_extend(claim_or_support_ops)
@@ -760,6 +778,12 @@ class BlockProcessor:
             self.db.total_transactions.append(tx_hash)
             self.db.transaction_num_mapping[tx_hash] = tx_count
             tx_count += 1
+
+        # handle expired claims
+        expired_ops = self._expire_claims(height)
+        if expired_ops:
+            print(f"************\nexpire claims at block {height}\n************")
+            claimtrie_stash_extend(expired_ops)
 
         # self.db.add_unflushed(hashXs_by_tx, self.tx_count)
         _unflushed = self.db.hist_unflushed
