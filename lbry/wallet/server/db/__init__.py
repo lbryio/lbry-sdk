@@ -13,6 +13,7 @@ class DB_PREFIXES(enum.Enum):
 
     claim_short_id_prefix = b'F'
     claim_effective_amount_prefix = b'D'
+    claim_expiration = b'O'
 
     undo_claimtrie = b'M'
 

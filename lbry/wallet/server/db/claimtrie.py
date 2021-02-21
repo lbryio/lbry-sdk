@@ -4,6 +4,21 @@ from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, Re
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes
 
+nOriginalClaimExpirationTime = 262974
+nExtendedClaimExpirationTime = 2102400
+nExtendedClaimExpirationForkHeight = 400155
+nNormalizedNameForkHeight = 539940      # targeting 21 March 2019
+nMinTakeoverWorkaroundHeight = 496850
+nMaxTakeoverWorkaroundHeight = 658300   # targeting 30 Oct 2019
+nWitnessForkHeight = 680770             # targeting 11 Dec 2019
+nAllClaimsInMerkleForkHeight = 658310   # targeting 30 Oct 2019
+proportionalDelayFactor = 32
+
+def get_expiration_height(last_updated_height: int) -> int:
+    if last_updated_height < nExtendedClaimExpirationForkHeight:
+        return last_updated_height + nOriginalClaimExpirationTime
+    return last_updated_height + nExtendedClaimExpirationTime
+
 
 def length_encoded_name(name: str) -> bytes:
     encoded = name.encode('utf-8')
@@ -79,6 +94,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
     amount: int
     effective_amount: int
     activation_height: int
+    expiration_height: int
     tx_num: int
     position: int
     root_claim_tx_num: int
@@ -123,6 +139,13 @@ class StagedClaimtrieItem(typing.NamedTuple):
             # claim hash by txo
             op(
                 *Prefixes.txo_to_claim.pack_item(self.tx_num, self.position, self.claim_hash, self.name)
+            ),
+            # claim expiration
+            op(
+                *Prefixes.claim_expiration.pack_item(
+                    self.expiration_height, self.tx_num, self.position, self.claim_hash,
+                    self.name
+                )
             )
         ]
         if self.signing_hash and self.claims_in_channel_count is not None:

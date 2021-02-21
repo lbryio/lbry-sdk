@@ -123,6 +123,17 @@ class SupportToClaimValue(typing.NamedTuple):
     claim_hash: bytes
 
 
+class ClaimExpirationKey(typing.NamedTuple):
+    expiration: int
+    tx_num: int
+    position: int
+
+
+class ClaimExpirationValue(typing.NamedTuple):
+    claim_hash: bytes
+    name: str
+
+
 class EffectiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_effective_amount_prefix.value
     key_struct = struct.Struct(b'>QLH')
@@ -374,6 +385,39 @@ class SupportToClaimPrefixRow(PrefixRow):
                cls.pack_value(claim_hash)
 
 
+class ClaimExpirationPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.claim_expiration.value
+    key_struct = struct.Struct(b'>LLH')
+    value_struct = struct.Struct(b'>20s')
+
+    @classmethod
+    def pack_key(cls, expiration: int, tx_num: int, position: int) -> bytes:
+        return super().pack_key(expiration, tx_num, position)
+
+    @classmethod
+    def pack_value(cls, claim_hash: bytes, name: str) -> bytes:
+        return cls.value_struct.pack(claim_hash) + length_encoded_name(name)
+
+    @classmethod
+    def pack_item(cls, expiration: int, tx_num: int, position: int, claim_hash: bytes, name: str) -> typing.Tuple[bytes, bytes]:
+        return cls.pack_key(expiration, tx_num, position), cls.pack_value(claim_hash, name)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> ClaimExpirationKey:
+        return ClaimExpirationKey(*super().unpack_key(key))
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> ClaimExpirationValue:
+        name_len = int.from_bytes(data[20:22], byteorder='big')
+        name = data[22:22 + name_len].decode()
+        claim_id, = cls.value_struct.unpack(data[:20])
+        return ClaimExpirationValue(claim_id, name)
+
+    @classmethod
+    def unpack_item(cls, key: bytes, value: bytes) -> typing.Tuple[ClaimExpirationKey, ClaimExpirationValue]:
+        return cls.unpack_key(key), cls.unpack_value(value)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -385,7 +429,7 @@ class Prefixes:
     channel_to_claim = ChannelToClaimPrefixRow
 
     claim_short_id = ClaimShortIDPrefixRow
-
     claim_effective_amount = EffectiveAmountPrefixRow
+    claim_expiration = ClaimExpirationPrefixRow
 
-    undo_claimtrie = b'M'
+    # undo_claimtrie = b'M'

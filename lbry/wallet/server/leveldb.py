@@ -30,6 +30,7 @@ from lbry.utils import LRUCacheWithMetrics
 from lbry.schema.url import URL
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str, CLAIM_HASH_LEN
+from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.storage import db_class
@@ -37,6 +38,7 @@ from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, Re
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes
 from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, get_update_effective_amount_ops, length_encoded_name
+from lbry.wallet.server.db.claimtrie import get_expiration_height
 
 UTXO = namedtuple("UTXO", "tx_num tx_pos tx_hash height value")
 
@@ -188,8 +190,8 @@ class LevelDB:
         created_height = bisect_right(self.tx_counts, root_tx_num)
         last_take_over_height = 0
         activation_height = created_height
-        expiration_height = 0
 
+        expiration_height = get_expiration_height(height)
         support_amount = self.get_support_amount(claim_hash)
         effective_amount = self.get_effective_amount(claim_hash)
         channel_hash = self.get_channel_for_claim(claim_hash)
@@ -324,16 +326,17 @@ class LevelDB:
         root_tx_num, root_idx, value, name, tx_num, idx = self.db.get_root_claim_txo_and_current_amount(
             claim_hash
         )
-        activation_height = 0
+        height = bisect_right(self.tx_counts, tx_num)
         effective_amount = self.db.get_support_amount(claim_hash) + value
         signing_hash = self.get_channel_for_claim(claim_hash)
+        activation_height = 0
         if signing_hash:
             count = self.get_claims_in_channel_count(signing_hash)
         else:
             count = 0
         return StagedClaimtrieItem(
-            name, claim_hash, value, effective_amount, activation_height, tx_num, idx, root_tx_num, root_idx,
-            signing_hash, count
+            name, claim_hash, value, effective_amount, activation_height, get_expiration_height(height), tx_num, idx,
+            root_tx_num, root_idx, signing_hash, count
         )
 
     def get_effective_amount(self, claim_hash):
@@ -364,6 +367,20 @@ class LevelDB:
 
     def get_channel_for_claim(self, claim_hash) -> Optional[bytes]:
         return self.db.get(DB_PREFIXES.claim_to_channel.value + claim_hash)
+
+    def get_expired_by_height(self, height: int):
+        expired = {}
+        for _k, _v in self.db.iterator(prefix=DB_PREFIXES.claim_expiration.value + struct.pack(b'>L', height)):
+            k, v = Prefixes.claim_expiration.unpack_item(_k, _v)
+            tx_hash = self.total_transactions[k.tx_num]
+            tx = self.coin.transaction(self.db.get(DB_PREFIXES.TX_PREFIX.value + tx_hash))
+            # treat it like a claim spend so it will delete/abandon properly
+            # the _spend_claim function this result is fed to expects a txi, so make a mock one
+            expired[v.claim_hash] = (
+                k.tx_num, k.position, v.name,
+                TxInput(prev_hash=tx_hash, prev_idx=k.position, script=tx.outputs[k.position].pk_script, sequence=0)
+            )
+        return expired
 
     # def add_unflushed(self, hashXs_by_tx, first_tx_num):
     #     unflushed = self.history.unflushed
