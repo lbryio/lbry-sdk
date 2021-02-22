@@ -1,10 +1,12 @@
 import os
+from asyncio import Queue
+
 import apsw
 from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
-from multiprocessing import Manager, Queue
+from multiprocessing import Manager
 from binascii import unhexlify, hexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
@@ -143,6 +145,11 @@ class SQLDB:
         begin
             insert or ignore into changelog (claim_hash) values (new.claim_hash);
         end;
+        create trigger if not exists claimtrie_changelog after update on claimtrie
+        begin
+            insert or ignore into changelog (claim_hash) values (new.claim_hash);
+            insert or ignore into changelog (claim_hash) values (old.claim_hash);
+        end;
     """
 
     SEARCH_INDEXES = """
@@ -226,7 +233,7 @@ class SQLDB:
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
         self.trending = trending
-        self.claim_queue = Queue(maxsize=100_000)
+        self.claim_queue = Queue()
 
     def open(self):
         self.db = apsw.Connection(
@@ -845,14 +852,12 @@ class SQLDB:
 
             claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
             claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
-            if not self.claim_queue.full():
-                self.claim_queue.put_nowait(('update', claim))
+            self.claim_queue.put_nowait(('update', claim))
         self.execute("delete from changelog;")
 
     def enqueue_deleted(self, deleted_claims):
         for claim_hash in deleted_claims:
-            if not self.claim_queue.full():
-                self.claim_queue.put_nowait(('delete', hexlify(claim_hash[::-1]).decode()))
+            self.claim_queue.put_nowait(('delete', hexlify(claim_hash[::-1]).decode()))
 
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []

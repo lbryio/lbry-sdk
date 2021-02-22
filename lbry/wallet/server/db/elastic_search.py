@@ -81,19 +81,17 @@ class SearchIndex:
         return self.client.indices.delete(self.index, ignore_unavailable=True)
 
     async def sync_queue(self, claim_queue):
+        self.logger.info("Writing to index from a queue with %d elements.", claim_queue.qsize())
         if claim_queue.empty():
             return
-        to_delete, to_update = [], []
+        actions = []
         while not claim_queue.empty():
             operation, doc = claim_queue.get_nowait()
-            if operation == 'delete':
-                to_delete.append(doc)
-            else:
-                to_update.append(doc)
-        await self.delete(to_delete)
+            actions.append(extract_doc(doc, self.index))
+        self.logger.info("prepare update: %d elements. Queue: %d elements", len(actions), claim_queue.qsize())
         await self.client.indices.refresh(self.index)
-        for bulk in range(0, len(to_update), 400):
-            await self.update(to_update[bulk:bulk+400])
+        self.logger.info("update done: %d elements. Queue: %d elements", len(actions), claim_queue.qsize())
+        await async_bulk(self.client, actions)
         await self.client.indices.refresh(self.index)
         await self.client.indices.flush(self.index)
 
@@ -128,40 +126,6 @@ class SearchIndex:
             await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
-
-    async def update(self, claims):
-        if not claims:
-            return
-        actions = [extract_doc(claim, self.index) for claim in claims]
-        names = []
-        claim_ids = []
-        for claim in claims:
-            if claim['is_controlling']:
-                names.append(claim['normalized'])
-                claim_ids.append(claim['claim_id'])
-        if names:
-            update = expand_query(name__in=names, not_claim_id=claim_ids, is_controlling=True)
-            update['script'] = {
-                "source": "ctx._source.is_controlling=false",
-                "lang": "painless"
-            }
-            await self.client.indices.refresh(self.index)
-            await self.client.update_by_query(self.index, body=update)
-        await self.client.indices.refresh(self.index)
-        await async_bulk(self.client, actions)
-
-    async def delete(self, claim_ids):
-        if not claim_ids:
-            return
-        actions = [{'_index': self.index, '_op_type': 'delete', '_id': claim_id} for claim_id in claim_ids]
-        await async_bulk(self.client, actions, raise_on_error=False)
-        update = expand_query(channel_id__in=claim_ids)
-        update['script'] = {
-            "source": "ctx._source.signature_valid=false",
-            "lang": "painless"
-        }
-        await self.client.indices.refresh(self.index)
-        await self.client.update_by_query(self.index, body=update)
 
     async def delete_above_height(self, height):
         await self.client.delete_by_query(self.index, expand_query(height='>'+str(height)))
