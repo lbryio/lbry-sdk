@@ -999,7 +999,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --urls=<urls>              : (str, list) one or more urls to resolve
-            --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase reciepts
+            --wallet_id=<wallet_id>    : (str) wallet to check for claim purchase receipts
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
            --include_purchase_receipt  : (bool) lookup and include a receipt if this wallet
                                                 has purchased the claim being resolved
@@ -1112,7 +1112,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --download_directory=<download_directory>  : (str) full path to the directory to download into
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
-            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase reciepts
+            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
 
         Returns: {File}
         """
@@ -2295,7 +2295,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --order_by=<order_by>      : (str) field to order by: 'name', 'height', 'amount'
             --no_totals                : (bool) do not calculate the total number of pages and items in result set
                                                 (significant performance boost)
-            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
+            --include_received_tips    : (bool) calculate the amount of tips received for claim outputs
 
         Returns: {Paginated[Output]}
         """
@@ -2477,7 +2477,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                     'trending_local', 'trending_global', 'activation_height'
             --no_totals                     : (bool) do not calculate the total number of pages and items in result set
                                                      (significant performance boost)
-            --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase reciepts
+            --wallet_id=<wallet_id>         : (str) wallet to check for claim purchase receipts
             --include_purchase_receipt      : (bool) lookup and include a receipt if this wallet
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
@@ -4427,7 +4427,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                                 "--is_my_input --is_my_output --type=other"
                                                 this allows to exclude "change" payments, this
                                                 flag can be used in combination with any of the other flags
-            --include_received_tips    : (bool) calculate the amount of tips recieved for claim outputs
+            --include_received_tips    : (bool) calculate the amount of tips received for claim outputs
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --page=<page>              : (int) page to return during paginating
