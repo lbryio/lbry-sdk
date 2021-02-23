@@ -875,7 +875,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     'wallet': (bool),
                 },
                 'connection_status': {
-                    'code': (str) connection status code,
+                    'code': (str) "connected" | "network_connection",
                     'message': (str) connection status message
                 },
                 'blockchain_headers': {
