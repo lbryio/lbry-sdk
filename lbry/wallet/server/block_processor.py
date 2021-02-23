@@ -1,4 +1,3 @@
-import os
 import time
 import asyncio
 from struct import pack, unpack
@@ -287,9 +286,6 @@ class BlockProcessor:
                 await self.run_in_thread_with_lock(flush_backup)
                 last -= len(raw_blocks)
 
-            if self.sql:
-                await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
-                await self.db.search_index.delete_above_height(self.height)
             await self.prefetcher.reset_height(self.height)
             self.reorg_count_metric.inc()
         except:

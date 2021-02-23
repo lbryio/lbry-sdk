@@ -439,7 +439,7 @@ class SQLDB:
         claims = self._upsertable_claims(txos, header)
         if claims:
             self.executemany("""
-                INSERT OR IGNORE INTO claim (
+                INSERT OR REPLACE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp, has_source,
                     fee_currency, fee_amount, title, description, author, duration, height, reposted_claim_hash,
