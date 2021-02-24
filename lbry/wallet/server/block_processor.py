@@ -9,6 +9,7 @@ from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
+from lbry.wallet.transaction import OutputScript, Output
 from lbry.wallet.server.tx import Tx
 from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
@@ -702,8 +703,6 @@ class BlockProcessor:
         return ops
 
     def advance_block(self, block, height: int):
-        from lbry.wallet.transaction import OutputScript, Output
-
         txs: List[Tuple[Tx, bytes]] = block.transactions
         # header = self.coin.electrum_header(block.header, height)
         block_hash = self.coin.header_hash(block.header)
