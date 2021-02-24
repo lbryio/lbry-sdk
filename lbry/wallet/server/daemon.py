@@ -365,6 +365,11 @@ class LBCDaemon(Daemon):
         return await self._send_single('getvalueforname', (name,))
 
     @handles_errors
+    async def getnamesintrie(self):
+        '''Given a name, returns the winning claim value.'''
+        return await self._send_single('getnamesintrie')
+
+    @handles_errors
     async def claimname(self, name, hexvalue, amount):
         '''Claim a name, used for functional tests only.'''
         return await self._send_single('claimname', (name, hexvalue, float(amount)))
