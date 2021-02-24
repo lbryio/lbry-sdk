@@ -27,7 +27,6 @@ class DB_PREFIXES(enum.Enum):
     TX_HASH_PREFIX = b'X'
 
     HASHX_UTXO_PREFIX = b'h'
-    HIST_STATE = b'state-hist'
-    UTXO_STATE = b'state-utxo'
+    db_state = b's'
     UTXO_PREFIX = b'u'
     HASHX_HISTORY_PREFIX = b'x'
