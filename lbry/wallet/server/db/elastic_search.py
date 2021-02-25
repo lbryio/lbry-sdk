@@ -220,12 +220,12 @@ class SearchIndex:
 
         reposted_txos = []
         if repost_hashes:
-            reposted_txos, _, _ = await self.search(**{'claim.claim_hash__in': repost_hashes})
+            reposted_txos, _, _ = await self.search(limit=100, **{'claim_hash__in': list(repost_hashes)})
             channel_hashes |= set(filter(None, (row['channel_hash'] for row in reposted_txos)))
 
         channel_txos = []
         if channel_hashes:
-            channel_txos, _, _ = await self.search(**{'claim.claim_hash__in': channel_hashes})
+            channel_txos, _, _ = await self.search(limit=100, **{'claim_hash__in': list(channel_hashes)})
 
         # channels must come first for client side inflation to work properly
         return channel_txos + reposted_txos
