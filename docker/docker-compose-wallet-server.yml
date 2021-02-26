@@ -1,47 +1,35 @@
 version: "3"
 
 volumes:
-  lbrycrd:
   wallet_server:
   es01:
 
 services:
-  lbrycrd:
-    image: lbry/lbrycrd:${LBRYCRD_TAG:-latest-release}
-    restart: always
-    ports: # accessible from host
-      - "9246:9246" # rpc port
-    expose: # internal to docker network. also this doesn't do anything. its for documentation only.
-      - "9245" # node-to-node comms port
-    volumes:
-      - "lbrycrd:/data/.lbrycrd"
-    environment:
-      - RUN_MODE=default
-      # Curently not snapshot provided
-      #- SNAPSHOT_URL=${LBRYCRD_SNAPSHOT_URL-https://lbry.com/snapshot/blockchain}
-      - RPC_ALLOW_IP=0.0.0.0/0
   wallet_server:
-    image: lbry/wallet-server:${WALLET_SERVER_TAG:-latest-release}
-    depends_on:
-      - lbrycrd
+    depends_on: 
+      - es01
+    image: lbry/wallet-server:${WALLET_SERVER_TAG:-development}
     restart: always
+    network_mode: host
     ports:
       - "50001:50001" # rpc port
-      - "50005:50005" # websocket port
-      #- "2112:2112"   # uncomment to enable prometheus
+      - "2112:2112"   # uncomment to enable prometheus
     volumes:
       - "wallet_server:/database"
+    env_file: [/home/lbry/wallet-server-env]
     environment:
-      # Curently not snapshot provided
-      # - SNAPSHOT_URL=${WALLET_SERVER_SNAPSHOT_URL-https://lbry.com/snapshot/wallet}
-      - DAEMON_URL=http://lbry:lbry@lbrycrd:9245
+      - DAEMON_URL=http://lbry:lbry@127.0.0.1:9245
+      - TCP_PORT=50001
+      - PROMETHEUS_PORT=2112
   es01:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.11.0
     container_name: es01
     environment:
       - node.name=es01
       - discovery.type=single-node
+      - indices.query.bool.max_clause_count=4096
       - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms8g -Xmx8g"  # no more than 32, remember to disable swap
     ulimits:
       memlock:
         soft: -1
