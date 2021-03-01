@@ -1976,10 +1976,14 @@ class SupportCommands(CommandTestCase):
         self.assertTrue(txs[1]['support_info'][0]['is_tip'])
         self.assertTrue(txs[1]['support_info'][0]['is_spent'])
 
-    async def test_signed_supports(self):
+    async def test_signed_supports_with_no_change_txo_regression(self):
+        # reproduces a bug where transactions did not get properly signed
+        # if there was no change and just a single output
+        # lbrycrd returned 'the transaction was rejected by network rules.'
         channel_id = self.get_claim_id(await self.channel_create())
         stream_id = self.get_claim_id(await self.stream_create())
-        tx = await self.support_create(stream_id, '0.3', channel_id=channel_id)
+        tx = await self.support_create(stream_id, '7.967598', channel_id=channel_id)
+        self.assertEqual(len(tx['outputs']), 1)  # must be one to reproduce bug
         self.assertTrue(tx['outputs'][0]['is_channel_signature_valid'])
 
 
