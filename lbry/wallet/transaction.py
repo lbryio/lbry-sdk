@@ -850,6 +850,7 @@ class Transaction:
         return hash_type
 
     async def sign(self, funding_accounts: Iterable['Account']):
+        self._reset()
         ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
         for i, txi in enumerate(self._inputs):
             assert txi.script is not None

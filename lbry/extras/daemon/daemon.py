@@ -2617,7 +2617,6 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         txo = tx.outputs[0]
         await txo.generate_channel_private_key()
-        tx._reset()
 
         await tx.sign(funding_accounts)
 
@@ -2774,7 +2773,6 @@ class Daemon(metaclass=JSONRPCServerType):
             new_txo.private_key = old_txo.private_key
 
         new_txo.script.generate()
-        tx._reset()
 
         await tx.sign(funding_accounts)
 
@@ -3345,7 +3343,6 @@ class Daemon(metaclass=JSONRPCServerType):
             file_stream = await self.file_manager.create_stream(file_path)
             claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
-            tx._reset()
 
         if channel:
             new_txo.sign(channel)
@@ -3565,7 +3562,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 file_stream = await self.file_manager.create_stream(file_path)
                 new_txo.claim.stream.source.sd_hash = file_stream.sd_hash
                 new_txo.script.generate()
-                tx._reset()
                 stream_hash = file_stream.stream_hash
             elif old_stream:
                 stream_hash = old_stream.stream_hash
@@ -3959,9 +3955,6 @@ class Daemon(metaclass=JSONRPCServerType):
             old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
-
-        new_txo.script.generate()
-        tx._reset()
 
         if channel:
             new_txo.sign(channel)
