@@ -275,7 +275,10 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertTrue(daemon.jsonrpc_preference_delete("conflict"))
         self.assertTrue(daemon.jsonrpc_preference_delete("another"))
         self.assertTrue(daemon.jsonrpc_preference_delete("fruit"))
-
+        
+        # Delete of non-existent key fails
+        self.assertFalse(daemon.jsonrpc_preference_delete("fruit"))
+        
         # Preferences empty
         self.assertFalse(daemon.jsonrpc_preference_get())
         
