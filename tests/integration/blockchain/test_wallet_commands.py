@@ -269,6 +269,16 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             {"one": "1", "two": "2", "conflict": "2", "another": "B", "fruit": ["peach", "apricot"]}
         )
 
+        # Delete keys
+        self.assertTrue(daemon.jsonrpc_preference_delete("one"))
+        self.assertTrue(daemon.jsonrpc_preference_delete("two"))
+        self.assertTrue(daemon.jsonrpc_preference_delete("conflict"))
+        self.assertTrue(daemon.jsonrpc_preference_delete("another"))
+        self.assertTrue(daemon.jsonrpc_preference_delete("fruit"))
+
+        # Preferences empty
+        self.assertFalse(daemon.jsonrpc_preference_get())
+        
         # Channel Certificate
         channel = await daemon2.jsonrpc_channel_create('@foo', '0.1')
         await self.confirm_tx(channel.id, self.daemon2.ledger)
