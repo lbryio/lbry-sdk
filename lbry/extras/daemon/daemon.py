@@ -1236,6 +1236,29 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet.save()
         return {key: value}
 
+    def jsonrpc_preference_delete(self, key=None, wallet_id=None):
+        """
+        Delete preference
+
+        Usage:
+            preference_delete (<key>) [--wallet_id=<wallet_id>]
+
+        Options:
+            --key=<key> : (str) key to be deleted
+            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
+
+        Returns:
+            (bool) true, if key exists and was removed
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+
+        if key in wallet.preferences:
+            del wallet.preferences[key]
+            wallet.save()
+            return True
+
+        return False
+
     WALLET_DOC = """
     Create, modify and inspect wallets.
     """
