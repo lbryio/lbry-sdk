@@ -1006,12 +1006,8 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def run_and_cache_query(self, query_name, kwargs):
-        if isinstance(kwargs, dict) and 'trending_mixed' in kwargs.get('order_by', {}):
-            # fixme: trending_mixed is 0 for all records on variable decay, making sort slow.
-            # also, release_time isnt releavant when sorting by trending but it makes cache bad
-            if 'release_time' in kwargs:
-                kwargs.pop('release_time')
-            kwargs['order_by'] = ['trending_mixed']
+        if isinstance(kwargs, dict):
+            kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
         metrics = self.get_metrics_or_placeholder_for_api(query_name)
         metrics.start()
         cache = self.session_mgr.search_cache[query_name]
@@ -1617,3 +1613,16 @@ def get_from_possible_keys(dictionary, *keys):
     for key in keys:
         if key in dictionary:
             return dictionary[key]
+
+
+def format_release_time(release_time):
+    # round release time to 1000 so it caches better
+    # also set a default so we dont show claims in the future
+    def roundup_time(number, factor=360):
+        return int(1 + int(number / factor)) * factor
+    if isinstance(release_time, str) and len(release_time) > 0:
+        time_digits = ''.join(filter(str.isdigit, release_time))
+        time_prefix = release_time[:-len(time_digits)]
+        return time_prefix + str(roundup_time(int(time_digits)))
+    elif isinstance(release_time, int):
+        return roundup_time(release_time)

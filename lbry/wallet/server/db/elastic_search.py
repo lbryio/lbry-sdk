@@ -9,7 +9,7 @@ from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_streaming_bulk
 
 from lbry.crypto.base58 import Base58
-from lbry.error import ResolveCensoredError
+from lbry.error import ResolveCensoredError, claim_id
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
 from lbry.schema.url import URL, normalize_name
@@ -159,12 +159,17 @@ class SearchIndex:
         ]
         return results, censored, censor
 
+    async def get_many(self, *claim_ids):
+        results = await self.client.mget(index=self.index, body={"ids": claim_ids})
+        results = filter(lambda doc: doc['found'], results["docs"])
+        return expand_result(results)
+
     async def search(self, **kwargs):
         if 'channel' in kwargs:
             result = await self.resolve_url(kwargs.pop('channel'))
             if not result or not isinstance(result, Iterable):
                 return [], 0, 0
-            kwargs['channel_id'] = result['_id']
+            kwargs['channel_id'] = result['claim_id']
         try:
             result = await self.client.search(expand_query(**kwargs), index=self.index)
         except NotFoundError:
@@ -214,18 +219,18 @@ class SearchIndex:
 
     async def _get_referenced_rows(self, txo_rows: List[dict]):
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
-        repost_hashes = set(filter(None, map(itemgetter('reposted_claim_hash'), txo_rows)))
-        channel_hashes = set(filter(None, (row['channel_hash'] for row in txo_rows)))
-        channel_hashes |= set(filter(None, (row['censoring_channel_hash'] for row in txo_rows)))
+        repost_hashes = set(filter(None, map(itemgetter('reposted_claim_id'), txo_rows)))
+        channel_hashes = set(filter(None, (row['channel_id'] for row in txo_rows)))
+        channel_hashes |= set(map(claim_id, filter(None, (row['censoring_channel_hash'] for row in txo_rows))))
 
         reposted_txos = []
         if repost_hashes:
-            reposted_txos, _, _ = await self.search(limit=100, **{'claim_hash__in': list(repost_hashes)})
+            reposted_txos = await self.get_many(*repost_hashes)
             channel_hashes |= set(filter(None, (row['channel_hash'] for row in reposted_txos)))
 
         channel_txos = []
         if channel_hashes:
-            channel_txos, _, _ = await self.search(limit=100, **{'claim_hash__in': list(channel_hashes)})
+            channel_txos = await self.get_many(*channel_hashes)
 
         # channels must come first for client side inflation to work properly
         return channel_txos + reposted_txos
@@ -393,6 +398,9 @@ def expand_query(**kwargs):
         if isinstance(kwargs["order_by"], str):
             kwargs["order_by"] = [kwargs["order_by"]]
         for value in kwargs['order_by']:
+            if 'trending_mixed' in value:
+                # fixme: trending_mixed is 0 for all records on variable decay, making sort slow.
+                continue
             is_asc = value.startswith('^')
             value = value[1:] if is_asc else value
             value = REPLACEMENTS.get(value, value)
@@ -413,12 +421,13 @@ def expand_query(**kwargs):
 
 def expand_result(results):
     inner_hits = []
+    expanded = []
     for result in results:
         if result.get("inner_hits"):
             for _, inner_hit in result["inner_hits"].items():
                 inner_hits.extend(inner_hit["hits"]["hits"])
             continue
-        result.update(result.pop('_source'))
+        result = result['_source']
         result['claim_hash'] = unhexlify(result['claim_id'])[::-1]
         if result['reposted_claim_id']:
             result['reposted_claim_hash'] = unhexlify(result['reposted_claim_id'])[::-1]
@@ -429,6 +438,7 @@ def expand_result(results):
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
         if result['censoring_channel_hash']:
             result['censoring_channel_hash'] = unhexlify(result['censoring_channel_hash'])[::-1]
+        expanded.append(result)
     if inner_hits:
         return expand_result(inner_hits)
-    return results
+    return expanded
