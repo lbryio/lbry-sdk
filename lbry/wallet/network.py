@@ -296,10 +296,13 @@ class Network:
                 log.info("maintaining connection to spv server %s", server_str)
                 self._keepalive_task = asyncio.create_task(self.client.keepalive_loop())
                 try:
-                    await asyncio.wait(
-                        [self._keepalive_task, self._urgent_need_reconnect.wait()],
-                        return_when=asyncio.FIRST_COMPLETED
-                    )
+                    if not self._urgent_need_reconnect.is_set():
+                        await asyncio.wait(
+                            [self._keepalive_task, self._urgent_need_reconnect.wait()],
+                            return_when=asyncio.FIRST_COMPLETED
+                        )
+                    else:
+                        await self._keepalive_task
                     if self._urgent_need_reconnect.is_set():
                         log.warning("urgent reconnect needed")
                         self._urgent_need_reconnect.clear()
