@@ -4021,7 +4021,10 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             collections = partial(self.ledger.get_collections, wallet=wallet, accounts=wallet.accounts)
             collection_count = partial(self.ledger.get_collection_count, wallet=wallet, accounts=wallet.accounts)
-        return paginate_rows(collections, collection_count, page, page_size, resolve=resolve, resolve_claims=resolve_claims)
+        return paginate_rows(
+            collections, collection_count, page, page_size,
+            resolve=resolve, resolve_claims=resolve_claims
+        )
 
     async def jsonrpc_collection_resolve(
             self, claim_id=None, url=None, wallet_id=None, page=1, page_size=DEFAULT_PAGE_SIZE):
