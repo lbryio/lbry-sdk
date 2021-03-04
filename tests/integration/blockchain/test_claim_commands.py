@@ -2029,10 +2029,10 @@ class CollectionCommands(CommandTestCase):
         await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
         collections = await self.out(self.daemon.jsonrpc_collection_list())
         self.assertEquals(len(collections['items']), 2)
+        self.assertNotIn('canonical_url', collections['items'][0])
 
-        # resolve flag resolves collection claim
-        resolved_collections_tx = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
-        self.assertIn('canonical_url', resolved_collections_tx[0])
+        resolved_collections = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
+        self.assertIn('canonical_url', resolved_collections['items'][0])
 
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
