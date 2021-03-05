@@ -166,9 +166,9 @@ class SearchIndex:
 
     async def get_many(self, *claim_ids):
         cached = {claim_id: self.search_cache.get(claim_id) for claim_id in claim_ids if claim_id in self.search_cache}
-        missing = {claim_id for claim_id in claim_ids if claim_id not in cached}
+        missing = [claim_id for claim_id in claim_ids if claim_id not in cached]
         if missing:
-            results = await self.client.mget(index=self.index, body={"ids": claim_ids},
+            results = await self.client.mget(index=self.index, body={"ids": missing},
                                              _source_excludes=['description', 'title'])
             results = expand_result(filter(lambda doc: doc['found'], results["docs"]))
             for result in results:
@@ -347,12 +347,13 @@ def expand_query(**kwargs):
     query = {'must': [], 'must_not': []}
     collapse = None
     for key, value in kwargs.items():
-        if value is None or isinstance(value, list) and len(value) == 0:
-            continue
         key = key.replace('claim.', '')
         many = key.endswith('__in') or isinstance(value, list)
         if many:
             key = key.replace('__in', '')
+            value = list(filter(None, value))
+        if value is None or isinstance(value, list) and len(value) == 0:
+            continue
         key = REPLACEMENTS.get(key, key)
         if key in FIELDS:
             partial_id = False
