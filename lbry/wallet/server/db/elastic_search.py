@@ -94,7 +94,7 @@ class SearchIndex:
             else:
                 yield extract_doc(doc, self.index)
             count += 1
-            if count % 100:
+            if count % 100 == 0:
                 self.logger.info("Indexing in progress, %d claims.", count)
         self.logger.info("Indexing done for %d claims.", count)
 
@@ -205,7 +205,6 @@ class SearchIndex:
                 result = result[0]['claim_id']
                 self.short_id_cache[key] = result
         return self.short_id_cache.get(key, None)
-
 
     async def search(self, **kwargs):
         if 'channel' in kwargs:
