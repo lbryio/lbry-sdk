@@ -233,7 +233,7 @@ class SQLDB:
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
         self.trending = trending
-        self.claim_queue = Queue()
+        self.pending_deletes = set()
 
     def open(self):
         self.db = apsw.Connection(
@@ -852,18 +852,24 @@ class SQLDB:
 
             claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
             claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
-            self.claim_queue.put_nowait(('update', claim))
+            yield 'update', claim
+
+    def clear_changelog(self):
         self.execute("delete from changelog;")
 
-    def enqueue_deleted(self, deleted_claims):
-        for claim_hash in deleted_claims:
-            self.claim_queue.put_nowait(('delete', hexlify(claim_hash[::-1]).decode()))
+    def claim_producer(self):
+        while self.pending_deletes:
+            claim_hash = self.pending_deletes.pop()
+            yield 'delete', hexlify(claim_hash[::-1]).decode()
+        for claim in self.enqueue_changes():
+            yield claim
+        self.clear_changelog()
 
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
         update_claims = []
         update_claim_hashes = set()
-        delete_claim_hashes = set()
+        delete_claim_hashes = self.pending_deletes
         insert_supports = []
         delete_support_txo_hashes = set()
         recalculate_claim_hashes = set()  # added/deleted supports, added/updated claim
@@ -943,8 +949,6 @@ class SQLDB:
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         for algorithm in self.trending:
             r(algorithm.run, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
-        r(self.enqueue_deleted, delete_claim_hashes)
-        r(self.enqueue_changes)
 
 
 class LBRYLevelDB(LevelDB):

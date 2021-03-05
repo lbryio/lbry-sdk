@@ -83,25 +83,26 @@ class SearchIndex:
     def delete_index(self):
         return self.client.indices.delete(self.index, ignore_unavailable=True)
 
-    async def _queue_consumer_doc_producer(self, queue: asyncio.Queue):
-        while not queue.empty():
-            op, doc = queue.get_nowait()
+    async def _consume_claim_producer(self, claim_producer):
+        count = 0
+        for op, doc in claim_producer:
             if op == 'delete':
                 yield {'_index': self.index, '_op_type': 'delete', '_id': doc}
             else:
                 yield extract_doc(doc, self.index)
+            count += 1
+            if count % 100:
+                self.logger.info("Indexing in progress, %d claims.", count)
+        self.logger.info("Indexing done for %d claims.", count)
 
-    async def sync_queue(self, claim_queue):
-        self.logger.info("Writing to index from a queue with %d elements.", claim_queue.qsize())
+    async def claim_consumer(self, claim_producer):
         await self.client.indices.refresh(self.index)
-        async for ok, item in async_streaming_bulk(self.client, self._queue_consumer_doc_producer(claim_queue)):
+        async for ok, item in async_streaming_bulk(self.client, self._consume_claim_producer(claim_producer)):
             if not ok:
                 self.logger.warning("indexing failed for an item: %s", item)
         await self.client.indices.refresh(self.index)
         await self.client.indices.flush(self.index)
-        self.logger.info("Indexing done. Queue: %d elements", claim_queue.qsize())
-        self.search_cache.clear()
-        self.channel_cache.clear()
+        self.logger.info("Indexing done.")
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         def make_query(censor_type, blockdict, channels=False):
@@ -134,6 +135,8 @@ class SearchIndex:
             await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
+        self.search_cache.clear()
+        self.channel_cache.clear()
 
     async def delete_above_height(self, height):
         await self.client.delete_by_query(self.index, expand_query(height='>'+str(height)))

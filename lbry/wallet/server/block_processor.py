@@ -215,7 +215,7 @@ class BlockProcessor:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
             if self.sql:
-                await self.db.search_index.sync_queue(self.sql.claim_queue)
+                await self.db.search_index.claim_consumer(self.sql.claim_producer())
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
