@@ -1,5 +1,7 @@
 import asyncio
+import json
 import struct
+import zlib
 from binascii import hexlify, unhexlify
 from decimal import Decimal
 from operator import itemgetter
@@ -26,6 +28,7 @@ class SearchIndex:
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.claim_cache = LRUCache(2 ** 15)  # invalidated on touched
         self.short_id_cache = LRUCache(2 ** 17)  # never invalidated, since short ids are forever
+        self.search_cache = LRUCache(2 ** 17)  # fixme: dont let session manager replace it
 
     async def start(self):
         if self.client:
@@ -145,6 +148,7 @@ class SearchIndex:
             await self.client.indices.refresh(self.index)
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
+        self.search_cache.clear()
 
     async def delete_above_height(self, height):
         await self.client.delete_by_query(self.index, expand_query(height='>'+str(height)))
@@ -210,7 +214,14 @@ class SearchIndex:
                 return [], 0, 0
             kwargs['channel_id'] = result['claim_id']
         try:
-            result = await self.client.search(expand_query(**kwargs), index=self.index)
+            expanded = expand_query(**kwargs)
+            cache_item = ResultCacheItem.from_cache(json.dumps(expanded, sort_keys=True), self.search_cache)
+            async with cache_item.lock:
+                if cache_item.result:
+                    result = json.loads(zlib.decompress(cache_item.result))
+                else:
+                    result = await self.client.search(expand_query(**kwargs), index=self.index)
+                    cache_item.result = zlib.compress(json.dumps(result).encode(), 1)
         except NotFoundError:
             # index has no docs, fixme: log something
             return [], 0, 0
@@ -408,13 +419,13 @@ def expand_query(**kwargs):
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
                 if key == 'fee_amount':
-                    value = Decimal(value)*1000
+                    value = str(Decimal(value)*1000)
                 query['must'].append({"range": {key: {ops[operator]: value}}})
             elif many:
                 query['must'].append({"terms": {key: value}})
             else:
                 if key == 'fee_amount':
-                    value = Decimal(value)*1000
+                    value = str(Decimal(value)*1000)
                 query['must'].append({"term": {key: {"value": value}}})
         elif key == 'not_channel_ids':
             for channel_id in value:
@@ -516,3 +527,29 @@ def expand_result(results):
     if inner_hits:
         return expand_result(inner_hits)
     return expanded
+
+
+class ResultCacheItem:
+    __slots__ = '_result', 'lock', 'has_result'
+
+    def __init__(self):
+        self.has_result = asyncio.Event()
+        self.lock = asyncio.Lock()
+        self._result = None
+
+    @property
+    def result(self) -> str:
+        return self._result
+
+    @result.setter
+    def result(self, result: str):
+        self._result = result
+        if result is not None:
+            self.has_result.set()
+
+    @classmethod
+    def from_cache(cls, cache_key, cache):
+        cache_item = cache.get(cache_key)
+        if cache_item is None:
+            cache_item = cache[cache_key] = ResultCacheItem()
+        return cache_item

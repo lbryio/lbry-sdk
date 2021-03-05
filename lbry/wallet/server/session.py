@@ -811,9 +811,6 @@ class LBRYSessionManager(SessionManager):
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
-        self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = LRUCacheWithMetrics(2 ** 14, metric_name='search', namespace=NAMESPACE)
-        self.search_cache['resolve'] = LRUCacheWithMetrics(2 ** 16, metric_name='resolve', namespace=NAMESPACE)
 
     async def process_metrics(self):
         while self.running:
@@ -1008,23 +1005,7 @@ class LBRYElectrumX(SessionBase):
     async def run_and_cache_query(self, query_name, kwargs):
         if isinstance(kwargs, dict):
             kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
-        metrics = self.get_metrics_or_placeholder_for_api(query_name)
-        metrics.start()
-        cache = self.session_mgr.search_cache[query_name]
-        cache_key = str(kwargs)
-        cache_item = cache.get(cache_key)
-        if cache_item is None:
-            cache_item = cache[cache_key] = ResultCacheItem()
-        elif cache_item.result is not None:
-            metrics.cache_response()
-            return cache_item.result
-        async with cache_item.lock:
-            if cache_item.result is None:
-                cache_item.result = await self.db.search_index.session_query(query_name, kwargs)
-            else:
-                metrics = self.get_metrics_or_placeholder_for_api(query_name)
-                metrics.cache_response()
-            return cache_item.result
+        return await self.db.search_index.session_query(query_name, kwargs)
 
     async def mempool_compact_histogram(self):
         return self.mempool.compact_fee_histogram()
@@ -1588,25 +1569,6 @@ class LocalRPC(SessionBase):
 
     def protocol_version_string(self):
         return 'RPC'
-
-
-class ResultCacheItem:
-    __slots__ = '_result', 'lock', 'has_result'
-
-    def __init__(self):
-        self.has_result = asyncio.Event()
-        self.lock = asyncio.Lock()
-        self._result = None
-
-    @property
-    def result(self) -> str:
-        return self._result
-
-    @result.setter
-    def result(self, result: str):
-        self._result = result
-        if result is not None:
-            self.has_result.set()
 
 
 def get_from_possible_keys(dictionary, *keys):
