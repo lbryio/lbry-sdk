@@ -1889,6 +1889,28 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(claim['value']['languages'], ['uk-UA'])
         self.assertEqual(claim['value']['tags'], ['anime'])
 
+        # publish a stream with no source
+        tx5 = await self.publish(
+            'future-release', bid='0.1', languages='uk-UA', tags=['Anime', 'anime '], no_file_path=True
+        )
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 2)
+        claim = await self.resolve('lbry://future-release')
+        self.assertEqual(claim['txid'], tx5['outputs'][0]['txid'])
+        self.assertNotIn('signing_channel', claim)
+        self.assertEqual(claim['value']['languages'], ['uk-UA'])
+        self.assertEqual(claim['value']['tags'], ['anime'])
+        self.assertNotIn('source', claim['value'])
+
+        # update the stream to have a source
+        with tempfile.NamedTemporaryFile() as file:
+            file.write(b'hi')
+            file.flush()
+            tx6 = await self.publish('future-release', file_path=file.name, tags=['something-else'])
+        claim = await self.resolve('lbry://future-release')
+        self.assertEqual(claim['txid'], tx6['outputs'][0]['txid'])
+        self.assertEqual(claim['value']['tags'], ['something-else'])
+        self.assertIn('source', claim['value'])
+
 
 class SupportCommands(CommandTestCase):
 
