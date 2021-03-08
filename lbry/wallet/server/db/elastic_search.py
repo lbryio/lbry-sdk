@@ -101,7 +101,8 @@ class SearchIndex:
     async def claim_consumer(self, claim_producer):
         await self.client.indices.refresh(self.index)
         touched = set()
-        async for ok, item in async_streaming_bulk(self.client, self._consume_claim_producer(claim_producer)):
+        async for ok, item in async_streaming_bulk(self.client, self._consume_claim_producer(claim_producer),
+                                                   raise_on_error=False):
             if not ok:
                 self.logger.warning("indexing failed for an item: %s", item)
             else:
@@ -283,8 +284,10 @@ class SearchIndex:
                 claim_id = url.stream.claim_id
             else:
                 claim_id = await self.full_id_from_short_id(query['name'], query['claim_id'], channel_id)
-            stream = await self.get_many(claim_id)
-            return stream[0] if len(stream) else None
+            if claim_id:
+                stream = await self.get_many(claim_id)
+                return stream[0] if len(stream) else None
+            return None
 
         if channel_id is not None:
             if set(query) == {'name'}:
