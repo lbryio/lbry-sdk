@@ -8,6 +8,7 @@ from operator import itemgetter
 from typing import Optional, List, Iterable
 
 from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
+from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import async_streaming_bulk
 
 from lbry.crypto.base58 import Base58
@@ -228,6 +229,8 @@ class SearchIndex:
                         expand_query(**kwargs), index=self.index, track_total_hits=200
                     )
                     cache_item.result = zlib.compress(json.dumps(result).encode(), 1)
+        except ConnectionTimeout:
+            raise TimeoutError()
         except NotFoundError:
             # index has no docs, fixme: log something
             return [], 0, 0
