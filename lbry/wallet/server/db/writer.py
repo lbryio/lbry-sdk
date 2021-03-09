@@ -973,7 +973,7 @@ class LBRYLevelDB(LevelDB):
             )
 
         # Search index
-        self.search_index = SearchIndex(self.env.es_index_prefix)
+        self.search_index = SearchIndex(self.env.es_index_prefix, self.env.database_query_timeout)
 
     def close(self):
         super().close()
