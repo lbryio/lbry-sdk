@@ -220,7 +220,7 @@ class SearchIndex:
                 if cache_item.result:
                     result = json.loads(zlib.decompress(cache_item.result))
                 else:
-                    result = await self.client.search(expand_query(**kwargs), index=self.index)
+                    result = await self.client.search(expand_query(**kwargs), index=self.index, track_total_hits=200)
                     cache_item.result = zlib.compress(json.dumps(result).encode(), 1)
         except NotFoundError:
             # index has no docs, fixme: log something
