@@ -108,6 +108,9 @@ class ResolveCommand(BaseResolveTestCase):
         await self.support_create(claim_id1, '0.29')
         await self.assertResolvesToClaimId('@foo', claim_id1)
 
+        await self.support_abandon(claim_id1)
+        await self.assertResolvesToClaimId('@foo', claim_id2)
+
     async def test_advanced_resolve(self):
         claim_id1 = self.get_claim_id(
             await self.stream_create('foo', '0.7', allow_duplicate_name=True))
@@ -129,12 +132,12 @@ class ResolveCommand(BaseResolveTestCase):
         await self.channel_create('@abc', '0.2', allow_duplicate_name=True)
         await self.channel_create('@abc', '1.0', allow_duplicate_name=True)
 
-        channel_id = self.get_claim_id(
-            await self.channel_create('@abc', '1.1', allow_duplicate_name=True))
+        channel_id = self.get_claim_id(await self.channel_create('@abc', '1.1', allow_duplicate_name=True))
         await self.assertResolvesToClaimId(f'@abc', channel_id)
         await self.assertResolvesToClaimId(f'@abc#{channel_id[:10]}', channel_id)
         await self.assertResolvesToClaimId(f'@abc#{channel_id}', channel_id)
-        channel = (await self.claim_search(claim_id=channel_id))[0]
+
+        channel = await self.claim_get(channel_id)
         await self.assertResolvesToClaimId(channel['short_url'], channel_id)
         await self.assertResolvesToClaimId(channel['canonical_url'], channel_id)
         await self.assertResolvesToClaimId(channel['permanent_url'], channel_id)
@@ -146,7 +149,8 @@ class ResolveCommand(BaseResolveTestCase):
 
         claim_id1 = self.get_claim_id(
             await self.stream_create('foo', '0.7', allow_duplicate_name=True, channel_id=channel['claim_id']))
-        claim1 = (await self.claim_search(claim_id=claim_id1))[0]
+        claim1 = await self.claim_get(claim_id=claim_id1)
+
         await self.assertResolvesToClaimId('foo', claim_id1)
         await self.assertResolvesToClaimId('@abc/foo', claim_id1)
         await self.assertResolvesToClaimId(claim1['short_url'], claim_id1)
@@ -155,7 +159,7 @@ class ResolveCommand(BaseResolveTestCase):
 
         claim_id2 = self.get_claim_id(
             await self.stream_create('foo', '0.8', allow_duplicate_name=True, channel_id=channel['claim_id']))
-        claim2 = (await self.claim_search(claim_id=claim_id2))[0]
+        claim2 = await self.claim_get(claim_id=claim_id2)
         await self.assertResolvesToClaimId('foo', claim_id2)
         await self.assertResolvesToClaimId('@abc/foo', claim_id2)
         await self.assertResolvesToClaimId(claim2['short_url'], claim_id2)
@@ -204,7 +208,7 @@ class ResolveCommand(BaseResolveTestCase):
         response = await self.resolve(uri)
         self.assertTrue(response['is_channel_signature_valid'])
         self.assertEqual(response['txid'], valid_claim['txid'])
-        claims = await self.claim_search(name='on-channel-claim')
+        claims = [await self.resolve('on-channel-claim'), await self.resolve('on-channel-claim$2')]
         self.assertEqual(2, len(claims))
         self.assertEqual(
             {channel['claim_id']}, {claim['signing_channel']['claim_id'] for claim in claims}

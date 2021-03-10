@@ -2225,7 +2225,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = wallet.get_accounts_or_all(funding_account_ids)
         txo = None
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, accounts, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
                 raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
         elif url:
@@ -4113,7 +4113,7 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error("amount", amount)
-        claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+        claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
             account = wallet.get_account_or_default(account_id)
