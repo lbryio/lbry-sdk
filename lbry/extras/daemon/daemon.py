@@ -3288,9 +3288,9 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs.update(spec)
 
         claim = Claim()
-        if file_path is not None and 'sd_hash' not in kwargs:
-            kwargs['sd_hash'] = '0' * 96
-        claim.stream.update(file_path=file_path, **kwargs)
+        claim.stream.update(**kwargs)
+        if file_path is not None:
+            claim.stream.update(file_path=file_path, sd_hash='0' * 96)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
