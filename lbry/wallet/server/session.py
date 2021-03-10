@@ -17,6 +17,8 @@ from functools import partial
 
 from binascii import hexlify
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
@@ -1009,7 +1011,7 @@ class LBRYElectrumX(SessionBase):
         try:
             self.session_mgr.pending_query_metric.inc()
             return await self.db.search_index.session_query(query_name, kwargs)
-        except (TimeoutError, asyncio.TimeoutError):
+        except ConnectionTimeout:
             self.session_mgr.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
         finally:

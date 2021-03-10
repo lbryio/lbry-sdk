@@ -1,14 +1,12 @@
 import asyncio
 import json
 import struct
-import zlib
 from binascii import hexlify, unhexlify
 from decimal import Decimal
 from operator import itemgetter
 from typing import Optional, List, Iterable
 
 from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
-from elasticsearch.exceptions import ConnectionTimeout
 from elasticsearch.helpers import async_streaming_bulk
 
 from lbry.crypto.base58 import Base58
@@ -162,17 +160,25 @@ class SearchIndex:
     async def session_query(self, query_name, kwargs):
         offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
         total_referenced = []
+        cache_item = None
         if query_name == 'resolve':
             total_referenced, response, censor = await self.resolve(*kwargs)
         else:
-            censor = Censor(Censor.SEARCH)
-            response, offset, total = await self.search(**kwargs)
-            censor.apply(response)
-            total_referenced.extend(response)
-            if censor.censored:
-                response, _, _ = await self.search(**kwargs, censor_type=0)
+            cache_item = ResultCacheItem.from_cache(json.dumps(kwargs, sort_keys=True), self.search_cache)
+            async with cache_item.lock:
+                if cache_item.result:
+                    return cache_item.result
+                censor = Censor(Censor.SEARCH)
+                response, offset, total = await self.search(**kwargs)
+                censor.apply(response)
                 total_referenced.extend(response)
-        return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
+                if censor.censored:
+                    response, _, _ = await self.search(**kwargs, censor_type=0)
+                    total_referenced.extend(response)
+        result = Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
+        if cache_item:
+            cache_item.result = result
+        return result
 
     async def resolve(self, *urls):
         censor = Censor(Censor.RESOLVE)
@@ -219,18 +225,9 @@ class SearchIndex:
                 return [], 0, 0
             kwargs['channel_id'] = result['claim_id']
         try:
-            expanded = expand_query(**kwargs)
-            cache_item = ResultCacheItem.from_cache(json.dumps(expanded, sort_keys=True), self.search_cache)
-            async with cache_item.lock:
-                if cache_item.result:
-                    result = json.loads(zlib.decompress(cache_item.result))
-                else:
-                    result = await self.search_client.search(
-                        expand_query(**kwargs), index=self.index, track_total_hits=200
-                    )
-                    cache_item.result = zlib.compress(json.dumps(result).encode(), 1)
-        except ConnectionTimeout:
-            raise TimeoutError()
+            result = await self.search_client.search(
+                expand_query(**kwargs), index=self.index, track_total_hits=200
+            )
         except NotFoundError:
             # index has no docs, fixme: log something
             return [], 0, 0
