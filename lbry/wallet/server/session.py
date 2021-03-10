@@ -1275,10 +1275,9 @@ class LBRYElectrumX(SessionBase):
         address: the address to subscribe to"""
         if len(addresses) > 1000:
             raise RPCError(BAD_REQUEST, f'too many addresses in subscription request: {len(addresses)}')
-        hashXes = [
-            (self.address_to_hashX(address), address) for address in addresses
+        return [
+            await self.hashX_subscribe(self.address_to_hashX(address), address) for address in addresses
         ]
-        return [await self.hashX_subscribe(*args) for args in hashXes]
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
