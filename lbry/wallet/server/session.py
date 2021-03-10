@@ -1552,15 +1552,14 @@ class LBRYElectrumX(SessionBase):
             else:
                 batch_result[tx_hash] = [raw_tx, {'block_height': -1}]
 
-        def threaded_get_merkle():
+        if needed_merkles:
             for tx_hash, (raw_tx, block_txs, pos, block_height) in needed_merkles.items():
                 batch_result[tx_hash] = raw_tx, {
                     'merkle': self._get_merkle_branch(block_txs, pos),
                     'pos': pos,
                     'block_height': block_height
                 }
-        if needed_merkles:
-            await asyncio.get_running_loop().run_in_executor(self.db.executor, threaded_get_merkle)
+                await asyncio.sleep(0)  # heavy call, give other tasks a chance
 
         self.session_mgr.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
