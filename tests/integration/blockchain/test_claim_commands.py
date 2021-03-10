@@ -1844,9 +1844,6 @@ class StreamCommands(ClaimTestCase):
         with self.assertRaisesRegex(Exception, "'bid' is a required argument for new publishes."):
             await self.daemon.jsonrpc_publish('foo')
 
-        with self.assertRaisesRegex(Exception, "'file_path' is a required argument for new publishes."):
-            await self.daemon.jsonrpc_publish('foo', bid='1.0')
-
         # successfully create stream
         with tempfile.NamedTemporaryFile() as file:
             file.write(b'hi')
@@ -1891,7 +1888,7 @@ class StreamCommands(ClaimTestCase):
 
         # publish a stream with no source
         tx5 = await self.publish(
-            'future-release', bid='0.1', languages='uk-UA', tags=['Anime', 'anime '], no_file_path=True
+            'future-release', bid='0.1', languages='uk-UA', tags=['Anime', 'anime ']
         )
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 2)
         claim = await self.resolve('lbry://future-release')
