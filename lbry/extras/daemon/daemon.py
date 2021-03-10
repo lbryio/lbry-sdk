@@ -2970,7 +2970,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Create or replace a stream claim at a given name (use 'stream create/update' for more control).
 
         Usage:
-            publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path> | --no_file_path]
+            publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
                     [--validate_file] [--optimize_file]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
@@ -2987,7 +2987,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
-            --no_file_path                 : (bool) don't associate a file to the name at this time.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3076,13 +3075,9 @@ class Daemon(metaclass=JSONRPCServerType):
         if len(claims) == 0:
             if 'bid' not in kwargs:
                 raise Exception("'bid' is a required argument for new publishes.")
-            if 'file_path' not in kwargs and not kwargs.get('no_file_path', False):
-                raise Exception("'file_path' is a required argument for new publishes.")
             return await self.jsonrpc_stream_create(name, **kwargs)
         elif len(claims) == 1:
             assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
-            if 'no_file_path' in kwargs:
-                kwargs.pop('no_file_path')
             return await self.jsonrpc_stream_update(claims[0].claim_id, replace=True, **kwargs)
         raise Exception(
             f"There are {len(claims)} claims for '{name}', please use 'stream update' command "
@@ -3166,13 +3161,13 @@ class Daemon(metaclass=JSONRPCServerType):
             self, name, bid, file_path=None, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
-            preview=False, blocking=False, validate_file=False, optimize_file=False, no_file_path=False, **kwargs):
+            preview=False, blocking=False, validate_file=False, optimize_file=False, **kwargs):
         """
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
             stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                    (<file_path> | --file_path=<file_path> | --no_file_path)
+                    [<file_path> | --file_path=<file_path>]
                     [--validate_file] [--optimize_file]
                     [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
@@ -3190,7 +3185,6 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
-            --no_file_path                 : (bool) don't associate a file to the name at this time.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3287,16 +3281,16 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"Use --allow-duplicate-name flag to override."
                 )
 
-        if not no_file_path:
+        if file_path is not None:
             file_path, spec = await self._video_file_analyzer.verify_or_repair(
                 validate_file, optimize_file, file_path, ignore_non_video=True
             )
             kwargs.update(spec)
 
         claim = Claim()
-        if not no_file_path and 'sd_hash' not in kwargs:
+        if file_path is not None and 'sd_hash' not in kwargs:
             kwargs['sd_hash'] = '0' * 96
-        claim.stream.update(file_path=file_path if not no_file_path else None, **kwargs)
+        claim.stream.update(file_path=file_path, **kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
@@ -3304,7 +3298,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         file_stream = None
         if not preview:
-            if not no_file_path:
+            if file_path is not None:
                 file_stream = await self.file_manager.create_stream(file_path)
                 claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
@@ -3320,7 +3314,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 await self.storage.save_claims([self._old_get_temp_claim_info(
                     tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
                 )])
-                if not no_file_path:
+                if file_path is not None:
                     await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
 
             self.component_manager.loop.create_task(save_claims())
