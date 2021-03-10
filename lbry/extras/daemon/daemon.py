@@ -3288,19 +3288,19 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs.update(spec)
 
         claim = Claim()
-        claim.stream.update(**kwargs)
         if file_path is not None:
-            claim.stream.update(file_path=file_path, sd_hash='0' * 96)
+            claim.stream.update(file_path=file_path, sd_hash='0' * 96, **kwargs)
+        else:
+            claim.stream.update(**kwargs)
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
         file_stream = None
-        if not preview:
-            if file_path is not None:
-                file_stream = await self.file_manager.create_stream(file_path)
-                claim.stream.source.sd_hash = file_stream.sd_hash
+        if not preview and file_path is not None:
+            file_stream = await self.file_manager.create_stream(file_path)
+            claim.stream.source.sd_hash = file_stream.sd_hash
             new_txo.script.generate()
 
         if channel:
