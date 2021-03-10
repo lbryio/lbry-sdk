@@ -57,11 +57,29 @@ class BlockchainReorganizationTests(CommandTestCase):
         await self.assertBlockHash(209)
         await self.assertBlockHash(210)
         await self.assertBlockHash(211)
+        still_valid = await self.daemon.jsonrpc_stream_create(
+            'still-valid', '1.0', file_path=self.create_upload_file(data=b'hi!')
+        )
+        await self.ledger.wait(still_valid)
+        await self.blockchain.generate(1)
+        await self.ledger.on_header.where(lambda e: e.height == 212)
+        claim_id = still_valid.outputs[0].claim_id
+        c1 = (await self.resolve(f'still-valid#{claim_id}'))['claim_id']
+        c2 = (await self.resolve(f'still-valid#{claim_id[:2]}'))['claim_id']
+        c3 = (await self.resolve(f'still-valid'))['claim_id']
+        self.assertTrue(c1 == c2 == c3)
+
+        abandon_tx = await self.daemon.jsonrpc_stream_abandon(claim_id=claim_id)
+        await self.blockchain.generate(1)
+        await self.ledger.on_header.where(lambda e: e.height == 213)
+        c1 = await self.resolve(f'still-valid#{still_valid.outputs[0].claim_id}')
+        c2 = await self.daemon.jsonrpc_resolve([f'still-valid#{claim_id[:2]}'])
+        c3 = await self.daemon.jsonrpc_resolve([f'still-valid'])
 
     async def test_reorg_change_claim_height(self):
         # sanity check
-        txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
-        self.assertListEqual(txos, [])
+        result = await self.resolve('hovercraft')  # TODO: do these for claim_search and resolve both
+        self.assertIn('error', result)
 
         still_valid = await self.daemon.jsonrpc_stream_create(
             'still-valid', '1.0', file_path=self.create_upload_file(data=b'hi!')
@@ -82,17 +100,15 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertEqual(self.ledger.headers.height, 208)
         await self.assertBlockHash(208)
 
-        txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
-        self.assertEqual(1, len(txos))
-        txo = txos[0]
-        self.assertEqual(txo.tx_ref.id, broadcast_tx.id)
-        self.assertEqual(txo.tx_ref.height, 208)
+        claim = await self.resolve('hovercraft')
+        self.assertEqual(claim['txid'], broadcast_tx.id)
+        self.assertEqual(claim['height'], 208)
 
         # check that our tx is in block 208 as returned by lbrycrdd
         invalidated_block_hash = (await self.ledger.headers.hash(208)).decode()
         block_207 = await self.blockchain.get_block(invalidated_block_hash)
-        self.assertIn(txo.tx_ref.id, block_207['tx'])
-        self.assertEqual(208, txos[0].tx_ref.height)
+        self.assertIn(claim['txid'], block_207['tx'])
+        self.assertEqual(208, claim['height'])
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
@@ -109,10 +125,19 @@ class BlockchainReorganizationTests(CommandTestCase):
         reorg_block_hash = await self.blockchain.get_block_hash(208)
         self.assertNotEqual(invalidated_block_hash, reorg_block_hash)
         block_207 = await self.blockchain.get_block(reorg_block_hash)
-        self.assertNotIn(txo.tx_ref.id, block_207['tx'])
+        self.assertNotIn(claim['txid'], block_207['tx'])
 
         client_reorg_block_hash = (await self.ledger.headers.hash(208)).decode()
         self.assertEqual(client_reorg_block_hash, reorg_block_hash)
+
+        # verify the dropped claim is no longer returned by claim search
+        self.assertDictEqual(
+            {'error': {'name': 'NOT_FOUND', 'text': 'Could not find claim at "hovercraft".'}},
+            await self.resolve('hovercraft')
+        )
+
+        # verify the claim published a block earlier wasn't also reverted
+        self.assertEqual(207, (await self.resolve('still-valid'))['height'])
 
         # broadcast the claim in a different block
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
@@ -123,14 +148,9 @@ class BlockchainReorganizationTests(CommandTestCase):
         await asyncio.wait_for(self.on_header(210), 1.0)
 
         # verify the claim is in the new block and that it is returned by claim_search
-        block_210 = await self.blockchain.get_block((await self.ledger.headers.hash(210)).decode())
-        self.assertIn(txo.tx_ref.id, block_210['tx'])
-        txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
-        self.assertEqual(1, len(txos))
-        self.assertEqual(txos[0].tx_ref.id, new_txid)
-        self.assertEqual(210, txos[0].tx_ref.height)
+        republished = await self.resolve('hovercraft')
+        self.assertEqual(210, republished['height'])
+        self.assertEqual(claim['claim_id'], republished['claim_id'])
 
         # this should still be unchanged
-        txos, _, _, _ = await self.ledger.claim_search([], name='still-valid')
-        self.assertEqual(1, len(txos))
-        self.assertEqual(207, txos[0].tx_ref.height)
+        self.assertEqual(207, (await self.resolve('still-valid'))['height'])
