@@ -304,6 +304,10 @@ class Stream(BaseClaim):
         return self.message.HasField('fee')
 
     @property
+    def has_source(self) -> bool:
+        return self.message.HasField('source')
+
+    @property
     def source(self) -> Source:
         return Source(self.message.source)
 

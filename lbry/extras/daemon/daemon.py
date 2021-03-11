@@ -3495,9 +3495,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if replace:
             claim = Claim()
-            claim.stream.message.source.CopyFrom(
-                old_txo.claim.stream.message.source
-            )
+            if old_txo.claim.stream.has_source:
+                claim.stream.message.source.CopyFrom(
+                    old_txo.claim.stream.message.source
+                )
             stream_type = old_txo.claim.stream.stream_type
             if stream_type:
                 old_stream_type = getattr(old_txo.claim.stream.message, stream_type)
