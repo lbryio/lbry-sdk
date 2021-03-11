@@ -38,6 +38,7 @@ class SearchIndex:
         self.claim_cache = LRUCache(2 ** 15)  # invalidated on touched
         self.short_id_cache = LRUCache(2 ** 17)  # never invalidated, since short ids are forever
         self.search_cache = LRUCache(2 ** 17)  # fixme: dont let session manager replace it
+        self.resolution_cache = LRUCache(2 ** 17)
 
     async def start(self):
         if self.client:
@@ -160,6 +161,7 @@ class SearchIndex:
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
         self.search_cache.clear()
+        self.resolution_cache.clear()
 
     async def delete_above_height(self, height):
         await self.client.delete_by_query(self.index, expand_query(height='>'+str(height)))
@@ -253,6 +255,11 @@ class SearchIndex:
         return expand_result(result['hits']['hits']), 0, result['hits']['total']['value']
 
     async def resolve_url(self, raw_url):
+        if raw_url not in self.resolution_cache:
+            self.resolution_cache[raw_url] = await self._resolve_url(raw_url)
+        return self.resolution_cache[raw_url]
+
+    async def _resolve_url(self, raw_url):
         try:
             url = URL.parse(raw_url)
         except ValueError as e:
