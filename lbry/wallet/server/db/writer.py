@@ -447,7 +447,7 @@ class SQLDB:
                 UPDATE claim SET
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
-                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency, no_source=:no_source
+                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency, no_source=:no_source,
                     title=:title, duration=:duration, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;
