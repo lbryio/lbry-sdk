@@ -1898,6 +1898,16 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(claim['value']['tags'], ['anime'])
         self.assertNotIn('source', claim['value'])
 
+        # change metadata before the release
+        await self.publish(
+            'future-release', bid='0.1', tags=['Anime', 'anime ', 'psy-trance'], title='Psy will be over 9000!!!'
+        )
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 2)
+        claim = await self.resolve('lbry://future-release')
+        self.assertEqual(claim['value']['tags'], ['anime', 'psy-trance'])
+        self.assertEqual(claim['value']['title'], 'Psy will be over 9000!!!')
+        self.assertNotIn('source', claim['value'])
+
         # update the stream to have a source
         with tempfile.NamedTemporaryFile() as file:
             file.write(b'hi')
