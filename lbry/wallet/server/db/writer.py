@@ -55,6 +55,7 @@ class SQLDB:
             description text,
 
             claim_type integer,
+            no_source bool,
             reposted integer default 0,
 
             -- streams
@@ -354,6 +355,7 @@ class SQLDB:
                 'author': None,
                 'duration': None,
                 'claim_type': None,
+                'no_source': False,
                 'stream_type': None,
                 'media_type': None,
                 'release_time': None,
@@ -371,6 +373,7 @@ class SQLDB:
 
             if claim.is_stream:
                 claim_record['claim_type'] = CLAIM_TYPES['stream']
+                claim_record['no_source'] = not claim.stream.has_source
                 claim_record['media_type'] = claim.stream.source.media_type
                 claim_record['stream_type'] = STREAM_TYPES[guess_stream_type(claim_record['media_type'])]
                 claim_record['title'] = claim.stream.title
@@ -421,12 +424,12 @@ class SQLDB:
             self.executemany("""
                 INSERT OR IGNORE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
-                    claim_type, media_type, stream_type, timestamp, creation_timestamp,
+                    claim_type, media_type, stream_type, timestamp, creation_timestamp, no_source,
                     fee_currency, fee_amount, title, description, author, duration, height, reposted_claim_hash,
                     creation_height, release_time, activation_height, expiration_height, short_url)
                 VALUES (
                     :claim_hash, :claim_id, :claim_name, :normalized, :txo_hash, :tx_position, :amount,
-                    :claim_type, :media_type, :stream_type, :timestamp, :timestamp,
+                    :claim_type, :media_type, :stream_type, :timestamp, :timestamp, :no_source,
                     :fee_currency, :fee_amount, :title, :description, :author, :duration, :height, :reposted_claim_hash, :height,
                     CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE :timestamp END,
                     CASE WHEN :normalized NOT IN (SELECT normalized FROM claimtrie) THEN :height END,
@@ -444,7 +447,7 @@ class SQLDB:
                 UPDATE claim SET
                     txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
                     claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
-                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency,
+                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency, no_source=:no_source
                     title=:title, duration=:duration, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
                     release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
                 WHERE claim_hash=:claim_hash;

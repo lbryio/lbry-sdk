@@ -158,6 +158,13 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.stream_abandon(txid=signed2['txid'], nout=0)
         await self.assertFindsClaims([], channel_ids=[channel_id2])
 
+    async def test_source_filter(self):
+        # no source
+        no_source = await self.stream_create('no_source', data=None)
+        normal = await self.stream_create('normal', data=b'normal')
+        await self.assertFindsClaims([no_source], no_source=True)
+        await self.assertFindsClaims([normal], no_source=False)
+
     async def test_pagination(self):
         await self.create_channel()
         await self.create_lots_of_streams()
