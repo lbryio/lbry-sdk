@@ -2862,7 +2862,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         kwargs['type'] = 'channel'
-        if 'is_spent' not in kwargs:
+        if 'is_spent' not in kwargs or not kwargs['is_spent']:
             kwargs['is_not_spent'] = True
         return self.jsonrpc_txo_list(*args, **kwargs)
 
