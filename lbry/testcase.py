@@ -480,7 +480,7 @@ class CommandTestCase(IntegrationTestCase):
     async def stream_create(
             self, name='hovercraft', bid='1.0', file_path=None,
             data=b'hi!', confirm=True, prefix=None, suffix=None, **kwargs):
-        if file_path is None:
+        if file_path is None and data is not None:
             file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
         return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm

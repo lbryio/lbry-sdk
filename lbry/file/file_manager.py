@@ -117,9 +117,11 @@ class FileManager:
             if claim.stream.source.bt_infohash:
                 source_manager = self.source_managers['torrent']
                 existing = source_manager.get_filtered(bt_infohash=claim.stream.source.bt_infohash)
-            else:
+            elif claim.stream.source.sd_hash:
                 source_manager = self.source_managers['stream']
                 existing = source_manager.get_filtered(sd_hash=claim.stream.source.sd_hash)
+            else:
+                raise ResolveError(f"There is nothing to download at {uri} - Source is unknown or unset")
 
             # resume or update an existing stream, if the stream changed: download it and delete the old one after
             to_replace, updated_stream = None, None

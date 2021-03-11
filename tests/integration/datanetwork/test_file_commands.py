@@ -221,6 +221,20 @@ class FileCommands(CommandTestCase):
         file_list = (await self.daemon.jsonrpc_file_list())['items']
         self.assertEqual(file_list[0].stream_claim_info.claim.stream.description, claim.stream.description)
 
+    async def test_sourceless_content(self):
+        # claim has no source, then it has one
+        tx = await self.stream_create('foo', '0.01', data=None)
+        claim_id = self.get_claim_id(tx)
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        response = await self.out(self.daemon.jsonrpc_get('lbry://foo'))
+        self.assertIn('error', response)
+        self.assertIn('nothing to download', response['error'])
+        # source is set (there isn't a way to clear the source field, so we stop here for now)
+        await self.stream_update(claim_id, data=b'surpriiiiiiiise')
+        response = await self.out(self.daemon.jsonrpc_get('lbry://foo'))
+        self.assertNotIn('error', response)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+
     async def test_file_list_paginated_output(self):
         await self.create_streams_in_range(0, 20)
 
