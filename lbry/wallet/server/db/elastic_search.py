@@ -121,9 +121,6 @@ class SearchIndex:
                 touched.add(item['_id'])
         await self.client.indices.refresh(self.index)
         await self.client.indices.flush(self.index)
-        for claim_id in touched:
-            if claim_id in self.claim_cache:
-                self.claim_cache.pop(claim_id)
         self.logger.info("Indexing done.")
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
@@ -134,9 +131,6 @@ class SearchIndex:
                 update = expand_query(channel_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
             else:
                 update = expand_query(claim_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
-            for claim_id in blockdict:
-                if claim_id in self.claim_cache:
-                    self.claim_cache.pop(claim_id)
             key = 'channel_id' if channels else 'claim_id'
             update['script'] = {
                 "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_hash=params[ctx._source.{key}]",
@@ -161,6 +155,7 @@ class SearchIndex:
             await self.client.update_by_query(self.index, body=make_query(2, blocked_channels, True), slices=32)
             await self.client.indices.refresh(self.index)
         self.search_cache.clear()
+        self.claim_cache.clear()
         self.resolution_cache.clear()
 
     async def delete_above_height(self, height):
@@ -241,9 +236,10 @@ class SearchIndex:
 
     async def search(self, **kwargs):
         if 'channel' in kwargs:
-            result = await self.resolve_url(kwargs.pop('channel'))
-            if not result or not isinstance(result, Iterable):
+            results, _, _ = await self.resolve(kwargs.pop('channel'))
+            if not results or not isinstance(results, Iterable):
                 return [], 0, 0
+            result = results[0] if results else None
             kwargs['channel_id'] = result['claim_id']
         try:
             result = await self.search_client.search(
