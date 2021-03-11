@@ -236,11 +236,10 @@ class SearchIndex:
 
     async def search(self, **kwargs):
         if 'channel' in kwargs:
-            results, _, _ = await self.resolve(kwargs.pop('channel'))
-            if not results or not isinstance(results, Iterable):
+            channel_id = await self.resolve_url(kwargs.pop('channel'))
+            if not channel_id or not isinstance(channel_id, str):
                 return [], 0, 0
-            result = results[0] if results else None
-            kwargs['channel_id'] = result['claim_id']
+            kwargs['channel_id'] = channel_id
         try:
             result = await self.search_client.search(
                 expand_query(**kwargs), index=self.index, track_total_hits=200
