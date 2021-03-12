@@ -162,8 +162,9 @@ class ClaimSearchCommand(ClaimTestCase):
         # no source
         no_source = await self.stream_create('no_source', data=None)
         normal = await self.stream_create('normal', data=b'normal')
-        await self.assertFindsClaims([no_source], no_source=True)
-        await self.assertFindsClaims([normal], no_source=False)
+        await self.assertFindsClaims([no_source], has_no_source=True)
+        await self.assertFindsClaims([normal], has_source=True)
+        await self.assertFindsClaims([normal, no_source])
 
     async def test_pagination(self):
         await self.create_channel()
