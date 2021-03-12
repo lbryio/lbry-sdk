@@ -4,6 +4,7 @@ import lbry
 from unittest.mock import Mock
 
 from lbry.wallet.network import Network
+from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
 from lbry.wallet.server.udp import StatusServer
@@ -144,6 +145,21 @@ class ReconnectTests(IntegrationTestCase):
     #     for session in self.ledger.network.session_pool.sessions:
     #         session.response_time = None
     #     self.assertIsNone(self.ledger.network.session_pool.fastest_session)
+
+
+class UDPServerFailDiscoveryTest(AsyncioTestCase):
+
+    async def test_wallet_connects_despite_lack_of_udp(self):
+        conductor = Conductor()
+        conductor.spv_node.udp_port = '0'
+        await conductor.start_blockchain()
+        self.addCleanup(conductor.stop_blockchain)
+        await conductor.start_spv()
+        self.addCleanup(conductor.stop_spv)
+        self.assertFalse(conductor.spv_node.server.bp.status_server.is_running)
+        await asyncio.wait_for(conductor.start_wallet(), timeout=5)
+        self.addCleanup(conductor.stop_wallet)
+        self.assertFalse(conductor.wallet_node.ledger.network.is_connected)
 
 
 class ServerPickingTestCase(AsyncioTestCase):

@@ -168,6 +168,7 @@ class SPVNode:
         self.server = None
         self.hostname = 'localhost'
         self.port = 50001 + node_number  # avoid conflict with default daemon
+        self.udp_port = self.port
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
 
@@ -182,6 +183,7 @@ class SPVNode:
             'REORG_LIMIT': '100',
             'HOST': self.hostname,
             'TCP_PORT': str(self.port),
+            'UDP_PORT': str(self.udp_port),
             'SESSION_TIMEOUT': str(self.session_timeout),
             'MAX_QUERY_WORKERS': '0',
             'INDIVIDUAL_TAG_INDEXES': '',

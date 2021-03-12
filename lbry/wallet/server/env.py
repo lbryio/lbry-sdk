@@ -57,6 +57,7 @@ class Env:
         self.reorg_limit = self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
         self.tcp_port = self.integer('TCP_PORT', None)
+        self.udp_port = self.integer('UDP_PORT', self.tcp_port)
         self.ssl_port = self.integer('SSL_PORT', None)
         if self.ssl_port:
             self.ssl_certfile = self.required('SSL_CERTFILE')

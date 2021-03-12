@@ -138,7 +138,7 @@ class StatusServer:
         self._protocol: Optional[SPVServerStatusProtocol] = None
 
     async def start(self, height: int, tip: bytes, interface: str, port: int):
-        if self._protocol:
+        if self.is_running:
             return
         loop = asyncio.get_event_loop()
         self._protocol = SPVServerStatusProtocol(height, tip)
@@ -147,18 +147,25 @@ class StatusServer:
         log.info("started udp status server on %s:%i", interface, port)
 
     def stop(self):
-        if self._protocol:
+        if self.is_running:
             self._protocol.close()
             self._protocol = None
 
+    @property
+    def is_running(self):
+        return self._protocol is not None
+
     def set_unavailable(self):
-        self._protocol.set_unavailable()
+        if self.is_running:
+            self._protocol.set_unavailable()
 
     def set_available(self):
-        self._protocol.set_available()
+        if self.is_running:
+            self._protocol.set_available()
 
     def set_height(self, height: int, tip: bytes):
-        self._protocol.set_height(height, tip)
+        if self.is_running:
+            self._protocol.set_height(height, tip)
 
 
 class SPVStatusClientProtocol(asyncio.DatagramProtocol):
