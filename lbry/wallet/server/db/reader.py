@@ -53,7 +53,7 @@ SEARCH_PARAMS = {
     'any_locations', 'all_locations', 'not_locations',
     'any_languages', 'all_languages', 'not_languages',
     'is_controlling', 'limit', 'offset', 'order_by',
-    'no_totals', 'no_source'
+    'no_totals', 'has_source'
 } | INTEGER_PARAMS
 
 

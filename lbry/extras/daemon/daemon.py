@@ -2330,6 +2330,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
+                         [--has_source | --has_no_source]
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
@@ -2438,6 +2439,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+            --has_source                    : (bool) find claims containing a source field
+            --has_no_source                 : (bool) find claims not containing a source field
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
 
         Returns: {Paginated[Output]}
@@ -2449,6 +2452,8 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs['signature_valid'] = 1
         if kwargs.pop('invalid_channel_signature', False):
             kwargs['signature_valid'] = 0
+        if 'has_no_source' in kwargs:
+            kwargs['has_source'] = not kwargs.pop('has_no_source')
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
