@@ -164,11 +164,12 @@ class SearchIndex:
     async def session_query(self, query_name, kwargs):
         offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
         total_referenced = []
-        cache_item = None
         if query_name == 'resolve':
             total_referenced, response, censor = await self.resolve(*kwargs)
         else:
-            cache_item = ResultCacheItem.from_cache(json.dumps(kwargs, sort_keys=True), self.search_cache)
+            cache_item = ResultCacheItem.from_cache(str(kwargs), self.search_cache)
+            if cache_item.result is not None:
+                return cache_item.result
             async with cache_item.lock:
                 if cache_item.result:
                     return cache_item.result
@@ -179,10 +180,12 @@ class SearchIndex:
                 if censor.censored:
                     response, _, _ = await self.search(**kwargs, censor_type=0)
                     total_referenced.extend(response)
-        result = Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
-        if cache_item:
-            cache_item.result = result
-        return result
+                result = Outputs.to_base64(
+                    response, await self._get_referenced_rows(total_referenced), offset, total, censor
+                )
+                cache_item.result = result
+                return result
+        return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
 
     async def resolve(self, *urls):
         censor = Censor(Censor.RESOLVE)
