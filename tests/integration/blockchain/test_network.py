@@ -159,7 +159,7 @@ class UDPServerFailDiscoveryTest(AsyncioTestCase):
         self.assertFalse(conductor.spv_node.server.bp.status_server.is_running)
         await asyncio.wait_for(conductor.start_wallet(), timeout=5)
         self.addCleanup(conductor.stop_wallet)
-        self.assertFalse(conductor.wallet_node.ledger.network.is_connected)
+        self.assertTrue(conductor.wallet_node.ledger.network.is_connected)
 
 
 class ServerPickingTestCase(AsyncioTestCase):
