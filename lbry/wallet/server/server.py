@@ -111,8 +111,11 @@ class Server:
             return _flag.wait()
 
         await self.start_prometheus()
-        await self.bp.status_server.start(0, bytes.fromhex(self.bp.coin.GENESIS_HASH)[::-1]
-                                          , self.env.host, self.env.tcp_port)
+        if self.env.udp_port:
+            await self.bp.status_server.start(
+                0, bytes.fromhex(self.bp.coin.GENESIS_HASH)[::-1],
+                self.env.host, self.env.udp_port
+            )
         await _start_cancellable(self.bp.fetch_and_process_blocks)
 
         await self.db.populate_header_merkle_cache()
