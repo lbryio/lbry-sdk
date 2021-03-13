@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
-    def __init__(self, *args, network: 'Network', server, timeout=30, **kwargs):
+    def __init__(self, *args, network: 'Network', server, timeout=30, concurrency=32, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
@@ -29,7 +29,11 @@ class ClientSession(BaseClientSession):
         self.response_time: Optional[float] = None
         self.connection_latency: Optional[float] = None
         self._response_samples = 0
-        self._concurrency = asyncio.Semaphore(16)
+        self._concurrency = asyncio.Semaphore(concurrency)
+
+    @property
+    def concurrency(self):
+        return self._concurrency._value
 
     @property
     def available(self):
@@ -262,7 +266,8 @@ class Network:
     async def connect_to_fastest(self) -> Optional[ClientSession]:
         fastest_spvs = await self.get_n_fastest_spvs()
         for (host, port) in fastest_spvs:
-            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'])
+            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'],
+                                   concurrency=self.config['concurrent_hub_requests'])
             try:
                 await client.create_connection()
                 log.warning("Connected to spv server %s:%i", host, port)
