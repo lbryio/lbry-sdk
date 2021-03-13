@@ -131,7 +131,8 @@ class WalletNode:
                 self.ledger_class.get_id(): {
                     'api_port': self.port,
                     'default_servers': [(spv_node.hostname, spv_node.port)],
-                    'data_path': self.data_path
+                    'data_path': self.data_path,
+                    'hub_timeout': 30,
                 }
             },
             'wallets': [wallet_file_name]
