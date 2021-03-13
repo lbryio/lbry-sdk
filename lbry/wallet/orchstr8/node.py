@@ -136,6 +136,7 @@ class WalletNode:
                     'default_servers': Config.lbryum_servers.default,
                     'data_path': self.data_path,
                     'known_hubs': config.known_hubs if config else KnownHubsList()
+                    'hub_timeout': 30,
                 }
             },
             'wallets': [wallet_file_name]

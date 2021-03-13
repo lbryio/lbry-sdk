@@ -294,6 +294,7 @@ class Network:
                     (pong.country_name != self.jurisdiction):
                 continue
             client = ClientSession(network=self, server=(host, port))
+            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'])
             try:
                 await client.create_connection()
                 log.warning("Connected to spv server %s:%i", host, port)
