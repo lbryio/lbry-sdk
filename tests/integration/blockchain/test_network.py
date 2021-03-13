@@ -139,14 +139,18 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
-    async def test_timeout_propagated_from_config(self):
+    async def test_timeout_and_concurrency_propagated_from_config(self):
         conf = Config()
         self.assertEqual(self.ledger.network.client.timeout, 30)
+        self.assertEqual(self.ledger.network.client.concurrency, 32)
         conf.hub_timeout = 123.0
+        conf.concurrent_hub_requests = 42
         conf.lbryum_servers = self.ledger.config['default_servers']
+        conf.wallet_dir = self.ledger.config['data_path']
         self.manager.config = conf
         await self.manager.reset()
         self.assertEqual(self.ledger.network.client.timeout, 123)
+        self.assertEqual(self.ledger.network.client.concurrency, 42)
 
     # async def test_online_but_still_unavailable(self):
     #     # Edge case. See issue #2445 for context

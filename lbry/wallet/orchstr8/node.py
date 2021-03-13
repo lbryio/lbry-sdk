@@ -133,6 +133,7 @@ class WalletNode:
                     'default_servers': [(spv_node.hostname, spv_node.port)],
                     'data_path': self.data_path,
                     'hub_timeout': 30,
+                    'concurrent_hub_requests': 32,
                 }
             },
             'wallets': [wallet_file_name]

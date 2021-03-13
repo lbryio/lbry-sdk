@@ -566,6 +566,7 @@ class Config(CLIConfig):
         "Maximum number of peers to connect to while downloading a blob", 4,
         previous_names=['max_connections_per_stream']
     )
+    concurrent_hub_requests = Integer("Maximum number of concurrent hub requests", 32)
     fixed_peer_delay = Float(
         "Amount of seconds before adding the reflector servers as potential peers to download from in case dht"
         "peers are not found or are slow", 2.0
