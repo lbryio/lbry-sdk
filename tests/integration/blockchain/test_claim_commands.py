@@ -1376,6 +1376,14 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, filtered['channels'][0]['blocked'])
         self.assertTrue(filtered['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
 
+        # same search, but details omitted by 'no_totals'
+        last_result = result
+        result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', no_totals=True))
+        filtered = result['blocked']
+        self.assertEqual(0, filtered['total'])
+        self.assertEqual(0, len(filtered['channels']))
+        self.assertEqual(result['items'], last_result['items'])
+
         # content was filtered by not_tag before censoring
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', not_tags=["good", "bad"]))
         self.assertEqual(0, len(result['items']))
