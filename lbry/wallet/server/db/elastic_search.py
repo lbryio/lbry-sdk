@@ -361,6 +361,7 @@ def extract_doc(doc, index):
     doc['signature_valid'] = bool(doc['signature_valid'])
     doc['claim_type'] = doc.get('claim_type', 0) or 0
     doc['stream_type'] = int(doc.get('stream_type', 0) or 0)
+    doc['has_source'] = bool(doc['has_source'])
     return {'doc': doc, '_id': doc['claim_id'], '_index': index, '_op_type': 'update',
            'doc_as_upsert': True}
 
@@ -372,7 +373,7 @@ FIELDS = {'is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
           'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
           'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
-          'reposted_claim_id'}
+          'reposted_claim_id', 'has_source'}
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
