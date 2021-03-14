@@ -61,7 +61,11 @@ class SearchIndex:
                         "index":
                             {"refresh_interval": -1,
                              "number_of_shards": 1,
-                             "number_of_replicas": 0}
+                             "number_of_replicas": 0,
+                             "sort": {
+                                "field": ["trending_mixed", "release_time"],
+                                "order": ["desc", "desc"]
+                             }}
                     },
                 "mappings": {
                     "properties": {
@@ -82,6 +86,7 @@ class SearchIndex:
                         "claim_type": {"type": "byte"},
                         "censor_type": {"type": "byte"},
                         "trending_mixed": {"type": "float"},
+                        "release_time": {"type": "long"},
                     }
                 }
             }, ignore=400
