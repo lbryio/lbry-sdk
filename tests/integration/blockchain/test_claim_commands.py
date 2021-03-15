@@ -1367,6 +1367,11 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, blocked['channels'][0]['blocked'])
         self.assertTrue(blocked['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
 
+        # same search, but details omitted by 'no_totals'
+        last_result = result
+        result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content', no_totals=True))
+        self.assertEqual(result['items'], last_result['items'])
+
         # search inside channel containing filtered content
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel'))
         filtered = result['blocked']
@@ -1379,9 +1384,6 @@ class StreamCommands(ClaimTestCase):
         # same search, but details omitted by 'no_totals'
         last_result = result
         result = await self.out(self.daemon.jsonrpc_claim_search(channel='@some_channel', no_totals=True))
-        filtered = result['blocked']
-        self.assertEqual(0, filtered['total'])
-        self.assertEqual(0, len(filtered['channels']))
         self.assertEqual(result['items'], last_result['items'])
 
         # content was filtered by not_tag before censoring
@@ -1436,6 +1438,13 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, len(filtered['channels']))
         self.assertEqual(3, filtered['channels'][0]['blocked'])
         self.assertTrue(filtered['channels'][0]['channel']['short_url'].startswith('lbry://@filtering#'))
+
+        # same search, but details omitted by 'no_totals'
+        last_result = result
+        result = await self.out(
+            self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height'], no_totals=True)
+        )
+        self.assertEqual(result['items'], last_result['items'])
 
         # filtered channel should still resolve
         result = await self.resolve('lbry://@bad_channel')
