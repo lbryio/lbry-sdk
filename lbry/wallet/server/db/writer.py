@@ -1,5 +1,4 @@
 import os
-from asyncio import Queue
 
 import apsw
 from typing import Union, Tuple, Set, List
@@ -20,7 +19,7 @@ from lbry.wallet.server.db.canonical import register_canonical_functions
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-from .elastic_search import SearchIndex
+from lbry.wallet.server.db.elasticsearch import SearchIndex
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 

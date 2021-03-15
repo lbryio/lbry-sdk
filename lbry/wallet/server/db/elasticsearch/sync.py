@@ -9,7 +9,7 @@ import apsw
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 
-from lbry.wallet.server.db.elastic_search import extract_doc, SearchIndex
+from .search import extract_doc, SearchIndex
 
 INDEX = 'claims'
 
