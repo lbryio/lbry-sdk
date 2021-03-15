@@ -247,12 +247,10 @@ class SearchIndex:
                 return [], 0, 0
             kwargs['channel_id'] = channel_id
         try:
-            result = await self.search_client.search(
-                expand_query(**kwargs), index=self.index, track_total_hits=False if kwargs.get('no_totals') else 200
-            )
-            result = result['hits']
+            result = (await self.search_client.search(
+                expand_query(**kwargs), index=self.index, track_total_hits=False if kwargs.get('no_totals') else 10_000
+            ))['hits']
         except NotFoundError:
-            # index has no docs, fixme: log something
             return [], 0, 0
         return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
 
