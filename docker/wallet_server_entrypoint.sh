@@ -20,6 +20,6 @@ if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/claims.db ]]; then
   rm "$filename"
 fi
 
-/home/lbry/.local/bin/torba-elastic-sync /database/claims.db
+/home/lbry/.local/bin/hub-elastic-sync /database/claims.db
 echo 'starting server'
-/home/lbry/.local/bin/torba-server "$@"
+/home/lbry/.local/bin/hub "$@"

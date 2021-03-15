@@ -28,9 +28,9 @@ setup(
     entry_points={
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
-            'torba-server=lbry.wallet.server.cli:main',
+            'hub=lbry.wallet.server.cli:main',
             'orchstr8=lbry.wallet.orchstr8.cli:main',
-            'torba-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync'
+            'hub-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync'
         ],
     },
     install_requires=[

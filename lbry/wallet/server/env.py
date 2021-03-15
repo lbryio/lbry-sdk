@@ -97,7 +97,7 @@ class Env:
         self.identities = [identity
                            for identity in (clearnet_identity, tor_identity)
                            if identity is not None]
-        self.database_query_timeout = float(self.integer('QUERY_TIMEOUT_MS', 250)) / 1000.0
+        self.database_query_timeout = float(self.integer('QUERY_TIMEOUT_MS', 3000)) / 1000.0
 
     @classmethod
     def default(cls, envvar, default):
