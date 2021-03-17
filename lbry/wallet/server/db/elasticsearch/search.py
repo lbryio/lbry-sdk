@@ -87,7 +87,6 @@ class SearchIndex:
                 item = item.popitem()[1]
                 touched.add(item['_id'])
         await self.client.indices.refresh(self.index)
-        await self.client.indices.flush(self.index)
         self.logger.info("Indexing done.")
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
