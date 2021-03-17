@@ -11,6 +11,7 @@ from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):
+    TIMEOUT = None  # not supported as it advances time
     async def test_ping_queue_discover(self):
         loop = asyncio.get_event_loop()
         loop.set_debug(False)
