@@ -84,6 +84,7 @@ class AsyncioTestCase(unittest.TestCase):
     #  https://bugs.python.org/issue32972
 
     LOOP_SLOW_CALLBACK_DURATION = 0.2
+    TIMEOUT = 120.0
 
     maxDiff = None
 
@@ -137,6 +138,8 @@ class AsyncioTestCase(unittest.TestCase):
                 with outcome.testPartExecutor(self, isTest=True):
                     maybe_coroutine = testMethod()
                     if asyncio.iscoroutine(maybe_coroutine):
+                        if self.TIMEOUT:
+                            self.loop.call_later(self.TIMEOUT, self.cancel)
                         self.loop.run_until_complete(maybe_coroutine)
                 outcome.expecting_failure = False
                 with outcome.testPartExecutor(self):
@@ -188,6 +191,12 @@ class AsyncioTestCase(unittest.TestCase):
                 maybe_coroutine = function(*args, **kwargs)
                 if asyncio.iscoroutine(maybe_coroutine):
                     self.loop.run_until_complete(maybe_coroutine)
+
+    def cancel(self):
+        for task in asyncio.all_tasks(self.loop):
+            if not task.done():
+                task.print_stack()
+                task.cancel()
 
 
 class AdvanceTimeTestCase(AsyncioTestCase):
