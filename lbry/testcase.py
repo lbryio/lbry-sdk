@@ -448,8 +448,9 @@ class CommandTestCase(IntegrationTestCase):
 
     async def generate(self, blocks):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
+        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
         await self.blockchain.generate(blocks)
-        await self.ledger.on_header.where(self.blockchain.is_expected_block)
+        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
 
     async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
