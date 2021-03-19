@@ -883,7 +883,6 @@ class LBRYElectrumX(SessionBase):
             'blockchain.transaction.get_height': cls.transaction_get_height,
             'blockchain.claimtrie.search': cls.claimtrie_search,
             'blockchain.claimtrie.resolve': cls.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
             'blockchain.block.get_server_height': cls.get_server_height,
             'mempool.get_fee_histogram': cls.mempool_compact_histogram,
             'blockchain.block.headers': cls.block_headers,
@@ -1047,67 +1046,6 @@ class LBRYElectrumX(SessionBase):
             return -1
         return None
 
-    async def claimtrie_getclaimsbyids(self, *claim_ids):
-        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
-        return dict(zip(claim_ids, claims))
-
-    async def batched_formatted_claims_from_daemon(self, claim_ids):
-        claims = await self.daemon.getclaimsbyids(claim_ids)
-        result = []
-        for claim in claims:
-            if claim and claim.get('value'):
-                result.append(self.format_claim_from_daemon(claim))
-        return result
-
-    def format_claim_from_daemon(self, claim, name=None):
-        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
-
-        if not claim:
-            return {}
-
-        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
-        # it will be fixed after the lbrycrd upstream merge to v17 is done
-        # it originated as a fear of terminals not supporting unicode. alas, they all do
-
-        if 'name' in claim:
-            name = claim['name'].encode('ISO-8859-1').decode()
-        info = self.db.sql.get_claims(claim_id=claim['claimId'])
-        if not info:
-            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
-            return {}
-        address = info.address.decode()
-        # fixme: temporary
-        #supports = self.format_supports_from_daemon(claim.get('supports', []))
-        supports = []
-
-        amount = get_from_possible_keys(claim, 'amount', 'nAmount')
-        height = get_from_possible_keys(claim, 'height', 'nHeight')
-        effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
-        valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
-
-        result = {
-            "name": name,
-            "claim_id": claim['claimId'],
-            "txid": claim['txid'],
-            "nout": claim['n'],
-            "amount": amount,
-            "depth": self.db.db_height - height + 1,
-            "height": height,
-            "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
-            "address": address,  # from index
-            "supports": supports,
-            "effective_amount": effective_amount,
-            "valid_at_height": valid_at_height
-        }
-        if 'claim_sequence' in claim:
-            # TODO: ensure that lbrycrd #209 fills in this value
-            result['claim_sequence'] = claim['claim_sequence']
-        else:
-            result['claim_sequence'] = -1
-        if 'normalized_name' in claim:
-            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
-        return result
-
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction
         hash.'''
@@ -1117,16 +1055,6 @@ class LBRYElectrumX(SessionBase):
         except Exception:
             pass
         raise RPCError(1, f'{value} should be a transaction hash')
-
-    def assert_claim_id(self, value):
-        '''Raise an RPCError if the value is not a valid claim id
-        hash.'''
-        try:
-            if len(util.hex_to_bytes(value)) == 20:
-                return
-        except Exception:
-            pass
-        raise RPCError(1, f'{value} should be a claim id hash')
 
     async def subscribe_headers_result(self):
         """The result of a header subscription or notification."""
