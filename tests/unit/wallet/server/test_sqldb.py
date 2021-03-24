@@ -8,12 +8,16 @@ from typing import List, Tuple
 from lbry.wallet.constants import COIN, NULL_HASH32
 from lbry.schema.claim import Claim
 from lbry.schema.result import Censor
-from lbry.wallet.server.db import reader, writer
+from lbry.wallet.server.db import writer
 from lbry.wallet.server.coin import LBCRegTest
 from lbry.wallet.server.db.trending import zscore
 from lbry.wallet.server.db.canonical import FindShortestID
 from lbry.wallet.server.block_processor import Timer
 from lbry.wallet.transaction import Transaction, Input, Output
+try:
+    import reader
+except:
+    from . import reader
 
 
 def get_output(amount=COIN, pubkey_hash=NULL_HASH32):
@@ -31,7 +35,7 @@ def get_tx():
 
 
 def search(**constraints) -> List:
-    return reader.search_claims(Censor(), **constraints)
+    return reader.search_claims(Censor(Censor.SEARCH), **constraints)
 
 
 def censored_search(**constraints) -> Tuple[List, Censor]:
@@ -553,6 +557,7 @@ class TestTrending(TestSQLDB):
         self.advance(zscore.TRENDING_WINDOW * 2, [self.get_support(problematic, 500000000)])
 
 
+@unittest.skip("filtering/blocking is applied during ES sync, this needs to be ported to integration test")
 class TestContentBlocking(TestSQLDB):
 
     def test_blocking_and_filtering(self):

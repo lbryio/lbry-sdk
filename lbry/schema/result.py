@@ -13,57 +13,45 @@ NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
 BLOCKED = ErrorMessage.Code.Name(ErrorMessage.BLOCKED)
 
 
-def set_reference(reference, claim_hash, rows):
-    if claim_hash:
-        for txo in rows:
-            if claim_hash == txo['claim_hash']:
-                reference.tx_hash = txo['txo_hash'][:32]
-                reference.nout = struct.unpack('<I', txo['txo_hash'][32:])[0]
-                reference.height = txo['height']
-                return
+def set_reference(reference, txo_row):
+    if txo_row:
+        reference.tx_hash = txo_row['txo_hash'][:32]
+        reference.nout = struct.unpack('<I', txo_row['txo_hash'][32:])[0]
+        reference.height = txo_row['height']
 
 
 class Censor:
 
-    __slots__ = 'streams', 'channels', 'limit_claims_per_channel', 'censored', 'claims_in_channel', 'total'
+    NOT_CENSORED = 0
+    SEARCH = 1
+    RESOLVE = 2
 
-    def __init__(self, streams: dict = None, channels: dict = None, limit_claims_per_channel: int = None):
-        self.streams = streams or {}
-        self.channels = channels or {}
-        self.limit_claims_per_channel = limit_claims_per_channel  # doesn't count as censored
+    __slots__ = 'censor_type', 'censored'
+
+    def __init__(self, censor_type):
+        self.censor_type = censor_type
         self.censored = {}
-        self.claims_in_channel = {}
-        self.total = 0
+
+    def is_censored(self, row):
+        return (row.get('censor_type') or self.NOT_CENSORED) >= self.censor_type
+
+    def apply(self, rows):
+        return [row for row in rows if not self.censor(row)]
 
     def censor(self, row) -> bool:
-        was_censored = False
-        for claim_hash, lookup in (
-                (row['claim_hash'], self.streams),
-                (row['claim_hash'], self.channels),
-                (row['channel_hash'], self.channels),
-                (row['reposted_claim_hash'], self.streams),
-                (row['reposted_claim_hash'], self.channels)):
-            censoring_channel_hash = lookup.get(claim_hash)
-            if censoring_channel_hash:
-                was_censored = True
-                self.censored.setdefault(censoring_channel_hash, 0)
-                self.censored[censoring_channel_hash] += 1
-                break
-        if was_censored:
-            self.total += 1
-        if not was_censored and self.limit_claims_per_channel is not None and row['channel_hash']:
-            self.claims_in_channel.setdefault(row['channel_hash'], 0)
-            self.claims_in_channel[row['channel_hash']] += 1
-            if self.claims_in_channel[row['channel_hash']] > self.limit_claims_per_channel:
-                return True
-        return was_censored
+        if self.is_censored(row):
+            censoring_channel_hash = row['censoring_channel_hash']
+            self.censored.setdefault(censoring_channel_hash, set())
+            self.censored[censoring_channel_hash].add(row['tx_hash'])
+            return True
+        return False
 
-    def to_message(self, outputs: OutputsMessage, extra_txo_rows):
-        outputs.blocked_total = self.total
+    def to_message(self, outputs: OutputsMessage, extra_txo_rows: dict):
         for censoring_channel_hash, count in self.censored.items():
             blocked = outputs.blocked.add()
-            blocked.count = count
-            set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
+            blocked.count = len(count)
+            set_reference(blocked.channel, extra_txo_rows.get(censoring_channel_hash))
+            outputs.blocked_total += len(count)
 
 
 class Outputs:
@@ -168,6 +156,7 @@ class Outputs:
 
     @classmethod
     def to_bytes(cls, txo_rows, extra_txo_rows, offset=0, total=None, blocked: Censor = None) -> bytes:
+        extra_txo_rows = {row['claim_hash']: row for row in extra_txo_rows}
         page = OutputsMessage()
         page.offset = offset
         if total is not None:
@@ -176,12 +165,12 @@ class Outputs:
             blocked.to_message(page, extra_txo_rows)
         for row in txo_rows:
             cls.row_to_message(row, page.txos.add(), extra_txo_rows)
-        for row in extra_txo_rows:
+        for row in extra_txo_rows.values():
             cls.row_to_message(row, page.extra_txos.add(), extra_txo_rows)
         return page.SerializeToString()
 
     @classmethod
-    def row_to_message(cls, txo, txo_message, extra_txo_rows):
+    def row_to_message(cls, txo, txo_message, extra_row_dict: dict):
         if isinstance(txo, Exception):
             txo_message.error.text = txo.args[0]
             if isinstance(txo, ValueError):
@@ -190,7 +179,7 @@ class Outputs:
                 txo_message.error.code = ErrorMessage.NOT_FOUND
             elif isinstance(txo, ResolveCensoredError):
                 txo_message.error.code = ErrorMessage.BLOCKED
-                set_reference(txo_message.error.blocked.channel, txo.censor_hash, extra_txo_rows)
+                set_reference(txo_message.error.blocked.channel, extra_row_dict.get(txo.censor_hash))
             return
         txo_message.tx_hash = txo['txo_hash'][:32]
         txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
@@ -213,5 +202,5 @@ class Outputs:
         txo_message.claim.trending_mixed = txo['trending_mixed']
         txo_message.claim.trending_local = txo['trending_local']
         txo_message.claim.trending_global = txo['trending_global']
-        set_reference(txo_message.claim.channel, txo['channel_hash'], extra_txo_rows)
-        set_reference(txo_message.claim.repost, txo['reposted_claim_hash'], extra_txo_rows)
+        set_reference(txo_message.claim.channel, extra_row_dict.get(txo['channel_hash']))
+        set_reference(txo_message.claim.repost, extra_row_dict.get(txo['reposted_claim_hash']))

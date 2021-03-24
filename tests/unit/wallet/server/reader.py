@@ -18,8 +18,7 @@ from lbry.schema.tags import clean_tags
 from lbry.schema.result import Outputs, Censor
 from lbry.wallet import Ledger, RegTestLedger
 
-from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-from .full_text_search import FTS_ORDER_BY
+from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
 
 
 class SQLiteOperationalError(apsw.Error):
@@ -94,10 +93,10 @@ class ReaderState:
         self.db.setprogresshandler(interruptor, 100)
 
     def get_resolve_censor(self) -> Censor:
-        return Censor(self.blocked_streams, self.blocked_channels)
+        return Censor(Censor.RESOLVE)
 
     def get_search_censor(self, limit_claims_per_channel: int) -> Censor:
-        return Censor(self.filtered_streams, self.filtered_channels, limit_claims_per_channel)
+        return Censor(Censor.SEARCH)
 
 
 ctx: ContextVar[Optional[ReaderState]] = ContextVar('ctx')
@@ -342,12 +341,7 @@ def claims_query(cols, for_count=False, **constraints) -> Tuple[str, Dict]:
     _apply_constraints_for_array_attributes(constraints, 'language', lambda _: _, for_count)
     _apply_constraints_for_array_attributes(constraints, 'location', lambda _: _, for_count)
 
-    if 'text' in constraints:
-        constraints["search"] = constraints.pop("text")
-        constraints["order_by"] = FTS_ORDER_BY
-        select = f"SELECT {cols} FROM search JOIN claim ON (search.rowid=claim.rowid)"
-    else:
-        select = f"SELECT {cols} FROM claim"
+    select = f"SELECT {cols} FROM claim"
     if not for_count:
         select += " LEFT JOIN claimtrie USING (claim_hash)"
     return query(select, **constraints)
@@ -372,7 +366,7 @@ def count_claims(**constraints) -> int:
     constraints.pop('offset', None)
     constraints.pop('limit', None)
     constraints.pop('order_by', None)
-    count = select_claims(Censor(), 'count(*) as row_count', for_count=True, **constraints)
+    count = select_claims(Censor(Censor.SEARCH), 'count(*) as row_count', for_count=True, **constraints)
     return count[0]['row_count']
 
 

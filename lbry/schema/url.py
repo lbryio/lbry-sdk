@@ -55,6 +55,14 @@ class PathSegment(NamedTuple):
     def normalized(self):
         return normalize_name(self.name)
 
+    @property
+    def is_shortid(self):
+        return self.claim_id is not None and len(self.claim_id) < 40
+
+    @property
+    def is_fullid(self):
+        return self.claim_id is not None and len(self.claim_id) == 40
+
     def to_dict(self):
         q = {'name': self.name}
         if self.claim_id is not None:

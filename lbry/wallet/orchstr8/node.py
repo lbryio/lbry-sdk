@@ -11,6 +11,7 @@ import importlib
 from binascii import hexlify
 from typing import Type, Optional
 import urllib.request
+from uuid import uuid4
 
 import lbry
 from lbry.wallet.server.server import Server
@@ -187,7 +188,9 @@ class SPVNode:
             'SESSION_TIMEOUT': str(self.session_timeout),
             'MAX_QUERY_WORKERS': '0',
             'INDIVIDUAL_TAG_INDEXES': '',
-            'RPC_PORT': self.rpc_port
+            'RPC_PORT': self.rpc_port,
+            'ES_INDEX_PREFIX': uuid4().hex,
+            'ES_MODE': 'writer',
         }
         if extraconf:
             conf.update(extraconf)
@@ -199,6 +202,8 @@ class SPVNode:
 
     async def stop(self, cleanup=True):
         try:
+            await self.server.db.search_index.delete_index()
+            await self.server.db.search_index.stop()
             await self.server.stop()
         finally:
             cleanup and self.cleanup()

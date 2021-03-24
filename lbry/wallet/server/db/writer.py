@@ -1,11 +1,12 @@
 import os
+
 import apsw
 from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
 from multiprocessing import Manager
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
 from lbry.wallet.database import query, constraints_to_sql
@@ -15,11 +16,10 @@ from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet import Ledger, RegTestLedger
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.server.db.canonical import register_canonical_functions
-from lbry.wallet.server.db.full_text_search import update_full_text_search, CREATE_FULL_TEXT_SEARCH, first_sync_finished
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-
+from lbry.wallet.server.db.elasticsearch import SearchIndex
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 
@@ -135,6 +135,22 @@ class SQLDB:
         create index if not exists claimtrie_claim_hash_idx on claimtrie (claim_hash);
     """
 
+    CREATE_CHANGELOG_TRIGGER = """
+        create table if not exists changelog (
+            claim_hash bytes primary key
+        );
+        create index if not exists claimtrie_claim_hash_idx on claimtrie (claim_hash);
+        create trigger if not exists claim_changelog after update on claim
+        begin
+            insert or ignore into changelog (claim_hash) values (new.claim_hash);
+        end;
+        create trigger if not exists claimtrie_changelog after update on claimtrie
+        begin
+            insert or ignore into changelog (claim_hash) values (new.claim_hash);
+            insert or ignore into changelog (claim_hash) values (old.claim_hash);
+        end;
+    """
+
     SEARCH_INDEXES = """
         -- used by any tag clouds
         create index if not exists tag_tag_idx on tag (tag, claim_hash);
@@ -190,10 +206,10 @@ class SQLDB:
 
     CREATE_TABLES_QUERY = (
         CREATE_CLAIM_TABLE +
-        CREATE_FULL_TEXT_SEARCH +
         CREATE_SUPPORT_TABLE +
         CREATE_CLAIMTRIE_TABLE +
         CREATE_TAG_TABLE +
+        CREATE_CHANGELOG_TRIGGER +
         CREATE_LANGUAGE_TABLE
     )
 
@@ -204,7 +220,6 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
-        self._fts_synced = False
         self.state_manager = None
         self.blocked_streams = None
         self.blocked_channels = None
@@ -217,6 +232,7 @@ class SQLDB:
             unhexlify(channel_id)[::-1] for channel_id in filtering_channels if channel_id
         }
         self.trending = trending
+        self.pending_deletes = set()
 
     def open(self):
         self.db = apsw.Connection(
@@ -422,7 +438,7 @@ class SQLDB:
         claims = self._upsertable_claims(txos, header)
         if claims:
             self.executemany("""
-                INSERT OR IGNORE INTO claim (
+                INSERT OR REPLACE INTO claim (
                     claim_hash, claim_id, claim_name, normalized, txo_hash, tx_position, amount,
                     claim_type, media_type, stream_type, timestamp, creation_timestamp, has_source,
                     fee_currency, fee_amount, title, description, author, duration, height, reposted_claim_hash,
@@ -531,6 +547,7 @@ class SQLDB:
                 WHERE claim_hash = ?
                 """, targets
             )
+        return set(target[0] for target in targets)
 
     def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:
@@ -804,11 +821,54 @@ class SQLDB:
             f"SELECT claim_hash, normalized FROM claim WHERE expiration_height = {height}"
         )
 
+    def enqueue_changes(self):
+        for claim in self.execute(f"""
+        SELECT claimtrie.claim_hash as is_controlling,
+               claimtrie.last_take_over_height,
+               (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
+               (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
+               claim.*
+        FROM claim LEFT JOIN claimtrie USING (claim_hash)
+        WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
+        """):
+            claim = claim._asdict()
+            id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
+            claim['censor_type'] = 0
+            claim['censoring_channel_hash'] = None
+            for reason_id in id_set:
+                if reason_id in self.blocked_streams:
+                    claim['censor_type'] = 2
+                    claim['censoring_channel_hash'] = self.blocked_streams.get(reason_id)
+                elif reason_id in self.blocked_channels:
+                    claim['censor_type'] = 2
+                    claim['censoring_channel_hash'] = self.blocked_channels.get(reason_id)
+                elif reason_id in self.filtered_streams:
+                    claim['censor_type'] = 1
+                    claim['censoring_channel_hash'] = self.filtered_streams.get(reason_id)
+                elif reason_id in self.filtered_channels:
+                    claim['censor_type'] = 1
+                    claim['censoring_channel_hash'] = self.filtered_channels.get(reason_id)
+
+            claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
+            claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
+            yield 'update', claim
+
+    def clear_changelog(self):
+        self.execute("delete from changelog;")
+
+    def claim_producer(self):
+        while self.pending_deletes:
+            claim_hash = self.pending_deletes.pop()
+            yield 'delete', hexlify(claim_hash[::-1]).decode()
+        for claim in self.enqueue_changes():
+            yield claim
+        self.clear_changelog()
+
     def advance_txs(self, height, all_txs, header, daemon_height, timer):
         insert_claims = []
         update_claims = []
         update_claim_hashes = set()
-        delete_claim_hashes = set()
+        delete_claim_hashes = self.pending_deletes
         insert_supports = []
         delete_support_txo_hashes = set()
         recalculate_claim_hashes = set()  # added/deleted supports, added/updated claim
@@ -877,28 +937,17 @@ class SQLDB:
         expire_timer.stop()
 
         r = timer.run
-        r(update_full_text_search, 'before-delete',
-          delete_claim_hashes, self.db.cursor(), self.main.first_sync)
         affected_channels = r(self.delete_claims, delete_claim_hashes)
         r(self.delete_supports, delete_support_txo_hashes)
         r(self.insert_claims, insert_claims, header)
         r(self.calculate_reposts, insert_claims)
-        r(update_full_text_search, 'after-insert',
-          [txo.claim_hash for txo in insert_claims], self.db.cursor(), self.main.first_sync)
-        r(update_full_text_search, 'before-update',
-          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
         r(self.update_claims, update_claims, header)
-        r(update_full_text_search, 'after-update',
-          [txo.claim_hash for txo in update_claims], self.db.cursor(), self.main.first_sync)
         r(self.validate_channel_signatures, height, insert_claims,
           update_claims, delete_claim_hashes, affected_channels, forward_timer=True)
         r(self.insert_supports, insert_supports)
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         for algorithm in self.trending:
             r(algorithm.run, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
-        if not self._fts_synced and self.main.first_sync and height == daemon_height:
-            r(first_sync_finished, self.db.cursor())
-            self._fts_synced = True
 
 
 class LBRYLevelDB(LevelDB):
@@ -910,17 +959,28 @@ class LBRYLevelDB(LevelDB):
         for algorithm_name in self.env.trending_algorithms:
             if algorithm_name in TRENDING_ALGORITHMS:
                 trending.append(TRENDING_ALGORITHMS[algorithm_name])
-        self.sql = SQLDB(
-            self, path,
-            self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
-            self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
-            trending
-        )
+        if self.env.es_mode == 'reader':
+            self.logger.info('Index mode: reader')
+            self.sql = None
+        else:
+            self.logger.info('Index mode: writer. Using SQLite db to sync ES')
+            self.sql = SQLDB(
+                self, path,
+                self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
+                self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
+                trending
+            )
+
+        # Search index
+        self.search_index = SearchIndex(self.env.es_index_prefix, self.env.database_query_timeout)
 
     def close(self):
         super().close()
-        self.sql.close()
+        if self.sql:
+            self.sql.close()
 
     async def _open_dbs(self, *args, **kwargs):
+        await self.search_index.start()
         await super()._open_dbs(*args, **kwargs)
-        self.sql.open()
+        if self.sql:
+            self.sql.open()

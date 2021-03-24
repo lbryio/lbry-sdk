@@ -12,6 +12,7 @@
 import asyncio
 import array
 import ast
+import base64
 import os
 import time
 import zlib
@@ -82,6 +83,7 @@ class LevelDB:
         self.utxo_db = None
         self.tx_counts = None
         self.headers = None
+        self.encoded_headers = LRUCacheWithMetrics(1 << 21, metric_name='encoded_headers', namespace='wallet_server')
         self.last_flush = time.time()
 
         self.logger.info(f'using {self.env.db_engine} for DB backend')
@@ -439,6 +441,16 @@ class LevelDB:
         if n != 1:
             raise IndexError(f'height {height:,d} out of range')
         return header
+
+    def encode_headers(self, start_height, count, headers):
+        key = (start_height, count)
+        if not self.encoded_headers.get(key):
+            compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
+            headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode()
+            if start_height % 1000 != 0:
+                return headers
+            self.encoded_headers[key] = headers
+        return self.encoded_headers.get(key)
 
     def read_headers(self, start_height, count) -> typing.Tuple[bytes, int]:
         """Requires start_height >= 0, count >= 0.  Reads as many headers as

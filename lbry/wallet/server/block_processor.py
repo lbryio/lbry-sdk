@@ -5,7 +5,6 @@ from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional
 from prometheus_client import Gauge, Histogram
 import lbry
-from lbry.schema.claim import Claim
 from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
@@ -215,6 +214,8 @@ class BlockProcessor:
         if hprevs == chain:
             start = time.perf_counter()
             await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+            if self.sql:
+                await self.db.search_index.claim_consumer(self.sql.claim_producer())
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()
@@ -228,6 +229,9 @@ class BlockProcessor:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
+                if self.sql:
+                    await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
+                                                             self.sql.filtered_streams, self.sql.filtered_channels)
                 await self.notifications.on_block(self.touched, self.height)
             self.touched = set()
         elif hprevs[0] != chain[0]:
@@ -282,7 +286,6 @@ class BlockProcessor:
                 await self.run_in_thread_with_lock(flush_backup)
                 last -= len(raw_blocks)
 
-            await self.run_in_thread_with_lock(self.db.sql.delete_claims_above_height, self.height)
             await self.prefetcher.reset_height(self.height)
             self.reorg_count_metric.inc()
         except:
@@ -651,7 +654,11 @@ class BlockProcessor:
                 self.reorg_count = 0
             else:
                 blocks = self.prefetcher.get_prefetched_blocks()
-                await self.check_and_advance_blocks(blocks)
+                try:
+                    await self.check_and_advance_blocks(blocks)
+                except Exception:
+                    self.logger.exception("error while processing txs")
+                    raise
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')
@@ -782,15 +789,17 @@ class LBRYBlockProcessor(BlockProcessor):
         self.timer = Timer('BlockProcessor')
 
     def advance_blocks(self, blocks):
-        self.sql.begin()
+        if self.sql:
+            self.sql.begin()
         try:
             self.timer.run(super().advance_blocks, blocks)
         except:
             self.logger.exception(f'Error while advancing transaction in new block.')
             raise
         finally:
-            self.sql.commit()
-        if self.db.first_sync and self.height == self.daemon.cached_height():
+            if self.sql:
+                self.sql.commit()
+        if self.sql and self.db.first_sync and self.height == self.daemon.cached_height():
             self.timer.run(self.sql.execute, self.sql.SEARCH_INDEXES, timer_name='executing SEARCH_INDEXES')
             if self.env.individual_tag_indexes:
                 self.timer.run(self.sql.execute, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
@@ -799,22 +808,8 @@ class LBRYBlockProcessor(BlockProcessor):
     def advance_txs(self, height, txs, header, block_hash):
         timer = self.timer.sub_timers['advance_blocks']
         undo = timer.run(super().advance_txs, height, txs, header, block_hash, timer_name='super().advance_txs')
-        timer.run(self.sql.advance_txs, height, txs, header, self.daemon.cached_height(), forward_timer=True)
+        if self.sql:
+            timer.run(self.sql.advance_txs, height, txs, header, self.daemon.cached_height(), forward_timer=True)
         if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(10):
             self.timer.show(height=height)
         return undo
-
-    def _checksig(self, value, address):
-        try:
-            claim_dict = Claim.from_bytes(value)
-            cert_id = claim_dict.signing_channel_hash
-            if not self.should_validate_signatures:
-                return cert_id
-            if cert_id:
-                cert_claim = self.db.get_claim_info(cert_id)
-                if cert_claim:
-                    certificate = Claim.from_bytes(cert_claim.value)
-                    claim_dict.validate_signature(address, certificate)
-                    return cert_id
-        except Exception:
-            pass

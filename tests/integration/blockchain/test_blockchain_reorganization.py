@@ -114,15 +114,6 @@ class BlockchainReorganizationTests(CommandTestCase):
         client_reorg_block_hash = (await self.ledger.headers.hash(208)).decode()
         self.assertEqual(client_reorg_block_hash, reorg_block_hash)
 
-        # verify the dropped claim is no longer returned by claim search
-        txos, _, _, _ = await self.ledger.claim_search([], name='hovercraft')
-        self.assertListEqual(txos, [])
-
-        # verify the claim published a block earlier wasn't also reverted
-        txos, _, _, _ = await self.ledger.claim_search([], name='still-valid')
-        self.assertEqual(1, len(txos))
-        self.assertEqual(207, txos[0].tx_ref.height)
-
         # broadcast the claim in a different block
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
         self.assertEqual(broadcast_tx.id, new_txid)

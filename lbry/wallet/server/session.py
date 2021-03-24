@@ -3,7 +3,6 @@ import ssl
 import math
 import time
 import json
-import zlib
 import base64
 import codecs
 import typing
@@ -16,8 +15,10 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from binascii import hexlify, unhexlify
+from binascii import hexlify
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+
+from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
@@ -25,7 +26,6 @@ from lbry.utils import LRUCacheWithMetrics
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
-from lbry.wallet.server.db import reader
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.rpc.framing import NewlineFramer
@@ -813,9 +813,6 @@ class LBRYSessionManager(SessionManager):
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
-        self.search_cache = self.bp.search_cache
-        self.search_cache['search'] = LRUCacheWithMetrics(2 ** 14, metric_name='search', namespace=NAMESPACE)
-        self.search_cache['resolve'] = LRUCacheWithMetrics(2 ** 16, metric_name='resolve', namespace=NAMESPACE)
 
     async def process_metrics(self):
         while self.running:
@@ -829,22 +826,11 @@ class LBRYSessionManager(SessionManager):
 
     async def start_other(self):
         self.running = True
-        path = os.path.join(self.env.db_dir, 'claims.db')
-        args = dict(
-            initializer=reader.initializer,
-            initargs=(
-                self.logger, path, self.env.coin.NET, self.env.database_query_timeout,
-                self.env.track_metrics, (
-                    self.db.sql.blocked_streams, self.db.sql.blocked_channels,
-                    self.db.sql.filtered_streams, self.db.sql.filtered_channels
-                )
-            )
-        )
         if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
-            self.query_executor = ThreadPoolExecutor(max_workers=1, **args)
+            self.query_executor = ThreadPoolExecutor(max_workers=1)
         else:
             self.query_executor = ProcessPoolExecutor(
-                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4), **args
+                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4)
             )
         if self.websocket is not None:
             await self.websocket.start()
@@ -897,7 +883,6 @@ class LBRYElectrumX(SessionBase):
             'blockchain.transaction.get_height': cls.transaction_get_height,
             'blockchain.claimtrie.search': cls.claimtrie_search,
             'blockchain.claimtrie.resolve': cls.claimtrie_resolve,
-            'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
             'blockchain.block.get_server_height': cls.get_server_height,
             'mempool.get_fee_histogram': cls.mempool_compact_histogram,
             'blockchain.block.headers': cls.block_headers,
@@ -1002,16 +987,6 @@ class LBRYElectrumX(SessionBase):
             )
         except asyncio.CancelledError:
             raise
-        except reader.SQLiteInterruptedError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_interrupt(start, error.metrics)
-            self.session_mgr.interrupt_count_metric.inc()
-            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'sqlite query timed out')
-        except reader.SQLiteOperationalError as error:
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_error(start, error.metrics)
-            self.session_mgr.db_operational_error_metric.inc()
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'query failed to execute')
         except Exception:
             log.exception("dear devs, please handle this exception better")
             metrics = self.get_metrics_or_placeholder_for_api(query_name)
@@ -1028,40 +1003,33 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    async def run_and_cache_query(self, query_name, function, kwargs):
-        metrics = self.get_metrics_or_placeholder_for_api(query_name)
-        metrics.start()
-        cache = self.session_mgr.search_cache[query_name]
-        cache_key = str(kwargs)
-        cache_item = cache.get(cache_key)
-        if cache_item is None:
-            cache_item = cache[cache_key] = ResultCacheItem()
-        elif cache_item.result is not None:
-            metrics.cache_response()
-            return cache_item.result
-        async with cache_item.lock:
-            if cache_item.result is None:
-                cache_item.result = await self.run_in_executor(
-                    query_name, function, kwargs
-                )
-            else:
-                metrics = self.get_metrics_or_placeholder_for_api(query_name)
-                metrics.cache_response()
-            return cache_item.result
+    async def run_and_cache_query(self, query_name, kwargs):
+        start = time.perf_counter()
+        if isinstance(kwargs, dict):
+            kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
+        try:
+            self.session_mgr.pending_query_metric.inc()
+            return await self.db.search_index.session_query(query_name, kwargs)
+        except ConnectionTimeout:
+            self.session_mgr.interrupt_count_metric.inc()
+            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
+        finally:
+            self.session_mgr.pending_query_metric.dec()
+            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def mempool_compact_histogram(self):
         return self.mempool.compact_fee_histogram()
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
-            return await self.run_and_cache_query('search', reader.search_to_bytes, kwargs)
+            return await self.run_and_cache_query('search', kwargs)
 
     async def claimtrie_resolve(self, *urls):
         if urls:
             count = len(urls)
             try:
                 self.session_mgr.urls_to_resolve_count_metric.inc(count)
-                return await self.run_and_cache_query('resolve', reader.resolve_to_bytes, urls)
+                return await self.run_and_cache_query('resolve', urls)
             finally:
                 self.session_mgr.resolved_url_count_metric.inc(count)
 
@@ -1078,67 +1046,6 @@ class LBRYElectrumX(SessionBase):
             return -1
         return None
 
-    async def claimtrie_getclaimsbyids(self, *claim_ids):
-        claims = await self.batched_formatted_claims_from_daemon(claim_ids)
-        return dict(zip(claim_ids, claims))
-
-    async def batched_formatted_claims_from_daemon(self, claim_ids):
-        claims = await self.daemon.getclaimsbyids(claim_ids)
-        result = []
-        for claim in claims:
-            if claim and claim.get('value'):
-                result.append(self.format_claim_from_daemon(claim))
-        return result
-
-    def format_claim_from_daemon(self, claim, name=None):
-        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
-
-        if not claim:
-            return {}
-
-        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
-        # it will be fixed after the lbrycrd upstream merge to v17 is done
-        # it originated as a fear of terminals not supporting unicode. alas, they all do
-
-        if 'name' in claim:
-            name = claim['name'].encode('ISO-8859-1').decode()
-        info = self.db.sql.get_claims(claim_id=claim['claimId'])
-        if not info:
-            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
-            return {}
-        address = info.address.decode()
-        # fixme: temporary
-        #supports = self.format_supports_from_daemon(claim.get('supports', []))
-        supports = []
-
-        amount = get_from_possible_keys(claim, 'amount', 'nAmount')
-        height = get_from_possible_keys(claim, 'height', 'nHeight')
-        effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
-        valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
-
-        result = {
-            "name": name,
-            "claim_id": claim['claimId'],
-            "txid": claim['txid'],
-            "nout": claim['n'],
-            "amount": amount,
-            "depth": self.db.db_height - height + 1,
-            "height": height,
-            "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
-            "address": address,  # from index
-            "supports": supports,
-            "effective_amount": effective_amount,
-            "valid_at_height": valid_at_height
-        }
-        if 'claim_sequence' in claim:
-            # TODO: ensure that lbrycrd #209 fills in this value
-            result['claim_sequence'] = claim['claim_sequence']
-        else:
-            result['claim_sequence'] = -1
-        if 'normalized_name' in claim:
-            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
-        return result
-
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction
         hash.'''
@@ -1148,16 +1055,6 @@ class LBRYElectrumX(SessionBase):
         except Exception:
             pass
         raise RPCError(1, f'{value} should be a transaction hash')
-
-    def assert_claim_id(self, value):
-        '''Raise an RPCError if the value is not a valid claim id
-        hash.'''
-        try:
-            if len(util.hex_to_bytes(value)) == 20:
-                return
-        except Exception:
-            pass
-        raise RPCError(1, f'{value} should be a claim id hash')
 
     async def subscribe_headers_result(self):
         """The result of a header subscription or notification."""
@@ -1363,8 +1260,7 @@ class LBRYElectrumX(SessionBase):
         headers, count = self.db.read_headers(start_height, count)
 
         if b64:
-            compressobj = zlib.compressobj(wbits=-15, level=1, memLevel=9)
-            headers = base64.b64encode(compressobj.compress(headers) + compressobj.flush()).decode()
+            headers = self.db.encode_headers(start_height, count, headers)
         else:
             headers = headers.hex()
         result = {
@@ -1614,26 +1510,20 @@ class LocalRPC(SessionBase):
         return 'RPC'
 
 
-class ResultCacheItem:
-    __slots__ = '_result', 'lock', 'has_result'
-
-    def __init__(self):
-        self.has_result = asyncio.Event()
-        self.lock = asyncio.Lock()
-        self._result = None
-
-    @property
-    def result(self) -> str:
-        return self._result
-
-    @result.setter
-    def result(self, result: str):
-        self._result = result
-        if result is not None:
-            self.has_result.set()
-
-
 def get_from_possible_keys(dictionary, *keys):
     for key in keys:
         if key in dictionary:
             return dictionary[key]
+
+
+def format_release_time(release_time):
+    # round release time to 1000 so it caches better
+    # also set a default so we dont show claims in the future
+    def roundup_time(number, factor=360):
+        return int(1 + int(number / factor)) * factor
+    if isinstance(release_time, str) and len(release_time) > 0:
+        time_digits = ''.join(filter(str.isdigit, release_time))
+        time_prefix = release_time[:-len(time_digits)]
+        return time_prefix + str(roundup_time(int(time_digits)))
+    elif isinstance(release_time, int):
+        return roundup_time(release_time)

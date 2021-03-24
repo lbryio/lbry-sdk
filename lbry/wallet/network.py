@@ -417,9 +417,6 @@ class Network:
     def get_server_features(self):
         return self.rpc('server.features', (), restricted=True)
 
-    def get_claims_by_ids(self, claim_ids):
-        return self.rpc('blockchain.claimtrie.getclaimsbyids', claim_ids)
-
     def resolve(self, urls, session_override=None):
         return self.rpc('blockchain.claimtrie.resolve', urls, False, session_override)
 

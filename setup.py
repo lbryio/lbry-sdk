@@ -28,8 +28,9 @@ setup(
     entry_points={
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
-            'torba-server=lbry.wallet.server.cli:main',
+            'lbry-hub=lbry.wallet.server.cli:main',
             'orchstr8=lbry.wallet.orchstr8.cli:main',
+            'lbry-hub-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync'
         ],
     },
     install_requires=[
@@ -53,7 +54,8 @@ setup(
         'coincurve==11.0.0',
         'pbkdf2==1.3',
         'attrs==18.2.0',
-        'pylru==1.1.0'
+        'pylru==1.1.0',
+        'elasticsearch==7.10.1'
     ] + PLYVEL,
     classifiers=[
         'Framework :: AsyncIO',

@@ -32,10 +32,13 @@ import inspect
 
 # other_params: None means cannot be called with keyword arguments only
 # any means any name is good
+from functools import lru_cache
+
 SignatureInfo = namedtuple('SignatureInfo', 'min_args max_args '
                            'required_names other_names')
 
 
+@lru_cache(256)
 def signature_info(func):
     params = inspect.signature(func).parameters
     min_args = max_args = 0
