@@ -8,7 +8,7 @@ from lbry.wallet.server.server import Server
 
 def get_argument_parser():
     parser = argparse.ArgumentParser(
-        prog="hub"
+        prog="lbry-hub"
     )
     parser.add_argument("spvserver", type=str, help="Python class path to SPV server implementation.",
                         nargs="?", default="lbry.wallet.server.coin.LBC")

@@ -82,7 +82,7 @@ def __run(args, shard):
 def run_elastic_sync():
     logging.basicConfig(level=logging.INFO)
     logging.info('lbry.server starting')
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="lbry-hub-elastic-sync")
     parser.add_argument("db_path", type=str)
     parser.add_argument("-c", "--clients", type=int, default=16)
     parser.add_argument("-b", "--blocks", type=int, default=0)
