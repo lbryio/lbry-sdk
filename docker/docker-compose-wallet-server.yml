@@ -8,7 +8,7 @@ services:
   wallet_server:
     depends_on: 
       - es01
-    image: lbry/wallet-server:${WALLET_SERVER_TAG:-development}
+    image: lbry/wallet-server:${WALLET_SERVER_TAG:-latest-release}
     restart: always
     network_mode: host
     ports:

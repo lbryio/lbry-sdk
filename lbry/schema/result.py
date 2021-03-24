@@ -22,6 +22,7 @@ def set_reference(reference, txo_row):
 
 class Censor:
 
+    NOT_CENSORED = 0
     SEARCH = 1
     RESOLVE = 2
 
@@ -31,16 +32,19 @@ class Censor:
         self.censor_type = censor_type
         self.censored = {}
 
+    def is_censored(self, row):
+        return (row.get('censor_type') or self.NOT_CENSORED) >= self.censor_type
+
     def apply(self, rows):
         return [row for row in rows if not self.censor(row)]
 
     def censor(self, row) -> bool:
-        was_censored = (row.get('censor_type') or 0) >= self.censor_type
-        if was_censored:
+        if self.is_censored(row):
             censoring_channel_hash = row['censoring_channel_hash']
             self.censored.setdefault(censoring_channel_hash, set())
             self.censored[censoring_channel_hash].add(row['tx_hash'])
-        return was_censored
+            return True
+        return False
 
     def to_message(self, outputs: OutputsMessage, extra_txo_rows: dict):
         for censoring_channel_hash, count in self.censored.items():
