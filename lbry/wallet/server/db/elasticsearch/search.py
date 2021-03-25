@@ -429,6 +429,11 @@ def expand_query(**kwargs):
         query["minimum_should_match"] = 1
         query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
         query['should'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
+    if 'has_source' in kwargs:
+        query.setdefault('should', [])
+        query["minimum_should_match"] = 1
+        query['should'].append({"bool": {"must": [{"match": {"has_source": kwargs['has_source']}}, {"match": {"claim_type": CLAIM_TYPES['stream']}}]}})
+        query['should'].append({"bool": {"must_not": [{"match": {"claim_type": CLAIM_TYPES['stream']}}]}})
     if kwargs.get('text'):
         query['must'].append(
                     {"simple_query_string":
