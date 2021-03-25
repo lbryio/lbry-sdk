@@ -28,12 +28,14 @@ SELECT claimtrie.claim_hash as is_controlling,
        claimtrie.last_take_over_height,
        (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
        (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
+       (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
        claim.*
 FROM claim LEFT JOIN claimtrie USING (claim_hash)
 WHERE claim.height % {shards_total} = {shard_num}
 ORDER BY claim.height desc
 """)):
         claim = dict(claim._asdict())
+        claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
         claim['censor_type'] = 0
         claim['censoring_channel_hash'] = None
         claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
