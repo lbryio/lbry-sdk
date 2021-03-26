@@ -539,8 +539,8 @@ class UPnPComponent(Component):
         success = False
         await self._maintain_redirects()
         if self.upnp:
-            if not self.upnp_redirects and not all([x in self.component_manager.skip_components for x in
-                                                    (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)]):
+            if not self.upnp_redirects and not all(x in self.component_manager.skip_components for x in
+                                                    (DHT_COMPONENT, PEER_PROTOCOL_SERVER_COMPONENT)):
                 log.error("failed to setup upnp")
             else:
                 success = True
