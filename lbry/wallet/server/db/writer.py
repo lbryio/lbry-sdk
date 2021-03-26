@@ -547,7 +547,7 @@ class SQLDB:
                 WHERE claim_hash = ?
                 """, targets
             )
-        return set(target[0] for target in targets)
+        return {target[0] for target in targets}
 
     def validate_channel_signatures(self, height, new_claims, updated_claims, spent_claims, affected_channels, timer):
         if not new_claims and not updated_claims and not spent_claims:

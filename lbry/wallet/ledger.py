@@ -538,7 +538,7 @@ class Ledger(metaclass=LedgerRegistry):
                 "request %i transactions, %i/%i for %s are already synced", len(to_request), len(already_synced),
                 len(remote_history), address
             )
-            remote_history_txids = set(txid for txid, _ in remote_history)
+            remote_history_txids = {txid for txid, _ in remote_history}
             async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 if len(pending_synced_history) % 100 == 0:
