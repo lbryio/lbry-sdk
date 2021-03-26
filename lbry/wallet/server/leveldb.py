@@ -478,7 +478,14 @@ class LevelDB:
         tx_height = bisect_right(self.tx_counts, tx_num)
         if tx_height > self.db_height:
             return None, tx_height
-        return self.total_transactions[tx_num], tx_height
+        try:
+            return self.total_transactions[tx_num], tx_height
+        except IndexError:
+            self.logger.exception(
+                "Failed to access a cached transaction, known bug #3142 "
+                "should be fixed in #3205"
+            )
+            return None, tx_height
 
     def _fs_transactions(self, txids: Iterable[str]):
         unpack_be_uint64 = util.unpack_be_uint64
