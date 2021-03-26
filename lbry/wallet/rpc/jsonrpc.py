@@ -108,9 +108,6 @@ class Response:
 
 class CodeMessageError(Exception):
 
-    def __init__(self, code, message):
-        super().__init__(code, message)
-
     @property
     def code(self):
         return self.args[0]
