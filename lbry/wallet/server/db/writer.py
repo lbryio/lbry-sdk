@@ -714,7 +714,7 @@ class SQLDB:
                               claim_in_channel.channel_hash=claim.claim_hash
                     )
                 WHERE claim_hash = ?
-            """, [(channel_hash,) for channel_hash in all_channel_keys.keys()])
+            """, [(channel_hash,) for channel_hash in all_channel_keys])
         sub_timer.stop()
 
         sub_timer = timer.add_timer('update blocked claims list')
