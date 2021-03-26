@@ -137,9 +137,7 @@ class LevelDB:
             return
 
         def get_headers():
-            return [
-                header for header in self.headers_db.iterator(prefix=HEADER_PREFIX, include_key=False)
-            ]
+            return list(self.headers_db.iterator(prefix=HEADER_PREFIX, include_key=False))
 
         headers = await asyncio.get_event_loop().run_in_executor(self.executor, get_headers)
         assert len(headers) - 1 == self.db_height, f"{len(headers)} vs {self.db_height}"
