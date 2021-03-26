@@ -42,7 +42,7 @@ FIELDS = {'is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', '
           'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
           'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
-          'reposted_claim_id', 'has_source'}
+          'reposted_claim_id'}
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}

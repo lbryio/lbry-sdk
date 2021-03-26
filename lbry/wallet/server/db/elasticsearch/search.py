@@ -432,8 +432,10 @@ def expand_query(**kwargs):
     if 'has_source' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
-        query['should'].append({"bool": {"must": [{"match": {"has_source": kwargs['has_source']}}, {"match": {"claim_type": CLAIM_TYPES['stream']}}]}})
-        query['should'].append({"bool": {"must_not": [{"match": {"claim_type": CLAIM_TYPES['stream']}}]}})
+        is_stream_or_repost = {"terms": {"claim_type": [CLAIM_TYPES['stream'], CLAIM_TYPES['repost']]}}
+        query['should'].append(
+            {"bool": {"must": [{"match": {"has_source": kwargs['has_source']}}, is_stream_or_repost]}})
+        query['should'].append({"bool": {"must_not": [is_stream_or_repost]}})
     if kwargs.get('text'):
         query['must'].append(
                     {"simple_query_string":
