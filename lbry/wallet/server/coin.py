@@ -14,7 +14,7 @@ from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-from lbry.wallet.server.block_processor import LBRYBlockProcessor
+from lbry.wallet.server.block_processor import BlockProcessor
 
 
 Block = namedtuple("Block", "raw header transactions")
@@ -38,7 +38,7 @@ class Coin:
     SESSIONCLS = LBRYElectrumX
     DESERIALIZER = lib_tx.Deserializer
     DAEMON = Daemon
-    BLOCK_PROCESSOR = LBRYBlockProcessor
+    BLOCK_PROCESSOR = BlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DB = LevelDB
     HEADER_VALUES = [
