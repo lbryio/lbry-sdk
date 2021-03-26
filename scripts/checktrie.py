@@ -64,7 +64,7 @@ async def checkcontrolling(daemon: Daemon, db: SQLDB):
 
 
 if __name__ == '__main__':
-    if not len(sys.argv) == 3:
+    if len(sys.argv) != 3:
         print("usage: <db_file_path> <lbrycrd_url>")
         sys.exit(1)
     db_path, lbrycrd_url = sys.argv[1:]  # pylint: disable=W0632
