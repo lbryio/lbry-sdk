@@ -180,13 +180,14 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three), text='*')
 
     async def test_source_filter(self):
+        channel = await self.channel_create('@abc')
         no_source = await self.stream_create('no-source', data=None)
         normal = await self.stream_create('normal', data=b'normal')
         normal_repost = await self.stream_repost(self.get_claim_id(normal), 'normal-repost')
         no_source_repost = await self.stream_repost(self.get_claim_id(no_source), 'no-source-repost')
-        await self.assertFindsClaims([no_source_repost, no_source], has_no_source=True)
-        await self.assertFindsClaims([normal_repost, normal], has_source=True)
-        await self.assertFindsClaims([no_source_repost, normal_repost, normal, no_source])
+        await self.assertFindsClaims([no_source_repost, no_source, channel], has_no_source=True)
+        await self.assertFindsClaims([normal_repost, normal, channel], has_source=True)
+        await self.assertFindsClaims([no_source_repost, normal_repost, normal, no_source, channel])
 
     async def test_pagination(self):
         await self.create_channel()
