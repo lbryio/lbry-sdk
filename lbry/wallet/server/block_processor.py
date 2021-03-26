@@ -605,8 +605,7 @@ class BlockProcessor:
         # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
         # Value: hashX
         prefix = b'h' + tx_hash[:4] + idx_packed
-        candidates = {db_key: hashX for db_key, hashX
-                      in self.db.utxo_db.iterator(prefix=prefix)}
+        candidates = dict(self.db.utxo_db.iterator(prefix=prefix))
         for hdb_key, hashX in candidates.items():
             tx_num_packed = hdb_key[-4:]
             if len(candidates) > 1:

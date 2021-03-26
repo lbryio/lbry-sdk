@@ -324,7 +324,7 @@ class MemPool:
                          for prevout in tx.prevouts
                          if prevout[0] not in all_hashes)
         utxos = await self.api.lookup_utxos(prevouts)
-        utxo_map = {prevout: utxo for prevout, utxo in zip(prevouts, utxos)}
+        utxo_map = dict(zip(prevouts, utxos))
 
         return self._accept_transactions(tx_map, utxo_map, touched)
 
