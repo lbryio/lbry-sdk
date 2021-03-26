@@ -1060,7 +1060,7 @@ class Ledger(metaclass=LedgerRegistry):
                 'abandon_info': [],
                 'purchase_info': []
             }
-            is_my_inputs = all([txi.is_my_input for txi in tx.inputs])
+            is_my_inputs = all(txi.is_my_input for txi in tx.inputs)
             if is_my_inputs:
                 # fees only matter if we are the ones paying them
                 item['value'] = dewies_to_lbc(tx.net_account_balance + tx.fee)
