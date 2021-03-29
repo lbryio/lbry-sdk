@@ -8,8 +8,9 @@ from multiprocessing import Process
 import apsw
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
-
-from .search import extract_doc, SearchIndex
+from lbry.wallet.server.env import Env
+from lbry.wallet.server.coin import LBC
+from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex
 
 INDEX = 'claims'
 
@@ -48,7 +49,9 @@ ORDER BY claim.height desc
 
 
 async def consume(producer):
-    es = AsyncElasticsearch()
+    env = Env(LBC)
+    logging.info("ES sync host: %s:%i", env.elastic_host, env.elastic_port)
+    es = AsyncElasticsearch([{'host': env.elastic_host, 'port': env.elastic_port}])
     try:
         await async_bulk(es, producer, request_timeout=120)
         await es.indices.refresh(index=INDEX)
@@ -57,7 +60,8 @@ async def consume(producer):
 
 
 async def make_es_index():
-    index = SearchIndex('')
+    env = Env(LBC)
+    index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
     try:
         return await index.start()
     finally:
@@ -83,6 +87,9 @@ def __run(args, shard):
 
 def run_elastic_sync():
     logging.basicConfig(level=logging.INFO)
+    logging.getLogger('aiohttp').setLevel(logging.WARNING)
+    logging.getLogger('elasticsearch').setLevel(logging.WARNING)
+
     logging.info('lbry.server starting')
     parser = argparse.ArgumentParser(prog="lbry-hub-elastic-sync")
     parser.add_argument("db_path", type=str)

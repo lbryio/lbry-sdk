@@ -33,6 +33,8 @@ class Env:
         self.allow_root = self.boolean('ALLOW_ROOT', False)
         self.host = self.default('HOST', 'localhost')
         self.rpc_host = self.default('RPC_HOST', 'localhost')
+        self.elastic_host = self.default('ELASTIC_HOST', 'localhost')
+        self.elastic_port = self.integer('ELASTIC_PORT', 9200)
         self.loop_policy = self.set_event_loop_policy()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')

@@ -27,6 +27,8 @@ def main():
     coin_class = get_coin_class(args.spvserver)
     logging.basicConfig(level=logging.INFO)
     logging.info('lbry.server starting')
+    logging.getLogger('aiohttp').setLevel(logging.WARNING)
+    logging.getLogger('elasticsearch').setLevel(logging.WARNING)
     try:
         server = Server(Env(coin_class))
         server.run()
