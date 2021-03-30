@@ -68,7 +68,7 @@ test:json-api:
   stage: test
   script:
     - make install tools
-    - HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
+    - ELASTIC_HOST=elasticsearch HOME=/tmp coverage run -p --source=lbry scripts/generate_json_api.py
 
 
 
