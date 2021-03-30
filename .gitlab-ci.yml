@@ -1,5 +1,11 @@
 default:
   image: python:3.7
+services:
+  - name: docker.elastic.co/elasticsearch/elasticsearch:7.11.2
+    alias: elasticsearch
+    command: [ "bin/elasticsearch", "-Expack.security.enabled=false", "-Ediscovery.type=single-node" ]
+variables:
+  ES_JAVA_OPTS: "-Xms512m -Xmx512m"
 
 
 #cache:
@@ -41,13 +47,14 @@ test:datanetwork-integration:
   stage: test
   script:
     - pip install tox-travis
-    - tox -e datanetwork --recreate
+    - ELASTIC_HOST=elasticsearch tox -e datanetwork --recreate
 
 test:blockchain-integration:
   stage: test
   script:
+    - curl "http://elasticsearch:9200/_cat/health"
     - pip install tox-travis
-    - tox -e blockchain
+    - ELASTIC_HOST=elasticsearch tox -e blockchain
 
 test:other-integration:
   stage: test
@@ -55,7 +62,7 @@ test:other-integration:
     - apt-get update
     - apt-get install -y --no-install-recommends ffmpeg
     - pip install tox-travis
-    - tox -e other
+    - ELASTIC_HOST=elasticsearch tox -e other
 
 test:json-api:
   stage: test
