@@ -54,7 +54,6 @@ class SearchIndex:
         self.sync_client = AsyncElasticsearch(hosts, timeout=self.sync_timeout)
         self.search_client = AsyncElasticsearch(hosts, timeout=self.search_timeout)
         while True:
-            self.logger.info("DOITDOITDOIT\n\n\n\n%s:%i\n\n\n", self._elastic_host, self._elastic_port)
             try:
                 await self.sync_client.cluster.health(wait_for_status='yellow')
                 break
