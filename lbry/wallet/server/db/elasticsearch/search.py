@@ -33,7 +33,7 @@ class StreamResolution(str):
 
 
 class SearchIndex:
-    def __init__(self, index_prefix: str, search_timeout=3.0):
+    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200):
         self.search_timeout = search_timeout
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
         self.search_client: Optional[AsyncElasticsearch] = None
@@ -44,13 +44,17 @@ class SearchIndex:
         self.short_id_cache = LRUCache(2 ** 17)  # never invalidated, since short ids are forever
         self.search_cache = LRUCache(2 ** 17)
         self.resolution_cache = LRUCache(2 ** 17)
+        self._elastic_host = elastic_host
+        self._elastic_port = elastic_port
 
     async def start(self):
         if self.sync_client:
             return
-        self.sync_client = AsyncElasticsearch(timeout=self.sync_timeout)
-        self.search_client = AsyncElasticsearch(timeout=self.search_timeout)
+        hosts = [{'host': self._elastic_host, 'port': self._elastic_port}]
+        self.sync_client = AsyncElasticsearch(hosts, timeout=self.sync_timeout)
+        self.search_client = AsyncElasticsearch(hosts, timeout=self.search_timeout)
         while True:
+            self.logger.info("DOITDOITDOIT\n\n\n\n%s:%i\n\n\n", self._elastic_host, self._elastic_port)
             try:
                 await self.sync_client.cluster.health(wait_for_status='yellow')
                 break
