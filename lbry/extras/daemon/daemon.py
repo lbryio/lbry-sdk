@@ -542,14 +542,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
     async def add_cors_headers(self, request):
         if self.conf.allowed_origin:
-            response = web.Response(
+            return web.Response(
                 headers={
                     'Access-Control-Allow-Origin': self.conf.allowed_origin,
                     'Access-Control-Allow-Methods': self.conf.allowed_origin,
                     'Access-Control-Allow-Headers': self.conf.allowed_origin,
                 }
             )
-            return response
         return None
 
     async def handle_old_jsonrpc(self, request):
