@@ -243,7 +243,7 @@ class Network:
                          pong.available, pong.height)
 
                 if pong.available:
-                    pongs[remote] = pong
+                    pongs[(ip_to_hostnames[remote][0], remote[1])] = pong
             return pongs
         except asyncio.TimeoutError:
             if pongs:
