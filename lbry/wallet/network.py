@@ -219,7 +219,7 @@ class Network:
         await asyncio.gather(*(resolve_spv(server, port) for (server, port) in self.config['default_servers']))
         return hostname_to_ip, ip_to_hostnames
 
-    async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], SPVPong]:
+    async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], Optional[SPVPong]]:
         loop = asyncio.get_event_loop()
         pong_responses = asyncio.Queue()
         connection = SPVStatusClientProtocol(pong_responses)
@@ -253,14 +253,16 @@ class Network:
                 log.warning("%i spv status probes failed, retrying later. servers tried: %s",
                             len(sent_ping_timestamps),
                             ', '.join('/'.join(hosts) + f' ({ip})' for ip, hosts in ip_to_hostnames.items()))
-                return {random.choice(list(ip_to_hostnames)): None}
+                random_server = random.choice(list(ip_to_hostnames.keys()))
+                host, port = random_server
+                log.warning("trying fallback to randomly selected spv: %s:%i", host, port)
+                return {(host, port): None}
         finally:
             connection.close()
 
     async def connect_to_fastest(self) -> Optional[ClientSession]:
         fastest_spvs = await self.get_n_fastest_spvs()
         for (host, port) in fastest_spvs:
-
             client = ClientSession(network=self, server=(host, port))
             try:
                 await client.create_connection()
