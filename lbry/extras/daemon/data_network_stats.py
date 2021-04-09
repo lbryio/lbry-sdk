@@ -19,7 +19,7 @@ class DataNetworkStats:
 
     def __init__(self, conf):
         if DataNetworkStats.instance is not None:
-            return self
+            raise Exception("Can't make two instances of class DataNetworkStats.")
 
         self.hour = None
         self._set_hour()
