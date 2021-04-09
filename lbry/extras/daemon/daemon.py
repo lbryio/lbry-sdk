@@ -343,6 +343,7 @@ class Daemon(metaclass=JSONRPCServerType):
         rpc_app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         rpc_app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
         rpc_app.router.add_post('/', self.handle_old_jsonrpc)
+        rpc_app.router.add_options('/', self.add_cors_headers)
         self.rpc_runner = web.AppRunner(rpc_app)
 
         streaming_app = web.Application()
