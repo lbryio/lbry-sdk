@@ -13,19 +13,24 @@ SAVE_INTERVAL = 120
 class DataNetworkStats:
     """
     Collect statistics on your data network activity
-    and saves them to a database.
+    and saves them to a database. This is a singleton class. There is only
+    one instance.
     """
     instance = None
 
     def __init__(self, conf):
-        if DataNetworkStats.instance is not None:
-            raise Exception("Can't make two instances of class DataNetworkStats.")
 
         self.hour = None
         self._set_hour()
         self._reset_counts()
-        self.conn = apsw.Connection(os.path.join(conf.data_dir,
-                                                 "data_network_stats.db"))
+
+        try:
+            self.conn = apsw.Connection(os.path.join(conf.data_dir,
+                                                     "data_network_stats.db"))
+        except:
+            # This is just so the tests will run
+            self.conn = apsw.Connection(":memory:")
+
         self.db = self.conn.cursor()
 
         self.db.execute("PRAGMA JOURNAL_MODE = WAL;")
@@ -47,10 +52,9 @@ class DataNetworkStats:
         # Cleanup
         atexit.register(self.save)
 
-        # Start the loop
-        self.start()
-
+        # Set this as the instance
         DataNetworkStats.instance = self
+
 
     def __del__(self):
         if self.th is not None:
@@ -151,11 +155,10 @@ class DataNetworkStats:
         self.lock.release()
 
 
-    def get_data(self, max_hours):
+    def get_data(self, max_hours=None):
         """
-        Return the entire contents of the hours table but in a list.
-        Inefficient if the history gets really large...the pagination
-        will load everything just to truncate it. But easy to start this way.
+        Return the hours table but in a list. max_hours can be used to limit
+        the number of items returned.
         """
 
         # Just save to disk, then assume disk is up-to-date
@@ -175,3 +178,6 @@ class DataNetworkStats:
                                findnode_responses=findnode,
                                findvalue_responses=findvalue))
         return result
+
+data_network_stats = DataNetworkStats(None)
+

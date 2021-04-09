@@ -334,8 +334,8 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         self.component_startup_task = None
 
-        global DataNetworkStats
-        data_network_stats = DataNetworkStats(self.conf)
+        # Set up the actual on-disk database
+        DataNetworkStats(self.conf)
 
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         rpc_app = web.Application()
