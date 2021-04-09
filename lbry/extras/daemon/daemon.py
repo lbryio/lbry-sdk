@@ -543,6 +543,17 @@ class Daemon(metaclass=JSONRPCServerType):
             self.analytics_manager.stop()
         log.info("finished shutting down")
 
+    async def add_cors_headers(self, request):
+        if self.conf.allowed_origin:
+            return web.Response(
+                headers={
+                    'Access-Control-Allow-Origin': self.conf.allowed_origin,
+                    'Access-Control-Allow-Methods': self.conf.allowed_origin,
+                    'Access-Control-Allow-Headers': self.conf.allowed_origin,
+                }
+            )
+        return None
+
     async def handle_old_jsonrpc(self, request):
         ensure_request_allowed(request, self.conf)
         data = await request.json()
@@ -563,8 +574,16 @@ class Daemon(metaclass=JSONRPCServerType):
                 'After successfully executing the command, failed to encode result for JSON RPC response.',
                 {'traceback': format_exc()}
             ), ledger=ledger)
+        headers = {}
+        if self.conf.allowed_origin:
+            headers.update({
+                'Access-Control-Allow-Origin': self.conf.allowed_origin,
+                'Access-Control-Allow-Methods': self.conf.allowed_origin,
+                'Access-Control-Allow-Headers': self.conf.allowed_origin,
+            })
         return web.Response(
             text=encoded_result,
+            headers=headers,
             content_type='application/json'
         )
 
