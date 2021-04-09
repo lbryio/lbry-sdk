@@ -171,7 +171,10 @@ class DataNetworkStats:
         for row in self.db.execute("SELECT * FROM hours ORDER BY timestamp DESC\
                                LIMIT ?;", (max_hours, )):
             hour, up, down, announced, stored, findnode, findvalue = row
+            human_time_utc = str(datetime.datetime.utcfromtimestamp(hour))
+
             result.append(dict(timestamp=hour,
+                               human_time_utc=human_time_utc,
                                blobs_up=up, blobs_down=down,
                                blobs_announced=announced,
                                announcements_stored=stored,
