@@ -142,7 +142,7 @@ class DataNetworkStats:
                              blobs_announced = blobs_announced + excluded.blobs_announced,\
                              announcements_stored = announcements_stored + excluded.announcements_stored,\
                              findnode_responses = findnode_responses + excluded.findnode_responses,\
-                             findvalue_responses = excluded.findvalue_responses;",
+                             findvalue_responses = findvalue_responses + excluded.findvalue_responses;",
                         data)
         log.info(f"Saved events to data_network_stats.db")
 
