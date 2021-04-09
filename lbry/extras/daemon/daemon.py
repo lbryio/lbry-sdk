@@ -45,6 +45,7 @@ from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT
 from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
+from lbry.extras.daemon.data_network_stats import DataNetworkStats
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
@@ -333,12 +334,14 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         self.component_startup_task = None
 
+        global DataNetworkStats
+        data_network_stats = DataNetworkStats(self.conf)
+
         logging.getLogger('aiohttp.access').setLevel(logging.WARN)
         rpc_app = web.Application()
         rpc_app.router.add_get('/lbryapi', self.handle_old_jsonrpc)
         rpc_app.router.add_post('/lbryapi', self.handle_old_jsonrpc)
         rpc_app.router.add_post('/', self.handle_old_jsonrpc)
-        rpc_app.router.add_options('/', self.add_cors_headers)
         self.rpc_runner = web.AppRunner(rpc_app)
 
         streaming_app = web.Application()
@@ -382,7 +385,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @classmethod
     def get_api_definitions(cls):
         prefix = 'jsonrpc_'
-        not_grouped = ['routing_table_get', 'ffmpeg_find']
+        not_grouped = ['routing_table_get', 'ffmpeg_find', 'data_network_stats']
         api = {
             'groups': {
                 group_name[:-len('_DOC')].lower(): getattr(cls, group_name).strip()
@@ -540,17 +543,6 @@ class Daemon(metaclass=JSONRPCServerType):
             self.analytics_manager.stop()
         log.info("finished shutting down")
 
-    async def add_cors_headers(self, request):
-        if self.conf.allowed_origin:
-            return web.Response(
-                headers={
-                    'Access-Control-Allow-Origin': self.conf.allowed_origin,
-                    'Access-Control-Allow-Methods': self.conf.allowed_origin,
-                    'Access-Control-Allow-Headers': self.conf.allowed_origin,
-                }
-            )
-        return None
-
     async def handle_old_jsonrpc(self, request):
         ensure_request_allowed(request, self.conf)
         data = await request.json()
@@ -571,16 +563,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 'After successfully executing the command, failed to encode result for JSON RPC response.',
                 {'traceback': format_exc()}
             ), ledger=ledger)
-        headers = {}
-        if self.conf.allowed_origin:
-            headers.update({
-                'Access-Control-Allow-Origin': self.conf.allowed_origin,
-                'Access-Control-Allow-Methods': self.conf.allowed_origin,
-                'Access-Control-Allow-Headers': self.conf.allowed_origin,
-            })
         return web.Response(
             text=encoded_result,
-            headers=headers,
             content_type='application/json'
         )
 
@@ -1939,6 +1923,21 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         return wallet.get_account_or_default(account_id).receiving.get_or_create_usable_address()
+
+
+    async def jsonrpc_data_network_stats(self, max_hours=None):
+        """
+        Get data network stats in reverse time order.
+
+        Usage:
+            data_network_stats [(<max_hours> | --max_hours=<max_hours>)]
+
+        Options:
+            --max_hours=<max_hours> : (int) maximum number of hours.
+
+        Returns: List[Dict]
+        """
+        return DataNetworkStats.instance.get_data(max_hours)
 
     FILE_DOC = """
     File management.

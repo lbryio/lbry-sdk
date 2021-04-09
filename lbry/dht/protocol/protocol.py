@@ -17,6 +17,7 @@ from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.routing_table import TreeRoutingTable
 from lbry.dht.protocol.data_store import DictDataStore
 from lbry.dht.peer import make_kademlia_peer
+from lbry.extras.daemon.data_network_stats import DataNetworkStats
 
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import PeerManager, KademliaPeer
@@ -433,14 +434,17 @@ class KademliaProtocol(DatagramProtocol):
         elif method == b'store':
             blob_hash, token, port, original_publisher_id, age = args[:5]  # pylint: disable=unused-variable
             result = self.node_rpc.store(sender_contact, blob_hash, token, port)
+            DataNetworkStats.instance.log_event("store")
         else:
             key = args[0]
             page = kwargs.get(PAGE_KEY, 0)
             if method == b'findNode':
                 result = self.node_rpc.find_node(sender_contact, key)
+                DataNetworkStats.instance.log_event("findnode")
             else:
                 assert method == b'findValue'
                 result = self.node_rpc.find_value(sender_contact, key, page)
+                DataNetworkStats.instance.log_event("findvalue")
 
         self.send_response(
             sender_contact, ResponseDatagram(RESPONSE_TYPE, message.rpc_id, self.node_id, result),

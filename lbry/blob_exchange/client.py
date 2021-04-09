@@ -6,6 +6,7 @@ import binascii
 from typing import Optional
 from lbry.error import InvalidBlobHashError, InvalidDataError
 from lbry.blob_exchange.serialization import BlobResponse, BlobRequest
+from lbry.extras.daemon.data_network_stats import DataNetworkStats
 from lbry.utils import cache_concurrent
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_file import AbstractBlob
@@ -157,6 +158,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             log.info("%s at %fMB/s", msg,
                      round((float(self._blob_bytes_received) /
                             float(time.perf_counter() - start_time)) / 1000000.0, 2))
+            DataNetworkStats.instance.log_event("down")
             # await self.blob.finished_writing.wait()  not necessary, but a dangerous change. TODO: is it needed?
             return self._blob_bytes_received, self
         except asyncio.TimeoutError:

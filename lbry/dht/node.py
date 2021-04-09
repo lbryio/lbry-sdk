@@ -4,6 +4,7 @@ import typing
 import binascii
 import socket
 from lbry.utils import resolve_host
+from lbry.extras.daemon.data_network_stats import DataNetworkStats
 from lbry.dht import constants
 from lbry.dht.peer import make_kademlia_peer
 from lbry.dht.protocol.distance import Distance
@@ -98,6 +99,7 @@ class Node:
                 "Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
                 len(stored_to), len(peers)
             )
+            DataNetworkStats.instance.log_event("announce")
         else:
             log.debug("Failed announcing %s, stored to 0 peers", blob_hash[:8])
         return stored_to
