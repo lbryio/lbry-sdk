@@ -50,7 +50,7 @@ class DataNetworkStats:
         self.th = None
 
         # Cleanup
-        atexit.register(self.save)
+        atexit.register(self.cleanup)
 
         # Set this as the instance
         DataNetworkStats.instance = self
@@ -153,6 +153,11 @@ class DataNetworkStats:
         self._reset_counts()
 
         self.lock.release()
+
+    def cleanup(self):
+        self.save()
+        self.db.execute("PRAGMA main.WAL_CHECKPOINT(TRUNCATE);")
+        self.conn.close()
 
 
     def get_data(self, max_hours=None):
