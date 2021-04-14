@@ -76,7 +76,7 @@ class WalletCommands(CommandTestCase):
         }
         self.assertIsNone(ledger._balance_cache.get(self.account.id))
 
-        query_count += 6
+        query_count += 2
         self.assertEqual(await wallet_balance(), expected)
         self.assertEqual(self.ledger.db.db.query_count, query_count)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
@@ -100,7 +100,7 @@ class WalletCommands(CommandTestCase):
         # on_transaction event reset balance cache
         query_count = self.ledger.db.db.query_count
         self.assertEqual(await wallet_balance(), expected)
-        query_count += 3  # only one of the accounts changed
+        query_count += 1  # only one of the accounts changed
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '9.979893')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
         self.assertEqual(self.ledger.db.db.query_count, query_count)
