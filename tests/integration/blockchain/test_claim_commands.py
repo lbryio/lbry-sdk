@@ -1990,14 +1990,17 @@ class StreamCommands(ClaimTestCase):
         self.assertNotIn('source', claim['value'])
 
         # update the stream to have a source
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi')
-            file.flush()
-            tx6 = await self.publish('future-release', file_path=file.name, tags=['something-else'])
+        tx6 = await self.publish(
+            'future-release', sd_hash='beef', file_hash='beef',
+            file_name='blah.mp3', tags=['something-else']
+        )
         claim = await self.resolve('lbry://future-release')
         self.assertEqual(claim['txid'], tx6['outputs'][0]['txid'])
         self.assertEqual(claim['value']['tags'], ['something-else'])
-        self.assertIn('source', claim['value'])
+        self.assertEqual(claim['value']['source']['sd_hash'], 'beef')
+        self.assertEqual(claim['value']['source']['hash'], 'beef')
+        self.assertEqual(claim['value']['source']['name'], 'blah.mp3')
+        self.assertEqual(claim['value']['source']['media_type'], 'audio/mpeg')
 
 
 class SupportCommands(CommandTestCase):

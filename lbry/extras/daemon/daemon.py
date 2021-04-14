@@ -2996,13 +2996,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
+                    [--file_name=<file_name>] [--file_hash=<file_hash>] [--validate_file] [--optimize_file]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3012,6 +3012,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --file_name=<file_name>        : (str) name of file to be associated with stream.
+            --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3074,6 +3076,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of publisher channel
           --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
@@ -3191,16 +3194,15 @@ class Daemon(metaclass=JSONRPCServerType):
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
-            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                    [<file_path> | --file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
+            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) [<file_path> | --file_path=<file_path>]
+                    [--file_name=<file_name>] [--file_hash=<file_hash>] [--validate_file] [--optimize_file]
                     [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3210,6 +3212,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --file_name=<file_name>        : (str) name of file to be associated with stream.
+            --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3274,6 +3278,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
             --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
@@ -3370,7 +3375,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--locations=<locations>...] [--clear_locations]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3449,6 +3454,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
             --clear_channel                : (bool) remove channel signature
