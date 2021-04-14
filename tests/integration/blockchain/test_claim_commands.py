@@ -75,7 +75,7 @@ class ClaimSearchCommand(ClaimTestCase):
             self.assertEqual(
                 (claim['txid'], self.get_claim_id(claim)),
                 (result['txid'], result['claim_id']),
-                f"{claim['outputs'][0]['name']} != {result['name']}"
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
             )
 
     @skip("doesnt happen on ES...?")
@@ -381,6 +381,38 @@ class ClaimSearchCommand(ClaimTestCase):
         await match(
             [claim6, claim5, claim4, claim3, claim2, claim1],
             limit_claims_per_channel=3, claim_type='stream'
+        )
+
+    async def test_limit_claims_per_channel_across_sorted_pages(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        channel_id = self.get_claim_id(await self.channel_create('@chan0'))
+        claims = []
+        first = await self.stream_create('claim0', channel_id=channel_id)
+        second = await self.stream_create('claim1', channel_id=channel_id)
+        for i in range(2, 10):
+            some_chan = self.get_claim_id(await self.channel_create(f'@chan{i}', bid='0.001'))
+            claims.append(await self.stream_create(f'claim{i}', bid='0.001', channel_id=some_chan))
+        last = await self.stream_create('claim10', channel_id=channel_id)
+
+        await match(
+            [first, second, claims[0], claims[1]], page_size=4,
+            limit_claims_per_channel=3, claim_type='stream', order_by=['^height']
+        )
+        # second goes out
+        await match(
+            [first, claims[0], claims[1], claims[2]], page_size=4,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
+        )
+        # second appears, from replacement queue
+        await match(
+            [second, claims[3], claims[4], claims[5]], page_size=4, page=2,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
+        )
+        # last is unaffected, as the limit applies per page
+        await match(
+            [claims[6], claims[7], last], page_size=4, page=3,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
         )
 
     async def test_claim_type_and_media_type_search(self):
