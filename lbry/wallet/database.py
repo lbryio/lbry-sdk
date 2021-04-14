@@ -1142,6 +1142,35 @@ class Database(SQLiteMixin):
         )
         return balance[0]['total'] or 0
 
+    async def get_detailed_balance(self, accounts, read_only=False, **constraints):
+        constraints['accounts'] = accounts
+        result = (await self.select_txos(
+            f"COALESCE(SUM(amount), 0) AS total,"
+            f"COALESCE(SUM(CASE WHEN txo_type != {TXO_TYPES['other']} THEN amount ELSE 0 END), 0) AS reserved,"
+            f"COALESCE(SUM(CASE WHEN txo_type IN ({','.join(map(str, CLAIM_TYPES))}) THEN amount ELSE 0 END), 0) AS claims,"
+            f"COALESCE(SUM(CASE WHEN txo_type = {TXO_TYPES['support']} THEN amount ELSE 0 END), 0) AS supports,"
+            f"COALESCE(SUM("
+            f"  CASE WHEN"
+            f"    txo_type = {TXO_TYPES['support']} AND"
+            f"    TXI.address IS NOT NULL AND"
+            f"    TXI.address IN (SELECT address FROM account_address WHERE account = :$account__in0)"
+            f"  THEN amount ELSE 0 END), 0) AS my_supports",
+            is_spent=False,
+            include_is_my_input=True,
+            read_only=read_only,
+            **constraints
+        ))[0]
+        return {
+            "total": result["total"],
+            "available": result["total"] - result["reserved"],
+            "reserved": result["reserved"],
+            "reserved_subtotals": {
+                "claims": result["claims"],
+                "supports": result["my_supports"],
+                "tips": result["supports"] - result["my_supports"]
+            }
+        }
+
     async def select_addresses(self, cols, read_only=False, **constraints):
         return await self.db.execute_fetchall(*query(
             f"SELECT {cols} FROM pubkey_address JOIN account_address USING (address)",

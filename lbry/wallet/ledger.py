@@ -1171,7 +1171,7 @@ class Ledger(metaclass=LedgerRegistry):
             balance = self._balance_cache.get(account.id)
             if not balance:
                 balance = self._balance_cache[account.id] = \
-                    await account.get_detailed_balance(confirmations, reserved_subtotals=True)
+                    await account.get_detailed_balance(confirmations)
             for key, value in balance.items():
                 if key == 'reserved_subtotals':
                     for subkey, subvalue in value.items():
@@ -1179,6 +1179,7 @@ class Ledger(metaclass=LedgerRegistry):
                 else:
                     result[key] += value
         return result
+
 
 class TestNetLedger(Ledger):
     network_name = 'testnet'
