@@ -1,6 +1,7 @@
 import asyncio
 import struct
 from binascii import unhexlify
+from collections import Counter
 from decimal import Decimal
 from operator import itemgetter
 from typing import Optional, List, Iterable, Union
@@ -218,12 +219,54 @@ class SearchIndex:
             if not kwargs['channel_id'] or not isinstance(kwargs['channel_id'], str):
                 return [], 0, 0
         try:
-            result = (await self.search_client.search(
-                expand_query(**kwargs), index=self.index, track_total_hits=False if kwargs.get('no_totals') else 10_000
-            ))['hits']
+            if 'limit_claims_per_channel' in kwargs:
+                return await self.search_ahead(**kwargs), 0, 0
+            else:
+                result = (await self.search_client.search(
+                    expand_query(**kwargs), index=self.index,
+                    track_total_hits=False if kwargs.get('no_totals') else 10_000
+                ))['hits']
         except NotFoundError:
             return [], 0, 0
         return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
+
+    async def search_ahead(self, **kwargs):
+        # 'limit_claims_per_channel' case. Fetch 1000 results, reorder, slice, inflate and return
+        per_channel_per_page = kwargs.pop('limit_claims_per_channel')
+        limit = kwargs.pop('limit', 10)
+        offset = kwargs.pop('offset', 0)
+        kwargs['limit'] = 1000
+        query = expand_query(**kwargs)
+        result = (await self.search_client.search(
+            query, index=self.index, track_total_hits=False, _source_includes=['_id', 'channel_id']
+        ))['hits']
+        to_inflate = []
+        channel_counter = Counter()
+        delayed = []
+        while result['hits'] or delayed:
+            if len(to_inflate) % limit == 0:
+                channel_counter.clear()
+            else:
+                break  # means last page was incomplete and we are left with bad replacements
+            new_delayed = []
+            for id, chann in delayed:
+                if channel_counter[chann] < per_channel_per_page:
+                    to_inflate.append((id, chann))
+                    channel_counter[hit_channel_id] += 1
+                else:
+                    new_delayed.append((id, chann))
+            delayed = new_delayed
+            while result['hits']:
+                hit = result['hits'].pop(0)
+                hit_id, hit_channel_id = hit['_id'], hit['_source']['channel_id']
+                if channel_counter[hit_channel_id] < per_channel_per_page:
+                    to_inflate.append((hit_id, hit_channel_id))
+                    channel_counter[hit_channel_id] += 1
+                    if len(to_inflate) % limit == 0:
+                        break
+                else:
+                    delayed.append((hit_id, hit_channel_id))
+        return list(await self.get_many(*(claim_id for claim_id, _ in to_inflate[offset:(offset + limit)])))
 
     async def resolve_url(self, raw_url):
         if raw_url not in self.resolution_cache:
