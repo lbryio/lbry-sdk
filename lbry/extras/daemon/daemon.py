@@ -1556,7 +1556,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
         balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=True, read_only=True
+            confirmations=confirmations, read_only=True
         )
         return dict_values_to_lbc(balance)
 
