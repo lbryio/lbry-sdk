@@ -5,7 +5,6 @@ import logging
 import typing
 import asyncio
 import random
-from functools import partial
 from hashlib import sha256
 from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
@@ -16,7 +15,7 @@ from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 
 from .bip32 import PrivateKey, PubKey, from_extended_key_string
 from .mnemonic import Mnemonic
-from .constants import COIN, CLAIM_TYPES, TXO_TYPES
+from .constants import COIN, TXO_TYPES
 from .transaction import Transaction, Input, Output
 
 if typing.TYPE_CHECKING:
