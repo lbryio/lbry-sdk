@@ -184,7 +184,13 @@ class PurchaseCommandTests(CommandTestCase):
         await self.generate(1)
         await self.ledger.wait(purchase)
 
-        await self.assertBalance(self.account, '10.987893')
+        # confirm that available and reserved take into account purchase received
+        self.assertEqual(await self.account.get_detailed_balance(), {
+            'total': 1099789300,
+            'available': 1098789300,
+            'reserved': 1000000,
+            'reserved_subtotals': {'claims': 1000000, 'supports': 0, 'tips': 0}
+        })
         self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 2)
 
         spend = await self.daemon.jsonrpc_wallet_send('10.5', address2)
