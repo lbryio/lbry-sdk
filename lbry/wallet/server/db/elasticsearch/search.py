@@ -42,7 +42,7 @@ class SearchIndex:
         self.index = index_prefix + 'claims'
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.claim_cache = LRUCache(2 ** 15)
-        self.short_id_cache = LRUCache(2 ** 17)  # never invalidated, since short ids are forever
+        self.short_id_cache = LRUCache(2 ** 17)
         self.search_cache = LRUCache(2 ** 17)
         self.resolution_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
@@ -134,6 +134,7 @@ class SearchIndex:
                 self.index, body=self.update_filter_query(Censor.RESOLVE, blocked_channels, True), slices=4)
             await self.sync_client.indices.refresh(self.index)
         self.search_cache.clear()
+        self.short_id_cache.clear()
         self.claim_cache.clear()
         self.resolution_cache.clear()
 
