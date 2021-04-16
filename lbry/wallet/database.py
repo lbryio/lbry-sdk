@@ -1146,7 +1146,10 @@ class Database(SQLiteMixin):
         constraints['accounts'] = accounts
         result = (await self.select_txos(
             f"COALESCE(SUM(amount), 0) AS total,"
-            f"COALESCE(SUM(CASE WHEN txo_type != {TXO_TYPES['other']} THEN amount ELSE 0 END), 0) AS reserved,"
+            f"COALESCE(SUM("
+            f"  CASE WHEN"
+            f"    txo_type NOT IN ({TXO_TYPES['other']}, {TXO_TYPES['purchase']})"
+            f"  THEN amount ELSE 0 END), 0) AS reserved,"
             f"COALESCE(SUM("
             f"  CASE WHEN"
             f"    txo_type IN ({','.join(map(str, CLAIM_TYPES))})"
