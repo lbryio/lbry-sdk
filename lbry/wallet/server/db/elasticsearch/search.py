@@ -199,7 +199,7 @@ class SearchIndex:
                 self.claim_cache.set(result['claim_id'], result)
 
     async def full_id_from_short_id(self, name, short_id, channel_id=None):
-        key = (channel_id or '') + name + short_id
+        key = '#'.join((channel_id or '', name, short_id))
         if key not in self.short_id_cache:
             query = {'name': name, 'claim_id': short_id}
             if channel_id:
