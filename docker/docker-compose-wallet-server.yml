@@ -16,11 +16,15 @@ services:
       - "2112:2112"   # uncomment to enable prometheus
     volumes:
       - "wallet_server:/database"
-    env_file: [/home/lbry/wallet-server-env]
     environment:
       - DAEMON_URL=http://lbry:lbry@127.0.0.1:9245
       - TCP_PORT=50001
       - PROMETHEUS_PORT=2112
+      - QUERY_TIMEOUT_MS=3000  # how long search queries allowed to run before cancelling, in milliseconds
+      - TRENDING_ALGORITHMS=variable_decay
+      - BANDWIDTH_LIMIT=1000000000000  # deprecated. leave it high until its removed
+      - MAX_SEND=10000000000000  # deprecated. leave it high until its removed
+      - MAX_SUBS=1000000000000  # deprecated. leave it high until its removed
   es01:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.11.0
     container_name: es01
