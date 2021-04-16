@@ -499,6 +499,7 @@ def expand_query(**kwargs):
         query['should'].append(
             {"bool": {"must": [{"match": {"has_source": kwargs['has_source']}}, is_stream_or_repost]}})
         query['should'].append({"bool": {"must_not": [is_stream_or_repost]}})
+        query['should'].append({"bool": {"must": [{"term": {"reposted_claim_type": CLAIM_TYPES['channel']}}]}})
     if kwargs.get('text'):
         query['must'].append(
                     {"simple_query_string":
