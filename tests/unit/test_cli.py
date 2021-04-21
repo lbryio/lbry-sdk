@@ -12,12 +12,15 @@ from contextlib import asynccontextmanager
 import docopt
 from lbry.testcase import AsyncioTestCase
 
-from lbry.extras.cli import normalize_value, main, setup_logging
+from lbry.extras.cli import normalize_value, main, setup_logging, ensure_directory_exists
 from lbry.extras.system_info import get_platform
 from lbry.extras.daemon.daemon import Daemon
 from lbry.conf import Config
 from lbry.extras import cli
+from lbry.error import ConfigWriteError
 
+
+HERE = os.path.dirname(os.path.realpath(__file__))
 
 @asynccontextmanager
 async def get_logger(argv, **conf_options):
@@ -202,3 +205,33 @@ class DaemonDocsTests(TestCase):
                 pass
         if failures:
             self.fail("\n" + "\n".join(failures))
+
+
+class DirectoryExistsTests(TestCase):
+
+    def test_dir_exists_and_is_writable(self):
+        # Normal operation
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ensure_directory_exists(temp_dir)
+            file_path = os.path.join(temp_dir, "test.txt")
+            with open(file_path, "w") as file:
+                file.write("Hello, LBRY")
+
+    def test_dir_does_not_exist(self):
+        try:
+            dir_path = os.path.join(HERE, "TEMP_DIR")
+            ensure_directory_exists(dir_path)
+            file_path = os.path.join(dir_path, "test.txt")
+            with open(file_path, "w") as file:
+                file.write("Hello, LBRY")
+        finally:
+            shutil.rmtree(dir_path)
+
+    def test_dir_exists_but_is_not_writable(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.chmod(temp_dir, 0o555)
+            self.assertRaises(ConfigWriteError, ensure_directory_exists, temp_dir)
+
+    def test_path_is_not_a_dir(self):
+        with tempfile.TemporaryFile(dir=HERE) as temp_file:
+            self.assertRaises(NotADirectoryError, ensure_directory_exists, temp_file.name)

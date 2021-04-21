@@ -4,6 +4,7 @@ import shutil
 import signal
 import pathlib
 import json
+import tempfile
 import asyncio
 import argparse
 import logging
@@ -16,6 +17,7 @@ from docopt import docopt
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.daemon import Daemon
 from lbry.conf import Config, CLIConfig
+from lbry.error import ConfigWriteError
 
 log = logging.getLogger('lbry')
 
@@ -224,8 +226,23 @@ def get_argument_parser():
 
 
 def ensure_directory_exists(path: str):
+    """Ensures a directory exists.
+    If the directory cannot be written/read, throws a human-friendly error."""
     if not os.path.isdir(path):
+        if os.path.exists(path):
+            raise NotADirectoryError(f"{path} was expected to be a directory.")
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+    # Assert process has read/write permissions for directory
+    try:
+        temp_file = tempfile.TemporaryFile(dir=path)
+    except OSError as err:
+        if err.errno == 13:
+            raise ConfigWriteError(path) from err
+        raise err
+    finally:
+        if "temp_file" in locals():
+            temp_file.close()
 
 
 LOG_MODULES = 'lbry', 'aioupnp'
