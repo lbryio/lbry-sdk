@@ -15,7 +15,7 @@ class FindShortestID:
 
     def finalize(self):
         if self.short_id:
-            return '#'+self.short_id
+            return ':'+self.short_id
 
     @classmethod
     def factory(cls):

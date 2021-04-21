@@ -415,8 +415,8 @@ class TestClaimtrie(TestSQLDB):
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
         (r_ab, r_a) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual("@foo#a", r_a['short_url'])
-        self.assertEqual("@foo#ab", r_ab['short_url'])
+        self.assertEqual("@foo:a", r_a['short_url'])
+        self.assertEqual("@foo:ab", r_ab['short_url'])
         self.assertIsNone(r_a['canonical_url'])
         self.assertIsNone(r_ab['canonical_url'])
         self.assertEqual(0, r_a['claims_in_channel'])
@@ -428,9 +428,9 @@ class TestClaimtrie(TestSQLDB):
         advance(3, [tx_a])
         advance(4, [tx_ab, tx_abc])
         (r_abc, r_ab, r_a) = search(order_by=['creation_height', 'tx_position'], limit=3)
-        self.assertEqual("foo#a", r_a['short_url'])
-        self.assertEqual("foo#ab", r_ab['short_url'])
-        self.assertEqual("foo#abc", r_abc['short_url'])
+        self.assertEqual("foo:a", r_a['short_url'])
+        self.assertEqual("foo:ab", r_ab['short_url'])
+        self.assertEqual("foo:abc", r_abc['short_url'])
         self.assertIsNone(r_a['canonical_url'])
         self.assertIsNone(r_ab['canonical_url'])
         self.assertIsNone(r_abc['canonical_url'])
@@ -442,17 +442,17 @@ class TestClaimtrie(TestSQLDB):
         advance(6, [tx_a2])
         advance(7, [tx_ab2])
         (r_ab2, r_a2) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
-        self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
-        self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
+        self.assertEqual(f"foo:{a2_claim.claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo:{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
+        self.assertEqual("@foo:a/foo:a", r_a2['canonical_url'])
+        self.assertEqual("@foo:a/foo:ab", r_ab2['canonical_url'])
         self.assertEqual(2, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
 
         # change channel public key, invaliding stream claim signatures
         advance(8, [self.get_channel_update(txo_chan_a, COIN, key=b'a')])
         (r_ab2, r_a2) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
+        self.assertEqual(f"foo:{a2_claim.claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo:{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
         self.assertIsNone(r_a2['canonical_url'])
         self.assertIsNone(r_ab2['canonical_url'])
         self.assertEqual(0, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
@@ -461,18 +461,18 @@ class TestClaimtrie(TestSQLDB):
         channel_update = self.get_channel_update(txo_chan_a, COIN, key=b'c')
         advance(9, [channel_update])
         (r_ab2, r_a2) = search(order_by=['creation_height'], limit=2)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
-        self.assertEqual(f"foo#{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
-        self.assertEqual("@foo#a/foo#a", r_a2['canonical_url'])
-        self.assertEqual("@foo#a/foo#ab", r_ab2['canonical_url'])
+        self.assertEqual(f"foo:{a2_claim.claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo:{ab2_claim.claim_id[:4]}", r_ab2['short_url'])
+        self.assertEqual("@foo:a/foo:a", r_a2['canonical_url'])
+        self.assertEqual("@foo:a/foo:ab", r_ab2['canonical_url'])
         self.assertEqual(2, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
         self.assertEqual(0, search(claim_id=txo_chan_ab.claim_id, limit=1)[0]['claims_in_channel'])
 
         # change channel of stream
-        self.assertEqual("@foo#a/foo#ab", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
+        self.assertEqual("@foo:a/foo:ab", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
         tx_ab2 = self.get_stream_update(tx_ab2, COIN, txo_chan_ab)
         advance(10, [tx_ab2])
-        self.assertEqual("@foo#ab/foo#a", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
+        self.assertEqual("@foo:ab/foo:a", search(claim_id=ab2_claim.claim_id, limit=1)[0]['canonical_url'])
         # TODO: currently there is a bug where stream leaving a channel does not update that channels claims count
         self.assertEqual(2, search(claim_id=txo_chan_a.claim_id, limit=1)[0]['claims_in_channel'])
         # TODO: after bug is fixed remove test above and add test below
@@ -486,7 +486,7 @@ class TestClaimtrie(TestSQLDB):
         # delete channel, invaliding stream claim signatures
         advance(12, [self.get_abandon(channel_update)])
         (r_a2,) = search(order_by=['creation_height'], limit=1)
-        self.assertEqual(f"foo#{a2_claim.claim_id[:2]}", r_a2['short_url'])
+        self.assertEqual(f"foo:{a2_claim.claim_id[:2]}", r_a2['short_url'])
         self.assertIsNone(r_a2['canonical_url'])
 
     def test_resolve_issue_2448(self):
@@ -499,15 +499,15 @@ class TestClaimtrie(TestSQLDB):
         advance(1, [tx_chan_a])
         advance(2, [tx_chan_ab])
 
-        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
-        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo:a")['claim_hash'], txo_chan_a.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo:ab")['claim_hash'], txo_chan_ab.claim_hash)
 
         # update increase last height change of channel
         advance(9, [self.get_channel_update(txo_chan_a, COIN, key=b'c')])
 
         # make sure that activation_height is used instead of height (issue #2448)
-        self.assertEqual(reader.resolve_url("@foo#a")['claim_hash'], txo_chan_a.claim_hash)
-        self.assertEqual(reader.resolve_url("@foo#ab")['claim_hash'], txo_chan_ab.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo:a")['claim_hash'], txo_chan_a.claim_hash)
+        self.assertEqual(reader.resolve_url("@foo:ab")['claim_hash'], txo_chan_ab.claim_hash)
 
     def test_canonical_find_shortest_id(self):
         new_hash = 'abcdef0123456789beef'
@@ -517,13 +517,13 @@ class TestClaimtrie(TestSQLDB):
         other3 = 'abcdef0123456789bee1'
         f = FindShortestID()
         f.step(other0, new_hash)
-        self.assertEqual('#a', f.finalize())
+        self.assertEqual(':a', f.finalize())
         f.step(other1, new_hash)
-        self.assertEqual('#abc', f.finalize())
+        self.assertEqual(':abc', f.finalize())
         f.step(other2, new_hash)
-        self.assertEqual('#abcd', f.finalize())
+        self.assertEqual(':abcd', f.finalize())
         f.step(other3, new_hash)
-        self.assertEqual('#abcdef0123456789beef', f.finalize())
+        self.assertEqual(':abcdef0123456789beef', f.finalize())
 
 
 class TestTrending(TestSQLDB):
