@@ -132,8 +132,8 @@ class ResolveCommand(BaseResolveTestCase):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '1.1', allow_duplicate_name=True))
         await self.assertResolvesToClaimId(f'@abc', channel_id)
-        await self.assertResolvesToClaimId(f'@abc#{channel_id[:10]}', channel_id)
-        await self.assertResolvesToClaimId(f'@abc#{channel_id}', channel_id)
+        await self.assertResolvesToClaimId(f'@abc:{channel_id[:10]}', channel_id)
+        await self.assertResolvesToClaimId(f'@abc:{channel_id}', channel_id)
         channel = (await self.claim_search(claim_id=channel_id))[0]
         await self.assertResolvesToClaimId(channel['short_url'], channel_id)
         await self.assertResolvesToClaimId(channel['canonical_url'], channel_id)
@@ -182,7 +182,7 @@ class ResolveCommand(BaseResolveTestCase):
         response = await self.resolve('lbry://on-channel-claim')
         self.assertFalse(response['is_channel_signature_valid'])
         self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
-        direct_uri = 'lbry://on-channel-claim#' + orphan_claim_id
+        direct_uri = 'lbry://on-channel-claim:' + orphan_claim_id
         response = await self.resolve(direct_uri)
         self.assertFalse(response['is_channel_signature_valid'])
         self.assertEqual({'channel_id': abandoned_channel_id}, response['signing_channel'])
