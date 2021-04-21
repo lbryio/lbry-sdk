@@ -47,8 +47,8 @@ class SQLDB:
             expiration_height integer not null,
             release_time integer not null,
 
-            short_url text not null, -- normalized#shortest-unique-claim_id
-            canonical_url text, -- channel's-short_url/normalized#shortest-unique-claim_id-within-channel
+            short_url text not null, -- normalized:shortest-unique-claim_id
+            canonical_url text, -- channel's-short_url/normalized:shortest-unique-claim_id-within-channel
 
             title text,
             author text,
@@ -452,7 +452,7 @@ class SQLDB:
                     CASE WHEN :height >= 137181 THEN :height+2102400 ELSE :height+262974 END,
                     :claim_name||COALESCE(
                         (SELECT shortest_id(claim_id, :claim_id) FROM claim WHERE normalized = :normalized),
-                        '#'||substr(:claim_id, 1, 1)
+                        ':'||substr(:claim_id, 1, 1)
                     )
                 )""", claims)
 
@@ -665,7 +665,7 @@ class SQLDB:
                                  WHERE other_claim.signature_valid = 1 AND
                                        other_claim.channel_hash = :channel_hash AND
                                        other_claim.normalized = claim.normalized),
-                                '#'||substr(claim_id, 1, 1)
+                                ':'||substr(claim_id, 1, 1)
                             )
                     END
                 WHERE claim_hash=:claim_hash;
