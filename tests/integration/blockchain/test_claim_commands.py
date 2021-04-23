@@ -984,6 +984,22 @@ class ClaimCommands(ClaimTestCase):
         self.assertEqual('0.0', claims[0]['received_tips'])
         self.assertEqual('0.0', claims[1]['received_tips'])
 
+    async def stream_update_and_wait(self, claim_id, **kwargs):
+        tx = await self.daemon.jsonrpc_stream_update(claim_id, **kwargs)
+        await self.ledger.wait(tx)
+
+    async def test_claim_list_pending_edits_ordering(self):
+        stream5_id = self.get_claim_id(await self.stream_create('five'))
+        stream4_id = self.get_claim_id(await self.stream_create('four'))
+        stream3_id = self.get_claim_id(await self.stream_create('three'))
+        stream2_id = self.get_claim_id(await self.stream_create('two'))
+        stream1_id = self.get_claim_id(await self.stream_create('one'))
+        await self.assertClaimList([stream1_id, stream2_id, stream3_id, stream4_id, stream5_id])
+        await self.stream_update_and_wait(stream4_id, title='foo')
+        await self.assertClaimList([stream4_id, stream1_id, stream2_id, stream3_id, stream5_id])
+        await self.stream_update_and_wait(stream3_id, title='foo')
+        await self.assertClaimList([stream4_id, stream3_id, stream1_id, stream2_id, stream5_id])
+
 
 class ChannelCommands(CommandTestCase):
 
