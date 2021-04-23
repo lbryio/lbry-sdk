@@ -1020,7 +1020,7 @@ class Database(SQLiteMixin):
 
         if 'order_by' not in constraints or constraints['order_by'] == 'height':
             constraints['order_by'] = [
-                "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
+                "tx.height in (0, -1) DESC", "tx.height DESC", "tx.position DESC", "txo.position"
             ]
         elif constraints.get('order_by', None) == 'none':
             del constraints['order_by']
