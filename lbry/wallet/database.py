@@ -447,7 +447,7 @@ class SQLiteMixin:
                     if version == (self.SCHEMA_VERSION,):
                         return
                     if version == ("1.5",) and self.SCHEMA_VERSION == "1.6":
-                        await self.db.execute("ALTER TABLE txo ADD COLUMN has_source bool;")
+                        await self.db.execute("ALTER TABLE txo ADD COLUMN has_source bool DEFAULT 1;")
                         await self.db.execute("UPDATE version SET version = ?", (self.SCHEMA_VERSION,))
                         return
                 await self.db.executescript('\n'.join(
