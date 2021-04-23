@@ -78,6 +78,17 @@ class ClaimSearchCommand(ClaimTestCase):
                 f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
             )
 
+    async def assertListsClaims(self, claims, **kwargs):
+        kwargs.setdefault('order_by', 'height')
+        results = await self.claim_list(**kwargs)
+        self.assertEqual(len(claims), len(results))
+        for claim, result in zip(claims, results):
+            self.assertEqual(
+                (claim['txid'], self.get_claim_id(claim)),
+                (result['txid'], result['claim_id']),
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
+            )
+
     @skip("doesnt happen on ES...?")
     async def test_disconnect_on_memory_error(self):
         claim_ids = [
@@ -186,8 +197,11 @@ class ClaimSearchCommand(ClaimTestCase):
         normal_repost = await self.stream_repost(self.get_claim_id(normal), 'normal-repost')
         no_source_repost = await self.stream_repost(self.get_claim_id(no_source), 'no-source-repost')
         await self.assertFindsClaims([no_source_repost, no_source, channel], has_no_source=True)
+        await self.assertListsClaims([no_source, channel], has_no_source=True)
         await self.assertFindsClaims([normal_repost, normal, channel], has_source=True)
+        await self.assertListsClaims([no_source_repost, normal_repost, normal], has_source=True)
         await self.assertFindsClaims([no_source_repost, normal_repost, normal, no_source, channel])
+        await self.assertListsClaims([no_source_repost, normal_repost, normal, no_source, channel])
 
     async def test_pagination(self):
         await self.create_channel()
