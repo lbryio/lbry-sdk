@@ -1,4 +1,4 @@
-.PHONY: install tools lint test idea
+.PHONY: install tools lint test test-unit test-unit-coverage test-integration idea
 
 install:
 	pip install https://s3.amazonaws.com/files.lbry.io/python_libtorrent-1.2.4-py3-none-any.whl
@@ -16,7 +16,15 @@ lint:
 	pylint --rcfile=setup.cfg lbry
 	#mypy --ignore-missing-imports lbry
 
-test:
+test: test-unit test-integration
+
+test-unit:
+	python -m unittest discover tests.unit
+
+test-unit-coverage:
+	coverage run -p --source=lbry -m unittest discover -vv tests.unit
+
+test-integration:
 	tox
 
 idea:

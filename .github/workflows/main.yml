@@ -22,10 +22,9 @@ jobs:
         with:
           python-version: '3.7'
       - run: make install tools
-      - working-directory: lbry
-        env:
+      - env:
           HOME: /tmp
-        run: coverage run -p --source=lbry -m unittest discover -vv tests.unit
+        run: make test-unit-coverage
 
   tests-integration:
     name: "tests / integration"
