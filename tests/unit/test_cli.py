@@ -3,6 +3,8 @@ import tempfile
 import shutil
 import contextlib
 import logging
+import pathlib
+import random
 from io import StringIO
 from unittest import TestCase
 from unittest.mock import patch
@@ -187,6 +189,38 @@ class CLITest(AsyncioTestCase):
         mock_daemon_start.side_effect = side_effect
         self.shell(["start", "--no-logging"])
         mock_daemon_start.assert_called_once()
+
+    def test_ensure_directory_exists_success(self):
+        r = random.random()
+        dir = f"/tmp/{r}"
+        path = pathlib.Path(dir)
+        path.mkdir(parents=True, exist_ok=True)
+        self.assertIsNone(cli.ensure_directory_exists(dir))
+        path.rmdir()
+
+    def test_ensure_directory_exists_not_writeable(self):
+        r = random.random()
+        dir = f"/tmp/{r}"
+        path = pathlib.Path(dir)
+        path.mkdir(parents=True, exist_ok=True)
+        path.chmod(000)
+        self.assertRaises(PermissionError, cli.ensure_directory_exists, dir)
+        path.rmdir()
+
+    def test_ensure_directory_exists_not_a_directory(self):
+        r = random.random()
+        f = f"/tmp/{r}"
+        path = pathlib.Path(f)
+        path.touch()
+        self.assertRaises(FileExistsError, cli.ensure_directory_exists, f)
+        path.unlink()
+
+    def test_ensure_directory_exists_does_not_exist(self):
+        r = random.random()
+        dir = f"/tmp/{r}"
+        self.assertIsNone(cli.ensure_directory_exists(dir))
+        path = pathlib.Path(dir)
+        path.rmdir()
 
 
 class DaemonDocsTests(TestCase):

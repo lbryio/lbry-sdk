@@ -223,9 +223,21 @@ def get_argument_parser():
     return root
 
 
+def ensure_disk_not_full(path: str):
+    realpath = os.path.realpath(path)
+    total, used, free = shutil.disk_usage(realpath)
+    # Less than 1MB of space is probably too little too run.
+    if free < 1000000:
+        log.error("Low disk space, bailing!")
+        raise IOError(f"{path} is on disk with less than 1MB of free space")
+
+
 def ensure_directory_exists(path: str):
     if not os.path.isdir(path):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+    else:
+        if not os.access(path, os.W_OK):
+            raise PermissionError(f"{path} is not writable by current process")
 
 
 LOG_MODULES = 'lbry', 'aioupnp'
@@ -293,6 +305,7 @@ def main(argv=None):
     conf = Config.create_from_arguments(args)
     for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
         ensure_directory_exists(directory)
+        ensure_disk_not_full(directory)
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")
