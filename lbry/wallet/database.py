@@ -18,7 +18,7 @@ from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day
 
 from concurrent.futures.thread import ThreadPoolExecutor  # pylint: disable=wrong-import-order
-if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
+if platform.system() == 'Windows' or ({'ANDROID_ARGUMENT', 'KIVY_BUILD'} & os.environ.keys()):
     from concurrent.futures.thread import ThreadPoolExecutor as ReaderExecutorClass  # pylint: disable=reimported
 else:
     from concurrent.futures.process import ProcessPoolExecutor as ReaderExecutorClass
