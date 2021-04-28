@@ -25,7 +25,7 @@ def main():
     parser = get_argument_parser()
     args = parser.parse_args()
     coin_class = get_coin_class(args.spvserver)
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-4s %(name)s:%(lineno)d: %(message)s")
     logging.info('lbry.server starting')
     logging.getLogger('aiohttp').setLevel(logging.WARNING)
     logging.getLogger('elasticsearch').setLevel(logging.WARNING)
