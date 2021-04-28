@@ -73,6 +73,7 @@ class Env:
         self.tor_banner_file = self.default('TOR_BANNER_FILE', self.banner_file)
         self.anon_logs = self.boolean('ANON_LOGS', False)
         self.log_sessions = self.integer('LOG_SESSIONS', 3600)
+        self.allow_lan_udp = self.boolean('ALLOW_LAN_UDP', False)
         # Peer discovery
         self.peer_discovery = self.peer_discovery_enum()
         self.peer_announce = self.boolean('PEER_ANNOUNCE', True)

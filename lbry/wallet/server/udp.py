@@ -70,7 +70,7 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
     PROTOCOL_VERSION = 1
 
     def __init__(self, height: int, tip: bytes, throttle_cache_size: int = 1024, throttle_reqs_per_sec: int = 10,
-                 allow_localhost: bool = False):
+                 allow_localhost: bool = False, allow_lan: bool = False):
         super().__init__()
         self.transport: Optional[asyncio.transports.DatagramTransport] = None
         self._height = height
@@ -82,6 +82,7 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
         self._should_log = LRUCache(throttle_cache_size)
         self._min_delay = 1 / throttle_reqs_per_sec
         self._allow_localhost = allow_localhost
+        self._allow_lan = allow_lan
 
     def update_cached_response(self):
         self._cached_response = SPVPong.make(self._height, self._tip, self._flags, self.PROTOCOL_VERSION)
@@ -121,7 +122,8 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
         except (ValueError, struct.error, AttributeError, TypeError):
             # log.exception("derp")
             return
-        if is_valid_public_ipv4(addr[0], allow_localhost=self._allow_localhost) and addr[1] >= 1024:
+        if addr[1] >= 1024 and is_valid_public_ipv4(
+                addr[0], allow_localhost=self._allow_localhost, allow_lan=self._allow_lan):
             self.transport.sendto(self.make_pong(addr[0]), addr)
         else:
             log.warning("odd packet from %s:%i", addr[0], addr[1])
@@ -142,12 +144,14 @@ class StatusServer:
     def __init__(self):
         self._protocol: Optional[SPVServerStatusProtocol] = None
 
-    async def start(self, height: int, tip: bytes, interface: str, port: int):
+    async def start(self, height: int, tip: bytes, interface: str, port: int, allow_lan: bool = False):
         if self.is_running:
             return
         loop = asyncio.get_event_loop()
         interface = interface if interface.lower() != 'localhost' else '127.0.0.1'
-        self._protocol = SPVServerStatusProtocol(height, tip, allow_localhost=interface == '127.0.0.1')
+        self._protocol = SPVServerStatusProtocol(
+            height, tip, allow_localhost=interface == '127.0.0.1', allow_lan=allow_lan
+        )
         await loop.create_datagram_endpoint(lambda: self._protocol, (interface, port))
         log.info("started udp status server on %s:%i", interface, port)
 

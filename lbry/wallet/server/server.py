@@ -115,7 +115,7 @@ class Server:
         if self.env.udp_port:
             await self.bp.status_server.start(
                 0, bytes.fromhex(self.bp.coin.GENESIS_HASH)[::-1],
-                self.env.host, self.env.udp_port
+                self.env.host, self.env.udp_port, self.env.allow_lan_udp
             )
         await _start_cancellable(self.bp.fetch_and_process_blocks)
 
