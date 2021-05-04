@@ -87,7 +87,7 @@ class MarketFeed:
         except json.JSONDecodeError as e:
             msg = e.doc if '<html>' not in e.doc else 'unexpected content type.'
             log.warning("Could not parse exchange rate response from %s: %s", self.name, msg)
-            log.debug(msg)
+            log.debug(e.doc)
         except InvalidExchangeRateResponseError as e:
             log.warning(str(e))
         except ClientConnectionError as e:
