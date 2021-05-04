@@ -79,7 +79,6 @@ class MarketFeed:
             log.debug("Saving rate update %f for %s from %s", rate, self.market, self.name)
             self.rate = ExchangeRate(self.market, rate, int(time.time()))
             self.last_check = time.time()
-            self.event.set()
             return self.rate
         except asyncio.CancelledError:
             raise
@@ -95,6 +94,8 @@ class MarketFeed:
             log.warning("Error trying to connect to exchange rate %s: %s", self.name, str(e))
         except Exception as e:
             log.exception("Exchange rate error (%s from %s):", self.market, self.name)
+        finally:
+            self.event.set()
 
     async def keep_updated(self):
         while True:
