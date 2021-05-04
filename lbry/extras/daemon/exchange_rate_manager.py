@@ -86,7 +86,9 @@ class MarketFeed:
         except asyncio.TimeoutError:
             log.warning("Timed out fetching exchange rate from %s.", self.name)
         except json.JSONDecodeError as e:
-            log.warning("Could not parse exchange rate response from %s: %s", self.name, e.doc)
+            msg = e.doc if '<html>' not in e.doc else 'unexpected content type.'
+            log.warning("Could not parse exchange rate response from %s: %s", self.name, msg)
+            log.debug(msg)
         except InvalidExchangeRateResponseError as e:
             log.warning(str(e))
         except Exception as e:
