@@ -5,7 +5,7 @@ import logging
 from statistics import median
 from decimal import Decimal
 from typing import Optional, Iterable, Type
-from aiohttp.client_exceptions import ContentTypeError
+from aiohttp.client_exceptions import ContentTypeError, ClientConnectionError
 from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
 from lbry.wallet.dewies import lbc_to_dewies
@@ -91,6 +91,8 @@ class MarketFeed:
             log.debug(msg)
         except InvalidExchangeRateResponseError as e:
             log.warning(str(e))
+        except ClientConnectionError as e:
+            log.warning("Error trying to connect to exchange rate %s: %s", self.name, str(e))
         except Exception as e:
             log.exception("Exchange rate error (%s from %s):", self.market, self.name)
 
