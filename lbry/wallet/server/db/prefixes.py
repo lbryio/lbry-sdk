@@ -46,6 +46,7 @@ class EffectiveAmountValue(typing.NamedTuple):
     claim_hash: bytes
     root_tx_num: int
     root_position: int
+    activation: int
 
 
 class ClaimToTXOKey(typing.NamedTuple):
@@ -58,6 +59,7 @@ class ClaimToTXOValue(typing.NamedTuple):
     root_tx_num: int
     root_position: int
     amount: int
+    activation: int
     name: str
 
 
@@ -81,6 +83,7 @@ class ClaimShortIDKey(typing.NamedTuple):
 class ClaimShortIDValue(typing.NamedTuple):
     tx_num: int
     position: int
+    activation: int
 
 
 class ClaimToChannelKey(typing.NamedTuple):
@@ -134,10 +137,30 @@ class ClaimExpirationValue(typing.NamedTuple):
     name: str
 
 
+class ClaimTakeoverKey(typing.NamedTuple):
+    name: str
+
+
+class ClaimTakeoverValue(typing.NamedTuple):
+    claim_hash: bytes
+    height: int
+
+
+class PendingActivationKey(typing.NamedTuple):
+    height: int
+    tx_num: int
+    position: int
+
+
+class PendingActivationValue(typing.NamedTuple):
+    claim_hash: bytes
+    name: str
+
+
 class EffectiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_effective_amount_prefix.value
     key_struct = struct.Struct(b'>QLH')
-    value_struct = struct.Struct(b'>20sLH')
+    value_struct = struct.Struct(b'>20sLHL')
 
     @classmethod
     def pack_key(cls, name: str, effective_amount: int, tx_num: int, position: int):
@@ -160,20 +183,20 @@ class EffectiveAmountPrefixRow(PrefixRow):
         return EffectiveAmountValue(*super().unpack_value(data))
 
     @classmethod
-    def pack_value(cls, claim_hash: bytes, root_tx_num: int, root_position: int) -> bytes:
-        return super().pack_value(claim_hash, root_tx_num, root_position)
+    def pack_value(cls, claim_hash: bytes, root_tx_num: int, root_position: int, activation: int) -> bytes:
+        return super().pack_value(claim_hash, root_tx_num, root_position, activation)
 
     @classmethod
     def pack_item(cls, name: str, effective_amount: int, tx_num: int, position: int, claim_hash: bytes,
-                  root_tx_num: int, root_position: int):
+                  root_tx_num: int, root_position: int, activation: int):
         return cls.pack_key(name, effective_amount, tx_num, position), \
-               cls.pack_value(claim_hash, root_tx_num, root_position)
+               cls.pack_value(claim_hash, root_tx_num, root_position, activation)
 
 
 class ClaimToTXOPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_to_txo.value
     key_struct = struct.Struct(b'>20sLH')
-    value_struct = struct.Struct(b'>LHQ')
+    value_struct = struct.Struct(b'>LHQL')
 
     @classmethod
     def pack_key(cls, claim_hash: bytes, tx_num: int, position: int):
@@ -190,21 +213,21 @@ class ClaimToTXOPrefixRow(PrefixRow):
         )
 
     @classmethod
-    def unpack_value(cls, data: bytes) ->ClaimToTXOValue:
-        root_tx_num, root_position, amount = cls.value_struct.unpack(data[:14])
-        name_len = int.from_bytes(data[14:16], byteorder='big')
-        name = data[16:16 + name_len].decode()
-        return ClaimToTXOValue(root_tx_num, root_position, amount, name)
+    def unpack_value(cls, data: bytes) -> ClaimToTXOValue:
+        root_tx_num, root_position, amount, activation = cls.value_struct.unpack(data[:18])
+        name_len = int.from_bytes(data[18:20], byteorder='big')
+        name = data[20:20 + name_len].decode()
+        return ClaimToTXOValue(root_tx_num, root_position, amount, activation, name)
 
     @classmethod
-    def pack_value(cls, root_tx_num: int, root_position: int, amount: int, name: str) -> bytes:
-        return cls.value_struct.pack(root_tx_num, root_position, amount) + length_encoded_name(name)
+    def pack_value(cls, root_tx_num: int, root_position: int, amount: int, activation: int, name: str) -> bytes:
+        return cls.value_struct.pack(root_tx_num, root_position, amount, activation) + length_encoded_name(name)
 
     @classmethod
     def pack_item(cls, claim_hash: bytes, tx_num: int, position: int, root_tx_num: int, root_position: int,
-                  amount: int, name: str):
+                  amount: int, activation: int, name: str):
         return cls.pack_key(claim_hash, tx_num, position), \
-               cls.pack_value(root_tx_num, root_position, amount, name)
+               cls.pack_value(root_tx_num, root_position, amount, activation, name)
 
 
 class TXOToClaimPrefixRow(PrefixRow):
@@ -240,15 +263,15 @@ class TXOToClaimPrefixRow(PrefixRow):
 class ClaimShortIDPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_short_id_prefix.value
     key_struct = struct.Struct(b'>20sLH')
-    value_struct = struct.Struct(b'>LH')
+    value_struct = struct.Struct(b'>LHL')
 
     @classmethod
     def pack_key(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int):
         return cls.prefix + length_encoded_name(name) + cls.key_struct.pack(claim_hash, root_tx_num, root_position)
 
     @classmethod
-    def pack_value(cls, tx_num: int, position: int):
-        return super().pack_value(tx_num, position)
+    def pack_value(cls, tx_num: int, position: int, activation: int):
+        return super().pack_value(tx_num, position, activation)
 
     @classmethod
     def unpack_key(cls, key: bytes) -> ClaimShortIDKey:
@@ -263,9 +286,9 @@ class ClaimShortIDPrefixRow(PrefixRow):
 
     @classmethod
     def pack_item(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int,
-                  tx_num: int, position: int):
+                  tx_num: int, position: int, activation: int):
         return cls.pack_key(name, claim_hash, root_tx_num, root_position), \
-               cls.pack_value(tx_num, position)
+               cls.pack_value(tx_num, position, activation)
 
 
 class ClaimToChannelPrefixRow(PrefixRow):
@@ -418,6 +441,63 @@ class ClaimExpirationPrefixRow(PrefixRow):
         return cls.unpack_key(key), cls.unpack_value(value)
 
 
+class ClaimTakeoverPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.claim_takeover.value
+    value_struct = struct.Struct(b'>20sL')
+
+    @classmethod
+    def pack_key(cls, name: str):
+        return cls.prefix + length_encoded_name(name)
+
+    @classmethod
+    def pack_value(cls, claim_hash: bytes, takeover_height: int):
+        return super().pack_value(claim_hash, takeover_height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> ClaimTakeoverKey:
+        assert key[:1] == cls.prefix
+        name_len = int.from_bytes(key[1:3], byteorder='big')
+        name = key[3:3 + name_len].decode()
+        return ClaimTakeoverKey(name)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> ClaimTakeoverValue:
+        return ClaimTakeoverValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, name: str, claim_hash: bytes, takeover_height: int):
+        return cls.pack_key(name), cls.pack_value(claim_hash, takeover_height)
+
+
+class PendingClaimActivationPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.pending_activation.value
+    key_struct = struct.Struct(b'>LLH')
+
+    @classmethod
+    def pack_key(cls, height: int, tx_num: int, position: int):
+        return super().pack_key(height, tx_num, position)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> PendingActivationKey:
+        return PendingActivationKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, claim_hash: bytes, name: str) -> bytes:
+        return claim_hash + length_encoded_name(name)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> PendingActivationValue:
+        claim_hash = data[:20]
+        name_len = int.from_bytes(data[20:22], byteorder='big')
+        name = data[22:22 + name_len].decode()
+        return PendingActivationValue(claim_hash, name)
+
+    @classmethod
+    def pack_item(cls, height: int, tx_num: int, position: int, claim_hash: bytes, name: str):
+        return cls.pack_key(height, tx_num, position), \
+               cls.pack_value(claim_hash, name)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -431,5 +511,8 @@ class Prefixes:
     claim_short_id = ClaimShortIDPrefixRow
     claim_effective_amount = EffectiveAmountPrefixRow
     claim_expiration = ClaimExpirationPrefixRow
+
+    claim_takeover = ClaimTakeoverPrefixRow
+    pending_activation = PendingClaimActivationPrefixRow
 
     # undo_claimtrie = b'M'
