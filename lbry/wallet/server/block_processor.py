@@ -362,15 +362,6 @@ class BlockProcessor:
 
         return start, count
 
-    def estimate_txs_remaining(self):
-        # Try to estimate how many txs there are to go
-        daemon_height = self.daemon.cached_height()
-        coin = self.coin
-        tail_count = daemon_height - max(self.height, coin.TX_COUNT_HEIGHT)
-        # Damp the initial enthusiasm
-        realism = max(2.0 - 0.9 * self.height / coin.TX_COUNT_HEIGHT, 1.0)
-        return (tail_count * coin.TX_PER_BLOCK +
-                max(coin.TX_COUNT - self.tx_count, 0)) * realism
 
     # - Flushing
     def flush_data(self):
@@ -382,7 +373,7 @@ class BlockProcessor:
 
     async def flush(self, flush_utxos):
         def flush():
-            self.db.flush_dbs(self.flush_data(), self.estimate_txs_remaining)
+            self.db.flush_dbs(self.flush_data())
         await self.run_in_thread_with_lock(flush)
 
     async def _maybe_flush(self):
