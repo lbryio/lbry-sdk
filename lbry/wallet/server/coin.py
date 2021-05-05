@@ -241,7 +241,6 @@ class Coin:
 class LBC(Coin):
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
-    BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DESERIALIZER = DeserializerSegWit
     DB = LevelDB
