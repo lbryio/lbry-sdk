@@ -161,7 +161,6 @@ class Outputs:
 
     @classmethod
     def to_bytes(cls, txo_rows, extra_txo_rows, offset=0, total=None, blocked: Censor = None) -> bytes:
-        extra_txo_rows = {row['claim_hash']: row for row in extra_txo_rows}
         page = OutputsMessage()
         page.offset = offset
         if total is not None:
@@ -208,7 +207,7 @@ class Outputs:
 
         if resolve_result.canonical_url is not None:
             txo_message.claim.canonical_url = resolve_result.canonical_url
-        if resolve_result.last_take_over_height is not None:
-            txo_message.claim.take_over_height = resolve_result.last_take_over_height
+        if resolve_result.last_takeover_height is not None:
+            txo_message.claim.take_over_height = resolve_result.last_takeover_height
         if resolve_result.claims_in_channel is not None:
             txo_message.claim.claims_in_channel = resolve_result.claims_in_channel
