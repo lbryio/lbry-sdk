@@ -623,7 +623,7 @@ class LevelDB:
         assert not flush_data.undo_infos
         assert not self.hist_unflushed
 
-    def flush_dbs(self, flush_data: FlushData, estimate_txs_remaining):
+    def flush_dbs(self, flush_data: FlushData):
         """Flush out cached state.  History is always flushed; UTXOs are
         flushed if flush_utxos."""
 
@@ -760,11 +760,9 @@ class LevelDB:
             flush_interval = self.last_flush - prior_flush
             tx_per_sec_gen = int(flush_data.tx_count / self.wall_time)
             tx_per_sec_last = 1 + int(tx_delta / flush_interval)
-            eta = estimate_txs_remaining() / tx_per_sec_last
             self.logger.info(f'tx/sec since genesis: {tx_per_sec_gen:,d}, '
                              f'since last flush: {tx_per_sec_last:,d}')
-            self.logger.info(f'sync time: {formatted_time(self.wall_time)}  '
-                             f'ETA: {formatted_time(eta)}')
+            self.logger.info(f'sync time: {formatted_time(self.wall_time)}')
 
     def flush_backup(self, flush_data, touched):
         """Like flush_dbs() but when backing up.  All UTXOs are flushed."""
