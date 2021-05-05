@@ -15,6 +15,9 @@ class DB_PREFIXES(enum.Enum):
     claim_effective_amount_prefix = b'D'
     claim_expiration = b'O'
 
+    claim_takeover = b'P'
+    pending_activation = b'Q'
+
     undo_claimtrie = b'M'
 
     HISTORY_PREFIX = b'A'
