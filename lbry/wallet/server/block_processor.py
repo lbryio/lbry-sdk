@@ -11,7 +11,6 @@ import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.transaction import OutputScript, Output
 from lbry.wallet.server.tx import Tx
-from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
@@ -238,16 +237,19 @@ class BlockProcessor:
         if hprevs == chain:
             start = time.perf_counter()
             try:
-                await self.run_in_thread_with_lock(self.advance_blocks, blocks)
+                for block in blocks:
+                    await self.run_in_thread_with_lock(self.advance_block, block)
+                    print("advanced\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
-            if self.sql:
-                await self.db.search_index.claim_consumer(self.sql.claim_producer())
+            # if self.sql:
+            #     await self.db.search_index.claim_consumer(self.db.claim_producer())
             for cache in self.search_cache.values():
                 cache.clear()
             self.history_cache.clear()  # TODO: is this needed?
             self.notifications.notified_mempool_txs.clear()
+
             processed_time = time.perf_counter() - start
             self.block_count_metric.set(self.height)
             self.block_update_time_metric.observe(processed_time)
@@ -256,9 +258,9 @@ class BlockProcessor:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
-                if self.sql:
-                    await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
-                                                             self.sql.filtered_streams, self.sql.filtered_channels)
+                # if self.sql:
+                #     await self.db.search_index.apply_filters(self.sql.blocked_streams, self.sql.blocked_channels,
+                #                                              self.sql.filtered_streams, self.sql.filtered_channels)
                 await self.notifications.on_block(self.touched, self.height)
             self.touched = set()
         elif hprevs[0] != chain[0]:
@@ -1122,36 +1124,3 @@ class Timer:
             sub_timer.show(depth+1)
         if depth == 0:
             print('='*100)
-
-
-class LBRYBlockProcessor(BlockProcessor):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.env.coin.NET == "regtest":
-            self.prefetcher.polling_delay = 0.5
-        self.should_validate_signatures = self.env.boolean('VALIDATE_CLAIM_SIGNATURES', False)
-        self.logger.info(f"LbryumX Block Processor - Validating signatures: {self.should_validate_signatures}")
-        self.sql: SQLDB = self.db.sql
-        self.timer = Timer('BlockProcessor')
-
-    def advance_blocks(self, blocks):
-        if self.sql:
-            self.sql.begin()
-        try:
-            self.timer.run(super().advance_blocks, blocks)
-        except:
-            self.logger.exception(f'Error while advancing transaction in new block.')
-            raise
-        finally:
-            if self.sql:
-                self.sql.commit()
-
-    def advance_txs(self, height, txs, header, block_hash):
-        timer = self.timer.sub_timers['advance_blocks']
-        undo = timer.run(super().advance_txs, height, txs, header, block_hash, timer_name='super().advance_txs')
-        if self.sql:
-            timer.run(self.sql.advance_txs, height, txs, header, self.daemon.cached_height(), forward_timer=True)
-        if (height % 10000 == 0 or not self.db.first_sync) and self.logger.isEnabledFor(10):
-            self.timer.show(height=height)
-        return undo

@@ -25,7 +25,7 @@ import lbry
 from lbry.utils import LRUCacheWithMetrics
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.schema.result import Outputs
-from lbry.wallet.server.block_processor import LBRYBlockProcessor
+from lbry.wallet.server.block_processor import BlockProcessor
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
@@ -177,7 +177,7 @@ class SessionManager:
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
-    def __init__(self, env: 'Env', db: LevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
+    def __init__(self, env: 'Env', db: LevelDB, bp: BlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
                  shutdown_event: asyncio.Event):
         env.max_send = max(350000, env.max_send)
         self.env = env
@@ -915,7 +915,7 @@ class LBRYElectrumX(SessionBase):
         self.protocol_tuple = self.PROTOCOL_MIN
         self.protocol_string = None
         self.daemon = self.session_mgr.daemon
-        self.bp: LBRYBlockProcessor = self.session_mgr.bp
+        self.bp: BlockProcessor = self.session_mgr.bp
         self.db: LevelDB = self.bp.db
 
     @classmethod
@@ -1020,8 +1020,9 @@ class LBRYElectrumX(SessionBase):
         return self.mempool.compact_fee_histogram()
 
     async def claimtrie_search(self, **kwargs):
-        if kwargs:
-            return await self.run_and_cache_query('search', kwargs)
+        raise NotImplementedError()
+        # if kwargs:
+        #     return await self.run_and_cache_query('search', kwargs)
 
     async def claimtrie_resolve(self, *urls):
         rows, extra = [], []
@@ -1063,54 +1064,6 @@ class LBRYElectrumX(SessionBase):
         # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
 
-    def format_claim_from_daemon(self, claim, name=None):
-        """Changes the returned claim data to the format expected by lbry and adds missing fields."""
-
-        if not claim:
-            return {}
-
-        # this ISO-8859 nonsense stems from a nasty form of encoding extended characters in lbrycrd
-        # it will be fixed after the lbrycrd upstream merge to v17 is done
-        # it originated as a fear of terminals not supporting unicode. alas, they all do
-
-        if 'name' in claim:
-            name = claim['name'].encode('ISO-8859-1').decode()
-        info = self.db.sql.get_claims(claim_id=claim['claimId'])
-        if not info:
-            #  raise RPCError("Lbrycrd has {} but not lbryumx, please submit a bug report.".format(claim_id))
-            return {}
-        address = info.address.decode()
-        # fixme: temporary
-        #supports = self.format_supports_from_daemon(claim.get('supports', []))
-        supports = []
-
-        amount = get_from_possible_keys(claim, 'amount', 'nAmount')
-        height = get_from_possible_keys(claim, 'height', 'nHeight')
-        effective_amount = get_from_possible_keys(claim, 'effective amount', 'nEffectiveAmount')
-        valid_at_height = get_from_possible_keys(claim, 'valid at height', 'nValidAtHeight')
-
-        result = {
-            "name": name,
-            "claim_id": claim['claimId'],
-            "txid": claim['txid'],
-            "nout": claim['n'],
-            "amount": amount,
-            "depth": self.db.db_height - height + 1,
-            "height": height,
-            "value": hexlify(claim['value'].encode('ISO-8859-1')).decode(),
-            "address": address,  # from index
-            "supports": supports,
-            "effective_amount": effective_amount,
-            "valid_at_height": valid_at_height
-        }
-        if 'claim_sequence' in claim:
-            # TODO: ensure that lbrycrd #209 fills in this value
-            result['claim_sequence'] = claim['claim_sequence']
-        else:
-            result['claim_sequence'] = -1
-        if 'normalized_name' in claim:
-            result['normalized_name'] = claim['normalized_name'].encode('ISO-8859-1').decode()
-        return result
 
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction

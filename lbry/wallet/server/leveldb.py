@@ -37,6 +37,7 @@ from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes
 from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, get_update_effective_amount_ops, length_encoded_name
 from lbry.wallet.server.db.claimtrie import get_expiration_height
+from lbry.wallet.server.db.elasticsearch import SearchIndex
 
 
 class UTXO(typing.NamedTuple):
@@ -177,6 +178,9 @@ class LevelDB:
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
         self.transaction_num_mapping = {}
+
+        # Search index
+        self.search_index = SearchIndex(self.env.es_index_prefix, self.env.database_query_timeout)
 
     def claim_hash_and_name_from_txo(self, tx_num: int, tx_idx: int):
         claim_hash_and_name = self.db.get(
@@ -557,6 +561,9 @@ class LevelDB:
         if self.total_transactions is None:
             await self._read_txids()
         await self._read_headers()
+
+        # start search index
+        await self.search_index.start()
 
     def close(self):
         self.db.close()

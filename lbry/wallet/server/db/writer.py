@@ -18,7 +18,6 @@ from lbry.wallet.server.db.canonical import register_canonical_functions
 from lbry.wallet.server.db.trending import TRENDING_ALGORITHMS
 
 from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
-from lbry.wallet.server.db.elasticsearch import SearchIndex
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
 sqlite3.enable_callback_tracebacks(True)
@@ -943,41 +942,3 @@ class SQLDB:
         r(self.update_claimtrie, height, recalculate_claim_hashes, deleted_claim_names, forward_timer=True)
         for algorithm in self.trending:
             r(algorithm.run, self.db.cursor(), height, daemon_height, recalculate_claim_hashes)
-
-
-class LBRYLevelDB(LevelDB):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        path = os.path.join(self.env.db_dir, 'claims.db')
-        trending = []
-        for algorithm_name in self.env.trending_algorithms:
-            if algorithm_name in TRENDING_ALGORITHMS:
-                trending.append(TRENDING_ALGORITHMS[algorithm_name])
-        if self.env.es_mode == 'reader':
-            self.logger.info('Index mode: reader')
-            self.sql = None
-        else:
-            self.logger.info('Index mode: writer. Using SQLite db to sync ES')
-            self.sql = SQLDB(
-                self, path,
-                self.env.default('BLOCKING_CHANNEL_IDS', '').split(' '),
-                self.env.default('FILTERING_CHANNEL_IDS', '').split(' '),
-                trending
-            )
-
-        # Search index
-        self.search_index = SearchIndex(
-            self.env.es_index_prefix, self.env.database_query_timeout, self.env.elastic_host, self.env.elastic_port
-        )
-
-    def close(self):
-        super().close()
-        if self.sql:
-            self.sql.close()
-
-    async def _open_dbs(self, *args, **kwargs):
-        await self.search_index.start()
-        await super()._open_dbs(*args, **kwargs)
-        if self.sql:
-            self.sql.open()
