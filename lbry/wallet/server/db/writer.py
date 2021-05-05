@@ -406,7 +406,9 @@ class SQLDB:
                     if isinstance(fee.currency, str):
                         claim_record['fee_currency'] = fee.currency.lower()
                     if isinstance(fee.amount, Decimal):
-                        claim_record['fee_amount'] = int(fee.amount*1000)
+                        if fee.amount >= 0 and int(fee.amount*1000) < 9223372036854775807:
+                            claim_record['fee_amount'] = int(fee.amount*1000)
+
             elif claim.is_repost:
                 claim_record['claim_type'] = CLAIM_TYPES['repost']
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
@@ -459,15 +461,19 @@ class SQLDB:
     def update_claims(self, txos: List[Output], header):
         claims = self._upsertable_claims(txos, header, clear_first=True)
         if claims:
-            self.executemany("""
-                UPDATE claim SET
-                    txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
-                    claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
-                    timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency, has_source=:has_source,
-                    title=:title, duration=:duration, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
-                    release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
-                WHERE claim_hash=:claim_hash;
-                """, claims)
+            try:
+                self.executemany("""
+                    UPDATE claim SET
+                        txo_hash=:txo_hash, tx_position=:tx_position, amount=:amount, height=:height,
+                        claim_type=:claim_type, media_type=:media_type, stream_type=:stream_type,
+                        timestamp=:timestamp, fee_amount=:fee_amount, fee_currency=:fee_currency, has_source=:has_source,
+                        title=:title, duration=:duration, description=:description, author=:author, reposted_claim_hash=:reposted_claim_hash,
+                        release_time=CASE WHEN :release_time IS NOT NULL THEN :release_time ELSE release_time END
+                    WHERE claim_hash=:claim_hash;
+                    """, claims)
+            except:
+                self.logger.exception("boom %s", claims)
+                raise
 
     def delete_claims(self, claim_hashes: Set[bytes]):
         """ Deletes claim supports and from claimtrie in case of an abandon. """
