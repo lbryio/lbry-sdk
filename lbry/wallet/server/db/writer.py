@@ -406,7 +406,8 @@ class SQLDB:
                     if isinstance(fee.currency, str):
                         claim_record['fee_currency'] = fee.currency.lower()
                     if isinstance(fee.amount, Decimal):
-                        claim_record['fee_amount'] = int(fee.amount*1000)
+                        if fee.amount >= 0 and int(fee.amount*1000) < 9223372036854775807:
+                            claim_record['fee_amount'] = int(fee.amount*1000)
             elif claim.is_repost:
                 claim_record['claim_type'] = CLAIM_TYPES['repost']
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
