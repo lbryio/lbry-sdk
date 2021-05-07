@@ -4,7 +4,6 @@ from time import time
 from lbry.schema.claim import Claim
 from lbry.extras.daemon.exchange_rate_manager import (
     ExchangeRate, ExchangeRateManager, CurrencyConversionError,
-    CryptonatorUSDFeed, CryptonatorBTCFeed,
     BittrexUSDFeed, BittrexBTCFeed,
     CoinExBTCFeed
 )
@@ -36,46 +35,6 @@ class ExchangeRateTests(AsyncioTestCase):
         with self.assertRaises(CurrencyConversionError):
             manager.convert_currency(fee.currency, "LBC", fee.amount)
 
-    def test_cryptonator_lbc_feed_response(self):
-        feed = CryptonatorUSDFeed()
-        out = feed.get_rate_from_response({
-            'ticker': {
-                'base': 'USD', 'target': 'LBC', 'price': 23657.44026496,
-                'volume': '', 'change': -5.59806916,
-            },
-            'timestamp': 1507470422,
-            'success': True,
-            'error': ""
-        })
-        self.assertEqual(23_657.44026496, out)
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({})
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({
-                "success": True,
-                "ticker": {}
-            })
-
-    def test_cryptonator_btc_feed_response(self):
-        feed = CryptonatorBTCFeed()
-        out = feed.get_rate_from_response({
-            'ticker': {
-                'base': 'BTC', 'target': 'LBC', 'price': 0.00022123,
-                'volume': '', 'change': -0.00000259,
-            },
-            'timestamp': 1507471141,
-            'success': True,
-            'error': ''
-        })
-        self.assertEqual(0.00022123, out)
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({})
-        with self.assertRaises(InvalidExchangeRateResponseError):
-            feed.get_rate_from_response({
-                "success": True,
-                "ticker": {}
-            })
-
     def test_bittrex_feed_response(self):
         feed = BittrexBTCFeed()
         out = feed.get_rate_from_response({
@@ -105,17 +64,20 @@ class ExchangeRateManagerTests(AsyncioTestCase):
     async def test_get_rate_failure_retrieved(self):
         manager = ExchangeRateManager([BadMarketFeed])
         manager.start()
-        await asyncio.sleep(1)
+        await manager.wait()
+        for feed in manager.market_feeds:  # no rate but it tried
+            self.assertFalse(feed.has_rate)
+            self.assertTrue(feed.event.is_set())
         self.addCleanup(manager.stop)
 
     async def test_median_rate_used(self):
-        manager = ExchangeRateManager([BittrexBTCFeed, CryptonatorBTCFeed, CoinExBTCFeed])
+        manager = ExchangeRateManager([BittrexBTCFeed, CoinExBTCFeed])
         for feed in manager.market_feeds:
             feed.last_check = time()
-        bittrex, cryptonator, coinex = manager.market_feeds
+        bittrex, coinex = manager.market_feeds
         bittrex.rate = ExchangeRate(bittrex.market, 1.0, time())
-        cryptonator.rate = ExchangeRate(cryptonator.market, 2.0, time())
+        coinex.rate = ExchangeRate(coinex.market, 2.0, time())
         coinex.rate = ExchangeRate(coinex.market, 3.0, time())
         self.assertEqual(14.0, manager.convert_currency("BTC", "LBC", Decimal(7.0)))
-        cryptonator.rate.spot = 4.0
-        self.assertEqual(21.0, manager.convert_currency("BTC", "LBC", Decimal(7.0)))
+        coinex.rate.spot = 4.0
+        self.assertEqual(17.5, manager.convert_currency("BTC", "LBC", Decimal(7.0)))

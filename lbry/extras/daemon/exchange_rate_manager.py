@@ -135,27 +135,6 @@ class BittrexUSDFeed(BaseBittrexFeed):
     url = "https://api.bittrex.com/v3/markets/LBC-USD/ticker"
 
 
-class BaseCryptonatorFeed(MarketFeed):
-    name = "Cryptonator"
-    market = None
-    url = None
-
-    def get_rate_from_response(self, json_response):
-        if 'ticker' not in json_response or 'price' not in json_response['ticker']:
-            raise InvalidExchangeRateResponseError(self.name, 'result not found')
-        return float(json_response['ticker']['price'])
-
-
-class CryptonatorBTCFeed(BaseCryptonatorFeed):
-    market = "BTCLBC"
-    url = "https://api.cryptonator.com/api/ticker/btc-lbc"
-
-
-class CryptonatorUSDFeed(BaseCryptonatorFeed):
-    market = "USDLBC"
-    url = "https://api.cryptonator.com/api/ticker/usd-lbc"
-
-
 class BaseCoinExFeed(MarketFeed):
     name = "CoinEx"
     market = None
@@ -215,8 +194,6 @@ class UPbitBTCFeed(MarketFeed):
 FEEDS: Iterable[Type[MarketFeed]] = (
     BittrexBTCFeed,
     BittrexUSDFeed,
-    CryptonatorBTCFeed,
-    CryptonatorUSDFeed,
     CoinExBTCFeed,
     CoinExUSDFeed,
     HotbitBTCFeed,
