@@ -823,16 +823,18 @@ class SQLDB:
         )
 
     def enqueue_changes(self):
-        for claim in self.execute(f"""
+        query = """
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
                (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
+               (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
-        """):
+        """
+        for claim in self.execute(query):
             claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
             claim['censor_type'] = 0
