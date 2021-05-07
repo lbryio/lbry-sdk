@@ -90,7 +90,7 @@ class SearchIndex:
         index_version = await self.get_index_version()
         if index_version != self.VERSION:
             self.logger.error("es search index has an incompatible version: %s vs %s", index_version, self.VERSION)
-            raise IndexVersionMismatch(f"{index_version} vs {self.VERSION}")
+            raise IndexVersionMismatch(index_version, self.VERSION)
         return acked
 
     def stop(self):
