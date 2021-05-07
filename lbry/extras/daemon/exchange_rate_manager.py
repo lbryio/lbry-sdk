@@ -215,8 +215,6 @@ class UPbitBTCFeed(MarketFeed):
 FEEDS: Iterable[Type[MarketFeed]] = (
     BittrexBTCFeed,
     BittrexUSDFeed,
-    CryptonatorBTCFeed,
-    CryptonatorUSDFeed,
     CoinExBTCFeed,
     CoinExUSDFeed,
     HotbitBTCFeed,
