@@ -10,7 +10,7 @@ from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 from lbry.wallet.server.env import Env
 from lbry.wallet.server.coin import LBC
-from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex
+from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex, IndexVersionMismatch
 
 INDEX = 'claims'
 
@@ -63,7 +63,14 @@ async def consume(producer):
 async def make_es_index():
     env = Env(LBC)
     index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
+
     try:
+        return await index.start()
+    except IndexVersionMismatch as err:
+        logging.info(
+            "dropping ES search index (version %s) for upgrade to version %s", err.got_version, err.expected_version
+        )
+        await index.delete_index()
         return await index.start()
     finally:
         index.stop()
