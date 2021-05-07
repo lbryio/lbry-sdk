@@ -64,7 +64,10 @@ class ExchangeRateManagerTests(AsyncioTestCase):
     async def test_get_rate_failure_retrieved(self):
         manager = ExchangeRateManager([BadMarketFeed])
         manager.start()
-        await asyncio.sleep(1)
+        await manager.wait()
+        for feed in manager.market_feeds:  # no rate but it tried
+            self.assertFalse(feed.has_rate)
+            self.assertTrue(feed.event.is_set())
         self.addCleanup(manager.stop)
 
     async def test_median_rate_used(self):
