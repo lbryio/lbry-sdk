@@ -269,3 +269,6 @@ class Env:
             return self.PD_SELF
         else:
             return self.PD_ON
+
+    def peer_hubs(self):
+        return [hub.strip() for hub in self.default('PEER_HUBS', '').split(',')]
