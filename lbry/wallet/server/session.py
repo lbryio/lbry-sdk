@@ -878,6 +878,7 @@ class LBRYElectrumX(SessionBase):
             'server.payment_address': cls.payment_address,
             'server.donation_address': cls.donation_address,
             'server.features': cls.server_features_async,
+            'server.peers.get': cls.peers_get,
             'server.peers.subscribe': cls.peers_subscribe,
             'server.version': cls.server_version,
             'blockchain.transaction.get_height': cls.transaction_get_height,
@@ -1081,6 +1082,10 @@ class LBRYElectrumX(SessionBase):
     async def add_peer(self, features):
         """Add a peer (but only if the peer resolves to the source)."""
         return await self.peer_mgr.on_add_peer(features, self.peer_address())
+
+    async def peers_get(self):
+        """Return the server peers as a list of (ip, host, details) tuples."""
+        return self.env.peer_hubs()
 
     async def peers_subscribe(self):
         """Return the server peers as a list of (ip, host, details) tuples."""

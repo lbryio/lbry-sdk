@@ -273,6 +273,36 @@ class Strings(ListSetting):
                 f"'{self.name}' must be a string."
 
 
+class KnownHubsList:
+
+    def __init__(self, config: 'Config', file_name: str = 'known_hubs.yml'):
+        self.file_name = file_name
+        self.path = os.path.join(config.wallet_dir, self.file_name)
+        self.hubs = []
+        if self.exists:
+            self.load()
+
+    @property
+    def exists(self):
+        return self.path and os.path.exists(self.path)
+
+    def load(self):
+        with open(self.path, 'r') as known_hubs_file:
+            raw = known_hubs_file.read()
+            self.hubs = yaml.safe_load(raw) or {}
+
+    def save(self):
+        with open(self.path, 'w') as known_hubs_file:
+            known_hubs_file.write(yaml.safe_dump(self.hubs, default_flow_style=False))
+
+    def append(self, hub: str):
+        self.hubs.append(hub)
+        return hub
+
+    def __iter__(self):
+        return iter(self.hubs)
+
+
 class EnvironmentAccess:
     PREFIX = 'LBRY_'
 
@@ -655,6 +685,7 @@ class Config(CLIConfig):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.set_default_paths()
+        self.known_hubs = KnownHubsList(self)
 
     def set_default_paths(self):
         if 'darwin' in sys.platform.lower():

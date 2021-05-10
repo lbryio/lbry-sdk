@@ -255,3 +255,12 @@ class ConfigurationTests(unittest.TestCase):
         args = parser.parse_args(['--string-choice', 'c'])
         c = TestConfig.create_from_arguments(args)
         self.assertEqual("c", c.string_choice)
+
+    def test_known_hubs_list(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            c1 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
+            self.assertEqual(list(c1.known_hubs), [])
+            c1.known_hubs.append('new.hub.io')
+            c1.known_hubs.save()
+            c2 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
+            self.assertEqual(list(c2.known_hubs), ['new.hub.io'])

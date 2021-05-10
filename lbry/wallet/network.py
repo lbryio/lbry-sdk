@@ -293,6 +293,8 @@ class Network:
                 log.debug("get spv server features %s:%i", *client.server)
                 features = await client.send_request('server.features', [])
                 self.client, self.server_features = client, features
+                log.debug("discover other hubs %s:%i", *client.server)
+                peers = await client.send_request('server.peers.get', [])
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
