@@ -53,7 +53,7 @@ async def consume(producer, index_name):
     es = AsyncElasticsearch([{'host': env.elastic_host, 'port': env.elastic_port}])
     try:
         await async_bulk(es, producer, request_timeout=120)
-        print(await es.indices.refresh(index=index_name))
+        await es.indices.refresh(index=index_name)
     finally:
         await es.close()
 
@@ -70,6 +70,7 @@ async def make_es_index(index=None):
             "dropping ES search index (version %s) for upgrade to version %s", err.got_version, err.expected_version
         )
         await index.delete_index()
+        await index.stop()
         return await index.start()
     finally:
         index.stop()

@@ -68,9 +68,9 @@ class SearchIndex:
             self.index, body={'version': version, 'index_patterns': ['ignored']}, ignore=400
         )
 
-    async def start(self):
+    async def start(self) -> bool:
         if self.sync_client:
-            return
+            return False
         hosts = [{'host': self._elastic_host, 'port': self._elastic_port}]
         self.sync_client = AsyncElasticsearch(hosts, timeout=self.sync_timeout)
         self.search_client = AsyncElasticsearch(hosts, timeout=self.search_timeout)
