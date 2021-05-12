@@ -104,10 +104,11 @@ Alternative installation methods are available [at Elasticsearch website](https:
 
 
 
-To run the unit tests from the repo directory:
+To run the unit and integration tests from the repo directory:
 
  ```
  python -m unittest discover tests.unit
+ python -m unittest discover tests.integration
  ```
 
 ## Usage
