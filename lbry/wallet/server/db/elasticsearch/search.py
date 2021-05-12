@@ -162,6 +162,9 @@ class SearchIndex:
             await self.sync_client.update_by_query(
                 self.index, body=self.update_filter_query(Censor.RESOLVE, blocked_channels, True), slices=4)
             await self.sync_client.indices.refresh(self.index)
+            self.clear_caches()
+
+    def clear_caches(self):
         self.search_cache.clear()
         self.short_id_cache.clear()
         self.claim_cache.clear()

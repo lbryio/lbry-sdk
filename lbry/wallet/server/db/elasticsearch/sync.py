@@ -12,10 +12,8 @@ from lbry.wallet.server.env import Env
 from lbry.wallet.server.coin import LBC
 from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex, IndexVersionMismatch
 
-INDEX = 'claims'
 
-
-async def get_all(db, shard_num, shards_total, limit=0):
+async def get_all(db, shard_num, shards_total, limit=0, index_name='claims'):
     logging.info("shard %d starting", shard_num)
     def exec_factory(cursor, statement, bindings):
         tpl = namedtuple('row', (d[0] for d in cursor.getdescription()))
@@ -44,25 +42,26 @@ ORDER BY claim.height desc
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
         if num % 10_000 == 0:
             logging.info("%d/%d", num, total)
-        yield extract_doc(claim, INDEX)
+        yield extract_doc(claim, index_name)
         if 0 < limit <= num:
             break
 
 
-async def consume(producer):
+async def consume(producer, index_name):
     env = Env(LBC)
     logging.info("ES sync host: %s:%i", env.elastic_host, env.elastic_port)
     es = AsyncElasticsearch([{'host': env.elastic_host, 'port': env.elastic_port}])
     try:
         await async_bulk(es, producer, request_timeout=120)
-        await es.indices.refresh(index=INDEX)
+        print(await es.indices.refresh(index=index_name))
     finally:
         await es.close()
 
 
-async def make_es_index():
+async def make_es_index(index=None):
     env = Env(LBC)
-    index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
+    if index is None:
+        index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
 
     try:
         return await index.start()
@@ -76,21 +75,21 @@ async def make_es_index():
         index.stop()
 
 
-async def run(args, shard):
+async def run(db_path, clients, blocks, shard, index_name='claims'):
     def itsbusy(*_):
         logging.info("shard %d: db is busy, retry", shard)
         return True
-    db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
+    db = apsw.Connection(db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
     db.setbusyhandler(itsbusy)
     db.cursor().execute('pragma journal_mode=wal;')
     db.cursor().execute('pragma temp_store=memory;')
 
-    producer = get_all(db.cursor(), shard, args.clients, limit=args.blocks)
-    await asyncio.gather(*(consume(producer) for _ in range(min(8, args.clients))))
+    producer = get_all(db.cursor(), shard, clients, limit=blocks, index_name=index_name)
+    await asyncio.gather(*(consume(producer, index_name=index_name) for _ in range(min(8, clients))))
 
 
 def __run(args, shard):
-    asyncio.run(run(args, shard))
+    asyncio.run(run(args.db_path, args.clients, args.blocks, shard))
 
 
 def run_elastic_sync():
