@@ -30,3 +30,6 @@ test-integration:
 idea:
 	mkdir -p .idea
 	cp -r scripts/idea/* .idea
+
+elastic-docker:
+	docker run -d -v lbryhub:/usr/share/elasticsearch/data -p 9200:9200 -p 9300:9300 -e"ES_JAVA_OPTS=-Xms512m -Xmx512m" -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:7.12.1
