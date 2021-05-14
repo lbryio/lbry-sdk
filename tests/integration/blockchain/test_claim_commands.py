@@ -2169,7 +2169,7 @@ class CollectionCommands(CommandTestCase):
         tx = await self.collection_create('radjingles', claims=claim_ids, allow_duplicate_name=True)
         claim_id2 = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 2)
-
+        # with clear_claims
         await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
         collections = await self.out(self.daemon.jsonrpc_collection_list())
         self.assertEquals(len(collections['items']), 2)
@@ -2177,7 +2177,8 @@ class CollectionCommands(CommandTestCase):
 
         resolved_collections = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
         self.assertIn('canonical_url', resolved_collections['items'][0])
-
+        # with replace
+        # TODO
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
