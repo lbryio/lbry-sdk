@@ -68,9 +68,9 @@ class SearchIndex:
             self.index, body={'version': version, 'index_patterns': ['ignored']}, ignore=400
         )
 
-    async def start(self):
+    async def start(self) -> bool:
         if self.sync_client:
-            return
+            return False
         hosts = [{'host': self._elastic_host, 'port': self._elastic_port}]
         self.sync_client = AsyncElasticsearch(hosts, timeout=self.sync_timeout)
         self.search_client = AsyncElasticsearch(hosts, timeout=self.search_timeout)
@@ -162,6 +162,9 @@ class SearchIndex:
             await self.sync_client.update_by_query(
                 self.index, body=self.update_filter_query(Censor.RESOLVE, blocked_channels, True), slices=4)
             await self.sync_client.indices.refresh(self.index)
+        self.clear_caches()
+
+    def clear_caches(self):
         self.search_cache.clear()
         self.short_id_cache.clear()
         self.claim_cache.clear()

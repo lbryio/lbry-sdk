@@ -4,6 +4,7 @@ import lbry
 import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
+from lbry.wallet.server.db.elasticsearch.sync import run as run_sync, make_es_index
 from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
@@ -13,9 +14,6 @@ class TestSessions(IntegrationTestCase):
     """
     Tests that server cleans up stale connections after session timeout and client times out too.
     """
-
-    LEDGER = lbry.wallet
-
     async def test_session_bloat_from_socket_timeout(self):
         await self.conductor.stop_spv()
         await self.ledger.stop()
@@ -87,3 +85,31 @@ class TestUsagePayment(CommandTestCase):
         self.assertIsNotNone(await self.blockchain.get_raw_transaction(tx.id))  # verify its broadcasted
         self.assertEqual(tx.outputs[0].amount, 100000000)
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address)
+
+
+class TestESSync(CommandTestCase):
+    async def test_es_sync_utility(self):
+        for i in range(10):
+            await self.stream_create(f"stream{i}", bid='0.001')
+        await self.generate(1)
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        db = self.conductor.spv_node.server.db
+        await db.search_index.delete_index()
+        db.search_index.clear_caches()
+        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
+        await db.search_index.stop()
+        self.assertTrue(await make_es_index(db.search_index))
+
+        async def resync():
+            await db.search_index.start()
+            db.search_index.clear_caches()
+            await run_sync(db.sql._db_path, 1, 0, 0, index_name=db.search_index.index)
+            self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        await resync()
+
+        # this time we will test a migration from unversioned to v1
+        await db.search_index.sync_client.indices.delete_template(db.search_index.index)
+        await db.search_index.stop()
+        self.assertTrue(await make_es_index(db.search_index))
+        await db.search_index.start()
+        await resync()
