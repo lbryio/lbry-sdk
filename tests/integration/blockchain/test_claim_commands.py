@@ -2172,18 +2172,27 @@ class CollectionCommands(CommandTestCase):
         # with clear_claims
         await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
         collections = await self.out(self.daemon.jsonrpc_collection_list())
-        self.assertEquals(len(collections['items']), 2)
+        self.assertEqual(len(collections['items']), 2)
         self.assertNotIn('canonical_url', collections['items'][0])
 
         resolved_collections = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
         self.assertIn('canonical_url', resolved_collections['items'][0])
         # with replace
-        # TODO
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[::-1][:2], tags=['cool'])
+        updated = await self.claim_search(claim_id=claim_id)
+        self.assertEqual(updated[0]['value']['tags'], ['cool'])
+        self.assertEqual(updated[0]['value']['claims'], claim_ids[::-1][:2])
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[:4], languages=['en', 'pt-BR'])
+        updated = await self.resolve(f'radjingles:{claim_id}')
+        self.assertEqual(updated['value']['claims'], claim_ids[:4])
+        self.assertNotIn('tags', updated['value'])
+        self.assertEqual(updated['value']['languages'], ['en', 'pt-BR'])
+
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=2))
-        self.assertEquals(len(collections['items'][0]['claims']), 2)
+        self.assertEqual(len(collections['items'][0]['claims']), 2)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=10))
         self.assertEqual(len(collections['items'][0]['claims']), 4)
