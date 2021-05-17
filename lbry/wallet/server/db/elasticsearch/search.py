@@ -252,13 +252,7 @@ class SearchIndex:
             if not kwargs['channel_id'] or not isinstance(kwargs['channel_id'], str):
                 return [], 0, 0
         try:
-            if 'limit_claims_per_channel' in kwargs:
-                return await self.search_ahead(**kwargs), 0, 0
-            else:
-                result = (await self.search_client.search(
-                    expand_query(**kwargs), index=self.index,
-                    track_total_hits=False if kwargs.get('no_totals') else 10_000
-                ))['hits']
+            return await self.search_ahead(**kwargs)
         except NotFoundError:
             return [], 0, 0
         return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
@@ -280,7 +274,8 @@ class SearchIndex:
                     query = expand_query(**kwargs)
                     reordered_hits = await self.__search_ahead(query, page_size, per_channel_per_page)
                     cache_item.result = reordered_hits
-        return list(await self.get_many(*(claim_id for claim_id, _ in reordered_hits[offset:(offset + page_size)])))
+        result = list(await self.get_many(*(claim_id for claim_id, _ in reordered_hits[offset:(offset + page_size)])))
+        return result, 0, len(reordered_hits)
 
     async def __search_ahead(self, query: dict, page_size: int, per_channel_per_page: int):
         search_hits = deque((await self.search_client.search(
