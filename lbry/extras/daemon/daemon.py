@@ -3938,9 +3938,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if replace:
             claim = Claim()
-            claim.collection.message.source.CopyFrom(
-                old_txo.claim.collection.message.source
-            )
             claim.collection.update(**kwargs)
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
