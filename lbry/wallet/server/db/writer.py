@@ -5,7 +5,6 @@ from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
-from multiprocessing import Manager
 from binascii import unhexlify, hexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
@@ -220,7 +219,6 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
-        self.state_manager = None
         self.blocked_streams = None
         self.blocked_channels = None
         self.blocking_channel_hashes = {
@@ -251,11 +249,10 @@ class SQLDB:
         self.execute(self.PRAGMAS)
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
-        self.state_manager = Manager()
-        self.blocked_streams = self.state_manager.dict()
-        self.blocked_channels = self.state_manager.dict()
-        self.filtered_streams = self.state_manager.dict()
-        self.filtered_channels = self.state_manager.dict()
+        self.blocked_streams = {}
+        self.blocked_channels = {}
+        self.filtered_streams = {}
+        self.filtered_channels = {}
         self.update_blocked_and_filtered_claims()
         for algorithm in self.trending:
             algorithm.install(self.db)
@@ -263,8 +260,6 @@ class SQLDB:
     def close(self):
         if self.db is not None:
             self.db.close()
-        if self.state_manager is not None:
-            self.state_manager.shutdown()
 
     def update_blocked_and_filtered_claims(self):
         self.update_claims_from_channel_hashes(

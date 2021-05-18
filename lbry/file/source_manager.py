@@ -132,7 +132,7 @@ class SourceManager:
         else:
             streams = list(self._sources.values())
         if sort_by:
-            streams.sort(key=lambda s: getattr(s, sort_by))
+            streams.sort(key=lambda s: getattr(s, sort_by) or "")
             if reverse:
                 streams.reverse()
         return streams
