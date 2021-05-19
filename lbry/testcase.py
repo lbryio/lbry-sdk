@@ -396,7 +396,7 @@ class CommandTestCase(IntegrationTestCase):
         conf.use_upnp = False
         conf.reflect_streams = True
         conf.blockchain_name = 'lbrycrd_regtest'
-        conf.lbryum_servers = [('127.0.0.1', 50001)]
+        conf.lbryum_servers = [(self.conductor.spv_node.hostname, self.conductor.spv_node.port)]
         conf.reflector_servers = [('127.0.0.1', 5566)]
         conf.fixed_peers = [('127.0.0.1', 5567)]
         conf.known_dht_nodes = []
@@ -409,6 +409,7 @@ class CommandTestCase(IntegrationTestCase):
         if self.skip_libtorrent:
             conf.components_to_skip.append(LIBTORRENT_COMPONENT)
         wallet_node.manager.config = conf
+        wallet_node.manager.ledger.config['known_hubs'] = conf.known_hubs
 
         def wallet_maker(component_manager):
             wallet_component = WalletComponent(component_manager)

@@ -77,6 +77,7 @@ class Env:
         # Peer discovery
         self.peer_discovery = self.peer_discovery_enum()
         self.peer_announce = self.boolean('PEER_ANNOUNCE', True)
+        self.peer_hubs = self.extract_peer_hubs()
         self.force_proxy = self.boolean('FORCE_PROXY', False)
         self.tor_proxy_host = self.default('TOR_PROXY_HOST', 'localhost')
         self.tor_proxy_port = self.integer('TOR_PROXY_PORT', None)
@@ -270,5 +271,5 @@ class Env:
         else:
             return self.PD_ON
 
-    def peer_hubs(self):
+    def extract_peer_hubs(self):
         return [hub.strip() for hub in self.default('PEER_HUBS', '').split(',')]

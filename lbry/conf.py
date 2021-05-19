@@ -1,8 +1,8 @@
 import os
 import re
 import sys
-import typing
 import logging
+from typing import List, Tuple, Union, TypeVar, Generic, Optional
 from argparse import ArgumentParser
 from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 
 
 NOT_SET = type('NOT_SET', (object,), {})  # pylint: disable=invalid-name
-T = typing.TypeVar('T')
+T = TypeVar('T')
 
 CURRENCIES = {
     'BTC': {'type': 'crypto'},
@@ -24,11 +24,11 @@ CURRENCIES = {
 }
 
 
-class Setting(typing.Generic[T]):
+class Setting(Generic[T]):
 
-    def __init__(self, doc: str, default: typing.Optional[T] = None,
-                 previous_names: typing.Optional[typing.List[str]] = None,
-                 metavar: typing.Optional[str] = None):
+    def __init__(self, doc: str, default: Optional[T] = None,
+                 previous_names: Optional[List[str]] = None,
+                 metavar: Optional[str] = None):
         self.doc = doc
         self.default = default
         self.previous_names = previous_names or []
@@ -45,7 +45,7 @@ class Setting(typing.Generic[T]):
     def no_cli_name(self):
         return f"--no-{self.name.replace('_', '-')}"
 
-    def __get__(self, obj: typing.Optional['BaseConfig'], owner) -> T:
+    def __get__(self, obj: Optional['BaseConfig'], owner) -> T:
         if obj is None:
             return self
         for location in obj.search_order:
@@ -53,7 +53,7 @@ class Setting(typing.Generic[T]):
                 return location[self.name]
         return self.default
 
-    def __set__(self, obj: 'BaseConfig', val: typing.Union[T, NOT_SET]):
+    def __set__(self, obj: 'BaseConfig', val: Union[T, NOT_SET]):
         if val == NOT_SET:
             for location in obj.modify_order:
                 if self.name in location:
@@ -87,7 +87,7 @@ class String(Setting[str]):
             f"Setting '{self.name}' must be a string."
 
     # TODO: removes this after pylint starts to understand generics
-    def __get__(self, obj: typing.Optional['BaseConfig'], owner) -> str:  # pylint: disable=useless-super-delegation
+    def __get__(self, obj: Optional['BaseConfig'], owner) -> str:  # pylint: disable=useless-super-delegation
         return super().__get__(obj, owner)
 
 
@@ -200,7 +200,7 @@ class MaxKeyFee(Setting[dict]):
 
 
 class StringChoice(String):
-    def __init__(self, doc: str, valid_values: typing.List[str], default: str, *args, **kwargs):
+    def __init__(self, doc: str, valid_values: List[str], default: str, *args, **kwargs):
         super().__init__(doc, default, *args, **kwargs)
         if not valid_values:
             raise ValueError("No valid values provided")
@@ -275,29 +275,53 @@ class Strings(ListSetting):
 
 class KnownHubsList:
 
-    def __init__(self, config: 'Config', file_name: str = 'known_hubs.yml'):
+    def __init__(self, config: 'Config' = None, file_name: str = 'known_hubs.yml'):
+        self.config = config
         self.file_name = file_name
-        self.path = os.path.join(config.wallet_dir, self.file_name)
-        self.hubs = []
-        if self.exists:
-            self.load()
+        self.hubs: List[Tuple[str, int]] = []
+
+    @property
+    def path(self):
+        if self.config:
+            return os.path.join(self.config.wallet_dir, self.file_name)
 
     @property
     def exists(self):
         return self.path and os.path.exists(self.path)
 
+    @property
+    def serialized(self) -> List[str]:
+        return [f"{host}:{port}" for host, port in self.hubs]
+
     def load(self):
-        with open(self.path, 'r') as known_hubs_file:
-            raw = known_hubs_file.read()
-            self.hubs = yaml.safe_load(raw) or {}
+        if self.exists:
+            with open(self.path, 'r') as known_hubs_file:
+                raw = known_hubs_file.read()
+                for hub in yaml.safe_load(raw) or []:
+                    self.append(hub)
 
     def save(self):
-        with open(self.path, 'w') as known_hubs_file:
-            known_hubs_file.write(yaml.safe_dump(self.hubs, default_flow_style=False))
+        if self.path:
+            with open(self.path, 'w') as known_hubs_file:
+                known_hubs_file.write(yaml.safe_dump(self.serialized, default_flow_style=False))
 
     def append(self, hub: str):
-        self.hubs.append(hub)
+        if hub and ':' in hub:
+            host, port = hub.split(':')
+            hub_parts = (host, int(port))
+            if hub_parts not in self.hubs:
+                self.hubs.append(hub_parts)
         return hub
+
+    def extend(self, hubs: List[str]):
+        for hub in hubs:
+            self.append(hub)
+
+    def __bool__(self):
+        return len(self) > 0
+
+    def __len__(self):
+        return self.hubs.__len__()
 
     def __iter__(self):
         return iter(self.hubs)
@@ -407,7 +431,7 @@ class ConfigFileAccess:
         del self.data[key]
 
 
-TBC = typing.TypeVar('TBC', bound='BaseConfig')
+TBC = TypeVar('TBC', bound='BaseConfig')
 
 
 class BaseConfig:
@@ -707,7 +731,7 @@ class Config(CLIConfig):
         return os.path.join(self.data_dir, 'lbrynet.log')
 
 
-def get_windows_directories() -> typing.Tuple[str, str, str]:
+def get_windows_directories() -> Tuple[str, str, str]:
     from lbry.winpaths import get_path, FOLDERID, UserHandle, \
         PathNotFoundException  # pylint: disable=import-outside-toplevel
 
@@ -729,14 +753,14 @@ def get_windows_directories() -> typing.Tuple[str, str, str]:
     return data_dir, lbryum_dir, download_dir
 
 
-def get_darwin_directories() -> typing.Tuple[str, str, str]:
+def get_darwin_directories() -> Tuple[str, str, str]:
     data_dir = user_data_dir('LBRY')
     lbryum_dir = os.path.expanduser('~/.lbryum')
     download_dir = os.path.expanduser('~/Downloads')
     return data_dir, lbryum_dir, download_dir
 
 
-def get_linux_directories() -> typing.Tuple[str, str, str]:
+def get_linux_directories() -> Tuple[str, str, str]:
     try:
         with open(os.path.join(user_config_dir(), 'user-dirs.dirs'), 'r') as xdg:
             down_dir = re.search(r'XDG_DOWNLOAD_DIR=(.+)', xdg.read())

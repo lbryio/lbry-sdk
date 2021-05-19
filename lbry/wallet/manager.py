@@ -183,6 +183,7 @@ class WalletManager:
         ledger_config = {
             'auto_connect': True,
             'default_servers': config.lbryum_servers,
+            'known_hubs': config.known_hubs,
             'data_path': config.wallet_dir,
             'tx_cache_size': config.transaction_cache_size
         }
@@ -226,6 +227,7 @@ class WalletManager:
         self.ledger.config = {
             'auto_connect': True,
             'default_servers': self.config.lbryum_servers,
+            'known_hubs': self.config.known_hubs,
             'data_path': self.config.wallet_dir,
         }
         await self.ledger.stop()
