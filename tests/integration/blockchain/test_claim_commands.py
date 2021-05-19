@@ -398,6 +398,22 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
+    async def test_no_duplicates(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        claims = []
+        channels = []
+        first = await self.stream_create('original_claim0')
+        second = await self.stream_create('original_claim1')
+        for i in range(10):
+            repost_id = self.get_claim_id(second if i % 2 == 0 else first)
+            channel = await self.channel_create(f'@chan{i}', bid='0.001')
+            channels.append(channel)
+            claims.append(
+                await self.stream_repost(repost_id, f'claim{i}', bid='0.001', channel_id=self.get_claim_id(channel)))
+        await match([first, second] + channels,
+                    remove_duplicates=True, order_by=['^height'])
+
     async def test_limit_claims_per_channel_across_sorted_pages(self):
         await self.generate(10)
         match = self.assertFindsClaims
