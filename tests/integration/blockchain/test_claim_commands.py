@@ -429,6 +429,12 @@ class ClaimSearchCommand(ClaimTestCase):
             [claims[6], claims[7], last], page_size=4, page=3,
             limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
         )
+        # feature disabled on 0 or negative values
+        for limit in [None, 0, -1]:
+            await match(
+                [first, second] + claims + [last],
+                limit_claims_per_channel=limit, claim_type='stream', order_by=['^height']
+            )
 
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim

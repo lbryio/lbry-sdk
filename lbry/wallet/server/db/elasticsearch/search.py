@@ -259,7 +259,7 @@ class SearchIndex:
 
     async def search_ahead(self, **kwargs):
         # 'limit_claims_per_channel' case. Fetch 1000 results, reorder, slice, inflate and return
-        per_channel_per_page = kwargs.pop('limit_claims_per_channel')
+        per_channel_per_page = kwargs.pop('limit_claims_per_channel', 0) or 0
         page_size = kwargs.pop('limit', 10)
         offset = kwargs.pop('offset', 0)
         kwargs['limit'] = 1000
@@ -272,15 +272,18 @@ class SearchIndex:
                     reordered_hits = cache_item.result
                 else:
                     query = expand_query(**kwargs)
-                    reordered_hits = await self.__search_ahead(query, page_size, per_channel_per_page)
+                    search_hits = deque((await self.search_client.search(
+                        query, index=self.index, track_total_hits=False, _source_includes=['_id', 'channel_id']
+                    ))['hits']['hits'])
+                    if per_channel_per_page > 0:
+                        reordered_hits = await self.__search_ahead(search_hits, page_size, per_channel_per_page)
+                    else:
+                        reordered_hits = [(hit['_id'], hit['_source']['channel_id']) for hit in search_hits]
                     cache_item.result = reordered_hits
         result = list(await self.get_many(*(claim_id for claim_id, _ in reordered_hits[offset:(offset + page_size)])))
         return result, 0, len(reordered_hits)
 
-    async def __search_ahead(self, query: dict, page_size: int, per_channel_per_page: int):
-        search_hits = deque((await self.search_client.search(
-            query, index=self.index, track_total_hits=False, _source_includes=['_id', 'channel_id']
-        ))['hits']['hits'])
+    async def __search_ahead(self, search_hits: list, page_size: int, per_channel_per_page: int):
         reordered_hits = []
         channel_counters = Counter()
         next_page_hits_maybe_check_later = deque()
@@ -293,7 +296,7 @@ class SearchIndex:
                 break  # means last page was incomplete and we are left with bad replacements
             for _ in range(len(next_page_hits_maybe_check_later)):
                 claim_id, channel_id = next_page_hits_maybe_check_later.popleft()
-                if channel_counters[channel_id] < per_channel_per_page:
+                if per_channel_per_page > 0 and channel_counters[channel_id] < per_channel_per_page:
                     reordered_hits.append((claim_id, channel_id))
                     channel_counters[channel_id] += 1
                 else:
@@ -301,7 +304,7 @@ class SearchIndex:
             while search_hits:
                 hit = search_hits.popleft()
                 hit_id, hit_channel_id = hit['_id'], hit['_source']['channel_id']
-                if hit_channel_id is None:
+                if hit_channel_id is None or per_channel_per_page <= 0:
                     reordered_hits.append((hit_id, hit_channel_id))
                 elif channel_counters[hit_channel_id] < per_channel_per_page:
                     reordered_hits.append((hit_id, hit_channel_id))
