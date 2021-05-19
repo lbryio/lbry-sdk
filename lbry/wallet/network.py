@@ -14,6 +14,7 @@ from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
 from lbry.wallet.server.udp import SPVStatusClientProtocol, SPVPong
+from lbry.conf import KnownHubsList
 
 log = logging.getLogger(__name__)
 
@@ -179,6 +180,10 @@ class Network:
     def config(self):
         return self.ledger.config
 
+    @property
+    def known_hubs(self):
+        return self.config.get('known_hubs', KnownHubsList())
+
     def disconnect(self):
         if self._keepalive_task and not self._keepalive_task.done():
             self._keepalive_task.cancel()
@@ -216,7 +221,8 @@ class Network:
                 log.exception("error looking up dns for spv server %s:%i", server, port)
 
         # accumulate the dns results
-        await asyncio.gather(*(resolve_spv(server, port) for (server, port) in self.config['default_servers']))
+        hubs = self.known_hubs if self.known_hubs else self.config['default_servers']
+        await asyncio.gather(*(resolve_spv(server, port) for (server, port) in hubs))
         return hostname_to_ip, ip_to_hostnames
 
     async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], Optional[SPVPong]]:
@@ -295,6 +301,12 @@ class Network:
                 self.client, self.server_features = client, features
                 log.debug("discover other hubs %s:%i", *client.server)
                 peers = await client.send_request('server.peers.get', [])
+                if peers:
+                    try:
+                        self.known_hubs.extend(peers)
+                        self.known_hubs.save()
+                    except Exception:
+                        log.exception("could not add hub peers: %s", peers)
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)

@@ -129,16 +129,21 @@ class TestHubDiscovery(CommandTestCase):
         self.addCleanup(relay_node.stop)
 
         self.assertEqual(list(self.daemon.conf.known_hubs), [])
-        self.daemon.conf.known_hubs.append(relay_node_host)
-
         self.assertEqual(
             self.daemon.ledger.network.client.server_address_and_port,
             ('127.0.0.1', 50002)
         )
 
+        # connect to relay hub which will tell us about the final hub
+        self.daemon.jsonrpc_settings_set('lbryum_servers', [relay_node_host])
         await self.daemon.jsonrpc_wallet_reconnect()
-
+        self.assertEqual(list(self.daemon.conf.known_hubs), [(final_node.hostname, final_node.port)])
         self.assertEqual(
-            self.daemon.ledger.network.client.server_address_and_port,
-            ('127.0.0.1', 50003)
+            self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', relay_node.port)
+        )
+
+        # use known_hubs to connect to final hub
+        await self.daemon.jsonrpc_wallet_reconnect()
+        self.assertEqual(
+            self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', final_node.port)
         )

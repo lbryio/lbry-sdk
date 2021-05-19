@@ -1085,7 +1085,7 @@ class LBRYElectrumX(SessionBase):
 
     async def peers_get(self):
         """Return the server peers as a list of (ip, host, details) tuples."""
-        return self.env.peer_hubs()
+        return self.env.peer_hubs
 
     async def peers_subscribe(self):
         """Return the server peers as a list of (ip, host, details) tuples."""

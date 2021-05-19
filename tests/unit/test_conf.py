@@ -260,7 +260,7 @@ class ConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             c1 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
             self.assertEqual(list(c1.known_hubs), [])
-            c1.known_hubs.append('new.hub.io')
+            c1.known_hubs.append('new.hub.io:99')
             c1.known_hubs.save()
             c2 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
-            self.assertEqual(list(c2.known_hubs), ['new.hub.io'])
+            self.assertEqual(list(c2.known_hubs), [('new.hub.io', 99)])
