@@ -128,17 +128,12 @@ class DBState(typing.NamedTuple):
         return cls(*DB_STATE_STRUCT.unpack(packed[:DB_STATE_STRUCT_SIZE]))
 
 
+class DBError(Exception):
+    """Raised on general DB errors generally indicating corruption."""
+
+
 class LevelDB:
-    """Simple wrapper of the backend database for querying.
-
-    Performs no DB update, though the DB will be cleaned on opening if
-    it was shutdown uncleanly.
-    """
-
     DB_VERSIONS = HIST_DB_VERSIONS = [7]
-
-    class DBError(Exception):
-        """Raised on general DB errors generally indicating corruption."""
 
     def __init__(self, env):
         self.logger = util.class_logger(__name__, self.__class__.__name__)
@@ -951,8 +946,7 @@ class LevelDB:
         """
 
         if start_height < 0 or count < 0:
-            raise self.DBError(f'{count:,d} headers starting at '
-                               f'{start_height:,d} not on disk')
+            raise DBError(f'{count:,d} headers starting at {start_height:,d} not on disk')
 
         disk_count = max(0, min(count, self.db_height + 1 - start_height))
         if disk_count:
@@ -1023,7 +1017,7 @@ class LevelDB:
 
     async def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
-            raise self.DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
+            raise DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
         return [self.coin.header_hash(header) for header in self.headers[height:height + count]]
 
     async def limited_history(self, hashX, *, limit=1000):
@@ -1164,12 +1158,12 @@ class LevelDB:
             state = DBState.unpack(state)
             self.db_version = state.db_version
             if self.db_version not in self.DB_VERSIONS:
-                raise self.DBError(f'your DB version is {self.db_version} but this '
+                raise DBError(f'your DB version is {self.db_version} but this '
                                    f'software only handles versions {self.DB_VERSIONS}')
             # backwards compat
             genesis_hash = state.genesis
             if genesis_hash.hex() != self.coin.GENESIS_HASH:
-                raise self.DBError(f'DB genesis hash {genesis_hash} does not '
+                raise DBError(f'DB genesis hash {genesis_hash} does not '
                                    f'match coin {self.coin.GENESIS_HASH}')
             self.db_height = state.height
             self.db_tx_count = state.tx_count
