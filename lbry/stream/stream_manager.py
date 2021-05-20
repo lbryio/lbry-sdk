@@ -215,13 +215,19 @@ class StreamManager(SourceManager):
             server, port = random.choice(self.config.reflector_servers)
         if stream.sd_hash in self.running_reflector_uploads:
             return self.running_reflector_uploads[stream.sd_hash]
-        task = self.loop.create_task(stream.upload_to_reflector(server, port))
+        task = self.loop.create_task(self._retriable_reflect_stream(stream, server, port))
         self.running_reflector_uploads[stream.sd_hash] = task
         task.add_done_callback(
             lambda _: None if stream.sd_hash not in self.running_reflector_uploads else
             self.running_reflector_uploads.pop(stream.sd_hash)
         )
         return task
+
+    async def _retriable_reflect_stream(self, stream, host, port):
+        sent = await stream.upload_to_reflector(host, port)
+        while not stream.is_fully_reflected and stream.reflector_progress > 0 and len(sent) > 0:
+            stream.reflector_progress = 0
+            sent = await stream.upload_to_reflector(host, port)
 
     async def create(self, file_path: str, key: Optional[bytes] = None,
                      iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
