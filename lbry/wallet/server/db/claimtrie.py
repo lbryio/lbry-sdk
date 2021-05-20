@@ -4,26 +4,10 @@ from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, Re
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue
 
-nOriginalClaimExpirationTime = 262974
-nExtendedClaimExpirationTime = 2102400
-nExtendedClaimExpirationForkHeight = 400155
-nNormalizedNameForkHeight = 539940      # targeting 21 March 2019
-nMinTakeoverWorkaroundHeight = 496850
-nMaxTakeoverWorkaroundHeight = 658300   # targeting 30 Oct 2019
-nWitnessForkHeight = 680770             # targeting 11 Dec 2019
-nAllClaimsInMerkleForkHeight = 658310   # targeting 30 Oct 2019
-proportionalDelayFactor = 32
-maxTakeoverDelay = 4032
 
 
-def get_delay_for_name(blocks_of_continuous_ownership: int) -> int:
-    return min(blocks_of_continuous_ownership // proportionalDelayFactor, maxTakeoverDelay)
 
 
-def get_expiration_height(last_updated_height: int) -> int:
-    if last_updated_height < nExtendedClaimExpirationForkHeight:
-        return last_updated_height + nOriginalClaimExpirationTime
-    return last_updated_height + nExtendedClaimExpirationTime
 
 
 def length_encoded_name(name: str) -> bytes:
