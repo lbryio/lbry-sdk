@@ -4,23 +4,24 @@ import typing
 from bisect import bisect_right
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Set, DefaultDict, Dict
 from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.transaction import OutputScript, Output
-from lbry.wallet.server.tx import Tx
+from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.crypto.hash import hash160
 from lbry.wallet.server.leveldb import FlushData
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport, get_expiration_height
-from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, get_force_activate_ops, get_delay_for_name
-from lbry.wallet.server.db.prefixes import PendingClaimActivationPrefixRow, Prefixes
-from lbry.wallet.server.db.revertable import RevertablePut
+from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport
+from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, StagedActivation
+from lbry.wallet.server.db.claimtrie import get_remove_name_ops
+from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
+from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue
 from lbry.wallet.server.udp import StatusServer
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
@@ -204,13 +205,19 @@ class BlockProcessor:
         self.search_cache = {}
         self.history_cache = {}
         self.status_server = StatusServer()
-        self.effective_amount_changes = defaultdict(list)
+
         self.pending_claims: typing.Dict[Tuple[int, int], StagedClaimtrieItem] = {}
         self.pending_claim_txos: typing.Dict[bytes, Tuple[int, int]] = {}
-        self.pending_supports = defaultdict(set)
+        self.pending_supports = defaultdict(list)
+
         self.pending_support_txos = {}
-        self.pending_abandon = set()
-        self.staged_pending_abandoned = {}
+
+        self.pending_removed_support = defaultdict(lambda: defaultdict(list))
+        self.staged_pending_abandoned: Dict[bytes, StagedClaimtrieItem] = {}
+        self.removed_active_support = defaultdict(list)
+        self.staged_activated_support = defaultdict(list)
+        self.staged_activated_claim = {}
+        self.pending_activated = defaultdict(lambda: defaultdict(list))
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -241,6 +248,7 @@ class BlockProcessor:
             try:
                 for block in blocks:
                     await self.run_in_thread_with_lock(self.advance_block, block)
+                    print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
@@ -363,7 +371,6 @@ class BlockProcessor:
 
         return start, count
 
-
     # - Flushing
     def flush_data(self):
         """The data for a flush.  The lock must be taken."""
@@ -386,461 +393,448 @@ class BlockProcessor:
             await self.flush(True)
             self.next_cache_check = time.perf_counter() + 30
 
-    def check_cache_size(self):
-        """Flush a cache if it gets too big."""
-        # Good average estimates based on traversal of subobjects and
-        # requesting size from Python (see deep_getsizeof).
-        one_MB = 1000*1000
-        utxo_cache_size = len(self.utxo_cache) * 205
-        db_deletes_size = len(self.db_deletes) * 57
-        hist_cache_size = len(self.db.hist_unflushed) * 180 + self.db.hist_unflushed_count * 4
-        # Roughly ntxs * 32 + nblocks * 42
-        tx_hash_size = ((self.tx_count - self.db.fs_tx_count) * 32
-                        + (self.height - self.db.fs_height) * 42)
-        utxo_MB = (db_deletes_size + utxo_cache_size) // one_MB
-        hist_MB = (hist_cache_size + tx_hash_size) // one_MB
-
-        self.logger.info('our height: {:,d} daemon: {:,d} '
-                         'UTXOs {:,d}MB hist {:,d}MB'
-                         .format(self.height, self.daemon.cached_height(),
-                                 utxo_MB, hist_MB))
-
-        # Flush history if it takes up over 20% of cache memory.
-        # Flush UTXOs once they take up 80% of cache memory.
-        cache_MB = self.env.cache_MB
-        if utxo_MB + hist_MB >= cache_MB or hist_MB >= cache_MB // 5:
-            return utxo_MB >= cache_MB * 4 // 5
-        return None
-
-    def _add_claim_or_update(self, height: int, txo, script, tx_hash: bytes, idx: int, tx_count: int, txout,
-                             spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]],
-                             zero_delay_claims: typing.Dict[Tuple[str, bytes], Tuple[int, int]]) -> List['RevertableOp']:
+    def _add_claim_or_update(self, height: int, txo: 'Output', tx_hash: bytes, tx_num: int, nout: int,
+                             spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]) -> List['RevertableOp']:
         try:
             claim_name = txo.normalized_name
         except UnicodeDecodeError:
             claim_name = ''.join(chr(c) for c in txo.script.values['claim_name'])
-        if script.is_claim_name:
-            claim_hash = hash160(tx_hash + pack('>I', idx))[::-1]
-            # print(f"\tnew lbry://{claim_name}#{claim_hash.hex()} ({tx_count} {txout.value})")
+        if txo.script.is_claim_name:
+            claim_hash = hash160(tx_hash + pack('>I', nout))[::-1]
+            print(f"\tnew lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
         else:
             claim_hash = txo.claim_hash[::-1]
-
-        signing_channel_hash = None
-        channel_claims_count = 0
-        activation_delay = self.db.get_activation_delay(claim_hash, claim_name)
-        if activation_delay == 0:
-            zero_delay_claims[(claim_name, claim_hash)] = tx_count, idx
-        # else:
-        #     print("delay activation ", claim_name, activation_delay, height)
-
-        activation_height = activation_delay + height
+            print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
         try:
             signable = txo.signable
         except:  # google.protobuf.message.DecodeError: Could not parse JSON.
             signable = None
 
+        ops = []
+        signing_channel_hash = None
         if signable and signable.signing_channel_hash:
             signing_channel_hash = txo.signable.signing_channel_hash[::-1]
-            # if signing_channel_hash in self.pending_claim_txos:
-            #     pending_channel = self.pending_claims[self.pending_claim_txos[signing_channel_hash]]
-            #     channel_claims_count = pending_channel.
-
-            channel_claims_count = self.db.get_claims_in_channel_count(signing_channel_hash) + 1
-        if script.is_claim_name:
-            support_amount = 0
-            root_tx_num, root_idx = tx_count, idx
+        if txo.script.is_claim_name:
+            root_tx_num, root_idx = tx_num, nout
         else:
             if claim_hash not in spent_claims:
                 print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
                 return []
-            support_amount = self.db.get_support_amount(claim_hash)
             (prev_tx_num, prev_idx, _) = spent_claims.pop(claim_hash)
-            # print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} {tx_hash[::-1].hex()} {txout.value}")
-
+            print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.pending_claims:
                 previous_claim = self.pending_claims.pop((prev_tx_num, prev_idx))
-                root_tx_num = previous_claim.root_claim_tx_num
-                root_idx = previous_claim.root_claim_tx_position
-                # prev_amount = previous_claim.amount
+                root_tx_num, root_idx = previous_claim.root_claim_tx_num, previous_claim.root_claim_tx_position
             else:
-                k, v = self.db.get_root_claim_txo_and_current_amount(
+                k, v = self.db.get_claim_txo(
                     claim_hash
                 )
-                root_tx_num = v.root_tx_num
-                root_idx = v.root_position
-                prev_amount = v.amount
-
+                root_tx_num, root_idx = v.root_tx_num, v.root_position
+                activation = self.db.get_activation(prev_tx_num, prev_idx)
+                ops.extend(
+                    StagedActivation(
+                        ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, claim_name, v.amount
+                    ).get_remove_activate_ops()
+                )
         pending = StagedClaimtrieItem(
-            claim_name, claim_hash, txout.value, support_amount + txout.value,
-            activation_height, get_expiration_height(height), tx_count, idx, root_tx_num, root_idx,
-            signing_channel_hash, channel_claims_count
+            claim_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout, root_tx_num,
+            root_idx, signing_channel_hash
         )
+        self.pending_claims[(tx_num, nout)] = pending
+        self.pending_claim_txos[claim_hash] = (tx_num, nout)
+        ops.extend(pending.get_add_claim_utxo_ops())
+        return ops
 
-        self.pending_claims[(tx_count, idx)] = pending
-        self.pending_claim_txos[claim_hash] = (tx_count, idx)
-        self.effective_amount_changes[claim_hash].append(txout.value)
-        return pending.get_add_claim_utxo_ops()
-
-    def _add_support(self, height, txo, txout, idx, tx_count,
-                     zero_delay_claims: typing.Dict[Tuple[str, bytes], Tuple[int, int]]) -> List['RevertableOp']:
+    def _add_support(self, txo: 'Output', tx_num: int, nout: int) -> List['RevertableOp']:
         supported_claim_hash = txo.claim_hash[::-1]
+        self.pending_supports[supported_claim_hash].append((tx_num, nout))
+        self.pending_support_txos[(tx_num, nout)] = supported_claim_hash, txo.amount
+        print(f"\tsupport claim {supported_claim_hash.hex()} +{txo.amount}")
+        return StagedClaimtrieSupport(
+            supported_claim_hash, tx_num, nout, txo.amount
+        ).get_add_support_utxo_ops()
 
-        claim_info = self.db.get_root_claim_txo_and_current_amount(
-            supported_claim_hash
-        )
-        controlling_claim = None
-        supported_tx_num = supported_position = supported_activation_height = supported_name = None
-        if claim_info:
-            k, v = claim_info
-            supported_name = v.name
-            supported_tx_num = k.tx_num
-            supported_position = k.position
-            supported_activation_height = v.activation
-            controlling_claim = self.db.get_controlling_claim(v.name)
-
-        if supported_claim_hash in self.effective_amount_changes:
-            # print(f"\tsupport claim {supported_claim_hash.hex()} {txout.value}")
-            self.effective_amount_changes[supported_claim_hash].append(txout.value)
-            self.pending_supports[supported_claim_hash].add((tx_count, idx))
-            self.pending_support_txos[(tx_count, idx)] = supported_claim_hash, txout.value
-            return StagedClaimtrieSupport(
-                supported_claim_hash, tx_count, idx, txout.value
-            ).get_add_support_utxo_ops()
-        elif supported_claim_hash not in self.pending_claims and supported_claim_hash not in self.pending_abandon:
-            # print(f"\tsupport claim {supported_claim_hash.hex()} {txout.value}")
-            ops = []
-            if claim_info:
-                starting_amount = self.db.get_effective_amount(supported_claim_hash)
-
-                if supported_claim_hash not in self.effective_amount_changes:
-                    self.effective_amount_changes[supported_claim_hash].append(starting_amount)
-                self.effective_amount_changes[supported_claim_hash].append(txout.value)
-                supported_amount = self._get_pending_effective_amount(supported_claim_hash)
-
-                if controlling_claim and supported_claim_hash != controlling_claim.claim_hash:
-                    if supported_amount + txo.amount > self._get_pending_effective_amount(controlling_claim.claim_hash):
-                        # takeover could happen
-                        if (supported_name, supported_claim_hash) not in zero_delay_claims:
-                            takeover_delay = get_delay_for_name(height - supported_activation_height)
-                            if takeover_delay == 0:
-                                zero_delay_claims[(supported_name, supported_claim_hash)] = (
-                                    supported_tx_num, supported_position
-                                )
-                            else:
-                                ops.append(
-                                    RevertablePut(
-                                        *Prefixes.pending_activation.pack_item(
-                                            height + takeover_delay, supported_tx_num, supported_position,
-                                            supported_claim_hash, supported_name
-                                        )
-                                    )
-                                )
-
-                self.pending_supports[supported_claim_hash].add((tx_count, idx))
-                self.pending_support_txos[(tx_count, idx)] = supported_claim_hash, txout.value
-                # print(f"\tsupport claim {supported_claim_hash.hex()} {starting_amount}+{txout.value}={starting_amount + txout.value}")
-                ops.extend(StagedClaimtrieSupport(
-                    supported_claim_hash, tx_count, idx, txout.value
-                ).get_add_support_utxo_ops())
-                return ops
-            else:
-                print(f"\tthis is a wonky tx, contains unlinked support for non existent {supported_claim_hash.hex()}")
+    def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_num: int, nout: int, txo: 'Output',
+                              spent_claims: typing.Dict[bytes, Tuple[int, int, str]]) -> List['RevertableOp']:
+        if txo.script.is_claim_name or txo.script.is_update_claim:
+            return self._add_claim_or_update(height, txo, tx_hash, tx_num, nout, spent_claims)
+        elif txo.script.is_support_claim or txo.script.is_support_claim_data:
+            return self._add_support(txo, tx_num, nout)
         return []
 
-    def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_count: int, idx: int, txo, txout, script,
-                              spent_claims: typing.Dict[bytes, Tuple[int, int, str]],
-                              zero_delay_claims: typing.Dict[Tuple[str, bytes], Tuple[int, int]]) -> List['RevertableOp']:
-        if script.is_claim_name or script.is_update_claim:
-            return self._add_claim_or_update(height, txo, script, tx_hash, idx, tx_count, txout, spent_claims,
-                                             zero_delay_claims)
-        elif script.is_support_claim or script.is_support_claim_data:
-            return self._add_support(height, txo, txout, idx, tx_count, zero_delay_claims)
-        return []
-
-    def _remove_support(self, txin, zero_delay_claims):
+    def _spend_support_txo(self, txin):
         txin_num = self.db.transaction_num_mapping[txin.prev_hash]
-        supported_name = None
         if (txin_num, txin.prev_idx) in self.pending_support_txos:
             spent_support, support_amount = self.pending_support_txos.pop((txin_num, txin.prev_idx))
-            supported_name = self._get_pending_claim_name(spent_support)
             self.pending_supports[spent_support].remove((txin_num, txin.prev_idx))
-        else:
-            spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
-            if spent_support:
-                supported_name = self._get_pending_claim_name(spent_support)
-
-        if spent_support and support_amount is not None and spent_support not in self.pending_abandon:
-            controlling = self.db.get_controlling_claim(supported_name)
-            if controlling:
-                bid_queue = {
-                    claim_hash: self._get_pending_effective_amount(claim_hash)
-                    for claim_hash in self.db.get_claims_for_name(supported_name)
-                    if claim_hash not in self.pending_abandon
-                }
-                bid_queue[spent_support] -= support_amount
-                sorted_claims = sorted(
-                    list(bid_queue.keys()), key=lambda claim_hash: bid_queue[claim_hash], reverse=True
-                )
-                if controlling.claim_hash == spent_support and sorted_claims.index(controlling.claim_hash) > 0:
-                    print("takeover due to abandoned support")
-
-            # print(f"\tspent support for {spent_support.hex()} -{support_amount} ({txin_num}, {txin.prev_idx}) {supported_name}")
-            if spent_support not in self.effective_amount_changes:
-                assert spent_support not in self.pending_claims
-                prev_effective_amount = self.db.get_effective_amount(spent_support)
-                self.effective_amount_changes[spent_support].append(prev_effective_amount)
-            self.effective_amount_changes[spent_support].append(-support_amount)
+            supported_name = self._get_pending_claim_name(spent_support)
+            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()}")
+            self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             return StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
             ).get_spend_support_txo_ops()
+        spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
+        if spent_support:
+            supported_name = self._get_pending_claim_name(spent_support)
+            self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
+            activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
+            self.removed_active_support[spent_support].append(support_amount)
+            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
+            return StagedClaimtrieSupport(
+                spent_support, txin_num, txin.prev_idx, support_amount
+            ).get_spend_support_txo_ops() + StagedActivation(
+                ACTIVATED_SUPPORT_TXO_TYPE, spent_support, txin_num, txin.prev_idx, activation, supported_name,
+                support_amount
+            ).get_remove_activate_ops()
         return []
 
-    def _remove_claim(self, txin, spent_claims, zero_delay_claims):
+    def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]):
         txin_num = self.db.transaction_num_mapping[txin.prev_hash]
         if (txin_num, txin.prev_idx) in self.pending_claims:
             spent = self.pending_claims[(txin_num, txin.prev_idx)]
-            name = spent.name
-            spent_claims[spent.claim_hash] = (txin_num, txin.prev_idx, name)
-            # print(f"spend lbry://{name}#{spent.claim_hash.hex()}")
         else:
-            spent_claim_hash_and_name = self.db.claim_hash_and_name_from_txo(
+            spent_claim_hash_and_name = self.db.get_claim_from_txo(
                 txin_num, txin.prev_idx
             )
             if not spent_claim_hash_and_name:  # txo is not a claim
                 return []
-            prev_claim_hash = spent_claim_hash_and_name.claim_hash
-
-            prev_signing_hash = self.db.get_channel_for_claim(prev_claim_hash)
-            prev_claims_in_channel_count = None
-            if prev_signing_hash:
-                prev_claims_in_channel_count = self.db.get_claims_in_channel_count(
-                    prev_signing_hash
-                )
-            prev_effective_amount = self.db.get_effective_amount(
-                prev_claim_hash
-            )
-            k, v = self.db.get_root_claim_txo_and_current_amount(prev_claim_hash)
-            claim_root_tx_num = v.root_tx_num
-            claim_root_idx = v.root_position
-            prev_amount = v.amount
-            name = v.name
-            tx_num = k.tx_num
-            position = k.position
-            activation_height = v.activation
-            height = bisect_right(self.db.tx_counts, tx_num)
+            claim_hash = spent_claim_hash_and_name.claim_hash
+            signing_hash = self.db.get_channel_for_claim(claim_hash)
+            k, v = self.db.get_claim_txo(claim_hash)
             spent = StagedClaimtrieItem(
-                name, prev_claim_hash, prev_amount, prev_effective_amount,
-                activation_height, get_expiration_height(height), txin_num, txin.prev_idx, claim_root_tx_num,
-                claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
+                v.name, claim_hash, v.amount,
+                self.coin.get_expiration_height(bisect_right(self.db.tx_counts, txin_num)),
+                txin_num, txin.prev_idx, v.root_tx_num, v.root_position, signing_hash
             )
-            spent_claims[prev_claim_hash] = (txin_num, txin.prev_idx, name)
-            # print(f"spend lbry://{spent_claims[prev_claim_hash][2]}#{prev_claim_hash.hex()}")
-        if spent.claim_hash not in self.effective_amount_changes:
-            self.effective_amount_changes[spent.claim_hash].append(spent.effective_amount)
-        self.effective_amount_changes[spent.claim_hash].append(-spent.amount)
-        if (name, spent.claim_hash) in zero_delay_claims:
-            zero_delay_claims.pop((name, spent.claim_hash))
+        spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.name)
+        print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
         return spent.get_spend_claim_txo_ops()
 
-    def _remove_claim_or_support(self, txin, spent_claims, zero_delay_claims):
-        spend_claim_ops = self._remove_claim(txin, spent_claims, zero_delay_claims)
+    def _spend_claim_or_support_txo(self, txin, spent_claims):
+        spend_claim_ops = self._spend_claim_txo(txin, spent_claims)
         if spend_claim_ops:
             return spend_claim_ops
-        return self._remove_support(txin, zero_delay_claims)
+        return self._spend_support_txo(txin)
 
-    def _abandon(self, spent_claims) -> typing.Tuple[List['RevertableOp'], typing.Set[str]]:
+    def _abandon_claim(self, claim_hash, tx_num, nout, name) -> List['RevertableOp']:
+        if (tx_num, nout) in self.pending_claims:
+            pending = self.pending_claims.pop((tx_num, nout))
+            self.staged_pending_abandoned[pending.claim_hash] = pending
+            claim_root_tx_num, claim_root_idx = pending.root_claim_tx_num, pending.root_claim_tx_position
+            prev_amount, prev_signing_hash = pending.amount, pending.signing_hash
+            expiration = self.coin.get_expiration_height(self.height)
+        else:
+            k, v = self.db.get_claim_txo(
+                claim_hash
+            )
+            claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
+            prev_signing_hash = self.db.get_channel_for_claim(claim_hash)
+            expiration = self.coin.get_expiration_height(bisect_right(self.db.tx_counts, tx_num))
+        self.staged_pending_abandoned[claim_hash] = staged = StagedClaimtrieItem(
+            name, claim_hash, prev_amount, expiration, tx_num, nout, claim_root_tx_num,
+            claim_root_idx, prev_signing_hash
+        )
+
+        self.pending_supports[claim_hash].clear()
+        self.pending_supports.pop(claim_hash)
+
+        return staged.get_abandon_ops(self.db.db)
+
+    def _abandon(self, spent_claims) -> List['RevertableOp']:
         # Handle abandoned claims
         ops = []
 
-        controlling_claims = {}
-        need_takeover = set()
+        for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
+            print(f"\tabandon lbry://{name}#{abandoned_claim_hash.hex()} {tx_num} {nout}")
+            ops.extend(self._abandon_claim(abandoned_claim_hash, tx_num, nout, name))
+        return ops
 
-        for abandoned_claim_hash, (prev_tx_num, prev_idx, name) in spent_claims.items():
-            # print(f"\tabandon lbry://{name}#{abandoned_claim_hash.hex()} {prev_tx_num} {prev_idx}")
-
-            if (prev_tx_num, prev_idx) in self.pending_claims:
-                pending = self.pending_claims.pop((prev_tx_num, prev_idx))
-                self.staged_pending_abandoned[pending.claim_hash] = pending
-                claim_root_tx_num = pending.root_claim_tx_num
-                claim_root_idx = pending.root_claim_tx_position
-                prev_amount = pending.amount
-                prev_signing_hash = pending.signing_hash
-                prev_effective_amount = pending.effective_amount
-                prev_claims_in_channel_count = pending.claims_in_channel_count
-            else:
-                k, v = self.db.get_root_claim_txo_and_current_amount(
-                    abandoned_claim_hash
-                )
-                claim_root_tx_num = v.root_tx_num
-                claim_root_idx = v.root_position
-                prev_amount = v.amount
-                prev_signing_hash = self.db.get_channel_for_claim(abandoned_claim_hash)
-                prev_claims_in_channel_count = None
-                if prev_signing_hash:
-                    prev_claims_in_channel_count = self.db.get_claims_in_channel_count(
-                        prev_signing_hash
-                    )
-                prev_effective_amount = self.db.get_effective_amount(
-                    abandoned_claim_hash
-                )
-
-            if name not in controlling_claims:
-                controlling_claims[name] = self.db.get_controlling_claim(name)
-            controlling = controlling_claims[name]
-            if controlling and controlling.claim_hash == abandoned_claim_hash:
-                need_takeover.add(name)
-                # print("needs takeover")
-
-            for (support_tx_num, support_tx_idx) in self.pending_supports[abandoned_claim_hash]:
-                _, support_amount = self.pending_support_txos.pop((support_tx_num, support_tx_idx))
-                ops.extend(
-                    StagedClaimtrieSupport(
-                        abandoned_claim_hash, support_tx_num, support_tx_idx, support_amount
-                    ).get_spend_support_txo_ops()
-                )
-                # print(f"\tremove pending support for abandoned lbry://{name}#{abandoned_claim_hash.hex()} {support_tx_num} {support_tx_idx}")
-            self.pending_supports[abandoned_claim_hash].clear()
-            self.pending_supports.pop(abandoned_claim_hash)
-
-            for (support_tx_num, support_tx_idx, support_amount) in self.db.get_supports(abandoned_claim_hash):
-                ops.extend(
-                    StagedClaimtrieSupport(
-                        abandoned_claim_hash, support_tx_num, support_tx_idx, support_amount
-                    ).get_spend_support_txo_ops()
-                )
-                # print(f"\tremove support for abandoned lbry://{name}#{abandoned_claim_hash.hex()} {support_tx_num} {support_tx_idx}")
-
-            height = bisect_right(self.db.tx_counts, prev_tx_num)
-            activation_height = 0
-
-            if abandoned_claim_hash in self.effective_amount_changes:
-                # print("pop")
-                self.effective_amount_changes.pop(abandoned_claim_hash)
-            self.pending_abandon.add(abandoned_claim_hash)
-
-            # print(f"\tabandoned lbry://{name}#{abandoned_claim_hash.hex()}, {len(need_takeover)} names need takeovers")
-            ops.extend(
-                StagedClaimtrieItem(
-                    name, abandoned_claim_hash, prev_amount, prev_effective_amount,
-                    activation_height, get_expiration_height(height), prev_tx_num, prev_idx, claim_root_tx_num,
-                    claim_root_idx, prev_signing_hash, prev_claims_in_channel_count
-                ).get_abandon_ops(self.db.db)
-            )
-        return ops, need_takeover
-
-    def _expire_claims(self, height: int, zero_delay_claims):
+    def _expire_claims(self, height: int):
         expired = self.db.get_expired_by_height(height)
         spent_claims = {}
         ops = []
-        names_needing_takeover = set()
         for expired_claim_hash, (tx_num, position, name, txi) in expired.items():
             if (tx_num, position) not in self.pending_claims:
-                ops.extend(self._remove_claim(txi, spent_claims, zero_delay_claims))
+                ops.extend(self._spend_claim_txo(txi, spent_claims))
         if expired:
             # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
-            abandon_ops, _names_needing_takeover = self._abandon(spent_claims)
-            if abandon_ops:
-                ops.extend(abandon_ops)
-                names_needing_takeover.update(_names_needing_takeover)
             ops.extend(self._abandon(spent_claims))
-        return ops, names_needing_takeover
+        return ops
 
-    def _get_pending_claim_amount(self, claim_hash: bytes) -> int:
-        if claim_hash in self.pending_claim_txos:
-            return self.pending_claims[self.pending_claim_txos[claim_hash]].amount
-        return self.db.get_claim_amount(claim_hash)
+    def _get_pending_claim_amount(self, name: str, claim_hash: bytes) -> int:
+        if (name, claim_hash) in self.staged_activated_claim:
+            return self.staged_activated_claim[(name, claim_hash)]
+        return self.db._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.height + 1)
 
-    def _get_pending_claim_name(self, claim_hash: bytes) -> str:
+    def _get_pending_claim_name(self, claim_hash: bytes) -> Optional[str]:
         assert claim_hash is not None
         if claim_hash in self.pending_claims:
             return self.pending_claims[claim_hash].name
-        claim = self.db.get_claim_from_txo(claim_hash)
-        return claim.name
+        claim_info = self.db.get_claim_txo(claim_hash)
+        if claim_info:
+            return claim_info[1].name
 
-    def _get_pending_effective_amount(self, claim_hash: bytes) -> int:
-        claim_amount = self._get_pending_claim_amount(claim_hash) or 0
-        support_amount = self.db.get_support_amount(claim_hash) or 0
-        return claim_amount + support_amount + sum(
-            self.pending_support_txos[support_txnum, support_n][1]
-            for (support_txnum, support_n) in self.pending_supports.get(claim_hash, [])
-        )  # TODO: subtract pending spend supports
+    def _get_pending_supported_amount(self, claim_hash: bytes) -> int:
+        support_amount = self.db._get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.height + 1) or 0
+        amount = support_amount + sum(
+            self.staged_activated_support.get(claim_hash, [])
+        )
+        if claim_hash in self.removed_active_support:
+            return amount - sum(self.removed_active_support[claim_hash])
+        return amount
 
-    def _get_name_takeover_ops(self, height: int, name: str,
-                               activated_claims: typing.Set[bytes]) -> List['RevertableOp']:
-        controlling = self.db.get_controlling_claim(name)
-        if not controlling or controlling.claim_hash in self.pending_abandon:
-            # print("no controlling claim for ", name)
-            bid_queue = {
-                claim_hash: self._get_pending_effective_amount(claim_hash) for claim_hash in activated_claims
-            }
-            winning_claim = max(bid_queue, key=lambda k: bid_queue[k])
-            if winning_claim in self.pending_claim_txos:
-                s = self.pending_claims[self.pending_claim_txos[winning_claim]]
-            else:
-                s = self.db.make_staged_claim_item(winning_claim)
-            ops = []
-            if s.activation_height > height:
-                ops.extend(get_force_activate_ops(
-                    name, s.tx_num, s.position, s.claim_hash, s.root_claim_tx_num, s.root_claim_tx_position,
-                    s.amount, s.effective_amount, s.activation_height, height
-                ))
-            ops.extend(get_takeover_name_ops(name, winning_claim, height))
-            return ops
-        else:
-            # print(f"current controlling claim for {name}#{controlling.claim_hash.hex()}")
-            controlling_effective_amount = self._get_pending_effective_amount(controlling.claim_hash)
-            bid_queue = {
-                claim_hash: self._get_pending_effective_amount(claim_hash) for claim_hash in activated_claims
-            }
-            highest_newly_activated = max(bid_queue, key=lambda k: bid_queue[k])
-            if bid_queue[highest_newly_activated] > controlling_effective_amount:
-                # print(f"takeover controlling claim for {name}#{controlling.claim_hash.hex()}")
-                return get_takeover_name_ops(name, highest_newly_activated, height, controlling)
-            print(bid_queue[highest_newly_activated], controlling_effective_amount)
-            # print("no takeover")
-            return []
+    def _get_pending_effective_amount(self, name: str, claim_hash: bytes) -> int:
+        claim_amount = self._get_pending_claim_amount(name, claim_hash)
+        support_amount = self._get_pending_supported_amount(claim_hash)
+        return claim_amount + support_amount
 
-    def _get_takeover_ops(self, height: int, zero_delay_claims) -> List['RevertableOp']:
+    def _get_takeover_ops(self, height: int) -> List['RevertableOp']:
         ops = []
-        pending = defaultdict(set)
-
-        # get non delayed takeovers for new names
-        for (name, claim_hash) in zero_delay_claims:
-            if claim_hash not in self.pending_abandon:
-                pending[name].add(claim_hash)
-                # print("zero delay activate", name, claim_hash.hex())
 
         # get takeovers from claims activated at this block
-        for activated in self.db.get_activated_claims_at_height(height):
-            if activated.claim_hash not in self.pending_abandon:
-                pending[activated.name].add(activated.claim_hash)
-                # print("delayed activate")
+        activated_at_height = self.db.get_activated_at_height(height)
+        controlling_claims = {}
+        abandoned_need_takeover = []
+        abandoned_support_check_need_takeover = defaultdict(list)
 
-        # get takeovers from supports for controlling claims being abandoned
-        for abandoned_claim_hash in self.pending_abandon:
-            if abandoned_claim_hash in self.staged_pending_abandoned:
-                abandoned = self.staged_pending_abandoned[abandoned_claim_hash]
-                controlling = self.db.get_controlling_claim(abandoned.name)
-                if controlling and controlling.claim_hash == abandoned_claim_hash and abandoned.name not in pending:
-                    pending[abandoned.name].update(self.db.get_claims_for_name(abandoned.name))
+        def get_controlling(_name):
+            if _name not in controlling_claims:
+                _controlling = self.db.get_controlling_claim(_name)
+                controlling_claims[_name] = _controlling
             else:
-                k, v = self.db.get_root_claim_txo_and_current_amount(abandoned_claim_hash)
-                controlling_claim = self.db.get_controlling_claim(v.name)
-                if controlling_claim and abandoned_claim_hash == controlling_claim.claim_hash and v.name not in pending:
-                    pending[v.name].update(self.db.get_claims_for_name(v.name))
-                    # print("check abandoned winning")
+                _controlling = controlling_claims[_name]
+            return _controlling
 
+        # determine names needing takeover/deletion due to controlling claims being abandoned
+        # and add ops to deactivate abandoned claims
+        for claim_hash, staged in self.staged_pending_abandoned.items():
+            controlling = get_controlling(staged.name)
+            if controlling and controlling.claim_hash == claim_hash:
+                abandoned_need_takeover.append(staged.name)
+                print(f"\t{staged.name} needs takeover")
+            activation = self.db.get_activation(staged.tx_num, staged.position)
+            if activation > 0:
+                # removed queued future activation from the db
+                ops.extend(
+                    StagedActivation(
+                        ACTIVATED_CLAIM_TXO_TYPE, staged.claim_hash, staged.tx_num, staged.position,
+                        activation, staged.name, staged.amount
+                    ).get_remove_activate_ops()
+                )
+            else:
+                # it hadn't yet been activated, db returns -1 for non-existent txos
+                pass
 
+        # build set of controlling claims that had activated supports spent to check them for takeovers later
+        for claim_hash, amounts in self.removed_active_support.items():
+            name = self._get_pending_claim_name(claim_hash)
+            controlling = get_controlling(name)
+            if controlling and controlling.claim_hash == claim_hash and name not in abandoned_need_takeover:
+                abandoned_support_check_need_takeover[(name, claim_hash)].extend(amounts)
 
-        # get takeovers from controlling claims being abandoned
+        # prepare to activate or delay activation of the pending claims being added this block
+        for (tx_num, nout), staged in self.pending_claims.items():
+            controlling = get_controlling(staged.name)
+            delay = 0
+            if not controlling or staged.claim_hash == controlling.claim_hash or \
+                    controlling.claim_hash in abandoned_need_takeover:
+                pass
+            else:
+                controlling_effective_amount = self._get_pending_effective_amount(staged.name, controlling.claim_hash)
+                amount = self._get_pending_effective_amount(staged.name, staged.claim_hash)
+                delay = 0
+                #  if this is an OP_CLAIM or the amount appears to trigger a takeover, delay
+                if not staged.is_update or (amount > controlling_effective_amount):
+                    delay = self.coin.get_delay_for_name(height - controlling.height)
+            ops.extend(
+                StagedActivation(
+                    ACTIVATED_CLAIM_TXO_TYPE, staged.claim_hash, staged.tx_num, staged.position,
+                    height + delay, staged.name, staged.amount
+                ).get_activate_ops()
+            )
+            if delay == 0:  # if delay was 0 it needs to be considered for takeovers
+                activated_at_height[PendingActivationValue(staged.claim_hash, staged.name)].append(
+                    PendingActivationKey(height, ACTIVATED_CLAIM_TXO_TYPE, tx_num, nout)
+                )
 
-        for name, activated_claims in pending.items():
-            ops.extend(self._get_name_takeover_ops(height, name, activated_claims))
+        # and the supports
+        for (tx_num, nout), (claim_hash, amount) in self.pending_support_txos.items():
+            if claim_hash in self.staged_pending_abandoned:
+                continue
+            elif claim_hash in self.pending_claim_txos:
+                name = self.pending_claims[self.pending_claim_txos[claim_hash]].name
+                is_update = self.pending_claims[self.pending_claim_txos[claim_hash]].is_update
+            else:
+                k, v = self.db.get_claim_txo(claim_hash)
+                name = v.name
+                is_update = (v.root_tx_num, v.root_position) != (k.tx_num, k.position)
+
+            controlling = get_controlling(name)
+            delay = 0
+            if not controlling or claim_hash == controlling.claim_hash:
+                pass
+            elif not is_update or self._get_pending_effective_amount(staged.name,
+                        claim_hash) > self._get_pending_effective_amount(staged.name, controlling.claim_hash):
+                delay = self.coin.get_delay_for_name(height - controlling.height)
+            if delay == 0:
+                activated_at_height[PendingActivationValue(claim_hash, name)].append(
+                    PendingActivationKey(height + delay, ACTIVATED_SUPPORT_TXO_TYPE, tx_num, nout)
+                )
+            ops.extend(
+                StagedActivation(
+                    ACTIVATED_SUPPORT_TXO_TYPE, claim_hash, tx_num, nout,
+                    height + delay, name, amount
+                ).get_activate_ops()
+            )
+
+        # add the activation/delayed-activation ops
+        for activated, activated_txos in activated_at_height.items():
+            controlling = get_controlling(activated.name)
+
+            if activated.claim_hash in self.staged_pending_abandoned:
+                continue
+            reactivate = False
+            if not controlling or controlling.claim_hash == activated.claim_hash:
+                # there is no delay for claims to a name without a controlling value or to the controlling value
+                reactivate = True
+            for activated_txo in activated_txos:
+                if activated_txo.is_support and (activated_txo.tx_num, activated_txo.position) in \
+                        self.pending_removed_support[activated.name][activated.claim_hash]:
+                    print("\tskip activate support for pending abandoned claim")
+                    continue
+                if activated_txo.is_claim:
+                    txo_type = ACTIVATED_CLAIM_TXO_TYPE
+                    txo_tup = (activated_txo.tx_num, activated_txo.position)
+                    if txo_tup in self.pending_claims:
+                        amount = self.pending_claims[txo_tup].amount
+                    else:
+                        amount = self.db.get_claim_txo_amount(
+                            activated.claim_hash, activated_txo.tx_num, activated_txo.position
+                        )
+                    self.staged_activated_claim[(activated.name, activated.claim_hash)] = amount
+                else:
+                    txo_type = ACTIVATED_SUPPORT_TXO_TYPE
+                    txo_tup = (activated_txo.tx_num, activated_txo.position)
+                    if txo_tup in self.pending_support_txos:
+                        amount = self.pending_support_txos[txo_tup][1]
+                    else:
+                        amount = self.db.get_support_txo_amount(
+                            activated.claim_hash, activated_txo.tx_num, activated_txo.position
+                        )
+                    self.staged_activated_support[activated.claim_hash].append(amount)
+                self.pending_activated[activated.name][activated.claim_hash].append((activated_txo, amount))
+                print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
+                      f"lbry://{activated.name}#{activated.claim_hash.hex()} @ {activated_txo.height}")
+                if reactivate:
+                    ops.extend(
+                        StagedActivation(
+                            txo_type, activated.claim_hash, activated_txo.tx_num, activated_txo.position,
+                            activated_txo.height, activated.name, amount
+                        ).get_activate_ops()
+                    )
+
+        # go through claims where the controlling claim or supports to the controlling claim have been abandoned
+        # check if takeovers are needed or if the name node is now empty
+        need_reactivate_if_takes_over = {}
+        for need_takeover in abandoned_need_takeover:
+            existing = self.db.get_claim_txos_for_name(need_takeover)
+            has_candidate = False
+            # add existing claims to the queue for the takeover
+            # track that we need to reactivate these if one of them becomes controlling
+            for candidate_claim_hash, (tx_num, nout) in existing.items():
+                if candidate_claim_hash in self.staged_pending_abandoned:
+                    continue
+                has_candidate = True
+                existing_activation = self.db.get_activation(tx_num, nout)
+                activate_key = PendingActivationKey(
+                    existing_activation, ACTIVATED_CLAIM_TXO_TYPE, tx_num, nout
+                )
+                self.pending_activated[need_takeover][candidate_claim_hash].append((
+                    activate_key, self.db.get_claim_txo_amount(candidate_claim_hash, tx_num, nout)
+                ))
+                need_reactivate_if_takes_over[(need_takeover, candidate_claim_hash)] = activate_key
+                print(f"\tcandidate to takeover abandoned controlling claim for lbry://{need_takeover} - "
+                      f"{activate_key.tx_num}:{activate_key.position} {activate_key.is_claim}")
+            if not has_candidate:
+                # remove name takeover entry, the name is now unclaimed
+                controlling = get_controlling(need_takeover)
+                ops.extend(get_remove_name_ops(need_takeover, controlling.claim_hash, controlling.height))
+
+        # process takeovers from the combined newly added and previously scheduled claims
+        checked_names = set()
+        for name, activated in self.pending_activated.items():
+            checked_names.add(name)
+            if name in abandoned_need_takeover:
+                print(f'\tabandoned {name} need takeover')
+            controlling = controlling_claims[name]
+            amounts = {
+                claim_hash: self._get_pending_effective_amount(name, claim_hash)
+                for claim_hash in activated.keys() if claim_hash not in self.staged_pending_abandoned
+            }
+            if controlling and controlling.claim_hash not in self.staged_pending_abandoned:
+                amounts[controlling.claim_hash] = self._get_pending_effective_amount(name, controlling.claim_hash)
+            winning = max(amounts, key=lambda x: amounts[x])
+            if not controlling or (winning != controlling.claim_hash and name in abandoned_need_takeover) or ((winning != controlling.claim_hash) and
+                                   (amounts[winning] > amounts[controlling.claim_hash])):
+                if (name, winning) in need_reactivate_if_takes_over:
+                    previous_pending_activate = need_reactivate_if_takes_over[(name, winning)]
+                    amount = self.db.get_claim_txo_amount(
+                        winning, previous_pending_activate.tx_num, previous_pending_activate.position
+                    )
+                    if winning in self.pending_claim_txos:
+                        tx_num, position = self.pending_claim_txos[winning]
+                        amount = self.pending_claims[(tx_num, position)].amount
+                    else:
+                        tx_num, position = previous_pending_activate.tx_num, previous_pending_activate.position
+                    if previous_pending_activate.height > height:
+                        # the claim had a pending activation in the future, move it to now
+                        ops.extend(
+                            StagedActivation(
+                                ACTIVATED_CLAIM_TXO_TYPE, winning, tx_num,
+                                position, previous_pending_activate.height, name, amount
+                            ).get_remove_activate_ops()
+                        )
+                        ops.extend(
+                            StagedActivation(
+                                ACTIVATED_CLAIM_TXO_TYPE, winning, tx_num,
+                                position, height, name, amount
+                            ).get_activate_ops()
+                        )
+                    ops.extend(get_takeover_name_ops(name, winning, height))
+                else:
+                    ops.extend(get_takeover_name_ops(name, winning, height))
+
+            elif winning == controlling.claim_hash:
+                print("\tstill winning")
+                pass
+            else:
+                print("\tno takeover")
+                pass
+
+        # handle remaining takeovers from abandoned supports
+        for (name, claim_hash), amounts in abandoned_support_check_need_takeover.items():
+            if name in checked_names:
+                continue
+            checked_names.add(name)
+
+            controlling = get_controlling(name)
+
+            amounts = {
+                claim_hash: self._get_pending_effective_amount(name, claim_hash)
+                for claim_hash in self.db.get_claims_for_name(name) if claim_hash not in self.staged_pending_abandoned
+            }
+            if controlling and controlling.claim_hash not in self.staged_pending_abandoned:
+                amounts[controlling.claim_hash] = self._get_pending_effective_amount(name, controlling.claim_hash)
+            winning = max(amounts, key=lambda x: amounts[x])
+            if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
+                print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
+                ops.extend(get_takeover_name_ops(name, winning, height))
+
         return ops
 
     def advance_block(self, block):
-        # print("advance ", height)
         height = self.height + 1
+        print("advance ", height)
         txs: List[Tuple[Tx, bytes]] = block.transactions
         block_hash = self.coin.header_hash(block.header)
 
@@ -881,34 +875,32 @@ class BlockProcessor:
                 undo_info_append(cache_value)
                 append_hashX(cache_value[:-12])
 
-                spend_claim_or_support_ops = self._remove_claim_or_support(txin, spent_claims, zero_delay_claims)
+                spend_claim_or_support_ops = self._spend_claim_or_support_txo(txin, spent_claims)
                 if spend_claim_or_support_ops:
                     claimtrie_stash_extend(spend_claim_or_support_ops)
 
             # Add the new UTXOs
-            for idx, txout in enumerate(tx.outputs):
+            for nout, txout in enumerate(tx.outputs):
                 # Get the hashX.  Ignore unspendable outputs
                 hashX = hashX_from_script(txout.pk_script)
                 if hashX:
                     append_hashX(hashX)
-                    put_utxo(tx_hash + pack('<H', idx), hashX + tx_numb + pack('<Q', txout.value))
+                    put_utxo(tx_hash + pack('<H', nout), hashX + tx_numb + pack('<Q', txout.value))
 
                 # add claim/support txo
                 script = OutputScript(txout.pk_script)
                 script.parse()
-                txo = Output(txout.value, script)
 
                 claim_or_support_ops = self._add_claim_or_support(
-                    height, tx_hash, tx_count, idx, txo, txout, script, spent_claims, zero_delay_claims
+                    height, tx_hash, tx_count, nout, Output(txout.value, script), spent_claims
                 )
                 if claim_or_support_ops:
                     claimtrie_stash_extend(claim_or_support_ops)
 
             # Handle abandoned claims
-            abandon_ops, abandoned_controlling_need_takeover = self._abandon(spent_claims)
+            abandon_ops = self._abandon(spent_claims)
             if abandon_ops:
                 claimtrie_stash_extend(abandon_ops)
-                abandoned_or_expired_controlling.update(abandoned_controlling_need_takeover)
 
             append_hashX_by_tx(hashXs)
             update_touched(hashXs)
@@ -917,14 +909,13 @@ class BlockProcessor:
             tx_count += 1
 
         # handle expired claims
-        expired_ops, expired_need_takeover = self._expire_claims(height, zero_delay_claims)
+        expired_ops = self._expire_claims(height)
         if expired_ops:
-            # print(f"************\nexpire claims at block {height}\n************")
-            abandoned_or_expired_controlling.update(expired_need_takeover)
+            print(f"************\nexpire claims at block {height}\n************")
             claimtrie_stash_extend(expired_ops)
 
         # activate claims and process takeovers
-        takeover_ops = self._get_takeover_ops(height, zero_delay_claims)
+        takeover_ops = self._get_takeover_ops(height)
         if takeover_ops:
             claimtrie_stash_extend(takeover_ops)
 
@@ -938,13 +929,6 @@ class BlockProcessor:
         self.db.hist_unflushed_count += _count
         self.tx_count = tx_count
         self.db.tx_counts.append(self.tx_count)
-
-        for touched_claim_hash, amount_changes in self.effective_amount_changes.items():
-            new_effective_amount = sum(amount_changes)
-            assert new_effective_amount >= 0, f'{new_effective_amount}, {touched_claim_hash.hex()}'
-            claimtrie_stash.extend(
-                self.db.get_update_effective_amount_ops(touched_claim_hash, new_effective_amount)
-            )
 
         undo_claims = b''.join(op.invert().pack() for op in claimtrie_stash)
         self.claimtrie_stash.extend(claimtrie_stash)
@@ -961,14 +945,18 @@ class BlockProcessor:
 
         self.db.flush_dbs(self.flush_data())
 
-        self.effective_amount_changes.clear()
+        # self.effective_amount_changes.clear()
 
         self.pending_claims.clear()
         self.pending_claim_txos.clear()
         self.pending_supports.clear()
         self.pending_support_txos.clear()
-        self.pending_abandon.clear()
+        self.pending_removed_support.clear()
         self.staged_pending_abandoned.clear()
+        self.removed_active_support.clear()
+        self.staged_activated_support.clear()
+        self.staged_activated_claim.clear()
+        self.pending_activated.clear()
 
         for cache in self.search_cache.values():
             cache.clear()
