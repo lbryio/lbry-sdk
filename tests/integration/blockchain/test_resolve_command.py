@@ -1,6 +1,7 @@
 import asyncio
 import json
 import hashlib
+from bisect import bisect_right
 from binascii import hexlify, unhexlify
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction, Output
@@ -43,35 +44,52 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertMatchClaim(self, claim_id):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimbyid', claim_id))
-        resolved, _ = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
-        print(expected)
-        print(resolved)
-        self.assertDictEqual({
-            'claim_id': expected['claimId'],
-            'activation_height': expected['validAtHeight'],
-            'last_takeover_height': expected['lastTakeoverHeight'],
-            'txid': expected['txId'],
-            'nout': expected['n'],
-            'amount': expected['amount'],
-            'effective_amount': expected['effectiveAmount']
-        }, {
-            'claim_id': resolved.claim_hash.hex(),
-            'activation_height': resolved.activation_height,
-            'last_takeover_height': resolved.last_takeover_height,
-            'txid': resolved.tx_hash[::-1].hex(),
-            'nout': resolved.position,
-            'amount': resolved.amount,
-            'effective_amount': resolved.effective_amount
-        })
-        return resolved
+        claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
+        if not expected:
+            self.assertIsNone(claim)
+            return
+        self.assertEqual(expected['claimId'], claim.claim_hash.hex())
+        self.assertEqual(expected['validAtHeight'], claim.activation_height)
+        self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)
+        self.assertEqual(expected['txId'], claim.tx_hash[::-1].hex())
+        self.assertEqual(expected['n'], claim.position)
+        self.assertEqual(expected['amount'], claim.amount)
+        self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
+        return claim
 
     async def assertMatchClaimIsWinning(self, name, claim_id):
         self.assertEqual(claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
         await self.assertMatchClaim(claim_id)
+        await self.assertMatchClaimsForName(name)
+
+    async def assertMatchClaimsForName(self, name):
+        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name))
+
+        print(len(expected['claims']), 'from lbrycrd for ', name)
+
+        db = self.conductor.spv_node.server.bp.db
+
+        def check_supports(claim_id, lbrycrd_supports):
+            for i, (tx_num, position, amount) in enumerate(db.get_supports(bytes.fromhex(claim_id))):
+                support = lbrycrd_supports[i]
+                self.assertEqual(support['txId'], db.total_transactions[tx_num][::-1].hex())
+                self.assertEqual(support['n'], position)
+                self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
+                self.assertEqual(support['validAtHeight'], db.get_activation(tx_num, position, is_support=True))
+
+        # self.assertEqual(len(expected['claims']), len(db_claims.claims))
+        # self.assertEqual(expected['lastTakeoverHeight'], db_claims.lastTakeoverHeight)
+
+        for c in expected['claims']:
+            check_supports(c['claimId'], c['supports'])
+            claim_hash = bytes.fromhex(c['claimId'])
+            self.assertEqual(c['validAtHeight'], db.get_activation(
+                db.total_transactions.index(bytes.fromhex(c['txId'])[::-1]), c['n']
+            ))
+            self.assertEqual(c['effectiveAmount'], db.get_effective_amount(claim_hash))
 
 
 class ResolveCommand(BaseResolveTestCase):
-
     async def test_resolve_response(self):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '0.01')
@@ -170,6 +188,7 @@ class ResolveCommand(BaseResolveTestCase):
             await self.stream_create('foo', '0.9', allow_duplicate_name=True))
         # plain winning claim
         await self.assertResolvesToClaimId('foo', claim_id3)
+
         # amount order resolution
         await self.assertResolvesToClaimId('foo$1', claim_id3)
         await self.assertResolvesToClaimId('foo$2', claim_id2)
@@ -275,9 +294,7 @@ class ResolveCommand(BaseResolveTestCase):
         winner_id = self.get_claim_id(c)
 
         # winning_one = await self.check_lbrycrd_winning(one)
-        winning_two = await self.assertMatchWinningClaim(two)
-
-        self.assertEqual(winner_id, winning_two.claim_hash.hex())
+        await self.assertMatchClaimIsWinning(two, winner_id)
 
         r1 = await self.resolve(f'lbry://{one}')
         r2 = await self.resolve(f'lbry://{two}')
@@ -385,24 +402,37 @@ class ResolveCommand(BaseResolveTestCase):
 
 
 class ResolveClaimTakeovers(BaseResolveTestCase):
-    async def test_activation_delay(self):
+    async def _test_activation_delay(self):
         name = 'derp'
         # initially claim the name
-        first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        first_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
         # a claim of higher amount made now will have a takeover delay of 10
         second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
         # sanity check
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(9)
         # not yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(1)
         # the new claim should have activated
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        return first_claim_id, second_claim_id
+
+    async def test_activation_delay(self):
+        await self._test_activation_delay()
+
+    async def test_activation_delay_then_abandon_then_reclaim(self):
+        name = 'derp'
+        first_claim_id, second_claim_id = await self._test_activation_delay()
+        await self.daemon.jsonrpc_txo_spend(type='stream', claim_id=first_claim_id)
+        await self.daemon.jsonrpc_txo_spend(type='stream', claim_id=second_claim_id)
+        await self.generate(1)
+        await self.assertNoClaimForName(name)
+        await self._test_activation_delay()
 
     async def test_block_takeover_with_delay_1_support(self):
         name = 'derp'
@@ -415,46 +445,46 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # sanity check
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(8)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # prevent the takeover by adding a support one block before the takeover happens
         await self.support_create(first_claim_id, bid='1.0')
         # one more block until activation
         await self.generate(1)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
 
     async def test_block_takeover_with_delay_0_support(self):
         name = 'derp'
         # initially claim the name
         first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
         # a claim of higher amount made now will have a takeover delay of 10
         second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
         # sanity check
-        self.assertNotEqual(first_claim_id, second_claim_id)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(9)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # prevent the takeover by adding a support on the same block the takeover would happen
         await self.support_create(first_claim_id, bid='1.0')
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
 
     async def _test_almost_prevent_takeover(self, name: str, blocks: int = 9):
         # initially claim the name
         first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
         # a claim of higher amount made now will have a takeover delay of 10
         second_claim_id = (await self.stream_create(name, '0.2', allow_duplicate_name=True))['outputs'][0]['claim_id']
         # sanity check
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(blocks)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # prevent the takeover by adding a support on the same block the takeover would happen
         tx = await self.daemon.jsonrpc_support_create(first_claim_id, '1.0')
         await self.ledger.wait(tx)
@@ -465,7 +495,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         first_claim_id, second_claim_id, tx = await self._test_almost_prevent_takeover(name, 9)
         await self.daemon.jsonrpc_txo_spend(type='support', txid=tx.id)
         await self.generate(1)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
 
     async def test_almost_prevent_takeover_remove_support_one_block_after_supported(self):
         name = 'derp'
@@ -473,35 +503,35 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(1)
         await self.daemon.jsonrpc_txo_spend(type='support', txid=tx.id)
         await self.generate(1)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
 
     async def test_abandon_before_takeover(self):
         name = 'derp'
         # initially claim the name
         first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
         # a claim of higher amount made now will have a takeover delay of 10
         second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
         # sanity check
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(8)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # abandon the winning claim
         await self.daemon.jsonrpc_txo_spend(type='stream', claim_id=first_claim_id)
         await self.generate(1)
         # the takeover and activation should happen a block earlier than they would have absent the abandon
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
         await self.generate(1)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
 
     async def test_abandon_before_takeover_no_delay_update(self):  # TODO: fix race condition line 506
         name = 'derp'
         # initially claim the name
         first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
         # block 527
         # a claim of higher amount made now will have a takeover delay of 10
@@ -510,19 +540,23 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # sanity check
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.assertMatchClaimsForName(name)
         await self.generate(8)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.assertMatchClaimsForName(name)
         # abandon the winning claim
         await self.daemon.jsonrpc_txo_spend(type='stream', claim_id=first_claim_id)
         await self.daemon.jsonrpc_stream_update(second_claim_id, '0.1')
         await self.generate(1)
 
         # the takeover and activation should happen a block earlier than they would have absent the abandon
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.assertMatchClaimsForName(name)
         await self.generate(1)
         # await self.ledger.on_header.where(lambda e: e.height == 537)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.assertMatchClaimsForName(name)
 
     async def test_abandon_controlling_support_before_pending_takeover(self):
         name = 'derp'
@@ -533,54 +567,78 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
         await self.generate(321)
 
-        second_claim_id = (await self.stream_create(name, '1.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        second_claim_id = (await self.stream_create(name, '0.9',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(8)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # abandon the support that causes the winning claim to have the highest staked
         tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id)
         await self.generate(1)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        # await self.assertMatchClaim(second_claim_id)
+
         await self.generate(1)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+
+        await self.assertMatchClaim(first_claim_id)
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
 
     async def test_remove_controlling_support(self):
         name = 'derp'
         # initially claim the name
-        first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
+        first_claim_id = (await self.stream_create(name, '0.2'))['outputs'][0]['claim_id']
         first_support_tx = await self.daemon.jsonrpc_support_create(first_claim_id, '0.9')
         await self.ledger.wait(first_support_tx)
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
 
-        await self.generate(321)  # give the first claim long enough for a 10 block takeover delay
+        await self.generate(320)  # give the first claim long enough for a 10 block takeover delay
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
 
         # make a second claim which will take over the name
-        second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
-        second_claim_support_tx = await self.daemon.jsonrpc_support_create(second_claim_id, '1.0')
-        await self.ledger.wait(second_claim_support_tx)
+        second_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
         self.assertNotEqual(first_claim_id, second_claim_id)
+        second_claim_support_tx = await self.daemon.jsonrpc_support_create(second_claim_id, '1.5')
+        await self.ledger.wait(second_claim_support_tx)
+        await self.generate(1)  # neither the second claim or its support have activated yet
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
 
-        # the name resolves to the first claim
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
-        await self.generate(9)
-        # still resolves to the first claim
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
-        await self.generate(1)   # second claim takes over
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
-        await self.generate(33)  # give the second claim long enough for a 1 block takeover delay
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
-        # abandon the support that causes the winning claim to have the highest staked
-        await self.daemon.jsonrpc_txo_spend(type='support', txid=second_claim_support_tx.id)
+        await self.generate(9)  # claim activates, but is not yet winning
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+        await self.generate(1)  # support activates, takeover happens
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+
+        await self.daemon.jsonrpc_txo_spend(type='support', claim_id=second_claim_id, blocking=True)
+        await self.generate(1)  # support activates, takeover happens
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+    async def test_claim_expiration(self):
+        name = 'derp'
+        # starts at height 206
+        vanishing_claim = (await self.stream_create('vanish', '0.1'))['outputs'][0]['claim_id']
+
+        await self.generate(493)
+        # in block 701 and 702
+        first_claim_id = (await self.stream_create(name, '0.3'))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning('vanish', vanishing_claim)
+        await self.generate(100)  # block 801, expiration fork happened
+        await self.assertNoClaimForName('vanish')
+        # second claim is in block 802
+        second_claim_id = (await self.stream_create(name, '0.2', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(498)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(1)
-        self.assertEqual(second_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
-        await self.generate(1)  # first claim takes over
-        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.generate(100)
+        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.generate(1)
+        await self.assertNoClaimForName(name)
 
 
 class ResolveAfterReorg(BaseResolveTestCase):
-
     async def reorg(self, start):
         blocks = self.ledger.headers.height - start
         self.blockchain.block_expected = start - 1

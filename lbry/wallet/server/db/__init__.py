@@ -12,11 +12,13 @@ class DB_PREFIXES(enum.Enum):
     channel_to_claim = b'J'
 
     claim_short_id_prefix = b'F'
-    claim_effective_amount_prefix = b'D'
+    # claim_effective_amount_prefix = b'D'
     claim_expiration = b'O'
 
     claim_takeover = b'P'
     pending_activation = b'Q'
+    activated_claim_and_support = b'R'
+    active_amount = b'S'
 
     undo_claimtrie = b'M'
 

@@ -45,40 +45,52 @@ class StagedClaimtrieSupport(typing.NamedTuple):
         return self._get_add_remove_support_utxo_ops(add=False)
 
 
-def get_update_effective_amount_ops(name: str, new_effective_amount: int, prev_effective_amount: int, tx_num: int,
-                                    position: int, root_tx_num: int, root_position: int, claim_hash: bytes,
-                                    activation_height: int, prev_activation_height: int,
-                                    signing_hash: Optional[bytes] = None,
-                                    claims_in_channel_count: Optional[int] = None):
-    assert root_position != root_tx_num, f"{tx_num} {position} {root_tx_num} {root_tx_num}"
-    ops = [
-        RevertableDelete(
-            *Prefixes.claim_effective_amount.pack_item(
-                name, prev_effective_amount, tx_num, position, claim_hash, root_tx_num, root_position,
-                prev_activation_height
+class StagedActivation(typing.NamedTuple):
+    txo_type: int
+    claim_hash: bytes
+    tx_num: int
+    position: int
+    activation_height: int
+    name: str
+    amount: int
+
+    def _get_add_remove_activate_ops(self, add=True):
+        op = RevertablePut if add else RevertableDelete
+        print(f"\t{'add' if add else 'remove'} {self.txo_type}, {self.tx_num}, {self.position}, activation={self.activation_height}, {self.name}")
+        return [
+            op(
+                *Prefixes.activated.pack_item(
+                    self.txo_type, self.tx_num, self.position, self.activation_height, self.claim_hash, self.name
+                )
+            ),
+            op(
+                *Prefixes.pending_activation.pack_item(
+                    self.activation_height, self.txo_type, self.tx_num, self.position,
+                    self.claim_hash, self.name
+                )
+            ),
+            op(
+                *Prefixes.active_amount.pack_item(
+                    self.claim_hash, self.txo_type, self.activation_height, self.tx_num, self.position, self.amount
+                )
             )
-        ),
-        RevertablePut(
-            *Prefixes.claim_effective_amount.pack_item(
-                name, new_effective_amount, tx_num, position, claim_hash, root_tx_num, root_position,
-                activation_height
+        ]
+
+    def get_activate_ops(self) -> typing.List[RevertableOp]:
+        return self._get_add_remove_activate_ops(add=True)
+
+    def get_remove_activate_ops(self) -> typing.List[RevertableOp]:
+        return self._get_add_remove_activate_ops(add=False)
+
+
+def get_remove_name_ops(name: str, claim_hash: bytes, height: int) -> typing.List[RevertableDelete]:
+    return [
+        RevertableDelete(
+            *Prefixes.claim_takeover.pack_item(
+                name, claim_hash, height
             )
         )
     ]
-    if signing_hash:
-        ops.extend([
-            RevertableDelete(
-                *Prefixes.channel_to_claim.pack_item(
-                    signing_hash, name, prev_effective_amount, tx_num, position, claim_hash, claims_in_channel_count
-                )
-            ),
-            RevertablePut(
-                *Prefixes.channel_to_claim.pack_item(
-                    signing_hash, name, new_effective_amount, tx_num, position, claim_hash, claims_in_channel_count
-                )
-            )
-        ])
-    return ops
 
 
 def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
@@ -107,76 +119,16 @@ def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
     ]
 
 
-def get_force_activate_ops(name: str, tx_num: int, position: int, claim_hash: bytes, root_claim_tx_num: int,
-                           root_claim_tx_position: int, amount: int, effective_amount: int,
-                           prev_activation_height: int, new_activation_height: int):
-    return [
-        # delete previous
-        RevertableDelete(
-            *Prefixes.claim_effective_amount.pack_item(
-                name, effective_amount, tx_num, position, claim_hash,
-                root_claim_tx_num, root_claim_tx_position, prev_activation_height
-            )
-        ),
-        RevertableDelete(
-            *Prefixes.claim_to_txo.pack_item(
-                claim_hash, tx_num, position, root_claim_tx_num, root_claim_tx_position,
-                amount, prev_activation_height, name
-            )
-        ),
-        RevertableDelete(
-            *Prefixes.claim_short_id.pack_item(
-                name, claim_hash, root_claim_tx_num, root_claim_tx_position, tx_num,
-                position, prev_activation_height
-            )
-        ),
-        RevertableDelete(
-            *Prefixes.pending_activation.pack_item(
-                prev_activation_height, tx_num, position, claim_hash, name
-            )
-        ),
-
-        # insert new
-        RevertablePut(
-            *Prefixes.claim_effective_amount.pack_item(
-                name, effective_amount, tx_num, position, claim_hash,
-                root_claim_tx_num, root_claim_tx_position, new_activation_height
-            )
-        ),
-        RevertablePut(
-            *Prefixes.claim_to_txo.pack_item(
-                claim_hash, tx_num, position, root_claim_tx_num, root_claim_tx_position,
-                amount, new_activation_height, name
-            )
-        ),
-        RevertablePut(
-            *Prefixes.claim_short_id.pack_item(
-                name, claim_hash, root_claim_tx_num, root_claim_tx_position, tx_num,
-                position, new_activation_height
-            )
-        ),
-        RevertablePut(
-            *Prefixes.pending_activation.pack_item(
-                new_activation_height, tx_num, position, claim_hash, name
-            )
-        )
-
-    ]
-
-
 class StagedClaimtrieItem(typing.NamedTuple):
     name: str
     claim_hash: bytes
     amount: int
-    effective_amount: int
-    activation_height: int
     expiration_height: int
     tx_num: int
     position: int
     root_claim_tx_num: int
     root_claim_tx_position: int
     signing_hash: Optional[bytes]
-    claims_in_channel_count: Optional[int]
 
     @property
     def is_update(self) -> bool:
@@ -191,25 +143,11 @@ class StagedClaimtrieItem(typing.NamedTuple):
         """
         op = RevertablePut if add else RevertableDelete
         ops = [
-            # url resolution by effective amount
-            op(
-                *Prefixes.claim_effective_amount.pack_item(
-                    self.name, self.effective_amount, self.tx_num, self.position, self.claim_hash,
-                    self.root_claim_tx_num, self.root_claim_tx_position, self.activation_height
-                )
-            ),
             # claim tip by claim hash
             op(
                 *Prefixes.claim_to_txo.pack_item(
                     self.claim_hash, self.tx_num, self.position, self.root_claim_tx_num, self.root_claim_tx_position,
-                    self.amount, self.activation_height, self.name
-                )
-            ),
-            # short url resolution
-            op(
-                *Prefixes.claim_short_id.pack_item(
-                    self.name, self.claim_hash, self.root_claim_tx_num, self.root_claim_tx_position, self.tx_num,
-                    self.position, self.activation_height
+                    self.amount, self.name
                 )
             ),
             # claim hash by txo
@@ -223,15 +161,16 @@ class StagedClaimtrieItem(typing.NamedTuple):
                     self.name
                 )
             ),
-            # claim activation
+            # short url resolution
             op(
-                *Prefixes.pending_activation.pack_item(
-                    self.activation_height, self.tx_num, self.position, self.claim_hash, self.name
+                *Prefixes.claim_short_id.pack_item(
+                    self.name, self.claim_hash, self.root_claim_tx_num, self.root_claim_tx_position, self.tx_num,
+                    self.position
                 )
             )
         ]
-        if self.signing_hash and self.claims_in_channel_count is not None:
-            # claims_in_channel_count can be none if the channel doesnt exist
+
+        if self.signing_hash:
             ops.extend([
                 # channel by stream
                 op(
@@ -240,8 +179,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
                 # stream by channel
                 op(
                     *Prefixes.channel_to_claim.pack_item(
-                        self.signing_hash, self.name, self.effective_amount, self.tx_num, self.position,
-                        self.claim_hash, self.claims_in_channel_count
+                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
                     )
                 )
             ])
@@ -257,8 +195,8 @@ class StagedClaimtrieItem(typing.NamedTuple):
         if not self.signing_hash:
             return []
         return [
-                   RevertableDelete(*Prefixes.claim_to_channel.pack_item(self.claim_hash, self.signing_hash))
-               ] + delete_prefix(db, DB_PREFIXES.channel_to_claim.value + self.signing_hash)
+            RevertableDelete(*Prefixes.claim_to_channel.pack_item(self.claim_hash, self.signing_hash))
+        ] + delete_prefix(db, DB_PREFIXES.channel_to_claim.value + self.signing_hash)
 
     def get_abandon_ops(self, db) -> typing.List[RevertableOp]:
         packed_name = length_encoded_name(self.name)
@@ -267,5 +205,4 @@ class StagedClaimtrieItem(typing.NamedTuple):
         )
         delete_claim_ops = delete_prefix(db, DB_PREFIXES.claim_to_txo.value + self.claim_hash)
         delete_supports_ops = delete_prefix(db, DB_PREFIXES.claim_to_support.value + self.claim_hash)
-        invalidate_channel_ops = self.get_invalidate_channel_ops(db)
-        return delete_short_id_ops + delete_claim_ops + delete_supports_ops + invalidate_channel_ops
+        return delete_short_id_ops + delete_claim_ops + delete_supports_ops + self.get_invalidate_channel_ops(db)
