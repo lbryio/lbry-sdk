@@ -3,6 +3,10 @@ import struct
 from lbry.wallet.server.db import DB_PREFIXES
 
 
+ACTIVATED_CLAIM_TXO_TYPE = 1
+ACTIVATED_SUPPORT_TXO_TYPE = 2
+
+
 def length_encoded_name(name: str) -> bytes:
     encoded = name.encode('utf-8')
     return len(encoded).to_bytes(2, byteorder='big') + encoded
@@ -12,6 +16,11 @@ class PrefixRow:
     prefix: bytes
     key_struct: struct.Struct
     value_struct: struct.Struct
+    key_part_lambdas = []
+
+    @classmethod
+    def pack_partial_key(cls, *args) -> bytes:
+        return cls.prefix + cls.key_part_lambdas[len(args)](*args)
 
     @classmethod
     def pack_key(cls, *args) -> bytes:
@@ -35,20 +44,6 @@ class PrefixRow:
         return cls.unpack_key(key), cls.unpack_value(value)
 
 
-class EffectiveAmountKey(typing.NamedTuple):
-    name: str
-    effective_amount: int
-    tx_num: int
-    position: int
-
-
-class EffectiveAmountValue(typing.NamedTuple):
-    claim_hash: bytes
-    root_tx_num: int
-    root_position: int
-    activation: int
-
-
 class ClaimToTXOKey(typing.NamedTuple):
     claim_hash: bytes
     tx_num: int
@@ -59,7 +54,7 @@ class ClaimToTXOValue(typing.NamedTuple):
     root_tx_num: int
     root_position: int
     amount: int
-    activation: int
+    # activation: int
     name: str
 
 
@@ -83,7 +78,6 @@ class ClaimShortIDKey(typing.NamedTuple):
 class ClaimShortIDValue(typing.NamedTuple):
     tx_num: int
     position: int
-    activation: int
 
 
 class ClaimToChannelKey(typing.NamedTuple):
@@ -97,14 +91,12 @@ class ClaimToChannelValue(typing.NamedTuple):
 class ChannelToClaimKey(typing.NamedTuple):
     signing_hash: bytes
     name: str
-    effective_amount: int
     tx_num: int
     position: int
 
 
 class ChannelToClaimValue(typing.NamedTuple):
     claim_hash: bytes
-    claims_in_channel: int
 
 
 class ClaimToSupportKey(typing.NamedTuple):
@@ -148,8 +140,17 @@ class ClaimTakeoverValue(typing.NamedTuple):
 
 class PendingActivationKey(typing.NamedTuple):
     height: int
+    txo_type: int
     tx_num: int
     position: int
+
+    @property
+    def is_support(self) -> bool:
+        return self.txo_type == ACTIVATED_SUPPORT_TXO_TYPE
+
+    @property
+    def is_claim(self) -> bool:
+        return self.txo_type == ACTIVATED_CLAIM_TXO_TYPE
 
 
 class PendingActivationValue(typing.NamedTuple):
@@ -157,46 +158,74 @@ class PendingActivationValue(typing.NamedTuple):
     name: str
 
 
-class EffectiveAmountPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.claim_effective_amount_prefix.value
-    key_struct = struct.Struct(b'>QLH')
-    value_struct = struct.Struct(b'>20sLHL')
+class ActivationKey(typing.NamedTuple):
+    txo_type: int
+    tx_num: int
+    position: int
+
+
+class ActivationValue(typing.NamedTuple):
+    height: int
+    claim_hash: bytes
+    name: str
+
+
+class ActiveAmountKey(typing.NamedTuple):
+    claim_hash: bytes
+    txo_type: int
+    activation_height: int
+    tx_num: int
+    position: int
+
+
+class ActiveAmountValue(typing.NamedTuple):
+    amount: int
+
+
+class ActiveAmountPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.active_amount.value
+    key_struct = struct.Struct(b'>20sBLLH')
+    value_struct = struct.Struct(b'>Q')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        struct.Struct(b'>20sB').pack,
+        struct.Struct(b'>20sBL').pack,
+        struct.Struct(b'>20sBLL').pack,
+        struct.Struct(b'>20sBLLH').pack
+    ]
 
     @classmethod
-    def pack_key(cls, name: str, effective_amount: int, tx_num: int, position: int):
-        return cls.prefix + length_encoded_name(name) + cls.key_struct.pack(
-            0xffffffffffffffff - effective_amount, tx_num, position
-        )
+    def pack_key(cls, claim_hash: bytes, txo_type: int, activation_height: int, tx_num: int, position: int):
+        return super().pack_key(claim_hash, txo_type, activation_height, tx_num, position)
 
     @classmethod
-    def unpack_key(cls, key: bytes) -> EffectiveAmountKey:
-        assert key[:1] == cls.prefix
-        name_len = int.from_bytes(key[1:3], byteorder='big')
-        name = key[3:3 + name_len].decode()
-        ones_comp_effective_amount, tx_num, position = cls.key_struct.unpack(key[3 + name_len:])
-        return EffectiveAmountKey(
-            name, 0xffffffffffffffff - ones_comp_effective_amount, tx_num, position
-        )
+    def unpack_key(cls, key: bytes) -> ActiveAmountKey:
+        return ActiveAmountKey(*super().unpack_key(key))
 
     @classmethod
-    def unpack_value(cls, data: bytes) -> EffectiveAmountValue:
-        return EffectiveAmountValue(*super().unpack_value(data))
+    def unpack_value(cls, data: bytes) -> ActiveAmountValue:
+        return ActiveAmountValue(*super().unpack_value(data))
 
     @classmethod
-    def pack_value(cls, claim_hash: bytes, root_tx_num: int, root_position: int, activation: int) -> bytes:
-        return super().pack_value(claim_hash, root_tx_num, root_position, activation)
+    def pack_value(cls, amount: int) -> bytes:
+        return cls.value_struct.pack(amount)
 
     @classmethod
-    def pack_item(cls, name: str, effective_amount: int, tx_num: int, position: int, claim_hash: bytes,
-                  root_tx_num: int, root_position: int, activation: int):
-        return cls.pack_key(name, effective_amount, tx_num, position), \
-               cls.pack_value(claim_hash, root_tx_num, root_position, activation)
+    def pack_item(cls, claim_hash: bytes, txo_type: int, activation_height: int, tx_num: int, position: int, amount: int):
+        return cls.pack_key(claim_hash, txo_type, activation_height, tx_num, position), cls.pack_value(amount)
 
 
 class ClaimToTXOPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_to_txo.value
     key_struct = struct.Struct(b'>20sLH')
-    value_struct = struct.Struct(b'>LHQL')
+    value_struct = struct.Struct(b'>LHQ')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        struct.Struct(b'>20sL').pack,
+        struct.Struct(b'>20sLH').pack
+    ]
 
     @classmethod
     def pack_key(cls, claim_hash: bytes, tx_num: int, position: int):
@@ -214,20 +243,20 @@ class ClaimToTXOPrefixRow(PrefixRow):
 
     @classmethod
     def unpack_value(cls, data: bytes) -> ClaimToTXOValue:
-        root_tx_num, root_position, amount, activation = cls.value_struct.unpack(data[:18])
-        name_len = int.from_bytes(data[18:20], byteorder='big')
-        name = data[20:20 + name_len].decode()
-        return ClaimToTXOValue(root_tx_num, root_position, amount, activation, name)
+        root_tx_num, root_position, amount = cls.value_struct.unpack(data[:14])
+        name_len = int.from_bytes(data[14:16], byteorder='big')
+        name = data[16:16 + name_len].decode()
+        return ClaimToTXOValue(root_tx_num, root_position, amount, name)
 
     @classmethod
-    def pack_value(cls, root_tx_num: int, root_position: int, amount: int, activation: int, name: str) -> bytes:
-        return cls.value_struct.pack(root_tx_num, root_position, amount, activation) + length_encoded_name(name)
+    def pack_value(cls, root_tx_num: int, root_position: int, amount: int,  name: str) -> bytes:
+        return cls.value_struct.pack(root_tx_num, root_position, amount) + length_encoded_name(name)
 
     @classmethod
     def pack_item(cls, claim_hash: bytes, tx_num: int, position: int, root_tx_num: int, root_position: int,
-                  amount: int, activation: int, name: str):
+                  amount: int, name: str):
         return cls.pack_key(claim_hash, tx_num, position), \
-               cls.pack_value(root_tx_num, root_position, amount, activation, name)
+               cls.pack_value(root_tx_num, root_position, amount, name)
 
 
 class TXOToClaimPrefixRow(PrefixRow):
@@ -260,18 +289,32 @@ class TXOToClaimPrefixRow(PrefixRow):
                cls.pack_value(claim_hash, name)
 
 
+def shortid_key_helper(struct_fmt):
+    packer = struct.Struct(struct_fmt).pack
+    def wrapper(name, *args):
+        return length_encoded_name(name) + packer(*args)
+    return wrapper
+
+
 class ClaimShortIDPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_short_id_prefix.value
     key_struct = struct.Struct(b'>20sLH')
-    value_struct = struct.Struct(b'>LHL')
+    value_struct = struct.Struct(b'>LH')
+    key_part_lambdas = [
+        lambda: b'',
+        length_encoded_name,
+        shortid_key_helper(b'>20s'),
+        shortid_key_helper(b'>20sL'),
+        shortid_key_helper(b'>20sLH'),
+    ]
 
     @classmethod
     def pack_key(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int):
         return cls.prefix + length_encoded_name(name) + cls.key_struct.pack(claim_hash, root_tx_num, root_position)
 
     @classmethod
-    def pack_value(cls, tx_num: int, position: int, activation: int):
-        return super().pack_value(tx_num, position, activation)
+    def pack_value(cls, tx_num: int, position: int):
+        return super().pack_value(tx_num, position)
 
     @classmethod
     def unpack_key(cls, key: bytes) -> ClaimShortIDKey:
@@ -286,9 +329,9 @@ class ClaimShortIDPrefixRow(PrefixRow):
 
     @classmethod
     def pack_item(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int,
-                  tx_num: int, position: int, activation: int):
+                  tx_num: int, position: int):
         return cls.pack_key(name, claim_hash, root_tx_num, root_position), \
-               cls.pack_value(tx_num, position, activation)
+               cls.pack_value(tx_num, position)
 
 
 class ClaimToChannelPrefixRow(PrefixRow):
@@ -317,15 +360,33 @@ class ClaimToChannelPrefixRow(PrefixRow):
         return cls.pack_key(claim_hash), cls.pack_value(signing_hash)
 
 
+def channel_to_claim_helper(struct_fmt):
+    packer = struct.Struct(struct_fmt).pack
+
+    def wrapper(signing_hash: bytes, name: str, *args):
+        return signing_hash + length_encoded_name(name) + packer(*args)
+
+    return wrapper
+
+
 class ChannelToClaimPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.channel_to_claim.value
-    key_struct = struct.Struct(b'>QLH')
-    value_struct = struct.Struct(b'>20sL')
+    key_struct = struct.Struct(b'>LH')
+    value_struct = struct.Struct(b'>20s')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        channel_to_claim_helper(b''),
+        channel_to_claim_helper(b'>s'),
+        channel_to_claim_helper(b'>L'),
+        channel_to_claim_helper(b'>LH'),
+    ]
 
     @classmethod
-    def pack_key(cls, signing_hash: bytes, name: str, effective_amount: int, tx_num: int, position: int):
+    def pack_key(cls, signing_hash: bytes, name: str, tx_num: int, position: int):
         return cls.prefix + signing_hash + length_encoded_name(name) + cls.key_struct.pack(
-            0xffffffffffffffff - effective_amount, tx_num, position
+            tx_num, position
         )
 
     @classmethod
@@ -334,24 +395,24 @@ class ChannelToClaimPrefixRow(PrefixRow):
         signing_hash = key[1:21]
         name_len = int.from_bytes(key[21:23], byteorder='big')
         name = key[23:23 + name_len].decode()
-        ones_comp_effective_amount, tx_num, position = cls.key_struct.unpack(key[23 + name_len:])
+        tx_num, position = cls.key_struct.unpack(key[23 + name_len:])
         return ChannelToClaimKey(
-            signing_hash, name, 0xffffffffffffffff - ones_comp_effective_amount, tx_num, position
+            signing_hash, name, tx_num, position
         )
 
     @classmethod
-    def pack_value(cls, claim_hash: bytes, claims_in_channel: int) -> bytes:
-        return super().pack_value(claim_hash, claims_in_channel)
+    def pack_value(cls, claim_hash: bytes) -> bytes:
+        return super().pack_value(claim_hash)
 
     @classmethod
     def unpack_value(cls, data: bytes) -> ChannelToClaimValue:
         return ChannelToClaimValue(*cls.value_struct.unpack(data))
 
     @classmethod
-    def pack_item(cls, signing_hash: bytes, name: str, effective_amount: int, tx_num: int, position: int,
-                  claim_hash: bytes, claims_in_channel: int):
-        return cls.pack_key(signing_hash, name, effective_amount, tx_num, position), \
-               cls.pack_value(claim_hash, claims_in_channel)
+    def pack_item(cls, signing_hash: bytes, name: str, tx_num: int, position: int,
+                  claim_hash: bytes):
+        return cls.pack_key(signing_hash, name, tx_num, position), \
+               cls.pack_value(claim_hash)
 
 
 class ClaimToSupportPrefixRow(PrefixRow):
@@ -412,6 +473,12 @@ class ClaimExpirationPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_expiration.value
     key_struct = struct.Struct(b'>LLH')
     value_struct = struct.Struct(b'>20s')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack,
+        struct.Struct(b'>LL').pack,
+        struct.Struct(b'>LLH').pack,
+    ]
 
     @classmethod
     def pack_key(cls, expiration: int, tx_num: int, position: int) -> bytes:
@@ -469,13 +536,20 @@ class ClaimTakeoverPrefixRow(PrefixRow):
         return cls.pack_key(name), cls.pack_value(claim_hash, takeover_height)
 
 
-class PendingClaimActivationPrefixRow(PrefixRow):
+class PendingActivationPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.pending_activation.value
-    key_struct = struct.Struct(b'>LLH')
+    key_struct = struct.Struct(b'>LBLH')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack,
+        struct.Struct(b'>LB').pack,
+        struct.Struct(b'>LBL').pack,
+        struct.Struct(b'>LBLH').pack
+    ]
 
     @classmethod
-    def pack_key(cls, height: int, tx_num: int, position: int):
-        return super().pack_key(height, tx_num, position)
+    def pack_key(cls, height: int, txo_type: int, tx_num: int, position: int):
+        return super().pack_key(height, txo_type, tx_num, position)
 
     @classmethod
     def unpack_key(cls, key: bytes) -> PendingActivationKey:
@@ -493,9 +567,45 @@ class PendingClaimActivationPrefixRow(PrefixRow):
         return PendingActivationValue(claim_hash, name)
 
     @classmethod
-    def pack_item(cls, height: int, tx_num: int, position: int, claim_hash: bytes, name: str):
-        return cls.pack_key(height, tx_num, position), \
+    def pack_item(cls, height: int, txo_type: int, tx_num: int, position: int, claim_hash: bytes, name: str):
+        return cls.pack_key(height, txo_type, tx_num, position), \
                cls.pack_value(claim_hash, name)
+
+
+class ActivatedPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.activated_claim_and_support.value
+    key_struct = struct.Struct(b'>BLH')
+    value_struct = struct.Struct(b'>L20s')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>B').pack,
+        struct.Struct(b'>BL').pack,
+        struct.Struct(b'>BLH').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, txo_type: int, tx_num: int, position: int):
+        return super().pack_key(txo_type, tx_num, position)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> ActivationKey:
+        return ActivationKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, height: int, claim_hash: bytes, name: str) -> bytes:
+        return cls.value_struct.pack(height, claim_hash) + length_encoded_name(name)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> ActivationValue:
+        height, claim_hash = cls.value_struct.unpack(data[:24])
+        name_len = int.from_bytes(data[24:26], byteorder='big')
+        name = data[26:26 + name_len].decode()
+        return ActivationValue(height, claim_hash, name)
+
+    @classmethod
+    def pack_item(cls, txo_type: int, tx_num: int, position: int, height: int, claim_hash: bytes, name: str):
+        return cls.pack_key(txo_type, tx_num, position), \
+               cls.pack_value(height, claim_hash, name)
 
 
 class Prefixes:
@@ -509,10 +619,11 @@ class Prefixes:
     channel_to_claim = ChannelToClaimPrefixRow
 
     claim_short_id = ClaimShortIDPrefixRow
-    claim_effective_amount = EffectiveAmountPrefixRow
     claim_expiration = ClaimExpirationPrefixRow
 
     claim_takeover = ClaimTakeoverPrefixRow
-    pending_activation = PendingClaimActivationPrefixRow
+    pending_activation = PendingActivationPrefixRow
+    activated = ActivatedPrefixRow
+    active_amount = ActiveAmountPrefixRow
 
     # undo_claimtrie = b'M'
