@@ -43,9 +43,18 @@ class TestReflector(AsyncioTestCase):
         self.stream_manager.config.reflect_streams = False
         self.stream = await self.stream_manager.create(file_path)
 
-    async def _test_reflect_stream(self, response_chunk_size):
-        reflector = ReflectorServer(self.server_blob_manager, response_chunk_size=response_chunk_size)
+    async def _test_reflect_stream(self, response_chunk_size=50, partial_needs=False):
+        reflector = ReflectorServer(self.server_blob_manager, response_chunk_size=response_chunk_size,
+                                    partial_needs=partial_needs)
         reflector.start_server(5566, '127.0.0.1')
+        if partial_needs:
+            server_blob = self.server_blob_manager.get_blob(self.stream.sd_hash)
+            client_blob = self.blob_manager.get_blob(self.stream.sd_hash)
+            with client_blob.reader_context() as handle:
+                server_blob.set_length(client_blob.get_length())
+                writer = server_blob.get_blob_writer('nobody', 0)
+                writer.write(handle.read())
+            self.server_blob_manager.blob_completed(server_blob)
         await reflector.started_listening.wait()
         self.addCleanup(reflector.stop_server)
         self.assertEqual(0, self.stream.reflector_progress)
@@ -70,6 +79,9 @@ class TestReflector(AsyncioTestCase):
 
     async def test_reflect_stream(self):
         return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=50), 3, loop=self.loop)
+
+    async def test_reflect_stream_but_reflector_changes_its_mind(self):
+        return await asyncio.wait_for(self._test_reflect_stream(partial_needs=True), 3, loop=self.loop)
 
     async def test_reflect_stream_small_response_chunks(self):
         return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=30), 3, loop=self.loop)

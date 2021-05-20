@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 class ReflectorServerProtocol(asyncio.Protocol):
     def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
                  stop_event: asyncio.Event = None, incoming_event: asyncio.Event = None,
-                 not_incoming_event: asyncio.Event = None):
+                 not_incoming_event: asyncio.Event = None, partial_needs=False):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
@@ -34,6 +34,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.stop_event = stop_event or asyncio.Event(loop=self.loop)
         self.chunk_size = response_chunk_size
         self.wait_for_stop_task: typing.Optional[asyncio.Task] = None
+        self.partial_needs = partial_needs
 
     async def wait_for_stop(self):
         await self.stop_event.wait()
@@ -115,10 +116,16 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 if self.writer:
                     self.writer.close_handle()
                     self.writer = None
-                self.send_response({"send_sd_blob": False, 'needed': [
-                    blob.blob_hash for blob in self.descriptor.blobs[:-1]
-                    if not self.blob_manager.get_blob(blob.blob_hash).get_is_verified()
-                ]})
+
+                needs = [blob.blob_hash
+                         for blob in self.descriptor.blobs[:-1]
+                         if not self.blob_manager.get_blob(blob.blob_hash).get_is_verified()]
+                print(self.partial_needs, needs)
+                if needs and self.partial_needs:
+                    needs = needs[:3]
+                    self.partial_needs = False
+                print(self.partial_needs, needs)
+                self.send_response({"send_sd_blob": False, 'needed_blobs': needs})
                 return
             return
         elif self.descriptor:
@@ -153,7 +160,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
 class ReflectorServer:
     def __init__(self, blob_manager: 'BlobManager', response_chunk_size: int = 10000,
                  stop_event: asyncio.Event = None, incoming_event: asyncio.Event = None,
-                 not_incoming_event: asyncio.Event = None):
+                 not_incoming_event: asyncio.Event = None, partial_needs=False):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
@@ -163,19 +170,18 @@ class ReflectorServer:
         self.not_incoming_event = not_incoming_event or asyncio.Event(loop=self.loop)
         self.response_chunk_size = response_chunk_size
         self.stop_event = stop_event
+        self.partial_needs = partial_needs  # for testing cases where it doesn't know what it wants
 
     def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
         if self.server_task is not None:
             raise Exception("already running")
 
         async def _start_server():
-            server = await self.loop.create_server(
-                lambda: ReflectorServerProtocol(
-                    self.blob_manager, self.response_chunk_size, self.stop_event, self.incoming_event,
-                    self.not_incoming_event
-                ),
-                interface, port
+            proto = ReflectorServerProtocol(
+                self.blob_manager, self.response_chunk_size, self.stop_event, self.incoming_event,
+                self.not_incoming_event, self.partial_needs
             )
+            server = await self.loop.create_server(lambda: proto, interface, port)
             self.started_listening.set()
             self.stopped_listening.clear()
             log.info("Reflector server listening on TCP %s:%i", interface, port)
