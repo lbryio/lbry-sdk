@@ -63,13 +63,16 @@ class TestReflector(AsyncioTestCase):
         if partial_needs:
             self.assertFalse(self.stream.is_fully_reflected)
             send_more = await self.stream.upload_to_reflector('127.0.0.1', 5566)
-            self.assertGreater(0, len(send_more))
+            self.assertGreater(len(send_more), 0)
             sent.extend(send_more)
+            sent.append(self.stream.sd_hash)
         self.assertSetEqual(
             set(sent),
             set(map(lambda b: b.blob_hash,
                     self.stream.descriptor.blobs[:-1] + [self.blob_manager.get_blob(self.stream.sd_hash)]))
         )
+        send_more = await self.stream.upload_to_reflector('127.0.0.1', 5566)
+        self.assertEqual(len(send_more), 0)
         self.assertTrue(self.stream.is_fully_reflected)
         server_sd_blob = self.server_blob_manager.get_blob(self.stream.sd_hash)
         self.assertTrue(server_sd_blob.get_is_verified())

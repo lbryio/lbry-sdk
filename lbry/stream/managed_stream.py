@@ -372,9 +372,6 @@ class ManagedStream(ManagedDownloadSource):
                 protocol.transport.close()
             self.uploading_to_reflector = False
 
-        if not self.fully_reflected.is_set():
-            self.fully_reflected.set()
-            await self.blob_manager.storage.update_reflected_stream(self.sd_hash, f"{host}:{port}")
         return sent
 
     async def update_content_claim(self, claim_info: Optional[typing.Dict] = None):
