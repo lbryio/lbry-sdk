@@ -60,6 +60,11 @@ class TestReflector(AsyncioTestCase):
         self.assertEqual(0, self.stream.reflector_progress)
         sent = await self.stream.upload_to_reflector('127.0.0.1', 5566)
         self.assertEqual(100, self.stream.reflector_progress)
+        if partial_needs:
+            self.assertFalse(self.stream.is_fully_reflected)
+            send_more = await self.stream.upload_to_reflector('127.0.0.1', 5566)
+            self.assertGreater(0, len(send_more))
+            sent.extend(send_more)
         self.assertSetEqual(
             set(sent),
             set(map(lambda b: b.blob_hash,
