@@ -287,7 +287,7 @@ class SearchIndex:
         result = list(await self.get_many(*(claim_id for claim_id, _ in reordered_hits[offset:(offset + page_size)])))
         return result, 0, len(reordered_hits)
 
-    def __remove_duplicates(self, search_hits: list):
+    def __remove_duplicates(self, search_hits: deque) -> deque:
         known_ids = {}  # claim_id -> (creation_height, hit_id), where hit_id is either reposted claim id or original
         dropped = set()
         for hit in search_hits:
@@ -301,7 +301,7 @@ class SearchIndex:
                     dropped.add(previous_id)
                 else:
                     dropped.add(hit['_id'])
-        return [hit for hit in search_hits if hit['_id'] not in dropped]
+        return deque(hit for hit in search_hits if hit['_id'] not in dropped)
 
     def __search_ahead(self, search_hits: list, page_size: int, per_channel_per_page: int):
         reordered_hits = []

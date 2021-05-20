@@ -419,6 +419,10 @@ class ClaimSearchCommand(ClaimTestCase):
         await match([channels[0], claims[0], channels[1], claims[1]] + channels[2:],
                     height='>218',
                     remove_duplicates=True, order_by=['^height'])
+        # limit claims per channel, invert order, oldest ones are still chosen
+        await match(channels[2:][::-1] + [claims[1], channels[1], claims[0], channels[0]],
+                    height='>218', limit_claims_per_channel=1,
+                    remove_duplicates=True, order_by=['height'])
 
     async def test_limit_claims_per_channel_across_sorted_pages(self):
         await self.generate(10)
