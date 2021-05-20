@@ -521,11 +521,6 @@ class LevelDB:
     async def _open_dbs(self, for_sync, compacting):
         if self.executor is None:
             self.executor = ThreadPoolExecutor(1)
-        coin_path = os.path.join(self.env.db_dir, 'COIN')
-        if not os.path.isfile(coin_path):
-            with util.open_file(coin_path, create=True) as f:
-                f.write(f'ElectrumX databases and metadata for '
-                        f'{self.coin.NAME} {self.coin.NET}'.encode())
 
         assert self.db is None
         self.db = self.db_class(f'lbry-{self.env.db_engine}', True)
