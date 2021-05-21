@@ -258,9 +258,35 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_known_hubs_list(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            c1 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
-            self.assertEqual(list(c1.known_hubs), [])
-            c1.known_hubs.append('new.hub.io:99')
-            c1.known_hubs.save()
-            c2 = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir)
-            self.assertEqual(list(c2.known_hubs), [('new.hub.io', 99)])
+            hubs = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir).known_hubs
+
+            self.assertEqual(hubs.serialized, {})
+            self.assertEqual(list(hubs), [])
+            self.assertFalse(hubs)
+            hubs.set('new.hub.io:99', {'jurisdiction': 'us'})
+            self.assertTrue(hubs)
+
+            self.assertFalse(hubs.exists)
+            hubs.save()
+            self.assertTrue(hubs.exists)
+
+            hubs = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir).known_hubs
+            self.assertEqual(list(hubs), [('new.hub.io', 99)])
+            self.assertEqual(hubs.serialized, {'new.hub.io:99': {'jurisdiction': 'us'}})
+
+            hubs.set('any.hub.io:99', {})
+            hubs.set('oth.hub.io:99', {'jurisdiction': 'other'})
+            self.assertEqual(list(hubs), [('new.hub.io', 99), ('any.hub.io', 99), ('oth.hub.io', 99)])
+            self.assertEqual(hubs.filter(), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'},
+                ('oth.hub.io', 99): {'jurisdiction': 'other'},
+                ('any.hub.io', 99): {}
+            })
+            self.assertEqual(hubs.filter(foo="bar"), {})
+            self.assertEqual(hubs.filter(jurisdiction="us"), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'}
+            })
+            self.assertEqual(hubs.filter(jurisdiction="us", match_none=True), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'},
+                ('any.hub.io', 99): {}
+            })

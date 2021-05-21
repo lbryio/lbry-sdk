@@ -147,3 +147,10 @@ class TestHubDiscovery(CommandTestCase):
         self.assertEqual(
             self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', final_node.port)
         )
+
+        final_node.server.session_mgr._notify_peer('127.0.0.1:9988')
+        self.assertEqual(list(self.daemon.conf.known_hubs), [(final_node.hostname, final_node.port)])
+        await self.daemon.ledger.network.on_hub.first
+        self.assertEqual(list(self.daemon.conf.known_hubs), [
+            (final_node.hostname, final_node.port), ('127.0.0.1', 9988)
+        ])

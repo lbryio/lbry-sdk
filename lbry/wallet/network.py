@@ -166,9 +166,13 @@ class Network:
         self._on_status_controller = StreamController(merge_repeated_events=True)
         self.on_status = self._on_status_controller.stream
 
+        self._on_hub_controller = StreamController(merge_repeated_events=True)
+        self.on_hub = self._on_hub_controller.stream
+
         self.subscription_controllers = {
             'blockchain.headers.subscribe': self._on_header_controller,
             'blockchain.address.subscribe': self._on_status_controller,
+            'blockchain.peers.subscribe': self._on_hub_controller,
         }
 
         self.aiohttp_session: Optional[aiohttp.ClientSession] = None
@@ -194,6 +198,7 @@ class Network:
             self.running = True
             self.aiohttp_session = aiohttp.ClientSession()
             self.on_header.listen(self._update_remote_height)
+            self.on_hub.listen(self._update_hubs)
             self._loop_task = asyncio.create_task(self.network_loop())
             self._urgent_need_reconnect.set()
 
@@ -300,13 +305,7 @@ class Network:
                 features = await client.send_request('server.features', [])
                 self.client, self.server_features = client, features
                 log.debug("discover other hubs %s:%i", *client.server)
-                peers = await client.send_request('server.peers.get', [])
-                if peers:
-                    try:
-                        self.known_hubs.extend(peers)
-                        self.known_hubs.save()
-                    except Exception:
-                        log.exception("could not add hub peers: %s", peers)
+                self._update_hubs(await client.send_request('server.peers.subscribe', []))
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
@@ -375,6 +374,14 @@ class Network:
 
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
+
+    def _update_hubs(self, hubs):
+        if hubs:
+            try:
+                if self.known_hubs.add_hubs(hubs):
+                    self.known_hubs.save()
+            except Exception:
+                log.exception("could not add hubs: %s", hubs)
 
     def get_transaction(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history
