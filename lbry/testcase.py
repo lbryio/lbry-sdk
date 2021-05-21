@@ -350,7 +350,11 @@ class CommandTestCase(IntegrationTestCase):
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
-        self.server_config = Config()
+        self.server_config = Config(
+            data_dir=server_tmp_dir,
+            wallet_dir=server_tmp_dir,
+            download_dir=server_tmp_dir
+        )
         self.server_config.transaction_cache_size = 10000
         self.server_storage = SQLiteStorage(self.server_config, ':memory:')
         await self.server_storage.open()
@@ -387,10 +391,12 @@ class CommandTestCase(IntegrationTestCase):
         upload_dir = os.path.join(wallet_node.data_path, 'uploads')
         os.mkdir(upload_dir)
 
-        conf = Config()
-        conf.data_dir = wallet_node.data_path
-        conf.wallet_dir = wallet_node.data_path
-        conf.download_dir = wallet_node.data_path
+        conf = Config(
+            # needed during instantiation to access known_hubs path
+            data_dir=wallet_node.data_path,
+            wallet_dir=wallet_node.data_path,
+            download_dir=wallet_node.data_path
+        )
         conf.upload_dir = upload_dir  # not a real conf setting
         conf.share_usage_data = False
         conf.use_upnp = False

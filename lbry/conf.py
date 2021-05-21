@@ -2,7 +2,7 @@ import os
 import re
 import sys
 import logging
-from typing import List, Tuple, Union, TypeVar, Generic, Optional
+from typing import List, Dict, Tuple, Union, TypeVar, Generic, Optional
 from argparse import ArgumentParser
 from contextlib import contextmanager
 from appdirs import user_data_dir, user_config_dir
@@ -276,46 +276,61 @@ class Strings(ListSetting):
 class KnownHubsList:
 
     def __init__(self, config: 'Config' = None, file_name: str = 'known_hubs.yml'):
-        self.config = config
         self.file_name = file_name
-        self.hubs: List[Tuple[str, int]] = []
-
-    @property
-    def path(self):
-        if self.config:
-            return os.path.join(self.config.wallet_dir, self.file_name)
+        self.path = os.path.join(config.wallet_dir, self.file_name) if config else None
+        self.hubs: Dict[Tuple[str, int], Dict] = {}
+        if self.exists:
+            self.load()
 
     @property
     def exists(self):
         return self.path and os.path.exists(self.path)
 
     @property
-    def serialized(self) -> List[str]:
-        return [f"{host}:{port}" for host, port in self.hubs]
+    def serialized(self) -> Dict[str, Dict]:
+        return {f"{host}:{port}": details for (host, port), details in self.hubs.items()}
+
+    def filter(self, match_none=False, **kwargs):
+        if not kwargs:
+            return self.hubs
+        result = {}
+        for hub, details in self.hubs.items():
+            for key, constraint in kwargs.items():
+                value = details.get(key)
+                if value == constraint or (match_none and value is None):
+                    result[hub] = details
+                    break
+        return result
 
     def load(self):
-        if self.exists:
+        if self.path:
             with open(self.path, 'r') as known_hubs_file:
                 raw = known_hubs_file.read()
-                for hub in yaml.safe_load(raw) or []:
-                    self.append(hub)
+                for hub, details in yaml.safe_load(raw).items():
+                    self.set(hub, details)
 
     def save(self):
         if self.path:
             with open(self.path, 'w') as known_hubs_file:
                 known_hubs_file.write(yaml.safe_dump(self.serialized, default_flow_style=False))
 
-    def append(self, hub: str):
-        if hub and ':' in hub:
+    def set(self, hub: str, details: Dict):
+        if hub and hub.count(':') == 1:
             host, port = hub.split(':')
             hub_parts = (host, int(port))
             if hub_parts not in self.hubs:
-                self.hubs.append(hub_parts)
-        return hub
+                self.hubs[hub_parts] = details
+                return hub
 
-    def extend(self, hubs: List[str]):
+    def add_hubs(self, hubs: List[str]):
+        added = False
         for hub in hubs:
-            self.append(hub)
+            if self.set(hub, {}) is not None:
+                added = True
+        return added
+
+    def items(self):
+        return self.hubs.items()
 
     def __bool__(self):
         return len(self) > 0
