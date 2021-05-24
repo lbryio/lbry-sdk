@@ -264,13 +264,12 @@ class LevelDB:
             print("resolved controlling", controlling.claim_hash.hex())
             return self._fs_get_claim_by_hash(controlling.claim_hash)
 
-        encoded_name = length_encoded_name(normalized_name)
         amount_order = max(int(amount_order or 1), 1)
 
         if claim_id:
             # resolve by partial/complete claim id
             short_claim_hash = bytes.fromhex(claim_id)
-            prefix = DB_PREFIXES.claim_short_id_prefix.value + encoded_name + short_claim_hash
+            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, short_claim_hash)
             for k, v in self.db.iterator(prefix=prefix):
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
@@ -281,15 +280,17 @@ class LevelDB:
             return
 
         # resolve by amount ordering, 1 indexed
-        for idx, (k, v) in enumerate(self.db.iterator(
-                prefix=DB_PREFIXES.claim_effective_amount_prefix.value + encoded_name)):
+        prefix = Prefixes.effective_amount.pack_partial_key(normalized_name)
+        for idx, (k, v) in enumerate(self.db.iterator(prefix=prefix)):
             if amount_order > idx + 1:
                 continue
-            key = Prefixes.claim_effective_amount.unpack_key(k)
-            claim_val = Prefixes.claim_effective_amount.unpack_value(v)
+            key = Prefixes.effective_amount.unpack_key(k)
+            claim_val = Prefixes.effective_amount.unpack_value(v)
+            claim_txo = self.get_claim_txo(claim_val.claim_hash)
+            activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
-                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_val.root_tx_num,
-                claim_val.root_position, claim_val.activation
+                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo[1].root_tx_num,
+                claim_txo[1].root_position, activation
             )
         return
 
