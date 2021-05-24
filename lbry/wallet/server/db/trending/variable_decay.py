@@ -123,7 +123,7 @@ class TrendingDB:
         trending_log("Initialising trending database...")
 
         # The need for speed
-        self.execute("PRAGMA JOURNAL_MODE=OFF;")
+        self.execute("PRAGMA JOURNAL_MODE=WAL;")
         self.execute("PRAGMA SYNCHRONOUS=0;")
 
         self.begin()
