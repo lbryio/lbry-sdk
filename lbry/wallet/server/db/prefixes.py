@@ -182,6 +182,17 @@ class ActiveAmountValue(typing.NamedTuple):
     amount: int
 
 
+class EffectiveAmountKey(typing.NamedTuple):
+    name: str
+    effective_amount: int
+    tx_num: int
+    position: int
+
+
+class EffectiveAmountValue(typing.NamedTuple):
+    claim_hash: bytes
+
+
 class ActiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.active_amount.value
     key_struct = struct.Struct(b'>20sBLLH')
@@ -296,6 +307,11 @@ def shortid_key_helper(struct_fmt):
     return wrapper
 
 
+def shortid_key_partial_claim_helper(name: str, partial_claim_hash: bytes):
+    assert len(partial_claim_hash) <= 20
+    return length_encoded_name(name) + partial_claim_hash
+
+
 class ClaimShortIDPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_short_id_prefix.value
     key_struct = struct.Struct(b'>20sLH')
@@ -303,7 +319,7 @@ class ClaimShortIDPrefixRow(PrefixRow):
     key_part_lambdas = [
         lambda: b'',
         length_encoded_name,
-        shortid_key_helper(b'>20s'),
+        shortid_key_partial_claim_helper,
         shortid_key_helper(b'>20sL'),
         shortid_key_helper(b'>20sLH'),
     ]
@@ -608,6 +624,58 @@ class ActivatedPrefixRow(PrefixRow):
                cls.pack_value(height, claim_hash, name)
 
 
+def effective_amount_helper(struct_fmt):
+    packer = struct.Struct(struct_fmt).pack
+
+    def wrapper(name, *args):
+        if not args:
+            return length_encoded_name(name)
+        if len(args) == 1:
+            return length_encoded_name(name) + packer(0xffffffffffffffff - args[0])
+        return length_encoded_name(name) + packer(0xffffffffffffffff - args[0], *args[1:])
+
+    return wrapper
+
+
+class EffectiveAmountPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.claim_effective_amount_prefix.value
+    key_struct = struct.Struct(b'>QLH')
+    value_struct = struct.Struct(b'>20s')
+    key_part_lambdas = [
+        lambda: b'',
+        length_encoded_name,
+        shortid_key_helper(b'>Q'),
+        shortid_key_helper(b'>QL'),
+        shortid_key_helper(b'>QLH'),
+    ]
+
+    @classmethod
+    def pack_key(cls, name: str, effective_amount: int, tx_num: int, position: int):
+        return cls.prefix + length_encoded_name(name) + cls.key_struct.pack(
+                    0xffffffffffffffff - effective_amount, tx_num, position
+        )
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> EffectiveAmountKey:
+        assert key[:1] == cls.prefix
+        name_len = int.from_bytes(key[1:3], byteorder='big')
+        name = key[3:3 + name_len].decode()
+        ones_comp_effective_amount, tx_num, position = cls.key_struct.unpack(key[3 + name_len:])
+        return EffectiveAmountKey(name, 0xffffffffffffffff - ones_comp_effective_amount, tx_num, position)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> EffectiveAmountValue:
+        return EffectiveAmountValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_value(cls, claim_hash: bytes) -> bytes:
+        return super().pack_value(claim_hash)
+
+    @classmethod
+    def pack_item(cls, name: str, effective_amount: int, tx_num: int, position: int, claim_hash: bytes):
+        return cls.pack_key(name, effective_amount, tx_num, position), cls.pack_value(claim_hash)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -625,5 +693,7 @@ class Prefixes:
     pending_activation = PendingActivationPrefixRow
     activated = ActivatedPrefixRow
     active_amount = ActiveAmountPrefixRow
+
+    effective_amount = EffectiveAmountPrefixRow
 
     # undo_claimtrie = b'M'
