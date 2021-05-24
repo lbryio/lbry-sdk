@@ -96,7 +96,7 @@ class TrendingDB:
     """
 
     def __init__(self):
-        self.conn = apsw.Connection(":memory:")
+        self.conn = apsw.Connection("trending.db")
         self.cursor = self.conn.cursor()
         self.initialised = False
         self.write_needed = set()
@@ -145,23 +145,13 @@ class TrendingDB:
                  FOREIGN KEY (claim_hash)
                     REFERENCES claims (claim_hash));""")
 
-        # Clear out any existing data
-        self.execute("DELETE FROM claims;")
-        self.execute("DELETE FROM spikes;")
-
         # Create indexes
-        self.execute("CREATE INDEX idx1 ON spikes (claim_hash, height, mass);")
-        self.execute("CREATE INDEX idx2 ON spikes (claim_hash, height, mass DESC);")
-        self.execute("CREATE INDEX idx3 on claims (lbc DESC, claim_hash, trending_score);")
-
-        # Import data from claims.db
-        for row in db.execute("""
-                              SELECT claim_hash,
-                                     1E-8*(amount + support_amount) AS lbc,
-                                     trending_mixed
-                              FROM claim;
-                              """):
-            self.execute("INSERT INTO claims VALUES (?, ?, ?);", row)
+        self.execute("CREATE INDEX IF NOT EXISTS\
+                                idx1 ON spikes (claim_hash, height, mass);")
+        self.execute("CREATE INDEX IF NOT EXISTS\
+                                idx2 ON spikes (claim_hash, height, mass DESC);")
+        self.execute("CREATE INDEX IF NOT EXISTS\
+                                idx3 on claims (lbc DESC, claim_hash, trending_score);")
         self.commit()
 
         self.initialised = True
@@ -374,9 +364,9 @@ def spike_mass(x, x_old):
 
 
 def run(db, height, final_height, recalculate_claim_hashes):
-    if height < final_height - 5*HALF_LIFE:
-        trending_log(f"Skipping trending calculations at block {height}.\n")
-        return
+#    if height < final_height - 5*HALF_LIFE:
+#        trending_log(f"Skipping trending calculations at block {height}.\n")
+#        return
 
     start = time.time()
     trending_log(f"Calculating variable_decay trending at block {height}.\n")
