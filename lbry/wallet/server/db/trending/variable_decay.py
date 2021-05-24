@@ -364,9 +364,9 @@ def spike_mass(x, x_old):
 
 
 def run(db, height, final_height, recalculate_claim_hashes):
-#    if height < final_height - 5*HALF_LIFE:
-#        trending_log(f"Skipping trending calculations at block {height}.\n")
-#        return
+    if height < final_height - 10*HALF_LIFE:
+        trending_log(f"Skipping trending calculations at block {height}.\n")
+        return
 
     start = time.time()
     trending_log(f"Calculating variable_decay trending at block {height}.\n")
