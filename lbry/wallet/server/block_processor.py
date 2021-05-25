@@ -833,7 +833,7 @@ class BlockProcessor:
                             k.position, height, name, amount
                         ).get_activate_ops()
                     )
-                    ops.extend(get_takeover_name_ops(name, winning_including_future_activations, height))
+                    ops.extend(get_takeover_name_ops(name, winning_including_future_activations, height, controlling))
                 elif not controlling or (winning_claim_hash != controlling.claim_hash and
                                        name in names_with_abandoned_controlling_claims) or \
                         ((winning_claim_hash != controlling.claim_hash) and (amounts[winning_claim_hash] > amounts[controlling.claim_hash])):
@@ -862,7 +862,7 @@ class BlockProcessor:
                                     position, height, name, amount
                                 ).get_activate_ops()
                             )
-                    ops.extend(get_takeover_name_ops(name, winning_claim_hash, height))
+                    ops.extend(get_takeover_name_ops(name, winning_claim_hash, height, controlling))
                 elif winning_claim_hash == controlling.claim_hash:
                     print("\tstill winning")
                     pass
@@ -887,8 +887,7 @@ class BlockProcessor:
             winning = max(amounts, key=lambda x: amounts[x])
             if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
                 print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
-                ops.extend(get_takeover_name_ops(name, winning, height))
-
+                ops.extend(get_takeover_name_ops(name, winning, height, controlling))
         return ops
 
     def advance_block(self, block):
