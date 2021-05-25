@@ -464,6 +464,16 @@ class LevelDB:
             activated[v].append(k)
         return activated
 
+    def get_future_activated(self, height: int) -> DefaultDict[PendingActivationValue, List[PendingActivationKey]]:
+        activated = defaultdict(list)
+        for i in range(self.coin.maxTakeoverDelay):
+            prefix = Prefixes.pending_activation.pack_partial_key(height+1+i, ACTIVATED_CLAIM_TXO_TYPE)
+            for _k, _v in self.db.iterator(prefix=prefix):
+                k = Prefixes.pending_activation.unpack_key(_k)
+                v = Prefixes.pending_activation.unpack_value(_v)
+                activated[v].append(k)
+        return activated
+
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
             return

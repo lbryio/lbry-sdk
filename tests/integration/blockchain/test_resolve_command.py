@@ -434,6 +434,27 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.assertNoClaimForName(name)
         await self._test_activation_delay()
 
+    async def test_early_takeover(self):
+        name = 'derp'
+        # block 207
+        first_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+        await self.generate(96)
+        # block 304, activates at 307
+        second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        # block 305, activates at 308 (but gets triggered early by the takeover by the second claim)
+        third_claim_id = (await self.stream_create(name, '0.3',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        self.assertNotEqual(first_claim_id, second_claim_id)
+        # takeover should not have happened yet
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+
     async def test_block_takeover_with_delay_1_support(self):
         name = 'derp'
         # initially claim the name
