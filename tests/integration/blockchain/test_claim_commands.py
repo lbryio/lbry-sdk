@@ -78,6 +78,17 @@ class ClaimSearchCommand(ClaimTestCase):
                 f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
             )
 
+    async def assertListsClaims(self, claims, **kwargs):
+        kwargs.setdefault('order_by', 'height')
+        results = await self.claim_list(**kwargs)
+        self.assertEqual(len(claims), len(results))
+        for claim, result in zip(claims, results):
+            self.assertEqual(
+                (claim['txid'], self.get_claim_id(claim)),
+                (result['txid'], result['claim_id']),
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
+            )
+
     @skip("doesnt happen on ES...?")
     async def test_disconnect_on_memory_error(self):
         claim_ids = [
@@ -185,9 +196,13 @@ class ClaimSearchCommand(ClaimTestCase):
         normal = await self.stream_create('normal', data=b'normal')
         normal_repost = await self.stream_repost(self.get_claim_id(normal), 'normal-repost')
         no_source_repost = await self.stream_repost(self.get_claim_id(no_source), 'no-source-repost')
-        await self.assertFindsClaims([no_source_repost, no_source, channel], has_no_source=True)
-        await self.assertFindsClaims([normal_repost, normal, channel], has_source=True)
-        await self.assertFindsClaims([no_source_repost, normal_repost, normal, no_source, channel])
+        channel_repost = await self.stream_repost(self.get_claim_id(channel), 'channel-repost')
+        await self.assertFindsClaims([channel_repost, no_source_repost, no_source, channel], has_no_source=True)
+        await self.assertListsClaims([no_source, channel], has_no_source=True)
+        await self.assertFindsClaims([channel_repost, normal_repost, normal, channel], has_source=True)
+        await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal], has_source=True)
+        await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
+        await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
 
     async def test_pagination(self):
         await self.create_channel()
@@ -969,6 +984,22 @@ class ClaimCommands(ClaimTestCase):
         claims = await self.claim_list(include_received_tips=True)
         self.assertEqual('0.0', claims[0]['received_tips'])
         self.assertEqual('0.0', claims[1]['received_tips'])
+
+    async def stream_update_and_wait(self, claim_id, **kwargs):
+        tx = await self.daemon.jsonrpc_stream_update(claim_id, **kwargs)
+        await self.ledger.wait(tx)
+
+    async def test_claim_list_pending_edits_ordering(self):
+        stream5_id = self.get_claim_id(await self.stream_create('five'))
+        stream4_id = self.get_claim_id(await self.stream_create('four'))
+        stream3_id = self.get_claim_id(await self.stream_create('three'))
+        stream2_id = self.get_claim_id(await self.stream_create('two'))
+        stream1_id = self.get_claim_id(await self.stream_create('one'))
+        await self.assertClaimList([stream1_id, stream2_id, stream3_id, stream4_id, stream5_id])
+        await self.stream_update_and_wait(stream4_id, title='foo')
+        await self.assertClaimList([stream4_id, stream1_id, stream2_id, stream3_id, stream5_id])
+        await self.stream_update_and_wait(stream3_id, title='foo')
+        await self.assertClaimList([stream4_id, stream3_id, stream1_id, stream2_id, stream5_id])
 
 
 class ChannelCommands(CommandTestCase):
@@ -2138,20 +2169,30 @@ class CollectionCommands(CommandTestCase):
         tx = await self.collection_create('radjingles', claims=claim_ids, allow_duplicate_name=True)
         claim_id2 = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 2)
-
+        # with clear_claims
         await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
         collections = await self.out(self.daemon.jsonrpc_collection_list())
-        self.assertEquals(len(collections['items']), 2)
+        self.assertEqual(len(collections['items']), 2)
         self.assertNotIn('canonical_url', collections['items'][0])
 
         resolved_collections = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
         self.assertIn('canonical_url', resolved_collections['items'][0])
+        # with replace
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[::-1][:2], tags=['cool'])
+        updated = await self.claim_search(claim_id=claim_id)
+        self.assertEqual(updated[0]['value']['tags'], ['cool'])
+        self.assertEqual(updated[0]['value']['claims'], claim_ids[::-1][:2])
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[:4], languages=['en', 'pt-BR'])
+        updated = await self.resolve(f'radjingles:{claim_id}')
+        self.assertEqual(updated['value']['claims'], claim_ids[:4])
+        self.assertNotIn('tags', updated['value'])
+        self.assertEqual(updated['value']['languages'], ['en', 'pt-BR'])
 
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=2))
-        self.assertEquals(len(collections['items'][0]['claims']), 2)
+        self.assertEqual(len(collections['items'][0]['claims']), 2)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=10))
         self.assertEqual(len(collections['items'][0]['claims']), 4)

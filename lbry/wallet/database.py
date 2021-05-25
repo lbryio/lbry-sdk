@@ -18,7 +18,7 @@ from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day
 
 from concurrent.futures.thread import ThreadPoolExecutor  # pylint: disable=wrong-import-order
-if platform.system() == 'Windows' or 'ANDROID_ARGUMENT' or 'KIVY_BUILD' in os.environ:
+if platform.system() == 'Windows' or ({'ANDROID_ARGUMENT', 'KIVY_BUILD'} & os.environ.keys()):
     from concurrent.futures.thread import ThreadPoolExecutor as ReaderExecutorClass  # pylint: disable=reimported
 else:
     from concurrent.futures.process import ProcessPoolExecutor as ReaderExecutorClass
@@ -446,6 +446,10 @@ class SQLiteMixin:
                     version = await self.db.execute_fetchone("SELECT version FROM version LIMIT 1;")
                     if version == (self.SCHEMA_VERSION,):
                         return
+                    if version == ("1.5",) and self.SCHEMA_VERSION == "1.6":
+                        await self.db.execute("ALTER TABLE txo ADD COLUMN has_source bool DEFAULT 1;")
+                        await self.db.execute("UPDATE version SET version = ?", (self.SCHEMA_VERSION,))
+                        return
                 await self.db.executescript('\n'.join(
                     f"DROP TABLE {table};" for table in tables
                 ) + '\n' + 'PRAGMA WAL_CHECKPOINT(FULL);' + '\n' + 'VACUUM;')
@@ -592,7 +596,7 @@ def get_and_reserve_spendable_utxos(transaction: sqlite3.Connection, accounts: L
 
 class Database(SQLiteMixin):
 
-    SCHEMA_VERSION = "1.5"
+    SCHEMA_VERSION = "1.6"
 
     PRAGMAS = """
         pragma journal_mode=WAL;
@@ -646,6 +650,7 @@ class Database(SQLiteMixin):
             txo_type integer not null default 0,
             claim_id text,
             claim_name text,
+            has_source bool,
 
             channel_id text,
             reposted_claim_id text
@@ -690,7 +695,8 @@ class Database(SQLiteMixin):
             'address': txo.get_address(self.ledger),
             'position': txo.position,
             'amount': txo.amount,
-            'script': sqlite3.Binary(txo.script.source)
+            'script': sqlite3.Binary(txo.script.source),
+            'has_source': False,
         }
         if txo.is_claim:
             if txo.can_decode_claim:
@@ -698,8 +704,11 @@ class Database(SQLiteMixin):
                 row['txo_type'] = TXO_TYPES.get(claim.claim_type, TXO_TYPES['stream'])
                 if claim.is_repost:
                     row['reposted_claim_id'] = claim.repost.reference.claim_id
+                    row['has_source'] = True
                 if claim.is_signed:
                     row['channel_id'] = claim.signing_channel_id
+                if claim.is_stream:
+                    row['has_source'] = claim.stream.has_source
             else:
                 row['txo_type'] = TXO_TYPES['stream']
         elif txo.is_support:
@@ -1015,7 +1024,7 @@ class Database(SQLiteMixin):
 
         if 'order_by' not in constraints or constraints['order_by'] == 'height':
             constraints['order_by'] = [
-                "tx.height=0 DESC", "tx.height DESC", "tx.position DESC", "txo.position"
+                "tx.height in (0, -1) DESC", "tx.height DESC", "tx.position DESC", "txo.position"
             ]
         elif constraints.get('order_by', None) == 'none':
             del constraints['order_by']

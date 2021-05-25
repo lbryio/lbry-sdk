@@ -5,7 +5,6 @@ from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
 from collections import namedtuple
-from multiprocessing import Manager
 from binascii import unhexlify, hexlify
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.util import class_logger
@@ -220,7 +219,6 @@ class SQLDB:
         self.db = None
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.ledger = Ledger if main.coin.NET == 'mainnet' else RegTestLedger
-        self.state_manager = None
         self.blocked_streams = None
         self.blocked_channels = None
         self.blocking_channel_hashes = {
@@ -251,11 +249,10 @@ class SQLDB:
         self.execute(self.PRAGMAS)
         self.execute(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
-        self.state_manager = Manager()
-        self.blocked_streams = self.state_manager.dict()
-        self.blocked_channels = self.state_manager.dict()
-        self.filtered_streams = self.state_manager.dict()
-        self.filtered_channels = self.state_manager.dict()
+        self.blocked_streams = {}
+        self.blocked_channels = {}
+        self.filtered_streams = {}
+        self.filtered_channels = {}
         self.update_blocked_and_filtered_claims()
         for algorithm in self.trending:
             algorithm.install(self.db)
@@ -263,8 +260,6 @@ class SQLDB:
     def close(self):
         if self.db is not None:
             self.db.close()
-        if self.state_manager is not None:
-            self.state_manager.shutdown()
 
     def update_blocked_and_filtered_claims(self):
         self.update_claims_from_channel_hashes(
@@ -406,7 +401,8 @@ class SQLDB:
                     if isinstance(fee.currency, str):
                         claim_record['fee_currency'] = fee.currency.lower()
                     if isinstance(fee.amount, Decimal):
-                        claim_record['fee_amount'] = int(fee.amount*1000)
+                        if fee.amount >= 0 and int(fee.amount*1000) < 9223372036854775807:
+                            claim_record['fee_amount'] = int(fee.amount*1000)
             elif claim.is_repost:
                 claim_record['claim_type'] = CLAIM_TYPES['repost']
                 claim_record['reposted_claim_hash'] = claim.repost.reference.claim_hash
@@ -822,16 +818,18 @@ class SQLDB:
         )
 
     def enqueue_changes(self):
-        for claim in self.execute(f"""
+        query = """
         SELECT claimtrie.claim_hash as is_controlling,
                claimtrie.last_take_over_height,
                (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
+               (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
-        """):
+        """
+        for claim in self.execute(query):
             claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
             claim['censor_type'] = 0

@@ -92,11 +92,23 @@ To install on Windows:
  ```
 
 ## Run the tests
+### Elasticsearch
 
-To run the unit tests from the repo directory:
+For running integration tests, Elasticsearch is required to be available at localhost:9200/
+
+The easiest way to start it is using docker with:
+```bash
+make elastic-docker
+```
+Alternative installation methods are available [at Elasticsearch website](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html).
+
+
+
+To run the unit and integration tests from the repo directory:
 
  ```
  python -m unittest discover tests.unit
+ python -m unittest discover tests.integration
  ```
 
 ## Usage

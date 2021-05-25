@@ -380,13 +380,15 @@ CARRIER_GRADE_NAT_SUBNET = ipaddress.ip_network('100.64.0.0/10')
 IPV4_TO_6_RELAY_SUBNET = ipaddress.ip_network('192.88.99.0/24')
 
 
-def is_valid_public_ipv4(address, allow_localhost: bool = False):
+def is_valid_public_ipv4(address, allow_localhost: bool = False, allow_lan: bool = False):
     try:
         parsed_ip = ipaddress.ip_address(address)
         if parsed_ip.is_loopback and allow_localhost:
             return True
+        if allow_lan and parsed_ip.is_private:
+            return True
         if any((parsed_ip.version != 4, parsed_ip.is_unspecified, parsed_ip.is_link_local, parsed_ip.is_loopback,
-                parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private, parsed_ip.is_reserved)):
+                parsed_ip.is_multicast, parsed_ip.is_reserved, parsed_ip.is_private)):
             return False
         else:
             return not any((CARRIER_GRADE_NAT_SUBNET.supernet_of(ipaddress.ip_network(f"{address}/32")),

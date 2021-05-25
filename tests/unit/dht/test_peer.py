@@ -10,8 +10,8 @@ class PeerTest(AsyncioTestCase):
         self.loop = asyncio.get_event_loop()
         self.peer_manager = PeerManager(self.loop)
         self.node_ids = [generate_id(), generate_id(), generate_id()]
-        self.first_contact = make_kademlia_peer(self.node_ids[1], '1.0.0.1', udp_port=1000)
-        self.second_contact = make_kademlia_peer(self.node_ids[0], '1.0.0.2', udp_port=1000)
+        self.first_contact = make_kademlia_peer(self.node_ids[1], '1.0.0.1', udp_port=1024)
+        self.second_contact = make_kademlia_peer(self.node_ids[0], '1.0.0.2', udp_port=1024)
 
     def test_peer_is_good_unknown_peer(self):
         # Scenario: peer replied, but caller doesn't know the node_id.
@@ -25,36 +25,37 @@ class PeerTest(AsyncioTestCase):
 
     def test_make_contact_error_cases(self):
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4', 100000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4.5', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], 'this is not an ip', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4.5', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], 'this is not an ip', 1024)
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4', -1000)
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4', 0)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4', 1023)
         self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '1.2.3.4', 70000)
-        self.assertRaises(ValueError, make_kademlia_peer, b'not valid node id', '1.2.3.4', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, b'not valid node id', '1.2.3.4', 1024)
 
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '0.0.0.0', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '10.0.0.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '100.64.0.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '127.0.0.1', 1000)
-        self.assertIsNotNone(make_kademlia_peer(self.node_ids[1], '127.0.0.1', 1000, allow_localhost=True))
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.0.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '172.16.0.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '169.254.1.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.0.0.2', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.0.2.2', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.88.99.2', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.18.1.1', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.51.100.2', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.51.100.2', 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '203.0.113.4', 1000)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '0.0.0.0', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '10.0.0.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '100.64.0.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '127.0.0.1', 1024)
+        self.assertIsNotNone(make_kademlia_peer(self.node_ids[1], '127.0.0.1', 1024, allow_localhost=True))
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.168.0.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '172.16.0.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '169.254.1.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.0.0.2', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.0.2.2', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '192.88.99.2', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.18.1.1', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.51.100.2', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '198.51.100.2', 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '203.0.113.4', 1024)
         for i in range(32):
-            self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], f"{224 + i}.0.0.0", 1000)
-        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '255.255.255.255', 1000)
+            self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], f"{224 + i}.0.0.0", 1024)
+        self.assertRaises(ValueError, make_kademlia_peer, self.node_ids[1], '255.255.255.255', 1024)
         self.assertRaises(
-            ValueError, make_kademlia_peer, self.node_ids[1], 'beee:eeee:eeee:eeee:eeee:eeee:eeee:eeef', 1000
+            ValueError, make_kademlia_peer, self.node_ids[1], 'beee:eeee:eeee:eeee:eeee:eeee:eeee:eeef', 1024
         )
         self.assertRaises(
-            ValueError, make_kademlia_peer, self.node_ids[1], '2001:db8::ff00:42:8329', 1000
+            ValueError, make_kademlia_peer, self.node_ids[1], '2001:db8::ff00:42:8329', 1024
         )
 
     def test_is_valid_ipv4(self):
@@ -79,7 +80,7 @@ class PeerTest(AsyncioTestCase):
     def test_boolean(self):
         self.assertNotEqual(self.first_contact, self.second_contact)
         self.assertEqual(
-            self.second_contact, make_kademlia_peer(self.node_ids[0], '1.0.0.2', udp_port=1000)
+            self.second_contact, make_kademlia_peer(self.node_ids[0], '1.0.0.2', udp_port=1024)
         )
 
     def test_compact_ip(self):

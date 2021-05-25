@@ -5,7 +5,7 @@ import logging
 from statistics import median
 from decimal import Decimal
 from typing import Optional, Iterable, Type
-from aiohttp.client_exceptions import ContentTypeError
+from aiohttp.client_exceptions import ContentTypeError, ClientConnectionError
 from lbry.error import InvalidExchangeRateResponseError, CurrencyConversionError
 from lbry.utils import aiohttp_request
 from lbry.wallet.dewies import lbc_to_dewies
@@ -79,18 +79,23 @@ class MarketFeed:
             log.debug("Saving rate update %f for %s from %s", rate, self.market, self.name)
             self.rate = ExchangeRate(self.market, rate, int(time.time()))
             self.last_check = time.time()
-            self.event.set()
             return self.rate
         except asyncio.CancelledError:
             raise
         except asyncio.TimeoutError:
             log.warning("Timed out fetching exchange rate from %s.", self.name)
         except json.JSONDecodeError as e:
-            log.warning("Could not parse exchange rate response from %s: %s", self.name, e.doc)
+            msg = e.doc if '<html>' not in e.doc else 'unexpected content type.'
+            log.warning("Could not parse exchange rate response from %s: %s", self.name, msg)
+            log.debug(e.doc)
         except InvalidExchangeRateResponseError as e:
             log.warning(str(e))
+        except ClientConnectionError as e:
+            log.warning("Error trying to connect to exchange rate %s: %s", self.name, str(e))
         except Exception as e:
             log.exception("Exchange rate error (%s from %s):", self.market, self.name)
+        finally:
+            self.event.set()
 
     async def keep_updated(self):
         while True:
@@ -128,27 +133,6 @@ class BittrexBTCFeed(BaseBittrexFeed):
 class BittrexUSDFeed(BaseBittrexFeed):
     market = "USDLBC"
     url = "https://api.bittrex.com/v3/markets/LBC-USD/ticker"
-
-
-class BaseCryptonatorFeed(MarketFeed):
-    name = "Cryptonator"
-    market = None
-    url = None
-
-    def get_rate_from_response(self, json_response):
-        if 'ticker' not in json_response or 'price' not in json_response['ticker']:
-            raise InvalidExchangeRateResponseError(self.name, 'result not found')
-        return float(json_response['ticker']['price'])
-
-
-class CryptonatorBTCFeed(BaseCryptonatorFeed):
-    market = "BTCLBC"
-    url = "https://api.cryptonator.com/api/ticker/btc-lbc"
-
-
-class CryptonatorUSDFeed(BaseCryptonatorFeed):
-    market = "USDLBC"
-    url = "https://api.cryptonator.com/api/ticker/usd-lbc"
 
 
 class BaseCoinExFeed(MarketFeed):
@@ -210,8 +194,6 @@ class UPbitBTCFeed(MarketFeed):
 FEEDS: Iterable[Type[MarketFeed]] = (
     BittrexBTCFeed,
     BittrexUSDFeed,
-    CryptonatorBTCFeed,
-    CryptonatorUSDFeed,
     CoinExBTCFeed,
     CoinExUSDFeed,
     HotbitBTCFeed,

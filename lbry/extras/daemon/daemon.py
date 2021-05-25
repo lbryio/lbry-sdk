@@ -2254,7 +2254,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                       [--page=<page>] [--page_size=<page_size>]
+                       [--has_source | --has_no_source] [--page=<page>] [--page_size=<page_size>]
                        [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
 
         Options:
@@ -2265,6 +2265,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_spent                 : (bool) shows previous claim updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --has_source               : (bool) list claims containing a source field
+            --has_no_source            : (bool) list claims not containing a source field
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
@@ -3936,9 +3938,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if replace:
             claim = Claim()
-            claim.collection.message.source.CopyFrom(
-                old_txo.claim.collection.message.source
-            )
             claim.collection.update(**kwargs)
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
@@ -4351,6 +4350,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_id=None, channel_id=None, not_channel_id=None,
             name=None, reposted_claim_id=None,
             is_spent=False, is_not_spent=False,
+            has_source=None, has_no_source=None,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
@@ -4358,6 +4358,10 @@ class Daemon(metaclass=JSONRPCServerType):
             constraints['is_spent'] = True
         elif is_not_spent:
             constraints['is_spent'] = False
+        if has_source:
+            constraints['has_source'] = True
+        elif has_no_source:
+            constraints['has_source'] = False
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
