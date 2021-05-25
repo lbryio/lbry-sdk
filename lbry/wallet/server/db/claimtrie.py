@@ -89,7 +89,7 @@ def get_remove_name_ops(name: str, claim_hash: bytes, height: int) -> typing.Lis
 
 
 def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
-                          previous_winning: Optional[ClaimTakeoverValue] = None):
+                          previous_winning: Optional[ClaimTakeoverValue]):
     if previous_winning:
         return [
             RevertableDelete(
