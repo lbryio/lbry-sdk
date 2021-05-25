@@ -5,11 +5,6 @@ from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue
 
 
-
-
-
-
-
 def length_encoded_name(name: str) -> bytes:
     encoded = name.encode('utf-8')
     return len(encoded).to_bytes(2, byteorder='big') + encoded
@@ -96,7 +91,6 @@ def get_remove_name_ops(name: str, claim_hash: bytes, height: int) -> typing.Lis
 def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
                           previous_winning: Optional[ClaimTakeoverValue] = None):
     if previous_winning:
-        # print(f"takeover previously owned {name} - {claim_hash.hex()} at {takeover_height}")
         return [
             RevertableDelete(
                 *Prefixes.claim_takeover.pack_item(
@@ -109,7 +103,6 @@ def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
                 )
             )
         ]
-    # print(f"takeover {name} - {claim_hash[::-1].hex()} at {takeover_height}")
     return [
         RevertablePut(
             *Prefixes.claim_takeover.pack_item(
