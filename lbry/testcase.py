@@ -18,7 +18,7 @@ from lbry.wallet import WalletManager, Wallet, Ledger, Account, Transaction
 from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode
+from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode, HubNode
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
@@ -223,6 +223,7 @@ class IntegrationTestCase(AsyncioTestCase):
         super().__init__(*args, **kwargs)
         self.conductor: Optional[Conductor] = None
         self.blockchain: Optional[BlockchainNode] = None
+        self.hub: Optional[HubNode] = None
         self.wallet_node: Optional[WalletNode] = None
         self.manager: Optional[WalletManager] = None
         self.ledger: Optional[Ledger] = None
@@ -237,7 +238,10 @@ class IntegrationTestCase(AsyncioTestCase):
         self.addCleanup(self.conductor.stop_spv)
         await self.conductor.start_wallet()
         self.addCleanup(self.conductor.stop_wallet)
+        await self.conductor.start_hub()
+        self.addCleanup(self.conductor.stop_hub)
         self.blockchain = self.conductor.blockchain_node
+        self.hub = self.conductor.hub_node
         self.wallet_node = self.conductor.wallet_node
         self.manager = self.wallet_node.manager
         self.ledger = self.wallet_node.ledger
@@ -611,7 +615,14 @@ class CommandTestCase(IntegrationTestCase):
         return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
     async def claim_search(self, **kwargs):
-        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
+        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            res = await self.out(self.hub.claim_search(**kwargs))
+            if 'txos' in res:
+                return res['txos']
+            else:
+                return []
+        else:
+            return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']
@@ -626,6 +637,12 @@ class CommandTestCase(IntegrationTestCase):
         return await self.out(self.daemon.jsonrpc_txo_plot(*args, **kwargs))
 
     async def claim_list(self, *args, **kwargs):
+        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            res = await self.out(self.hub.claim_search(**kwargs))
+            if 'txos' in res:
+                return res['txos']
+            else:
+                return []
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 
     async def stream_list(self, *args, **kwargs):
