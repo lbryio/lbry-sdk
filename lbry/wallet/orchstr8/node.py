@@ -19,7 +19,10 @@ from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 from lbry.conf import KnownHubsList, Config
 
-
+from decimal import Decimal
+from lbry.wallet.server.db.elasticsearch.constants import INDEX_DEFAULT_SETTINGS, REPLACEMENTS, FIELDS, TEXT_FIELDS, \
+     RANGE_FIELDS
+MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 log = logging.getLogger(__name__)
 
 
@@ -48,10 +51,12 @@ class Conductor:
         self.wallet_node = WalletNode(
             self.manager_module, RegTestLedger, default_seed=seed
         )
+        self.hub_node = HubNode("asdf", "hub", "hub")
 
         self.blockchain_started = False
         self.spv_started = False
         self.wallet_started = False
+        self.hub_started = False
 
         self.log = log.getChild('conductor')
 
@@ -66,6 +71,17 @@ class Conductor:
         if self.blockchain_started:
             await self.blockchain_node.stop(cleanup=True)
             self.blockchain_started = False
+
+    async def start_hub(self):
+        if not self.hub_started:
+            asyncio.create_task(self.hub_node.start())
+            await self.blockchain_node.running.wait()
+            self.hub_started = True
+
+    async def stop_hub(self):
+        if self.hub_started:
+            await self.hub_node.stop(cleanup=True)
+            self.hub_started = False
 
     async def start_spv(self):
         if not self.spv_started:
@@ -440,3 +456,307 @@ class BlockchainNode:
 
     def get_raw_transaction(self, txid):
         return self._cli_cmnd('getrawtransaction', txid, '1')
+
+
+class HubProcess(asyncio.SubprocessProtocol):
+
+    IGNORE_OUTPUT = [
+        b'keypool keep',
+        b'keypool reserve',
+        b'keypool return',
+    ]
+
+    def __init__(self):
+        self.ready = asyncio.Event()
+        self.stopped = asyncio.Event()
+        self.log = log.getChild('hub')
+
+    def pipe_data_received(self, fd, data):
+        if self.log and not any(ignore in data for ignore in self.IGNORE_OUTPUT):
+            if b'Error:' in data:
+                self.log.error(data.decode())
+            else:
+                self.log.info(data.decode())
+        if b'Error:' in data:
+            self.ready.set()
+            raise SystemError(data.decode())
+        if b'listening on' in data:
+            self.ready.set()
+
+    def process_exited(self):
+        self.stopped.set()
+        self.ready.set()
+
+
+class HubNode:
+
+    def __init__(self, url, daemon, cli):
+        self.debug = True
+
+        self.latest_release_url = url
+        self.project_dir = os.path.dirname(os.path.dirname(__file__))
+        self.bin_dir = os.path.join(self.project_dir, 'bin')
+        self.daemon_bin = os.path.join(self.bin_dir, daemon)
+        self.cli_bin = os.path.join(os.environ['GOPATH'], 'bin/grpcurl')
+        self.log = log.getChild('hub')
+        self.data_path = None
+        self.protocol = None
+        self.transport = None
+        self.block_expected = 0
+        self.hostname = 'localhost'
+        # self.peerport = 9246 + 13  # avoid conflict with default peer port
+        self.rpcport = 50051 # avoid conflict with default rpc port
+        self.rpcuser = 'rpcuser'
+        self.rpcpassword = 'rpcpassword'
+        self.stopped = False
+        self.restart_ready = asyncio.Event()
+        self.restart_ready.set()
+        self.running = asyncio.Event()
+
+    @property
+    def rpc_url(self):
+        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.rpcport}/'
+
+    @property
+    def exists(self):
+        return (
+            os.path.exists(self.cli_bin) and
+            os.path.exists(self.daemon_bin)
+        )
+
+    def download(self):
+        downloaded_file = os.path.join(
+            self.bin_dir,
+            self.latest_release_url[self.latest_release_url.rfind('/')+1:]
+        )
+
+        if not os.path.exists(self.bin_dir):
+            os.mkdir(self.bin_dir)
+
+        if not os.path.exists(downloaded_file):
+            self.log.info('Downloading: %s', self.latest_release_url)
+            with urllib.request.urlopen(self.latest_release_url) as response:
+                with open(downloaded_file, 'wb') as out_file:
+                    shutil.copyfileobj(response, out_file)
+
+        self.log.info('Extracting: %s', downloaded_file)
+
+        if downloaded_file.endswith('.zip'):
+            with zipfile.ZipFile(downloaded_file) as dotzip:
+                dotzip.extractall(self.bin_dir)
+                # zipfile bug https://bugs.python.org/issue15795
+                os.chmod(self.cli_bin, 0o755)
+                os.chmod(self.daemon_bin, 0o755)
+
+        elif downloaded_file.endswith('.tar.gz'):
+            with tarfile.open(downloaded_file) as tar:
+                tar.extractall(self.bin_dir)
+
+        return self.exists
+
+    def ensure(self):
+        return self.exists or self.download()
+
+    async def start(self):
+        assert self.ensure()
+        self.data_path = tempfile.mkdtemp()
+        loop = asyncio.get_event_loop()
+        asyncio.get_child_watcher().attach_loop(loop)
+        command = [
+            self.daemon_bin, 'serve',
+        ]
+        self.log.info(' '.join(command))
+        while not self.stopped:
+            if self.running.is_set():
+                await asyncio.sleep(1)
+                continue
+            await self.restart_ready.wait()
+            try:
+                if not self.debug:
+                    self.transport, self.protocol = await loop.subprocess_exec(
+                        HubProcess, *command
+                    )
+                    await self.protocol.ready.wait()
+                    assert not self.protocol.stopped.is_set()
+                self.running.set()
+            except asyncio.CancelledError:
+                self.running.clear()
+                raise
+            except Exception as e:
+                self.running.clear()
+                log.exception('failed to start hub', exc_info=e)
+
+    async def stop(self, cleanup=True):
+        self.stopped = True
+        try:
+            if not self.debug:
+                self.transport.terminate()
+                await self.protocol.stopped.wait()
+                self.transport.close()
+        finally:
+            if cleanup:
+                self.cleanup()
+
+    async def clear_mempool(self):
+        self.restart_ready.clear()
+        self.transport.terminate()
+        await self.protocol.stopped.wait()
+        self.transport.close()
+        self.running.clear()
+        # os.remove(os.path.join(self.data_path, 'regtest', 'mempool.dat'))
+        self.restart_ready.set()
+        await self.running.wait()
+
+    def cleanup(self):
+        pass
+        #shutil.rmtree(self.data_path, ignore_errors=True)
+
+    def fix_kwargs(self, **kwargs):
+        DEFAULT_PAGE_SIZE = 20
+        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+        if "has_no_source" in kwargs:
+            kwargs["has_source"] = not kwargs["has_no_source"]
+            del kwargs["has_no_source"]
+        if "claim_id" in kwargs:
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs["claim_id"]
+            }
+        if "not_claim_id" in kwargs:
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs["not_claim_id"]
+            }
+            del kwargs["not_claim_id"]
+        if "claim_ids" in kwargs:
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs["claim_ids"]
+            }
+            del kwargs["claim_ids"]
+        if "not_claim_ids" in kwargs:
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs["not_claim_ids"]
+            }
+            del kwargs["not_claim_ids"]
+        if "channel_id" in kwargs:
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs["channel_id"]
+            }
+        if "channel" in kwargs:
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs["channel"]
+            }
+            del kwargs["channel"]
+        if "not_channel_id" in kwargs:
+            kwargs["channel_id"] = {
+                "invert": True,
+                "value": kwargs["not_channel_id"]
+            }
+            del kwargs["not_channel_id"]
+        if "channel_ids" in kwargs:
+            kwargs["channel_ids"] = {
+                "invert": False,
+                "value": kwargs["channel_ids"]
+            }
+        if "not_channel_ids" in kwargs:
+            kwargs["channel_ids"] = {
+                "invert": True,
+                "value": kwargs["not_channel_ids"]
+            }
+            del kwargs["not_channel_ids"]
+        if "txid" in kwargs:
+            kwargs["tx_id"] = kwargs["txid"]
+            del kwargs["txid"]
+        if "nout" in kwargs:
+            kwargs["tx_nout"] = kwargs["nout"]
+            del kwargs["nout"]
+        if "valid_channel_signature" in kwargs:
+            kwargs["signature_valid"] = kwargs["valid_channel_signature"]
+            del kwargs["valid_channel_signature"]
+        if "invalid_channel_signature" in kwargs:
+            kwargs["signature_valid"] = not kwargs["invalid_channel_signature"]
+            del kwargs["invalid_channel_signature"]
+
+        ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
+        for key in kwargs.keys():
+            value = kwargs[key]
+            if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
+                operator_length = 2 if value[:2] in ops else 1
+                operator, value = value[:operator_length], value[operator_length:]
+
+                op = 0
+                if operator == '=':
+                    op = 0
+                if operator == '<=' or operator == 'lte':
+                    op = 1
+                if operator == '>=' or operator == 'gte':
+                    op = 2
+                if operator == '<' or operator == 'lt':
+                    op = 3
+                if operator == '>' or operator == 'gt':
+                    op = 4
+                kwargs[key] = {"op": op, "value": str(value)}
+            elif key in MY_RANGE_FIELDS:
+                kwargs[key] = {"op": 0, "value": str(value)}
+
+        if 'fee_amount' in kwargs:
+            value = kwargs['fee_amount']
+            value.update({"value": str(Decimal(value['value']) * 1000)})
+            kwargs['fee_amount'] = value
+        if 'stream_types' in kwargs:
+            kwargs['stream_type'] = kwargs.pop('stream_types')
+        if 'media_types' in kwargs:
+            kwargs['media_type'] = kwargs.pop('media_types')
+        return kwargs
+
+    async def _cli_cmnd2(self, *args):
+        cmnd_args = [
+            self.daemon_bin,
+        ] + list(args)
+        self.log.info(' '.join(cmnd_args))
+        loop = asyncio.get_event_loop()
+        asyncio.get_child_watcher().attach_loop(loop)
+        process = await asyncio.create_subprocess_exec(
+            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        out, _ = await process.communicate()
+        result = out.decode().strip()
+        self.log.info(result)
+        if result.startswith('error code'):
+            raise Exception(result)
+        return result
+
+    async def _cli_cmnd(self, *args, **kwargs):
+        cmnd_args = [
+            self.cli_bin,
+            '-d', f'{json.dumps(kwargs)}',
+            '-plaintext',
+            f'{self.hostname}:{self.rpcport}',
+            'pb.Hub.Search'
+        ] + list(args)
+        self.log.warning(' '.join(cmnd_args))
+        loop = asyncio.get_event_loop()
+        asyncio.get_child_watcher().attach_loop(loop)
+        process = await asyncio.create_subprocess_exec(
+            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+        out, _ = await process.communicate()
+        result = out.decode().strip()
+        self.log.warning(result)
+        if result.startswith('error code'):
+            raise Exception(result)
+        return result
+
+    async def claim_search(self, **kwargs):
+        kwargs = self.fix_kwargs(**kwargs)
+        res = json.loads(await self._cli_cmnd(**kwargs))
+        # log.warning(res)
+        return res
+
+    async def name_query(self, name):
+        return await self._cli_cmnd2('--name', name)
