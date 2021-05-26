@@ -1060,10 +1060,11 @@ class LBRYElectrumX(SessionBase):
         rows = []
         extra = []
         stream = await self.db.fs_getclaimbyid(claim_id)
+        if not stream:
+            stream = LookupError(f"Could not find claim at {claim_id}")
         rows.append(stream)
         # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
-
 
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction
