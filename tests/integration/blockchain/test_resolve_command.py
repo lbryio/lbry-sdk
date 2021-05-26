@@ -455,6 +455,83 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(1)
         await self.assertMatchClaimIsWinning(name, third_claim_id)
 
+    async def test_early_takeover_zero_delay(self):
+        name = 'derp'
+        # block 207
+        first_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+        await self.generate(96)
+        # block 304, activates at 307
+        second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        # on block 307 make a third claim with a yet higher amount, it takes over with no delay because the
+        # second claim activates and begins the takeover on this block
+        third_claim_id = (await self.stream_create(name, '0.3',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+
+    async def test_early_takeover_from_support_zero_delay(self):
+        name = 'derp'
+        # block 207
+        first_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+        await self.generate(96)
+        # block 304, activates at 307
+        second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        third_claim_id = (await self.stream_create(name, '0.19',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        tx = await self.daemon.jsonrpc_support_create(third_claim_id, '0.1')
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+
+    async def test_early_takeover_from_support_and_claim_zero_delay(self):
+        name = 'derp'
+        # block 207
+        first_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+
+        await self.generate(96)
+        # block 304, activates at 307
+        second_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(1)
+
+        file_path = self.create_upload_file(data=b'hi!')
+        tx = await self.daemon.jsonrpc_stream_create(name, '0.19', file_path=file_path, allow_duplicate_name=True)
+        await self.ledger.wait(tx)
+        third_claim_id = tx.outputs[0].claim_id
+
+        wallet = self.daemon.wallet_manager.get_wallet_or_default(None)
+        funding_accounts = wallet.get_accounts_or_all(None)
+        amount = self.daemon.get_dewies_or_error("amount", '0.1')
+        account = wallet.get_account_or_default(None)
+        claim_address = await account.receiving.get_or_create_usable_address()
+        tx = await Transaction.support(
+            'derp', third_claim_id, amount, claim_address, funding_accounts, funding_accounts[0], None
+        )
+        await tx.sign(funding_accounts)
+        await self.daemon.broadcast_or_release(tx, True)
+        await self.ledger.wait(tx)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+        await self.generate(1)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
+
     async def test_early_takeover_abandoned_controlling_support(self):
         name = 'derp'
         # block 207
