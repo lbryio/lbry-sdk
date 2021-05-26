@@ -845,8 +845,6 @@ class BlockProcessor:
                 winning_including_future_activations = max(
                     amounts_with_future_activations, key=lambda x: amounts_with_future_activations[x]
                 )
-                print(amounts_with_future_activations)
-                print(amounts)
                 if winning_claim_hash != winning_including_future_activations:
                     print(f"\ttakeover of {name} by {winning_claim_hash.hex()} triggered early activation and "
                           f"takeover by {winning_including_future_activations.hex()} at {height}")
@@ -866,7 +864,9 @@ class BlockProcessor:
                             if (k.tx_num, k.position) == (tx_num, position):
                                 amount = tx_amount
                                 activation = k.height
+                                break
                         assert None not in (amount, activation)
+                    # update the claim that's activating early
                     ops.extend(
                         StagedActivation(
                             ACTIVATED_CLAIM_TXO_TYPE, winning_including_future_activations, tx_num,
@@ -879,26 +879,22 @@ class BlockProcessor:
                             position, height, name, amount
                         ).get_activate_ops()
                     )
-
                     for (k, amount) in activate_in_future[name][winning_including_future_activations]:
                         txo = (k.tx_num, k.position)
                         if txo in self.possible_future_support_txos[winning_including_future_activations]:
                             t = ACTIVATED_SUPPORT_TXO_TYPE
-                        else:
-                            t = ACTIVATED_CLAIM_TXO_TYPE
-                        ops.extend(
-                            StagedActivation(
-                                t, winning_including_future_activations, k.tx_num,
-                                k.position, k.height, name, amount
-                            ).get_remove_activate_ops()
-                        )
-                        ops.extend(
-                            StagedActivation(
-                                t, winning_including_future_activations, k.tx_num,
-                                k.position, height, name, amount
-                            ).get_activate_ops()
-                        )
-
+                            ops.extend(
+                                StagedActivation(
+                                    t, winning_including_future_activations, k.tx_num,
+                                    k.position, k.height, name, amount
+                                ).get_remove_activate_ops()
+                            )
+                            ops.extend(
+                                StagedActivation(
+                                    t, winning_including_future_activations, k.tx_num,
+                                    k.position, height, name, amount
+                                ).get_activate_ops()
+                            )
                     ops.extend(get_takeover_name_ops(name, winning_including_future_activations, height, controlling))
                 elif not controlling or (winning_claim_hash != controlling.claim_hash and
                                        name in names_with_abandoned_controlling_claims) or \
