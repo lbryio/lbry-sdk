@@ -3,6 +3,7 @@ from typing import Optional
 from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue
+from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE
 
 
 def length_encoded_name(name: str) -> bytes:
@@ -51,7 +52,9 @@ class StagedActivation(typing.NamedTuple):
 
     def _get_add_remove_activate_ops(self, add=True):
         op = RevertablePut if add else RevertableDelete
-        print(f"\t{'add' if add else 'remove'} {self.txo_type}, {self.tx_num}, {self.position}, activation={self.activation_height}, {self.name}")
+        print(f"\t{'add' if add else 'remove'} {'claim' if self.txo_type == ACTIVATED_CLAIM_TXO_TYPE else 'support'},"
+              f" {self.tx_num}, {self.position}, activation={self.activation_height}, {self.name}, "
+              f"amount={self.amount}")
         return [
             op(
                 *Prefixes.activated.pack_item(
