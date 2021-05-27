@@ -1002,27 +1002,36 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    async def run_and_cache_query(self, query_name, kwargs):
+    # async def run_and_cache_query(self, query_name, kwargs):
+    #     start = time.perf_counter()
+    #     if isinstance(kwargs, dict):
+    #         kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
+    #     try:
+    #         self.session_mgr.pending_query_metric.inc()
+    #         return await self.db.search_index.session_query(query_name, kwargs)
+    #     except ConnectionTimeout:
+    #         self.session_mgr.interrupt_count_metric.inc()
+    #         raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
+    #     finally:
+    #         self.session_mgr.pending_query_metric.dec()
+    #         self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
+
+    async def mempool_compact_histogram(self):
+        return self.mempool.compact_fee_histogram()
+
+    async def claimtrie_search(self, **kwargs):
         start = time.perf_counter()
         if isinstance(kwargs, dict):
             kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
         try:
             self.session_mgr.pending_query_metric.inc()
-            return await self.db.search_index.session_query(query_name, kwargs)
+            return await self.db.search_index.cached_search(kwargs)
         except ConnectionTimeout:
             self.session_mgr.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
         finally:
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
-
-    async def mempool_compact_histogram(self):
-        return self.mempool.compact_fee_histogram()
-
-    async def claimtrie_search(self, **kwargs):
-        raise NotImplementedError()
-        # if kwargs:
-        #     return await self.run_and_cache_query('search', kwargs)
 
     async def claimtrie_resolve(self, *urls):
         rows, extra = [], []

@@ -170,48 +170,43 @@ class SearchIndex:
         self.claim_cache.clear()
         self.resolution_cache.clear()
 
-    async def session_query(self, query_name, kwargs):
-        offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
+    async def cached_search(self, kwargs):
         total_referenced = []
-        if query_name == 'resolve':
-            total_referenced, response, censor = await self.resolve(*kwargs)
-        else:
-            cache_item = ResultCacheItem.from_cache(str(kwargs), self.search_cache)
-            if cache_item.result is not None:
+        cache_item = ResultCacheItem.from_cache(str(kwargs), self.search_cache)
+        if cache_item.result is not None:
+            return cache_item.result
+        async with cache_item.lock:
+            if cache_item.result:
                 return cache_item.result
-            async with cache_item.lock:
-                if cache_item.result:
-                    return cache_item.result
-                censor = Censor(Censor.SEARCH)
-                if kwargs.get('no_totals'):
-                    response, offset, total = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
-                else:
-                    response, offset, total = await self.search(**kwargs)
-                censor.apply(response)
+            censor = Censor(Censor.SEARCH)
+            if kwargs.get('no_totals'):
+                response, offset, total = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
+            else:
+                response, offset, total = await self.search(**kwargs)
+            censor.apply(response)
+            total_referenced.extend(response)
+            if censor.censored:
+                response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
                 total_referenced.extend(response)
-                if censor.censored:
-                    response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
-                    total_referenced.extend(response)
-                result = Outputs.to_base64(
-                    response, await self._get_referenced_rows(total_referenced), offset, total, censor
-                )
-                cache_item.result = result
-                return result
-        return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
+            result = Outputs.to_base64(
+                response, await self._get_referenced_rows(total_referenced), offset, total, censor
+            )
+            cache_item.result = result
+            return result
 
-    async def resolve(self, *urls):
-        censor = Censor(Censor.RESOLVE)
-        results = [await self.resolve_url(url) for url in urls]
-        # just heat the cache
-        await self.populate_claim_cache(*filter(lambda x: isinstance(x, str), results))
-        results = [self._get_from_cache_or_error(url, result) for url, result in zip(urls, results)]
-
-        censored = [
-            result if not isinstance(result, dict) or not censor.censor(result)
-            else ResolveCensoredError(url, result['censoring_channel_hash'])
-            for url, result in zip(urls, results)
-        ]
-        return results, censored, censor
+    # async def resolve(self, *urls):
+    #     censor = Censor(Censor.RESOLVE)
+    #     results = [await self.resolve_url(url) for url in urls]
+    #     # just heat the cache
+    #     await self.populate_claim_cache(*filter(lambda x: isinstance(x, str), results))
+    #     results = [self._get_from_cache_or_error(url, result) for url, result in zip(urls, results)]
+    #
+    #     censored = [
+    #         result if not isinstance(result, dict) or not censor.censor(result)
+    #         else ResolveCensoredError(url, result['censoring_channel_hash'])
+    #         for url, result in zip(urls, results)
+    #     ]
+    #     return results, censored, censor
 
     def _get_from_cache_or_error(self, url: str, resolution: Union[LookupError, StreamResolution, ChannelResolution]):
         cached = self.claim_cache.get(resolution)
@@ -434,9 +429,9 @@ def extract_doc(doc, index):
     doc['channel_id'] = channel_hash[::-1].hex() if channel_hash else channel_hash
     channel_hash = doc.pop('censoring_channel_hash')
     doc['censoring_channel_hash'] = channel_hash[::-1].hex() if channel_hash else channel_hash
-    txo_hash = doc.pop('txo_hash')
-    doc['tx_id'] = txo_hash[:32][::-1].hex()
-    doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
+    # txo_hash = doc.pop('txo_hash')
+    # doc['tx_id'] = txo_hash[:32][::-1].hex()
+    # doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
     doc['is_controlling'] = bool(doc['is_controlling'])
     doc['signature'] = (doc.pop('signature') or b'').hex() or None
     doc['signature_digest'] = (doc.pop('signature_digest') or b'').hex() or None
