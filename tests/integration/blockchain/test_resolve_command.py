@@ -182,8 +182,11 @@ class ResolveCommand(BaseResolveTestCase):
     async def test_advanced_resolve(self):
         claim_id1 = self.get_claim_id(
             await self.stream_create('foo', '0.7', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId('foo$1', claim_id1)
         claim_id2 = self.get_claim_id(
             await self.stream_create('foo', '0.8', allow_duplicate_name=True))
+        await self.assertResolvesToClaimId('foo$1', claim_id2)
+        await self.assertResolvesToClaimId('foo$2', claim_id1)
         claim_id3 = self.get_claim_id(
             await self.stream_create('foo', '0.9', allow_duplicate_name=True))
         # plain winning claim

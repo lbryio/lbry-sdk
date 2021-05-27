@@ -2,7 +2,7 @@ import typing
 from typing import Optional
 from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue
+from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue, EffectiveAmountPrefixRow
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE
 
 
@@ -112,6 +112,18 @@ def get_takeover_name_ops(name: str, claim_hash: bytes, takeover_height: int,
                 name, claim_hash, takeover_height
             )
         )
+    ]
+
+
+def get_remove_effective_amount_ops(name: str, effective_amount: int, tx_num: int, position: int, claim_hash: bytes):
+    return [
+        RevertableDelete(*EffectiveAmountPrefixRow.pack_item(name, effective_amount, tx_num, position, claim_hash))
+    ]
+
+
+def get_add_effective_amount_ops(name: str, effective_amount: int, tx_num: int, position: int, claim_hash: bytes):
+    return [
+        RevertablePut(*EffectiveAmountPrefixRow.pack_item(name, effective_amount, tx_num, position, claim_hash))
     ]
 
 
