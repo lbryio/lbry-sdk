@@ -185,7 +185,10 @@ class Ledger(metaclass=LedgerRegistry):
     @classmethod
     def is_valid_address(cls, address):
         decoded = Base58.decode_check(address)
-        return decoded[0] == cls.pubkey_address_prefix[0]
+        return (
+            decoded[0] == cls.pubkey_address_prefix[0] or
+            decoded[0] == cls.script_address_prefix[0]
+        )
 
     @classmethod
     def public_key_to_address(cls, public_key):
