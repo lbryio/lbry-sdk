@@ -398,6 +398,32 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
+    async def test_no_duplicates(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        claims = []
+        channels = []
+        first = await self.stream_create('original_claim0')
+        second = await self.stream_create('original_claim1')
+        for i in range(10):
+            repost_id = self.get_claim_id(second if i % 2 == 0 else first)
+            channel = await self.channel_create(f'@chan{i}', bid='0.001')
+            channels.append(channel)
+            claims.append(
+                await self.stream_repost(repost_id, f'claim{i}', bid='0.001', channel_id=self.get_claim_id(channel)))
+        await match([first, second] + channels,
+                    remove_duplicates=True, order_by=['^height'])
+        await match(list(reversed(channels)) + [second, first],
+                    remove_duplicates=True, order_by=['height'])
+        # the original claims doesn't show up, so we pick the oldest reposts
+        await match([channels[0], claims[0], channels[1], claims[1]] + channels[2:],
+                    height='>218',
+                    remove_duplicates=True, order_by=['^height'])
+        # limit claims per channel, invert order, oldest ones are still chosen
+        await match(channels[2:][::-1] + [claims[1], channels[1], claims[0], channels[0]],
+                    height='>218', limit_claims_per_channel=1,
+                    remove_duplicates=True, order_by=['height'])
+
     async def test_limit_claims_per_channel_across_sorted_pages(self):
         await self.generate(10)
         match = self.assertFindsClaims
@@ -429,6 +455,12 @@ class ClaimSearchCommand(ClaimTestCase):
             [claims[6], claims[7], last], page_size=4, page=3,
             limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
         )
+        # feature disabled on 0 or negative values
+        for limit in [None, 0, -1]:
+            await match(
+                [first, second] + claims + [last],
+                limit_claims_per_channel=limit, claim_type='stream', order_by=['^height']
+            )
 
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim

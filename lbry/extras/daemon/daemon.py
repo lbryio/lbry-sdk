@@ -2352,7 +2352,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
-                         [--has_source | --has_no_source]
+                         [--remove_duplicates] [--has_source | --has_no_source]
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
@@ -2461,6 +2461,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+            --remove_duplicates             : (bool) removes duplicated content from search by picking either the
+                                                     original claim or the oldest matching repost
             --has_source                    : (bool) find claims containing a source field
             --has_no_source                 : (bool) find claims not containing a source field
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
