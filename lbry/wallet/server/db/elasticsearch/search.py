@@ -19,6 +19,7 @@ from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
 from lbry.wallet.server.db.elasticsearch.constants import INDEX_DEFAULT_SETTINGS, REPLACEMENTS, FIELDS, TEXT_FIELDS, \
     RANGE_FIELDS
 from lbry.wallet.server.util import class_logger
+from lbry.wallet.server.db.common import ResolveResult
 
 
 class ChannelResolution(str):
@@ -185,11 +186,59 @@ class SearchIndex:
                 response, offset, total = await self.search(**kwargs)
             censor.apply(response)
             total_referenced.extend(response)
+
             if censor.censored:
                 response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
                 total_referenced.extend(response)
+
+            response = [
+                ResolveResult(
+                    name=r['claim_name'],
+                    claim_hash=r['claim_hash'],
+                    tx_num=r['tx_num'],
+                    position=r['tx_nout'],
+                    tx_hash=r['tx_hash'],
+                    height=r['height'],
+                    amount=r['amount'],
+                    short_url=r['short_url'],
+                    is_controlling=r['is_controlling'],
+                    canonical_url=r['canonical_url'],
+                    creation_height=r['creation_height'],
+                    activation_height=r['activation_height'],
+                    expiration_height=r['expiration_height'],
+                    effective_amount=r['effective_amount'],
+                    support_amount=r['support_amount'],
+                    last_takeover_height=r['last_take_over_height'],
+                    claims_in_channel=r['claims_in_channel'],
+                    channel_hash=r['channel_hash'],
+                    reposted_claim_hash=r['reposted_claim_hash']
+                ) for r in response
+            ]
+            extra = [
+                ResolveResult(
+                    name=r['claim_name'],
+                    claim_hash=r['claim_hash'],
+                    tx_num=r['tx_num'],
+                    position=r['tx_nout'],
+                    tx_hash=r['tx_hash'],
+                    height=r['height'],
+                    amount=r['amount'],
+                    short_url=r['short_url'],
+                    is_controlling=r['is_controlling'],
+                    canonical_url=r['canonical_url'],
+                    creation_height=r['creation_height'],
+                    activation_height=r['activation_height'],
+                    expiration_height=r['expiration_height'],
+                    effective_amount=r['effective_amount'],
+                    support_amount=r['support_amount'],
+                    last_takeover_height=r['last_take_over_height'],
+                    claims_in_channel=r['claims_in_channel'],
+                    channel_hash=r['channel_hash'],
+                    reposted_claim_hash=r['reposted_claim_hash']
+                ) for r in await self._get_referenced_rows(total_referenced)
+            ]
             result = Outputs.to_base64(
-                response, await self._get_referenced_rows(total_referenced), offset, total, censor
+                response, extra, offset, total, censor
             )
             cache_item.result = result
             return result
