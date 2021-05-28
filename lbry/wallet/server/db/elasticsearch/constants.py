@@ -53,7 +53,7 @@ FIELDS = {
     'duration', 'release_time',
     'tags', 'languages', 'has_source', 'reposted_claim_type',
     'reposted_claim_id', 'repost_count',
-    'trending_group', 'trending_mixed', 'trending_local', 'trending_global',
+    'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'tx_num'
 }
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id', 'censoring_channel_id',
@@ -66,7 +66,7 @@ RANGE_FIELDS = {
     'tx_position', 'channel_join', 'repost_count', 'limit_claims_per_channel',
     'amount', 'effective_amount', 'support_amount',
     'trending_group', 'trending_mixed', 'censor_type',
-    'trending_local', 'trending_global',
+    'trending_local', 'trending_global', 'tx_num'
 }
 
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
