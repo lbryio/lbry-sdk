@@ -1,3 +1,5 @@
+import typing
+
 CLAIM_TYPES = {
     'stream': 1,
     'channel': 2,
@@ -418,3 +420,25 @@ INDEXED_LANGUAGES = [
   'zh',
   'zu'
 ]
+
+
+class ResolveResult(typing.NamedTuple):
+    name: str
+    claim_hash: bytes
+    tx_num: int
+    position: int
+    tx_hash: bytes
+    height: int
+    amount: int
+    short_url: str
+    is_controlling: bool
+    canonical_url: str
+    creation_height: int
+    activation_height: int
+    expiration_height: int
+    effective_amount: int
+    support_amount: int
+    last_takeover_height: typing.Optional[int]
+    claims_in_channel: typing.Optional[int]
+    channel_hash: typing.Optional[bytes]
+    reposted_claim_hash: typing.Optional[bytes]

@@ -9,6 +9,10 @@ from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
+from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
+from lbry.wallet.constants import TXO_TYPES
+from lbry.wallet.server.db.common import STREAM_TYPES
+
 from lbry.wallet.transaction import OutputScript, Output
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.daemon import DaemonError
@@ -174,6 +178,13 @@ class BlockProcessor:
         self.notifications = notifications
 
         self.coin = env.coin
+        if env.coin.NET == 'mainnet':
+            self.ledger = Ledger
+        elif env.coin.NET == 'testnet':
+            self.ledger = TestNetLedger
+        else:
+            self.ledger = RegTestLedger
+
         self.blocks_event = asyncio.Event()
         self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event)
         self.logger = class_logger(__name__, self.__class__.__name__)
@@ -247,12 +258,31 @@ class BlockProcessor:
             yield 'delete', claim_hash.hex()
         for claim_hash in self.touched_claims_to_send_es:
             claim = self.db._fs_get_claim_by_hash(claim_hash)
+            raw_claim_tx = self.db.db.get(DB_PREFIXES.TX_PREFIX.value + claim.tx_hash)
+            try:
+                claim_txo: TxOutput = self.coin.transaction(raw_claim_tx).outputs[claim.position]
+                script = OutputScript(claim_txo.pk_script)
+                script.parse()
+            except:
+                self.logger.exception(
+                    "tx parsing for ES went boom %s %s", claim.tx_hash[::-1].hex(), raw_claim_tx.hex()
+                )
+                continue
+            try:
+                metadata = Claim.from_bytes(script.values['claim'])
+            except:
+                self.logger.exception(
+                    "claim parsing for ES went boom %s %s", claim.tx_hash[::-1].hex(), raw_claim_tx.hex()
+                )
+                continue
+
             yield ('update', {
-                'claim_hash': claim_hash,
+                'claim_hash': claim_hash[::-1],
                 # 'claim_id': claim_hash.hex(),
                 'claim_name': claim.name,
                 'normalized': claim.name,
                 'tx_id': claim.tx_hash[::-1].hex(),
+                'tx_num': claim.tx_num,
                 'tx_nout': claim.position,
                 'amount': claim.amount,
                 'timestamp': 0,
@@ -269,35 +299,38 @@ class BlockProcessor:
                 'short_url': '',
                 'canonical_url': '',
 
-                'release_time': 0,
-                'title': '',
-                'author': '',
-                'description': '',
-                'claim_type': 0,
-                'has_source': False,
-                'stream_type': '',
-                'media_type': '',
-                'fee_amount': 0,
-                'fee_currency': '',
-                'duration': 0,
+                'release_time': None if not metadata.is_stream else metadata.stream.release_time,
+                'title': None if not metadata.is_stream else metadata.stream.title,
+                'author': None if not metadata.is_stream else metadata.stream.author,
+                'description': None if not metadata.is_stream else metadata.stream.description,
+                'claim_type': TXO_TYPES[metadata.claim_type],
+                'has_source': None if not metadata.is_stream else metadata.stream.has_source,
+                'stream_type': None if not metadata.is_stream else STREAM_TYPES.get(metadata.stream.stream_type, None),
+                'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
+                'fee_amount': None if not metadata.is_stream else metadata.stream.fee.amount,
+                'fee_currency': None if not metadata.is_stream else metadata.stream.fee.currency,
+                'duration': None if not metadata.is_stream else (metadata.stream.video.duration or metadata.stream.audio.duration),
 
                 'reposted': 0,
                 'reposted_claim_hash': None,
                 'reposted_claim_type': None,
                 'reposted_has_source': False,
 
-                'channel_hash': None,
+                'channel_hash': metadata.signing_channel_hash,
 
-                'public_key_bytes': None,
-                'public_key_hash': None,
-                'signature': None,
+                'public_key_bytes': None if not metadata.is_channel else metadata.channel.public_key_bytes,
+                'public_key_hash': None if not metadata.is_channel else self.ledger.address_to_hash160(
+                            self.ledger.public_key_to_address(metadata.channel.public_key_bytes)
+                ),
+                'signature': metadata.signature,
                 'signature_digest': None,
                 'signature_valid': False,
                 'claims_in_channel': 0,
 
-                'tags': [],
-                'languages': [],
-
+                'tags': [] if not metadata.is_stream else [tag for tag in metadata.stream.tags],
+                'languages': [] if not metadata.is_stream else (
+                        [lang.language or 'none' for lang in metadata.stream.languages] or ['none']
+                ),
                 'censor_type': 0,
                 'censoring_channel_hash': None,
                 # 'trending_group': 0,
@@ -885,10 +918,10 @@ class BlockProcessor:
                 for txo in activated:
                     v = txo[1], PendingActivationValue(claim_hash, name), txo[0]
                     future_activations[name][claim_hash] = v
-                    if v[2].is_claim:
-                        self.possible_future_activated_claim[(name, claim_hash)] = v[0]
+                    if txo[0].is_claim:
+                        self.possible_future_activated_claim[(name, claim_hash)] = txo[1]
                     else:
-                        self.possible_future_activated_support[claim_hash].append(v[0])
+                        self.possible_future_activated_support[claim_hash].append(txo[1])
 
         # process takeovers
         checked_names = set()
@@ -927,7 +960,6 @@ class BlockProcessor:
                         position = claim[0].position
                         amount = claim[1].amount
                         activation = self.db.get_activation(tx_num, position)
-
                     else:
                         tx_num, position = self.pending_claim_txos[winning_including_future_activations]
                         amount = None
@@ -1024,8 +1056,9 @@ class BlockProcessor:
         # gather cumulative removed/touched sets to update the search index
         self.removed_claims_to_send_es.update(set(self.staged_pending_abandoned.keys()))
         self.touched_claims_to_send_es.update(
-            set(self.staged_activated_support.keys()).union(set(claim_hash for (_, claim_hash) in self.staged_activated_claim.keys())).difference(
-                self.removed_claims_to_send_es)
+            set(self.staged_activated_support.keys()).union(
+                set(claim_hash for (_, claim_hash) in self.staged_activated_claim.keys())
+            ).difference(self.removed_claims_to_send_es)
         )
 
         # for use the cumulative changes to now update bid ordered resolve
