@@ -1035,7 +1035,6 @@ class LBRYElectrumX(SessionBase):
     async def claimtrie_resolve(self, *urls):
         rows, extra = [], []
         for url in urls:
-            print("resolve", url)
             self.session_mgr.urls_to_resolve_count_metric.inc()
             stream, channel = await self.db.fs_resolve(url)
             self.session_mgr.resolved_url_count_metric.inc()
@@ -1071,7 +1070,6 @@ class LBRYElectrumX(SessionBase):
         if not stream:
             stream = LookupError(f"Could not find claim at {claim_id}")
         rows.append(stream)
-        # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
 
     def assert_tx_hash(self, value):
