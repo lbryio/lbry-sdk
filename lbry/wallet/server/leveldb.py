@@ -36,6 +36,7 @@ from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_ui
 from lbry.wallet.server.storage import db_class
 from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
 from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.common import ResolveResult
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, ClaimToTXOKey, TXOToClaimValue
@@ -73,28 +74,6 @@ class FlushData:
     deletes = attr.ib()
     tip = attr.ib()
     undo = attr.ib()
-
-
-class ResolveResult(typing.NamedTuple):
-    name: str
-    claim_hash: bytes
-    tx_num: int
-    position: int
-    tx_hash: bytes
-    height: int
-    amount: int
-    short_url: str
-    is_controlling: bool
-    canonical_url: str
-    creation_height: int
-    activation_height: int
-    expiration_height: int
-    effective_amount: int
-    support_amount: int
-    last_takeover_height: Optional[int]
-    claims_in_channel: Optional[int]
-    channel_hash: Optional[bytes]
-    reposted_claim_hash: Optional[bytes]
 
 
 OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, LookupError, ValueError]]
@@ -259,9 +238,9 @@ class LevelDB:
             # winning resolution
             controlling = self.get_controlling_claim(normalized_name)
             if not controlling:
-                print("none controlling")
+                print(f"none controlling for lbry://{normalized_name}")
                 return
-            print("resolved controlling", controlling.claim_hash.hex())
+            print(f"resolved controlling lbry://{normalized_name}#{controlling.claim_hash.hex()}")
             return self._fs_get_claim_by_hash(controlling.claim_hash)
 
         amount_order = max(int(amount_order or 1), 1)
