@@ -925,11 +925,13 @@ class Transaction:
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+                funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
+                comment: str = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         if signing_channel is not None:
             support = Support()
             support.emoji = '👍'
+            support.comment = comment
             support_output = Output.pay_support_data_pubkey_hash(
                 amount, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
             )

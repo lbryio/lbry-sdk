@@ -574,6 +574,15 @@ class TransactionCommands(ClaimTestCase):
 
 class TransactionOutputCommands(ClaimTestCase):
 
+    async def test_support_with_comment(self):
+        channel = self.get_claim_id(await self.channel_create('@identity'))
+        stream = self.get_claim_id(await self.stream_create())
+        support = await self.support_create(stream, channel_id=channel, comment="nice!")
+        self.assertEqual(support['outputs'][0]['value']['comment'], "nice!")
+        r, = await self.txo_list(type='support')
+        self.assertEqual(r['txid'], support['txid'])
+        self.assertEqual(r['value']['comment'], "nice!")
+
     async def test_txo_list_resolve_supports(self):
         channel = self.get_claim_id(await self.channel_create('@identity'))
         stream = self.get_claim_id(await self.stream_create())
