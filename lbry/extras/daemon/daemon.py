@@ -4080,7 +4080,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, amount, tip=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, funding_account_ids=None,
-            preview=False, blocking=False):
+            comment=None, preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
 
@@ -4088,7 +4088,7 @@ class Daemon(metaclass=JSONRPCServerType):
             support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
                            [--tip] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                            [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                           [--channel_account_id=<channel_account_id>...]
+                           [--channel_account_id=<channel_account_id>...] [--comment=<comment>]
                            [--preview] [--blocking] [--funding_account_ids=<funding_account_ids>...]
 
         Options:
@@ -4102,6 +4102,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>     : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>       : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --comment                     : (str) add a comment to the support
             --preview                     : (bool) do not broadcast the transaction
             --blocking                    : (bool) wait until transaction is in mempool
 
@@ -4119,7 +4120,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            comment=comment
         )
         new_txo = tx.outputs[0]
 
