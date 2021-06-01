@@ -255,7 +255,7 @@ class SQLDB:
         self.filtered_channels = {}
         self.update_blocked_and_filtered_claims()
         for algorithm in self.trending:
-            algorithm.install(self.db)
+            algorithm.install(self.db, self._db_path)
 
     def close(self):
         if self.db is not None:

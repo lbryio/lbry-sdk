@@ -6,6 +6,7 @@ decay rate for high valued claims.
 import math
 import time
 import apsw
+import os
 
 # Half life in blocks *for lower LBC claims* (it's shorter for whale claims)
 HALF_LIFE = 200
@@ -32,16 +33,6 @@ DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 TRENDING_LOG = True
 
 
-def install(connection):
-    """
-    Install the trending algorithm.
-    """
-    check_trending_values(connection)
-    trending_data.initialise(connection.cursor())
-
-    if TRENDING_LOG:
-        f = open("trending_variable_decay.log", "a")
-        f.close()
 
 # Stub
 CREATE_TREND_TABLE = ""
@@ -62,8 +53,7 @@ def check_trending_values(connection):
         print("Resetting some columns. This might take a while...", flush=True,
               end="")
         c.execute(""" BEGIN;
-                      UPDATE claim SET trending_group = 0;
-                      UPDATE claim SET trending_mixed = 0;
+                      UPDATE claim SET trending_group = 0, trending_mixed=0;
                       COMMIT;""")
         print("done.")
 
@@ -95,8 +85,9 @@ class TrendingDB:
     An in-memory database of trending scores
     """
 
-    def __init__(self):
-        self.conn = apsw.Connection("trending.db")
+    def __init__(self, db_path):
+        path = db_path.split("claims.db")[0]
+        self.conn = apsw.Connection(os.path.join(path, "trending.db"))
         self.cursor = self.conn.cursor()
         self.initialised = False
         self.write_needed = set()
@@ -338,9 +329,27 @@ class TrendingDB:
 
 
 
+
 # The "global" instance to work with
 # pylint: disable=C0103
-trending_data = TrendingDB()
+trending_data = None
+
+
+def install(connection, db_path):
+    """
+    Install the trending algorithm.
+    """
+    check_trending_values(connection)
+    global trending_data
+    trending_data = TrendingDB(db_path)
+    trending_data.initialise(connection.cursor())
+
+    path = db_path.split("claims.db")[0]
+
+    if TRENDING_LOG:
+        f = open(os.path.join(path, "trending_variable_decay.log"), "a")
+        f.close()
+
 
 def spike_mass(x, x_old):
     """
