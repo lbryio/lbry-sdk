@@ -928,14 +928,15 @@ class Transaction:
                 funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
                 comment: str = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        if signing_channel is not None:
+        if signing_channel is not None or comment is not None:
             support = Support()
-            support.emoji = '👍'
-            support.comment = comment
+            if comment is not None:
+                support.comment = comment
             support_output = Output.pay_support_data_pubkey_hash(
                 amount, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
             )
-            support_output.sign(signing_channel, b'placeholder txid:nout')
+            if signing_channel is not None:
+                support_output.sign(signing_channel, b'placeholder txid:nout')
         else:
             support_output = Output.pay_support_pubkey_hash(
                 amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
