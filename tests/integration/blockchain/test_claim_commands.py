@@ -2173,7 +2173,7 @@ class SupportCommands(CommandTestCase):
         # lbrycrd returned 'the transaction was rejected by network rules.'
         channel_id = self.get_claim_id(await self.channel_create())
         stream_id = self.get_claim_id(await self.stream_create())
-        tx = await self.support_create(stream_id, '7.967598', channel_id=channel_id)
+        tx = await self.support_create(stream_id, '7.967601', channel_id=channel_id)
         self.assertEqual(len(tx['outputs']), 1)  # must be one to reproduce bug
         self.assertTrue(tx['outputs'][0]['is_channel_signature_valid'])
 
