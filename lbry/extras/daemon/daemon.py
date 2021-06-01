@@ -4102,7 +4102,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>     : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>       : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
-            --comment                     : (str) add a comment to the support
+            --comment=<comment>           : (str) add a comment to the support
             --preview                     : (bool) do not broadcast the transaction
             --blocking                    : (bool) wait until transaction is in mempool
 
