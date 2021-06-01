@@ -31,8 +31,7 @@ DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 
 # Log trending calculations?
 TRENDING_LOG = True
-
-
+TRENDING_LOG_PATH = None
 
 # Stub
 CREATE_TREND_TABLE = ""
@@ -65,7 +64,7 @@ def trending_log(s):
     Log a string to the log file
     """
     if TRENDING_LOG:
-        fout = open("trending_variable_decay.log", "a")
+        fout = open(TRENDING_LOG_PATH, "a")
         fout.write(s)
         fout.flush()
         fout.close()
@@ -339,16 +338,18 @@ def install(connection, db_path):
     """
     Install the trending algorithm.
     """
+    path = db_path.split("claims.db")[0]
+
+    global TRENDING_LOG_PATH
+    TRENDING_LOG_PATH = os.path.join(path, "trending_variable_decay.log")
+    if TRENDING_LOG:
+        f = open(TRENDING_LOG_PATH, "a")
+        f.close()
+
     check_trending_values(connection)
     global trending_data
     trending_data = TrendingDB(db_path)
     trending_data.initialise(connection.cursor())
-
-    path = db_path.split("claims.db")[0]
-
-    if TRENDING_LOG:
-        f = open(os.path.join(path, "trending_variable_decay.log"), "a")
-        f.close()
 
 
 def spike_mass(x, x_old):
