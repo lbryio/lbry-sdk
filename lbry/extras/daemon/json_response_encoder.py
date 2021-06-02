@@ -234,8 +234,6 @@ class JSONResponseEncoder(JSONEncoder):
                     output['value_type'] = txo.claim.claim_type
                     if txo.claim.is_channel:
                         output['has_signing_key'] = txo.has_private_key
-                elif txo.script.is_support_claim_data:
-                    output['value_type'] = 'emoji'
                 if check_signature and txo.signable.is_signed:
                     if txo.channel is not None:
                         output['signing_channel'] = self.encode_output(txo.channel)
