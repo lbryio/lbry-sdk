@@ -723,8 +723,10 @@ class Ledger(metaclass=LedgerRegistry):
                     self.hash160_to_address(txi.txo_ref.txo.pubkey_hash)
                 )
         for txo in tx.outputs:
-            if txo.has_address:
+            if txo.is_pubkey_hash:
                 addresses.add(self.hash160_to_address(txo.pubkey_hash))
+            elif txo.is_script_hash:
+                addresses.add(self.hash160_to_script_address(txo.script_hash))
         start = int(time.perf_counter())
         while timeout and (int(time.perf_counter()) - start) <= timeout:
             if await self._wait_round(tx, height, addresses):

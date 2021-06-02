@@ -273,8 +273,16 @@ class Output(InputOutput):
         return self.ref.id
 
     @property
+    def is_pubkey_hash(self):
+        return 'pubkey_hash' in self.script.values
+
+    @property
     def pubkey_hash(self):
         return self.script.values['pubkey_hash']
+
+    @property
+    def is_script_hash(self):
+        return 'script_hash' in self.script.values
 
     @property
     def script_hash(self):
@@ -282,12 +290,12 @@ class Output(InputOutput):
 
     @property
     def has_address(self):
-        return 'pubkey_hash' in self.script.values
+        return self.is_pubkey_hash or self.is_script_hash
 
     def get_address(self, ledger):
-        if self.script.is_pay_pubkey_hash:
+        if self.is_pubkey_hash:
             return ledger.hash160_to_address(self.pubkey_hash)
-        elif self.script.is_pay_script_hash:
+        elif self.is_script_hash:
             return ledger.hash160_to_script_address(self.script_hash)
 
     def get_estimator(self, ledger):
