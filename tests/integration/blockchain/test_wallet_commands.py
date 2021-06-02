@@ -61,7 +61,8 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(await self.blockchain.get_balance(), '95.99973580')
         await self.assertBalance(self.account, '10.0')
         p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
-        await self.account_send('2.0', p2sh_address1)
+        tx = await self.account_send('2.0', p2sh_address1)
+        self.assertEqual(tx['outputs'][0]['address'], p2sh_address1)
         self.assertEqual(await self.blockchain.get_balance(), '98.99973580')  # +1 lbc for confirm block
         await self.assertBalance(self.account, '7.999877')
         await self.wallet_send('3.0', p2sh_address1)
