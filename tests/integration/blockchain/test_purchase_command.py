@@ -60,7 +60,7 @@ class PurchaseCommandTests(CommandTestCase):
         self.assertEqual(
             await self.account.get_balance(), buyer_balance - (purchase.input_sum-purchase.outputs[2].amount))
         self.assertEqual(
-            await self.blockchain.get_balance(),
+            str(float(await self.blockchain.get_balance())),
             dewies_to_lbc(merchant_balance + purchase_txo.amount)
         )
 
