@@ -193,6 +193,24 @@ class EffectiveAmountValue(typing.NamedTuple):
     claim_hash: bytes
 
 
+class RepostKey(typing.NamedTuple):
+    claim_hash: bytes
+
+
+class RepostValue(typing.NamedTuple):
+    reposted_claim_hash: bytes
+
+
+class RepostedKey(typing.NamedTuple):
+    reposted_claim_hash: bytes
+    tx_num: int
+    position: int
+
+
+class RepostedValue(typing.NamedTuple):
+    claim_hash: bytes
+
+
 class ActiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.active_amount.value
     key_struct = struct.Struct(b'>20sBLLH')
@@ -676,6 +694,64 @@ class EffectiveAmountPrefixRow(PrefixRow):
         return cls.pack_key(name, effective_amount, tx_num, position), cls.pack_value(claim_hash)
 
 
+class RepostPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.repost.value
+
+    @classmethod
+    def pack_key(cls, claim_hash: bytes):
+        return cls.prefix + claim_hash
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> RepostKey:
+        assert key[0] == cls.prefix
+        assert len(key) == 21
+        return RepostKey[1:]
+
+    @classmethod
+    def pack_value(cls, reposted_claim_hash: bytes) -> bytes:
+        return reposted_claim_hash
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> RepostValue:
+        return RepostValue(data)
+
+    @classmethod
+    def pack_item(cls, claim_hash: bytes, reposted_claim_hash: bytes):
+        return cls.pack_key(claim_hash), cls.pack_value(reposted_claim_hash)
+
+
+class RepostedPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.reposted_claim.value
+    key_struct = struct.Struct(b'>20sLH')
+    value_struct = struct.Struct(b'>20s')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        struct.Struct(b'>20sL').pack,
+        struct.Struct(b'>20sLH').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, reposted_claim_hash: bytes, tx_num: int, position: int):
+        return super().pack_key(reposted_claim_hash, tx_num, position)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> RepostedKey:
+        return RepostedKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, claim_hash: bytes) -> bytes:
+        return super().pack_value(claim_hash)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> RepostedValue:
+        return RepostedValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, reposted_claim_hash: bytes, tx_num: int, position: int, claim_hash: bytes):
+        return cls.pack_key(reposted_claim_hash, tx_num, position), cls.pack_value(claim_hash)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -695,5 +771,8 @@ class Prefixes:
     active_amount = ActiveAmountPrefixRow
 
     effective_amount = EffectiveAmountPrefixRow
+
+    repost = RepostPrefixRow
+    reposted_claim = RepostedPrefixRow
 
     # undo_claimtrie = b'M'

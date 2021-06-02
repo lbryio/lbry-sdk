@@ -3,7 +3,7 @@ from typing import Optional
 from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue, EffectiveAmountPrefixRow
-from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE
+from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, RepostPrefixRow, RepostedPrefixRow
 
 
 def length_encoded_name(name: str) -> bytes:
@@ -137,6 +137,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
     root_claim_tx_num: int
     root_claim_tx_position: int
     signing_hash: Optional[bytes]
+    reposted_claim_hash: Optional[bytes]
 
     @property
     def is_update(self) -> bool:
@@ -191,6 +192,16 @@ class StagedClaimtrieItem(typing.NamedTuple):
                     )
                 )
             ])
+        if self.reposted_claim_hash:
+            ops.extend([
+                op(
+                    *RepostPrefixRow.pack_item(self.claim_hash, self.reposted_claim_hash)
+                ),
+                op(
+                    *RepostedPrefixRow.pack_item(self.reposted_claim_hash, self.tx_num, self.position, self.claim_hash)
+                ),
+
+            ])
         return ops
 
     def get_add_claim_utxo_ops(self) -> typing.List[RevertableOp]:
@@ -207,9 +218,8 @@ class StagedClaimtrieItem(typing.NamedTuple):
         ] + delete_prefix(db, DB_PREFIXES.channel_to_claim.value + self.signing_hash)
 
     def get_abandon_ops(self, db) -> typing.List[RevertableOp]:
-        packed_name = length_encoded_name(self.name)
         delete_short_id_ops = delete_prefix(
-            db, DB_PREFIXES.claim_short_id_prefix.value + packed_name + self.claim_hash
+            db, Prefixes.claim_short_id.pack_partial_key(self.name, self.claim_hash)
         )
         delete_claim_ops = delete_prefix(db, DB_PREFIXES.claim_to_txo.value + self.claim_hash)
         delete_supports_ops = delete_prefix(db, DB_PREFIXES.claim_to_support.value + self.claim_hash)

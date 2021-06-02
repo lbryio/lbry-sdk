@@ -211,7 +211,8 @@ class SearchIndex:
                     last_takeover_height=r['last_take_over_height'],
                     claims_in_channel=r['claims_in_channel'],
                     channel_hash=r['channel_hash'],
-                    reposted_claim_hash=r['reposted_claim_hash']
+                    reposted_claim_hash=r['reposted_claim_hash'],
+                    reposted=r['reposted']
                 ) for r in response
             ]
             extra = [
@@ -234,7 +235,8 @@ class SearchIndex:
                     last_takeover_height=r['last_take_over_height'],
                     claims_in_channel=r['claims_in_channel'],
                     channel_hash=r['channel_hash'],
-                    reposted_claim_hash=r['reposted_claim_hash']
+                    reposted_claim_hash=r['reposted_claim_hash'],
+                    reposted=r['reposted']
                 ) for r in await self._get_referenced_rows(total_referenced)
             ]
             result = Outputs.to_base64(
@@ -471,7 +473,7 @@ class SearchIndex:
 def extract_doc(doc, index):
     doc['claim_id'] = doc.pop('claim_hash')[::-1].hex()
     if doc['reposted_claim_hash'] is not None:
-        doc['reposted_claim_id'] = doc.pop('reposted_claim_hash')[::-1].hex()
+        doc['reposted_claim_id'] = doc.pop('reposted_claim_hash').hex()
     else:
         doc['reposted_claim_id'] = None
     channel_hash = doc.pop('channel_hash')
