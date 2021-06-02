@@ -9,9 +9,10 @@ from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
+from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
 from lbry.wallet.constants import TXO_TYPES
-from lbry.wallet.server.db.common import STREAM_TYPES
+from lbry.wallet.server.db.common import STREAM_TYPES, CLAIM_TYPES
 
 from lbry.wallet.transaction import OutputScript, Output
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
@@ -213,7 +214,7 @@ class BlockProcessor:
         # is consistent with self.height
         self.state_lock = asyncio.Lock()
 
-        self.search_cache = {}
+        # self.search_cache = {}
         self.history_cache = {}
         self.status_server = StatusServer()
 
@@ -251,32 +252,98 @@ class BlockProcessor:
         self.removed_claims_to_send_es = set()
         self.touched_claims_to_send_es = set()
 
+        self.pending_reposted_count = set()
+
     def claim_producer(self):
+        def get_claim_txo(tx_hash, nout):
+            raw = self.db.db.get(
+                DB_PREFIXES.TX_PREFIX.value + tx_hash
+            )
+            try:
+                output: TxOutput = self.coin.transaction(raw).outputs[nout]
+                script = OutputScript(output.pk_script)
+                script.parse()
+                return Claim.from_bytes(script.values['claim'])
+            except:
+                self.logger.exception(
+                    "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
+                    raw.hex()
+                )
+                return
+
         if self.db.db_height <= 1:
             return
+
+        to_send_es = set(self.touched_claims_to_send_es)
+        to_send_es.update(self.pending_reposted_count.difference(self.removed_claims_to_send_es))
+
         for claim_hash in self.removed_claims_to_send_es:
             yield 'delete', claim_hash.hex()
-        for claim_hash in self.touched_claims_to_send_es:
+        for claim_hash in to_send_es:
             claim = self.db._fs_get_claim_by_hash(claim_hash)
-            raw_claim_tx = self.db.db.get(DB_PREFIXES.TX_PREFIX.value + claim.tx_hash)
-            try:
-                claim_txo: TxOutput = self.coin.transaction(raw_claim_tx).outputs[claim.position]
-                script = OutputScript(claim_txo.pk_script)
-                script.parse()
-            except:
-                self.logger.exception(
-                    "tx parsing for ES went boom %s %s", claim.tx_hash[::-1].hex(), raw_claim_tx.hex()
-                )
+            metadata = get_claim_txo(claim.tx_hash, claim.position)
+            if not metadata:
                 continue
-            try:
-                metadata = Claim.from_bytes(script.values['claim'])
-            except:
-                self.logger.exception(
-                    "claim parsing for ES went boom %s %s", claim.tx_hash[::-1].hex(), raw_claim_tx.hex()
+            reposted_claim_hash = None if not metadata.is_repost else metadata.repost.reference.claim_hash[::-1]
+            reposted_claim = None
+            reposted_metadata = None
+            if reposted_claim_hash:
+                reposted_claim = self.db.get_claim_txo(reposted_claim_hash)
+                if not reposted_claim:
+                    continue
+                reposted_metadata = get_claim_txo(
+                    self.db.total_transactions[reposted_claim[0].tx_num], reposted_claim[0].position
                 )
-                continue
+                if not reposted_metadata:
+                    continue
+            reposted_tags = []
+            reposted_languages = []
+            reposted_has_source = None
+            reposted_claim_type = None
+            if reposted_claim:
+                reposted_tx_hash = self.db.total_transactions[reposted_claim[0].tx_num]
+                raw_reposted_claim_tx = self.db.db.get(
+                    DB_PREFIXES.TX_PREFIX.value + reposted_tx_hash
+                )
+                try:
+                    reposted_claim_txo: TxOutput = self.coin.transaction(
+                        raw_reposted_claim_tx
+                    ).outputs[reposted_claim[0].position]
+                    reposted_script = OutputScript(reposted_claim_txo.pk_script)
+                    reposted_script.parse()
+                except:
+                    self.logger.exception(
+                        "repost tx parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
+                        raw_reposted_claim_tx.hex()
+                    )
+                    continue
+                try:
+                    reposted_metadata = Claim.from_bytes(reposted_script.values['claim'])
+                except:
+                    self.logger.exception(
+                        "reposted claim parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
+                        raw_reposted_claim_tx.hex()
+                    )
+                    continue
+            if reposted_metadata:
+                reposted_tags = [] if not reposted_metadata.is_stream else [tag for tag in reposted_metadata.stream.tags]
+                reposted_languages = [] if not reposted_metadata.is_stream else (
+                        [lang.language or 'none' for lang in reposted_metadata.stream.languages] or ['none']
+                )
+                reposted_has_source = False if not reposted_metadata.is_stream else reposted_metadata.stream.has_source
+                reposted_claim_type = CLAIM_TYPES[reposted_metadata.claim_type]
+            claim_tags = [] if not metadata.is_stream else [tag for tag in metadata.stream.tags]
+            claim_languages = [] if not metadata.is_stream else (
+                    [lang.language or 'none' for lang in metadata.stream.languages] or ['none']
+            )
+            tags = list(set(claim_tags).union(set(reposted_tags)))
+            languages = list(set(claim_languages).union(set(reposted_languages)))
+            canonical_url = f'{claim.name}#{claim.claim_hash.hex()}'
+            if metadata.is_signed:
+                channel_txo = self.db.get_claim_txo(metadata.signing_channel_hash[::-1])
+                canonical_url = f'{channel_txo[1].name}#{metadata.signing_channel_hash[::-1].hex()}/{canonical_url}'
 
-            yield ('update', {
+            value = {
                 'claim_hash': claim_hash[::-1],
                 # 'claim_id': claim_hash.hex(),
                 'claim_name': claim.name,
@@ -285,8 +352,8 @@ class BlockProcessor:
                 'tx_num': claim.tx_num,
                 'tx_nout': claim.position,
                 'amount': claim.amount,
-                'timestamp': 0,
-                'creation_timestamp': 0,
+                'timestamp': 0,  # TODO: fix
+                'creation_timestamp': 0,  # TODO: fix
                 'height': claim.height,
                 'creation_height': claim.creation_height,
                 'activation_height': claim.activation_height,
@@ -296,25 +363,24 @@ class BlockProcessor:
                 'is_controlling': claim.is_controlling,
                 'last_take_over_height': claim.last_takeover_height,
 
-                'short_url': '',
-                'canonical_url': '',
+                'short_url': f'{claim.name}#{claim.claim_hash.hex()}',  # TODO: fix
+                'canonical_url': canonical_url,
 
-                'release_time': None if not metadata.is_stream else metadata.stream.release_time,
                 'title': None if not metadata.is_stream else metadata.stream.title,
                 'author': None if not metadata.is_stream else metadata.stream.author,
                 'description': None if not metadata.is_stream else metadata.stream.description,
-                'claim_type': TXO_TYPES[metadata.claim_type],
+                'claim_type': CLAIM_TYPES[metadata.claim_type],
                 'has_source': None if not metadata.is_stream else metadata.stream.has_source,
-                'stream_type': None if not metadata.is_stream else STREAM_TYPES.get(metadata.stream.stream_type, None),
+                'stream_type': None if not metadata.is_stream else STREAM_TYPES[guess_stream_type(metadata.stream.source.media_type)],
                 'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
-                'fee_amount': None if not metadata.is_stream else metadata.stream.fee.amount,
+                'fee_amount': None if not metadata.is_stream or not metadata.stream.has_fee else int(max(metadata.stream.fee.amount or 0, 0)*1000),
                 'fee_currency': None if not metadata.is_stream else metadata.stream.fee.currency,
-                'duration': None if not metadata.is_stream else (metadata.stream.video.duration or metadata.stream.audio.duration),
+                # 'duration': None if not metadata.is_stream else (metadata.stream.video.duration or metadata.stream.audio.duration),
 
-                'reposted': 0,
-                'reposted_claim_hash': None,
-                'reposted_claim_type': None,
-                'reposted_has_source': False,
+                'reposted': self.db.get_reposted_count(claim_hash),
+                'reposted_claim_hash': reposted_claim_hash,
+                'reposted_claim_type': reposted_claim_type,
+                'reposted_has_source': reposted_has_source,
 
                 'channel_hash': metadata.signing_channel_hash,
 
@@ -323,21 +389,25 @@ class BlockProcessor:
                             self.ledger.public_key_to_address(metadata.channel.public_key_bytes)
                 ),
                 'signature': metadata.signature,
-                'signature_digest': None,
-                'signature_valid': False,
-                'claims_in_channel': 0,
+                'signature_digest': None,  # TODO: fix
+                'signature_valid': False,  # TODO: fix
+                'claims_in_channel': 0,  # TODO: fix
 
-                'tags': [] if not metadata.is_stream else [tag for tag in metadata.stream.tags],
-                'languages': [] if not metadata.is_stream else (
-                        [lang.language or 'none' for lang in metadata.stream.languages] or ['none']
-                ),
-                'censor_type': 0,
-                'censoring_channel_hash': None,
+                'tags': tags,
+                'languages': languages,
+                'censor_type': 0,  # TODO: fix
+                'censoring_channel_hash': None,  # TODO: fix
                 # 'trending_group': 0,
                 # 'trending_mixed': 0,
                 # 'trending_local': 0,
                 # 'trending_global': 0,
-            })
+            }
+            if metadata.is_stream and (metadata.stream.video.duration or metadata.stream.audio.duration):
+                value['duration'] = metadata.stream.video.duration or metadata.stream.audio.duration
+            if metadata.is_stream and metadata.stream.release_time:
+                value['release_time'] = metadata.stream.release_time
+
+            yield ('update', value)
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -368,17 +438,20 @@ class BlockProcessor:
             try:
                 for block in blocks:
                     await self.run_in_thread_with_lock(self.advance_block, block)
+                    # TODO: we shouldnt wait on the search index updating before advancing to the next block
                     await self.db.search_index.claim_consumer(self.claim_producer())
+                    self.db.search_index.clear_caches()
                     self.touched_claims_to_send_es.clear()
                     self.removed_claims_to_send_es.clear()
+                    self.pending_reposted_count.clear()
                     print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
             # if self.sql:
 
-            for cache in self.search_cache.values():
-                cache.clear()
+            # for cache in self.search_cache.values():
+            #     cache.clear()
             self.history_cache.clear()  # TODO: is this needed?
             self.notifications.notified_mempool_txs.clear()
 
@@ -535,11 +608,16 @@ class BlockProcessor:
 
         ops = []
         signing_channel_hash = None
+        reposted_claim_hash = None
+        if txo.claim.is_repost:
+            reposted_claim_hash = txo.claim.repost.reference.claim_hash[::-1]
+            self.pending_reposted_count.add(reposted_claim_hash)
+
         if signable and signable.signing_channel_hash:
             signing_channel_hash = txo.signable.signing_channel_hash[::-1]
-        if txo.script.is_claim_name:
+        if txo.script.is_claim_name:  # it's a root claim
             root_tx_num, root_idx = tx_num, nout
-        else:
+        else:  # it's a claim update
             if claim_hash not in spent_claims:
                 print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
                 return []
@@ -561,7 +639,7 @@ class BlockProcessor:
                 )
         pending = StagedClaimtrieItem(
             claim_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout, root_tx_num,
-            root_idx, signing_channel_hash
+            root_idx, signing_channel_hash, reposted_claim_hash
         )
         self.pending_claims[(tx_num, nout)] = pending
         self.pending_claim_txos[claim_hash] = (tx_num, nout)
@@ -625,11 +703,14 @@ class BlockProcessor:
             claim_hash = spent_claim_hash_and_name.claim_hash
             signing_hash = self.db.get_channel_for_claim(claim_hash)
             k, v = self.db.get_claim_txo(claim_hash)
+            reposted_claim_hash = self.db.get_repost(claim_hash)
             spent = StagedClaimtrieItem(
                 v.name, claim_hash, v.amount,
                 self.coin.get_expiration_height(bisect_right(self.db.tx_counts, txin_num)),
-                txin_num, txin.prev_idx, v.root_tx_num, v.root_position, signing_hash
+                txin_num, txin.prev_idx, v.root_tx_num, v.root_position, signing_hash, reposted_claim_hash
             )
+        if spent.reposted_claim_hash:
+            self.pending_reposted_count.add(spent.reposted_claim_hash)
         spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.name)
         print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
         return spent.get_spend_claim_txo_ops()
@@ -646,6 +727,7 @@ class BlockProcessor:
             self.staged_pending_abandoned[pending.claim_hash] = pending
             claim_root_tx_num, claim_root_idx = pending.root_claim_tx_num, pending.root_claim_tx_position
             prev_amount, prev_signing_hash = pending.amount, pending.signing_hash
+            reposted_claim_hash = pending.reposted_claim_hash
             expiration = self.coin.get_expiration_height(self.height)
         else:
             k, v = self.db.get_claim_txo(
@@ -653,10 +735,11 @@ class BlockProcessor:
             )
             claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
             prev_signing_hash = self.db.get_channel_for_claim(claim_hash)
+            reposted_claim_hash = self.db.get_repost(claim_hash)
             expiration = self.coin.get_expiration_height(bisect_right(self.db.tx_counts, tx_num))
         self.staged_pending_abandoned[claim_hash] = staged = StagedClaimtrieItem(
             name, claim_hash, prev_amount, expiration, tx_num, nout, claim_root_tx_num,
-            claim_root_idx, prev_signing_hash
+            claim_root_idx, prev_signing_hash, reposted_claim_hash
         )
 
         self.pending_supports[claim_hash].clear()
@@ -1216,8 +1299,8 @@ class BlockProcessor:
         self.possible_future_activated_support.clear()
         self.possible_future_support_txos.clear()
 
-        for cache in self.search_cache.values():
-            cache.clear()
+        # for cache in self.search_cache.values():
+        #     cache.clear()
         self.history_cache.clear()
         self.notifications.notified_mempool_txs.clear()
 

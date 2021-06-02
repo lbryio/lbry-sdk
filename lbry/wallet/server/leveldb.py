@@ -40,7 +40,7 @@ from lbry.wallet.server.db.common import ResolveResult
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, ClaimToTXOKey, TXOToClaimValue
-from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, length_encoded_name
+from lbry.wallet.server.db.claimtrie import length_encoded_name
 
 from lbry.wallet.server.db.elasticsearch import SearchIndex
 
@@ -56,8 +56,6 @@ class UTXO(typing.NamedTuple):
 TXO_STRUCT = struct.Struct(b'>LH')
 TXO_STRUCT_unpack = TXO_STRUCT.unpack
 TXO_STRUCT_pack = TXO_STRUCT.pack
-
-
 
 
 @attr.s(slots=True)
@@ -158,6 +156,18 @@ class LevelDB:
             return
         return Prefixes.txo_to_claim.unpack_value(claim_hash_and_name)
 
+    def get_repost(self, claim_hash) -> Optional[bytes]:
+        repost = self.db.get(Prefixes.repost.pack_key(claim_hash))
+        if repost:
+            return Prefixes.repost.unpack_value(repost).reposted_claim_hash
+        return
+
+    def get_reposted_count(self, claim_hash: bytes) -> int:
+        cnt = 0
+        for _ in self.db.iterator(prefix=Prefixes.reposted_claim.pack_partial_key(claim_hash)):
+            cnt += 1
+        return cnt
+
     def get_activation(self, tx_num, position, is_support=False) -> int:
         activation = self.db.get(
             Prefixes.activated.pack_key(
@@ -208,6 +218,7 @@ class LevelDB:
 
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash)
+        reposted_claim_hash = self.get_repost(claim_hash)
 
         claims_in_channel = None
         short_url = f'{name}#{claim_hash.hex()}'
@@ -224,7 +235,8 @@ class LevelDB:
             last_takeover_height=last_take_over_height, claims_in_channel=claims_in_channel,
             creation_height=created_height, activation_height=activation_height,
             expiration_height=expiration_height, effective_amount=effective_amount, support_amount=support_amount,
-            channel_hash=channel_hash, reposted_claim_hash=None
+            channel_hash=channel_hash, reposted_claim_hash=reposted_claim_hash,
+            reposted=self.get_reposted_count(claim_hash)
         )
 
     def _resolve(self, normalized_name: str, claim_id: Optional[str] = None,
@@ -337,26 +349,6 @@ class LevelDB:
     async def fs_getclaimbyid(self, claim_id):
         return await asyncio.get_event_loop().run_in_executor(
             self.executor, self._fs_get_claim_by_hash, bytes.fromhex(claim_id)
-        )
-
-    def make_staged_claim_item(self, claim_hash: bytes) -> Optional[StagedClaimtrieItem]:
-        claim_info = self.get_claim_txo(claim_hash)
-        k, v = claim_info
-        root_tx_num = v.root_tx_num
-        root_idx = v.root_position
-        value = v.amount
-        name = v.name
-        tx_num = k.tx_num
-        idx = k.position
-        height = bisect_right(self.tx_counts, tx_num)
-        signing_hash = self.get_channel_for_claim(claim_hash)
-        # if signing_hash:
-        #     count = self.get_claims_in_channel_count(signing_hash)
-        # else:
-        #     count = 0
-        return StagedClaimtrieItem(
-            name, claim_hash, value, self.coin.get_expiration_height(height), tx_num, idx,
-            root_tx_num, root_idx, signing_hash
         )
 
     def get_claim_txo_amount(self, claim_hash: bytes, tx_num: int, position: int) -> Optional[int]:

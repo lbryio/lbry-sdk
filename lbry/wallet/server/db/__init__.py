@@ -1,6 +1,7 @@
 import enum
 
 
+@enum.unique
 class DB_PREFIXES(enum.Enum):
     claim_to_support = b'K'
     support_to_claim = b'L'
@@ -19,6 +20,9 @@ class DB_PREFIXES(enum.Enum):
     pending_activation = b'Q'
     activated_claim_and_support = b'R'
     active_amount = b'S'
+
+    repost = b'V'
+    reposted_claim = b'W'
 
     undo_claimtrie = b'M'
 
