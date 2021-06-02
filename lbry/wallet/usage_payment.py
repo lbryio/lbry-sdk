@@ -35,7 +35,7 @@ class WalletServerPayer:
             if not address or not amount:
                 continue
 
-            if not self.ledger.is_valid_address(address):
+            if not self.ledger.is_pubkey_address(address):
                 self._on_payment_controller.add_error(ServerPaymentInvalidAddressError(address))
                 continue
 

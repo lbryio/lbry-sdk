@@ -410,7 +410,7 @@ class BlockchainNode:
         return self._cli_cmnd('getnewaddress', "", address_type)
 
     async def get_balance(self):
-        return float(await self._cli_cmnd('getbalance'))
+        return await self._cli_cmnd('getbalance')
 
     def send_to_address(self, address, amount):
         return self._cli_cmnd('sendtoaddress', address, str(amount))
