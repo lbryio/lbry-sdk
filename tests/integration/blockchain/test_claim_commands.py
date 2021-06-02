@@ -1460,9 +1460,9 @@ class StreamCommands(ClaimTestCase):
         filtering_channel_id = self.get_claim_id(
             await self.channel_create('@filtering', '0.1')
         )
-        self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
-            unhexlify(filtering_channel_id)[::-1]
-        )
+        # self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
+        #     unhexlify(filtering_channel_id)[::-1]
+        # )
         self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_streams))
         await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
         self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_streams))

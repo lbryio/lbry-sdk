@@ -120,10 +120,10 @@ class Outputs:
                 'expiration_height': claim.expiration_height,
                 'effective_amount': claim.effective_amount,
                 'support_amount': claim.support_amount,
-                'trending_group': claim.trending_group,
-                'trending_mixed': claim.trending_mixed,
-                'trending_local': claim.trending_local,
-                'trending_global': claim.trending_global,
+                # 'trending_group': claim.trending_group,
+                # 'trending_mixed': claim.trending_mixed,
+                # 'trending_local': claim.trending_local,
+                # 'trending_global': claim.trending_global,
             }
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
@@ -197,7 +197,7 @@ class Outputs:
         txo_message.nout = resolve_result.position
         txo_message.height = resolve_result.height
         txo_message.claim.short_url = resolve_result.short_url
-        txo_message.claim.reposted = 0
+        txo_message.claim.reposted = resolve_result.reposted
         txo_message.claim.is_controlling = resolve_result.is_controlling
         txo_message.claim.creation_height = resolve_result.creation_height
         txo_message.claim.activation_height = resolve_result.activation_height
