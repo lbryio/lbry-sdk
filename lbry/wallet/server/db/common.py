@@ -438,6 +438,7 @@ class ResolveResult(typing.NamedTuple):
     expiration_height: int
     effective_amount: int
     support_amount: int
+    reposted: int
     last_takeover_height: typing.Optional[int]
     claims_in_channel: typing.Optional[int]
     channel_hash: typing.Optional[bytes]
