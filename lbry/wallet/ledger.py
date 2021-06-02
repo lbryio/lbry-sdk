@@ -178,17 +178,24 @@ class Ledger(metaclass=LedgerRegistry):
         raw_address = cls.pubkey_address_prefix + h160
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
+    @classmethod
+    def hash160_to_script_address(cls, h160):
+        raw_address = cls.script_address_prefix + h160
+        return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
+
     @staticmethod
     def address_to_hash160(address):
         return Base58.decode(address)[1:21]
 
     @classmethod
-    def is_valid_address(cls, address):
+    def is_pubkey_address(cls, address):
         decoded = Base58.decode_check(address)
-        return (
-            decoded[0] == cls.pubkey_address_prefix[0] or
-            decoded[0] == cls.script_address_prefix[0]
-        )
+        return decoded[0] == cls.pubkey_address_prefix[0]
+
+    @classmethod
+    def is_script_address(cls, address):
+        decoded = Base58.decode_check(address)
+        return decoded[0] == cls.script_address_prefix[0]
 
     @classmethod
     def public_key_to_address(cls, public_key):
@@ -1191,6 +1198,7 @@ class TestNetLedger(Ledger):
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
     checkpoints = {}
+
 
 class RegTestLedger(Ledger):
     network_name = 'regtest'

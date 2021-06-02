@@ -769,9 +769,10 @@ class Database(SQLiteMixin):
                 conn.execute(*self._insert_sql(
                     "txo", self.txo_to_row(tx, txo), ignore_duplicate=True
                 )).fetchall()
-            elif txo.script.is_pay_script_hash:
-                # TODO: implement script hash payments
-                log.warning('Database.save_transaction_io: pay script hash is not implemented!')
+            elif txo.script.is_pay_script_hash and is_my_input:
+                conn.execute(*self._insert_sql(
+                    "txo", self.txo_to_row(tx, txo), ignore_duplicate=True
+                )).fetchall()
 
     def save_transaction_io(self, tx: Transaction, address, txhash, history):
         return self.save_transaction_io_batch([tx], address, txhash, history)

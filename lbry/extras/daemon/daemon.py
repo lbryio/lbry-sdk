@@ -1477,12 +1477,21 @@ class Daemon(metaclass=JSONRPCServerType):
 
         outputs = []
         for address in addresses:
-            self.valid_address_or_error(address)
-            outputs.append(
-                Output.pay_pubkey_hash(
-                    amount, self.ledger.address_to_hash160(address)
+            self.valid_address_or_error(address, allow_script_address=True)
+            if self.ledger.is_pubkey_address(address):
+                outputs.append(
+                    Output.pay_pubkey_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
                 )
-            )
+            elif self.ledger.is_script_address(address):
+                outputs.append(
+                    Output.pay_script_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
+                )
+            else:
+                raise ValueError(f"Unsupported address: '{address}'")
 
         tx = await Transaction.create(
             [], outputs, accounts, account
@@ -5525,9 +5534,11 @@ class Daemon(metaclass=JSONRPCServerType):
     async def broadcast_or_release(self, tx, blocking=False):
         await self.wallet_manager.broadcast_or_release(tx, blocking)
 
-    def valid_address_or_error(self, address):
+    def valid_address_or_error(self, address, allow_script_address=False):
         try:
-            assert self.ledger.is_valid_address(address)
+            assert self.ledger.is_pubkey_address(address) or (
+                allow_script_address and self.ledger.is_script_address(address)
+            )
         except:
             raise Exception(f"'{address}' is not a valid address")
 

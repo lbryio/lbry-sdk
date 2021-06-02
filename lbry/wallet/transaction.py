@@ -277,11 +277,18 @@ class Output(InputOutput):
         return self.script.values['pubkey_hash']
 
     @property
+    def script_hash(self):
+        return self.script.values['script_hash']
+
+    @property
     def has_address(self):
         return 'pubkey_hash' in self.script.values
 
     def get_address(self, ledger):
-        return ledger.hash160_to_address(self.pubkey_hash)
+        if self.script.is_pay_pubkey_hash:
+            return ledger.hash160_to_address(self.pubkey_hash)
+        elif self.script.is_pay_script_hash:
+            return ledger.hash160_to_script_address(self.script_hash)
 
     def get_estimator(self, ledger):
         return OutputEffectiveAmountEstimator(ledger, self)
@@ -289,6 +296,10 @@ class Output(InputOutput):
     @classmethod
     def pay_pubkey_hash(cls, amount, pubkey_hash):
         return cls(amount, OutputScript.pay_pubkey_hash(pubkey_hash))
+
+    @classmethod
+    def pay_script_hash(cls, amount, pubkey_hash):
+        return cls(amount, OutputScript.pay_script_hash(pubkey_hash))
 
     @classmethod
     def deserialize_from(cls, stream):

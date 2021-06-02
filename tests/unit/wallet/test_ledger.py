@@ -89,7 +89,7 @@ class LedgerTestCase(AsyncioTestCase):
 class TestUtils(TestCase):
 
     def test_valid_address(self):
-        self.assertTrue(Ledger.is_valid_address("rCz6yb1p33oYHToGZDzTjX7nFKaU3kNgBd"))
+        self.assertTrue(Ledger.is_script_address("rCz6yb1p33oYHToGZDzTjX7nFKaU3kNgBd"))
 
 
 class TestSynchronization(LedgerTestCase):
