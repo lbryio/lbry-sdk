@@ -772,7 +772,10 @@ class Ledger(metaclass=LedgerRegistry):
             include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         # log.warning(base64.b64decode(encoded_outputs))
-        outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
+        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            outputs = Outputs.from_grpc(encoded_outputs)
+        else:
+            outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
         txs: List[Transaction] = []
         log.warning(outputs)
         log.warning(outputs.txs)
