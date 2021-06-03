@@ -69,14 +69,15 @@ class ClaimSearchCommand(ClaimTestCase):
 
     async def assertFindsClaims(self, claims, **kwargs):
         kwargs.setdefault('order_by', ['height', '^name'])
+
         results = await self.claim_search(**kwargs)
         self.assertEqual(len(claims), len(results))
-        # for claim, result in zip(claims, results):
-        #     self.assertEqual(
-        #         (claim['txid'], self.get_claim_id(claim)),
-        #         (result['txid'], result['claim_id']),
-        #         f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
-        #     )
+        for claim, result in zip(claims, results):
+            self.assertEqual(
+                (claim['txid'], self.get_claim_id(claim)),
+                (result['txid'], result['claim_id']),
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
+            )
 
     async def assertListsClaims(self, claims, **kwargs):
         kwargs.setdefault('order_by', 'height')
@@ -129,6 +130,7 @@ class ClaimSearchCommand(ClaimTestCase):
         # three streams in channel, zero streams in abandoned channel
         claims = [three, two, signed]
         await self.assertFindsClaims(claims, channel_ids=[self.channel_id])
+        # FIXME
         # channel param doesn't work yet because we need to implement resolve url from search first
         # await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
         # await self.assertFindsClaims([], channel=f"@inexistent")
@@ -144,14 +146,16 @@ class ClaimSearchCommand(ClaimTestCase):
         self.ledger._tx_cache.clear()
         invalid_claims = await self.claim_search(invalid_channel_signature=True, has_channel_signature=True)
         self.assertEqual(3, len(invalid_claims))
-        # Doesn't work yet because we haven't implemented inflate query yet
-        # self.assertTrue(all([not c['is_channel_signature_valid'] for c in invalid_claims]))
-        # self.assertEqual({'channel_id': self.channel_id}, invalid_claims[0]['signing_channel'])
+        self.assertTrue(all([not c['is_channel_signature_valid'] for c in invalid_claims]))
+        self.assertEqual({'channel_id': self.channel_id}, invalid_claims[0]['signing_channel'])
 
         valid_claims = await self.claim_search(valid_channel_signature=True, has_channel_signature=True)
         self.assertEqual(1, len(valid_claims))
+        # FIXME
+        # print(valid_claims)
+        # Something happens in inflation I think and this gets switch from valid to not
         # self.assertTrue(all([c['is_channel_signature_valid'] for c in valid_claims]))
-        # This doesn't work yet
+        # And signing channel only has id? 'signing_channel': {'channel_id': '6f4513e9bbd63d7b7f13dbf4fd2ef28c560ac89b'}
         # self.assertEqual('@abc', valid_claims[0]['signing_channel']['name'])
 
         # abandoned stream won't show up for streams in channel search
@@ -177,21 +181,23 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
         # await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
 
-    @skip("Won't work until we can inflate hub replies")
+    @skip("Won't work until we can resolve the channel id")
     async def test_pagination(self):
         await self.create_channel()
         await self.create_lots_of_streams()
 
-        # with and without totals
-        results = await self.daemon.jsonrpc_claim_search()
-        self.assertEqual(results['total_pages'], 2)
-        self.assertEqual(results['total_items'], 25)
-        results = await self.daemon.jsonrpc_claim_search(no_totals=True)
-        self.assertNotIn('total_pages', results)
-        self.assertNotIn('total_items', results)
+        # FIXME: this doesn't work when jsonrpc_claim_search is called directly
+        # # with and without totals
+        # results = await self.daemon.jsonrpc_claim_search()
+        # self.assertEqual(results['total_pages'], 2)
+        # self.assertEqual(results['total_items'], 25)
+        # results = await self.daemon.jsonrpc_claim_search(no_totals=True)
+        # self.assertNotIn('total_pages', results)
+        # self.assertNotIn('total_items', results)
 
         # defaults
         page = await self.claim_search(channel='@abc', order_by=['height', '^name'])
+        print(page)
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[:DEFAULT_PAGE_SIZE])
 

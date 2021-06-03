@@ -615,76 +615,95 @@ class HubNode:
         DEFAULT_PAGE_SIZE = 20
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        if "has_no_source" in kwargs:
-            kwargs["has_source"] = not kwargs["has_no_source"]
-            del kwargs["has_no_source"]
-        if "claim_id" in kwargs:
-            kwargs["claim_id"] = {
-                "invert": False,
-                "value": kwargs["claim_id"]
-            }
-        if "not_claim_id" in kwargs:
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs["not_claim_id"]
-            }
-            del kwargs["not_claim_id"]
-        if "claim_ids" in kwargs:
-            kwargs["claim_id"] = {
-                "invert": False,
-                "value": kwargs["claim_ids"]
-            }
-            del kwargs["claim_ids"]
-        if "not_claim_ids" in kwargs:
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs["not_claim_ids"]
-            }
-            del kwargs["not_claim_ids"]
-        if "channel_id" in kwargs:
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs["channel_id"]
-            }
-        if "channel" in kwargs:
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs["channel"]
-            }
-            del kwargs["channel"]
-        if "not_channel_id" in kwargs:
-            kwargs["channel_id"] = {
-                "invert": True,
-                "value": kwargs["not_channel_id"]
-            }
-            del kwargs["not_channel_id"]
-        if "channel_ids" in kwargs:
-            kwargs["channel_ids"] = {
-                "invert": False,
-                "value": kwargs["channel_ids"]
-            }
-        if "not_channel_ids" in kwargs:
-            kwargs["channel_ids"] = {
-                "invert": True,
-                "value": kwargs["not_channel_ids"]
-            }
-            del kwargs["not_channel_ids"]
-        if "txid" in kwargs:
-            kwargs["tx_id"] = kwargs["txid"]
-            del kwargs["txid"]
-        if "nout" in kwargs:
-            kwargs["tx_nout"] = kwargs["nout"]
-            del kwargs["nout"]
-        if "valid_channel_signature" in kwargs:
-            kwargs["signature_valid"] = kwargs["valid_channel_signature"]
-            del kwargs["valid_channel_signature"]
-        if "invalid_channel_signature" in kwargs:
-            kwargs["signature_valid"] = not kwargs["invalid_channel_signature"]
-            del kwargs["invalid_channel_signature"]
-
+        repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
+                           "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
+                           "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
+                           "canonical_url", "short_url", "claim_id"}
+        value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
+                        "limit_claims_per_channel", "tx_nout",
+                        "signature_valid", "is_controlling", "amount_order"}
         ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
-        for key in kwargs.keys():
+        for key in list(kwargs.keys()):
             value = kwargs[key]
+
+            if "txid" == key:
+                kwargs["tx_id"] = kwargs.pop("txid")
+                key = "tx_id"
+            if "nout" == key:
+                kwargs["tx_nout"] = kwargs.pop("nout")
+                key = "tx_nout"
+            if "valid_channel_signature" == key:
+                kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
+            if "invalid_channel_signature" == key:
+                kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
+            if key in {"valid_channel_signature", "invalid_channel_signature"}:
+                key = "signature_valid"
+                value = kwargs[key]
+            if "has_no_source" == key:
+                kwargs["has_source"] = not kwargs.pop("has_no_source")
+                key = "has_source"
+                value = kwargs[key]
+
+            if key in value_fields:
+                kwargs[key] = {"value": value} if type(value) != dict else value
+
+            if key in repeated_fields:
+                kwargs[key] = [value]
+
+
+            if "claim_id" == key:
+                kwargs["claim_id"] = {
+                    "invert": False,
+                    "value": kwargs["claim_id"]
+                }
+            if "not_claim_id" == key:
+                kwargs["claim_id"] = {
+                    "invert": True,
+                    "value": kwargs["not_claim_id"]
+                }
+                del kwargs["not_claim_id"]
+            if "claim_ids" == key:
+                kwargs["claim_id"] = {
+                    "invert": False,
+                    "value": kwargs["claim_ids"]
+                }
+                del kwargs["claim_ids"]
+            if "not_claim_ids" == key:
+                kwargs["claim_id"] = {
+                    "invert": True,
+                    "value": kwargs["not_claim_ids"]
+                }
+                del kwargs["not_claim_ids"]
+            if "channel_id" == key:
+                kwargs["channel_id"] = {
+                    "invert": False,
+                    "value": kwargs["channel_id"]
+                }
+            if "channel" == key:
+                kwargs["channel_id"] = {
+                    "invert": False,
+                    "value": kwargs["channel"]
+                }
+                del kwargs["channel"]
+            if "not_channel_id" == key:
+                kwargs["channel_id"] = {
+                    "invert": True,
+                    "value": kwargs["not_channel_id"]
+                }
+                del kwargs["not_channel_id"]
+            if "channel_ids" == key:
+                kwargs["channel_ids"] = {
+                    "invert": False,
+                    "value": kwargs["channel_ids"]
+                }
+            if "not_channel_ids" == key:
+                kwargs["channel_ids"] = {
+                    "invert": True,
+                    "value": kwargs["not_channel_ids"]
+                }
+                del kwargs["not_channel_ids"]
+
+
             if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
@@ -700,18 +719,18 @@ class HubNode:
                     op = 3
                 if operator == '>' or operator == 'gt':
                     op = 4
-                kwargs[key] = {"op": op, "value": str(value)}
+                kwargs[key] = {"op": op, "value": [str(value)]}
             elif key in MY_RANGE_FIELDS:
-                kwargs[key] = {"op": 0, "value": str(value)}
+                kwargs[key] = {"op": 0, "value": [str(value)]}
 
-        if 'fee_amount' in kwargs:
-            value = kwargs['fee_amount']
-            value.update({"value": str(Decimal(value['value']) * 1000)})
-            kwargs['fee_amount'] = value
-        if 'stream_types' in kwargs:
-            kwargs['stream_type'] = kwargs.pop('stream_types')
-        if 'media_types' in kwargs:
-            kwargs['media_type'] = kwargs.pop('media_types')
+            if 'fee_amount' == key:
+                value = kwargs['fee_amount']
+                value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
+                kwargs['fee_amount'] = value
+            if 'stream_types' == key:
+                kwargs['stream_type'] = kwargs.pop('stream_types')
+            if 'media_types' == key:
+                kwargs['media_type'] = kwargs.pop('media_types')
         return kwargs
 
     async def _cli_cmnd2(self, *args):
