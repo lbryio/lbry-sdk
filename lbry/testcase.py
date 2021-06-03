@@ -616,13 +616,9 @@ class CommandTestCase(IntegrationTestCase):
 
     async def claim_search(self, **kwargs):
         if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            res = await self.out(self.hub.claim_search(**kwargs))
-            if 'txos' in res:
-                return res['txos']
-            else:
-                return []
-        else:
-            return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
+            kwargs['new_sdk_server'] = "localhost:50051"
+            kwargs = self.hub.fix_kwargs(**kwargs)
+        return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
     async def file_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_file_list(*args, **kwargs)))['items']
@@ -638,11 +634,10 @@ class CommandTestCase(IntegrationTestCase):
 
     async def claim_list(self, *args, **kwargs):
         if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            kwargs['new_sdk_server'] = "localhost:50051"
+            kwargs = self.hub.fix_kwargs(**kwargs)
             res = await self.out(self.hub.claim_search(**kwargs))
-            if 'txos' in res:
-                return res['txos']
-            else:
-                return []
+            return res
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 
     async def stream_list(self, *args, **kwargs):
