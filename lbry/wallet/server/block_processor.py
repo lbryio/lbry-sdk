@@ -449,7 +449,7 @@ class BlockProcessor:
                     self.removed_claims_to_send_es.clear()
                     self.pending_reposted.clear()
                     self.pending_channel_counts.clear()
-                    print("******************\n")
+                    # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
@@ -602,10 +602,10 @@ class BlockProcessor:
             claim_name = ''.join(chr(c) for c in txo.script.values['claim_name'])
         if txo.script.is_claim_name:
             claim_hash = hash160(tx_hash + pack('>I', nout))[::-1]
-            print(f"\tnew lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
+            # print(f"\tnew lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
         else:
             claim_hash = txo.claim_hash[::-1]
-            print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
+            # print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} ({tx_num} {txo.amount})")
 
         signing_channel_hash = None
         channel_signature_is_valid = False
@@ -663,10 +663,10 @@ class BlockProcessor:
             root_tx_num, root_idx = tx_num, nout
         else:  # it's a claim update
             if claim_hash not in spent_claims:
-                print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
+                # print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
                 return []
             (prev_tx_num, prev_idx, _) = spent_claims.pop(claim_hash)
-            print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
+            # print(f"\tupdate lbry://{claim_name}#{claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.pending_claims:
                 previous_claim = self.pending_claims.pop((prev_tx_num, prev_idx))
                 root_tx_num, root_idx = previous_claim.root_claim_tx_num, previous_claim.root_claim_tx_position
@@ -694,7 +694,7 @@ class BlockProcessor:
         supported_claim_hash = txo.claim_hash[::-1]
         self.pending_supports[supported_claim_hash].append((tx_num, nout))
         self.pending_support_txos[(tx_num, nout)] = supported_claim_hash, txo.amount
-        print(f"\tsupport claim {supported_claim_hash.hex()} +{txo.amount}")
+        # print(f"\tsupport claim {supported_claim_hash.hex()} +{txo.amount}")
         return StagedClaimtrieSupport(
             supported_claim_hash, tx_num, nout, txo.amount
         ).get_add_support_utxo_ops()
@@ -713,7 +713,7 @@ class BlockProcessor:
             spent_support, support_amount = self.pending_support_txos.pop((txin_num, txin.prev_idx))
             self.pending_supports[spent_support].remove((txin_num, txin.prev_idx))
             supported_name = self._get_pending_claim_name(spent_support)
-            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()}")
+            # print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()}")
             self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             return StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
@@ -724,7 +724,7 @@ class BlockProcessor:
             self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
             self.removed_active_support[spent_support].append(support_amount)
-            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
+            # print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
             return StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
             ).get_spend_support_txo_ops() + \
@@ -759,7 +759,7 @@ class BlockProcessor:
         if spent.signing_hash and spent.channel_signature_is_valid:
             self.pending_channel_counts[spent.signing_hash] -= 1
         spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.name)
-        print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
+        # print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
         return spent.get_spend_claim_txo_ops()
 
     def _spend_claim_or_support_txo(self, txin, spent_claims):
@@ -803,7 +803,7 @@ class BlockProcessor:
         ops = []
 
         for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
-            print(f"\tabandon lbry://{name}#{abandoned_claim_hash.hex()} {tx_num} {nout}")
+            # print(f"\tabandon lbry://{name}#{abandoned_claim_hash.hex()} {tx_num} {nout}")
             ops.extend(self._abandon_claim(abandoned_claim_hash, tx_num, nout, name))
         return ops
 
@@ -915,7 +915,7 @@ class BlockProcessor:
             controlling = get_controlling(staged.name)
             if controlling and controlling.claim_hash == claim_hash:
                 names_with_abandoned_controlling_claims.append(staged.name)
-                print(f"\t{staged.name} needs takeover")
+                # print(f"\t{staged.name} needs takeover")
             activation = self.db.get_activation(staged.tx_num, staged.position)
             if activation > 0:  #  db returns -1 for non-existent txos
                 # removed queued future activation from the db
@@ -972,7 +972,7 @@ class BlockProcessor:
             for activated_txo in activated_txos:
                 if activated_txo.is_support and (activated_txo.tx_num, activated_txo.position) in \
                         self.pending_removed_support[activated.name][activated.claim_hash]:
-                    print("\tskip activate support for pending abandoned claim")
+                    # print("\tskip activate support for pending abandoned claim")
                     continue
                 if activated_txo.is_claim:
                     txo_type = ACTIVATED_CLAIM_TXO_TYPE
@@ -995,8 +995,8 @@ class BlockProcessor:
                         )
                     self.staged_activated_support[activated.claim_hash].append(amount)
                 self.pending_activated[activated.name][activated.claim_hash].append((activated_txo, amount))
-                print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
-                      f"lbry://{activated.name}#{activated.claim_hash.hex()} @ {activated_txo.height}")
+                # print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
+                #       f"lbry://{activated.name}#{activated.claim_hash.hex()} @ {activated_txo.height}")
                 if reactivate:
                     ops.extend(
                         StagedActivation(
@@ -1025,8 +1025,8 @@ class BlockProcessor:
                     activate_key, self.db.get_claim_txo_amount(candidate_claim_hash, tx_num, nout)
                 ))
                 need_reactivate_if_takes_over[(need_takeover, candidate_claim_hash)] = activate_key
-                print(f"\tcandidate to takeover abandoned controlling claim for lbry://{need_takeover} - "
-                      f"{activate_key.tx_num}:{activate_key.position} {activate_key.is_claim}")
+                # print(f"\tcandidate to takeover abandoned controlling claim for lbry://{need_takeover} - "
+                #       f"{activate_key.tx_num}:{activate_key.position} {activate_key.is_claim}")
             if not has_candidate:
                 # remove name takeover entry, the name is now unclaimed
                 controlling = get_controlling(need_takeover)
@@ -1085,8 +1085,8 @@ class BlockProcessor:
                     amounts_with_future_activations, key=lambda x: amounts_with_future_activations[x]
                 )
                 if winning_claim_hash != winning_including_future_activations:
-                    print(f"\ttakeover of {name} by {winning_claim_hash.hex()} triggered early activation and "
-                          f"takeover by {winning_including_future_activations.hex()} at {height}")
+                    # print(f"\ttakeover of {name} by {winning_claim_hash.hex()} triggered early activation and "
+                    #       f"takeover by {winning_including_future_activations.hex()} at {height}")
                     # handle a pending activated claim jumping the takeover delay when another name takes over
                     if winning_including_future_activations not in self.pending_claim_txos:
                         claim = self.db.get_claim_txo(winning_including_future_activations)
@@ -1137,7 +1137,7 @@ class BlockProcessor:
                 elif not controlling or (winning_claim_hash != controlling.claim_hash and
                                        name in names_with_abandoned_controlling_claims) or \
                         ((winning_claim_hash != controlling.claim_hash) and (amounts[winning_claim_hash] > amounts[controlling.claim_hash])):
-                    print(f"\ttakeover {name} by {winning_claim_hash.hex()} at {height}")
+                    # print(f"\ttakeover {name} by {winning_claim_hash.hex()} at {height}")
                     if (name, winning_claim_hash) in need_reactivate_if_takes_over:
                         previous_pending_activate = need_reactivate_if_takes_over[(name, winning_claim_hash)]
                         amount = self.db.get_claim_txo_amount(
@@ -1164,10 +1164,10 @@ class BlockProcessor:
                             )
                     ops.extend(get_takeover_name_ops(name, winning_claim_hash, height, controlling))
                 elif winning_claim_hash == controlling.claim_hash:
-                    print("\tstill winning")
+                    # print("\tstill winning")
                     pass
                 else:
-                    print("\tno takeover")
+                    # print("\tno takeover")
                     pass
 
         # handle remaining takeovers from abandoned supports
@@ -1184,7 +1184,7 @@ class BlockProcessor:
                 amounts[controlling.claim_hash] = self._get_pending_effective_amount(name, controlling.claim_hash)
             winning = max(amounts, key=lambda x: amounts[x])
             if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
-                print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
+                # print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
                 ops.extend(get_takeover_name_ops(name, winning, height, controlling))
 
         # gather cumulative removed/touched sets to update the search index
@@ -1228,7 +1228,7 @@ class BlockProcessor:
 
     def advance_block(self, block):
         height = self.height + 1
-        print("advance ", height)
+        # print("advance ", height)
         txs: List[Tuple[Tx, bytes]] = block.transactions
         block_hash = self.coin.header_hash(block.header)
 
@@ -1301,7 +1301,7 @@ class BlockProcessor:
         # handle expired claims
         expired_ops = self._expire_claims(height)
         if expired_ops:
-            print(f"************\nexpire claims at block {height}\n************")
+            # print(f"************\nexpire claims at block {height}\n************")
             claimtrie_stash_extend(expired_ops)
 
         # activate claims and process takeovers
