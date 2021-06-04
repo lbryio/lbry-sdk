@@ -76,8 +76,8 @@ class FlushData:
 
 OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, LookupError, ValueError]]
 
-DB_STATE_STRUCT = struct.Struct(b'>32sLL32sHLBBlll')
-DB_STATE_STRUCT_SIZE = 92
+DB_STATE_STRUCT = struct.Struct(b'>32sLL32sLLBBlll')
+DB_STATE_STRUCT_SIZE = 94
 
 
 class DBState(typing.NamedTuple):
