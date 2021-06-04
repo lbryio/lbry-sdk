@@ -136,6 +136,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
     position: int
     root_claim_tx_num: int
     root_claim_tx_position: int
+    channel_signature_is_valid: bool
     signing_hash: Optional[bytes]
     reposted_claim_hash: Optional[bytes]
 
@@ -156,7 +157,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
             op(
                 *Prefixes.claim_to_txo.pack_item(
                     self.claim_hash, self.tx_num, self.position, self.root_claim_tx_num, self.root_claim_tx_position,
-                    self.amount, self.name
+                    self.amount, self.channel_signature_is_valid, self.name
                 )
             ),
             # claim hash by txo
@@ -180,18 +181,21 @@ class StagedClaimtrieItem(typing.NamedTuple):
         ]
 
         if self.signing_hash:
-            ops.extend([
+            ops.append(
                 # channel by stream
                 op(
                     *Prefixes.claim_to_channel.pack_item(self.claim_hash, self.signing_hash)
-                ),
-                # stream by channel
-                op(
-                    *Prefixes.channel_to_claim.pack_item(
-                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
+                )
+            )
+            if self.channel_signature_is_valid:
+                ops.append(
+                    # stream by channel
+                    op(
+                        *Prefixes.channel_to_claim.pack_item(
+                            self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
+                        )
                     )
                 )
-            ])
         if self.reposted_claim_hash:
             ops.extend([
                 op(
