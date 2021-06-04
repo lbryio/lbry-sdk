@@ -52,9 +52,9 @@ class StagedActivation(typing.NamedTuple):
 
     def _get_add_remove_activate_ops(self, add=True):
         op = RevertablePut if add else RevertableDelete
-        print(f"\t{'add' if add else 'remove'} {'claim' if self.txo_type == ACTIVATED_CLAIM_TXO_TYPE else 'support'},"
-              f" {self.tx_num}, {self.position}, activation={self.activation_height}, {self.name}, "
-              f"amount={self.amount}")
+        # print(f"\t{'add' if add else 'remove'} {'claim' if self.txo_type == ACTIVATED_CLAIM_TXO_TYPE else 'support'},"
+        #       f" {self.tx_num}, {self.position}, activation={self.activation_height}, {self.name}, "
+        #       f"amount={self.amount}")
         return [
             op(
                 *Prefixes.activated.pack_item(

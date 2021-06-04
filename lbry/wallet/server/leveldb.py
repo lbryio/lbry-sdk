@@ -249,9 +249,9 @@ class LevelDB:
             # winning resolution
             controlling = self.get_controlling_claim(normalized_name)
             if not controlling:
-                print(f"none controlling for lbry://{normalized_name}")
+                # print(f"none controlling for lbry://{normalized_name}")
                 return
-            print(f"resolved controlling lbry://{normalized_name}#{controlling.claim_hash.hex()}")
+            # print(f"resolved controlling lbry://{normalized_name}#{controlling.claim_hash.hex()}")
             return self._fs_get_claim_by_hash(controlling.claim_hash)
 
         amount_order = max(int(amount_order or 1), 1)
@@ -405,7 +405,7 @@ class LevelDB:
             tx = self.coin.transaction(self.db.get(DB_PREFIXES.TX_PREFIX.value + tx_hash))
             # treat it like a claim spend so it will delete/abandon properly
             # the _spend_claim function this result is fed to expects a txi, so make a mock one
-            print(f"\texpired lbry://{v.name} {v.claim_hash.hex()}")
+            # print(f"\texpired lbry://{v.name} {v.claim_hash.hex()}")
             expired[v.claim_hash] = (
                 k.tx_num, k.position, v.name,
                 TxInput(prev_hash=tx_hash, prev_idx=k.position, script=tx.outputs[k.position].pk_script, sequence=0)
