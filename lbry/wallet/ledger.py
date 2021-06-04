@@ -769,10 +769,12 @@ class Ledger(metaclass=LedgerRegistry):
             include_is_my_output=False,
             include_sent_supports=False,
             include_sent_tips=False,
-            include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
+            include_received_tips=False,
+            hub_server=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
         # log.warning(base64.b64decode(encoded_outputs))
-        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+        # if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+        if hub_server:
             outputs = Outputs.from_grpc(encoded_outputs)
         else:
             outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
@@ -894,6 +896,7 @@ class Ledger(metaclass=LedgerRegistry):
             claim_search(**kwargs), accounts,
             include_purchase_receipt=include_purchase_receipt,
             include_is_my_output=include_is_my_output,
+            hub_server=True if new_sdk_server else False
         )
 
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:

@@ -488,6 +488,129 @@ class HubProcess(asyncio.SubprocessProtocol):
         self.ready.set()
 
 
+def fix_kwargs_for_hub(**kwargs):
+    # DEFAULT_PAGE_SIZE = 20
+    # page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+    # kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
+    repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
+                       "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
+                       "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
+                       "canonical_url", "short_url", "claim_id"}
+    value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
+                    "limit_claims_per_channel", "tx_nout",
+                    "signature_valid", "is_controlling", "amount_order"}
+    ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
+    for key in list(kwargs.keys()):
+        value = kwargs[key]
+
+        if "txid" == key:
+            kwargs["tx_id"] = kwargs.pop("txid")
+            key = "tx_id"
+        if "nout" == key:
+            kwargs["tx_nout"] = kwargs.pop("nout")
+            key = "tx_nout"
+        if "valid_channel_signature" == key:
+            kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
+        if "invalid_channel_signature" == key:
+            kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
+        if key in {"valid_channel_signature", "invalid_channel_signature"}:
+            key = "signature_valid"
+            value = kwargs[key]
+        if "has_no_source" == key:
+            kwargs["has_source"] = not kwargs.pop("has_no_source")
+            key = "has_source"
+            value = kwargs[key]
+
+        if key in value_fields:
+            kwargs[key] = {"value": value} if type(value) != dict else value
+
+        if key in repeated_fields:
+            kwargs[key] = [value]
+
+
+        if "claim_id" == key:
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs["claim_id"]
+            }
+        if "not_claim_id" == key:
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs["not_claim_id"]
+            }
+            del kwargs["not_claim_id"]
+        if "claim_ids" == key:
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs["claim_ids"]
+            }
+            del kwargs["claim_ids"]
+        if "not_claim_ids" == key:
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs["not_claim_ids"]
+            }
+            del kwargs["not_claim_ids"]
+        if "channel_id" == key:
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs["channel_id"]
+            }
+        if "channel" == key:
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs["channel"]
+            }
+            del kwargs["channel"]
+        if "not_channel_id" == key:
+            kwargs["channel_id"] = {
+                "invert": True,
+                "value": kwargs["not_channel_id"]
+            }
+            del kwargs["not_channel_id"]
+        if "channel_ids" == key:
+            kwargs["channel_ids"] = {
+                "invert": False,
+                "value": kwargs["channel_ids"]
+            }
+        if "not_channel_ids" == key:
+            kwargs["channel_ids"] = {
+                "invert": True,
+                "value": kwargs["not_channel_ids"]
+            }
+            del kwargs["not_channel_ids"]
+
+
+        if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
+            operator_length = 2 if value[:2] in ops else 1
+            operator, value = value[:operator_length], value[operator_length:]
+
+            op = 0
+            if operator == '=':
+                op = 0
+            if operator == '<=' or operator == 'lte':
+                op = 1
+            if operator == '>=' or operator == 'gte':
+                op = 2
+            if operator == '<' or operator == 'lt':
+                op = 3
+            if operator == '>' or operator == 'gt':
+                op = 4
+            kwargs[key] = {"op": op, "value": [str(value)]}
+        elif key in MY_RANGE_FIELDS:
+            kwargs[key] = {"op": 0, "value": [str(value)]}
+
+        if 'fee_amount' == key:
+            value = kwargs['fee_amount']
+            value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
+            kwargs['fee_amount'] = value
+        if 'stream_types' == key:
+            kwargs['stream_type'] = kwargs.pop('stream_types')
+        if 'media_types' == key:
+            kwargs['media_type'] = kwargs.pop('media_types')
+    return kwargs
+
+
 class HubNode:
 
     def __init__(self, url, daemon, cli):
@@ -497,7 +620,7 @@ class HubNode:
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
         self.bin_dir = os.path.join(self.project_dir, 'bin')
         self.daemon_bin = os.path.join(self.bin_dir, daemon)
-        self.cli_bin = os.path.join(os.environ['GOPATH'], 'bin/grpcurl')
+        self.cli_bin = os.path.join(self.bin_dir, daemon)
         self.log = log.getChild('hub')
         self.data_path = None
         self.protocol = None
@@ -611,129 +734,7 @@ class HubNode:
         pass
         #shutil.rmtree(self.data_path, ignore_errors=True)
 
-    def fix_kwargs(self, **kwargs):
-        DEFAULT_PAGE_SIZE = 20
-        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
-        kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
-                           "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
-                           "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
-                           "canonical_url", "short_url", "claim_id"}
-        value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
-                        "limit_claims_per_channel", "tx_nout",
-                        "signature_valid", "is_controlling", "amount_order"}
-        ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
-        for key in list(kwargs.keys()):
-            value = kwargs[key]
-
-            if "txid" == key:
-                kwargs["tx_id"] = kwargs.pop("txid")
-                key = "tx_id"
-            if "nout" == key:
-                kwargs["tx_nout"] = kwargs.pop("nout")
-                key = "tx_nout"
-            if "valid_channel_signature" == key:
-                kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
-            if "invalid_channel_signature" == key:
-                kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
-            if key in {"valid_channel_signature", "invalid_channel_signature"}:
-                key = "signature_valid"
-                value = kwargs[key]
-            if "has_no_source" == key:
-                kwargs["has_source"] = not kwargs.pop("has_no_source")
-                key = "has_source"
-                value = kwargs[key]
-
-            if key in value_fields:
-                kwargs[key] = {"value": value} if type(value) != dict else value
-
-            if key in repeated_fields:
-                kwargs[key] = [value]
-
-
-            if "claim_id" == key:
-                kwargs["claim_id"] = {
-                    "invert": False,
-                    "value": kwargs["claim_id"]
-                }
-            if "not_claim_id" == key:
-                kwargs["claim_id"] = {
-                    "invert": True,
-                    "value": kwargs["not_claim_id"]
-                }
-                del kwargs["not_claim_id"]
-            if "claim_ids" == key:
-                kwargs["claim_id"] = {
-                    "invert": False,
-                    "value": kwargs["claim_ids"]
-                }
-                del kwargs["claim_ids"]
-            if "not_claim_ids" == key:
-                kwargs["claim_id"] = {
-                    "invert": True,
-                    "value": kwargs["not_claim_ids"]
-                }
-                del kwargs["not_claim_ids"]
-            if "channel_id" == key:
-                kwargs["channel_id"] = {
-                    "invert": False,
-                    "value": kwargs["channel_id"]
-                }
-            if "channel" == key:
-                kwargs["channel_id"] = {
-                    "invert": False,
-                    "value": kwargs["channel"]
-                }
-                del kwargs["channel"]
-            if "not_channel_id" == key:
-                kwargs["channel_id"] = {
-                    "invert": True,
-                    "value": kwargs["not_channel_id"]
-                }
-                del kwargs["not_channel_id"]
-            if "channel_ids" == key:
-                kwargs["channel_ids"] = {
-                    "invert": False,
-                    "value": kwargs["channel_ids"]
-                }
-            if "not_channel_ids" == key:
-                kwargs["channel_ids"] = {
-                    "invert": True,
-                    "value": kwargs["not_channel_ids"]
-                }
-                del kwargs["not_channel_ids"]
-
-
-            if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
-                operator_length = 2 if value[:2] in ops else 1
-                operator, value = value[:operator_length], value[operator_length:]
-
-                op = 0
-                if operator == '=':
-                    op = 0
-                if operator == '<=' or operator == 'lte':
-                    op = 1
-                if operator == '>=' or operator == 'gte':
-                    op = 2
-                if operator == '<' or operator == 'lt':
-                    op = 3
-                if operator == '>' or operator == 'gt':
-                    op = 4
-                kwargs[key] = {"op": op, "value": [str(value)]}
-            elif key in MY_RANGE_FIELDS:
-                kwargs[key] = {"op": 0, "value": [str(value)]}
-
-            if 'fee_amount' == key:
-                value = kwargs['fee_amount']
-                value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
-                kwargs['fee_amount'] = value
-            if 'stream_types' == key:
-                kwargs['stream_type'] = kwargs.pop('stream_types')
-            if 'media_types' == key:
-                kwargs['media_type'] = kwargs.pop('media_types')
-        return kwargs
-
-    async def _cli_cmnd2(self, *args):
+    async def _cli_cmnd(self, *args):
         cmnd_args = [
             self.daemon_bin,
         ] + list(args)
@@ -750,32 +751,5 @@ class HubNode:
             raise Exception(result)
         return result
 
-    async def _cli_cmnd(self, *args, **kwargs):
-        cmnd_args = [
-            self.cli_bin,
-            '-d', f'{json.dumps(kwargs)}',
-            '-plaintext',
-            f'{self.hostname}:{self.rpcport}',
-            'pb.Hub.Search'
-        ] + list(args)
-        self.log.warning(' '.join(cmnd_args))
-        loop = asyncio.get_event_loop()
-        asyncio.get_child_watcher().attach_loop(loop)
-        process = await asyncio.create_subprocess_exec(
-            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        )
-        out, _ = await process.communicate()
-        result = out.decode().strip()
-        self.log.warning(result)
-        if result.startswith('error code'):
-            raise Exception(result)
-        return result
-
-    async def claim_search(self, **kwargs):
-        kwargs = self.fix_kwargs(**kwargs)
-        res = json.loads(await self._cli_cmnd(**kwargs))
-        # log.warning(res)
-        return res
-
     async def name_query(self, name):
-        return await self._cli_cmnd2('--name', name)
+        return await self._cli_cmnd('--name', name)

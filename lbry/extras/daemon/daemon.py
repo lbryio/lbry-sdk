@@ -51,6 +51,7 @@ from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
+from lbry.wallet.orchstr8.node import fix_kwargs_for_hub
 
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
@@ -2494,7 +2495,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
+        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            kwargs['new_sdk_server'] = "localhost:50051"
+            kwargs = fix_kwargs_for_hub(**kwargs)
+        else:
+            # Don't do this if using the hub server, it screws everything up
         if "claim_ids" in kwargs and not kwargs["claim_ids"]:
             kwargs.pop("claim_ids")
         if {'claim_id', 'claim_ids'}.issubset(kwargs):
@@ -2507,8 +2512,10 @@ class Daemon(metaclass=JSONRPCServerType):
         if 'has_no_source' in kwargs:
             kwargs['has_source'] = not kwargs.pop('has_no_source')
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+        print(len(txos))
         result = {
             "items": txos,
             "blocked": blocked,
