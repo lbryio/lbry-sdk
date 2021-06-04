@@ -313,8 +313,8 @@ class LRUCache:
     def clear(self):
         self.cache.clear()
 
-    def pop(self, key):
-        return self.cache.pop(key)
+    def pop(self, key, default=None):
+        return self.cache.pop(key, default)
 
     def __setitem__(self, key, value):
         return self.set(key, value)
