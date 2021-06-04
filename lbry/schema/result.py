@@ -152,7 +152,6 @@ class Outputs:
 
     @classmethod
     def from_grpc(cls, outputs: OutputsMessage) -> 'Outputs':
-        print(outputs)
         txs = set()
         for txo_message in chain(outputs.txos, outputs.extra_txos):
             if txo_message.WhichOneof('meta') == 'error':

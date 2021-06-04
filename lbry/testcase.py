@@ -19,6 +19,7 @@ from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode, HubNode
+from lbry.wallet.orchstr8.node import fix_kwargs_for_hub
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
@@ -615,9 +616,6 @@ class CommandTestCase(IntegrationTestCase):
         return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
     async def claim_search(self, **kwargs):
-        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            kwargs['new_sdk_server'] = "localhost:50051"
-            kwargs = self.hub.fix_kwargs(**kwargs)
         return (await self.out(self.daemon.jsonrpc_claim_search(**kwargs)))['items']
 
     async def file_list(self, *args, **kwargs):
@@ -635,7 +633,7 @@ class CommandTestCase(IntegrationTestCase):
     async def claim_list(self, *args, **kwargs):
         if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
             kwargs['new_sdk_server'] = "localhost:50051"
-            kwargs = self.hub.fix_kwargs(**kwargs)
+            kwargs = fix_kwargs_for_hub(**kwargs)
             res = await self.out(self.hub.claim_search(**kwargs))
             return res
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
