@@ -6,6 +6,7 @@ from binascii import unhexlify
 from unittest import skip
 from urllib.request import urlopen
 
+import lbry.wallet.transaction
 from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.comment_client import verify
 
@@ -69,9 +70,13 @@ class ClaimSearchCommand(ClaimTestCase):
 
     async def assertFindsClaims(self, claims, **kwargs):
         kwargs.setdefault('order_by', ['height', '^name'])
-
+        if os.environ.get("GO_HUB") and os.environ["GO_HUB"] == "true":
+            kwargs['new_sdk_server'] = self.hub.hostname + ":" + str(self.hub.rpcport)
         results = await self.claim_search(**kwargs)
         self.assertEqual(len(claims), len(results))
+        for claim, result in zip(claims, results):
+            print((claim['txid'], self.get_claim_id(claim)),
+                  (result['txid'], result['claim_id'], result['height']))
         for claim, result in zip(claims, results):
             self.assertEqual(
                 (claim['txid'], self.get_claim_id(claim)),
@@ -90,7 +95,7 @@ class ClaimSearchCommand(ClaimTestCase):
         #         f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
         #     )
 
-    @skip("okay")
+    # @skip("okay")
     async def test_basic_claim_search(self):
         await self.create_channel()
         channel_txo = self.channel['outputs'][0]
@@ -132,11 +137,20 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims(claims, channel_ids=[self.channel_id])
         # FIXME
         # channel param doesn't work yet because we need to implement resolve url from search first
-        # await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
-        # await self.assertFindsClaims([], channel=f"@inexistent")
+        cid = await self.daemon.jsonrpc_resolve(f"@abc#{self.channel_id}")
+        await self.assertFindsClaims(claims, channel_id=cid[f"@abc#{self.channel_id}"].claim_id)
+        cid = await self.daemon.jsonrpc_resolve(f"@inexistent")
+        if type(cid["@inexistent"]) == dict:
+            cid = ""
+        else:
+            cid = cid["@inexistent"].claim_id
+        await self.assertFindsClaims([], channel_id=cid)
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
-        # await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", valid_channel_signature=True)
+        # since the resolve is being done separately this would only test finding something with an empty channel so I
+        # think we can just remove these and test those independently
+        # cid = await self.daemon.jsonrpc_resolve(f"@abc#{self.channel_id}")
+        # await self.assertFindsClaims([], channel_id=cid[f"@abc#{self.channel_id}"].claim_id, valid_channel_signature=True)
         await self.assertFindsClaims([], channel_ids=[self.channel_id], valid_channel_signature=True)
         await self.assertFindsClaims([signed2], channel_ids=[channel_id2], valid_channel_signature=True)
         # pass `invalid_channel_signature=False` to catch a bug in argument processing
@@ -166,7 +180,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three))
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three), text='*')
 
-    @skip("okay")
+    # @skip("okay")
     async def test_source_filter(self):
         channel = await self.channel_create('@abc')
         no_source = await self.stream_create('no-source', data=None)
@@ -181,50 +195,52 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
         # await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
 
-    @skip("Won't work until we can resolve the channel id")
+    # @skip("Okay???")
     async def test_pagination(self):
         await self.create_channel()
         await self.create_lots_of_streams()
 
+        channel_id = (await self.daemon.jsonrpc_resolve(f"@abc"))["@abc"].claim_id
         # FIXME: this doesn't work when jsonrpc_claim_search is called directly
-        # # with and without totals
-        # results = await self.daemon.jsonrpc_claim_search()
-        # self.assertEqual(results['total_pages'], 2)
-        # self.assertEqual(results['total_items'], 25)
-        # results = await self.daemon.jsonrpc_claim_search(no_totals=True)
+        new_sdk_server = self.hub.hostname + ":" + str(self.hub.rpcport)
+        # with and without totals
+        results = await self.daemon.jsonrpc_claim_search(new_sdk_server=new_sdk_server)
+        self.assertEqual(results['total_pages'], 2)
+        self.assertEqual(results['total_items'], 25)
+        # FIXME: Do we still need to support this?
+        # results = await self.daemon.jsonrpc_claim_search(no_totals=True, new_sdk_server=new_sdk_server)
         # self.assertNotIn('total_pages', results)
         # self.assertNotIn('total_items', results)
 
         # defaults
-        page = await self.claim_search(channel='@abc', order_by=['height', '^name'])
-        print(page)
+        page = await self.claim_search(channel_id=channel_id, order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[:DEFAULT_PAGE_SIZE])
 
         # page with default page_size
-        page = await self.claim_search(page=2, channel='@abc', order_by=['height', '^name'])
+        page = await self.claim_search(page=2, channel_id=channel_id, order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[DEFAULT_PAGE_SIZE:(DEFAULT_PAGE_SIZE*2)])
 
         # page_size larger than dataset
-        page = await self.claim_search(page_size=50, channel='@abc', order_by=['height', '^name'])
+        page = await self.claim_search(page_size=50, channel_id=channel_id, order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams)
 
         # page_size less than dataset
-        page = await self.claim_search(page_size=6, channel='@abc', order_by=['height', '^name'])
+        page = await self.claim_search(page_size=6, channel_id=channel_id, order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[:6])
 
         # page and page_size
-        page = await self.claim_search(page=2, page_size=6, channel='@abc', order_by=['height', '^name'])
+        page = await self.claim_search(page=2, page_size=6, channel_id=channel_id, order_by=['height', '^name'])
         page_claim_ids = [item['name'] for item in page]
         self.assertEqual(page_claim_ids, self.streams[6:12])
 
-        out_of_bounds = await self.claim_search(page=4, page_size=20, channel='@abc')
+        out_of_bounds = await self.claim_search(page=4, page_size=20, channel_id=channel_id)
         self.assertEqual(out_of_bounds, [])
 
-    @skip("okay")
+    # @skip("okay")
     async def test_tag_search(self):
         claim1 = await self.stream_create('claim1', tags=['aBc'])
         claim2 = await self.stream_create('claim2', tags=['#abc', 'def'])
@@ -261,7 +277,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim3], all_tags=['abc', 'ghi'], any_tags=['jkl'], not_tags=['mno'])
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
 
-    @skip("okay")
+    # @skip("okay")
     async def test_order_by(self):
         height = self.ledger.network.remote_height
         claims = [await self.stream_create(f'claim{i}') for i in range(5)]
@@ -278,7 +294,7 @@ class ClaimSearchCommand(ClaimTestCase):
 
         await self.assertFindsClaims(claims, order_by=["^name"])
 
-    @skip("okay")
+    # @skip("okay")
     async def test_search_by_fee(self):
         claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
         claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
@@ -293,7 +309,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim3], fee_amount='0.5', fee_currency='lbc')
         await self.assertFindsClaims([claim5], fee_currency='usd')
 
-    @skip("okay")
+    # @skip("okay")
     async def test_search_by_language(self):
         claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
         claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
@@ -308,7 +324,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim5, claim4, claim3], any_languages=['en', 'es'])
         await self.assertFindsClaims([], fee_currency='foo')
 
-    @skip("okay")
+    # @skip("okay")
     async def test_search_by_channel(self):
         match = self.assertFindsClaims
 
@@ -364,7 +380,7 @@ class ClaimSearchCommand(ClaimTestCase):
                     not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
         await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
 
-    @skip("not okay")
+    # @skip("okay")
     async def test_limit_claims_per_channel(self):
         match = self.assertFindsClaims
         chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
@@ -384,7 +400,7 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
-    @skip("not okay")
+    # @skip("okay")
     async def test_limit_claims_per_channel_across_sorted_pages(self):
         await self.generate(10)
         match = self.assertFindsClaims
@@ -417,7 +433,7 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
         )
 
-    @skip("okay")
+    # @skip("okay")
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()
@@ -460,7 +476,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], duration='>100')
         await self.assertFindsClaims([], duration='<14')
 
-    @skip("okay")
+    # @skip("okay")
     async def test_search_by_text(self):
         chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))
         chan2_id = self.get_claim_id(await self.channel_create('@Bitcoin'))

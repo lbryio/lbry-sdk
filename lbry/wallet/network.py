@@ -469,14 +469,7 @@ class Network:
         return self.rpc('blockchain.claimtrie.resolve', urls, False, session_override)
 
     def claim_search(self, session_override=None, **kwargs):
-        # FIXME: How do i get a session to connect to my go rpc server?!?
-        # if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-        #     session_override = ClientSession(
-        #         network=self, server=("localhost", 50051)
-        #     )
-        #     return self.rpc('pb.Hub.Search', kwargs, False, session_override)
-        # else:
-            return self.rpc('blockchain.claimtrie.search', kwargs, False, session_override)
+        return self.rpc('blockchain.claimtrie.search', kwargs, False, session_override)
 
     async def new_resolve(self, server, urls):
         message = {"method": "resolve", "params": {"urls": urls, "protobuf": True}}
@@ -494,13 +487,12 @@ class Network:
             log.warning(kwargs)
             response = await stub.Search(SearchRequest(**kwargs))
             return response
-        # kwargs['protobuf'] = True
-        # # TODO: grpc python client here
-        #
-        # message = {"method": "claim_search", "params": kwargs}
-        # async with self.aiohttp_session.post(server, json=message) as r:
-        #     result = await r.json()
-        #     return result['result']
+        kwargs['protobuf'] = True
+
+        message = {"method": "claim_search", "params": kwargs}
+        async with self.aiohttp_session.post(server, json=message) as r:
+            result = await r.json()
+            return result['result']
 
     async def sum_supports(self, server, **kwargs):
         message = {"method": "support_sum", "params": kwargs}
