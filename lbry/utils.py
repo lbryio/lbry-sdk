@@ -21,7 +21,6 @@ import pkg_resources
 import certifi
 import aiohttp
 from prometheus_client import Counter
-from prometheus_client.registry import REGISTRY
 from lbry.schema.claim import Claim
 
 
@@ -276,12 +275,6 @@ class LRUCacheWithMetrics:
 
     def __del__(self):
         self.clear()
-        if self._track_metrics:  # needed for tests
-            try:
-                REGISTRY.unregister(self.hits)
-                REGISTRY.unregister(self.misses)
-            except AttributeError:
-                pass
 
 
 class LRUCache:
