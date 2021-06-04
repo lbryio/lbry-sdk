@@ -220,14 +220,13 @@ class LevelDB:
         channel_hash = self.get_channel_for_claim(claim_hash)
         reposted_claim_hash = self.get_repost(claim_hash)
 
-        claims_in_channel = None
         short_url = f'{name}#{claim_hash.hex()}'
         canonical_url = short_url
+        claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
             channel_vals = self.get_claim_txo(channel_hash)
             if channel_vals:
                 channel_name = channel_vals[1].name
-                claims_in_channel = self.get_claims_in_channel_count(channel_hash)
                 canonical_url = f'{channel_name}#{channel_hash.hex()}/{name}#{claim_hash.hex()}'
         return ResolveResult(
             name, claim_hash, tx_num, position, tx_hash, height, claim_amount, short_url=short_url,
