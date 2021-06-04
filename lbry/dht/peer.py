@@ -4,7 +4,7 @@ import logging
 from binascii import hexlify
 from dataclasses import dataclass, field
 from functools import lru_cache
-from lbry.utils import is_valid_public_ipv4 as _is_valid_public_ipv4
+from lbry.utils import is_valid_public_ipv4 as _is_valid_public_ipv4, LRUCache
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
@@ -31,12 +31,12 @@ class PeerManager:
         self._rpc_failures: typing.Dict[
             typing.Tuple[str, int], typing.Tuple[typing.Optional[float], typing.Optional[float]]
         ] = {}
-        self._last_replied: typing.Dict[typing.Tuple[str, int], float] = {}
-        self._last_sent: typing.Dict[typing.Tuple[str, int], float] = {}
-        self._last_requested: typing.Dict[typing.Tuple[str, int], float] = {}
-        self._node_id_mapping: typing.Dict[typing.Tuple[str, int], bytes] = {}
-        self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = {}
-        self._node_tokens: typing.Dict[bytes, (float, bytes)] = {}
+        self._last_replied: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
+        self._last_sent: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
+        self._last_requested: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
+        self._node_id_mapping: typing.Dict[typing.Tuple[str, int], bytes] = LRUCache(2048)
+        self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = LRUCache(2048)
+        self._node_tokens: typing.Dict[bytes, (float, bytes)] = LRUCache(2048)
 
     def reset(self):
         for statistic in (self._rpc_failures, self._last_replied, self._last_sent, self._last_requested):
