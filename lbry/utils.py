@@ -310,6 +310,9 @@ class LRUCache:
                 self.cache.popitem(last=False)
         self.cache[key] = value
 
+    def items(self):
+        return self.cache.items()
+
     def clear(self):
         self.cache.clear()
 
