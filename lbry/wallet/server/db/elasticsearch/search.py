@@ -111,8 +111,11 @@ class SearchIndex:
                 yield extract_doc(doc, self.index)
             count += 1
             if count % 100 == 0:
-                self.logger.info("Indexing in progress, %d claims.", count)
-        self.logger.info("Indexing done for %d claims.", count)
+                self.logger.debug("Indexing in progress, %d claims.", count)
+        if count:
+            self.logger.info("Indexing done for %d claims.", count)
+        else:
+            self.logger.debug("Indexing done for %d claims.", count)
 
     async def claim_consumer(self, claim_producer):
         touched = set()
@@ -124,7 +127,7 @@ class SearchIndex:
                 item = item.popitem()[1]
                 touched.add(item['_id'])
         await self.sync_client.indices.refresh(self.index)
-        self.logger.info("Indexing done.")
+        self.logger.debug("Indexing done.")
 
     def update_filter_query(self, censor_type, blockdict, channels=False):
         blockdict = {key[::-1].hex(): value[::-1].hex() for key, value in blockdict.items()}
