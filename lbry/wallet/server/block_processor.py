@@ -724,15 +724,18 @@ class BlockProcessor:
             if supported_name is not None:
                 self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
-            self.removed_active_support[spent_support].append(support_amount)
-            # print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
-            return StagedClaimtrieSupport(
+            if activation <= self.height + 1:
+                self.removed_active_support[spent_support].append(support_amount)
+            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
+            ops = StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
-            ).get_spend_support_txo_ops() + \
-                StagedActivation(
+            ).get_spend_support_txo_ops()
+            if supported_name is not None:
+                ops.extend(StagedActivation(
                     ACTIVATED_SUPPORT_TXO_TYPE, spent_support, txin_num, txin.prev_idx, activation, supported_name,
                     support_amount
-                ).get_remove_activate_ops()
+                ).get_remove_activate_ops())
+            return ops
         return []
 
     def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]):
