@@ -797,6 +797,8 @@ class BlockProcessor:
         if prev_signing_hash and prev_signing_hash in self.pending_channel_counts:
             self.pending_channel_counts.pop(prev_signing_hash)
 
+        for support_txo_to_clear in self.pending_supports[claim_hash]:
+            self.pending_support_txos.pop(support_txo_to_clear)
         self.pending_supports[claim_hash].clear()
         self.pending_supports.pop(claim_hash)
 
