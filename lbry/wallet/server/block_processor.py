@@ -1111,7 +1111,10 @@ class BlockProcessor:
                 winning_including_future_activations = max(
                     amounts_with_future_activations, key=lambda x: amounts_with_future_activations[x]
                 )
-                if winning_claim_hash != winning_including_future_activations:  # TODO: and amount is higher and claim exists
+                future_winning_amount = amounts_with_future_activations[winning_including_future_activations]
+
+                if winning_claim_hash != winning_including_future_activations and \
+                        future_winning_amount > amounts[winning_claim_hash]:
                     print(f"\ttakeover of {name} by {winning_claim_hash.hex()} triggered early activation and "
                           f"takeover by {winning_including_future_activations.hex()} at {height}")
                     # handle a pending activated claim jumping the takeover delay when another name takes over
