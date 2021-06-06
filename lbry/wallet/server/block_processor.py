@@ -344,8 +344,8 @@ class BlockProcessor:
             languages = list(set(claim_languages).union(set(reposted_languages)))
             canonical_url = f'{claim.name}#{claim.claim_hash.hex()}'
             if metadata.is_signed:
-                channel_txo = self.db.get_claim_txo(metadata.signing_channel_hash[::-1])
-                canonical_url = f'{channel_txo[1].name}#{metadata.signing_channel_hash[::-1].hex()}/{canonical_url}'
+                channel_name = self._get_pending_claim_name(metadata.signing_channel_hash[::-1])
+                canonical_url = f'{channel_name}#{metadata.signing_channel_hash[::-1].hex()}/{canonical_url}'
 
             value = {
                 'claim_hash': claim_hash[::-1],
