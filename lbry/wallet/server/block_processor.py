@@ -713,7 +713,7 @@ class BlockProcessor:
             spent_support, support_amount = self.pending_support_txos.pop((txin_num, txin.prev_idx))
             self.pending_supports[spent_support].remove((txin_num, txin.prev_idx))
             supported_name = self._get_pending_claim_name(spent_support)
-            # print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()}")
+            print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()}")
             self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             return StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
@@ -721,7 +721,8 @@ class BlockProcessor:
         spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
         if spent_support:
             supported_name = self._get_pending_claim_name(spent_support)
-            self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
+            if supported_name is not None:
+                self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
             self.removed_active_support[spent_support].append(support_amount)
             # print(f"\tspent support for lbry://{supported_name}#{spent_support.hex()} activation:{activation} {support_amount}")
@@ -933,6 +934,8 @@ class BlockProcessor:
         abandoned_support_check_need_takeover = defaultdict(list)
         for claim_hash, amounts in self.removed_active_support.items():
             name = self._get_pending_claim_name(claim_hash)
+            if name is None:
+                continue
             controlling = get_controlling(name)
             if controlling and controlling.claim_hash == claim_hash and \
                     name not in names_with_abandoned_controlling_claims:
@@ -952,7 +955,12 @@ class BlockProcessor:
                 name = self.pending_claims[self.pending_claim_txos[claim_hash]].name
                 staged_is_new_claim = not self.pending_claims[self.pending_claim_txos[claim_hash]].is_update
             else:
-                k, v = self.db.get_claim_txo(claim_hash)
+                supported_claim_info = self.db.get_claim_txo(claim_hash)
+                if not supported_claim_info:
+                    # the supported claim doesn't exist
+                    continue
+                else:
+                    k, v = supported_claim_info
                 name = v.name
                 staged_is_new_claim = (v.root_tx_num, v.root_position) == (k.tx_num, k.position)
             ops.extend(get_delayed_activate_ops(
@@ -993,6 +1001,9 @@ class BlockProcessor:
                         amount = self.db.get_support_txo_amount(
                             activated.claim_hash, activated_txo.tx_num, activated_txo.position
                         )
+                    if amount is None:
+                        print("\tskip activate support for non existent claim")
+                        continue
                     self.staged_activated_support[activated.claim_hash].append(amount)
                 self.pending_activated[activated.name][activated.claim_hash].append((activated_txo, amount))
                 print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
