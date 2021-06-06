@@ -540,7 +540,7 @@ class LevelDB:
             keys = []
             for key, hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value):
                 k = key[1:]
-                flush_id, = unpack_be_uint16_from(k[-2:])
+                flush_id = int.from_bytes(k[-4:], byteorder='big')
                 if flush_id > self.utxo_flush_count:
                     keys.append(k)
 
@@ -719,7 +719,7 @@ class LevelDB:
 
             # Then history
             self.hist_flush_count += 1
-            flush_id = pack_be_uint16(self.hist_flush_count)
+            flush_id = util.pack_be_uint32(self.hist_flush_count)
             unflushed = self.hist_unflushed
 
             for hashX in sorted(unflushed):
