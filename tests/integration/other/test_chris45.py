@@ -199,5 +199,5 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # He closes and opens the wallet server databases to see how horribly they break
         db = self.conductor.spv_node.server.db
         db.close()
-        await db.open_for_serving()
+        await db.open_dbs()
         # They didn't! (error would be AssertionError: 276 vs 266 (264 counts) on startup)
