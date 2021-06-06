@@ -1576,13 +1576,7 @@ class BlockProcessor:
             self.logger.info(f'{lbry.__version__} synced to '
                              f'height {self.height:,d}')
         # Reopen for serving
-        await self.db.open_for_serving()
-
-    async def _first_open_dbs(self):
-        await self.db.open_for_sync()
-        self.height = self.db.db_height
-        self.tip = self.db.db_tip
-        self.tx_count = self.db.db_tx_count
+        await self.db.open_dbs()
 
     # --- External API
 
@@ -1601,7 +1595,11 @@ class BlockProcessor:
 
         self._caught_up_event = caught_up_event
         try:
-            await self._first_open_dbs()
+            await self.db.open_dbs()
+            self.height = self.db.db_height
+            self.tip = self.db.db_tip
+            self.tx_count = self.db.db_tx_count
+
             self.status_server.set_height(self.db.fs_height, self.db.db_tip)
             await asyncio.wait([
                 self.prefetcher.main_loop(self.height),
