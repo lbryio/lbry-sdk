@@ -1,5 +1,6 @@
 import copy
 import math
+import os
 import time
 
 # Half life in blocks
@@ -22,17 +23,22 @@ DECAY_PER_RENORM = DECAY**(RENORM_INTERVAL)
 
 # Log trending calculations?
 TRENDING_LOG = True
+TRENDING_LOG_PATH = None
 
+def install(connection, db_path):
+    """
+    Install the trending algorithm.
+    """
+    path = db_path.split("claims.db")[0]
 
-def install(connection):
-    """
-    Install the AR trending algorithm.
-    """
+    global TRENDING_LOG_PATH
+    TRENDING_LOG_PATH = os.path.join(path, "trending_ar.log")
+    if TRENDING_LOG:
+        f = open(TRENDING_LOG_PATH, "a")
+        f.close()
+
     check_trending_values(connection)
 
-    if TRENDING_LOG:
-        f = open("trending_ar.log", "a")
-        f.close()
 
 # Stub
 CREATE_TREND_TABLE = ""
@@ -53,10 +59,8 @@ def check_trending_values(connection):
     if needs_reset:
         print("Resetting some columns. This might take a while...", flush=True, end="")
         c.execute(""" BEGIN;
-                      UPDATE claim SET trending_group = 0;
-                      UPDATE claim SET trending_mixed = 0;
-                      UPDATE claim SET trending_global = 0;
-                      UPDATE claim SET trending_local = 0;
+                      UPDATE claim SET trending_group=0, trending_mixed=0,
+                                       trending_global=0, trending_local=0;
                       COMMIT;""")
         print("done.")
 
@@ -93,10 +97,10 @@ def get_time_boost(height):
 
 def trending_log(s):
     """
-    Log a string.
+    Log a string to the log file
     """
     if TRENDING_LOG:
-        fout = open("trending_ar.log", "a")
+        fout = open(TRENDING_LOG_PATH, "a")
         fout.write(s)
         fout.flush()
         fout.close()
