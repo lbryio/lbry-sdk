@@ -410,11 +410,12 @@ class FileCommands(CommandTestCase):
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=1)
 
         # check that the fee was received
-        starting_balance = await self.blockchain.get_balance()
+        starting_balance = float(await self.blockchain.get_balance())
         await self.generate(1)
         block_reward_and_claim_fee = 2.0
         self.assertEqual(
-            await self.blockchain.get_balance(), starting_balance + block_reward_and_claim_fee
+            float(await self.blockchain.get_balance()),
+            starting_balance + block_reward_and_claim_fee
         )
 
         # restart the daemon and make sure the fee is still there
@@ -463,11 +464,11 @@ class FileCommands(CommandTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
 
         # Assert the transaction is recorded to the blockchain
-        starting_balance = await self.blockchain.get_balance()
+        starting_balance = float(await self.blockchain.get_balance())
         await self.generate(1)
         block_reward_and_claim_fee = 2.0
         self.assertEqual(
-            await self.blockchain.get_balance(), starting_balance + block_reward_and_claim_fee
+            float(await self.blockchain.get_balance()), starting_balance + block_reward_and_claim_fee
         )
 
     async def test_null_fee(self):

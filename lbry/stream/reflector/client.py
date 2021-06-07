@@ -59,7 +59,7 @@ class StreamReflectorClient(asyncio.Protocol):
             return
 
     async def send_request(self, request_dict: typing.Dict, timeout: int = 180):
-        msg = json.dumps(request_dict)
+        msg = json.dumps(request_dict, sort_keys=True)
         try:
             self.transport.write(msg.encode())
             self.pending_request = self.loop.create_task(asyncio.wait_for(self.response_queue.get(), timeout))

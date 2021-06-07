@@ -1477,12 +1477,21 @@ class Daemon(metaclass=JSONRPCServerType):
 
         outputs = []
         for address in addresses:
-            self.valid_address_or_error(address)
-            outputs.append(
-                Output.pay_pubkey_hash(
-                    amount, self.ledger.address_to_hash160(address)
+            self.valid_address_or_error(address, allow_script_address=True)
+            if self.ledger.is_pubkey_address(address):
+                outputs.append(
+                    Output.pay_pubkey_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
                 )
-            )
+            elif self.ledger.is_script_address(address):
+                outputs.append(
+                    Output.pay_script_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
+                )
+            else:
+                raise ValueError(f"Unsupported address: '{address}'")
 
         tx = await Transaction.create(
             [], outputs, accounts, account
@@ -2352,7 +2361,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
-                         [--has_source | --has_no_source]
+                         [--remove_duplicates] [--has_source | --has_no_source]
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
@@ -2461,6 +2470,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+            --remove_duplicates             : (bool) removes duplicated content from search by picking either the
+                                                     original claim or the oldest matching repost
             --has_source                    : (bool) find claims containing a source field
             --has_no_source                 : (bool) find claims not containing a source field
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
@@ -4069,7 +4080,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, amount, tip=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, funding_account_ids=None,
-            preview=False, blocking=False):
+            comment=None, preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
 
@@ -4077,7 +4088,7 @@ class Daemon(metaclass=JSONRPCServerType):
             support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
                            [--tip] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                            [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                           [--channel_account_id=<channel_account_id>...]
+                           [--channel_account_id=<channel_account_id>...] [--comment=<comment>]
                            [--preview] [--blocking] [--funding_account_ids=<funding_account_ids>...]
 
         Options:
@@ -4091,6 +4102,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>     : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>       : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --comment=<comment>           : (str) add a comment to the support
             --preview                     : (bool) do not broadcast the transaction
             --blocking                    : (bool) wait until transaction is in mempool
 
@@ -4108,7 +4120,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            comment=comment
         )
         new_txo = tx.outputs[0]
 
@@ -5523,9 +5536,11 @@ class Daemon(metaclass=JSONRPCServerType):
     async def broadcast_or_release(self, tx, blocking=False):
         await self.wallet_manager.broadcast_or_release(tx, blocking)
 
-    def valid_address_or_error(self, address):
+    def valid_address_or_error(self, address, allow_script_address=False):
         try:
-            assert self.ledger.is_valid_address(address)
+            assert self.ledger.is_pubkey_address(address) or (
+                allow_script_address and self.ledger.is_script_address(address)
+            )
         except:
             raise Exception(f"'{address}' is not a valid address")
 

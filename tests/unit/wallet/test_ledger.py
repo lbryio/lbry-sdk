@@ -1,4 +1,5 @@
 import os
+from unittest import TestCase
 from binascii import hexlify
 
 from lbry.testcase import AsyncioTestCase
@@ -83,6 +84,12 @@ class LedgerTestCase(AsyncioTestCase):
         self.ledger.headers.io.seek(0, os.SEEK_END)
         self.ledger.headers.io.write(serialized)
         self.ledger.headers._size = self.ledger.headers.io.seek(0, os.SEEK_END) // self.ledger.headers.header_size
+
+
+class TestUtils(TestCase):
+
+    def test_valid_address(self):
+        self.assertTrue(Ledger.is_script_address("rCz6yb1p33oYHToGZDzTjX7nFKaU3kNgBd"))
 
 
 class TestSynchronization(LedgerTestCase):

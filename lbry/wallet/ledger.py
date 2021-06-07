@@ -178,14 +178,24 @@ class Ledger(metaclass=LedgerRegistry):
         raw_address = cls.pubkey_address_prefix + h160
         return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
 
+    @classmethod
+    def hash160_to_script_address(cls, h160):
+        raw_address = cls.script_address_prefix + h160
+        return Base58.encode(bytearray(raw_address + double_sha256(raw_address)[0:4]))
+
     @staticmethod
     def address_to_hash160(address):
         return Base58.decode(address)[1:21]
 
     @classmethod
-    def is_valid_address(cls, address):
+    def is_pubkey_address(cls, address):
         decoded = Base58.decode_check(address)
         return decoded[0] == cls.pubkey_address_prefix[0]
+
+    @classmethod
+    def is_script_address(cls, address):
+        decoded = Base58.decode_check(address)
+        return decoded[0] == cls.script_address_prefix[0]
 
     @classmethod
     def public_key_to_address(cls, public_key):
@@ -713,8 +723,10 @@ class Ledger(metaclass=LedgerRegistry):
                     self.hash160_to_address(txi.txo_ref.txo.pubkey_hash)
                 )
         for txo in tx.outputs:
-            if txo.has_address:
+            if txo.is_pubkey_hash:
                 addresses.add(self.hash160_to_address(txo.pubkey_hash))
+            elif txo.is_script_hash:
+                addresses.add(self.hash160_to_script_address(txo.script_hash))
         start = int(time.perf_counter())
         while timeout and (int(time.perf_counter()) - start) <= timeout:
             if await self._wait_round(tx, height, addresses):
@@ -1188,6 +1200,7 @@ class TestNetLedger(Ledger):
     extended_public_key_prefix = unhexlify('043587cf')
     extended_private_key_prefix = unhexlify('04358394')
     checkpoints = {}
+
 
 class RegTestLedger(Ledger):
     network_name = 'regtest'

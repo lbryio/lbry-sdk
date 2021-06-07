@@ -44,7 +44,7 @@ class PurchaseCommandTests(CommandTestCase):
 
         await self.account.release_all_outputs()
         buyer_balance = await self.account.get_balance()
-        merchant_balance = lbc_to_dewies(str(await self.blockchain.get_balance()))
+        merchant_balance = lbc_to_dewies(await self.blockchain.get_balance())
         pre_purchase_count = (await self.daemon.jsonrpc_purchase_list())['total_items']
         purchase = await operation()
         stream_txo, purchase_txo = stream.outputs[0], purchase.outputs[0]
@@ -60,7 +60,9 @@ class PurchaseCommandTests(CommandTestCase):
         self.assertEqual(
             await self.account.get_balance(), buyer_balance - (purchase.input_sum-purchase.outputs[2].amount))
         self.assertEqual(
-            str(await self.blockchain.get_balance()), dewies_to_lbc(merchant_balance + purchase_txo.amount))
+            str(float(await self.blockchain.get_balance())),
+            dewies_to_lbc(merchant_balance + purchase_txo.amount)
+        )
 
         purchases = await self.daemon.jsonrpc_purchase_list()
         self.assertEqual(purchases['total_items'], pre_purchase_count+1)
