@@ -1065,7 +1065,7 @@ class BlockProcessor:
             if activated.claim_hash not in claim_exists:
                 claim_exists[activated.claim_hash] = activated.claim_hash in self.pending_claim_txos or (
                         self.db.get_claim_txo(activated.claim_hash) is not None)
-            if claim_exists[activated.claim_hash]:
+            if claim_exists[activated.claim_hash] and activated.claim_hash not in self.staged_pending_abandoned:
                 v = future_amount, activated, activated_txos[-1]
                 future_activations[activated.name][activated.claim_hash] = v
 
@@ -1075,6 +1075,8 @@ class BlockProcessor:
                     claim_exists[claim_hash] = claim_hash in self.pending_claim_txos or (
                             self.db.get_claim_txo(claim_hash) is not None)
                 if not claim_exists[claim_hash]:
+                    continue
+                if claim_hash in self.staged_pending_abandoned:
                     continue
                 for txo in activated:
                     v = txo[1], PendingActivationValue(claim_hash, name), txo[0]
