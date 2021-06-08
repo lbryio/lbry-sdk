@@ -273,15 +273,30 @@ class Output(InputOutput):
         return self.ref.id
 
     @property
+    def is_pubkey_hash(self):
+        return 'pubkey_hash' in self.script.values
+
+    @property
     def pubkey_hash(self):
         return self.script.values['pubkey_hash']
 
     @property
+    def is_script_hash(self):
+        return 'script_hash' in self.script.values
+
+    @property
+    def script_hash(self):
+        return self.script.values['script_hash']
+
+    @property
     def has_address(self):
-        return 'pubkey_hash' in self.script.values
+        return self.is_pubkey_hash or self.is_script_hash
 
     def get_address(self, ledger):
-        return ledger.hash160_to_address(self.pubkey_hash)
+        if self.is_pubkey_hash:
+            return ledger.hash160_to_address(self.pubkey_hash)
+        elif self.is_script_hash:
+            return ledger.hash160_to_script_address(self.script_hash)
 
     def get_estimator(self, ledger):
         return OutputEffectiveAmountEstimator(ledger, self)
@@ -289,6 +304,10 @@ class Output(InputOutput):
     @classmethod
     def pay_pubkey_hash(cls, amount, pubkey_hash):
         return cls(amount, OutputScript.pay_pubkey_hash(pubkey_hash))
+
+    @classmethod
+    def pay_script_hash(cls, amount, pubkey_hash):
+        return cls(amount, OutputScript.pay_script_hash(pubkey_hash))
 
     @classmethod
     def deserialize_from(cls, stream):
@@ -906,15 +925,18 @@ class Transaction:
 
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
-                funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+                funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
+                comment: str = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        if signing_channel is not None:
+        if signing_channel is not None or comment is not None:
             support = Support()
-            support.emoji = '👍'
+            if comment is not None:
+                support.comment = comment
             support_output = Output.pay_support_data_pubkey_hash(
                 amount, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
             )
-            support_output.sign(signing_channel, b'placeholder txid:nout')
+            if signing_channel is not None:
+                support_output.sign(signing_channel, b'placeholder txid:nout')
         else:
             support_output = Output.pay_support_pubkey_hash(
                 amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)

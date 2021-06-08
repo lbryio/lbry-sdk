@@ -1482,12 +1482,21 @@ class Daemon(metaclass=JSONRPCServerType):
 
         outputs = []
         for address in addresses:
-            self.valid_address_or_error(address)
-            outputs.append(
-                Output.pay_pubkey_hash(
-                    amount, self.ledger.address_to_hash160(address)
+            self.valid_address_or_error(address, allow_script_address=True)
+            if self.ledger.is_pubkey_address(address):
+                outputs.append(
+                    Output.pay_pubkey_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
                 )
-            )
+            elif self.ledger.is_script_address(address):
+                outputs.append(
+                    Output.pay_script_hash(
+                        amount, self.ledger.address_to_hash160(address)
+                    )
+                )
+            else:
+                raise ValueError(f"Unsupported address: '{address}'")
 
         tx = await Transaction.create(
             [], outputs, accounts, account
@@ -1561,7 +1570,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         account = wallet.get_account_or_default(account_id)
         balance = await account.get_detailed_balance(
-            confirmations=confirmations, reserved_subtotals=True, read_only=True
+            confirmations=confirmations, read_only=True
         )
         return dict_values_to_lbc(balance)
 
@@ -2274,7 +2283,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Usage:
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                       [--page=<page>] [--page_size=<page_size>]
+                       [--has_source | --has_no_source] [--page=<page>] [--page_size=<page_size>]
                        [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
 
         Options:
@@ -2285,6 +2294,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --is_spent                 : (bool) shows previous claim updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
+            --has_source               : (bool) list claims containing a source field
+            --has_no_source            : (bool) list claims not containing a source field
             --page=<page>              : (int) page to return during paginating
             --page_size=<page_size>    : (int) number of items on page during pagination
             --resolve                  : (bool) resolves each claim to provide additional metadata
@@ -2370,7 +2381,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
-                         [--has_source | --has_no_source]
+                         [--remove_duplicates] [--has_source | --has_no_source]
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
@@ -2479,6 +2490,8 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      has purchased the claim
             --include_is_my_output          : (bool) lookup and include a boolean indicating
                                                      if claim being resolved is yours
+            --remove_duplicates             : (bool) removes duplicated content from search by picking either the
+                                                     original claim or the oldest matching repost
             --has_source                    : (bool) find claims containing a source field
             --has_no_source                 : (bool) find claims not containing a source field
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
@@ -3016,13 +3029,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
+                    [--file_name=<file_name>] [--file_hash=<file_hash>] [--validate_file] [--optimize_file]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3032,6 +3045,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --file_name=<file_name>        : (str) name of file to be associated with stream.
+            --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3094,6 +3109,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of publisher channel
           --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
@@ -3211,16 +3227,15 @@ class Daemon(metaclass=JSONRPCServerType):
         Make a new stream claim and announce the associated file to lbrynet.
 
         Usage:
-            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>)
-                    [<file_path> | --file_path=<file_path>]
-                    [--validate_file] [--optimize_file]
+            stream_create (<name> | --name=<name>) (<bid> | --bid=<bid>) [<file_path> | --file_path=<file_path>]
+                    [--file_name=<file_name>] [--file_hash=<file_hash>] [--validate_file] [--optimize_file]
                     [--allow_duplicate_name=<allow_duplicate_name>]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
                     [--tags=<tags>...] [--languages=<languages>...] [--locations=<locations>...]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name>]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3230,6 +3245,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
             --file_path=<file_path>        : (str) path to file to be associated with name.
+            --file_name=<file_name>        : (str) name of file to be associated with stream.
+            --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
                                              FFmpeg is required
@@ -3294,6 +3311,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
             --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
@@ -3390,7 +3408,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     [--locations=<locations>...] [--clear_locations]
                     [--license=<license>] [--license_url=<license_url>] [--thumbnail_url=<thumbnail_url>]
                     [--release_time=<release_time>] [--width=<width>] [--height=<height>] [--duration=<duration>]
-                    [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
+                    [--sd_hash=<sd_hash>] [--channel_id=<channel_id> | --channel_name=<channel_name> | --clear_channel]
                     [--channel_account_id=<channel_account_id>...]
                     [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                     [--claim_address=<claim_address>] [--funding_account_ids=<funding_account_ids>...]
@@ -3469,6 +3487,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --width=<width>                : (int) image/video width, automatically calculated from media file
             --height=<height>              : (int) image/video height, automatically calculated from media file
             --duration=<duration>          : (int) audio/video duration in seconds, automatically calculated
+            --sd_hash=<sd_hash>            : (str) sd_hash of stream
             --channel_id=<channel_id>      : (str) claim id of the publisher channel
             --channel_name=<channel_name>  : (str) name of the publisher channel
             --clear_channel                : (bool) remove channel signature
@@ -3950,9 +3969,6 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if replace:
             claim = Claim()
-            claim.collection.message.source.CopyFrom(
-                old_txo.claim.collection.message.source
-            )
             claim.collection.update(**kwargs)
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
@@ -4084,7 +4100,7 @@ class Daemon(metaclass=JSONRPCServerType):
             self, claim_id, amount, tip=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, funding_account_ids=None,
-            preview=False, blocking=False):
+            comment=None, preview=False, blocking=False):
         """
         Create a support or a tip for name claim.
 
@@ -4092,7 +4108,7 @@ class Daemon(metaclass=JSONRPCServerType):
             support_create (<claim_id> | --claim_id=<claim_id>) (<amount> | --amount=<amount>)
                            [--tip] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                            [--channel_id=<channel_id> | --channel_name=<channel_name>]
-                           [--channel_account_id=<channel_account_id>...]
+                           [--channel_account_id=<channel_account_id>...] [--comment=<comment>]
                            [--preview] [--blocking] [--funding_account_ids=<funding_account_ids>...]
 
         Options:
@@ -4106,6 +4122,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --account_id=<account_id>     : (str) account to use for holding the transaction
             --wallet_id=<wallet_id>       : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
+            --comment=<comment>           : (str) add a comment to the support
             --preview                     : (bool) do not broadcast the transaction
             --blocking                    : (bool) wait until transaction is in mempool
 
@@ -4123,7 +4140,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = await account.receiving.get_or_create_usable_address()
 
         tx = await Transaction.support(
-            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            comment=comment
         )
         new_txo = tx.outputs[0]
 
@@ -4365,6 +4383,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_id=None, channel_id=None, not_channel_id=None,
             name=None, reposted_claim_id=None,
             is_spent=False, is_not_spent=False,
+            has_source=None, has_no_source=None,
             is_my_input_or_output=None, exclude_internal_transfers=False,
             is_my_output=None, is_not_my_output=None,
             is_my_input=None, is_not_my_input=None):
@@ -4372,6 +4391,10 @@ class Daemon(metaclass=JSONRPCServerType):
             constraints['is_spent'] = True
         elif is_not_spent:
             constraints['is_spent'] = False
+        if has_source:
+            constraints['has_source'] = True
+        elif has_no_source:
+            constraints['has_source'] = False
         constraints['exclude_internal_transfers'] = exclude_internal_transfers
         if is_my_input_or_output is True:
             constraints['is_my_input_or_output'] = True
@@ -5533,9 +5556,11 @@ class Daemon(metaclass=JSONRPCServerType):
     async def broadcast_or_release(self, tx, blocking=False):
         await self.wallet_manager.broadcast_or_release(tx, blocking)
 
-    def valid_address_or_error(self, address):
+    def valid_address_or_error(self, address, allow_script_address=False):
         try:
-            assert self.ledger.is_valid_address(address)
+            assert self.ledger.is_pubkey_address(address) or (
+                allow_script_address and self.ledger.is_script_address(address)
+            )
         except:
             raise Exception(f"'{address}' is not a valid address")
 

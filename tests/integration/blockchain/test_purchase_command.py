@@ -44,7 +44,7 @@ class PurchaseCommandTests(CommandTestCase):
 
         await self.account.release_all_outputs()
         buyer_balance = await self.account.get_balance()
-        merchant_balance = lbc_to_dewies(str(await self.blockchain.get_balance()))
+        merchant_balance = lbc_to_dewies(await self.blockchain.get_balance())
         pre_purchase_count = (await self.daemon.jsonrpc_purchase_list())['total_items']
         purchase = await operation()
         stream_txo, purchase_txo = stream.outputs[0], purchase.outputs[0]
@@ -60,7 +60,9 @@ class PurchaseCommandTests(CommandTestCase):
         self.assertEqual(
             await self.account.get_balance(), buyer_balance - (purchase.input_sum-purchase.outputs[2].amount))
         self.assertEqual(
-            str(await self.blockchain.get_balance()), dewies_to_lbc(merchant_balance + purchase_txo.amount))
+            str(float(await self.blockchain.get_balance())),
+            dewies_to_lbc(merchant_balance + purchase_txo.amount)
+        )
 
         purchases = await self.daemon.jsonrpc_purchase_list()
         self.assertEqual(purchases['total_items'], pre_purchase_count+1)
@@ -184,7 +186,13 @@ class PurchaseCommandTests(CommandTestCase):
         await self.generate(1)
         await self.ledger.wait(purchase)
 
-        await self.assertBalance(self.account, '10.987893')
+        # confirm that available and reserved take into account purchase received
+        self.assertEqual(await self.account.get_detailed_balance(), {
+            'total': 1099789300,
+            'available': 1098789300,
+            'reserved': 1000000,
+            'reserved_subtotals': {'claims': 1000000, 'supports': 0, 'tips': 0}
+        })
         self.assertItemCount(await self.daemon.jsonrpc_utxo_list(), 2)
 
         spend = await self.daemon.jsonrpc_wallet_send('10.5', address2)

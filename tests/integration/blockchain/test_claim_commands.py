@@ -75,7 +75,18 @@ class ClaimSearchCommand(ClaimTestCase):
             self.assertEqual(
                 (claim['txid'], self.get_claim_id(claim)),
                 (result['txid'], result['claim_id']),
-                f"{claim['outputs'][0]['name']} != {result['name']}"
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
+            )
+
+    async def assertListsClaims(self, claims, **kwargs):
+        kwargs.setdefault('order_by', 'height')
+        results = await self.claim_list(**kwargs)
+        self.assertEqual(len(claims), len(results))
+        for claim, result in zip(claims, results):
+            self.assertEqual(
+                (claim['txid'], self.get_claim_id(claim)),
+                (result['txid'], result['claim_id']),
+                f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
             )
 
     @skip("doesnt happen on ES...?")
@@ -185,9 +196,13 @@ class ClaimSearchCommand(ClaimTestCase):
         normal = await self.stream_create('normal', data=b'normal')
         normal_repost = await self.stream_repost(self.get_claim_id(normal), 'normal-repost')
         no_source_repost = await self.stream_repost(self.get_claim_id(no_source), 'no-source-repost')
-        await self.assertFindsClaims([no_source_repost, no_source, channel], has_no_source=True)
-        await self.assertFindsClaims([normal_repost, normal, channel], has_source=True)
-        await self.assertFindsClaims([no_source_repost, normal_repost, normal, no_source, channel])
+        channel_repost = await self.stream_repost(self.get_claim_id(channel), 'channel-repost')
+        await self.assertFindsClaims([channel_repost, no_source_repost, no_source, channel], has_no_source=True)
+        await self.assertListsClaims([no_source, channel], has_no_source=True)
+        await self.assertFindsClaims([channel_repost, normal_repost, normal, channel], has_source=True)
+        await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal], has_source=True)
+        await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
+        await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
 
     async def test_pagination(self):
         await self.create_channel()
@@ -383,6 +398,70 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
+    async def test_no_duplicates(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        claims = []
+        channels = []
+        first = await self.stream_create('original_claim0')
+        second = await self.stream_create('original_claim1')
+        for i in range(10):
+            repost_id = self.get_claim_id(second if i % 2 == 0 else first)
+            channel = await self.channel_create(f'@chan{i}', bid='0.001')
+            channels.append(channel)
+            claims.append(
+                await self.stream_repost(repost_id, f'claim{i}', bid='0.001', channel_id=self.get_claim_id(channel)))
+        await match([first, second] + channels,
+                    remove_duplicates=True, order_by=['^height'])
+        await match(list(reversed(channels)) + [second, first],
+                    remove_duplicates=True, order_by=['height'])
+        # the original claims doesn't show up, so we pick the oldest reposts
+        await match([channels[0], claims[0], channels[1], claims[1]] + channels[2:],
+                    height='>218',
+                    remove_duplicates=True, order_by=['^height'])
+        # limit claims per channel, invert order, oldest ones are still chosen
+        await match(channels[2:][::-1] + [claims[1], channels[1], claims[0], channels[0]],
+                    height='>218', limit_claims_per_channel=1,
+                    remove_duplicates=True, order_by=['height'])
+
+    async def test_limit_claims_per_channel_across_sorted_pages(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        channel_id = self.get_claim_id(await self.channel_create('@chan0'))
+        claims = []
+        first = await self.stream_create('claim0', channel_id=channel_id)
+        second = await self.stream_create('claim1', channel_id=channel_id)
+        for i in range(2, 10):
+            some_chan = self.get_claim_id(await self.channel_create(f'@chan{i}', bid='0.001'))
+            claims.append(await self.stream_create(f'claim{i}', bid='0.001', channel_id=some_chan))
+        last = await self.stream_create('claim10', channel_id=channel_id)
+
+        await match(
+            [first, second, claims[0], claims[1]], page_size=4,
+            limit_claims_per_channel=3, claim_type='stream', order_by=['^height']
+        )
+        # second goes out
+        await match(
+            [first, claims[0], claims[1], claims[2]], page_size=4,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
+        )
+        # second appears, from replacement queue
+        await match(
+            [second, claims[3], claims[4], claims[5]], page_size=4, page=2,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
+        )
+        # last is unaffected, as the limit applies per page
+        await match(
+            [claims[6], claims[7], last], page_size=4, page=3,
+            limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
+        )
+        # feature disabled on 0 or negative values
+        for limit in [None, 0, -1]:
+            await match(
+                [first, second] + claims + [last],
+                limit_claims_per_channel=limit, claim_type='stream', order_by=['^height']
+            )
+
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()
@@ -494,6 +573,21 @@ class TransactionCommands(ClaimTestCase):
 
 
 class TransactionOutputCommands(ClaimTestCase):
+
+    async def test_support_with_comment(self):
+        channel = self.get_claim_id(await self.channel_create('@identity'))
+        stream = self.get_claim_id(await self.stream_create())
+        support = await self.support_create(stream, channel_id=channel, comment="nice!")
+        self.assertEqual(support['outputs'][0]['value']['comment'], "nice!")
+        r, = await self.txo_list(type='support')
+        self.assertEqual(r['txid'], support['txid'])
+        self.assertEqual(r['value']['comment'], "nice!")
+        await self.support_abandon(txid=support['txid'], nout=0, blocking=True)
+        support = await self.support_create(stream, comment="anonymously great!")
+        self.assertEqual(support['outputs'][0]['value']['comment'], "anonymously great!")
+        r, = await self.txo_list(type='support', is_not_spent=True)
+        self.assertEqual(r['txid'], support['txid'])
+        self.assertEqual(r['value']['comment'], "anonymously great!")
 
     async def test_txo_list_resolve_supports(self):
         channel = self.get_claim_id(await self.channel_create('@identity'))
@@ -937,6 +1031,22 @@ class ClaimCommands(ClaimTestCase):
         claims = await self.claim_list(include_received_tips=True)
         self.assertEqual('0.0', claims[0]['received_tips'])
         self.assertEqual('0.0', claims[1]['received_tips'])
+
+    async def stream_update_and_wait(self, claim_id, **kwargs):
+        tx = await self.daemon.jsonrpc_stream_update(claim_id, **kwargs)
+        await self.ledger.wait(tx)
+
+    async def test_claim_list_pending_edits_ordering(self):
+        stream5_id = self.get_claim_id(await self.stream_create('five'))
+        stream4_id = self.get_claim_id(await self.stream_create('four'))
+        stream3_id = self.get_claim_id(await self.stream_create('three'))
+        stream2_id = self.get_claim_id(await self.stream_create('two'))
+        stream1_id = self.get_claim_id(await self.stream_create('one'))
+        await self.assertClaimList([stream1_id, stream2_id, stream3_id, stream4_id, stream5_id])
+        await self.stream_update_and_wait(stream4_id, title='foo')
+        await self.assertClaimList([stream4_id, stream1_id, stream2_id, stream3_id, stream5_id])
+        await self.stream_update_and_wait(stream3_id, title='foo')
+        await self.assertClaimList([stream4_id, stream3_id, stream1_id, stream2_id, stream5_id])
 
 
 class ChannelCommands(CommandTestCase):
@@ -1958,14 +2068,17 @@ class StreamCommands(ClaimTestCase):
         self.assertNotIn('source', claim['value'])
 
         # update the stream to have a source
-        with tempfile.NamedTemporaryFile() as file:
-            file.write(b'hi')
-            file.flush()
-            tx6 = await self.publish('future-release', file_path=file.name, tags=['something-else'])
+        tx6 = await self.publish(
+            'future-release', sd_hash='beef', file_hash='beef',
+            file_name='blah.mp3', tags=['something-else']
+        )
         claim = await self.resolve('lbry://future-release')
         self.assertEqual(claim['txid'], tx6['outputs'][0]['txid'])
         self.assertEqual(claim['value']['tags'], ['something-else'])
-        self.assertIn('source', claim['value'])
+        self.assertEqual(claim['value']['source']['sd_hash'], 'beef')
+        self.assertEqual(claim['value']['source']['hash'], 'beef')
+        self.assertEqual(claim['value']['source']['name'], 'blah.mp3')
+        self.assertEqual(claim['value']['source']['media_type'], 'audio/mpeg')
 
 
 class SupportCommands(CommandTestCase):
@@ -2060,7 +2173,7 @@ class SupportCommands(CommandTestCase):
         # lbrycrd returned 'the transaction was rejected by network rules.'
         channel_id = self.get_claim_id(await self.channel_create())
         stream_id = self.get_claim_id(await self.stream_create())
-        tx = await self.support_create(stream_id, '7.967598', channel_id=channel_id)
+        tx = await self.support_create(stream_id, '7.967601', channel_id=channel_id)
         self.assertEqual(len(tx['outputs']), 1)  # must be one to reproduce bug
         self.assertTrue(tx['outputs'][0]['is_channel_signature_valid'])
 
@@ -2103,20 +2216,30 @@ class CollectionCommands(CommandTestCase):
         tx = await self.collection_create('radjingles', claims=claim_ids, allow_duplicate_name=True)
         claim_id2 = self.get_claim_id(tx)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 2)
-
+        # with clear_claims
         await self.collection_update(claim_id, clear_claims=True, claims=claim_ids[:2])
         collections = await self.out(self.daemon.jsonrpc_collection_list())
-        self.assertEquals(len(collections['items']), 2)
+        self.assertEqual(len(collections['items']), 2)
         self.assertNotIn('canonical_url', collections['items'][0])
 
         resolved_collections = await self.out(self.daemon.jsonrpc_collection_list(resolve=True))
         self.assertIn('canonical_url', resolved_collections['items'][0])
+        # with replace
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[::-1][:2], tags=['cool'])
+        updated = await self.claim_search(claim_id=claim_id)
+        self.assertEqual(updated[0]['value']['tags'], ['cool'])
+        self.assertEqual(updated[0]['value']['claims'], claim_ids[::-1][:2])
+        await self.collection_update(claim_id, replace=True, claims=claim_ids[:4], languages=['en', 'pt-BR'])
+        updated = await self.resolve(f'radjingles:{claim_id}')
+        self.assertEqual(updated['value']['claims'], claim_ids[:4])
+        self.assertNotIn('tags', updated['value'])
+        self.assertEqual(updated['value']['languages'], ['en', 'pt-BR'])
 
         await self.collection_abandon(claim_id)
         self.assertItemCount(await self.daemon.jsonrpc_collection_list(), 1)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=2))
-        self.assertEquals(len(collections['items'][0]['claims']), 2)
+        self.assertEqual(len(collections['items'][0]['claims']), 2)
 
         collections = await self.out(self.daemon.jsonrpc_collection_list(resolve_claims=10))
         self.assertEqual(len(collections['items'][0]['claims']), 4)

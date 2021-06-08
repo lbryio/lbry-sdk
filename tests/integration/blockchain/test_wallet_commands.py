@@ -57,6 +57,18 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(len(status['wallet']['servers']), 1)
         self.assertEqual(status['wallet']['servers'][0]['port'], 54320)
 
+    async def test_sending_to_scripthash_address(self):
+        self.assertEqual(await self.blockchain.get_balance(), '95.99973580')
+        await self.assertBalance(self.account, '10.0')
+        p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
+        tx = await self.account_send('2.0', p2sh_address1)
+        self.assertEqual(tx['outputs'][0]['address'], p2sh_address1)
+        self.assertEqual(await self.blockchain.get_balance(), '98.99973580')  # +1 lbc for confirm block
+        await self.assertBalance(self.account, '7.999877')
+        await self.wallet_send('3.0', p2sh_address1)
+        self.assertEqual(await self.blockchain.get_balance(), '102.99973580')  # +1 lbc for confirm block
+        await self.assertBalance(self.account, '4.999754')
+
     async def test_balance_caching(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
@@ -76,7 +88,7 @@ class WalletCommands(CommandTestCase):
         }
         self.assertIsNone(ledger._balance_cache.get(self.account.id))
 
-        query_count += 6
+        query_count += 2
         self.assertEqual(await wallet_balance(), expected)
         self.assertEqual(self.ledger.db.db.query_count, query_count)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
@@ -100,7 +112,7 @@ class WalletCommands(CommandTestCase):
         # on_transaction event reset balance cache
         query_count = self.ledger.db.db.query_count
         self.assertEqual(await wallet_balance(), expected)
-        query_count += 3  # only one of the accounts changed
+        query_count += 1  # only one of the accounts changed
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '9.979893')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
         self.assertEqual(self.ledger.db.db.query_count, query_count)

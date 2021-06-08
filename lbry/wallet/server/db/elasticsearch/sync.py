@@ -10,12 +10,10 @@ from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 from lbry.wallet.server.env import Env
 from lbry.wallet.server.coin import LBC
-from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex
-
-INDEX = 'claims'
+from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex, IndexVersionMismatch
 
 
-async def get_all(db, shard_num, shards_total, limit=0):
+async def get_all(db, shard_num, shards_total, limit=0, index_name='claims'):
     logging.info("shard %d starting", shard_num)
     def exec_factory(cursor, statement, bindings):
         tpl = namedtuple('row', (d[0] for d in cursor.getdescription()))
@@ -30,6 +28,7 @@ SELECT claimtrie.claim_hash as is_controlling,
        (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
        (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
        (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
+       (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
        claim.*
 FROM claim LEFT JOIN claimtrie USING (claim_hash)
 WHERE claim.height % {shards_total} = {shard_num}
@@ -43,46 +42,55 @@ ORDER BY claim.height desc
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
         if num % 10_000 == 0:
             logging.info("%d/%d", num, total)
-        yield extract_doc(claim, INDEX)
+        yield extract_doc(claim, index_name)
         if 0 < limit <= num:
             break
 
 
-async def consume(producer):
+async def consume(producer, index_name):
     env = Env(LBC)
     logging.info("ES sync host: %s:%i", env.elastic_host, env.elastic_port)
     es = AsyncElasticsearch([{'host': env.elastic_host, 'port': env.elastic_port}])
     try:
         await async_bulk(es, producer, request_timeout=120)
-        await es.indices.refresh(index=INDEX)
+        await es.indices.refresh(index=index_name)
     finally:
         await es.close()
 
 
-async def make_es_index():
+async def make_es_index(index=None):
     env = Env(LBC)
-    index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
+    if index is None:
+        index = SearchIndex('', elastic_host=env.elastic_host, elastic_port=env.elastic_port)
+
     try:
+        return await index.start()
+    except IndexVersionMismatch as err:
+        logging.info(
+            "dropping ES search index (version %s) for upgrade to version %s", err.got_version, err.expected_version
+        )
+        await index.delete_index()
+        await index.stop()
         return await index.start()
     finally:
         index.stop()
 
 
-async def run(args, shard):
+async def run(db_path, clients, blocks, shard, index_name='claims'):
     def itsbusy(*_):
         logging.info("shard %d: db is busy, retry", shard)
         return True
-    db = apsw.Connection(args.db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
+    db = apsw.Connection(db_path, flags=apsw.SQLITE_OPEN_READONLY | apsw.SQLITE_OPEN_URI)
     db.setbusyhandler(itsbusy)
     db.cursor().execute('pragma journal_mode=wal;')
     db.cursor().execute('pragma temp_store=memory;')
 
-    producer = get_all(db.cursor(), shard, args.clients, limit=args.blocks)
-    await asyncio.gather(*(consume(producer) for _ in range(min(8, args.clients))))
+    producer = get_all(db.cursor(), shard, clients, limit=blocks, index_name=index_name)
+    await asyncio.gather(*(consume(producer, index_name=index_name) for _ in range(min(8, clients))))
 
 
 def __run(args, shard):
-    asyncio.run(run(args, shard))
+    asyncio.run(run(args.db_path, args.clients, args.blocks, shard))
 
 
 def run_elastic_sync():

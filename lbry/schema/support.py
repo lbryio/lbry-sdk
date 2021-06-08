@@ -13,3 +13,11 @@ class Support(Signable):
     @emoji.setter
     def emoji(self, emoji: str):
         self.message.emoji = emoji
+
+    @property
+    def comment(self) -> str:
+        return self.message.comment
+
+    @comment.setter
+    def comment(self, comment: str):
+        self.message.comment = comment
