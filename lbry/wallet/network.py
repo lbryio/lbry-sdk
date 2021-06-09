@@ -1,6 +1,7 @@
 import logging
 import asyncio
 import json
+import os
 import socket
 import random
 from time import perf_counter
@@ -478,15 +479,15 @@ class Network:
             return result['result']
 
     async def new_claim_search(self, server, **kwargs):
-        if "offset" in kwargs and type(kwargs["offset"]) == int:
-            kwargs["offset"] = {"value": kwargs["offset"]}
-        if "limit" in kwargs and type(kwargs["limit"]) == int:
-            kwargs["limit"] = {"value": kwargs["limit"]}
-        async with grpc.aio.insecure_channel(server) as channel:
-            stub = hub_pb2_grpc.HubStub(channel)
-            log.warning(kwargs)
-            response = await stub.Search(SearchRequest(**kwargs))
-            return response
+        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+            if "offset" in kwargs and type(kwargs["offset"]) == int:
+                kwargs["offset"] = {"value": kwargs["offset"]}
+            if "limit" in kwargs and type(kwargs["limit"]) == int:
+                kwargs["limit"] = {"value": kwargs["limit"]}
+            async with grpc.aio.insecure_channel(server) as channel:
+                stub = hub_pb2_grpc.HubStub(channel)
+                response = await stub.Search(SearchRequest(**kwargs))
+                return response
         kwargs['protobuf'] = True
 
         message = {"method": "claim_search", "params": kwargs}
