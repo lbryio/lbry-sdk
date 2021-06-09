@@ -46,11 +46,11 @@ class PrefixRow:
 
 class ClaimToTXOKey(typing.NamedTuple):
     claim_hash: bytes
-    tx_num: int
-    position: int
 
 
 class ClaimToTXOValue(typing.NamedTuple):
+    tx_num: int
+    position: int
     root_tx_num: int
     root_position: int
     amount: int
@@ -248,48 +248,47 @@ class ActiveAmountPrefixRow(PrefixRow):
 
 class ClaimToTXOPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_to_txo.value
-    key_struct = struct.Struct(b'>20sLH')
-    value_struct = struct.Struct(b'>LHQB')
+    key_struct = struct.Struct(b'>20s')
+    value_struct = struct.Struct(b'>LHLHQB')
     key_part_lambdas = [
         lambda: b'',
-        struct.Struct(b'>20s').pack,
-        struct.Struct(b'>20sL').pack,
-        struct.Struct(b'>20sLH').pack
+        struct.Struct(b'>20s').pack
     ]
 
     @classmethod
-    def pack_key(cls, claim_hash: bytes, tx_num: int, position: int):
+    def pack_key(cls, claim_hash: bytes):
         return super().pack_key(
-            claim_hash, 0xffffffff - tx_num, 0xffff - position
+            claim_hash
         )
 
     @classmethod
     def unpack_key(cls, key: bytes) -> ClaimToTXOKey:
-        assert key[:1] == cls.prefix
-        claim_hash, ones_comp_tx_num, ones_comp_position = cls.key_struct.unpack(key[1:])
-        return ClaimToTXOKey(
-            claim_hash, 0xffffffff - ones_comp_tx_num, 0xffff - ones_comp_position
-        )
+        assert key[:1] == cls.prefix and len(key) == 21
+        return ClaimToTXOKey(key[1:])
 
     @classmethod
     def unpack_value(cls, data: bytes) -> ClaimToTXOValue:
-        root_tx_num, root_position, amount, channel_signature_is_valid = cls.value_struct.unpack(data[:15])
-        name_len = int.from_bytes(data[15:17], byteorder='big')
-        name = data[17:17 + name_len].decode()
-        return ClaimToTXOValue(root_tx_num, root_position, amount, bool(channel_signature_is_valid), name)
+        tx_num, position, root_tx_num, root_position, amount, channel_signature_is_valid = cls.value_struct.unpack(
+            data[:21]
+        )
+        name_len = int.from_bytes(data[21:23], byteorder='big')
+        name = data[23:23 + name_len].decode()
+        return ClaimToTXOValue(
+            tx_num, position, root_tx_num, root_position, amount, bool(channel_signature_is_valid), name
+        )
 
     @classmethod
-    def pack_value(cls, root_tx_num: int, root_position: int, amount: int,
+    def pack_value(cls, tx_num: int, position: int, root_tx_num: int, root_position: int, amount: int,
                    channel_signature_is_valid: bool, name: str) -> bytes:
         return cls.value_struct.pack(
-            root_tx_num, root_position, amount, int(channel_signature_is_valid)
+            tx_num, position, root_tx_num, root_position, amount, int(channel_signature_is_valid)
         ) + length_encoded_name(name)
 
     @classmethod
     def pack_item(cls, claim_hash: bytes, tx_num: int, position: int, root_tx_num: int, root_position: int,
                   amount: int, channel_signature_is_valid: bool, name: str):
-        return cls.pack_key(claim_hash, tx_num, position), \
-               cls.pack_value(root_tx_num, root_position, amount, channel_signature_is_valid, name)
+        return cls.pack_key(claim_hash), \
+               cls.pack_value(tx_num, position, root_tx_num, root_position, amount, channel_signature_is_valid, name)
 
 
 class TXOToClaimPrefixRow(PrefixRow):

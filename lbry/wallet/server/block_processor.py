@@ -296,7 +296,7 @@ class BlockProcessor:
                 if not reposted_claim:
                     continue
                 reposted_metadata = get_claim_txo(
-                    self.db.total_transactions[reposted_claim[0].tx_num], reposted_claim[0].position
+                    self.db.total_transactions[reposted_claim.tx_num], reposted_claim.position
                 )
                 if not reposted_metadata:
                     continue
@@ -305,14 +305,14 @@ class BlockProcessor:
             reposted_has_source = None
             reposted_claim_type = None
             if reposted_claim:
-                reposted_tx_hash = self.db.total_transactions[reposted_claim[0].tx_num]
+                reposted_tx_hash = self.db.total_transactions[reposted_claim.tx_num]
                 raw_reposted_claim_tx = self.db.db.get(
                     DB_PREFIXES.TX_PREFIX.value + reposted_tx_hash
                 )
                 try:
                     reposted_claim_txo: TxOutput = self.coin.transaction(
                         raw_reposted_claim_tx
-                    ).outputs[reposted_claim[0].position]
+                    ).outputs[reposted_claim.position]
                     reposted_script = OutputScript(reposted_claim_txo.pk_script)
                     reposted_script.parse()
                 except:
@@ -635,7 +635,7 @@ class BlockProcessor:
             signing_channel = self.db.get_claim_txo(signing_channel_hash)
             if signing_channel:
                 raw_channel_tx = self.db.db.get(
-                    DB_PREFIXES.TX_PREFIX.value + self.db.total_transactions[signing_channel[0].tx_num]
+                    DB_PREFIXES.TX_PREFIX.value + self.db.total_transactions[signing_channel.tx_num]
                 )
             channel_pub_key_bytes = None
             try:
@@ -643,7 +643,7 @@ class BlockProcessor:
                     if txo.signable.signing_channel_hash[::-1] in self.pending_channels:
                         channel_pub_key_bytes = self.pending_channels[txo.signable.signing_channel_hash[::-1]]
                 elif raw_channel_tx:
-                    chan_output = self.coin.transaction(raw_channel_tx).outputs[signing_channel[0].position]
+                    chan_output = self.coin.transaction(raw_channel_tx).outputs[signing_channel.position]
 
                     chan_script = OutputScript(chan_output.pk_script)
                     chan_script.parse()
@@ -671,7 +671,7 @@ class BlockProcessor:
                 previous_claim = self.pending_claims.pop((prev_tx_num, prev_idx))
                 root_tx_num, root_idx = previous_claim.root_claim_tx_num, previous_claim.root_claim_tx_position
             else:
-                k, v = self.db.get_claim_txo(
+                v = self.db.get_claim_txo(
                     claim_hash
                 )
                 root_tx_num, root_idx = v.root_tx_num, v.root_position
@@ -750,7 +750,7 @@ class BlockProcessor:
                 return []
             claim_hash = spent_claim_hash_and_name.claim_hash
             signing_hash = self.db.get_channel_for_claim(claim_hash)
-            k, v = self.db.get_claim_txo(claim_hash)
+            v = self.db.get_claim_txo(claim_hash)
             reposted_claim_hash = self.db.get_repost(claim_hash)
             spent = StagedClaimtrieItem(
                 v.name, claim_hash, v.amount,
@@ -782,7 +782,7 @@ class BlockProcessor:
             expiration = self.coin.get_expiration_height(self.height)
             signature_is_valid = pending.channel_signature_is_valid
         else:
-            k, v = self.db.get_claim_txo(
+            v = self.db.get_claim_txo(
                 claim_hash
             )
             claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
@@ -838,7 +838,7 @@ class BlockProcessor:
             return self.pending_claims[claim_hash].name
         claim_info = self.db.get_claim_txo(claim_hash)
         if claim_info:
-            return claim_info[1].name
+            return claim_info.name
 
     def _get_pending_supported_amount(self, claim_hash: bytes, height: Optional[int] = None) -> int:
         amount = self.db._get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, height or (self.height + 1)) or 0
@@ -965,9 +965,9 @@ class BlockProcessor:
                     # the supported claim doesn't exist
                     continue
                 else:
-                    k, v = supported_claim_info
+                    v = supported_claim_info
                 name = v.name
-                staged_is_new_claim = (v.root_tx_num, v.root_position) == (k.tx_num, k.position)
+                staged_is_new_claim = (v.root_tx_num, v.root_position) == (v.tx_num, v.position)
             ops.extend(get_delayed_activate_ops(
                 name, claim_hash, staged_is_new_claim, tx_num, nout, amount, is_support=True
             ))
@@ -994,7 +994,7 @@ class BlockProcessor:
                         amount = self.pending_claims[txo_tup].amount
                     else:
                         amount = self.db.get_claim_txo_amount(
-                            activated.claim_hash, activated_txo.tx_num, activated_txo.position
+                            activated.claim_hash
                         )
                     self.staged_activated_claim[(activated.name, activated.claim_hash)] = amount
                 else:
@@ -1038,7 +1038,7 @@ class BlockProcessor:
                     existing_activation, ACTIVATED_CLAIM_TXO_TYPE, tx_num, nout
                 )
                 self.pending_activated[need_takeover][candidate_claim_hash].append((
-                    activate_key, self.db.get_claim_txo_amount(candidate_claim_hash, tx_num, nout)
+                    activate_key, self.db.get_claim_txo_amount(candidate_claim_hash)
                 ))
                 need_reactivate_if_takes_over[(need_takeover, candidate_claim_hash)] = activate_key
                 print(f"\tcandidate to takeover abandoned controlling claim for lbry://{need_takeover} - "
@@ -1122,9 +1122,9 @@ class BlockProcessor:
                     # handle a pending activated claim jumping the takeover delay when another name takes over
                     if winning_including_future_activations not in self.pending_claim_txos:
                         claim = self.db.get_claim_txo(winning_including_future_activations)
-                        tx_num = claim[0].tx_num
-                        position = claim[0].position
-                        amount = claim[1].amount
+                        tx_num = claim.tx_num
+                        position = claim.position
+                        amount = claim.amount
                         activation = self.db.get_activation(tx_num, position)
                     else:
                         tx_num, position = self.pending_claim_txos[winning_including_future_activations]
@@ -1173,7 +1173,7 @@ class BlockProcessor:
                     if (name, winning_claim_hash) in need_reactivate_if_takes_over:
                         previous_pending_activate = need_reactivate_if_takes_over[(name, winning_claim_hash)]
                         amount = self.db.get_claim_txo_amount(
-                            winning_claim_hash, previous_pending_activate.tx_num, previous_pending_activate.position
+                            winning_claim_hash
                         )
                         if winning_claim_hash in self.pending_claim_txos:
                             tx_num, position = self.pending_claim_txos[winning_claim_hash]
@@ -1232,8 +1232,7 @@ class BlockProcessor:
             removed_claim = self.db.get_claim_txo(removed)
             if not removed_claim:
                 continue
-            k, v = removed_claim
-            name, tx_num, position = v.name, k.tx_num, k.position
+            name, tx_num, position = removed_claim.name, removed_claim.tx_num, removed_claim.position
             ops.extend(get_remove_effective_amount_ops(
                 name, self.db.get_effective_amount(removed), tx_num, position, removed
             ))
@@ -1243,14 +1242,13 @@ class BlockProcessor:
                 name, tx_num, position = pending.name, pending.tx_num, pending.position
                 claim_from_db = self.db.get_claim_txo(touched)
                 if claim_from_db:
-                    k, v = claim_from_db
-                    prev_tx_num, prev_position = k.tx_num, k.position
+                    prev_tx_num, prev_position = claim_from_db.tx_num, claim_from_db.position
                     ops.extend(get_remove_effective_amount_ops(
                         name, self.db.get_effective_amount(touched), prev_tx_num, prev_position, touched
                     ))
             else:
-                k, v = self.db.get_claim_txo(touched)
-                name, tx_num, position = v.name, k.tx_num, k.position
+                v = self.db.get_claim_txo(touched)
+                name, tx_num, position = v.name, v.tx_num, v.position
                 ops.extend(get_remove_effective_amount_ops(
                     name, self.db.get_effective_amount(touched), tx_num, position, touched
                 ))
