@@ -497,7 +497,7 @@ def fix_kwargs_for_hub(**kwargs):
                        "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
                        "canonical_url", "short_url", "claim_id"}
     value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
-                    "limit_claims_per_channel", "tx_nout",
+                    "limit_claims_per_channel", "tx_nout", "remove_duplicates",
                     "signature_valid", "is_controlling", "amount_order"}
     ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
     for key in list(kwargs.keys()):
