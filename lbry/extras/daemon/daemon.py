@@ -2496,7 +2496,6 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
-        print(len(txos))
         result = {
             "items": txos,
             "blocked": blocked,

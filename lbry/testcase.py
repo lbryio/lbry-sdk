@@ -631,11 +631,6 @@ class CommandTestCase(IntegrationTestCase):
         return await self.out(self.daemon.jsonrpc_txo_plot(*args, **kwargs))
 
     async def claim_list(self, *args, **kwargs):
-        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            kwargs['new_sdk_server'] = "localhost:50051"
-            kwargs = fix_kwargs_for_hub(**kwargs)
-            res = await self.out(self.hub.claim_search(**kwargs))
-            return res
         return (await self.out(self.daemon.jsonrpc_claim_list(*args, **kwargs)))['items']
 
     async def stream_list(self, *args, **kwargs):
