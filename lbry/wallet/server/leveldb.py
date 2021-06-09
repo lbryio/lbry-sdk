@@ -214,7 +214,7 @@ class LevelDB:
 
         expiration_height = self.coin.get_expiration_height(height)
         support_amount = self.get_support_amount(claim_hash)
-        claim_amount = self.get_claim_txo_amount(claim_hash, tx_num, position)
+        claim_amount = self.get_claim_txo_amount(claim_hash)
 
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash)
@@ -226,7 +226,7 @@ class LevelDB:
         if channel_hash:
             channel_vals = self.get_claim_txo(channel_hash)
             if channel_vals:
-                channel_name = channel_vals[1].name
+                channel_name = channel_vals.name
                 canonical_url = f'{channel_name}#{channel_hash.hex()}/{name}#{claim_hash.hex()}'
         return ResolveResult(
             name, claim_hash, tx_num, position, tx_hash, height, claim_amount, short_url=short_url,
@@ -279,8 +279,8 @@ class LevelDB:
             claim_txo = self.get_claim_txo(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
-                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo[1].root_tx_num,
-                claim_txo[1].root_position, activation
+                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo.root_tx_num,
+                claim_txo.root_position, activation
             )
         return
 
@@ -336,13 +336,13 @@ class LevelDB:
          return await asyncio.get_event_loop().run_in_executor(self.executor, self._fs_resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
-        for k, v in self.db.iterator(prefix=Prefixes.claim_to_txo.pack_partial_key(claim_hash)):
-            unpacked_k = Prefixes.claim_to_txo.unpack_key(k)
-            unpacked_v = Prefixes.claim_to_txo.unpack_value(v)
-            activation_height = self.get_activation(unpacked_k.tx_num, unpacked_k.position)
+        claim = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
+        if claim:
+            v = Prefixes.claim_to_txo.unpack_value(claim)
+            activation_height = self.get_activation(v.tx_num, v.position)
             return self._prepare_resolve_result(
-                unpacked_k.tx_num, unpacked_k.position, unpacked_k.claim_hash, unpacked_v.name,
-                unpacked_v.root_tx_num, unpacked_v.root_position, activation_height
+                v.tx_num, v.position, claim_hash, v.name,
+                v.root_tx_num, v.root_position, activation_height
             )
 
     async def fs_getclaimbyid(self, claim_id):
@@ -350,8 +350,8 @@ class LevelDB:
             self.executor, self._fs_get_claim_by_hash, bytes.fromhex(claim_id)
         )
 
-    def get_claim_txo_amount(self, claim_hash: bytes, tx_num: int, position: int) -> Optional[int]:
-        v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash, tx_num, position))
+    def get_claim_txo_amount(self, claim_hash: bytes) -> Optional[int]:
+        v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
         if v:
             return Prefixes.claim_to_txo.unpack_value(v).amount
 
@@ -360,10 +360,11 @@ class LevelDB:
         if v:
             return Prefixes.claim_to_support.unpack_value(v).amount
 
-    def get_claim_txo(self, claim_hash: bytes) -> Optional[Tuple[ClaimToTXOKey, ClaimToTXOValue]]:
+    def get_claim_txo(self, claim_hash: bytes) -> Optional[ClaimToTXOValue]:
         assert claim_hash
-        for k, v in self.db.iterator(prefix=Prefixes.claim_to_txo.pack_partial_key(claim_hash)):
-            return Prefixes.claim_to_txo.unpack_key(k), Prefixes.claim_to_txo.unpack_value(v)
+        v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
+        if v:
+            return Prefixes.claim_to_txo.unpack_value(v)
 
     def _get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
         return sum(
