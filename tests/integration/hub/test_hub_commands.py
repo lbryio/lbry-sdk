@@ -95,7 +95,7 @@ class ClaimSearchCommand(ClaimTestCase):
         #         f"(expected {claim['outputs'][0]['name']}) != (got {result['name']})"
         #     )
 
-    # @skip("okay")
+    @skip("okay")
     async def test_basic_claim_search(self):
         await self.create_channel()
         channel_txo = self.channel['outputs'][0]
@@ -180,7 +180,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three))
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three), text='*')
 
-    # @skip("okay")
+    @skip("okay")
     async def test_source_filter(self):
         channel = await self.channel_create('@abc')
         no_source = await self.stream_create('no-source', data=None)
@@ -195,7 +195,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
         # await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
 
-    # @skip("Okay???")
+    @skip("Okay???")
     async def test_pagination(self):
         await self.create_channel()
         await self.create_lots_of_streams()
@@ -240,7 +240,7 @@ class ClaimSearchCommand(ClaimTestCase):
         out_of_bounds = await self.claim_search(page=4, page_size=20, channel_id=channel_id)
         self.assertEqual(out_of_bounds, [])
 
-    # @skip("okay")
+    @skip("okay")
     async def test_tag_search(self):
         claim1 = await self.stream_create('claim1', tags=['aBc'])
         claim2 = await self.stream_create('claim2', tags=['#abc', 'def'])
@@ -277,7 +277,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim3], all_tags=['abc', 'ghi'], any_tags=['jkl'], not_tags=['mno'])
         await self.assertFindsClaims([claim4, claim3, claim2], all_tags=['abc'], any_tags=['def', 'ghi'])
 
-    # @skip("okay")
+    @skip("okay")
     async def test_order_by(self):
         height = self.ledger.network.remote_height
         claims = [await self.stream_create(f'claim{i}') for i in range(5)]
@@ -294,7 +294,7 @@ class ClaimSearchCommand(ClaimTestCase):
 
         await self.assertFindsClaims(claims, order_by=["^name"])
 
-    # @skip("okay")
+    @skip("okay")
     async def test_search_by_fee(self):
         claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
         claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
@@ -309,7 +309,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim3], fee_amount='0.5', fee_currency='lbc')
         await self.assertFindsClaims([claim5], fee_currency='usd')
 
-    # @skip("okay")
+    @skip("okay")
     async def test_search_by_language(self):
         claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
         claim2 = await self.stream_create('claim2', fee_amount='0.9', fee_currency='lbc')
@@ -324,7 +324,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([claim5, claim4, claim3], any_languages=['en', 'es'])
         await self.assertFindsClaims([], fee_currency='foo')
 
-    # @skip("okay")
+    @skip("okay")
     async def test_search_by_channel(self):
         match = self.assertFindsClaims
 
@@ -380,7 +380,7 @@ class ClaimSearchCommand(ClaimTestCase):
                     not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
         await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
 
-    # @skip("okay")
+    @skip("okay")
     async def test_limit_claims_per_channel(self):
         match = self.assertFindsClaims
         chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
@@ -400,7 +400,33 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
-    # @skip("okay")
+    async def test_no_duplicates(self):
+        await self.generate(10)
+        match = self.assertFindsClaims
+        claims = []
+        channels = []
+        first = await self.stream_create('original_claim0')
+        second = await self.stream_create('original_claim1')
+        for i in range(10):
+            repost_id = self.get_claim_id(second if i % 2 == 0 else first)
+            channel = await self.channel_create(f'@chan{i}', bid='0.001')
+            channels.append(channel)
+            claims.append(
+                await self.stream_repost(repost_id, f'claim{i}', bid='0.001', channel_id=self.get_claim_id(channel)))
+        await match([first, second] + channels,
+                    remove_duplicates=True, order_by=['^height'])
+        await match(list(reversed(channels)) + [second, first],
+                    remove_duplicates=True, order_by=['height'])
+        # the original claims doesn't show up, so we pick the oldest reposts
+        await match([channels[0], claims[0], channels[1], claims[1]] + channels[2:],
+                    height='>218',
+                    remove_duplicates=True, order_by=['^height'])
+        # limit claims per channel, invert order, oldest ones are still chosen
+        await match(channels[2:][::-1] + [claims[1], channels[1], claims[0], channels[0]],
+                    height='>218', limit_claims_per_channel=1,
+                    remove_duplicates=True, order_by=['height'])
+
+    @skip("okay")
     async def test_limit_claims_per_channel_across_sorted_pages(self):
         await self.generate(10)
         match = self.assertFindsClaims
@@ -433,7 +459,7 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=1, claim_type='stream', order_by=['^height']
         )
 
-    # @skip("okay")
+    @skip("okay")
     async def test_claim_type_and_media_type_search(self):
         # create an invalid/unknown claim
         address = await self.account.receiving.get_or_create_usable_address()
@@ -476,7 +502,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], duration='>100')
         await self.assertFindsClaims([], duration='<14')
 
-    # @skip("okay")
+    @skip("okay")
     async def test_search_by_text(self):
         chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))
         chan2_id = self.get_claim_id(await self.channel_create('@Bitcoin'))
