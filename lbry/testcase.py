@@ -19,7 +19,6 @@ from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode, HubNode
-from lbry.wallet.orchstr8.node import fix_kwargs_for_hub
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent

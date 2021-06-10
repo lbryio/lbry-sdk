@@ -10,6 +10,7 @@ import typing
 import random
 import hashlib
 import tracemalloc
+from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -52,7 +53,8 @@ from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL
-from lbry.wallet.orchstr8.node import fix_kwargs_for_hub
+from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS
+MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
@@ -169,6 +171,118 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
         "page": page, "page_size": page_size
     }
 
+
+def fix_kwargs_for_hub(**kwargs):
+    repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
+                       "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
+                       "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
+                       "canonical_url", "short_url", "claim_id"}
+    value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
+                    "limit_claims_per_channel", "tx_nout", "remove_duplicates",
+                    "signature_valid", "is_controlling", "amount_order", "no_totals"}
+    ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
+    for key in list(kwargs.keys()):
+        value = kwargs[key]
+
+        if key == "txid":
+            kwargs["tx_id"] = kwargs.pop("txid")
+            key = "tx_id"
+        if key == "nout":
+            kwargs["tx_nout"] = kwargs.pop("nout")
+            key = "tx_nout"
+        if key == "valid_channel_signature":
+            kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
+        if key == "invalid_channel_signature":
+            kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
+        if key in {"valid_channel_signature", "invalid_channel_signature"}:
+            key = "signature_valid"
+            value = kwargs[key]
+        if key == "has_no_source":
+            kwargs["has_source"] = not kwargs.pop("has_no_source")
+            key = "has_source"
+            value = kwargs[key]
+
+        if key in value_fields:
+            kwargs[key] = {"value": value} if not isinstance(value, dict) else value
+
+        if key in repeated_fields and isinstance(value, str):
+            kwargs[key] = [value]
+
+        if key == "claim_id":
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs["claim_id"]
+            }
+        if key == "not_claim_id":
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs.pop("not_claim_id")
+            }
+        if key == "claim_ids":
+            kwargs["claim_id"] = {
+                "invert": False,
+                "value": kwargs.pop("claim_ids")
+            }
+        if key == "not_claim_ids":
+            kwargs["claim_id"] = {
+                "invert": True,
+                "value": kwargs["not_claim_ids"]
+            }
+            del kwargs["not_claim_ids"]
+        if key == "channel_id":
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs["channel_id"]
+            }
+        if key == "channel":
+            kwargs["channel_id"] = {
+                "invert": False,
+                "value": kwargs.pop("channel")
+            }
+        if key == "not_channel_id":
+            kwargs["channel_id"] = {
+                "invert": True,
+                "value": kwargs.pop("not_channel_id")
+            }
+        if key == "channel_ids":
+            kwargs["channel_ids"] = {
+                "invert": False,
+                "value": kwargs["channel_ids"]
+            }
+        if key == "not_channel_ids":
+            kwargs["channel_ids"] = {
+                "invert": True,
+                "value": kwargs.pop("not_channel_ids")
+            }
+
+        if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
+            operator_length = 2 if value[:2] in ops else 1
+            operator, value = value[:operator_length], value[operator_length:]
+
+            op = 0
+            if operator == '=':
+                op = 0
+            if operator in ('<=', 'lte'):
+                op = 1
+            if operator in ('>=', 'gte'):
+                op = 2
+            if operator in ('<', 'lt'):
+                op = 3
+            if operator in ('>', 'gt'):
+                op = 4
+            kwargs[key] = {"op": op, "value": [str(value)]}
+        elif key in MY_RANGE_FIELDS:
+            kwargs[key] = {"op": 0, "value": [str(value)]}
+
+        if key == 'fee_amount':
+            value = kwargs['fee_amount']
+            value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
+            kwargs['fee_amount'] = value
+        if key == 'stream_types':
+            kwargs['stream_type'] = kwargs.pop('stream_types')
+        if key == 'media_types':
+            kwargs['media_type'] = kwargs.pop('media_types')
+    return kwargs
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
 
@@ -2480,7 +2594,18 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            kwargs['new_sdk_server'] = "localhost:50051"
+            log.warning("### Using go hub! ###")
+            host = os.environ.get("HUB_HOST", "localhost")
+            port = os.environ.get("HUB_PORT", "50051")
+            kwargs['new_sdk_server'] = f"{host}:{port}"
+            if kwargs.get("channel"):
+                channel = kwargs.pop("channel")
+                channel_obj = (await self.jsonrpc_resolve(channel))[channel]
+                if isinstance(channel_obj, dict):
+                    # This happens when the channel doesn't exist
+                    kwargs["channel_id"] = ""
+                else:
+                    kwargs["channel_id"] = channel_obj.claim_id
             kwargs = fix_kwargs_for_hub(**kwargs)
         else:
             # Don't do this if using the hub server, it screws everything up

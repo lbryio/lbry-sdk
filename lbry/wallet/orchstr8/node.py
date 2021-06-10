@@ -18,11 +18,8 @@ from lbry.wallet.server.server import Server
 from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 from lbry.conf import KnownHubsList, Config
+from lbry.wallet.orchstr8 import __hub_url__
 
-from decimal import Decimal
-from lbry.wallet.server.db.elasticsearch.constants import INDEX_DEFAULT_SETTINGS, REPLACEMENTS, FIELDS, TEXT_FIELDS, \
-     RANGE_FIELDS
-MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 log = logging.getLogger(__name__)
 
 
@@ -51,7 +48,7 @@ class Conductor:
         self.wallet_node = WalletNode(
             self.manager_module, RegTestLedger, default_seed=seed
         )
-        self.hub_node = HubNode("asdf", "hub", "hub")
+        self.hub_node = HubNode(__hub_url__, "hub", "hub")
 
         self.blockchain_started = False
         self.spv_started = False
@@ -482,139 +479,17 @@ class HubProcess(asyncio.SubprocessProtocol):
             raise SystemError(data.decode())
         if b'listening on' in data:
             self.ready.set()
+        print(data.decode("utf-8"))
 
     def process_exited(self):
         self.stopped.set()
         self.ready.set()
 
 
-def fix_kwargs_for_hub(**kwargs):
-    # DEFAULT_PAGE_SIZE = 20
-    # page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
-    # kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-    repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
-                       "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
-                       "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
-                       "canonical_url", "short_url", "claim_id"}
-    value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
-                    "limit_claims_per_channel", "tx_nout", "remove_duplicates",
-                    "signature_valid", "is_controlling", "amount_order"}
-    ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
-    for key in list(kwargs.keys()):
-        value = kwargs[key]
-
-        if "txid" == key:
-            kwargs["tx_id"] = kwargs.pop("txid")
-            key = "tx_id"
-        if "nout" == key:
-            kwargs["tx_nout"] = kwargs.pop("nout")
-            key = "tx_nout"
-        if "valid_channel_signature" == key:
-            kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
-        if "invalid_channel_signature" == key:
-            kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
-        if key in {"valid_channel_signature", "invalid_channel_signature"}:
-            key = "signature_valid"
-            value = kwargs[key]
-        if "has_no_source" == key:
-            kwargs["has_source"] = not kwargs.pop("has_no_source")
-            key = "has_source"
-            value = kwargs[key]
-
-        if key in value_fields:
-            kwargs[key] = {"value": value} if type(value) != dict else value
-
-        if key in repeated_fields:
-            kwargs[key] = [value]
-
-
-        if "claim_id" == key:
-            kwargs["claim_id"] = {
-                "invert": False,
-                "value": kwargs["claim_id"]
-            }
-        if "not_claim_id" == key:
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs["not_claim_id"]
-            }
-            del kwargs["not_claim_id"]
-        if "claim_ids" == key:
-            kwargs["claim_id"] = {
-                "invert": False,
-                "value": kwargs["claim_ids"]
-            }
-            del kwargs["claim_ids"]
-        if "not_claim_ids" == key:
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs["not_claim_ids"]
-            }
-            del kwargs["not_claim_ids"]
-        if "channel_id" == key:
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs["channel_id"]
-            }
-        if "channel" == key:
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs["channel"]
-            }
-            del kwargs["channel"]
-        if "not_channel_id" == key:
-            kwargs["channel_id"] = {
-                "invert": True,
-                "value": kwargs["not_channel_id"]
-            }
-            del kwargs["not_channel_id"]
-        if "channel_ids" == key:
-            kwargs["channel_ids"] = {
-                "invert": False,
-                "value": kwargs["channel_ids"]
-            }
-        if "not_channel_ids" == key:
-            kwargs["channel_ids"] = {
-                "invert": True,
-                "value": kwargs["not_channel_ids"]
-            }
-            del kwargs["not_channel_ids"]
-
-
-        if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
-            operator_length = 2 if value[:2] in ops else 1
-            operator, value = value[:operator_length], value[operator_length:]
-
-            op = 0
-            if operator == '=':
-                op = 0
-            if operator == '<=' or operator == 'lte':
-                op = 1
-            if operator == '>=' or operator == 'gte':
-                op = 2
-            if operator == '<' or operator == 'lt':
-                op = 3
-            if operator == '>' or operator == 'gt':
-                op = 4
-            kwargs[key] = {"op": op, "value": [str(value)]}
-        elif key in MY_RANGE_FIELDS:
-            kwargs[key] = {"op": 0, "value": [str(value)]}
-
-        if 'fee_amount' == key:
-            value = kwargs['fee_amount']
-            value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
-            kwargs['fee_amount'] = value
-        if 'stream_types' == key:
-            kwargs['stream_type'] = kwargs.pop('stream_types')
-        if 'media_types' == key:
-            kwargs['media_type'] = kwargs.pop('media_types')
-    return kwargs
-
-
 class HubNode:
 
     def __init__(self, url, daemon, cli):
-        self.debug = True
+        self.debug = False
 
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
@@ -622,23 +497,14 @@ class HubNode:
         self.daemon_bin = os.path.join(self.bin_dir, daemon)
         self.cli_bin = os.path.join(self.bin_dir, daemon)
         self.log = log.getChild('hub')
-        self.data_path = None
-        self.protocol = None
         self.transport = None
-        self.block_expected = 0
+        self.protocol = None
         self.hostname = 'localhost'
-        # self.peerport = 9246 + 13  # avoid conflict with default peer port
-        self.rpcport = 50051 # avoid conflict with default rpc port
-        self.rpcuser = 'rpcuser'
-        self.rpcpassword = 'rpcpassword'
+        self.rpcport = 50051  # avoid conflict with default rpc port
         self.stopped = False
         self.restart_ready = asyncio.Event()
         self.restart_ready.set()
         self.running = asyncio.Event()
-
-    @property
-    def rpc_url(self):
-        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.rpcport}/'
 
     @property
     def exists(self):
@@ -675,6 +541,8 @@ class HubNode:
             with tarfile.open(downloaded_file) as tar:
                 tar.extractall(self.bin_dir)
 
+        os.chmod(self.daemon_bin, 0o755)
+
         return self.exists
 
     def ensure(self):
@@ -682,11 +550,10 @@ class HubNode:
 
     async def start(self):
         assert self.ensure()
-        self.data_path = tempfile.mkdtemp()
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
         command = [
-            self.daemon_bin, 'serve',
+            self.daemon_bin, 'serve', '--dev'
         ]
         self.log.info(' '.join(command))
         while not self.stopped:
@@ -720,19 +587,8 @@ class HubNode:
             if cleanup:
                 self.cleanup()
 
-    async def clear_mempool(self):
-        self.restart_ready.clear()
-        self.transport.terminate()
-        await self.protocol.stopped.wait()
-        self.transport.close()
-        self.running.clear()
-        # os.remove(os.path.join(self.data_path, 'regtest', 'mempool.dat'))
-        self.restart_ready.set()
-        await self.running.wait()
-
     def cleanup(self):
         pass
-        #shutil.rmtree(self.data_path, ignore_errors=True)
 
     async def _cli_cmnd(self, *args):
         cmnd_args = [
