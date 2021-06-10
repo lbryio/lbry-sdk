@@ -88,13 +88,13 @@ class TestLanguages(TestCase):
 
     def test_language_error_parsing(self):
         stream = Stream()
-        with self.assertRaisesRegex(ValueError, 'Language has no value defined for name zz'):
+        with self.assertRaisesRegex(ValueError, "Enum Language has no value defined for name 'zz'"):
             stream.languages.append('zz')
-        with self.assertRaisesRegex(ValueError, 'Script has no value defined for name Zabc'):
+        with self.assertRaisesRegex(ValueError, "Enum Script has no value defined for name 'Zabc'"):
             stream.languages.append('en-Zabc')
-        with self.assertRaisesRegex(ValueError, 'Country has no value defined for name ZZ'):
+        with self.assertRaisesRegex(ValueError, "Enum Country has no value defined for name 'ZZ'"):
             stream.languages.append('en-Zzzz-ZZ')
-        with self.assertRaisesRegex(AssertionError, 'Failed to parse language tag: en-Zzz-US'):
+        with self.assertRaisesRegex(AssertionError, "Failed to parse language tag: en-Zzz-US"):
             stream.languages.append('en-Zzz-US')
 
 

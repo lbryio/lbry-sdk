@@ -891,7 +891,7 @@ class Ledger(metaclass=LedgerRegistry):
             claim_search(**kwargs), accounts,
             include_purchase_receipt=include_purchase_receipt,
             include_is_my_output=include_is_my_output,
-            hub_server=True if new_sdk_server else False
+            hub_server=new_sdk_server is not None
         )
 
     async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:

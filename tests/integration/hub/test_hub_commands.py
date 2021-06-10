@@ -135,8 +135,6 @@ class ClaimSearchCommand(ClaimTestCase):
         # three streams in channel, zero streams in abandoned channel
         claims = [three, two, signed]
         await self.assertFindsClaims(claims, channel_ids=[self.channel_id])
-        # FIXME
-        # channel param doesn't work yet because we need to implement resolve url from search first
         cid = await self.daemon.jsonrpc_resolve(f"@abc#{self.channel_id}")
         await self.assertFindsClaims(claims, channel_id=cid[f"@abc#{self.channel_id}"].claim_id)
         cid = await self.daemon.jsonrpc_resolve(f"@inexistent")
@@ -168,9 +166,10 @@ class ClaimSearchCommand(ClaimTestCase):
         # FIXME
         # print(valid_claims)
         # Something happens in inflation I think and this gets switch from valid to not
-        # self.assertTrue(all([c['is_channel_signature_valid'] for c in valid_claims]))
-        # And signing channel only has id? 'signing_channel': {'channel_id': '6f4513e9bbd63d7b7f13dbf4fd2ef28c560ac89b'}
-        # self.assertEqual('@abc', valid_claims[0]['signing_channel']['name'])
+        self.assertTrue(all([c['is_channel_signature_valid'] for c in valid_claims]))
+        # import json
+        # print(json.dumps(valid_claims, indent=4, sort_keys=True))
+        self.assertEqual('@abc', valid_claims[0]['signing_channel']['name'])
 
         # abandoned stream won't show up for streams in channel search
         await self.stream_abandon(txid=signed2['txid'], nout=0)
@@ -397,6 +396,7 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
+    # @skip("okay")
     async def test_no_duplicates(self):
         await self.generate(10)
         match = self.assertFindsClaims
@@ -499,7 +499,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([], duration='>100')
         await self.assertFindsClaims([], duration='<14')
 
-    # @skip("okay")
+    # # @skip("okay")
     async def test_search_by_text(self):
         chan1_id = self.get_claim_id(await self.channel_create('@SatoshiNakamoto'))
         chan2_id = self.get_claim_id(await self.channel_create('@Bitcoin'))
