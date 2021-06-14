@@ -239,14 +239,14 @@ class Network:
         else:
             hubs = self.config['default_servers']
         await asyncio.gather(*(resolve_spv(server, port) for (server, port) in hubs))
-        return hubs, hostname_to_ip, ip_to_hostnames
+        return hostname_to_ip, ip_to_hostnames
 
     async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], Optional[SPVPong]]:
         loop = asyncio.get_event_loop()
         pong_responses = asyncio.Queue()
         connection = SPVStatusClientProtocol(pong_responses)
         sent_ping_timestamps = {}
-        hubs, _, ip_to_hostnames = await self.resolve_spv_dns()
+        _, ip_to_hostnames = await self.resolve_spv_dns()
         n = len(ip_to_hostnames)
         log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['explicit_servers']))
         pongs = {}
