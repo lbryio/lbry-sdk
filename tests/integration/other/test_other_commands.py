@@ -15,7 +15,7 @@ class AddressManagement(CommandTestCase):
 class SettingsManagement(CommandTestCase):
 
     async def test_settings(self):
-        self.assertEqual(self.daemon.jsonrpc_settings_get()['lbryum_servers'][0], ('127.0.0.1', 50001))
+        self.assertEqual(self.daemon.jsonrpc_settings_get()['lbryum_servers'][0], ('localhost', 50002))
 
         setting = self.daemon.jsonrpc_settings_set('lbryum_servers', ['server:50001'])
         self.assertEqual(setting['lbryum_servers'][0], ('server', 50001))
