@@ -68,8 +68,8 @@ class ReconnectTests(IntegrationTestCase):
         node2 = SPVNode(self.conductor.spv_module, node_number=2)
         await node2.start(self.blockchain)
 
-        self.ledger.network.config['default_servers'].append((node2.hostname, node2.port))
-        self.ledger.network.config['default_servers'].reverse()
+        self.ledger.network.config['explicit_servers'].append((node2.hostname, node2.port))
+        self.ledger.network.config['explicit_servers'].reverse()
         self.assertEqual(50002, self.ledger.network.client.server[1])
         await self.ledger.stop()
         await self.ledger.start()
