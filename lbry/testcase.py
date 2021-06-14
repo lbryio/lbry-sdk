@@ -378,6 +378,7 @@ class CommandTestCase(IntegrationTestCase):
             await daemon.stop()
 
     async def add_daemon(self, wallet_node=None, seed=None):
+        start_wallet_node = False
         if wallet_node is None:
             wallet_node = WalletNode(
                 self.wallet_node.manager_class,
@@ -385,8 +386,7 @@ class CommandTestCase(IntegrationTestCase):
                 port=self.extra_wallet_node_port
             )
             self.extra_wallet_node_port += 1
-            await wallet_node.start(self.conductor.spv_node, seed=seed)
-            self.extra_wallet_nodes.append(wallet_node)
+            start_wallet_node = True
 
         upload_dir = os.path.join(wallet_node.data_path, 'uploads')
         os.mkdir(upload_dir)
@@ -414,8 +414,13 @@ class CommandTestCase(IntegrationTestCase):
         ]
         if self.skip_libtorrent:
             conf.components_to_skip.append(LIBTORRENT_COMPONENT)
-        wallet_node.manager.config = conf
-        wallet_node.manager.ledger.config['known_hubs'] = conf.known_hubs
+
+        if start_wallet_node:
+            await wallet_node.start(self.conductor.spv_node, seed=seed, config=conf)
+            self.extra_wallet_nodes.append(wallet_node)
+        else:
+            wallet_node.manager.config = conf
+            wallet_node.manager.ledger.config['known_hubs'] = conf.known_hubs
 
         def wallet_maker(component_manager):
             wallet_component = WalletComponent(component_manager)

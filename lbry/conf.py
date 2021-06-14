@@ -63,6 +63,18 @@ class Setting(Generic[T]):
             for location in obj.modify_order:
                 location[self.name] = val
 
+    def is_set(self, obj: 'BaseConfig') -> bool:
+        for location in obj.search_order:
+            if self.name in location:
+                return True
+        return False
+
+    def is_set_to_default(self, obj: 'BaseConfig') -> bool:
+        for location in obj.search_order:
+            if self.name in location:
+                return location[self.name] == self.default
+        return False
+
     def validate(self, value):
         raise NotImplementedError()
 
@@ -577,6 +589,9 @@ class CLIConfig(TranscodeConfig):
 
 
 class Config(CLIConfig):
+
+    jurisdiction = String("Limit interactions to wallet server in this jurisdiction.")
+
     # directories
     data_dir = Path("Directory path to store blobs.", metavar='DIR')
     download_dir = Path(

@@ -47,6 +47,26 @@ class ConfigurationTests(unittest.TestCase):
         c.persisted = {}
         self.assertEqual(c.test_str, 'the default')
 
+    def test_is_set(self):
+        c = TestConfig()
+        self.assertEqual(c.test_str, 'the default')
+        self.assertFalse(TestConfig.test_str.is_set(c))
+        c.test_str = 'new value'
+        self.assertEqual(c.test_str, 'new value')
+        self.assertTrue(TestConfig.test_str.is_set(c))
+
+    def test_is_set_to_default(self):
+        c = TestConfig()
+        self.assertEqual(TestConfig.test_str.default, 'the default')
+        self.assertFalse(TestConfig.test_str.is_set(c))
+        self.assertFalse(TestConfig.test_str.is_set_to_default(c))
+        c.test_str = 'new value'
+        self.assertTrue(TestConfig.test_str.is_set(c))
+        self.assertFalse(TestConfig.test_str.is_set_to_default(c))
+        c.test_str = 'the default'
+        self.assertTrue(TestConfig.test_str.is_set(c))
+        self.assertTrue(TestConfig.test_str.is_set_to_default(c))
+
     def test_arguments(self):
         parser = argparse.ArgumentParser()
         TestConfig.contribute_to_argparse(parser)
