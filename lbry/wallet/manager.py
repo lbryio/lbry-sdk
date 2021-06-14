@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import List, Type, MutableSequence, MutableMapping, Optional
 
 from lbry.error import KeyFeeAboveMaxAllowedError
-from lbry.conf import Config
+from lbry.conf import Config, NOT_SET
 
 from .dewies import dewies_to_lbc
 from .account import Account
@@ -184,6 +184,7 @@ class WalletManager:
             'auto_connect': True,
             'default_servers': config.lbryum_servers,
             'known_hubs': config.known_hubs,
+            'jurisdiction': config.jurisdiction,
             'data_path': config.wallet_dir,
             'tx_cache_size': config.transaction_cache_size
         }
@@ -195,6 +196,10 @@ class WalletManager:
         receiving_addresses, change_addresses = cls.migrate_lbryum_to_torba(
             os.path.join(wallets_directory, 'default_wallet')
         )
+
+        if Config.lbryum_servers.is_set_to_default(config):
+            with config.update_config() as c:
+                c.lbryum_servers = NOT_SET
 
         manager = cls.from_config({
             'ledgers': {ledger_id: ledger_config},
@@ -226,10 +231,14 @@ class WalletManager:
     async def reset(self):
         self.ledger.config = {
             'auto_connect': True,
-            'default_servers': self.config.lbryum_servers,
+            'explicit_servers': [],
+            'default_servers': Config.lbryum_servers.default,
             'known_hubs': self.config.known_hubs,
+            'jurisdiction': self.config.jurisdiction,
             'data_path': self.config.wallet_dir,
         }
+        if Config.lbryum_servers.is_set(self.config):
+            self.ledger.config['explicit_servers'] = self.config.lbryum_servers
         await self.ledger.stop()
         await self.ledger.start()
 

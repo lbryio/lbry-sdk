@@ -186,7 +186,13 @@ class Network:
 
     @property
     def known_hubs(self):
-        return self.config.get('known_hubs', KnownHubsList())
+        if 'known_hubs' not in self.config:
+            return KnownHubsList()
+        return self.config['known_hubs']
+
+    @property
+    def jurisdiction(self):
+        return self.config.get("jurisdiction")
 
     def disconnect(self):
         if self._keepalive_task and not self._keepalive_task.done():
@@ -226,18 +232,23 @@ class Network:
                 log.exception("error looking up dns for spv server %s:%i", server, port)
 
         # accumulate the dns results
-        hubs = self.known_hubs if self.known_hubs else self.config['default_servers']
+        if self.config['explicit_servers']:
+            hubs = self.config['explicit_servers']
+        elif self.known_hubs:
+            hubs = self.known_hubs
+        else:
+            hubs = self.config['default_servers']
         await asyncio.gather(*(resolve_spv(server, port) for (server, port) in hubs))
-        return hostname_to_ip, ip_to_hostnames
+        return hubs, hostname_to_ip, ip_to_hostnames
 
     async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], Optional[SPVPong]]:
         loop = asyncio.get_event_loop()
         pong_responses = asyncio.Queue()
         connection = SPVStatusClientProtocol(pong_responses)
         sent_ping_timestamps = {}
-        _, ip_to_hostnames = await self.resolve_spv_dns()
+        hubs, _, ip_to_hostnames = await self.resolve_spv_dns()
         n = len(ip_to_hostnames)
-        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['default_servers']))
+        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['explicit_servers']))
         pongs = {}
         try:
             await loop.create_datagram_endpoint(lambda: connection, ('0.0.0.0', 0))
@@ -246,6 +257,7 @@ class Network:
             for server in ip_to_hostnames:
                 connection.ping(server)
                 sent_ping_timestamps[server] = perf_counter()
+            known_hubs = self.known_hubs
             while len(pongs) < n:
                 (remote, ts), pong = await asyncio.wait_for(pong_responses.get(), timeout - (perf_counter() - start))
                 latency = ts - start
@@ -253,6 +265,9 @@ class Network:
                          '/'.join(ip_to_hostnames[remote]), remote[1], round(latency * 1000, 2),
                          pong.available, pong.height)
 
+                known_hubs.hubs.setdefault((ip_to_hostnames[remote][0], remote[1]), {}).update(
+                    {"country": pong.country_name}
+                )
                 if pong.available:
                     pongs[(ip_to_hostnames[remote][0], remote[1])] = pong
             return pongs
@@ -267,13 +282,17 @@ class Network:
                 random_server = random.choice(list(ip_to_hostnames.keys()))
                 host, port = random_server
                 log.warning("trying fallback to randomly selected spv: %s:%i", host, port)
+                known_hubs.hubs.setdefault((host, port), {})
                 return {(host, port): None}
         finally:
             connection.close()
 
     async def connect_to_fastest(self) -> Optional[ClientSession]:
         fastest_spvs = await self.get_n_fastest_spvs()
-        for (host, port) in fastest_spvs:
+        for (host, port), pong in fastest_spvs.items():
+            if (pong is not None and self.jurisdiction is not None) and \
+                    (pong.country_name != self.jurisdiction):
+                continue
             client = ClientSession(network=self, server=(host, port))
             try:
                 await client.create_connection()
@@ -305,7 +324,7 @@ class Network:
                 features = await client.send_request('server.features', [])
                 self.client, self.server_features = client, features
                 log.debug("discover other hubs %s:%i", *client.server)
-                self._update_hubs(await client.send_request('server.peers.subscribe', []))
+                await self._update_hubs(await client.send_request('server.peers.subscribe', []))
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
@@ -375,8 +394,8 @@ class Network:
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
 
-    def _update_hubs(self, hubs):
-        if hubs:
+    async def _update_hubs(self, hubs):
+        if hubs and hubs != ['']:
             try:
                 if self.known_hubs.add_hubs(hubs):
                     self.known_hubs.save()

@@ -37,6 +37,9 @@ class SPVPing(NamedTuple):
         return decoded
 
 
+PONG_ENCODING = b'!BBL32s4sH'
+
+
 class SPVPong(NamedTuple):
     protocol_version: int
     flags: int
@@ -46,7 +49,7 @@ class SPVPong(NamedTuple):
     country: int
 
     def encode(self):
-        return struct.pack(b'!BBL32s4sH', *self)
+        return struct.pack(PONG_ENCODING, *self)
 
     @staticmethod
     def encode_address(address: str):
@@ -67,7 +70,7 @@ class SPVPong(NamedTuple):
 
     @classmethod
     def decode(cls, packet: bytes):
-        return cls(*struct.unpack(b'!BBl32s4s', packet[:42]))
+        return cls(*struct.unpack(PONG_ENCODING, packet[:44]))
 
     @property
     def available(self) -> bool:

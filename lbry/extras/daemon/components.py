@@ -138,7 +138,7 @@ class WalletComponent(Component):
                     'availability': session.available,
                 } for session in sessions
             ],
-            'known_servers': len(self.wallet_manager.ledger.network.config['default_servers']),
+            'known_servers': len(self.wallet_manager.ledger.network.known_hubs),
             'available_servers': 1 if is_connected else 0
         }
 
