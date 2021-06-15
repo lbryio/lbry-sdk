@@ -78,10 +78,12 @@ class LevelDB(Storage):
         cls.module = plyvel
 
     def open(self, name, create, lru_cache_size=None):
-        mof = 10000
+        mof = 512
         path = os.path.join(self.db_dir, name)
         # Use snappy compression (the default)
-        self.db = self.module.DB(path, create_if_missing=create, max_open_files=mof)
+        self.db = self.module.DB(path, create_if_missing=create, max_open_files=mof, lru_cache_size=4*1024*1024*1024,
+                                 write_buffer_size=64*1024*1024, block_size=1024*1024, max_file_size=1024*1024*64,
+                                 bloom_filter_bits=32)
         self.close = self.db.close
         self.get = self.db.get
         self.put = self.db.put
