@@ -55,8 +55,13 @@ setup(
         'pbkdf2==1.3',
         'attrs==18.2.0',
         'pylru==1.1.0',
-        'elasticsearch==7.10.1'
+        'elasticsearch==7.10.1',
     ] + PLYVEL,
+    extras_require={
+        'torrent': ['lbry-libtorrent'],
+        'lint': ['mypy==0.701', 'pylint==2.4.4'],
+        'test': ['coverage'],
+    },
     classifiers=[
         'Framework :: AsyncIO',
         'Intended Audience :: Developers',
