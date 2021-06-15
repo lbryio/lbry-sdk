@@ -256,6 +256,7 @@ class BlockProcessor:
         self.pending_channel_counts = defaultdict(lambda: 0)
 
         self.pending_channels = {}
+        self.amount_cache = {}
 
     def claim_producer(self):
         def get_claim_txo(tx_hash, nout):
@@ -825,12 +826,28 @@ class BlockProcessor:
             ops.extend(self._abandon(spent_claims))
         return ops
 
+    def _cached_get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
+        if (claim_hash, txo_type, height) in self.amount_cache:
+            return self.amount_cache[(claim_hash, txo_type, height)]
+        self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db._get_active_amount(
+            claim_hash, txo_type, height
+        )
+        return amount
+
+    def _cached_get_effective_amount(self, claim_hash: bytes, support_only=False) -> int:
+        support_amount = self._cached_get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.db.db_height + 1)
+        if support_only:
+            return support_only
+        return support_amount + self._cached_get_active_amount(
+            claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db.db_height + 1
+        )
+
     def _get_pending_claim_amount(self, name: str, claim_hash: bytes, height=None) -> int:
         if (name, claim_hash) in self.staged_activated_claim:
             return self.staged_activated_claim[(name, claim_hash)]
         if (name, claim_hash) in self.possible_future_activated_claim:
             return self.possible_future_activated_claim[(name, claim_hash)]
-        return self.db._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, height or (self.height + 1))
+        return self._cached_get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, height or (self.height + 1))
 
     def _get_pending_claim_name(self, claim_hash: bytes) -> Optional[str]:
         assert claim_hash is not None
@@ -841,7 +858,7 @@ class BlockProcessor:
             return claim_info.name
 
     def _get_pending_supported_amount(self, claim_hash: bytes, height: Optional[int] = None) -> int:
-        amount = self.db._get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, height or (self.height + 1)) or 0
+        amount = self._cached_get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, height or (self.height + 1))
         if claim_hash in self.staged_activated_support:
             amount += sum(self.staged_activated_support[claim_hash])
         if claim_hash in self.possible_future_activated_support:
@@ -1232,9 +1249,9 @@ class BlockProcessor:
             removed_claim = self.db.get_claim_txo(removed)
             if not removed_claim:
                 continue
-            name, tx_num, position = removed_claim.name, removed_claim.tx_num, removed_claim.position
             ops.extend(get_remove_effective_amount_ops(
-                name, self.db.get_effective_amount(removed), tx_num, position, removed
+                removed_claim.name, self._cached_get_effective_amount(removed), removed_claim.tx_num,
+                removed_claim.position, removed
             ))
         for touched in self.touched_claims_to_send_es:
             if touched in self.pending_claim_txos:
@@ -1244,13 +1261,13 @@ class BlockProcessor:
                 if claim_from_db:
                     prev_tx_num, prev_position = claim_from_db.tx_num, claim_from_db.position
                     ops.extend(get_remove_effective_amount_ops(
-                        name, self.db.get_effective_amount(touched), prev_tx_num, prev_position, touched
+                        name, self._cached_get_effective_amount(touched), prev_tx_num, prev_position, touched
                     ))
             else:
                 v = self.db.get_claim_txo(touched)
                 name, tx_num, position = v.name, v.tx_num, v.position
                 ops.extend(get_remove_effective_amount_ops(
-                    name, self.db.get_effective_amount(touched), tx_num, position, touched
+                    name, self._cached_get_effective_amount(touched), tx_num, position, touched
                 ))
             ops.extend(get_add_effective_amount_ops(name, self._get_pending_effective_amount(name, touched),
                                                         tx_num, position, touched))
@@ -1379,6 +1396,7 @@ class BlockProcessor:
         self.possible_future_activated_support.clear()
         self.possible_future_support_txos.clear()
         self.pending_channels.clear()
+        self.amount_cache.clear()
 
         # for cache in self.search_cache.values():
         #     cache.clear()
