@@ -17,10 +17,6 @@ class FindShortestID:
         if self.short_id:
             return '#'+self.short_id
 
-    @classmethod
-    def factory(cls):
-        return cls(), cls.step, cls.finalize
-
 
 def register_canonical_functions(connection):
-    connection.createaggregatefunction("shortest_id", FindShortestID.factory, 2)
+    connection.create_aggregate("shortest_id", 2, FindShortestID)

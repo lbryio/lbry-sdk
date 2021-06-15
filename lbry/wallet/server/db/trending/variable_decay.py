@@ -5,7 +5,6 @@ decay rate for high valued claims.
 
 import math
 import time
-import apsw
 
 # Half life in blocks *for lower LBC claims* (it's shorter for whale claims)
 HALF_LIFE = 200
@@ -350,7 +349,7 @@ class TrendingDB:
 
 # The "global" instance to work with
 # pylint: disable=C0103
-trending_data = TrendingDB()
+#trending_data = TrendingDB()
 
 def spike_mass(x, x_old):
     """

@@ -798,11 +798,6 @@ class LBRYBlockProcessor(BlockProcessor):
         finally:
             if self.sql:
                 self.sql.commit()
-        if self.sql and self.db.first_sync and self.height == self.daemon.cached_height():
-            self.timer.run(self.sql.execute, self.sql.SEARCH_INDEXES, timer_name='executing SEARCH_INDEXES')
-            if self.env.individual_tag_indexes:
-                self.timer.run(self.sql.execute, self.sql.TAG_INDEXES, timer_name='executing TAG_INDEXES')
-            self.timer.run(self.sql.execute, self.sql.LANGUAGE_INDEXES, timer_name='executing LANGUAGE_INDEXES')
 
     def advance_txs(self, height, txs, header, block_hash):
         timer = self.timer.sub_timers['advance_blocks']
