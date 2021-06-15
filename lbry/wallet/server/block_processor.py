@@ -444,7 +444,7 @@ class BlockProcessor:
                 for block in blocks:
                     await self.run_in_thread_with_lock(self.advance_block, block)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
-                    await self.db.search_index.claim_consumer(self.claim_producer())
+                    # await self.db.search_index.claim_consumer(self.claim_producer())
                     self.db.search_index.clear_caches()
                     self.touched_claims_to_send_es.clear()
                     self.removed_claims_to_send_es.clear()
