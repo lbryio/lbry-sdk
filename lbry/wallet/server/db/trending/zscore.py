@@ -47,14 +47,10 @@ class ZScore:
             return self.last
         return (self.last - self.mean) / (self.standard_deviation or 1)
 
-    @classmethod
-    def factory(cls):
-        return cls(), cls.step, cls.finalize
-
 
 def install(connection):
-    connection.createaggregatefunction("zscore", ZScore.factory, 1)
-    connection.cursor().execute(CREATE_TREND_TABLE)
+    connection.create_aggregate("zscore", 1, ZScore)
+    connection.executescript(CREATE_TREND_TABLE)
 
 
 def run(db, height, final_height, affected_claims):
