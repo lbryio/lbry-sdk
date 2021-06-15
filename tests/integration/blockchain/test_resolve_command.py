@@ -65,8 +65,6 @@ class BaseResolveTestCase(CommandTestCase):
     async def assertMatchClaimsForName(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name))
 
-        print(len(expected['claims']), 'from lbrycrd for ', name)
-
         db = self.conductor.spv_node.server.bp.db
 
         def check_supports(claim_id, lbrycrd_supports):
