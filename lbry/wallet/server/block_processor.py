@@ -449,7 +449,7 @@ class BlockProcessor:
                     self.removed_claims_to_send_es.clear()
                     self.pending_reposted.clear()
                     self.pending_channel_counts.clear()
-                    print("******************\n")
+                    # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
