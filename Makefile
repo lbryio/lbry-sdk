@@ -1,7 +1,6 @@
 .PHONY: install tools lint test test-unit test-unit-coverage test-integration idea
 
 install:
-	pip install lbry-libtorrent
 	pip install -e .
 
 tools:

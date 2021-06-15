@@ -1,0 +1,17 @@
+name: slack
+on:
+  release:
+    types: [published]
+
+jobs:
+  release:
+    name: "slack notification"
+    runs-on: ubuntu-latest
+    steps:
+      - name: send message
+        uses: slackapi/slack-github-action@v1.14.0
+        with:
+          payload: '{"type": "mrkdwn", "text":"Hello, *World*!"}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_RELEASE_BOT_WEBHOOK }}
+
