@@ -5,6 +5,7 @@ decay rate for high valued claims.
 
 import math
 import time
+import sqlite3
 
 # Half life in blocks *for lower LBC claims* (it's shorter for whale claims)
 HALF_LIFE = 200
@@ -95,16 +96,16 @@ class TrendingDB:
     """
 
     def __init__(self):
-        self.conn = apsw.Connection(":memory:")
+        self.conn = sqlite3.connect(":memory:", check_same_thread=False)
         self.cursor = self.conn.cursor()
         self.initialised = False
         self.write_needed = set()
 
     def execute(self, query, *args, **kwargs):
-        return self.cursor.execute(query, *args, **kwargs)
+        return self.conn.execute(query, *args, **kwargs)
 
     def executemany(self, query, *args, **kwargs):
-        return self.cursor.executemany(query, *args, **kwargs)
+        return self.conn.executemany(query, *args, **kwargs)
 
     def begin(self):
         self.execute("BEGIN;")
@@ -250,7 +251,7 @@ class TrendingDB:
                                 FROM claims
                                 WHERE claim_hash IN
                                 ({','.join('?' for _ in self.write_needed)});
-                                """, self.write_needed).fetchall()
+                                """, list(self.write_needed)).fetchall()
 
         db.executemany("""UPDATE claim SET trending_mixed = ?
                          WHERE claim_hash = ?;""", rows)
@@ -277,7 +278,7 @@ class TrendingDB:
                              FROM claim
                              WHERE claim_hash IN
                              ({','.join('?' for _ in recalculate_claim_hashes)});
-                             """, recalculate_claim_hashes):
+                             """, list(recalculate_claim_hashes)):
             claim_hash, lbc = row
 
             # Insert into trending db if it does not exist
@@ -349,7 +350,7 @@ class TrendingDB:
 
 # The "global" instance to work with
 # pylint: disable=C0103
-#trending_data = TrendingDB()
+trending_data = TrendingDB()
 
 def spike_mass(x, x_old):
     """

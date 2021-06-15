@@ -76,7 +76,7 @@ async def make_es_index(index=None):
 
 
 async def run(db_path, clients, blocks, shard, index_name='claims'):
-    db = sqlite3.connect(db_path, isolation_level=None, uri=True)
+    db = sqlite3.connect(db_path, isolation_level=None, check_same_thread=False, uri=True)
     db.execute('pragma journal_mode=wal;')
     db.execute('pragma temp_store=memory;')
     producer = get_all(db, shard, clients, limit=blocks, index_name=index_name)
