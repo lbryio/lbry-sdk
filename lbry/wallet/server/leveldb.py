@@ -728,26 +728,11 @@ class LevelDB:
                 batch_put(DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix, value[-8:])
             flush_data.adds.clear()
 
-            # Flush state last as it reads the wall time.
-            start_time = time.time()
-            add_count = len(flush_data.adds)
-            spend_count = len(flush_data.deletes) // 2
-
-            if self.db.for_sync:
-                block_count = flush_data.height - self.db_height
-                tx_count = flush_data.tx_count - self.db_tx_count
-                elapsed = time.time() - start_time
-                self.logger.info(f'advanced to {flush_data.height:,d} with '
-                                 f'{tx_count:,d} txs, {add_count:,d} UTXO adds, '
-                                 f'{spend_count:,d} spends, {op_count:,d} claim ops in '
-                                 f'{elapsed:.1f}s, committing...')
-
             self.utxo_flush_count = self.hist_flush_count
             self.db_height = flush_data.height
             self.db_tx_count = flush_data.tx_count
             self.db_tip = flush_data.tip
-            # self.flush_state(batch)
-            #
+
             now = time.time()
             self.wall_time += now - self.last_flush
             self.last_flush = now
