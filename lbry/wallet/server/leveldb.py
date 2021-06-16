@@ -150,6 +150,8 @@ class LevelDB:
         # Search index
         self.search_index = SearchIndex(self.env.es_index_prefix, self.env.database_query_timeout)
 
+        self.genesis_bytes = bytes.fromhex(self.coin.GENESIS_HASH)
+
     def get_claim_from_txo(self, tx_num: int, tx_idx: int) -> Optional[TXOToClaimValue]:
         claim_hash_and_name = self.db.get(Prefixes.txo_to_claim.pack_key(tx_num, tx_idx))
         if not claim_hash_and_name:
@@ -1079,12 +1081,14 @@ class LevelDB:
 
     def write_db_state(self, batch):
         """Write (UTXO) state to the batch."""
-        db_state = DBState(
-            bytes.fromhex(self.coin.GENESIS_HASH), self.db_height, self.db_tx_count, self.db_tip,
-            self.utxo_flush_count, int(self.wall_time), self.first_sync, self.db_version,
-            self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor
+        batch.put(
+            DB_PREFIXES.db_state.value,
+            DBState(
+                self.genesis_bytes, self.db_height, self.db_tx_count, self.db_tip,
+                self.utxo_flush_count, int(self.wall_time), self.first_sync, self.db_version,
+                self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor
+            ).pack()
         )
-        batch.put(DB_PREFIXES.db_state.value, db_state.pack())
 
     def read_db_state(self):
         state = self.db.get(DB_PREFIXES.db_state.value)
