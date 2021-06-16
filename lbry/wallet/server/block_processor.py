@@ -442,7 +442,9 @@ class BlockProcessor:
             start = time.perf_counter()
             try:
                 for block in blocks:
+                    start = time.perf_counter()
                     await self.run_in_thread_with_lock(self.advance_block, block)
+                    self.logger.info("advanced to %i in %ds", self.height, time.perf_counter() - start)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
                     # await self.db.search_index.claim_consumer(self.claim_producer())
                     self.db.search_index.clear_caches()
