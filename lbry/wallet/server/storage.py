@@ -88,7 +88,7 @@ class LevelDB(Storage):
         self.get = self.db.get
         self.put = self.db.put
         self.iterator = self.db.iterator
-        self.write_batch = partial(self.db.write_batch, transaction=True, sync=True)
+        self.write_batch = partial(self.db.write_batch, transaction=True)
 
 
 class RocksDB(Storage):
