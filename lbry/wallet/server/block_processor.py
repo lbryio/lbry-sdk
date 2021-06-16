@@ -725,7 +725,7 @@ class BlockProcessor:
             if supported_name is not None:
                 self.pending_removed_support[supported_name][spent_support].append((txin_num, txin.prev_idx))
             activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
-            if 0 < activation <= self.height + 1:
+            if 0 < activation < self.height + 1:
                 self.removed_active_support[spent_support].append(support_amount)
             # print(f"\tspent support for {spent_support.hex()} activation:{activation} {support_amount}")
             ops = StagedClaimtrieSupport(
