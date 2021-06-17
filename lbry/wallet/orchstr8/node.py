@@ -479,7 +479,6 @@ class HubProcess(asyncio.SubprocessProtocol):
             raise SystemError(data.decode())
         if b'listening on' in data:
             self.ready.set()
-        print(data.decode("utf-8"))
 
     def process_exited(self):
         self.stopped.set()
