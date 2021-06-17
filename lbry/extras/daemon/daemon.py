@@ -2594,7 +2594,6 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            log.warning("### Using go hub! ###")
             host = os.environ.get("HUB_HOST", "localhost")
             port = os.environ.get("HUB_PORT", "50051")
             kwargs['new_sdk_server'] = f"{host}:{port}"
