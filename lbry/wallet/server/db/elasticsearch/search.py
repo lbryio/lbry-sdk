@@ -193,7 +193,6 @@ class SearchIndex:
             if censor.censored:
                 response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
                 total_referenced.extend(response)
-
             response = [
                 ResolveResult(
                     name=r['claim_name'],
@@ -215,7 +214,8 @@ class SearchIndex:
                     claims_in_channel=r['claims_in_channel'],
                     channel_hash=r['channel_hash'],
                     reposted_claim_hash=r['reposted_claim_hash'],
-                    reposted=r['reposted']
+                    reposted=r['reposted'],
+                    signature_valid=r['signature_valid']
                 ) for r in response
             ]
             extra = [
@@ -239,7 +239,8 @@ class SearchIndex:
                     claims_in_channel=r['claims_in_channel'],
                     channel_hash=r['channel_hash'],
                     reposted_claim_hash=r['reposted_claim_hash'],
-                    reposted=r['reposted']
+                    reposted=r['reposted'],
+                    signature_valid=r['signature_valid']
                 ) for r in await self._get_referenced_rows(total_referenced)
             ]
             result = Outputs.to_base64(
@@ -304,7 +305,7 @@ class SearchIndex:
             return await self.search_ahead(**kwargs)
         except NotFoundError:
             return [], 0, 0
-        return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
+        # return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
 
     async def search_ahead(self, **kwargs):
         # 'limit_claims_per_channel' case. Fetch 1000 results, reorder, slice, inflate and return
@@ -488,7 +489,7 @@ def extract_doc(doc, index):
     # doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
     doc['is_controlling'] = bool(doc['is_controlling'])
     doc['signature'] = (doc.pop('signature') or b'').hex() or None
-    doc['signature_digest'] = (doc.pop('signature_digest') or b'').hex() or None
+    doc['signature_digest'] = doc['signature']
     doc['public_key_bytes'] = (doc.pop('public_key_bytes') or b'').hex() or None
     doc['public_key_hash'] = (doc.pop('public_key_hash') or b'').hex() or None
     doc['signature_valid'] = bool(doc['signature_valid'])
@@ -509,6 +510,8 @@ def expand_query(**kwargs):
         kwargs.pop('is_controlling')
     query = {'must': [], 'must_not': []}
     collapse = None
+    if 'fee_currency' in kwargs and kwargs['fee_currency'] is not None:
+        kwargs['fee_currency'] = kwargs['fee_currency'].upper()
     for key, value in kwargs.items():
         key = key.replace('claim.', '')
         many = key.endswith('__in') or isinstance(value, list)
@@ -591,6 +594,7 @@ def expand_query(**kwargs):
         query["minimum_should_match"] = 1
         query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
         query['should'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
+
     if 'has_source' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
@@ -627,6 +631,7 @@ def expand_query(**kwargs):
             if value in TEXT_FIELDS:
                 value += '.keyword'
             query['sort'].append({value: "asc" if is_asc else "desc"})
+
     if collapse:
         query["collapse"] = {
             "field": collapse[0],

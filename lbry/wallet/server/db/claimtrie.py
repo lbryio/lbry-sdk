@@ -214,17 +214,3 @@ class StagedClaimtrieItem(typing.NamedTuple):
     def get_spend_claim_txo_ops(self) -> typing.List[RevertableOp]:
         return self._get_add_remove_claim_utxo_ops(add=False)
 
-    def get_invalidate_channel_ops(self, db) -> typing.List[RevertableOp]:
-        if not self.signing_hash:
-            return []
-        return [
-            RevertableDelete(*Prefixes.claim_to_channel.pack_item(self.claim_hash, self.signing_hash))
-        ] + delete_prefix(db, DB_PREFIXES.channel_to_claim.value + self.signing_hash)
-
-    def get_abandon_ops(self, db) -> typing.List[RevertableOp]:
-        delete_short_id_ops = delete_prefix(
-            db, Prefixes.claim_short_id.pack_partial_key(self.name, self.claim_hash)
-        )
-        delete_claim_ops = delete_prefix(db, DB_PREFIXES.claim_to_txo.value + self.claim_hash)
-        delete_supports_ops = delete_prefix(db, DB_PREFIXES.claim_to_support.value + self.claim_hash)
-        return delete_short_id_ops + delete_claim_ops + delete_supports_ops + self.get_invalidate_channel_ops(db)
