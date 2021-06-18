@@ -251,6 +251,7 @@ class BlockProcessor:
 
         self.removed_claims_to_send_es = set()
         self.touched_claims_to_send_es = set()
+        self.signatures_changed = set()
 
         self.pending_reposted = set()
         self.pending_channel_counts = defaultdict(lambda: 0)
@@ -662,7 +663,36 @@ class BlockProcessor:
         self.pending_supports[claim_hash].clear()
         self.pending_supports.pop(claim_hash)
 
-        return staged.get_abandon_ops(self.db.db)
+        ops = []
+
+        if staged.name.startswith('@'):  # abandon a channel, invalidate signatures
+            for k, claim_hash in self.db.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
+                if claim_hash in self.staged_pending_abandoned:
+                    continue
+                self.signatures_changed.add(claim_hash)
+                if claim_hash in self.pending_claims:
+                    claim = self.pending_claims[claim_hash]
+                else:
+                    claim = self.db.get_claim_txo(claim_hash)
+                assert claim is not None
+                ops.extend([
+                    RevertableDelete(k, claim_hash),
+                    RevertableDelete(
+                        *Prefixes.claim_to_txo.pack_item(
+                            claim_hash, claim.tx_num, claim.position, claim.root_tx_num, claim.root_position,
+                            claim.amount, claim.channel_signature_is_valid, claim.name
+                        )
+                    ),
+                    RevertablePut(
+                        *Prefixes.claim_to_txo.pack_item(
+                            claim_hash, claim.tx_num, claim.position, claim.root_tx_num, claim.root_position,
+                            claim.amount, False, claim.name
+                        )
+                    )
+                ])
+        if staged.signing_hash:
+            ops.append(RevertableDelete(*Prefixes.claim_to_channel.pack_item(staged.claim_hash, staged.signing_hash)))
+        return ops
 
     def _abandon(self, spent_claims) -> List['RevertableOp']:
         # Handle abandoned claims
@@ -1100,7 +1130,7 @@ class BlockProcessor:
         self.touched_claims_to_send_es.update(
             set(self.staged_activated_support.keys()).union(
                 set(claim_hash for (_, claim_hash) in self.staged_activated_claim.keys())
-            ).difference(self.removed_claims_to_send_es)
+            ).union(self.signatures_changed).difference(self.removed_claims_to_send_es)
         )
 
         # use the cumulative changes to update bid ordered resolve
@@ -1256,6 +1286,7 @@ class BlockProcessor:
         self.possible_future_support_txos.clear()
         self.pending_channels.clear()
         self.amount_cache.clear()
+        self.signatures_changed.clear()
 
         # for cache in self.search_cache.values():
         #     cache.clear()
