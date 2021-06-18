@@ -1,17 +1,11 @@
 import argparse
 import asyncio
 import logging
-import os
-from collections import namedtuple
-from multiprocessing import Process
-
-import apsw
 from elasticsearch import AsyncElasticsearch
 from elasticsearch.helpers import async_bulk
 from lbry.wallet.server.env import Env
 from lbry.wallet.server.coin import LBC
 from lbry.wallet.server.leveldb import LevelDB
-from lbry.wallet.server.db.prefixes import Prefixes
 from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex, IndexVersionMismatch
 
 
