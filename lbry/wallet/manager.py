@@ -182,6 +182,7 @@ class WalletManager:
 
         ledger_config = {
             'auto_connect': True,
+            'explicit_servers': [],
             'default_servers': config.lbryum_servers,
             'known_hubs': config.known_hubs,
             'jurisdiction': config.jurisdiction,
