@@ -21,8 +21,16 @@ async def get_all_claims(index_name='claims', db=None):
     db = db or LevelDB(env)
     if need_open:
         await db.open_dbs()
-    for claim in db.all_claims_producer():
-        yield extract_doc(claim, index_name)
+    try:
+        cnt = 0
+        for claim in db.all_claims_producer():
+            yield extract_doc(claim, index_name)
+            cnt += 1
+            if cnt % 10000 == 0:
+                print(f"{cnt} claims sent")
+    finally:
+        if need_open:
+            db.close()
 
 
 async def make_es_index(index=None):
