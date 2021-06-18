@@ -4,7 +4,7 @@ import lbry
 import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
-from lbry.wallet.server.db.elasticsearch.sync import run as run_sync, make_es_index
+from lbry.wallet.server.db.elasticsearch.sync import run_sync, make_es_index
 from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
@@ -103,8 +103,11 @@ class TestESSync(CommandTestCase):
         async def resync():
             await db.search_index.start()
             db.search_index.clear_caches()
-            await run_sync(db.sql._db_path, 1, 0, 0, index_name=db.search_index.index)
+            await run_sync(index_name=db.search_index.index, db=db)
             self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
+
         await resync()
 
         # this time we will test a migration from unversioned to v1

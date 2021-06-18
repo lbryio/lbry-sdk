@@ -161,6 +161,9 @@ class ClaimSearchCommand(ClaimTestCase):
         claims = [three, two, signed]
         await self.assertFindsClaims(claims, channel_ids=[self.channel_id])
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
+        await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}", valid_channel_signature=True)
+        await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}", has_channel_signature=True, valid_channel_signature=True)
+        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", has_channel_signature=True, invalid_channel_signature=True)  # fixme
         await self.assertFindsClaims([], channel=f"@inexistent")
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
