@@ -216,7 +216,7 @@ class LevelDB:
         return supports
 
     def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
-                                root_position: int, activation_height: int) -> ResolveResult:
+                                root_position: int, activation_height: int, signature_valid: bool) -> ResolveResult:
         controlling_claim = self.get_controlling_claim(name)
 
         tx_hash = self.total_transactions[tx_num]
@@ -247,7 +247,8 @@ class LevelDB:
             creation_height=created_height, activation_height=activation_height,
             expiration_height=expiration_height, effective_amount=effective_amount, support_amount=support_amount,
             channel_hash=channel_hash, reposted_claim_hash=reposted_claim_hash,
-            reposted=self.get_reposted_count(claim_hash)
+            reposted=self.get_reposted_count(claim_hash),
+            signature_valid=None if not channel_hash else signature_valid
         )
 
     def _resolve(self, normalized_name: str, claim_id: Optional[str] = None,
@@ -275,9 +276,11 @@ class LevelDB:
             for k, v in self.db.iterator(prefix=prefix):
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
+                signature_is_valid = self.get_claim_txo(key.claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, key.claim_hash, key.name, key.root_tx_num,
-                    key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position)
+                    key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
+                    signature_is_valid
                 )
             return
 
@@ -292,7 +295,7 @@ class LevelDB:
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
                 key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo.root_tx_num,
-                claim_txo.root_position, activation
+                claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
             )
         return
 
@@ -354,7 +357,7 @@ class LevelDB:
             activation_height = self.get_activation(v.tx_num, v.position)
             return self._prepare_resolve_result(
                 v.tx_num, v.position, claim_hash, v.name,
-                v.root_tx_num, v.root_position, activation_height
+                v.root_tx_num, v.root_position, activation_height, v.channel_signature_is_valid
             )
 
     async def fs_getclaimbyid(self, claim_id):
