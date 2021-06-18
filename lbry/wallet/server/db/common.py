@@ -443,3 +443,4 @@ class ResolveResult(typing.NamedTuple):
     claims_in_channel: typing.Optional[int]
     channel_hash: typing.Optional[bytes]
     reposted_claim_hash: typing.Optional[bytes]
+    signature_valid: typing.Optional[bool]
