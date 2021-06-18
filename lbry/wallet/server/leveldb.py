@@ -469,7 +469,12 @@ class LevelDB:
         metadata = self.get_claim_metadata(claim.tx_hash, claim.position)
         if not metadata:
             return
-
+        if not metadata.is_stream or not metadata.stream.has_fee:
+            fee_amount = None
+        else:
+            fee_amount = int(max(metadata.stream.fee.amount or 0, 0) * 1000)
+            if fee_amount >= 9223372036854775807:
+                return
         reposted_claim_hash = None if not metadata.is_repost else metadata.repost.reference.claim_hash[::-1]
         reposted_claim = None
         reposted_metadata = None
@@ -529,7 +534,6 @@ class LevelDB:
             channel = self.get_claim_txo(metadata.signing_channel_hash[::-1])
             if channel:
                 canonical_url = f'{channel.name}#{metadata.signing_channel_hash[::-1].hex()}/{canonical_url}'
-
         value = {
             'claim_hash': claim_hash[::-1],
             # 'claim_id': claim_hash.hex(),
@@ -561,9 +565,7 @@ class LevelDB:
             'stream_type': None if not metadata.is_stream else STREAM_TYPES[
                 guess_stream_type(metadata.stream.source.media_type)],
             'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
-            'fee_amount': None if not metadata.is_stream or not metadata.stream.has_fee else int(
-                max(metadata.stream.fee.amount or 0, 0) * 1000
-            ),
+            'fee_amount': fee_amount,
             'fee_currency': None if not metadata.is_stream else metadata.stream.fee.currency,
 
             'reposted': self.get_reposted_count(claim_hash),
