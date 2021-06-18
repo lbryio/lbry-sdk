@@ -250,6 +250,7 @@ class Network:
         n = len(ip_to_hostnames)
         log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['explicit_servers']))
         pongs = {}
+        known_hubs = self.known_hubs
         try:
             await loop.create_datagram_endpoint(lambda: connection, ('0.0.0.0', 0))
             # could raise OSError if it cant bind
@@ -257,7 +258,6 @@ class Network:
             for server in ip_to_hostnames:
                 connection.ping(server)
                 sent_ping_timestamps[server] = perf_counter()
-            known_hubs = self.known_hubs
             while len(pongs) < n:
                 (remote, ts), pong = await asyncio.wait_for(pong_responses.get(), timeout - (perf_counter() - start))
                 latency = ts - start
