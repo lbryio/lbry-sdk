@@ -28,7 +28,7 @@ from lbry.wallet.server.db.claimtrie import get_remove_name_ops, get_remove_effe
 from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, Prefixes
 from lbry.wallet.server.udp import StatusServer
-from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete
+from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete, RevertableOpStack
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
 
@@ -610,7 +610,7 @@ class BlockProcessor:
             if not spent_claim_hash_and_name:  # txo is not a claim
                 return []
             claim_hash = spent_claim_hash_and_name.claim_hash
-            signing_hash = self.db.get_channel_for_claim(claim_hash)
+            signing_hash = self.db.get_channel_for_claim(claim_hash, txin_num, txin.prev_idx)
             v = self.db.get_claim_txo(claim_hash)
             reposted_claim_hash = self.db.get_repost(claim_hash)
             spent = StagedClaimtrieItem(
@@ -634,6 +634,7 @@ class BlockProcessor:
         return self._spend_support_txo(txin)
 
     def _abandon_claim(self, claim_hash, tx_num, nout, name) -> List['RevertableOp']:
+        claim_from_db = False
         if (tx_num, nout) in self.pending_claims:
             pending = self.pending_claims.pop((tx_num, nout))
             self.staged_pending_abandoned[pending.claim_hash] = pending
@@ -646,9 +647,10 @@ class BlockProcessor:
             v = self.db.get_claim_txo(
                 claim_hash
             )
+            claim_from_db = True
             claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
             signature_is_valid = v.channel_signature_is_valid
-            prev_signing_hash = self.db.get_channel_for_claim(claim_hash)
+            prev_signing_hash = self.db.get_channel_for_claim(claim_hash, tx_num, nout)
             reposted_claim_hash = self.db.get_repost(claim_hash)
             expiration = self.coin.get_expiration_height(bisect_right(self.db.tx_counts, tx_num))
         self.staged_pending_abandoned[claim_hash] = staged = StagedClaimtrieItem(
@@ -690,17 +692,12 @@ class BlockProcessor:
                         )
                     )
                 ])
-        if staged.signing_hash:
-            ops.append(RevertableDelete(*Prefixes.claim_to_channel.pack_item(staged.claim_hash, staged.signing_hash)))
-        return ops
-
-    def _abandon(self, spent_claims) -> List['RevertableOp']:
-        # Handle abandoned claims
-        ops = []
-
-        for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
-            # print(f"\tabandon {abandoned_claim_hash.hex()} {tx_num} {nout}")
-            ops.extend(self._abandon_claim(abandoned_claim_hash, tx_num, nout, name))
+        if staged.signing_hash and claim_from_db:
+            ops.append(RevertableDelete(
+                *Prefixes.claim_to_channel.pack_item(
+                    staged.claim_hash, staged.tx_num, staged.position, staged.signing_hash
+                )
+            ))
         return ops
 
     def _expire_claims(self, height: int):
@@ -712,7 +709,11 @@ class BlockProcessor:
                 ops.extend(self._spend_claim_txo(txi, spent_claims))
         if expired:
             # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
-            ops.extend(self._abandon(spent_claims))
+            for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
+                # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                abandon_ops = self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+                if abandon_ops:
+                    ops.extend(abandon_ops)
         return ops
 
     def _cached_get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
@@ -881,7 +882,6 @@ class BlockProcessor:
         # add the activation/delayed-activation ops
         for activated, activated_txos in activated_at_height.items():
             controlling = get_controlling(activated.name)
-
             if activated.claim_hash in self.staged_pending_abandoned:
                 continue
             reactivate = False
@@ -1088,12 +1088,13 @@ class BlockProcessor:
                             tx_num, position = previous_pending_activate.tx_num, previous_pending_activate.position
                         if previous_pending_activate.height > height:
                             # the claim had a pending activation in the future, move it to now
-                            ops.extend(
-                                StagedActivation(
-                                    ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
-                                    position, previous_pending_activate.height, name, amount
-                                ).get_remove_activate_ops()
-                            )
+                            if tx_num < self.tx_count:
+                                ops.extend(
+                                    StagedActivation(
+                                        ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
+                                        position, previous_pending_activate.height, name, amount
+                                    ).get_remove_activate_ops()
+                                )
                             ops.extend(
                                 StagedActivation(
                                     ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
@@ -1138,8 +1139,11 @@ class BlockProcessor:
             removed_claim = self.db.get_claim_txo(removed)
             if not removed_claim:
                 continue
+            amt = self._cached_get_effective_amount(removed)
+            if amt <= 0:
+                continue
             ops.extend(get_remove_effective_amount_ops(
-                removed_claim.name, self._cached_get_effective_amount(removed), removed_claim.tx_num,
+                removed_claim.name, amt, removed_claim.tx_num,
                 removed_claim.position, removed
             ))
         for touched in self.touched_claims_to_send_es:
@@ -1148,16 +1152,20 @@ class BlockProcessor:
                 name, tx_num, position = pending.name, pending.tx_num, pending.position
                 claim_from_db = self.db.get_claim_txo(touched)
                 if claim_from_db:
-                    prev_tx_num, prev_position = claim_from_db.tx_num, claim_from_db.position
-                    ops.extend(get_remove_effective_amount_ops(
-                        name, self._cached_get_effective_amount(touched), prev_tx_num, prev_position, touched
-                    ))
+                    amount = self._cached_get_effective_amount(touched)
+                    if amount > 0:
+                        prev_tx_num, prev_position = claim_from_db.tx_num, claim_from_db.position
+                        ops.extend(get_remove_effective_amount_ops(
+                            name, amount, prev_tx_num, prev_position, touched
+                        ))
             else:
                 v = self.db.get_claim_txo(touched)
                 name, tx_num, position = v.name, v.tx_num, v.position
-                ops.extend(get_remove_effective_amount_ops(
-                    name, self._cached_get_effective_amount(touched), tx_num, position, touched
-                ))
+                amt = self._cached_get_effective_amount(touched)
+                if amt > 0:
+                    ops.extend(get_remove_effective_amount_ops(
+                        name, amt, tx_num, position, touched
+                    ))
             ops.extend(get_add_effective_amount_ops(name, self._get_pending_effective_amount(name, touched),
                                                         tx_num, position, touched))
         return ops
@@ -1178,7 +1186,7 @@ class BlockProcessor:
 
         # Use local vars for speed in the loops
         put_utxo = self.utxo_cache.__setitem__
-        claimtrie_stash = []
+        claimtrie_stash = RevertableOpStack(self.db.db.get)
         claimtrie_stash_extend = claimtrie_stash.extend
         spend_utxo = self.spend_utxo
         undo_info_append = undo_info.append
@@ -1224,9 +1232,11 @@ class BlockProcessor:
                     claimtrie_stash_extend(claim_or_support_ops)
 
             # Handle abandoned claims
-            abandon_ops = self._abandon(spent_claims)
-            if abandon_ops:
-                claimtrie_stash_extend(abandon_ops)
+            for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
+                # print(f"\tabandon {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                abandon_ops = self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+                if abandon_ops:
+                    claimtrie_stash_extend(abandon_ops)
 
             append_hashX_by_tx(hashXs)
             update_touched(hashXs)
