@@ -34,7 +34,7 @@ from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.util import formatted_time, pack_be_uint16, unpack_be_uint16_from
 from lbry.wallet.server.storage import db_class
-from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
+from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, RevertableOpStack
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue
@@ -229,7 +229,7 @@ class LevelDB:
         claim_amount = self.get_claim_txo_amount(claim_hash)
 
         effective_amount = support_amount + claim_amount
-        channel_hash = self.get_channel_for_claim(claim_hash)
+        channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
         reposted_claim_hash = self.get_repost(claim_hash)
 
         short_url = f'{name}#{claim_hash.hex()}'
@@ -410,8 +410,8 @@ class LevelDB:
             count += 1
         return count
 
-    def get_channel_for_claim(self, claim_hash) -> Optional[bytes]:
-        return self.db.get(Prefixes.claim_to_channel.pack_key(claim_hash))
+    def get_channel_for_claim(self, claim_hash, tx_num, position) -> Optional[bytes]:
+        return self.db.get(Prefixes.claim_to_channel.pack_key(claim_hash, tx_num, position))
 
     def get_expired_by_height(self, height: int) -> Dict[bytes, Tuple[int, int, str, TxInput]]:
         expired = {}
@@ -770,7 +770,7 @@ class LevelDB:
             keys.append(key)
         if min_height > 0:
             for key in self.db.iterator(start=DB_PREFIXES.undo_claimtrie.value,
-                                        stop=DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(min_height),
+                                        stop=Prefixes.undo.pack_key(min_height),
                                         include_value=False):
                 keys.append(key)
         if keys:
@@ -885,7 +885,6 @@ class LevelDB:
             flush_data.headers.clear()
             flush_data.block_txs.clear()
             flush_data.block_hashes.clear()
-            op_count = len(flush_data.claimtrie_stash)
             for staged_change in flush_data.claimtrie_stash:
                 # print("ADVANCE", staged_change)
                 if staged_change.is_put:
@@ -895,7 +894,7 @@ class LevelDB:
             flush_data.claimtrie_stash.clear()
 
             for undo_ops, height in flush_data.undo:
-                batch_put(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(height), undo_ops)
+                batch_put(*Prefixes.undo.pack_item(height, undo_ops))
             flush_data.undo.clear()
 
             self.fs_height = flush_data.height
@@ -964,22 +963,25 @@ class LevelDB:
         self.hist_flush_count += 1
         nremoves = 0
 
+        undo_ops = RevertableOpStack(self.db.get)
+
+        for (packed_ops, height) in reversed(flush_data.undo):
+            undo_ops.extend(reversed(RevertableOp.unpack_stack(packed_ops)))
+            undo_ops.append(
+                RevertableDelete(*Prefixes.undo.pack_item(height, packed_ops))
+            )
+
         with self.db.write_batch() as batch:
             batch_put = batch.put
             batch_delete = batch.delete
 
-            claim_reorg_height = self.fs_height
             # print("flush undos", flush_data.undo_claimtrie)
-            for (packed_ops, height) in reversed(flush_data.undo):
-                undo_ops = RevertableOp.unpack_stack(packed_ops)
-                for op in reversed(undo_ops):
-                    # print("REWIND", op)
-                    if op.is_put:
-                        batch_put(op.key, op.value)
-                    else:
-                        batch_delete(op.key)
-                batch_delete(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(claim_reorg_height))
-                claim_reorg_height -= 1
+            for op in undo_ops:
+                # print("REWIND", op)
+                if op.is_put:
+                    batch_put(op.key, op.value)
+                else:
+                    batch_delete(op.key)
 
             flush_data.undo.clear()
             flush_data.claimtrie_stash.clear()
@@ -1209,8 +1211,7 @@ class LevelDB:
 
     def read_undo_info(self, height):
         """Read undo information from a file for the current height."""
-        undo_claims = self.db.get(DB_PREFIXES.undo_claimtrie.value + util.pack_be_uint64(self.fs_height))
-        return self.db.get(self.undo_key(height)), undo_claims
+        return self.db.get(self.undo_key(height)), self.db.get(Prefixes.undo.pack_key(self.fs_height))
 
     def raw_block_prefix(self):
         return 'block'
