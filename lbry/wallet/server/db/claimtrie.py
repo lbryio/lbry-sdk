@@ -1,9 +1,8 @@
 import typing
 from typing import Optional
-from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp, delete_prefix
-from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.revertable import RevertablePut, RevertableDelete, RevertableOp
 from lbry.wallet.server.db.prefixes import Prefixes, ClaimTakeoverValue, EffectiveAmountPrefixRow
-from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, RepostPrefixRow, RepostedPrefixRow
+from lbry.wallet.server.db.prefixes import RepostPrefixRow, RepostedPrefixRow
 
 
 def length_encoded_name(name: str) -> bytes:
@@ -184,7 +183,9 @@ class StagedClaimtrieItem(typing.NamedTuple):
             ops.append(
                 # channel by stream
                 op(
-                    *Prefixes.claim_to_channel.pack_item(self.claim_hash, self.signing_hash)
+                    *Prefixes.claim_to_channel.pack_item(
+                        self.claim_hash, self.tx_num, self.position, self.signing_hash
+                    )
                 )
             )
             if self.channel_signature_is_valid:

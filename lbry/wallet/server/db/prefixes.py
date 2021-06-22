@@ -83,6 +83,8 @@ class ClaimShortIDValue(typing.NamedTuple):
 
 class ClaimToChannelKey(typing.NamedTuple):
     claim_hash: bytes
+    tx_num: int
+    position: int
 
 
 class ClaimToChannelValue(typing.NamedTuple):
@@ -373,12 +375,19 @@ class ClaimShortIDPrefixRow(PrefixRow):
 
 class ClaimToChannelPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_to_channel.value
-    key_struct = struct.Struct(b'>20s')
+    key_struct = struct.Struct(b'>20sLH')
     value_struct = struct.Struct(b'>20s')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        struct.Struct(b'>20sL').pack,
+        struct.Struct(b'>20sLH').pack
+    ]
+
     @classmethod
-    def pack_key(cls, claim_hash: bytes):
-        return super().pack_key(claim_hash)
+    def pack_key(cls, claim_hash: bytes, tx_num: int, position: int):
+        return super().pack_key(claim_hash, tx_num, position)
 
     @classmethod
     def pack_value(cls, signing_hash: bytes):
@@ -393,8 +402,8 @@ class ClaimToChannelPrefixRow(PrefixRow):
         return ClaimToChannelValue(*super().unpack_value(data))
 
     @classmethod
-    def pack_item(cls, claim_hash: bytes, signing_hash: bytes):
-        return cls.pack_key(claim_hash), cls.pack_value(signing_hash)
+    def pack_item(cls, claim_hash: bytes, tx_num: int, position: int, signing_hash: bytes):
+        return cls.pack_key(claim_hash, tx_num, position), cls.pack_value(signing_hash)
 
 
 def channel_to_claim_helper(struct_fmt):
@@ -755,6 +764,33 @@ class RepostedPrefixRow(PrefixRow):
         return cls.pack_key(reposted_claim_hash, tx_num, position), cls.pack_value(claim_hash)
 
 
+class UndoPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.undo_claimtrie.value
+    key_struct = struct.Struct(b'>Q')
+
+    @classmethod
+    def pack_key(cls, height: int):
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> int:
+        assert key[:1] == cls.prefix
+        height, = cls.key_struct.unpack(key[1:])
+        return height
+
+    @classmethod
+    def pack_value(cls, undo_ops: bytes) -> bytes:
+        return undo_ops
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> bytes:
+        return data
+
+    @classmethod
+    def pack_item(cls, height: int, undo_ops: bytes):
+        return cls.pack_key(height), cls.pack_value(undo_ops)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -778,4 +814,28 @@ class Prefixes:
     repost = RepostPrefixRow
     reposted_claim = RepostedPrefixRow
 
-    # undo_claimtrie = b'M'
+    undo = UndoPrefixRow
+
+
+ROW_TYPES = {
+    Prefixes.claim_to_support.prefix: Prefixes.claim_to_support,
+    Prefixes.support_to_claim.prefix: Prefixes.support_to_claim,
+    Prefixes.claim_to_txo.prefix: Prefixes.claim_to_txo,
+    Prefixes.txo_to_claim.prefix: Prefixes.txo_to_claim,
+    Prefixes.claim_to_channel.prefix: Prefixes.claim_to_channel,
+    Prefixes.channel_to_claim.prefix: Prefixes.channel_to_claim,
+    Prefixes.claim_short_id.prefix: Prefixes.claim_short_id,
+    Prefixes.claim_expiration.prefix: Prefixes.claim_expiration,
+    Prefixes.claim_takeover.prefix: Prefixes.claim_takeover,
+    Prefixes.pending_activation.prefix: Prefixes.pending_activation,
+    Prefixes.activated.prefix: Prefixes.activated,
+    Prefixes.active_amount.prefix: Prefixes.active_amount,
+    Prefixes.effective_amount.prefix: Prefixes.effective_amount,
+    Prefixes.repost.prefix: Prefixes.repost,
+    Prefixes.reposted_claim.prefix: Prefixes.reposted_claim,
+    Prefixes.undo.prefix: Prefixes.undo
+}
+
+
+def auto_decode_item(key: bytes, value: bytes) -> typing.Tuple[typing.NamedTuple, typing.NamedTuple]:
+    return ROW_TYPES[key[:1]].unpack_item(key, value)
