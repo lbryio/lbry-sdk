@@ -1,5 +1,6 @@
 import struct
-from typing import Tuple, List
+from collections import OrderedDict, defaultdict
+from typing import Tuple, List, Iterable, Callable, Optional
 from lbry.wallet.server.db import DB_PREFIXES
 
 _OP_STRUCT = struct.Struct('>BHH')
@@ -58,8 +59,9 @@ class RevertableOp:
         return (self.is_put, self.key, self.value) == (other.is_put, other.key, other.value)
 
     def __repr__(self) -> str:
-        return f"{'PUT' if self.is_put else 'DELETE'} {DB_PREFIXES(self.key[:1]).name}: " \
-               f"{self.key[1:].hex()} | {self.value.hex()}"
+        from lbry.wallet.server.db.prefixes import auto_decode_item
+        k, v = auto_decode_item(self.key, self.value)
+        return f"{'PUT' if self.is_put else 'DELETE'} {DB_PREFIXES(self.key[:1]).name}: {k} | {v}"
 
 
 class RevertableDelete(RevertableOp):
@@ -74,5 +76,48 @@ class RevertablePut(RevertableOp):
         return RevertableDelete(self.key, self.value)
 
 
-def delete_prefix(db: 'plyvel.DB', prefix: bytes) -> List['RevertableDelete']:
-    return [RevertableDelete(k, v) for k, v in db.iterator(prefix=prefix)]
+class RevertableOpStack:
+    def __init__(self, get_fn: Callable[[bytes], Optional[bytes]]):
+        self._get = get_fn
+        self._items = defaultdict(list)
+
+    def append(self, op: RevertableOp):
+        inverted = op.invert()
+        if self._items[op.key] and inverted == self._items[op.key][-1]:
+            self._items[op.key].pop()
+        else:
+            if op.is_put:
+                if op in self._items[op.key]:
+                    # TODO: error
+                    print("!! dup put", op)
+                    # self._items[op.key].remove(op)
+                # assert op not in self._items[op.key], f"duplicate add for {op}"
+                stored = self._get(op.key)
+                if stored is not None:
+                    assert RevertableDelete(op.key, stored) in self._items[op.key], f"db op ties to add on top of existing key={op}"
+                self._items[op.key].append(op)
+            else:
+                if op in self._items[op.key]:
+                    # TODO: error
+                    print("!! dup delete ", op)
+                    # self._items[op.key].remove(op)
+                # assert op not in self._items[op.key], f"duplicate delete for {op}"
+                stored = self._get(op.key)
+                if stored is not None and stored != op.value:
+                    assert RevertableDelete(op.key, stored) in self._items[op.key]
+                else:
+                    assert stored is not None, f"db op tries to delete nonexistent key: {op}"
+                    assert stored == op.value, f"db op tries to delete with incorrect value: {op}"
+                self._items[op.key].append(op)
+
+    def extend(self, ops: Iterable[RevertableOp]):
+        for op in ops:
+            self.append(op)
+
+    def __len__(self):
+        return sum(map(len, self._items.values()))
+
+    def __iter__(self):
+        for key, ops in self._items.items():
+            for op in ops:
+                yield op
