@@ -87,21 +87,11 @@ class RevertableOpStack:
             self._items[op.key].pop()
         else:
             if op.is_put:
-                if op in self._items[op.key]:
-                    # TODO: error
-                    print("!! dup put", op)
-                    # self._items[op.key].remove(op)
-                # assert op not in self._items[op.key], f"duplicate add for {op}"
                 stored = self._get(op.key)
                 if stored is not None:
                     assert RevertableDelete(op.key, stored) in self._items[op.key], f"db op ties to add on top of existing key={op}"
                 self._items[op.key].append(op)
             else:
-                if op in self._items[op.key]:
-                    # TODO: error
-                    print("!! dup delete ", op)
-                    # self._items[op.key].remove(op)
-                # assert op not in self._items[op.key], f"duplicate delete for {op}"
                 stored = self._get(op.key)
                 if stored is not None and stored != op.value:
                     assert RevertableDelete(op.key, stored) in self._items[op.key]
