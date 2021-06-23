@@ -156,6 +156,7 @@ class Network:
     MINIMUM_REQUIRED = (0, 65, 0)
 
     def __init__(self, ledger):
+        self.use_go_hub = True
         self.ledger = ledger
         self.client: Optional[ClientSession] = None
         self.server_features = None
@@ -207,6 +208,7 @@ class Network:
 
     async def start(self):
         if not self.running:
+            self.use_go_hub = True
             self.running = True
             self.aiohttp_session = aiohttp.ClientSession()
             self.on_header.listen(self._update_remote_height)

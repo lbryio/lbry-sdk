@@ -1,3 +1,4 @@
+import copy
 import linecache
 import os
 import re
@@ -435,6 +436,7 @@ class Daemon(metaclass=JSONRPCServerType):
     )
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
+        self.use_go_hub = True
         self.conf = conf
         self.platform_info = system_info.get_platform()
         self._video_file_analyzer = VideoFileAnalyzer(conf)
@@ -2593,8 +2595,11 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-            host = os.environ.get("HUB_HOST", "localhost")
+        # if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
+        if self.ledger.network.use_go_hub:
+            kwargs_old = copy.copy(kwargs)
+            host = self.ledger.network.client.server[0]
+            # host = os.environ.get("HUB_HOST", "localhost")
             port = os.environ.get("HUB_PORT", "50051")
             kwargs['new_sdk_server'] = f"{host}:{port}"
             if kwargs.get("channel"):
@@ -2619,17 +2624,24 @@ class Daemon(metaclass=JSONRPCServerType):
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
-        result = {
-            "items": txos,
-            "blocked": blocked,
-            "page": page_num,
-            "page_size": page_size
-        }
-        if not kwargs.pop('no_totals', False):
-            result['total_pages'] = int((total + (page_size - 1)) / page_size)
-            result['total_items'] = total
-        return result
+        try:
+            txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+            result = {
+                "items": txos,
+                "blocked": blocked,
+                "page": page_num,
+                "page_size": page_size
+            }
+            if not kwargs.pop('no_totals', False):
+                result['total_pages'] = int((total + (page_size - 1)) / page_size)
+                result['total_items'] = total
+            return result
+        except Exception as e:
+            if self.ledger.network.use_go_hub:
+                log.warning("failed, trying again without hub")
+                self.ledger.network.use_go_hub = False
+                return await self.jsonrpc_claim_search(**kwargs_old)
+            raise e
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.
