@@ -2596,8 +2596,11 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         # if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
-        if self.ledger.network.use_go_hub:
-            kwargs_old = copy.copy(kwargs)
+        if self.ledger.config['use_go_hub']:
+            if self.ledger.config['first_search']:
+                # Only do this the first time because we might need to retry due to the go hub not being there
+                self.ledger.config['first_search'] = False
+                kwargs_old = copy.copy(kwargs)
             host = self.ledger.network.client.server[0]
             # host = os.environ.get("HUB_HOST", "localhost")
             port = os.environ.get("HUB_PORT", "50051")
@@ -2637,9 +2640,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 result['total_items'] = total
             return result
         except Exception as e:
-            if self.ledger.network.use_go_hub:
+            if self.ledger.config['use_go_hub']:
                 log.warning("failed, trying again without hub")
-                self.ledger.network.use_go_hub = False
+                self.ledger.config['use_go_hub'] = False
                 return await self.jsonrpc_claim_search(**kwargs_old)
             raise e
 
