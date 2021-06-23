@@ -2595,15 +2595,13 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        # if os.environ.get("GO_HUB") and os.environ.get("GO_HUB") == "true":
         if self.ledger.config['use_go_hub']:
             if self.ledger.config['first_search']:
                 # Only do this the first time because we might need to retry due to the go hub not being there
                 self.ledger.config['first_search'] = False
                 kwargs_old = copy.copy(kwargs)
             host = self.ledger.network.client.server[0]
-            # host = os.environ.get("HUB_HOST", "localhost")
-            port = os.environ.get("HUB_PORT", "50051")
+            port = "50051"
             kwargs['new_sdk_server'] = f"{host}:{port}"
             if kwargs.get("channel"):
                 channel = kwargs.pop("channel")
