@@ -183,9 +183,11 @@ class WalletManager:
         ledger_config = {
             'auto_connect': True,
             'explicit_servers': [],
+            'hub_timeout': config.hub_timeout,
             'default_servers': config.lbryum_servers,
             'known_hubs': config.known_hubs,
             'jurisdiction': config.jurisdiction,
+            'concurrent_hub_requests': config.concurrent_hub_requests,
             'data_path': config.wallet_dir,
             'tx_cache_size': config.transaction_cache_size
         }
@@ -236,6 +238,8 @@ class WalletManager:
             'default_servers': Config.lbryum_servers.default,
             'known_hubs': self.config.known_hubs,
             'jurisdiction': self.config.jurisdiction,
+            'hub_timeout': self.config.hub_timeout,
+            'concurrent_hub_requests': self.config.concurrent_hub_requests,
             'data_path': self.config.wallet_dir,
         }
         if Config.lbryum_servers.is_set(self.config):

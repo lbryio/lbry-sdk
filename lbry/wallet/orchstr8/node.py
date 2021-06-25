@@ -135,7 +135,9 @@ class WalletNode:
                     'explicit_servers': [(spv_node.hostname, spv_node.port)],
                     'default_servers': Config.lbryum_servers.default,
                     'data_path': self.data_path,
-                    'known_hubs': config.known_hubs if config else KnownHubsList()
+                    'known_hubs': config.known_hubs if config else KnownHubsList(),
+                    'hub_timeout': 30,
+                    'concurrent_hub_requests': 32,
                 }
             },
             'wallets': [wallet_file_name]

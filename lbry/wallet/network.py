@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
-    def __init__(self, *args, network: 'Network', server, timeout=30, **kwargs):
+    def __init__(self, *args, network: 'Network', server, timeout=30, concurrency=32, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
@@ -30,7 +30,11 @@ class ClientSession(BaseClientSession):
         self.response_time: Optional[float] = None
         self.connection_latency: Optional[float] = None
         self._response_samples = 0
-        self.pending_amount = 0
+        self._concurrency = asyncio.Semaphore(concurrency)
+
+    @property
+    def concurrency(self):
+        return self._concurrency._value
 
     @property
     def available(self):
@@ -56,9 +60,9 @@ class ClientSession(BaseClientSession):
         return result
 
     async def send_request(self, method, args=()):
-        self.pending_amount += 1
         log.debug("send %s%s to %s:%i (%i timeout)", method, tuple(args), self.server[0], self.server[1], self.timeout)
         try:
+            await self._concurrency.acquire()
             if method == 'server.version':
                 return await self.send_timed_server_version_request(args, self.timeout)
             request = asyncio.ensure_future(super().send_request(method, args))
@@ -92,7 +96,7 @@ class ClientSession(BaseClientSession):
             # self.synchronous_close()
             raise
         finally:
-            self.pending_amount -= 1
+            self._concurrency.release()
 
     async def ensure_server_version(self, required=None, timeout=3):
         required = required or self.network.PROTOCOL_VERSION
@@ -155,7 +159,6 @@ class Network:
         # self._switch_task: Optional[asyncio.Task] = None
         self.running = False
         self.remote_height: int = 0
-        self._concurrency = asyncio.Semaphore(16)
 
         self._on_connected_controller = StreamController()
         self.on_connected = self._on_connected_controller.stream
@@ -293,7 +296,8 @@ class Network:
             if (pong is not None and self.jurisdiction is not None) and \
                     (pong.country_name != self.jurisdiction):
                 continue
-            client = ClientSession(network=self, server=(host, port))
+            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'],
+                                   concurrency=self.config['concurrent_hub_requests'])
             try:
                 await client.create_connection()
                 log.warning("Connected to spv server %s:%i", host, port)
@@ -376,18 +380,17 @@ class Network:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
     async def retriable_call(self, function, *args, **kwargs):
-        async with self._concurrency:
-            while self.running:
-                if not self.is_connected:
-                    log.warning("Wallet server unavailable, waiting for it to come back and retry.")
-                    self._urgent_need_reconnect.set()
-                    await self.on_connected.first
-                try:
-                    return await function(*args, **kwargs)
-                except asyncio.TimeoutError:
-                    log.warning("Wallet server call timed out, retrying.")
-                except ConnectionError:
-                    log.warning("connection error")
+        while self.running:
+            if not self.is_connected:
+                log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                self._urgent_need_reconnect.set()
+                await self.on_connected.first
+            try:
+                return await function(*args, **kwargs)
+            except asyncio.TimeoutError:
+                log.warning("Wallet server call timed out, retrying.")
+            except ConnectionError:
+                log.warning("connection error")
 
         raise asyncio.CancelledError()  # if we got here, we are shutting down
 

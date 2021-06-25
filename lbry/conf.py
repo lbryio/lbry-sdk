@@ -628,6 +628,7 @@ class Config(CLIConfig):
     # protocol timeouts
     download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)
     blob_download_timeout = Float("Timeout to download a blob from a peer", 30.0)
+    hub_timeout = Float("Timeout when making a hub request", 30.0)
     peer_connect_timeout = Float("Timeout to establish a TCP connection to a peer", 3.0)
     node_rpc_timeout = Float("Timeout when making a DHT request", constants.RPC_TIMEOUT)
 
@@ -649,6 +650,7 @@ class Config(CLIConfig):
         "Maximum number of peers to connect to while downloading a blob", 4,
         previous_names=['max_connections_per_stream']
     )
+    concurrent_hub_requests = Integer("Maximum number of concurrent hub requests", 32)
     fixed_peer_delay = Float(
         "Amount of seconds before adding the reflector servers as potential peers to download from in case dht"
         "peers are not found or are slow", 2.0
