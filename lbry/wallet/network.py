@@ -14,12 +14,13 @@ from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
 from lbry.wallet.server.udp import SPVStatusClientProtocol, SPVPong
+from lbry.conf import KnownHubsList
 
 log = logging.getLogger(__name__)
 
 
 class ClientSession(BaseClientSession):
-    def __init__(self, *args, network: 'Network', server, timeout=30, **kwargs):
+    def __init__(self, *args, network: 'Network', server, timeout=30, concurrency=32, **kwargs):
         self.network = network
         self.server = server
         super().__init__(*args, **kwargs)
@@ -29,7 +30,11 @@ class ClientSession(BaseClientSession):
         self.response_time: Optional[float] = None
         self.connection_latency: Optional[float] = None
         self._response_samples = 0
-        self.pending_amount = 0
+        self._concurrency = asyncio.Semaphore(concurrency)
+
+    @property
+    def concurrency(self):
+        return self._concurrency._value
 
     @property
     def available(self):
@@ -55,9 +60,9 @@ class ClientSession(BaseClientSession):
         return result
 
     async def send_request(self, method, args=()):
-        self.pending_amount += 1
         log.debug("send %s%s to %s:%i (%i timeout)", method, tuple(args), self.server[0], self.server[1], self.timeout)
         try:
+            await self._concurrency.acquire()
             if method == 'server.version':
                 return await self.send_timed_server_version_request(args, self.timeout)
             request = asyncio.ensure_future(super().send_request(method, args))
@@ -91,7 +96,7 @@ class ClientSession(BaseClientSession):
             # self.synchronous_close()
             raise
         finally:
-            self.pending_amount -= 1
+            self._concurrency.release()
 
     async def ensure_server_version(self, required=None, timeout=3):
         required = required or self.network.PROTOCOL_VERSION
@@ -154,7 +159,6 @@ class Network:
         # self._switch_task: Optional[asyncio.Task] = None
         self.running = False
         self.remote_height: int = 0
-        self._concurrency = asyncio.Semaphore(16)
 
         self._on_connected_controller = StreamController()
         self.on_connected = self._on_connected_controller.stream
@@ -165,9 +169,13 @@ class Network:
         self._on_status_controller = StreamController(merge_repeated_events=True)
         self.on_status = self._on_status_controller.stream
 
+        self._on_hub_controller = StreamController(merge_repeated_events=True)
+        self.on_hub = self._on_hub_controller.stream
+
         self.subscription_controllers = {
             'blockchain.headers.subscribe': self._on_header_controller,
             'blockchain.address.subscribe': self._on_status_controller,
+            'blockchain.peers.subscribe': self._on_hub_controller,
         }
 
         self.aiohttp_session: Optional[aiohttp.ClientSession] = None
@@ -179,6 +187,16 @@ class Network:
     def config(self):
         return self.ledger.config
 
+    @property
+    def known_hubs(self):
+        if 'known_hubs' not in self.config:
+            return KnownHubsList()
+        return self.config['known_hubs']
+
+    @property
+    def jurisdiction(self):
+        return self.config.get("jurisdiction")
+
     def disconnect(self):
         if self._keepalive_task and not self._keepalive_task.done():
             self._keepalive_task.cancel()
@@ -189,6 +207,7 @@ class Network:
             self.running = True
             self.aiohttp_session = aiohttp.ClientSession()
             self.on_header.listen(self._update_remote_height)
+            self.on_hub.listen(self._update_hubs)
             self._loop_task = asyncio.create_task(self.network_loop())
             self._urgent_need_reconnect.set()
 
@@ -216,7 +235,13 @@ class Network:
                 log.exception("error looking up dns for spv server %s:%i", server, port)
 
         # accumulate the dns results
-        await asyncio.gather(*(resolve_spv(server, port) for (server, port) in self.config['default_servers']))
+        if self.config['explicit_servers']:
+            hubs = self.config['explicit_servers']
+        elif self.known_hubs:
+            hubs = self.known_hubs
+        else:
+            hubs = self.config['default_servers']
+        await asyncio.gather(*(resolve_spv(server, port) for (server, port) in hubs))
         return hostname_to_ip, ip_to_hostnames
 
     async def get_n_fastest_spvs(self, timeout=3.0) -> Dict[Tuple[str, int], Optional[SPVPong]]:
@@ -226,8 +251,9 @@ class Network:
         sent_ping_timestamps = {}
         _, ip_to_hostnames = await self.resolve_spv_dns()
         n = len(ip_to_hostnames)
-        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['default_servers']))
+        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['explicit_servers']))
         pongs = {}
+        known_hubs = self.known_hubs
         try:
             await loop.create_datagram_endpoint(lambda: connection, ('0.0.0.0', 0))
             # could raise OSError if it cant bind
@@ -242,6 +268,9 @@ class Network:
                          '/'.join(ip_to_hostnames[remote]), remote[1], round(latency * 1000, 2),
                          pong.available, pong.height)
 
+                known_hubs.hubs.setdefault((ip_to_hostnames[remote][0], remote[1]), {}).update(
+                    {"country": pong.country_name}
+                )
                 if pong.available:
                     pongs[(ip_to_hostnames[remote][0], remote[1])] = pong
             return pongs
@@ -256,14 +285,19 @@ class Network:
                 random_server = random.choice(list(ip_to_hostnames.keys()))
                 host, port = random_server
                 log.warning("trying fallback to randomly selected spv: %s:%i", host, port)
+                known_hubs.hubs.setdefault((host, port), {})
                 return {(host, port): None}
         finally:
             connection.close()
 
     async def connect_to_fastest(self) -> Optional[ClientSession]:
         fastest_spvs = await self.get_n_fastest_spvs()
-        for (host, port) in fastest_spvs:
-            client = ClientSession(network=self, server=(host, port))
+        for (host, port), pong in fastest_spvs.items():
+            if (pong is not None and self.jurisdiction is not None) and \
+                    (pong.country_name != self.jurisdiction):
+                continue
+            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'],
+                                   concurrency=self.config['concurrent_hub_requests'])
             try:
                 await client.create_connection()
                 log.warning("Connected to spv server %s:%i", host, port)
@@ -293,6 +327,8 @@ class Network:
                 log.debug("get spv server features %s:%i", *client.server)
                 features = await client.send_request('server.features', [])
                 self.client, self.server_features = client, features
+                log.debug("discover other hubs %s:%i", *client.server)
+                await self._update_hubs(await client.send_request('server.peers.subscribe', []))
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
@@ -344,23 +380,30 @@ class Network:
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
 
     async def retriable_call(self, function, *args, **kwargs):
-        async with self._concurrency:
-            while self.running:
-                if not self.is_connected:
-                    log.warning("Wallet server unavailable, waiting for it to come back and retry.")
-                    self._urgent_need_reconnect.set()
-                    await self.on_connected.first
-                try:
-                    return await function(*args, **kwargs)
-                except asyncio.TimeoutError:
-                    log.warning("Wallet server call timed out, retrying.")
-                except ConnectionError:
-                    log.warning("connection error")
+        while self.running:
+            if not self.is_connected:
+                log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                self._urgent_need_reconnect.set()
+                await self.on_connected.first
+            try:
+                return await function(*args, **kwargs)
+            except asyncio.TimeoutError:
+                log.warning("Wallet server call timed out, retrying.")
+            except ConnectionError:
+                log.warning("connection error")
 
         raise asyncio.CancelledError()  # if we got here, we are shutting down
 
     def _update_remote_height(self, header_args):
         self.remote_height = header_args[0]["height"]
+
+    async def _update_hubs(self, hubs):
+        if hubs and hubs != ['']:
+            try:
+                if self.known_hubs.add_hubs(hubs):
+                    self.known_hubs.save()
+            except Exception:
+                log.exception("could not add hubs: %s", hubs)
 
     def get_transaction(self, tx_hash, known_height=None):
         # use any server if its old, otherwise restrict to who gave us the history

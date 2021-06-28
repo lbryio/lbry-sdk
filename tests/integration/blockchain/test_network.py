@@ -9,6 +9,7 @@ from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
 from lbry.wallet.server.udp import StatusServer
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
+from lbry.conf import Config
 
 
 class NetworkTests(IntegrationTestCase):
@@ -24,7 +25,7 @@ class NetworkTests(IntegrationTestCase):
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
-            'protocol_max': '0.99.0',
+            'protocol_max': '0.199.0',
             'protocol_min': '0.54.0',
             'pruning': None,
             'description': '',
@@ -49,7 +50,7 @@ class NetworkTests(IntegrationTestCase):
             'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
-            'protocol_max': '0.99.0',
+            'protocol_max': '0.199.0',
             'protocol_min': '0.54.0',
             'pruning': None,
             'description': 'Fastest server in the west.',
@@ -68,8 +69,8 @@ class ReconnectTests(IntegrationTestCase):
         node2 = SPVNode(self.conductor.spv_module, node_number=2)
         await node2.start(self.blockchain)
 
-        self.ledger.network.config['default_servers'].append((node2.hostname, node2.port))
-        self.ledger.network.config['default_servers'].reverse()
+        self.ledger.network.config['explicit_servers'].append((node2.hostname, node2.port))
+        self.ledger.network.config['explicit_servers'].reverse()
         self.assertEqual(50002, self.ledger.network.client.server[1])
         await self.ledger.stop()
         await self.ledger.start()
@@ -137,6 +138,19 @@ class ReconnectTests(IntegrationTestCase):
         await self.conductor.spv_node.start(self.conductor.blockchain_node)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
+
+    async def test_timeout_and_concurrency_propagated_from_config(self):
+        conf = Config()
+        self.assertEqual(self.ledger.network.client.timeout, 30)
+        self.assertEqual(self.ledger.network.client.concurrency, 32)
+        conf.hub_timeout = 123.0
+        conf.concurrent_hub_requests = 42
+        conf.known_hubs = self.ledger.config['known_hubs']
+        conf.wallet_dir = self.ledger.config['data_path']
+        self.manager.config = conf
+        await self.manager.reset()
+        self.assertEqual(self.ledger.network.client.timeout, 123)
+        self.assertEqual(self.ledger.network.client.concurrency, 42)
 
     # async def test_online_but_still_unavailable(self):
     #     # Edge case. See issue #2445 for context

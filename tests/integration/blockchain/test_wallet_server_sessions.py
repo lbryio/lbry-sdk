@@ -113,3 +113,79 @@ class TestESSync(CommandTestCase):
         self.assertTrue(await make_es_index(db.search_index))
         await db.search_index.start()
         await resync()
+
+
+class TestHubDiscovery(CommandTestCase):
+
+    async def test_hub_discovery(self):
+        us_final_node = SPVNode(self.conductor.spv_module, node_number=2)
+        await us_final_node.start(self.blockchain, extraconf={"COUNTRY": "US"})
+        self.addCleanup(us_final_node.stop)
+        final_node_host = f"{us_final_node.hostname}:{us_final_node.port}"
+
+        kp_final_node = SPVNode(self.conductor.spv_module, node_number=3)
+        await kp_final_node.start(self.blockchain, extraconf={"COUNTRY": "KP"})
+        self.addCleanup(kp_final_node.stop)
+        kp_final_node_host = f"{kp_final_node.hostname}:{kp_final_node.port}"
+
+        relay_node = SPVNode(self.conductor.spv_module, node_number=4)
+        await relay_node.start(self.blockchain, extraconf={
+            "COUNTRY": "FR",
+            "PEER_HUBS": ",".join([kp_final_node_host, final_node_host])
+        })
+        relay_node_host = f"{relay_node.hostname}:{relay_node.port}"
+        self.addCleanup(relay_node.stop)
+
+        self.assertEqual(list(self.daemon.conf.known_hubs), [])
+        self.assertEqual(
+            self.daemon.ledger.network.client.server_address_and_port,
+            ('127.0.0.1', 50002)
+        )
+
+        # connect to relay hub which will tell us about the final hubs
+        self.daemon.jsonrpc_settings_set('lbryum_servers', [relay_node_host])
+        await self.daemon.jsonrpc_wallet_reconnect()
+        self.assertEqual(
+            self.daemon.conf.known_hubs.filter(), {
+                (relay_node.hostname, relay_node.port): {"country": "FR"},
+                (us_final_node.hostname, us_final_node.port): {},  # discovered from relay but not contacted yet
+                (kp_final_node.hostname, kp_final_node.port): {},  # discovered from relay but not contacted yet
+            }
+        )
+        self.assertEqual(
+            self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', relay_node.port)
+        )
+
+        # use known_hubs to connect to final US hub
+        self.daemon.jsonrpc_settings_clear('lbryum_servers')
+        self.daemon.conf.jurisdiction = "US"
+        await self.daemon.jsonrpc_wallet_reconnect()
+        self.assertEqual(
+            self.daemon.conf.known_hubs.filter(), {
+                (relay_node.hostname, relay_node.port): {"country": "FR"},
+                (us_final_node.hostname, us_final_node.port): {"country": "US"},
+                (kp_final_node.hostname, kp_final_node.port): {"country": "KP"},
+            }
+        )
+        self.assertEqual(
+            self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', us_final_node.port)
+        )
+
+        # connection to KP jurisdiction
+        self.daemon.conf.jurisdiction = "KP"
+        await self.daemon.jsonrpc_wallet_reconnect()
+        self.assertEqual(
+            self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', kp_final_node.port)
+        )
+
+        kp_final_node.server.session_mgr._notify_peer('127.0.0.1:9988')
+        await self.daemon.ledger.network.on_hub.first
+        await asyncio.sleep(0.5)  # wait for above event to be processed by other listeners
+        self.assertEqual(
+            self.daemon.conf.known_hubs.filter(), {
+                (relay_node.hostname, relay_node.port): {"country": "FR"},
+                (us_final_node.hostname, us_final_node.port): {"country": "US"},
+                (kp_final_node.hostname, kp_final_node.port): {"country": "KP"},
+                ('127.0.0.1', 9988): {}
+            }
+        )

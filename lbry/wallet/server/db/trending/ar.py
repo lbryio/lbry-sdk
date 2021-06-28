@@ -231,7 +231,7 @@ def run(db, height, final_height, recalculate_claim_hashes):
                               FROM claim
                               WHERE claim_hash IN
                             ({','.join('?' for _ in recalculate_claim_hashes)});
-                              """, recalculate_claim_hashes):
+                              """, list(recalculate_claim_hashes)):
             trending_data.update_claim(row[0], 1E-8*row[1], time_boost)
 
     trending_log("done.\n")

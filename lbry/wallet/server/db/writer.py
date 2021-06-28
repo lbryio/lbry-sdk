@@ -1,6 +1,6 @@
 import os
 
-import apsw
+import sqlite3
 from typing import Union, Tuple, Set, List
 from itertools import chain
 from decimal import Decimal
@@ -21,6 +21,7 @@ from .common import CLAIM_TYPES, STREAM_TYPES, COMMON_TAGS, INDEXED_LANGUAGES
 from lbry.wallet.server.db.elasticsearch import SearchIndex
 
 ATTRIBUTE_ARRAY_MAX_LENGTH = 100
+sqlite3.enable_callback_tracebacks(True)
 
 
 class SQLDB:
@@ -233,21 +234,14 @@ class SQLDB:
         self.pending_deletes = set()
 
     def open(self):
-        self.db = apsw.Connection(
-            self._db_path,
-            flags=(
-                apsw.SQLITE_OPEN_READWRITE |
-                apsw.SQLITE_OPEN_CREATE |
-                apsw.SQLITE_OPEN_URI
-            )
-        )
-        def exec_factory(cursor, statement, bindings):
-            tpl = namedtuple('row', (d[0] for d in cursor.getdescription()))
-            cursor.setrowtrace(lambda cursor, row: tpl(*row))
-            return True
-        self.db.setexectrace(exec_factory)
-        self.execute(self.PRAGMAS)
-        self.execute(self.CREATE_TABLES_QUERY)
+        self.db = sqlite3.connect(self._db_path, isolation_level=None, check_same_thread=False, uri=True)
+
+        def namedtuple_factory(cursor, row):
+            Row = namedtuple('Row', (d[0] for d in cursor.description))
+            return Row(*row)
+        self.db.row_factory = namedtuple_factory
+        self.db.executescript(self.PRAGMAS)
+        self.db.executescript(self.CREATE_TABLES_QUERY)
         register_canonical_functions(self.db)
         self.blocked_streams = {}
         self.blocked_channels = {}
@@ -319,10 +313,10 @@ class SQLDB:
         return f"DELETE FROM {table} WHERE {where}", values
 
     def execute(self, *args):
-        return self.db.cursor().execute(*args)
+        return self.db.execute(*args)
 
     def executemany(self, *args):
-        return self.db.cursor().executemany(*args)
+        return self.db.executemany(*args)
 
     def begin(self):
         self.execute('begin;')
@@ -620,7 +614,7 @@ class SQLDB:
                 channel_hash IN ({','.join('?' for _ in changed_channel_keys)}) AND
                 signature IS NOT NULL
             """
-            for affected_claim in self.execute(sql, changed_channel_keys.keys()):
+            for affected_claim in self.execute(sql, list(changed_channel_keys.keys())):
                 if affected_claim.claim_hash not in signables:
                     claim_updates.append({
                         'claim_hash': affected_claim.claim_hash,
@@ -677,7 +671,7 @@ class SQLDB:
                     signature_valid=CASE WHEN signature IS NOT NULL THEN 0 END,
                     channel_join=NULL, canonical_url=NULL
                 WHERE channel_hash IN ({','.join('?' for _ in spent_claims)})
-                """, spent_claims
+                """, list(spent_claims)
             )
         sub_timer.stop()
 
@@ -802,12 +796,13 @@ class SQLDB:
 
     def update_claimtrie(self, height, changed_claim_hashes, deleted_names, timer):
         r = timer.run
+        binary_claim_hashes = list(changed_claim_hashes)
 
         r(self._calculate_activation_height, height)
-        r(self._update_support_amount, changed_claim_hashes)
+        r(self._update_support_amount, binary_claim_hashes)
 
-        r(self._update_effective_amount, height, changed_claim_hashes)
-        r(self._perform_overtake, height, changed_claim_hashes, list(deleted_names))
+        r(self._update_effective_amount, height, binary_claim_hashes)
+        r(self._perform_overtake, height, binary_claim_hashes, list(deleted_names))
 
         r(self._update_effective_amount, height)
         r(self._perform_overtake, height, [], [])

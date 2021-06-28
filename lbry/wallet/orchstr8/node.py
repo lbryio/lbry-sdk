@@ -17,6 +17,7 @@ import lbry
 from lbry.wallet.server.server import Server
 from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
+from lbry.conf import KnownHubsList, Config
 
 
 log = logging.getLogger(__name__)
@@ -107,7 +108,8 @@ class Conductor:
 class WalletNode:
 
     def __init__(self, manager_class: Type[WalletManager], ledger_class: Type[Ledger],
-                 verbose: bool = False, port: int = 5280, default_seed: str = None) -> None:
+                 verbose: bool = False, port: int = 5280, default_seed: str = None,
+                 data_path: str = None) -> None:
         self.manager_class = manager_class
         self.ledger_class = ledger_class
         self.verbose = verbose
@@ -115,12 +117,12 @@ class WalletNode:
         self.ledger: Optional[Ledger] = None
         self.wallet: Optional[Wallet] = None
         self.account: Optional[Account] = None
-        self.data_path: Optional[str] = None
+        self.data_path: str = data_path or tempfile.mkdtemp()
         self.port = port
         self.default_seed = default_seed
+        self.known_hubs = KnownHubsList()
 
-    async def start(self, spv_node: 'SPVNode', seed=None, connect=True):
-        self.data_path = tempfile.mkdtemp()
+    async def start(self, spv_node: 'SPVNode', seed=None, connect=True, config=None):
         wallets_dir = os.path.join(self.data_path, 'wallets')
         os.mkdir(wallets_dir)
         wallet_file_name = os.path.join(wallets_dir, 'my_wallet.json')
@@ -130,12 +132,17 @@ class WalletNode:
             'ledgers': {
                 self.ledger_class.get_id(): {
                     'api_port': self.port,
-                    'default_servers': [(spv_node.hostname, spv_node.port)],
-                    'data_path': self.data_path
+                    'explicit_servers': [(spv_node.hostname, spv_node.port)],
+                    'default_servers': Config.lbryum_servers.default,
+                    'data_path': self.data_path,
+                    'known_hubs': config.known_hubs if config else KnownHubsList(),
+                    'hub_timeout': 30,
+                    'concurrent_hub_requests': 32,
                 }
             },
             'wallets': [wallet_file_name]
         })
+        self.manager.config = config
         self.ledger = self.manager.ledgers[self.ledger_class]
         self.wallet = self.manager.default_wallet
         if not self.wallet:
@@ -172,6 +179,7 @@ class SPVNode:
         self.udp_port = self.port
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
+        self.stopped = False
 
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
@@ -201,10 +209,13 @@ class SPVNode:
         await self.server.start()
 
     async def stop(self, cleanup=True):
+        if self.stopped:
+            return
         try:
             await self.server.db.search_index.delete_index()
             await self.server.db.search_index.stop()
             await self.server.stop()
+            self.stopped = True
         finally:
             cleanup and self.cleanup()
 

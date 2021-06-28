@@ -47,6 +47,26 @@ class ConfigurationTests(unittest.TestCase):
         c.persisted = {}
         self.assertEqual(c.test_str, 'the default')
 
+    def test_is_set(self):
+        c = TestConfig()
+        self.assertEqual(c.test_str, 'the default')
+        self.assertFalse(TestConfig.test_str.is_set(c))
+        c.test_str = 'new value'
+        self.assertEqual(c.test_str, 'new value')
+        self.assertTrue(TestConfig.test_str.is_set(c))
+
+    def test_is_set_to_default(self):
+        c = TestConfig()
+        self.assertEqual(TestConfig.test_str.default, 'the default')
+        self.assertFalse(TestConfig.test_str.is_set(c))
+        self.assertFalse(TestConfig.test_str.is_set_to_default(c))
+        c.test_str = 'new value'
+        self.assertTrue(TestConfig.test_str.is_set(c))
+        self.assertFalse(TestConfig.test_str.is_set_to_default(c))
+        c.test_str = 'the default'
+        self.assertTrue(TestConfig.test_str.is_set(c))
+        self.assertTrue(TestConfig.test_str.is_set_to_default(c))
+
     def test_arguments(self):
         parser = argparse.ArgumentParser()
         TestConfig.contribute_to_argparse(parser)
@@ -255,3 +275,38 @@ class ConfigurationTests(unittest.TestCase):
         args = parser.parse_args(['--string-choice', 'c'])
         c = TestConfig.create_from_arguments(args)
         self.assertEqual("c", c.string_choice)
+
+    def test_known_hubs_list(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            hubs = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir).known_hubs
+
+            self.assertEqual(hubs.serialized, {})
+            self.assertEqual(list(hubs), [])
+            self.assertFalse(hubs)
+            hubs.set('new.hub.io:99', {'jurisdiction': 'us'})
+            self.assertTrue(hubs)
+
+            self.assertFalse(hubs.exists)
+            hubs.save()
+            self.assertTrue(hubs.exists)
+
+            hubs = Config(config=os.path.join(temp_dir, 'settings.yml'), wallet_dir=temp_dir).known_hubs
+            self.assertEqual(list(hubs), [('new.hub.io', 99)])
+            self.assertEqual(hubs.serialized, {'new.hub.io:99': {'jurisdiction': 'us'}})
+
+            hubs.set('any.hub.io:99', {})
+            hubs.set('oth.hub.io:99', {'jurisdiction': 'other'})
+            self.assertEqual(list(hubs), [('new.hub.io', 99), ('any.hub.io', 99), ('oth.hub.io', 99)])
+            self.assertEqual(hubs.filter(), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'},
+                ('oth.hub.io', 99): {'jurisdiction': 'other'},
+                ('any.hub.io', 99): {}
+            })
+            self.assertEqual(hubs.filter(foo="bar"), {})
+            self.assertEqual(hubs.filter(jurisdiction="us"), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'}
+            })
+            self.assertEqual(hubs.filter(jurisdiction="us", match_none=True), {
+                ('new.hub.io', 99): {'jurisdiction': 'us'},
+                ('any.hub.io', 99): {}
+            })

@@ -350,7 +350,11 @@ class CommandTestCase(IntegrationTestCase):
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
-        self.server_config = Config()
+        self.server_config = Config(
+            data_dir=server_tmp_dir,
+            wallet_dir=server_tmp_dir,
+            download_dir=server_tmp_dir
+        )
         self.server_config.transaction_cache_size = 10000
         self.server_storage = SQLiteStorage(self.server_config, ':memory:')
         await self.server_storage.open()
@@ -374,6 +378,7 @@ class CommandTestCase(IntegrationTestCase):
             await daemon.stop()
 
     async def add_daemon(self, wallet_node=None, seed=None):
+        start_wallet_node = False
         if wallet_node is None:
             wallet_node = WalletNode(
                 self.wallet_node.manager_class,
@@ -381,22 +386,23 @@ class CommandTestCase(IntegrationTestCase):
                 port=self.extra_wallet_node_port
             )
             self.extra_wallet_node_port += 1
-            await wallet_node.start(self.conductor.spv_node, seed=seed)
-            self.extra_wallet_nodes.append(wallet_node)
+            start_wallet_node = True
 
         upload_dir = os.path.join(wallet_node.data_path, 'uploads')
         os.mkdir(upload_dir)
 
-        conf = Config()
-        conf.data_dir = wallet_node.data_path
-        conf.wallet_dir = wallet_node.data_path
-        conf.download_dir = wallet_node.data_path
+        conf = Config(
+            # needed during instantiation to access known_hubs path
+            data_dir=wallet_node.data_path,
+            wallet_dir=wallet_node.data_path,
+            download_dir=wallet_node.data_path
+        )
         conf.upload_dir = upload_dir  # not a real conf setting
         conf.share_usage_data = False
         conf.use_upnp = False
         conf.reflect_streams = True
         conf.blockchain_name = 'lbrycrd_regtest'
-        conf.lbryum_servers = [('127.0.0.1', 50001)]
+        conf.lbryum_servers = [(self.conductor.spv_node.hostname, self.conductor.spv_node.port)]
         conf.reflector_servers = [('127.0.0.1', 5566)]
         conf.fixed_peers = [('127.0.0.1', 5567)]
         conf.known_dht_nodes = []
@@ -408,7 +414,13 @@ class CommandTestCase(IntegrationTestCase):
         ]
         if self.skip_libtorrent:
             conf.components_to_skip.append(LIBTORRENT_COMPONENT)
-        wallet_node.manager.config = conf
+
+        if start_wallet_node:
+            await wallet_node.start(self.conductor.spv_node, seed=seed, config=conf)
+            self.extra_wallet_nodes.append(wallet_node)
+        else:
+            wallet_node.manager.config = conf
+            wallet_node.manager.ledger.config['known_hubs'] = conf.known_hubs
 
         def wallet_maker(component_manager):
             wallet_component = WalletComponent(component_manager)
