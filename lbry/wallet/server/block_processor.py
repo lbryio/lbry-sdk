@@ -918,13 +918,6 @@ class BlockProcessor:
                 self.pending_activated[activated.name][activated.claim_hash].append((activated_txo, amount))
                 # print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
                 #       f"{activated.claim_hash.hex()} @ {activated_txo.height}")
-                if reactivate:
-                    ops.extend(
-                        StagedActivation(
-                            txo_type, activated.claim_hash, activated_txo.tx_num, activated_txo.position,
-                            activated_txo.height, activated.name, amount
-                        ).get_activate_ops()
-                    )
 
         # go through claims where the controlling claim or supports to the controlling claim have been abandoned
         # check if takeovers are needed or if the name node is now empty
