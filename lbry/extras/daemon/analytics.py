@@ -40,7 +40,7 @@ def _event_properties(analytics_id: str, event_properties: typing.Optional[typin
     return properties
 
 
-def _download_properties(conf: Config, external_ip: str, resolve_duration: float,
+def _download_properties(conf: Config, resolve_duration: float,
                          total_duration: typing.Optional[float], download_id: str, name: str,
                          outpoint: str, active_peer_count: typing.Optional[int],
                          tried_peers_count: typing.Optional[int], connection_failures_count: typing.Optional[int],
@@ -52,7 +52,6 @@ def _download_properties(conf: Config, external_ip: str, resolve_duration: float
                          error: typing.Optional[str] = None, error_msg: typing.Optional[str] = None,
                          wallet_server: typing.Optional[str] = None) -> typing.Dict:
     return {
-        "external_ip": external_ip,
         "download_id": download_id,
         "total_duration": round(total_duration, 4),
         "resolve_duration": None if not resolve_duration else round(resolve_duration, 4),
@@ -112,7 +111,6 @@ class AnalyticsManager:
         self.context = _make_context(system_info.get_platform())
         self.analytics_id = utils.generate_id().hex()
         self.task: typing.Optional[asyncio.Task] = None
-        self.external_ip: typing.Optional[str] = None
 
     @property
     def enabled(self):
@@ -129,7 +127,6 @@ class AnalyticsManager:
     async def run(self):
         while True:
             if self.enabled:
-                self.external_ip, _ = await utils.get_external_ip(self.conf.lbryum_servers)
                 await self._send_heartbeat()
             await asyncio.sleep(1800)
 
@@ -191,7 +188,7 @@ class AnalyticsManager:
                                        error_msg: typing.Optional[str] = None,
                                        wallet_server: typing.Optional[str] = None):
         await self.track(self._event(TIME_TO_FIRST_BYTES, _download_properties(
-            self.conf, self.external_ip, resolve_duration, total_duration, download_id, name, outpoint,
+            self.conf, resolve_duration, total_duration, download_id, name, outpoint,
             found_peers_count, tried_peers_count, connection_failures_count, added_fixed_peers, fixed_peers_delay,
             sd_hash, sd_download_duration, head_blob_hash, head_blob_length, head_blob_duration, error, error_msg,
             wallet_server
