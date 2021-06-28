@@ -9,7 +9,6 @@ from decimal import Decimal
 from lbry.file.file_manager import FileManager
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from lbry.testcase import get_fake_exchange_rate_manager
-from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
 from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
 from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output, Database
@@ -140,11 +139,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, self.client_wallet_dir,
                                                            balance, fee)
-        analytics_manager = AnalyticsManager(
-            self.client_config,
-            binascii.hexlify(generate_id()).decode(),
-            binascii.hexlify(generate_id()).decode()
-        )
+        analytics_manager = AnalyticsManager(self.client_config)
         self.stream_manager = StreamManager(
             self.loop, self.client_config, self.client_blob_manager, self.mock_wallet,
             self.client_storage, get_mock_node(self.server_from_client),

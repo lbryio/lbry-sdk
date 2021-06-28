@@ -32,11 +32,9 @@ TIME_TO_FIRST_BYTES = "Time To First Bytes"
 log = logging.getLogger(__name__)
 
 
-def _event_properties(installation_id: str, session_id: str,
-                      event_properties: typing.Optional[typing.Dict]) -> typing.Dict:
+def _event_properties(analytics_id: str, event_properties: typing.Optional[typing.Dict]) -> typing.Dict:
     properties = {
-        'lbry_id': installation_id,
-        'session_id': session_id,
+        'analytics_id': analytics_id
     }
     properties.update(event_properties or {})
     return properties
@@ -105,15 +103,14 @@ def _make_context(platform):
 
 
 class AnalyticsManager:
-    def __init__(self, conf: Config, installation_id: str, session_id: str):
+    def __init__(self, conf: Config):
         self.conf = conf
         self.cookies = {}
         self.url = ANALYTICS_ENDPOINT
         self._write_key = utils.deobfuscate(ANALYTICS_TOKEN)
         self._tracked_data = collections.defaultdict(list)
         self.context = _make_context(system_info.get_platform())
-        self.installation_id = installation_id
-        self.session_id = session_id
+        self.analytics_id = utils.generate_id().hex()
         self.task: typing.Optional[asyncio.Task] = None
         self.external_ip: typing.Optional[str] = None
 
@@ -227,7 +224,7 @@ class AnalyticsManager:
         return {
             'userId': 'lbry',
             'event': event,
-            'properties': _event_properties(self.installation_id, self.session_id, properties),
+            'properties': _event_properties(self.analytics_id, properties),
             'context': self.context,
             'timestamp': utils.isonow()
         }
