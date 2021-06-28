@@ -1,5 +1,6 @@
 import typing
 import struct
+from typing import Union, Tuple, NamedTuple
 from lbry.wallet.server.db import DB_PREFIXES
 
 
@@ -837,5 +838,8 @@ ROW_TYPES = {
 }
 
 
-def auto_decode_item(key: bytes, value: bytes) -> typing.Tuple[typing.NamedTuple, typing.NamedTuple]:
-    return ROW_TYPES[key[:1]].unpack_item(key, value)
+def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:
+    try:
+        return ROW_TYPES[key[:1]].unpack_item(key, value)
+    except KeyError:
+        return key, value
