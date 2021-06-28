@@ -104,6 +104,9 @@ class RevertableOpStack:
         for op in ops:
             self.append(op)
 
+    def clear(self):
+        self._items.clear()
+
     def __len__(self):
         return sum(map(len, self._items.values()))
 
