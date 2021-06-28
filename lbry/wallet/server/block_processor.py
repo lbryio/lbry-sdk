@@ -1130,7 +1130,9 @@ class BlockProcessor:
         self.touched_claims_to_send_es.update(
             set(self.staged_activated_support.keys()).union(
                 set(claim_hash for (_, claim_hash) in self.staged_activated_claim.keys())
-            ).union(self.signatures_changed).difference(self.removed_claims_to_send_es)
+            ).union(self.signatures_changed).union(
+                set(self.removed_active_support.keys())
+            ).difference(self.removed_claims_to_send_es)
         )
 
         # use the cumulative changes to update bid ordered resolve
