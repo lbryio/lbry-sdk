@@ -300,9 +300,8 @@ class LevelDB:
         return
 
     def _resolve_claim_in_channel(self, channel_hash: bytes, normalized_name: str):
-        prefix = DB_PREFIXES.channel_to_claim.value + channel_hash + length_encoded_name(normalized_name)
         candidates = []
-        for k, v in self.db.iterator(prefix=prefix):
+        for k, v in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash, normalized_name)):
             key = Prefixes.channel_to_claim.unpack_key(k)
             stream = Prefixes.channel_to_claim.unpack_value(v)
             effective_amount = self.get_effective_amount(stream.claim_hash)
@@ -394,6 +393,15 @@ class LevelDB:
         if support_only:
             return support_only
         return support_amount + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
+
+    def get_url_effective_amount(self, name: str, tx_num: int, position: int, claim_hash: bytes):
+        for _k, _v in self.db.iterator(prefix=Prefixes.effective_amount.pack_partial_key(name)):
+            v = Prefixes.effective_amount.unpack_value(_v)
+            if v.claim_hash == claim_hash:
+                k = Prefixes.effective_amount.unpack_key(_k)
+                if k.tx_num == tx_num and k.position == position:
+                    return k.effective_amount
+                return
 
     def get_claims_for_name(self, name):
         claims = []
