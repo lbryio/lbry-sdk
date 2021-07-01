@@ -1,4 +1,5 @@
 import struct
+from string import printable
 from collections import OrderedDict, defaultdict
 from typing import Tuple, List, Iterable, Callable, Optional
 from lbry.wallet.server.db import DB_PREFIXES
@@ -59,9 +60,14 @@ class RevertableOp:
         return (self.is_put, self.key, self.value) == (other.is_put, other.key, other.value)
 
     def __repr__(self) -> str:
+        return str(self)
+
+    def __str__(self) -> str:
         from lbry.wallet.server.db.prefixes import auto_decode_item
         k, v = auto_decode_item(self.key, self.value)
-        return f"{'PUT' if self.is_put else 'DELETE'} {DB_PREFIXES(self.key[:1]).name}: {k} | {v}"
+        key = ''.join(c if c in printable else '.' for c in str(k))
+        val = ''.join(c if c in printable else '.' for c in str(v))
+        return f"{'PUT' if self.is_put else 'DELETE'} {DB_PREFIXES(self.key[:1]).name}: {key} | {val}"
 
 
 class RevertableDelete(RevertableOp):
