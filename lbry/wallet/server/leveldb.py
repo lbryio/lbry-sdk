@@ -394,14 +394,11 @@ class LevelDB:
             return support_only
         return support_amount + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
 
-    def get_url_effective_amount(self, name: str, tx_num: int, position: int, claim_hash: bytes):
+    def get_url_effective_amount(self, name: str, claim_hash: bytes):
         for _k, _v in self.db.iterator(prefix=Prefixes.effective_amount.pack_partial_key(name)):
             v = Prefixes.effective_amount.unpack_value(_v)
             if v.claim_hash == claim_hash:
-                k = Prefixes.effective_amount.unpack_key(_k)
-                if k.tx_num == tx_num and k.position == position:
-                    return k.effective_amount
-                return
+                return Prefixes.effective_amount.unpack_key(_k)
 
     def get_claims_for_name(self, name):
         claims = []
@@ -654,7 +651,6 @@ class LevelDB:
             k = Prefixes.pending_activation.unpack_key(_k)
             v = Prefixes.pending_activation.unpack_value(_v)
             activated[v].append(k)
-
         return activated
 
     async def _read_tx_counts(self):
@@ -992,7 +988,7 @@ class LevelDB:
                     batch_delete(op.key)
 
             flush_data.undo.clear()
-            flush_data.claimtrie_stash.clear()
+            flush_data.db_op_stack.clear()
 
             while self.fs_height > flush_data.height:
                 self.fs_height -= 1
