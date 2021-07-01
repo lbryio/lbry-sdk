@@ -91,16 +91,19 @@ class RevertableOpStack:
         inverted = op.invert()
         if self._items[op.key] and inverted == self._items[op.key][-1]:
             self._items[op.key].pop()
+        elif self._items[op.key] and self._items[op.key][-1] == op:  # duplicate of last op
+            pass  # raise an error?
         else:
             if op.is_put:
                 stored = self._get(op.key)
                 if stored is not None:
-                    assert RevertableDelete(op.key, stored) in self._items[op.key], f"db op ties to add on top of existing key={op}"
+                    assert RevertableDelete(op.key, stored) in self._items[op.key], \
+                        f"db op tries to add on top of existing key: {op}"
                 self._items[op.key].append(op)
             else:
                 stored = self._get(op.key)
                 if stored is not None and stored != op.value:
-                    assert RevertableDelete(op.key, stored) in self._items[op.key]
+                    assert RevertableDelete(op.key, stored) in self._items[op.key], f"delete {op}"
                 else:
                     assert stored is not None, f"db op tries to delete nonexistent key: {op}"
                     assert stored == op.value, f"db op tries to delete with incorrect value: {op}"

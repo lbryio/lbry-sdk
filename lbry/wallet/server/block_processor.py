@@ -530,7 +530,7 @@ class BlockProcessor:
             # print(f"\tupdate {claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.pending_claims:
                 previous_claim = self.pending_claims.pop((prev_tx_num, prev_idx))
-                root_tx_num, root_idx = previous_claim.root_claim_tx_num, previous_claim.root_claim_tx_position
+                root_tx_num, root_idx = previous_claim.root_tx_num, previous_claim.root_position
             else:
                 v = self.db.get_claim_txo(
                     claim_hash
@@ -638,7 +638,7 @@ class BlockProcessor:
         if (tx_num, nout) in self.pending_claims:
             pending = self.pending_claims.pop((tx_num, nout))
             self.staged_pending_abandoned[pending.claim_hash] = pending
-            claim_root_tx_num, claim_root_idx = pending.root_claim_tx_num, pending.root_claim_tx_position
+            claim_root_tx_num, claim_root_idx = pending.root_tx_num, pending.root_position
             prev_amount, prev_signing_hash = pending.amount, pending.signing_hash
             reposted_claim_hash = pending.reposted_claim_hash
             expiration = self.coin.get_expiration_height(self.height)
@@ -672,8 +672,8 @@ class BlockProcessor:
                 if claim_hash in self.staged_pending_abandoned:
                     continue
                 self.signatures_changed.add(claim_hash)
-                if claim_hash in self.pending_claims:
-                    claim = self.pending_claims[claim_hash]
+                if claim_hash in self.pending_claim_txos:
+                    claim = self.pending_claims[self.pending_claim_txos[claim_hash]]
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
                 assert claim is not None
@@ -1131,32 +1131,35 @@ class BlockProcessor:
         # use the cumulative changes to update bid ordered resolve
         for removed in self.removed_claims_to_send_es:
             removed_claim = self.db.get_claim_txo(removed)
-            if not removed_claim:
-                continue
-            amt = self._cached_get_effective_amount(removed)
-            if amt <= 0:
-                continue
-            ops.extend(get_remove_effective_amount_ops(
-                removed_claim.name, amt, removed_claim.tx_num,
-                removed_claim.position, removed
-            ))
+            if removed_claim:
+                amt = self.db.get_url_effective_amount(
+                    removed_claim.name, removed_claim.tx_num, removed_claim.position, removed
+                )
+                if amt and amt > 0:
+                    self.claimtrie_stash.extend(get_remove_effective_amount_ops(
+                        removed_claim.name, amt, removed_claim.tx_num,
+                        removed_claim.position, removed
+                    ))
         for touched in self.touched_claims_to_send_es:
             if touched in self.pending_claim_txos:
                 pending = self.pending_claims[self.pending_claim_txos[touched]]
                 name, tx_num, position = pending.name, pending.tx_num, pending.position
                 claim_from_db = self.db.get_claim_txo(touched)
                 if claim_from_db:
-                    amount = self._cached_get_effective_amount(touched)
-                    if amount > 0:
-                        prev_tx_num, prev_position = claim_from_db.tx_num, claim_from_db.position
+                    amount = self.db.get_url_effective_amount(
+                        name, claim_from_db.tx_num, claim_from_db.position, touched
+                    )
+                    if amount and amount > 0:
                         self.claimtrie_stash.extend(get_remove_effective_amount_ops(
-                            name, amount, prev_tx_num, prev_position, touched
+                            name, amount, claim_from_db.tx_num, claim_from_db.position, touched
                         ))
             else:
                 v = self.db.get_claim_txo(touched)
+                if not v:
+                    continue
                 name, tx_num, position = v.name, v.tx_num, v.position
-                amt = self._cached_get_effective_amount(touched)
-                if amt > 0:
+                amt = self.db.get_url_effective_amount(name, tx_num, position, touched)
+                if amt and amt > 0:
                     self.claimtrie_stash.extend(get_remove_effective_amount_ops(
                         name, amt, tx_num, position, touched
                     ))

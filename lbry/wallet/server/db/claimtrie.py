@@ -133,15 +133,15 @@ class StagedClaimtrieItem(typing.NamedTuple):
     expiration_height: int
     tx_num: int
     position: int
-    root_claim_tx_num: int
-    root_claim_tx_position: int
+    root_tx_num: int
+    root_position: int
     channel_signature_is_valid: bool
     signing_hash: Optional[bytes]
     reposted_claim_hash: Optional[bytes]
 
     @property
     def is_update(self) -> bool:
-        return (self.tx_num, self.position) != (self.root_claim_tx_num, self.root_claim_tx_position)
+        return (self.tx_num, self.position) != (self.root_tx_num, self.root_position)
 
     def _get_add_remove_claim_utxo_ops(self, add=True):
         """
@@ -155,7 +155,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
             # claim tip by claim hash
             op(
                 *Prefixes.claim_to_txo.pack_item(
-                    self.claim_hash, self.tx_num, self.position, self.root_claim_tx_num, self.root_claim_tx_position,
+                    self.claim_hash, self.tx_num, self.position, self.root_tx_num, self.root_position,
                     self.amount, self.channel_signature_is_valid, self.name
                 )
             ),
@@ -173,7 +173,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
             # short url resolution
             op(
                 *Prefixes.claim_short_id.pack_item(
-                    self.name, self.claim_hash, self.root_claim_tx_num, self.root_claim_tx_position, self.tx_num,
+                    self.name, self.claim_hash, self.root_tx_num, self.root_position, self.tx_num,
                     self.position
                 )
             )
