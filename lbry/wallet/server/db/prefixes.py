@@ -48,6 +48,9 @@ class PrefixRow:
 class ClaimToTXOKey(typing.NamedTuple):
     claim_hash: bytes
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
+
 
 class ClaimToTXOValue(typing.NamedTuple):
     tx_num: int
@@ -69,12 +72,19 @@ class TXOToClaimValue(typing.NamedTuple):
     claim_hash: bytes
     name: str
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
+
 
 class ClaimShortIDKey(typing.NamedTuple):
     name: str
     claim_hash: bytes
     root_tx_num: int
     root_position: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(name={self.name}, claim_hash={self.claim_hash.hex()}, " \
+               f"root_tx_num={self.root_tx_num}, root_position={self.root_position})"
 
 
 class ClaimShortIDValue(typing.NamedTuple):
@@ -87,9 +97,16 @@ class ClaimToChannelKey(typing.NamedTuple):
     tx_num: int
     position: int
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, " \
+               f"tx_num={self.tx_num}, position={self.position})"
+
 
 class ClaimToChannelValue(typing.NamedTuple):
     signing_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(signing_hash={self.signing_hash.hex()})"
 
 
 class ChannelToClaimKey(typing.NamedTuple):
@@ -98,15 +115,26 @@ class ChannelToClaimKey(typing.NamedTuple):
     tx_num: int
     position: int
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(signing_hash={self.signing_hash.hex()}, name={self.name}, " \
+               f"tx_num={self.tx_num}, position={self.position})"
+
 
 class ChannelToClaimValue(typing.NamedTuple):
     claim_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
 
 
 class ClaimToSupportKey(typing.NamedTuple):
     claim_hash: bytes
     tx_num: int
     position: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, tx_num={self.tx_num}, " \
+               f"position={self.position})"
 
 
 class ClaimToSupportValue(typing.NamedTuple):
@@ -121,6 +149,9 @@ class SupportToClaimKey(typing.NamedTuple):
 class SupportToClaimValue(typing.NamedTuple):
     claim_hash: bytes
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
+
 
 class ClaimExpirationKey(typing.NamedTuple):
     expiration: int
@@ -132,6 +163,9 @@ class ClaimExpirationValue(typing.NamedTuple):
     claim_hash: bytes
     name: str
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
+
 
 class ClaimTakeoverKey(typing.NamedTuple):
     name: str
@@ -140,6 +174,9 @@ class ClaimTakeoverKey(typing.NamedTuple):
 class ClaimTakeoverValue(typing.NamedTuple):
     claim_hash: bytes
     height: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, height={self.height})"
 
 
 class PendingActivationKey(typing.NamedTuple):
@@ -161,6 +198,9 @@ class PendingActivationValue(typing.NamedTuple):
     claim_hash: bytes
     name: str
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
+
 
 class ActivationKey(typing.NamedTuple):
     txo_type: int
@@ -173,6 +213,9 @@ class ActivationValue(typing.NamedTuple):
     claim_hash: bytes
     name: str
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(height={self.height}, claim_hash={self.claim_hash.hex()}, name={self.name})"
+
 
 class ActiveAmountKey(typing.NamedTuple):
     claim_hash: bytes
@@ -180,6 +223,10 @@ class ActiveAmountKey(typing.NamedTuple):
     activation_height: int
     tx_num: int
     position: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, txo_type={self.txo_type}, " \
+               f"activation_height={self.activation_height}, tx_num={self.tx_num}, position={self.position})"
 
 
 class ActiveAmountValue(typing.NamedTuple):
@@ -196,13 +243,22 @@ class EffectiveAmountKey(typing.NamedTuple):
 class EffectiveAmountValue(typing.NamedTuple):
     claim_hash: bytes
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
+
 
 class RepostKey(typing.NamedTuple):
     claim_hash: bytes
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
+
 
 class RepostValue(typing.NamedTuple):
     reposted_claim_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(reposted_claim_hash={self.reposted_claim_hash.hex()})"
 
 
 class RepostedKey(typing.NamedTuple):
@@ -210,9 +266,16 @@ class RepostedKey(typing.NamedTuple):
     tx_num: int
     position: int
 
+    def __str__(self):
+        return f"{self.__class__.__name__}(reposted_claim_hash={self.reposted_claim_hash.hex()}, " \
+               f"tx_num={self.tx_num}, position={self.position})"
+
 
 class RepostedValue(typing.NamedTuple):
     claim_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
 
 
 class ActiveAmountPrefixRow(PrefixRow):
