@@ -634,7 +634,7 @@ class BlockProcessor:
             return spend_claim_ops
         return self._spend_support_txo(txin)
 
-    def _abandon_claim(self, claim_hash, tx_num, nout, name) -> List['RevertableOp']:
+    def _abandon_claim(self, claim_hash, tx_num, nout, name):
         claim_from_db = False
         if (tx_num, nout) in self.txo_to_claim:
             pending = self.txo_to_claim.pop((tx_num, nout))
@@ -666,8 +666,6 @@ class BlockProcessor:
         self.support_txos_by_claim[claim_hash].clear()
         self.support_txos_by_claim.pop(claim_hash)
 
-        ops = []
-
         if staged.name.startswith('@'):  # abandon a channel, invalidate signatures
             for k, claim_hash in self.db.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
                 if claim_hash in self.abandoned_claims or claim_hash in self.expired_claim_hashes:
@@ -678,7 +676,7 @@ class BlockProcessor:
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
                 assert claim is not None
-                ops.extend([
+                self.db_op_stack.extend([
                     RevertableDelete(k, claim_hash),
                     RevertableDelete(
                         *Prefixes.claim_to_txo.pack_item(
@@ -694,29 +692,24 @@ class BlockProcessor:
                     )
                 ])
         if staged.signing_hash and claim_from_db:
-            ops.append(RevertableDelete(
+            self.db_op_stack.append(RevertableDelete(
                 *Prefixes.claim_to_channel.pack_item(
                     staged.claim_hash, staged.tx_num, staged.position, staged.signing_hash
                 )
             ))
-        return ops
 
     def _expire_claims(self, height: int):
         expired = self.db.get_expired_by_height(height)
         self.expired_claim_hashes.update(set(expired.keys()))
         spent_claims = {}
-        ops = []
         for expired_claim_hash, (tx_num, position, name, txi) in expired.items():
             if (tx_num, position) not in self.txo_to_claim:
-                ops.extend(self._spend_claim_txo(txi, spent_claims))
+                self.db_op_stack.extend(self._spend_claim_txo(txi, spent_claims))
         if expired:
             # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
                 # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                abandon_ops = self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
-                if abandon_ops:
-                    ops.extend(abandon_ops)
-        return ops
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
 
     def _cached_get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
         if (claim_hash, txo_type, height) in self.amount_cache:
@@ -1232,9 +1225,7 @@ class BlockProcessor:
             # Handle abandoned claims
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
                 # print(f"\tabandon {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                abandon_ops = self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
-                if abandon_ops:
-                    claimtrie_stash_extend(abandon_ops)
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
 
             append_hashX_by_tx(hashXs)
             update_touched(hashXs)
@@ -1243,10 +1234,7 @@ class BlockProcessor:
             tx_count += 1
 
         # handle expired claims
-        expired_ops = self._expire_claims(height)
-        if expired_ops:
-            # print(f"************\nexpire claims at block {height}\n************")
-            claimtrie_stash_extend(expired_ops)
+        self._expire_claims(height)
 
         # activate claims and process takeovers
         self._get_takeover_ops(height)
