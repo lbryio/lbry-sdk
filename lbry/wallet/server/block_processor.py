@@ -258,6 +258,7 @@ class BlockProcessor:
 
         self.pending_channels = {}
         self.amount_cache = {}
+        self.expired_claim_hashes: Set[bytes] = set()
 
     def claim_producer(self):
         if self.db.db_height <= 1:
@@ -669,7 +670,7 @@ class BlockProcessor:
 
         if staged.name.startswith('@'):  # abandon a channel, invalidate signatures
             for k, claim_hash in self.db.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
-                if claim_hash in self.abandoned_claims:
+                if claim_hash in self.abandoned_claims or claim_hash in self.expired_claim_hashes:
                     continue
                 self.signatures_changed.add(claim_hash)
                 if claim_hash in self.claim_hash_to_txo:
@@ -702,6 +703,7 @@ class BlockProcessor:
 
     def _expire_claims(self, height: int):
         expired = self.db.get_expired_by_height(height)
+        self.expired_claim_hashes.update(set(expired.keys()))
         spent_claims = {}
         ops = []
         for expired_claim_hash, (tx_num, position, name, txi) in expired.items():
@@ -1291,6 +1293,7 @@ class BlockProcessor:
         self.pending_channels.clear()
         self.amount_cache.clear()
         self.signatures_changed.clear()
+        self.expired_claim_hashes.clear()
 
         # for cache in self.search_cache.values():
         #     cache.clear()
