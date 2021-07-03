@@ -676,8 +676,12 @@ class BlockProcessor:
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
                 assert claim is not None
+                signing_hash = Prefixes.channel_to_claim.unpack_key(k).signing_hash
                 self.db_op_stack.extend([
                     RevertableDelete(k, claim_hash),
+                    RevertableDelete(
+                        *Prefixes.claim_to_channel.pack_item(claim_hash, claim.tx_num, claim.position, signing_hash)
+                    ),
                     RevertableDelete(
                         *Prefixes.claim_to_txo.pack_item(
                             claim_hash, claim.tx_num, claim.position, claim.root_tx_num, claim.root_position,
