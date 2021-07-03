@@ -457,7 +457,7 @@ class BlockProcessor:
             self.next_cache_check = time.perf_counter() + 30
 
     def _add_claim_or_update(self, height: int, txo: 'Output', tx_hash: bytes, tx_num: int, nout: int,
-                             spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]) -> List['RevertableOp']:
+                             spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]):
         try:
             claim_name = txo.normalized_name
         except UnicodeDecodeError:
@@ -482,7 +482,6 @@ class BlockProcessor:
             is_repost = False
             is_channel = False
 
-        ops = []
         reposted_claim_hash = None
 
         if is_repost:
@@ -526,7 +525,7 @@ class BlockProcessor:
         else:  # it's a claim update
             if claim_hash not in spent_claims:
                 # print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
-                return []
+                return
             (prev_tx_num, prev_idx, _) = spent_claims.pop(claim_hash)
             # print(f"\tupdate {claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.txo_to_claim:
@@ -538,7 +537,7 @@ class BlockProcessor:
                 )
                 root_tx_num, root_idx = v.root_tx_num, v.root_position
                 activation = self.db.get_activation(prev_tx_num, prev_idx)
-                ops.extend(
+                self.db_op_stack.extend(
                     StagedActivation(
                         ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, claim_name, v.amount
                     ).get_remove_activate_ops()
@@ -549,25 +548,23 @@ class BlockProcessor:
         )
         self.txo_to_claim[(tx_num, nout)] = pending
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
-        ops.extend(pending.get_add_claim_utxo_ops())
-        return ops
+        self.db_op_stack.extend(pending.get_add_claim_utxo_ops())
 
     def _add_support(self, txo: 'Output', tx_num: int, nout: int) -> List['RevertableOp']:
         supported_claim_hash = txo.claim_hash[::-1]
         self.support_txos_by_claim[supported_claim_hash].append((tx_num, nout))
         self.support_txo_to_claim[(tx_num, nout)] = supported_claim_hash, txo.amount
         # print(f"\tsupport claim {supported_claim_hash.hex()} +{txo.amount}")
-        return StagedClaimtrieSupport(
+        self.db_op_stack.extend(StagedClaimtrieSupport(
             supported_claim_hash, tx_num, nout, txo.amount
-        ).get_add_support_utxo_ops()
+        ).get_add_support_utxo_ops())
 
     def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_num: int, nout: int, txo: 'Output',
-                              spent_claims: typing.Dict[bytes, Tuple[int, int, str]]) -> List['RevertableOp']:
+                              spent_claims: typing.Dict[bytes, Tuple[int, int, str]]):
         if txo.script.is_claim_name or txo.script.is_update_claim:
-            return self._add_claim_or_update(height, txo, tx_hash, tx_num, nout, spent_claims)
+            self._add_claim_or_update(height, txo, tx_hash, tx_num, nout, spent_claims)
         elif txo.script.is_support_claim or txo.script.is_support_claim_data:
-            return self._add_support(txo, tx_num, nout)
-        return []
+            self._add_support(txo, tx_num, nout)
 
     def _spend_support_txo(self, txin):
         txin_num = self.db.transaction_num_mapping[txin.prev_hash]
@@ -577,9 +574,9 @@ class BlockProcessor:
             supported_name = self._get_pending_claim_name(spent_support)
             # print(f"\tspent support for {spent_support.hex()}")
             self.removed_support_txos_by_name_by_claim[supported_name][spent_support].append((txin_num, txin.prev_idx))
-            return StagedClaimtrieSupport(
+            self.db_op_stack.extend(StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
-            ).get_spend_support_txo_ops()
+            ).get_spend_support_txo_ops())
         spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
         if spent_support:
             supported_name = self._get_pending_claim_name(spent_support)
@@ -589,18 +586,16 @@ class BlockProcessor:
             if 0 < activation < self.height + 1:
                 self.removed_active_support_amount_by_claim[spent_support].append(support_amount)
             # print(f"\tspent support for {spent_support.hex()} activation:{activation} {support_amount}")
-            ops = StagedClaimtrieSupport(
+            self.db_op_stack.extend(StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
-            ).get_spend_support_txo_ops()
+            ).get_spend_support_txo_ops())
             if supported_name is not None and activation > 0:
-                ops.extend(StagedActivation(
+                self.db_op_stack.extend(StagedActivation(
                     ACTIVATED_SUPPORT_TXO_TYPE, spent_support, txin_num, txin.prev_idx, activation, supported_name,
                     support_amount
                 ).get_remove_activate_ops())
-            return ops
-        return []
 
-    def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]):
+    def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]) -> bool:
         txin_num = self.db.transaction_num_mapping[txin.prev_hash]
         if (txin_num, txin.prev_idx) in self.txo_to_claim:
             spent = self.txo_to_claim[(txin_num, txin.prev_idx)]
@@ -609,7 +604,7 @@ class BlockProcessor:
                 txin_num, txin.prev_idx
             )
             if not spent_claim_hash_and_name:  # txo is not a claim
-                return []
+                return False
             claim_hash = spent_claim_hash_and_name.claim_hash
             signing_hash = self.db.get_channel_for_claim(claim_hash, txin_num, txin.prev_idx)
             v = self.db.get_claim_txo(claim_hash)
@@ -626,13 +621,12 @@ class BlockProcessor:
             self.pending_channel_counts[spent.signing_hash] -= 1
         spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.name)
         # print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
-        return spent.get_spend_claim_txo_ops()
+        self.db_op_stack.extend(spent.get_spend_claim_txo_ops())
+        return True
 
     def _spend_claim_or_support_txo(self, txin, spent_claims):
-        spend_claim_ops = self._spend_claim_txo(txin, spent_claims)
-        if spend_claim_ops:
-            return spend_claim_ops
-        return self._spend_support_txo(txin)
+        if not self._spend_claim_txo(txin, spent_claims):
+            self._spend_support_txo(txin)
 
     def _abandon_claim(self, claim_hash, tx_num, nout, name):
         claim_from_db = False
@@ -667,7 +661,8 @@ class BlockProcessor:
         self.support_txos_by_claim.pop(claim_hash)
 
         if staged.name.startswith('@'):  # abandon a channel, invalidate signatures
-            for k, claim_hash in self.db.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
+            for k, claim_hash in self.db.db.iterator(
+                    prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
                 if claim_hash in self.abandoned_claims or claim_hash in self.expired_claim_hashes:
                     continue
                 self.signatures_changed.add(claim_hash)
@@ -1206,10 +1201,7 @@ class BlockProcessor:
                 cache_value = spend_utxo(txin.prev_hash, txin.prev_idx)
                 undo_info_append(cache_value)
                 append_hashX(cache_value[:-12])
-
-                spend_claim_or_support_ops = self._spend_claim_or_support_txo(txin, spent_claims)
-                if spend_claim_or_support_ops:
-                    claimtrie_stash_extend(spend_claim_or_support_ops)
+                self._spend_claim_or_support_txo(txin, spent_claims)
 
             # Add the new UTXOs
             for nout, txout in enumerate(tx.outputs):
@@ -1220,11 +1212,9 @@ class BlockProcessor:
                     put_utxo(tx_hash + pack('<H', nout), hashX + tx_numb + pack('<Q', txout.value))
 
                 # add claim/support txo
-                claim_or_support_ops = self._add_claim_or_support(
+                self._add_claim_or_support(
                     height, tx_hash, tx_count, nout, txos[nout], spent_claims
                 )
-                if claim_or_support_ops:
-                    claimtrie_stash_extend(claim_or_support_ops)
 
             # Handle abandoned claims
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
