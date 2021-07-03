@@ -732,7 +732,7 @@ def effective_amount_helper(struct_fmt):
 
 
 class EffectiveAmountPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.claim_effective_amount_prefix.value
+    prefix = DB_PREFIXES.effective_amount.value
     key_struct = struct.Struct(b'>QLH')
     value_struct = struct.Struct(b'>20s')
     key_part_lambdas = [
