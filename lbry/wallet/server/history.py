@@ -58,6 +58,8 @@ class History:
     def open_db(self, db_class, for_sync, utxo_flush_count, compacting):
         self.db = db_class('hist', for_sync)
         self.read_state()
+        if self.needs_migration:
+            self.migrate()
         self.clear_excess(utxo_flush_count)
         # An incomplete compaction needs to be cancelled otherwise
         # restarting it will corrupt the history
