@@ -668,6 +668,11 @@ class BlockProcessor:
                 self.signatures_changed.add(claim_hash)
                 if claim_hash in self.claim_hash_to_txo:
                     claim = self.txo_to_claim[self.claim_hash_to_txo[claim_hash]]
+                    self.txo_to_claim[self.claim_hash_to_txo[claim_hash]] = StagedClaimtrieItem(
+                        claim.name, claim.claim_hash, claim.amount, claim.expiration_height, claim.tx_num,
+                        claim.position, claim.root_tx_num, claim.root_position, False,
+                        claim.signing_hash, claim.reposted_claim_hash
+                    )
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
                 assert claim is not None
@@ -690,6 +695,7 @@ class BlockProcessor:
                         )
                     )
                 ])
+
         if staged.signing_hash and claim_from_db:
             self.db_op_stack.extend([
                 RevertableDelete(
