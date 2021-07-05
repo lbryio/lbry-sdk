@@ -691,11 +691,18 @@ class BlockProcessor:
                     )
                 ])
         if staged.signing_hash and claim_from_db:
-            self.db_op_stack.append(RevertableDelete(
-                *Prefixes.claim_to_channel.pack_item(
-                    staged.claim_hash, staged.tx_num, staged.position, staged.signing_hash
+            self.db_op_stack.extend([
+                RevertableDelete(
+                    *Prefixes.channel_to_claim.pack_item(
+                        staged.signing_hash, staged.name, staged.tx_num, staged.position, staged.claim_hash
+                    )
+                ),
+                RevertableDelete(
+                    *Prefixes.claim_to_channel.pack_item(
+                        staged.claim_hash, staged.tx_num, staged.position, staged.signing_hash
+                    )
                 )
-            ))
+            ])
 
     def _expire_claims(self, height: int):
         expired = self.db.get_expired_by_height(height)
