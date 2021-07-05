@@ -51,7 +51,7 @@ setup(
         'docopt==0.6.2',
         'hachoir',
         'multidict==4.6.1',
-        'coincurve==11.0.0',
+        'coincurve==15.0.0',
         'pbkdf2==1.3',
         'attrs==18.2.0',
         'pylru==1.1.0',

@@ -136,7 +136,6 @@ build:windows:
     - pip install virtualenv pywin32
     - virtualenv venv
     - venv/Scripts/activate.ps1
-    - pip install pip==19.3.1; $true # $true ignores errors. need this to get the correct coincurve wheel. see commit notes for details.
   after_script:
     - rmdir -Recurse venv
   script:
