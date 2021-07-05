@@ -115,7 +115,7 @@ class RevertableOpStack:
             # check that a delete for the stored value is in the stack
             raise OpStackIntegrity(f"delete {op}")
         elif op.is_delete and not has_stored_val:
-            raise OpStackIntegrity("db op tries to delete nonexistent key: {op}")
+            raise OpStackIntegrity(f"db op tries to delete nonexistent key: {op}")
         elif op.is_delete and stored_val != op.value:
             raise OpStackIntegrity(f"db op tries to delete with incorrect value: {op}")
         self._items[op.key].append(op)
