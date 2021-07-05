@@ -179,24 +179,21 @@ class StagedClaimtrieItem(typing.NamedTuple):
             )
         ]
 
-        if self.signing_hash:
-            ops.append(
+        if self.signing_hash and self.channel_signature_is_valid:
+            ops.extend([
                 # channel by stream
                 op(
                     *Prefixes.claim_to_channel.pack_item(
                         self.claim_hash, self.tx_num, self.position, self.signing_hash
                     )
-                )
-            )
-            if self.channel_signature_is_valid:
-                ops.append(
-                    # stream by channel
-                    op(
-                        *Prefixes.channel_to_claim.pack_item(
-                            self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
-                        )
+                ),
+                # stream by channel
+                op(
+                    *Prefixes.channel_to_claim.pack_item(
+                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
                     )
                 )
+            ])
         if self.reposted_claim_hash:
             ops.extend([
                 op(
