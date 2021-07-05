@@ -566,7 +566,8 @@ class LevelDB:
             'author': None if not metadata.is_stream else metadata.stream.author,
             'description': None if not metadata.is_stream else metadata.stream.description,
             'claim_type': CLAIM_TYPES[metadata.claim_type],
-            'has_source': None if not metadata.is_stream else metadata.stream.has_source,
+            'has_source': reposted_has_source if reposted_has_source is not None else (
+                False if not metadata.is_stream else metadata.stream.has_source),
             'stream_type': None if not metadata.is_stream else STREAM_TYPES[
                 guess_stream_type(metadata.stream.source.media_type)],
             'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
