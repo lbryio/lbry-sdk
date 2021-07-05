@@ -16,13 +16,13 @@ from collections import defaultdict
 from functools import partial
 
 from lbry.wallet.server import util
-from lbry.wallet.server.util import pack_be_uint32, unpack_be_uint32_from
+from lbry.wallet.server.util import pack_be_uint32, unpack_be_uint32_from, unpack_be_uint16_from
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 
 
 class History:
 
-    DB_VERSIONS = [0]
+    DB_VERSIONS = [0, 1]
 
     def __init__(self):
         self.logger = util.class_logger(__name__, self.__class__.__name__)
@@ -31,6 +31,29 @@ class History:
         self.unflushed = defaultdict(partial(array.array, 'I'))
         self.unflushed_count = 0
         self.db = None
+
+    @property
+    def needs_migration(self):
+        return self.db_version != max(self.DB_VERSIONS)
+
+    def migrate(self):
+        # 0 -> 1: flush_count from 16 to 32 bits
+        self.logger.warning("HISTORY MIGRATION IN PROGRESS. Please avoid shutting down before it finishes.")
+        with self.db.write_batch() as batch:
+            for key, value in self.db.iterator(prefix=b''):
+                if len(key) != 13:
+                    continue
+                flush_id, = unpack_be_uint16_from(key[-2:])
+                new_key = key[:-2] + pack_be_uint32(flush_id)
+                batch.put(new_key, value)
+            self.logger.warning("history migration: new keys added, removing old ones.")
+            for key, value in self.db.iterator(prefix=b''):
+                if len(key) == 13:
+                    batch.delete(key)
+            self.logger.warning("history migration: writing new state.")
+            self.db_version = 1
+            self.write_state(batch)
+            self.logger.warning("history migration: done.")
 
     def open_db(self, db_class, for_sync, utxo_flush_count, compacting):
         self.db = db_class('hist', for_sync)
@@ -81,7 +104,7 @@ class History:
 
         keys = []
         for key, hist in self.db.iterator(prefix=b''):
-            flush_id, = unpack_be_uint32_from(key[-2:])
+            flush_id, = unpack_be_uint32_from(key[-4:])
             if flush_id > utxo_flush_count:
                 keys.append(key)
 
