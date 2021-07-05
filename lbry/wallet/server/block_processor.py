@@ -207,7 +207,7 @@ class BlockProcessor:
         self.db_deletes = []
 
         # Claimtrie cache
-        self.db_op_stack = None
+        self.db_op_stack: Optional[RevertableOpStack] = None
         self.undo_claims = []
 
         # If the lock is successfully acquired, in-memory chain state
