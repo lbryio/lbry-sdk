@@ -779,9 +779,9 @@ class RepostPrefixRow(PrefixRow):
 
     @classmethod
     def unpack_key(cls, key: bytes) -> RepostKey:
-        assert key[0] == cls.prefix
+        assert key[:1] == cls.prefix
         assert len(key) == 21
-        return RepostKey[1:]
+        return RepostKey(key[1:])
 
     @classmethod
     def pack_value(cls, reposted_claim_hash: bytes) -> bytes:
