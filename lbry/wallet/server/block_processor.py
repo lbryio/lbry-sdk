@@ -703,7 +703,7 @@ class BlockProcessor:
         spent_claims = {}
         for expired_claim_hash, (tx_num, position, name, txi) in expired.items():
             if (tx_num, position) not in self.txo_to_claim:
-                self.db_op_stack.extend(self._spend_claim_txo(txi, spent_claims))
+                self._spend_claim_txo(txi, spent_claims)
         if expired:
             # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
