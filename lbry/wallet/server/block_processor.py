@@ -550,7 +550,7 @@ class BlockProcessor:
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
         self.db_op_stack.extend(pending.get_add_claim_utxo_ops())
 
-    def _add_support(self, txo: 'Output', tx_num: int, nout: int) -> List['RevertableOp']:
+    def _add_support(self, txo: 'Output', tx_num: int, nout: int):
         supported_claim_hash = txo.claim_hash[::-1]
         self.support_txos_by_claim[supported_claim_hash].append((tx_num, nout))
         self.support_txo_to_claim[(tx_num, nout)] = supported_claim_hash, txo.amount
@@ -663,6 +663,7 @@ class BlockProcessor:
         if staged.name.startswith('@'):  # abandon a channel, invalidate signatures
             for k, claim_hash in self.db.db.iterator(
                     prefix=Prefixes.channel_to_claim.pack_partial_key(staged.claim_hash)):
+
                 if claim_hash in self.abandoned_claims or claim_hash in self.expired_claim_hashes:
                     continue
                 self.signatures_changed.add(claim_hash)
@@ -670,18 +671,20 @@ class BlockProcessor:
                     claim = self.txo_to_claim[self.claim_hash_to_txo[claim_hash]]
                     self.txo_to_claim[self.claim_hash_to_txo[claim_hash]] = StagedClaimtrieItem(
                         claim.name, claim.claim_hash, claim.amount, claim.expiration_height, claim.tx_num,
-                        claim.position, claim.root_tx_num, claim.root_position, False,
-                        claim.signing_hash, claim.reposted_claim_hash
+                        claim.position, claim.root_tx_num, claim.root_position, channel_signature_is_valid=False,
+                        signing_hash=claim.signing_hash, reposted_claim_hash=claim.reposted_claim_hash
                     )
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
                 assert claim is not None
                 signing_hash = Prefixes.channel_to_claim.unpack_key(k).signing_hash
                 self.db_op_stack.extend([
+                    # delete channel_to_claim/claim_to_channel
                     RevertableDelete(k, claim_hash),
                     RevertableDelete(
                         *Prefixes.claim_to_channel.pack_item(claim_hash, claim.tx_num, claim.position, signing_hash)
                     ),
+                    # update claim_to_txo with channel_signature_is_valid=False
                     RevertableDelete(
                         *Prefixes.claim_to_txo.pack_item(
                             claim_hash, claim.tx_num, claim.position, claim.root_tx_num, claim.root_position,
