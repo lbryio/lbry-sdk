@@ -1,5 +1,5 @@
 import asyncio
-from lbry.wallet.client.basenetwork import ClientSession
+from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc.jsonrpc import RPCError
 import logging
 import json
