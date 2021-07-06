@@ -197,10 +197,12 @@ class StagedClaimtrieItem(typing.NamedTuple):
         if self.reposted_claim_hash:
             ops.extend([
                 op(
-                    *RepostPrefixRow.pack_item(self.claim_hash, self.reposted_claim_hash)
+                    *Prefixes.repost.pack_item(self.claim_hash, self.reposted_claim_hash)
                 ),
                 op(
-                    *RepostedPrefixRow.pack_item(self.reposted_claim_hash, self.tx_num, self.position, self.claim_hash)
+                    *Prefixes.reposted_claim.pack_item(
+                        self.reposted_claim_hash, self.tx_num, self.position, self.claim_hash
+                    )
                 ),
 
             ])
@@ -212,3 +214,42 @@ class StagedClaimtrieItem(typing.NamedTuple):
     def get_spend_claim_txo_ops(self) -> typing.List[RevertableOp]:
         return self._get_add_remove_claim_utxo_ops(add=False)
 
+    def get_invalidate_signature_ops(self):
+        if not self.signing_hash:
+            return []
+        ops = [
+            RevertableDelete(
+                *Prefixes.claim_to_channel.pack_item(
+                    self.claim_hash, self.tx_num, self.position, self.signing_hash
+                )
+            )
+        ]
+        if self.channel_signature_is_valid:
+            ops.extend([
+                # delete channel_to_claim/claim_to_channel
+                RevertableDelete(
+                    *Prefixes.channel_to_claim.pack_item(
+                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
+                    )
+                ),
+                # update claim_to_txo with channel_signature_is_valid=False
+                RevertableDelete(
+                    *Prefixes.claim_to_txo.pack_item(
+                        self.claim_hash, self.tx_num, self.position, self.root_tx_num, self.root_position,
+                        self.amount, self.channel_signature_is_valid, self.name
+                    )
+                ),
+                RevertablePut(
+                    *Prefixes.claim_to_txo.pack_item(
+                        self.claim_hash, self.tx_num, self.position, self.root_tx_num, self.root_position,
+                        self.amount, False, self.name
+                    )
+                )
+            ])
+        return ops
+
+    def invalidate_signature(self) -> 'StagedClaimtrieItem':
+        return StagedClaimtrieItem(
+            self.name, self.claim_hash, self.amount, self.expiration_height, self.tx_num, self.position,
+            self.root_tx_num, self.root_position, False, None, self.reposted_claim_hash
+        )
