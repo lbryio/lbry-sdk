@@ -629,7 +629,6 @@ class BlockProcessor:
             self._spend_support_txo(txin)
 
     def _abandon_claim(self, claim_hash, tx_num, nout, name):
-        claim_from_db = False
         if (tx_num, nout) in self.txo_to_claim:
             pending = self.txo_to_claim.pop((tx_num, nout))
             self.abandoned_claims[pending.claim_hash] = pending
@@ -642,7 +641,6 @@ class BlockProcessor:
             v = self.db.get_claim_txo(
                 claim_hash
             )
-            claim_from_db = True
             claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
             signature_is_valid = v.channel_signature_is_valid
             prev_signing_hash = self.db.get_channel_for_claim(claim_hash, tx_num, nout)
@@ -672,7 +670,7 @@ class BlockProcessor:
                     self.txo_to_claim[self.claim_hash_to_txo[claim_hash]] = StagedClaimtrieItem(
                         claim.name, claim.claim_hash, claim.amount, claim.expiration_height, claim.tx_num,
                         claim.position, claim.root_tx_num, claim.root_position, channel_signature_is_valid=False,
-                        signing_hash=claim.signing_hash, reposted_claim_hash=claim.reposted_claim_hash
+                        signing_hash=None, reposted_claim_hash=claim.reposted_claim_hash
                     )
                 else:
                     claim = self.db.get_claim_txo(claim_hash)
@@ -698,20 +696,6 @@ class BlockProcessor:
                         )
                     )
                 ])
-
-        if staged.signing_hash and claim_from_db:
-            self.db_op_stack.extend([
-                RevertableDelete(
-                    *Prefixes.channel_to_claim.pack_item(
-                        staged.signing_hash, staged.name, staged.tx_num, staged.position, staged.claim_hash
-                    )
-                ),
-                RevertableDelete(
-                    *Prefixes.claim_to_channel.pack_item(
-                        staged.claim_hash, staged.tx_num, staged.position, staged.signing_hash
-                    )
-                )
-            ])
 
     def _expire_claims(self, height: int):
         expired = self.db.get_expired_by_height(height)
