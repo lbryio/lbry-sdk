@@ -3522,7 +3522,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = old_txo.get_address(account.ledger)
 
         channel = None
-        if channel_id or channel_name:
+        if not clear_channel and (channel_id or channel_name):
             channel = await self.get_channel_or_error(
                 wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         elif old_txo.claim.is_signed and not clear_channel and not replace:
@@ -3552,11 +3552,13 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.stream.update(file_path=file_path, **kwargs)
+        if clear_channel:
+            claim.clear_signature()
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
+            channel if not clear_channel else None
         )
         new_txo = tx.outputs[0]
-
         stream_hash = None
         if not preview:
             old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)
