@@ -403,6 +403,56 @@ class ResolveCommand(BaseResolveTestCase):
 
 
 class ResolveClaimTakeovers(BaseResolveTestCase):
+    async def test_channel_invalidation(self):
+        channel_id = (await self.channel_create('@test', '0.1'))['outputs'][0]['claim_id']
+
+        initially_unsigned1 = (
+            await self.stream_create('initially_unsigned1', '0.1')
+        )['outputs'][0]['claim_id']
+        initially_unsigned2 = (
+            await self.stream_create('initially_unsigned2', '0.1')
+        )['outputs'][0]['claim_id']
+        initially_signed1 = (
+            await self.stream_create('signed1', '0.01',  channel_id=channel_id)
+        )['outputs'][0]['claim_id']
+
+        await self.generate(1)
+        self.assertIn("error", await self.resolve('@test/initially_unsigned1'))
+        await self.assertMatchClaimIsWinning('initially_unsigned1', initially_unsigned1)
+        self.assertIn("error", await self.resolve('@test/initially_unsigned2'))
+        await self.assertMatchClaimIsWinning('initially_unsigned2', initially_unsigned2)
+        self.assertDictEqual(await self.resolve('@test/signed1'), await self.resolve('signed1'))
+        await self.assertMatchClaimIsWinning('signed1', initially_signed1)
+        # sign 'initially_unsigned1' and update it
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
+            initially_unsigned1, '0.09', channel_id=channel_id))
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(initially_unsigned2, '0.09'))
+
+        # update the still unsigned 'initially_unsigned2'
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
+            initially_unsigned2, '0.09', channel_id=channel_id))
+
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
+            initially_signed1, '0.09', clear_channel=True))
+
+        await self.daemon.jsonrpc_txo_spend(type='channel', claim_id=channel_id)
+
+        signed2 = (
+            await self.stream_create('signed2', '0.01',  channel_id=channel_id)
+        )['outputs'][0]['claim_id']
+
+        await self.generate(1)
+        self.assertIn("error", await self.resolve('@test'))
+        self.assertIn("error", await self.resolve('@test/signed1'))
+        self.assertIn("error", await self.resolve('@test/initially_unsigned2'))
+        self.assertIn("error", await self.resolve('@test/initially_unsigned1'))
+        self.assertIn("error", await self.resolve('@test/signed2'))
+
+        await self.assertMatchClaimIsWinning('signed1', initially_signed1)
+        await self.assertMatchClaimIsWinning('initially_unsigned1', initially_unsigned1)
+        await self.assertMatchClaimIsWinning('initially_unsigned2', initially_unsigned2)
+        await self.assertMatchClaimIsWinning('signed2', signed2)
+
     async def _test_activation_delay(self):
         name = 'derp'
         # initially claim the name
