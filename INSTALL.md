@@ -70,7 +70,10 @@ To install on Linux/Mac:
  $ make idea
  ```
 
-To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `python3.7 -m venv lbry-venv` command.
+To verify your installation, `which lbrynet` should return a path inside
+of the `lbry-venv` folder.
+
+To exit the virtual environment simply use the command `deactivate`.
 
 ### Windows
 
@@ -114,7 +117,35 @@ To run the unit and integration tests from the repo directory:
 ## Usage
 
 To start the API server:
-    `lbrynet start`
+```
+lbrynet start
+```
 
+Whenever the code inside [lbry-sdk/lbry](./lbry)
+is modified we should run `make install` to recompile the `lbrynet`
+executable with the newest code.
+
+## Development
+
+When developing, remember to enter the environment,
+and if you wish start the server interactively.
+```
+$ source lbry-venv/bin/activate
+
+(lbry-venv) $ python lbry/extras/cli.py start
+```
+
+Parameters can be passed in the same way.
+```
+(lbry-venv) $ python lbry/extras/cli.py wallet balance
+```
+
+If a Python debugger (`pdb` or `ipdb`) is installed we can also start it
+in this way, set up break points, and step through the code.
+```
+(lbry-venv) $ pip install ipdb
+
+(lbry-venv) $ ipdb lbry/extras/cli.py
+```
 
 Happy hacking!
