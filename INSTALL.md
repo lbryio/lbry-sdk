@@ -72,6 +72,13 @@ To install on Linux/Mac:
 
 To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `python3.7 -m venv lbry-venv` command.
 
+To exit the virtual environment simply use the command `deactivate`.
+
+When developing, remember to enter the environment again.
+```
+source lbry-venv/bin/activate
+```
+
 ### Windows
 
 To install on Windows:
@@ -116,5 +123,9 @@ To run the unit and integration tests from the repo directory:
 To start the API server:
     `lbrynet start`
 
+When developing, we can start the server interactively.
+```
+python lbry/extras/cli.py start
+```
 
 Happy hacking!
