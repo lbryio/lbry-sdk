@@ -405,53 +405,67 @@ class ResolveCommand(BaseResolveTestCase):
 class ResolveClaimTakeovers(BaseResolveTestCase):
     async def test_channel_invalidation(self):
         channel_id = (await self.channel_create('@test', '0.1'))['outputs'][0]['claim_id']
+        channel_id2 = (await self.channel_create('@other', '0.1'))['outputs'][0]['claim_id']
 
-        initially_unsigned1 = (
-            await self.stream_create('initially_unsigned1', '0.1')
-        )['outputs'][0]['claim_id']
-        initially_unsigned2 = (
-            await self.stream_create('initially_unsigned2', '0.1')
-        )['outputs'][0]['claim_id']
-        initially_signed1 = (
-            await self.stream_create('signed1', '0.01',  channel_id=channel_id)
+        async def make_claim(name, amount, channel_id=None):
+            return (
+            await self.stream_create(name, amount, channel_id=channel_id)
         )['outputs'][0]['claim_id']
 
-        await self.generate(1)
-        self.assertIn("error", await self.resolve('@test/initially_unsigned1'))
-        await self.assertMatchClaimIsWinning('initially_unsigned1', initially_unsigned1)
-        self.assertIn("error", await self.resolve('@test/initially_unsigned2'))
-        await self.assertMatchClaimIsWinning('initially_unsigned2', initially_unsigned2)
-        self.assertDictEqual(await self.resolve('@test/signed1'), await self.resolve('signed1'))
-        await self.assertMatchClaimIsWinning('signed1', initially_signed1)
-        # sign 'initially_unsigned1' and update it
-        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
-            initially_unsigned1, '0.09', channel_id=channel_id))
-        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(initially_unsigned2, '0.09'))
+        unsigned_then_signed = await make_claim('unsigned_then_signed', '0.1')
+        unsigned_then_updated_then_signed = await make_claim('unsigned_then_updated_then_signed', '0.1')
+        signed_then_unsigned = await make_claim(
+            'signed_then_unsigned', '0.01',  channel_id=channel_id
+        )
+        signed_then_signed_different_chan = await make_claim(
+            'signed_then_signed_different_chan', '0.01', channel_id=channel_id
+        )
 
-        # update the still unsigned 'initially_unsigned2'
+        self.assertIn("error", await self.resolve('@test/unsigned_then_signed'))
+        await self.assertMatchClaimIsWinning('unsigned_then_signed', unsigned_then_signed)
+        self.assertIn("error", await self.resolve('@test/unsigned_then_updated_then_signed'))
+        await self.assertMatchClaimIsWinning('unsigned_then_updated_then_signed', unsigned_then_updated_then_signed)
+        self.assertDictEqual(
+            await self.resolve('@test/signed_then_unsigned'), await self.resolve('signed_then_unsigned')
+        )
+        await self.assertMatchClaimIsWinning('signed_then_unsigned', signed_then_unsigned)
+        # sign 'unsigned_then_signed' and update it
         await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
-            initially_unsigned2, '0.09', channel_id=channel_id))
+            unsigned_then_signed, '0.09', channel_id=channel_id))
+
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(unsigned_then_updated_then_signed, '0.09'))
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
+            unsigned_then_updated_then_signed, '0.09', channel_id=channel_id))
 
         await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
-            initially_signed1, '0.09', clear_channel=True))
+            signed_then_unsigned, '0.09', clear_channel=True))
+
+        await self.ledger.wait(await self.daemon.jsonrpc_stream_update(
+            signed_then_signed_different_chan, '0.09', channel_id=channel_id2))
 
         await self.daemon.jsonrpc_txo_spend(type='channel', claim_id=channel_id)
 
-        signed2 = (
-            await self.stream_create('signed2', '0.01',  channel_id=channel_id)
-        )['outputs'][0]['claim_id']
+        signed3 = await make_claim('signed3', '0.01',  channel_id=channel_id)
+        signed4 = await make_claim('signed4', '0.01',  channel_id=channel_id2)
 
-        await self.generate(1)
         self.assertIn("error", await self.resolve('@test'))
         self.assertIn("error", await self.resolve('@test/signed1'))
-        self.assertIn("error", await self.resolve('@test/initially_unsigned2'))
-        self.assertIn("error", await self.resolve('@test/initially_unsigned1'))
-        self.assertIn("error", await self.resolve('@test/signed2'))
+        self.assertIn("error", await self.resolve('@test/unsigned_then_updated_then_signed'))
+        self.assertIn("error", await self.resolve('@test/unsigned_then_signed'))
+        self.assertIn("error", await self.resolve('@test/signed3'))
+        self.assertIn("error", await self.resolve('@test/signed4'))
 
-        await self.assertMatchClaimIsWinning('signed1', initially_signed1)
-        await self.assertMatchClaimIsWinning('initially_unsigned1', initially_unsigned1)
-        await self.assertMatchClaimIsWinning('initially_unsigned2', initially_unsigned2)
-        await self.assertMatchClaimIsWinning('signed2', signed2)
+        await self.assertMatchClaimIsWinning('signed_then_unsigned', signed_then_unsigned)
+        await self.assertMatchClaimIsWinning('unsigned_then_signed', unsigned_then_signed)
+        await self.assertMatchClaimIsWinning('unsigned_then_updated_then_signed', unsigned_then_updated_then_signed)
+        await self.assertMatchClaimIsWinning('signed_then_signed_different_chan', signed_then_signed_different_chan)
+        await self.assertMatchClaimIsWinning('signed3', signed3)
+        await self.assertMatchClaimIsWinning('signed4', signed4)
+
+        self.assertDictEqual(await self.resolve('@other/signed_then_signed_different_chan'),
+                             await self.resolve('signed_then_signed_different_chan'))
+        self.assertDictEqual(await self.resolve('@other/signed4'),
+                             await self.resolve('signed4'))
 
     async def _test_activation_delay(self):
         name = 'derp'
