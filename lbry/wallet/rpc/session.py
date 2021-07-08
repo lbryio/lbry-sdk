@@ -436,7 +436,8 @@ class RPCSession(SessionBase):
         except CancelledError:
             raise
         except Exception:
-            self.logger.exception(f'exception handling {request}')
+            reqstr = str(request)
+            self.logger.exception(f'exception handling {reqstr[:16_000]}')
             result = RPCError(JSONRPC.INTERNAL_ERROR,
                               'internal server error')
         if isinstance(request, Request):

@@ -16,13 +16,13 @@ from collections import defaultdict
 from functools import partial
 
 from lbry.wallet.server import util
-from lbry.wallet.server.util import pack_be_uint16, unpack_be_uint16_from
+from lbry.wallet.server.util import pack_be_uint32, unpack_be_uint32_from, unpack_be_uint16_from
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 
 
 class History:
 
-    DB_VERSIONS = [0]
+    DB_VERSIONS = [0, 1]
 
     def __init__(self):
         self.logger = util.class_logger(__name__, self.__class__.__name__)
@@ -32,9 +32,34 @@ class History:
         self.unflushed_count = 0
         self.db = None
 
+    @property
+    def needs_migration(self):
+        return self.db_version != max(self.DB_VERSIONS)
+
+    def migrate(self):
+        # 0 -> 1: flush_count from 16 to 32 bits
+        self.logger.warning("HISTORY MIGRATION IN PROGRESS. Please avoid shutting down before it finishes.")
+        with self.db.write_batch() as batch:
+            for key, value in self.db.iterator(prefix=b''):
+                if len(key) != 13:
+                    continue
+                flush_id, = unpack_be_uint16_from(key[-2:])
+                new_key = key[:-2] + pack_be_uint32(flush_id)
+                batch.put(new_key, value)
+            self.logger.warning("history migration: new keys added, removing old ones.")
+            for key, value in self.db.iterator(prefix=b''):
+                if len(key) == 13:
+                    batch.delete(key)
+            self.logger.warning("history migration: writing new state.")
+            self.db_version = 1
+            self.write_state(batch)
+            self.logger.warning("history migration: done.")
+
     def open_db(self, db_class, for_sync, utxo_flush_count, compacting):
         self.db = db_class('hist', for_sync)
         self.read_state()
+        if self.needs_migration:
+            self.migrate()
         self.clear_excess(utxo_flush_count)
         # An incomplete compaction needs to be cancelled otherwise
         # restarting it will corrupt the history
@@ -81,7 +106,7 @@ class History:
 
         keys = []
         for key, hist in self.db.iterator(prefix=b''):
-            flush_id, = unpack_be_uint16_from(key[-2:])
+            flush_id, = unpack_be_uint32_from(key[-4:])
             if flush_id > utxo_flush_count:
                 keys.append(key)
 
@@ -126,7 +151,7 @@ class History:
     def flush(self):
         start_time = time.time()
         self.flush_count += 1
-        flush_id = pack_be_uint16(self.flush_count)
+        flush_id = pack_be_uint32(self.flush_count)
         unflushed = self.unflushed
 
         with self.db.write_batch() as batch:
@@ -250,7 +275,7 @@ class History:
         write_size = 0
         keys_to_delete.update(hist_map)
         for n, chunk in enumerate(util.chunks(full_hist, max_row_size)):
-            key = hashX + pack_be_uint16(n)
+            key = hashX + pack_be_uint32(n)
             if hist_map.get(key) == chunk:
                 keys_to_delete.remove(key)
             else:
@@ -301,8 +326,8 @@ class History:
 
         # Loop over 2-byte prefixes
         cursor = self.comp_cursor
-        while write_size < limit and cursor < 65536:
-            prefix = pack_be_uint16(cursor)
+        while write_size < limit and cursor < (1 << 32):
+            prefix = pack_be_uint32(cursor)
             write_size += self._compact_prefix(prefix, write_items,
                                                keys_to_delete)
             cursor += 1
