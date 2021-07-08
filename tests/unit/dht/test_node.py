@@ -92,7 +92,7 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 
 
 class TestTemporarilyLosingConnection(AsyncioTestCase):
-    @unittest.SkipTest
+    TIMEOUT = None  # not supported as it advances time
     async def test_losing_connection(self):
         async def wait_for(check_ok, insist, timeout=20):
             start = loop.time()
