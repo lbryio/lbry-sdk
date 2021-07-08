@@ -543,15 +543,15 @@ class SessionManager:
         """Return statistics about connected sessions."""
         return self._session_data(for_log=False)
 
-    async def rpc_reorg(self, count):
-        """Force a reorg of the given number of blocks.
-
-        count: number of blocks to reorg
-        """
-        count = non_negative_integer(count)
-        if not self.bp.force_chain_reorg(count):
-            raise RPCError(BAD_REQUEST, 'still catching up with daemon')
-        return f'scheduled a reorg of {count:,d} blocks'
+    # async def rpc_reorg(self, count):
+    #     """Force a reorg of the given number of blocks.
+    #
+    #     count: number of blocks to reorg
+    #     """
+    #     count = non_negative_integer(count)
+    #     if not self.bp.force_chain_reorg(count):
+    #         raise RPCError(BAD_REQUEST, 'still catching up with daemon')
+    #     return f'scheduled a reorg of {count:,d} blocks'
 
     # --- External Interface
 

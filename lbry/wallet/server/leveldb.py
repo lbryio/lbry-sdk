@@ -995,7 +995,6 @@ class LevelDB:
                     batch_delete(op.key)
 
             flush_data.undo.clear()
-            flush_data.db_op_stack.clear()
 
             while self.fs_height > flush_data.height:
                 self.fs_height -= 1
