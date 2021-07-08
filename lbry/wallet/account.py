@@ -96,7 +96,8 @@ class AddressManager:
         return [r['address'] for r in records]
 
     async def get_or_create_usable_address(self) -> str:
-        addresses = await self.get_addresses(only_usable=True, limit=10)
+        async with self.address_generator_lock:
+            addresses = await self.get_addresses(only_usable=True, limit=10)
         if addresses:
             return random.choice(addresses)
         addresses = await self.ensure_address_gap()
