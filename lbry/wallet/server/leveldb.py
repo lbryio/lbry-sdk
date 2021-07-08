@@ -609,7 +609,10 @@ class LevelDB:
 
     def all_claims_producer(self, batch_size=500_000):
         batch = []
-        for claim_hash in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix, include_value=False):
+        for claim_hash, v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
+            # TODO: fix the couple of claim txos that dont have controlling names
+            if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).name)):
+                continue
             claim = self._fs_get_claim_by_hash(claim_hash[1:])
             if claim:
                 batch.append(claim)
