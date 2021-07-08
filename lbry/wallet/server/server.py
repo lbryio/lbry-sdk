@@ -76,7 +76,7 @@ class Server:
         self.notifications = notifications = Notifications()
         self.daemon = daemon = env.coin.DAEMON(env.coin, env.daemon_url)
         self.db = db = env.coin.DB(env)
-        self.bp = bp = env.coin.BLOCK_PROCESSOR(env, db, daemon, notifications)
+        self.bp = bp = env.coin.BLOCK_PROCESSOR(env, db, daemon, notifications, self.shutdown_event)
         self.prometheus_server: typing.Optional[PrometheusServer] = None
 
         # Set notifications up to implement the MemPoolAPI
