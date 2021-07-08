@@ -172,11 +172,12 @@ class BlockProcessor:
         "reorg_count", "Number of reorgs", namespace=NAMESPACE
     )
 
-    def __init__(self, env, db: 'LevelDB', daemon, notifications):
+    def __init__(self, env, db: 'LevelDB', daemon, notifications, shutdown_event: asyncio.Event):
         self.env = env
         self.db = db
         self.daemon = daemon
         self.notifications = notifications
+        self.shutdown_event = shutdown_event
 
         self.coin = env.coin
         if env.coin.NET == 'mainnet':
@@ -308,7 +309,8 @@ class BlockProcessor:
                     await self.run_in_thread_with_lock(self.advance_block, block)
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
-                    await self.db.search_index.claim_consumer(self.claim_producer())
+                    if not self.db.first_sync:
+                        await self.db.search_index.claim_consumer(self.claim_producer())
                     self.db.search_index.clear_caches()
                     self.touched_claims_to_send_es.clear()
                     self.removed_claims_to_send_es.clear()
@@ -1495,9 +1497,8 @@ class BlockProcessor:
         await self.flush(True)
         if first_sync:
             self.logger.info(f'{lbry.__version__} synced to '
-                             f'height {self.height:,d}')
-        # Reopen for serving
-        await self.db.open_dbs()
+                             f'height {self.height:,d}, halting here.')
+            self.shutdown_event.set()
 
     # --- External API
 
