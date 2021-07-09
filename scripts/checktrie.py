@@ -2,7 +2,7 @@ import sys
 import asyncio
 from binascii import hexlify
 
-from lbry.wallet.server.db import SQLDB
+from lbry.wallet.server.db.writer import SQLDB
 from lbry.wallet.server.coin import LBC
 from lbry.wallet.server.daemon import Daemon
 
