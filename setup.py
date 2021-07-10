@@ -9,7 +9,7 @@ with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
 
 PLYVEL = []
 if sys.platform.startswith('linux'):
-    PLYVEL.append('plyvel==1.0.5')
+    PLYVEL.append('plyvel==1.2.0')
 
 setup(
     name=__name__,
