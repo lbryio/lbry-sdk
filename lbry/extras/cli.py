@@ -37,7 +37,8 @@ async def execute_command(conf, method, params, callback=display):
                         return callback(data['error'])
                 except Exception as e:
                     log.exception('Could not process response from server:', exc_info=e)
-        except aiohttp.ClientConnectionError:
+        except aiohttp.ClientConnectionError as cce:
+            log.exception("Exception: ", exc_info=cce)
             print("Could not connect to daemon. Are you sure it's running?")
 
 
