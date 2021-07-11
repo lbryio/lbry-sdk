@@ -34,7 +34,7 @@ setup(
         ],
     },
     install_requires=[
-        'aiohttp==3.5.4',
+        'aiohttp==3.6.2',
         'aioupnp==0.0.18',
         'appdirs==1.4.3',
         'certifi>=2018.11.29',
