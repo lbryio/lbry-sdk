@@ -26,11 +26,12 @@ Could not connect to daemon. Are you sure it's running?
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
 
 These environment variables also need to be set:
-1. PYTHONUNBUFFERED=1
-2. EVENT_NOKQUEUE=1
+```
+PYTHONUNBUFFERED=1
+EVENT_NOKQUEUE=1
+```
 
 Remaining dependencies can then be installed by running:
-
 ```
 brew install python protobuf
 ```
@@ -40,7 +41,6 @@ Assistance installing Python3: https://docs.python-guide.org/starting/install3/o
 ### Linux
 
 On Ubuntu (we recommend 18.04 or 20.04), install the following:
-
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
@@ -59,52 +59,68 @@ If you're running another Linux distro, install the equivalent of the above pack
 
 ### Linux/Mac
 
-To install on Linux/Mac:
+Clone the repository:
+```
+$ git clone https://github.com/lbryio/lbry-sdk.git
+$ cd lbry-sdk
+```
 
- ```
- Clone the repository:
- $ git clone https://github.com/lbryio/lbry-sdk.git
- $ cd lbry-sdk
+Create a Python virtual environment for lbry-sdk:
+```
+$ python3.7 -m venv lbry-venv
+```
 
- Create a Python virtual environment for lbry-sdk:
- $ python3.7 -m venv lbry-venv
- 
- Activating lbry-sdk virtual environment:
- $ source lbry-venv/bin/activate
- 
- Make sure you're on Python 3.7+ (as the default Python in virtual environment):
- $ python --version
+Activate virtual environment:
+```
+$ source lbry-venv/bin/activate
+```
 
- Install packages:
- $ make install
+Make sure you're on Python 3.7+ as default in the virtual environment:
+```
+$ python --version
+```
 
- If you are on Linux and using PyCharm, generates initial configs:
- $ make idea
- ```
+Install packages:
+```
+$ make install
+```
+
+If you are on Linux and using PyCharm, generates initial configs:
+```
+$ make idea
+```
 
 To verify your installation, `which lbrynet` should return a path inside
 of the `lbry-venv` folder.
+```
+(lbry-venv) $ which lbrynet
+/opt/lbry-sdk/lbry-venv/bin/lbrynet
+```
 
 To exit the virtual environment simply use the command `deactivate`.
 
 ### Windows
 
-To install on Windows:
+Clone the repository:
+```
+> git clone https://github.com/lbryio/lbry-sdk.git
+> cd lbry-sdk
+```
 
- ```
- Clone the repository:
- > git clone https://github.com/lbryio/lbry-sdk.git
- > cd lbry-sdk
+Create a Python virtual environment for lbry-sdk:
+```
+> python -m venv lbry-venv
+```
 
- Create a Python virtual environment for lbry-sdk:
- > python -m venv lbry-venv
+Activate virtual environment:
+```
+> lbry-venv\Scripts\activate
+```
 
- Activating lbry-sdk virtual environment:
- > lbry-venv\Scripts\activate
-
- Install packages:
- > pip install -e .
- ```
+Install packages:
+```
+> pip install -e .
+```
 
 ## Run the tests
 ### Elasticsearch
@@ -115,16 +131,14 @@ The easiest way to start it is using docker with:
 ```bash
 make elastic-docker
 ```
+
 Alternative installation methods are available [at Elasticsearch website](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html).
 
-
-
 To run the unit and integration tests from the repo directory:
-
- ```
- python -m unittest discover tests.unit
- python -m unittest discover tests.integration
- ```
+```
+python -m unittest discover tests.unit
+python -m unittest discover tests.integration
+```
 
 ## Usage
 
