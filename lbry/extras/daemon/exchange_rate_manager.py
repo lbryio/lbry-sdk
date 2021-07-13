@@ -186,7 +186,7 @@ class UPbitBTCFeed(MarketFeed):
     params = {"markets": "BTC-LBC"}
 
     def get_rate_from_response(self, json_response):
-        if len(json_response) != 1 or 'trade_price' not in json_response[0]:
+        if "error" in json_response or len(json_response) != 1 or 'trade_price' not in json_response[0]:
             raise InvalidExchangeRateResponseError(self.name, 'result not found')
         return 1.0 / float(json_response[0]['trade_price'])
 
