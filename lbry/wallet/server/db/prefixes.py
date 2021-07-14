@@ -938,7 +938,7 @@ class RepostedPrefixRow(PrefixRow):
 
 
 class UndoPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.undo_claimtrie.value
+    prefix = DB_PREFIXES.undo.value
     key_struct = struct.Struct(b'>Q')
 
     @classmethod
@@ -965,7 +965,7 @@ class UndoPrefixRow(PrefixRow):
 
 
 class BlockHashPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.BLOCK_HASH_PREFIX.value
+    prefix = DB_PREFIXES.block_hash.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>32s')
 
@@ -991,7 +991,7 @@ class BlockHashPrefixRow(PrefixRow):
 
 
 class BlockHeaderPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.HEADER_PREFIX.value
+    prefix = DB_PREFIXES.header.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>112s')
 
@@ -1017,7 +1017,7 @@ class BlockHeaderPrefixRow(PrefixRow):
 
 
 class TXNumPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.TX_NUM_PREFIX.value
+    prefix = DB_PREFIXES.tx_num.value
     key_struct = struct.Struct(b'>32s')
     value_struct = struct.Struct(b'>L')
 
@@ -1043,7 +1043,7 @@ class TXNumPrefixRow(PrefixRow):
 
 
 class TxCountPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.TX_COUNT_PREFIX.value
+    prefix = DB_PREFIXES.tx_count.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>L')
 
@@ -1069,7 +1069,7 @@ class TxCountPrefixRow(PrefixRow):
 
 
 class TXHashPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.TX_HASH_PREFIX.value
+    prefix = DB_PREFIXES.tx_hash.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>32s')
 
@@ -1095,7 +1095,7 @@ class TXHashPrefixRow(PrefixRow):
 
 
 class TXPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.TX_PREFIX.value
+    prefix = DB_PREFIXES.tx.value
     key_struct = struct.Struct(b'>32s')
 
     @classmethod
@@ -1120,7 +1120,7 @@ class TXPrefixRow(PrefixRow):
 
 
 class UTXOPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.UTXO_PREFIX.value
+    prefix = DB_PREFIXES.utxo.value
     key_struct = struct.Struct(b'>11sLH')
     value_struct = struct.Struct(b'>Q')
 
@@ -1153,7 +1153,7 @@ class UTXOPrefixRow(PrefixRow):
 
 
 class HashXUTXOPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.HASHX_UTXO_PREFIX.value
+    prefix = DB_PREFIXES.hashx_utxo.value
     key_struct = struct.Struct(b'>4sLH')
     value_struct = struct.Struct(b'>11s')
 
@@ -1186,7 +1186,7 @@ class HashXUTXOPrefixRow(PrefixRow):
 
 
 class HashXHistoryPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.HASHX_HISTORY_PREFIX.value
+    prefix = DB_PREFIXES.hashx_history.value
     key_struct = struct.Struct(b'>11sL')
 
     key_part_lambdas = [

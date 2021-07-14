@@ -430,7 +430,7 @@ class BlockProcessor:
 
             if signing_channel:
                 raw_channel_tx = self.db.db.get(
-                    DB_PREFIXES.TX_PREFIX.value + self.db.total_transactions[signing_channel.tx_num]
+                    DB_PREFIXES.tx.value + self.db.total_transactions[signing_channel.tx_num]
                 )
             channel_pub_key_bytes = None
             try:
