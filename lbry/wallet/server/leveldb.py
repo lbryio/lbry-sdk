@@ -1171,6 +1171,16 @@ class LevelDB:
             raise DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
         return [self.coin.header_hash(header) for header in self.headers[height:height + count]]
 
+    def read_history(self, hashX: bytes, limit: int = 1000) -> List[int]:
+        txs = array.array('I')
+        for hist in self.db.iterator(prefix=Prefixes.hashX_history.pack_partial_key(hashX), include_key=False):
+            a = array.array('I')
+            a.frombytes(hist)
+            txs.extend(a)
+            if len(txs) >= limit:
+                break
+        return txs.tolist()
+
     async def limited_history(self, hashX, *, limit=1000):
         """Return an unpruned, sorted list of (tx_hash, height) tuples of
         confirmed transactions that touched the address, earliest in
@@ -1178,33 +1188,10 @@ class LevelDB:
         transactions.  By default returns at most 1000 entries.  Set
         limit to None to get them all.
         """
-
-        def read_history():
-            db_height = self.db_height
-            tx_counts = self.tx_counts
-
-            cnt = 0
-            txs = []
-
-            for hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value + hashX, include_key=False):
-                a = array.array('I')
-                a.frombytes(hist)
-                for tx_num in a:
-                    tx_height = bisect_right(tx_counts, tx_num)
-                    if tx_height > db_height:
-                        return
-                    txs.append((tx_num, tx_height))
-                    cnt += 1
-                    if limit and cnt >= limit:
-                        break
-                if limit and cnt >= limit:
-                    break
-            return txs
-
         while True:
-            history = await asyncio.get_event_loop().run_in_executor(self.executor, read_history)
+            history = await asyncio.get_event_loop().run_in_executor(self.executor, self.read_history, hashX, limit)
             if history is not None:
-                return [(self.total_transactions[tx_num], tx_height) for (tx_num, tx_height) in history]
+                return [(self.total_transactions[tx_num], bisect_right(self.tx_counts, tx_num)) for tx_num in history]
             self.logger.warning(f'limited_history: tx hash '
                                 f'not found (reorg?), retrying...')
             await sleep(0.25)
