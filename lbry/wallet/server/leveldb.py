@@ -65,16 +65,10 @@ TXO_STRUCT_pack = TXO_STRUCT.pack
 class FlushData:
     height = attr.ib()
     tx_count = attr.ib()
-    headers = attr.ib()
     block_hashes = attr.ib()
     block_txs = attr.ib()
-    claimtrie_stash = attr.ib()
-    # The following are flushed to the UTXO DB if undo_infos is not None
-    undo_infos = attr.ib()
-    adds = attr.ib()
-    deletes = attr.ib()
+    put_and_delete_ops = attr.ib()
     tip = attr.ib()
-    undo = attr.ib()
 
 
 OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, LookupError, ValueError]]
@@ -142,9 +136,6 @@ class LevelDB:
         # Header merkle cache
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
-
-        self.headers_db = None
-        self.tx_db = None
 
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
@@ -748,60 +739,7 @@ class LevelDB:
             raise RuntimeError(msg)
         self.logger.info(f'flush count: {self.hist_flush_count:,d}')
 
-        # self.history.clear_excess(self.utxo_flush_count)
-        # < might happen at end of compaction as both DBs cannot be
-        # updated atomically
-        if self.hist_flush_count > self.utxo_flush_count:
-            self.logger.info('DB shut down uncleanly.  Scanning for excess history flushes...')
-
-            keys = []
-            for key, hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value):
-                k = key[1:]
-                flush_id = int.from_bytes(k[-4:], byteorder='big')
-                if flush_id > self.utxo_flush_count:
-                    keys.append(k)
-
-            self.logger.info(f'deleting {len(keys):,d} history entries')
-
-            self.hist_flush_count = self.utxo_flush_count
-            with self.db.write_batch() as batch:
-                for key in keys:
-                    batch.delete(DB_PREFIXES.HASHX_HISTORY_PREFIX.value + key)
-            if keys:
-                self.logger.info('deleted %i excess history entries', len(keys))
-
         self.utxo_flush_count = self.hist_flush_count
-
-        min_height = self.min_undo_height(self.db_height)
-        keys = []
-        for key, hist in self.db.iterator(prefix=DB_PREFIXES.UNDO_PREFIX.value):
-            height, = unpack('>I', key[-4:])
-            if height >= min_height:
-                break
-            keys.append(key)
-        if min_height > 0:
-            for key in self.db.iterator(start=DB_PREFIXES.undo_claimtrie.value,
-                                        stop=Prefixes.undo.pack_key(min_height),
-                                        include_value=False):
-                keys.append(key)
-        if keys:
-            with self.db.write_batch() as batch:
-                for key in keys:
-                    batch.delete(key)
-            self.logger.info(f'deleted {len(keys):,d} stale undo entries')
-
-        # delete old block files
-        prefix = self.raw_block_prefix()
-        paths = [path for path in glob(f'{prefix}[0-9]*')
-                 if len(path) > len(prefix)
-                 and int(path[len(prefix):]) < min_height]
-        if paths:
-            for path in paths:
-                try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
-            self.logger.info(f'deleted {len(paths):,d} stale block files')
 
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
@@ -836,129 +774,50 @@ class LevelDB:
         assert flush_data.tx_count == self.fs_tx_count == self.db_tx_count
         assert flush_data.height == self.fs_height == self.db_height
         assert flush_data.tip == self.db_tip
-        assert not flush_data.headers
         assert not flush_data.block_txs
-        assert not flush_data.adds
-        assert not flush_data.deletes
-        assert not flush_data.undo_infos
-        assert not self.hist_unflushed
+        assert not len(flush_data.put_and_delete_ops)
 
     def flush_dbs(self, flush_data: FlushData):
-        """Flush out cached state.  History is always flushed; UTXOs are
-        flushed if flush_utxos."""
-
         if flush_data.height == self.db_height:
             self.assert_flushed(flush_data)
             return
 
-        # start_time = time.time()
-        prior_flush = self.last_flush
-        tx_delta = flush_data.tx_count - self.last_flush_tx_count
-
-        # Flush to file system
-        # self.flush_fs(flush_data)
-        prior_tx_count = (self.tx_counts[self.fs_height]
-                          if self.fs_height >= 0 else 0)
-
-        assert len(flush_data.block_txs) == len(flush_data.headers)
-        assert flush_data.height == self.fs_height + len(flush_data.headers)
-        assert flush_data.tx_count == (self.tx_counts[-1] if self.tx_counts
-                                       else 0)
-        assert len(self.tx_counts) == flush_data.height + 1
-        assert len(
-            b''.join(hashes for hashes, _ in flush_data.block_txs)
-        ) // 32 == flush_data.tx_count - prior_tx_count, f"{len(b''.join(hashes for hashes, _ in flush_data.block_txs)) // 32} != {flush_data.tx_count}"
-
-        # Write the headers
-        # start_time = time.perf_counter()
+        min_height = self.min_undo_height(self.db_height)
+        delete_undo_keys = []
+        if min_height > 0:
+            delete_undo_keys.extend(
+                self.db.iterator(
+                    start=Prefixes.undo.pack_key(0), stop=Prefixes.undo.pack_key(min_height), include_value=False
+                )
+            )
 
         with self.db.write_batch() as batch:
-            self.put = batch.put
-            batch_put = self.put
+            batch_put = batch.put
             batch_delete = batch.delete
-            height_start = self.fs_height + 1
-            tx_num = prior_tx_count
-            for i, (header, block_hash, (tx_hashes, txs)) in enumerate(
-                    zip(flush_data.headers, flush_data.block_hashes, flush_data.block_txs)):
-                batch_put(DB_PREFIXES.HEADER_PREFIX.value + util.pack_be_uint64(height_start), header)
-                self.headers.append(header)
-                tx_count = self.tx_counts[height_start]
-                batch_put(DB_PREFIXES.BLOCK_HASH_PREFIX.value + util.pack_be_uint64(height_start), block_hash[::-1])
-                batch_put(DB_PREFIXES.TX_COUNT_PREFIX.value + util.pack_be_uint64(height_start), util.pack_be_uint64(tx_count))
-                height_start += 1
-                offset = 0
-                while offset < len(tx_hashes):
-                    batch_put(DB_PREFIXES.TX_HASH_PREFIX.value + util.pack_be_uint64(tx_num), tx_hashes[offset:offset + 32])
-                    batch_put(DB_PREFIXES.TX_NUM_PREFIX.value + tx_hashes[offset:offset + 32], util.pack_be_uint64(tx_num))
-                    batch_put(DB_PREFIXES.TX_PREFIX.value + tx_hashes[offset:offset + 32], txs[offset // 32])
-                    tx_num += 1
-                    offset += 32
-            flush_data.headers.clear()
-            flush_data.block_txs.clear()
-            flush_data.block_hashes.clear()
-            for staged_change in flush_data.claimtrie_stash:
-                # print("ADVANCE", staged_change)
+
+            for staged_change in flush_data.put_and_delete_ops:
                 if staged_change.is_put:
                     batch_put(staged_change.key, staged_change.value)
                 else:
                     batch_delete(staged_change.key)
-            flush_data.claimtrie_stash.clear()
-
-            for undo_ops, height in flush_data.undo:
-                batch_put(*Prefixes.undo.pack_item(height, undo_ops))
-            flush_data.undo.clear()
+            for delete_key in delete_undo_keys:
+                batch_delete(delete_key)
 
             self.fs_height = flush_data.height
             self.fs_tx_count = flush_data.tx_count
-
-            # Then history
             self.hist_flush_count += 1
-            flush_id = util.pack_be_uint32(self.hist_flush_count)
-            unflushed = self.hist_unflushed
-
-            for hashX in sorted(unflushed):
-                key = hashX + flush_id
-                batch_put(DB_PREFIXES.HASHX_HISTORY_PREFIX.value + key, unflushed[hashX].tobytes())
-
-            unflushed.clear()
             self.hist_unflushed_count = 0
-
-            #########################
-
-            # New undo information
-            for undo_info, height in flush_data.undo_infos:
-                batch_put(self.undo_key(height), b''.join(undo_info))
-            flush_data.undo_infos.clear()
-
-            # Spends
-            for key in sorted(flush_data.deletes):
-                batch_delete(key)
-            flush_data.deletes.clear()
-
-            # New UTXOs
-            for key, value in flush_data.adds.items():
-                # suffix = tx_idx + tx_num
-                hashX = value[:-12]
-                suffix = key[-2:] + value[-12:-8]
-                batch_put(DB_PREFIXES.HASHX_UTXO_PREFIX.value + key[:4] + suffix, hashX)
-                batch_put(DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix, value[-8:])
-            flush_data.adds.clear()
-
             self.utxo_flush_count = self.hist_flush_count
             self.db_height = flush_data.height
             self.db_tx_count = flush_data.tx_count
             self.db_tip = flush_data.tip
-
+            self.last_flush_tx_count = self.fs_tx_count
             now = time.time()
             self.wall_time += now - self.last_flush
             self.last_flush = now
-            self.last_flush_tx_count = self.fs_tx_count
-
             self.write_db_state(batch)
 
-    def flush_backup(self, flush_data, touched):
-        """Like flush_dbs() but when backing up.  All UTXOs are flushed."""
-        assert not flush_data.headers
+    def flush_backup(self, flush_data):
         assert not flush_data.block_txs
         assert flush_data.height < self.db_height
         assert not self.hist_unflushed
@@ -974,82 +833,25 @@ class LevelDB:
         self.hist_flush_count += 1
         nremoves = 0
 
-        undo_ops = RevertableOpStack(self.db.get)
-
-        for (packed_ops, height) in reversed(flush_data.undo):
-            undo_ops.extend(reversed(RevertableOp.unpack_stack(packed_ops)))
-            undo_ops.append(
-                RevertableDelete(*Prefixes.undo.pack_item(height, packed_ops))
-            )
-
         with self.db.write_batch() as batch:
             batch_put = batch.put
             batch_delete = batch.delete
-
-            # print("flush undos", flush_data.undo_claimtrie)
-            for op in undo_ops:
+            for op in flush_data.put_and_delete_ops:
                 # print("REWIND", op)
                 if op.is_put:
                     batch_put(op.key, op.value)
                 else:
                     batch_delete(op.key)
-
-            flush_data.undo.clear()
-
             while self.fs_height > flush_data.height:
                 self.fs_height -= 1
-                self.headers.pop()
-            tx_count = flush_data.tx_count
-            for hashX in sorted(touched):
-                deletes = []
-                puts = {}
-                for key, hist in self.db.iterator(prefix=DB_PREFIXES.HASHX_HISTORY_PREFIX.value + hashX, reverse=True):
-                    k = key[1:]
-                    a = array.array('I')
-                    a.frombytes(hist)
-                    # Remove all history entries >= tx_count
-                    idx = bisect_left(a, tx_count)
-                    nremoves += len(a) - idx
-                    if idx > 0:
-                        puts[k] = a[:idx].tobytes()
-                        break
-                    deletes.append(k)
-
-                for key in deletes:
-                    batch_delete(key)
-                for key, value in puts.items():
-                    batch_put(key, value)
-
-            # New undo information
-            for undo_info, height in flush_data.undo:
-                batch.put(self.undo_key(height), b''.join(undo_info))
-            flush_data.undo.clear()
-
-            # Spends
-            for key in sorted(flush_data.deletes):
-                batch_delete(key)
-            flush_data.deletes.clear()
-
-            # New UTXOs
-            for key, value in flush_data.adds.items():
-                # suffix = tx_idx + tx_num
-                hashX = value[:-12]
-                suffix = key[-2:] + value[-12:-8]
-                batch_put(DB_PREFIXES.HASHX_UTXO_PREFIX.value + key[:4] + suffix, hashX)
-                batch_put(DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix, value[-8:])
-            flush_data.adds.clear()
 
             start_time = time.time()
-            add_count = len(flush_data.adds)
-            spend_count = len(flush_data.deletes) // 2
-
             if self.db.for_sync:
                 block_count = flush_data.height - self.db_height
                 tx_count = flush_data.tx_count - self.db_tx_count
                 elapsed = time.time() - start_time
                 self.logger.info(f'flushed {block_count:,d} blocks with '
-                                 f'{tx_count:,d} txs, {add_count:,d} UTXO adds, '
-                                 f'{spend_count:,d} spends in '
+                                 f'{tx_count:,d} txs in '
                                  f'{elapsed:.1f}s, committing...')
 
             self.utxo_flush_count = self.hist_flush_count
@@ -1121,7 +923,6 @@ class LevelDB:
             return None, tx_height
 
     def _fs_transactions(self, txids: Iterable[str]):
-        unpack_be_uint64 = util.unpack_be_uint64
         tx_counts = self.tx_counts
         tx_db_get = self.db.get
         tx_cache = self._tx_and_merkle_cache
@@ -1133,14 +934,12 @@ class LevelDB:
                 tx, merkle = cached_tx
             else:
                 tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = tx_db_get(DB_PREFIXES.TX_NUM_PREFIX.value + tx_hash_bytes)
+                tx_num = self.transaction_num_mapping.get(tx_hash_bytes)
                 tx = None
                 tx_height = -1
                 if tx_num is not None:
-                    tx_num = unpack_be_uint64(tx_num)
                     tx_height = bisect_right(tx_counts, tx_num)
-                    if tx_height < self.db_height:
-                        tx = tx_db_get(DB_PREFIXES.TX_PREFIX.value + tx_hash_bytes)
+                    tx = tx_db_get(Prefixes.tx.pack_key(tx_hash_bytes))
                 if tx_height == -1:
                     merkle = {
                         'block_height': -1
@@ -1204,67 +1003,10 @@ class LevelDB:
 
     def undo_key(self, height: int) -> bytes:
         """DB key for undo information at the given height."""
-        return DB_PREFIXES.UNDO_PREFIX.value + pack('>I', height)
+        return Prefixes.undo.pack_key(height)
 
-    def read_undo_info(self, height):
-        """Read undo information from a file for the current height."""
-        return self.db.get(self.undo_key(height)), self.db.get(Prefixes.undo.pack_key(self.fs_height))
-
-    def raw_block_prefix(self):
-        return 'block'
-
-    def raw_block_path(self, height):
-        return os.path.join(self.env.db_dir, f'{self.raw_block_prefix()}{height:d}')
-
-    async def read_raw_block(self, height):
-        """Returns a raw block read from disk.  Raises FileNotFoundError
-        if the block isn't on-disk."""
-
-        def read():
-            with util.open_file(self.raw_block_path(height)) as f:
-                return f.read(-1)
-
-        return await asyncio.get_event_loop().run_in_executor(self.executor, read)
-
-    def write_raw_block(self, block, height):
-        """Write a raw block to disk."""
-        with util.open_truncate(self.raw_block_path(height)) as f:
-            f.write(block)
-        # Delete old blocks to prevent them accumulating
-        try:
-            del_height = self.min_undo_height(height) - 1
-            os.remove(self.raw_block_path(del_height))
-        except FileNotFoundError:
-            pass
-
-    def clear_excess_undo_info(self):
-        """Clear excess undo info.  Only most recent N are kept."""
-        min_height = self.min_undo_height(self.db_height)
-        keys = []
-        for key, hist in self.db.iterator(prefix=DB_PREFIXES.UNDO_PREFIX.value):
-            height, = unpack('>I', key[-4:])
-            if height >= min_height:
-                break
-            keys.append(key)
-
-        if keys:
-            with self.db.write_batch() as batch:
-                for key in keys:
-                    batch.delete(key)
-            self.logger.info(f'deleted {len(keys):,d} stale undo entries')
-
-        # delete old block files
-        prefix = self.raw_block_prefix()
-        paths = [path for path in glob(f'{prefix}[0-9]*')
-                 if len(path) > len(prefix)
-                 and int(path[len(prefix):]) < min_height]
-        if paths:
-            for path in paths:
-                try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
-            self.logger.info(f'deleted {len(paths):,d} stale block files')
+    def read_undo_info(self, height: int):
+        return self.db.get(Prefixes.undo.pack_key(height))
 
     # -- UTXO database
 
