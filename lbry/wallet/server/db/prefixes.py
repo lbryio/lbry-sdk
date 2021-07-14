@@ -1,5 +1,7 @@
 import typing
 import struct
+import array
+import base64
 from typing import Union, Tuple, NamedTuple
 from lbry.wallet.server.db import DB_PREFIXES
 
@@ -43,6 +45,113 @@ class PrefixRow:
     @classmethod
     def unpack_item(cls, key: bytes, value: bytes):
         return cls.unpack_key(key), cls.unpack_value(value)
+
+
+class UTXOKey(NamedTuple):
+    hashX: bytes
+    tx_num: int
+    nout: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(hashX={self.hashX.hex()}, tx_num={self.tx_num}, nout={self.nout})"
+
+
+class UTXOValue(NamedTuple):
+    amount: int
+
+
+class HashXUTXOKey(NamedTuple):
+    short_tx_hash: bytes
+    tx_num: int
+    nout: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(short_tx_hash={self.short_tx_hash.hex()}, tx_num={self.tx_num}, nout={self.nout})"
+
+
+class HashXUTXOValue(NamedTuple):
+    hashX: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(hashX={self.hashX.hex()})"
+
+
+class HashXHistoryKey(NamedTuple):
+    hashX: bytes
+    height: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(hashX={self.hashX.hex()}, height={self.height})"
+
+
+class HashXHistoryValue(NamedTuple):
+    hashXes: typing.List[int]
+
+
+class BlockHashKey(NamedTuple):
+    height: int
+
+
+class BlockHashValue(NamedTuple):
+    block_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(block_hash={self.block_hash.hex()})"
+
+
+class TxCountKey(NamedTuple):
+    height: int
+
+
+class TxCountValue(NamedTuple):
+    tx_count: int
+
+
+class TxHashKey(NamedTuple):
+    tx_num: int
+
+
+class TxHashValue(NamedTuple):
+    tx_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+
+
+class TxNumKey(NamedTuple):
+    tx_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+
+
+class TxNumValue(NamedTuple):
+    tx_num: int
+
+
+class TxKey(NamedTuple):
+    tx_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+
+
+class TxValue(NamedTuple):
+    raw_tx: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(raw_tx={base64.b64encode(self.raw_tx)})"
+
+
+class BlockHeaderKey(NamedTuple):
+    height: int
+
+
+class BlockHeaderValue(NamedTuple):
+    header: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(header={base64.b64encode(self.header)})"
 
 
 class ClaimToTXOKey(typing.NamedTuple):
@@ -855,6 +964,261 @@ class UndoPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(undo_ops)
 
 
+class BlockHashPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.BLOCK_HASH_PREFIX.value
+    key_struct = struct.Struct(b'>L')
+    value_struct = struct.Struct(b'>32s')
+
+    @classmethod
+    def pack_key(cls, height: int) -> bytes:
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> BlockHashKey:
+        return BlockHashKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, block_hash: bytes) -> bytes:
+        return super().pack_value(block_hash)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> BlockHashValue:
+        return BlockHashValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, height: int, block_hash: bytes):
+        return cls.pack_key(height), cls.pack_value(block_hash)
+
+
+class BlockHeaderPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.HEADER_PREFIX.value
+    key_struct = struct.Struct(b'>L')
+    value_struct = struct.Struct(b'>112s')
+
+    @classmethod
+    def pack_key(cls, height: int) -> bytes:
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> BlockHeaderKey:
+        return BlockHeaderKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, header: bytes) -> bytes:
+        return super().pack_value(header)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> BlockHeaderValue:
+        return BlockHeaderValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, height: int, header: bytes):
+        return cls.pack_key(height), cls.pack_value(header)
+
+
+class TXNumPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.TX_NUM_PREFIX.value
+    key_struct = struct.Struct(b'>32s')
+    value_struct = struct.Struct(b'>L')
+
+    @classmethod
+    def pack_key(cls, tx_hash: bytes) -> bytes:
+        return super().pack_key(tx_hash)
+
+    @classmethod
+    def unpack_key(cls, tx_hash: bytes) -> TxNumKey:
+        return TxNumKey(*super().unpack_key(tx_hash))
+
+    @classmethod
+    def pack_value(cls, tx_num: int) -> bytes:
+        return super().pack_value(tx_num)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TxNumValue:
+        return TxNumValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, tx_hash: bytes, tx_num: int):
+        return cls.pack_key(tx_hash), cls.pack_value(tx_num)
+
+
+class TxCountPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.TX_COUNT_PREFIX.value
+    key_struct = struct.Struct(b'>L')
+    value_struct = struct.Struct(b'>L')
+
+    @classmethod
+    def pack_key(cls, height: int) -> bytes:
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TxCountKey:
+        return TxCountKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, tx_count: int) -> bytes:
+        return super().pack_value(tx_count)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TxCountValue:
+        return TxCountValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, height: int, tx_count: int):
+        return cls.pack_key(height), cls.pack_value(tx_count)
+
+
+class TXHashPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.TX_HASH_PREFIX.value
+    key_struct = struct.Struct(b'>L')
+    value_struct = struct.Struct(b'>32s')
+
+    @classmethod
+    def pack_key(cls, tx_num: int) -> bytes:
+        return super().pack_key(tx_num)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TxHashKey:
+        return TxHashKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, tx_hash: bytes) -> bytes:
+        return super().pack_value(tx_hash)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TxHashValue:
+        return TxHashValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, tx_num: int, tx_hash: bytes):
+        return cls.pack_key(tx_num), cls.pack_value(tx_hash)
+
+
+class TXPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.TX_PREFIX.value
+    key_struct = struct.Struct(b'>32s')
+
+    @classmethod
+    def pack_key(cls, tx_hash: bytes) -> bytes:
+        return super().pack_key(tx_hash)
+
+    @classmethod
+    def unpack_key(cls, tx_hash: bytes) -> TxKey:
+        return TxKey(*super().unpack_key(tx_hash))
+
+    @classmethod
+    def pack_value(cls, tx: bytes) -> bytes:
+        return tx
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TxValue:
+        return TxValue(data)
+
+    @classmethod
+    def pack_item(cls, tx_hash: bytes, raw_tx: bytes):
+        return cls.pack_key(tx_hash), cls.pack_value(raw_tx)
+
+
+class UTXOPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.UTXO_PREFIX.value
+    key_struct = struct.Struct(b'>11sLH')
+    value_struct = struct.Struct(b'>Q')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>11s').pack,
+        struct.Struct(b'>11sL').pack,
+        struct.Struct(b'>11sLH').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, hashX: bytes, tx_num, nout: int):
+        return super().pack_key(hashX, tx_num, nout)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> UTXOKey:
+        return UTXOKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, amount: int) -> bytes:
+        return super().pack_value(amount)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> UTXOValue:
+        return UTXOValue(*cls.value_struct.unpack(data))
+
+    @classmethod
+    def pack_item(cls, hashX: bytes, tx_num: int, nout: int, amount: int):
+        return cls.pack_key(hashX, tx_num, nout), cls.pack_value(amount)
+
+
+class HashXUTXOPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.HASHX_UTXO_PREFIX.value
+    key_struct = struct.Struct(b'>4sLH')
+    value_struct = struct.Struct(b'>11s')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>4s').pack,
+        struct.Struct(b'>4sL').pack,
+        struct.Struct(b'>4sLH').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, short_tx_hash: bytes, tx_num, nout: int):
+        return super().pack_key(short_tx_hash, tx_num, nout)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> HashXUTXOKey:
+        return HashXUTXOKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, hashX: bytes) -> bytes:
+        return super().pack_value(hashX)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> HashXUTXOValue:
+        return HashXUTXOValue(*cls.value_struct.unpack(data))
+
+    @classmethod
+    def pack_item(cls, short_tx_hash: bytes, tx_num: int, nout: int, hashX: bytes):
+        return cls.pack_key(short_tx_hash, tx_num, nout), cls.pack_value(hashX)
+
+
+class HashXHistoryPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.HASHX_HISTORY_PREFIX.value
+    key_struct = struct.Struct(b'>11sL')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>11s').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, hashX: bytes, height: int):
+        return super().pack_key(hashX, height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> HashXHistoryKey:
+        return HashXHistoryKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, history: typing.List[int]) -> bytes:
+        a = array.array('I')
+        a.fromlist(history)
+        return a.tobytes()
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> HashXHistoryValue:
+        a = array.array('I')
+        a.frombytes(data)
+        return HashXHistoryValue(a.tolist())
+
+    @classmethod
+    def pack_item(cls, hashX: bytes, height: int, history: typing.List[int]):
+        return cls.pack_key(hashX, height), cls.pack_value(history)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -879,6 +1243,15 @@ class Prefixes:
     reposted_claim = RepostedPrefixRow
 
     undo = UndoPrefixRow
+    utxo = UTXOPrefixRow
+    hashX_utxo = HashXUTXOPrefixRow
+    hashX_history = HashXHistoryPrefixRow
+    block_hash = BlockHashPrefixRow
+    tx_count = TxCountPrefixRow
+    tx_hash = TXHashPrefixRow
+    tx_num = TXNumPrefixRow
+    tx = TXPrefixRow
+    header = BlockHeaderPrefixRow
 
 
 ROW_TYPES = {
@@ -897,7 +1270,16 @@ ROW_TYPES = {
     Prefixes.effective_amount.prefix: Prefixes.effective_amount,
     Prefixes.repost.prefix: Prefixes.repost,
     Prefixes.reposted_claim.prefix: Prefixes.reposted_claim,
-    Prefixes.undo.prefix: Prefixes.undo
+    Prefixes.undo.prefix: Prefixes.undo,
+    Prefixes.utxo.prefix: Prefixes.utxo,
+    Prefixes.hashX_utxo.prefix: Prefixes.hashX_utxo,
+    Prefixes.hashX_history.prefix: Prefixes.hashX_history,
+    Prefixes.block_hash.prefix: Prefixes.block_hash,
+    Prefixes.tx_count.prefix: Prefixes.tx_count,
+    Prefixes.tx_hash.prefix: Prefixes.tx_hash,
+    Prefixes.tx_num.prefix: Prefixes.tx_num,
+    Prefixes.tx.prefix: Prefixes.tx,
+    Prefixes.header.prefix: Prefixes.header
 }
 
 
