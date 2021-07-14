@@ -132,40 +132,6 @@ class MemPool:
             await asyncio.sleep(self.log_status_secs)
             await synchronized_event.wait()
 
-    async def _refresh_histogram(self, synchronized_event):
-        while True:
-            await synchronized_event.wait()
-            async with self.lock:
-                self._update_histogram(100_000)
-            await asyncio.sleep(self.coin.MEMPOOL_HISTOGRAM_REFRESH_SECS)
-
-    def _update_histogram(self, bin_size):
-        # Build a histogram by fee rate
-        histogram = defaultdict(int)
-        for tx in self.txs.values():
-            histogram[tx.fee // tx.size] += tx.size
-
-        # Now compact it.  For efficiency, get_fees returns a
-        # compact histogram with variable bin size.  The compact
-        # histogram is an array of (fee_rate, vsize) values.
-        # vsize_n is the cumulative virtual size of mempool
-        # transactions with a fee rate in the interval
-        # [rate_(n-1), rate_n)], and rate_(n-1) > rate_n.
-        # Intervals are chosen to create tranches containing at
-        # least 100kb of transactions
-        compact = []
-        cum_size = 0
-        r = 0   # ?
-        for fee_rate, size in sorted(histogram.items(), reverse=True):
-            cum_size += size
-            if cum_size + r > bin_size:
-                compact.append((fee_rate, cum_size))
-                r += cum_size - bin_size
-                cum_size = 0
-                bin_size *= 1.1
-        self.logger.info(f'compact fee histogram: {compact}')
-        self.cached_compact_histogram = compact
-
     def _accept_transactions(self, tx_map, utxo_map, touched):
         """Accept transactions in tx_map to the mempool if all their inputs
         can be found in the existing mempool or a utxo_map from the
