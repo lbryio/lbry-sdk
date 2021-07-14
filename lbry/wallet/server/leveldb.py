@@ -1333,16 +1333,12 @@ class LevelDB:
         def read_utxos():
             utxos = []
             utxos_append = utxos.append
-            s_unpack = unpack
             fs_tx_hash = self.fs_tx_hash
-            # Key: b'u' + address_hashX + tx_idx + tx_num
-            # Value: the UTXO value as a 64-bit unsigned integer
-            prefix = DB_PREFIXES.UTXO_PREFIX.value + hashX
-            for db_key, db_value in self.db.iterator(prefix=prefix):
-                tx_pos, tx_num = s_unpack('<HI', db_key[-6:])
-                value, = unpack('<Q', db_value)
-                tx_hash, height = fs_tx_hash(tx_num)
-                utxos_append(UTXO(tx_num, tx_pos, tx_hash, height, value))
+            for db_key, db_value in self.db.iterator(prefix=Prefixes.utxo.pack_partial_key(hashX)):
+                k = Prefixes.utxo.unpack_key(db_key)
+                v = Prefixes.utxo.unpack_value(db_value)
+                tx_hash, height = fs_tx_hash(k.tx_num)
+                utxos_append(UTXO(k.tx_num, k.nout, tx_hash, height, v.amount))
             return utxos
 
         while True:
@@ -1354,50 +1350,14 @@ class LevelDB:
             await sleep(0.25)
 
     async def lookup_utxos(self, prevouts):
-        """For each prevout, lookup it up in the DB and return a (hashX,
-        value) pair or None if not found.
-
-        Used by the mempool code.
-        """
-        def lookup_hashXs():
-            """Return (hashX, suffix) pairs, or None if not found,
-            for each prevout.
-            """
-            def lookup_hashX(tx_hash, tx_idx):
-                idx_packed = pack('<H', tx_idx)
-
-                # Key: b'h' + compressed_tx_hash + tx_idx + tx_num
-                # Value: hashX
-                prefix = DB_PREFIXES.HASHX_UTXO_PREFIX.value + tx_hash[:4] + idx_packed
-
-                # Find which entry, if any, the TX_HASH matches.
-                for db_key, hashX in self.db.iterator(prefix=prefix):
-                    tx_num_packed = db_key[-4:]
-                    tx_num, = unpack('<I', tx_num_packed)
-                    hash, height = self.fs_tx_hash(tx_num)
-                    if hash == tx_hash:
-                        return hashX, idx_packed + tx_num_packed
-                return None, None
-            return [lookup_hashX(*prevout) for prevout in prevouts]
-
-        def lookup_utxos(hashX_pairs):
-            def lookup_utxo(hashX, suffix):
-                if not hashX:
-                    # This can happen when the daemon is a block ahead
-                    # of us and has mempool txs spending outputs from
-                    # that new block
-                    return None
-                # Key: b'u' + address_hashX + tx_idx + tx_num
-                # Value: the UTXO value as a 64-bit unsigned integer
-                key = DB_PREFIXES.UTXO_PREFIX.value + hashX + suffix
-                db_value = self.db.get(key)
-                if not db_value:
-                    # This can happen if the DB was updated between
-                    # getting the hashXs and getting the UTXOs
-                    return None
-                value, = unpack('<Q', db_value)
-                return hashX, value
-            return [lookup_utxo(*hashX_pair) for hashX_pair in hashX_pairs]
-
-        hashX_pairs = await asyncio.get_event_loop().run_in_executor(self.executor, lookup_hashXs)
-        return await asyncio.get_event_loop().run_in_executor(self.executor, lookup_utxos, hashX_pairs)
+        def lookup_utxos():
+            utxos = []
+            utxo_append = utxos.append
+            for (tx_hash, nout) in prevouts:
+                tx_num = self.transaction_num_mapping[tx_hash]
+                hashX = self.db.get(Prefixes.hashX_utxo.pack_key(tx_hash[:4], tx_num, nout))
+                utxo_value = self.db.get(Prefixes.utxo.pack_key(hashX, tx_num, nout))
+                if utxo_value:
+                    utxo_append((hashX, Prefixes.utxo.unpack_value(utxo_value).amount))
+            return utxos
+        return await asyncio.get_event_loop().run_in_executor(self.executor, lookup_utxos)
