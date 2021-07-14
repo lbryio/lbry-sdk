@@ -82,7 +82,7 @@ class BaseResolveTestCase(CommandTestCase):
             check_supports(c['claimId'], c['supports'])
             claim_hash = bytes.fromhex(c['claimId'])
             self.assertEqual(c['validAtHeight'], db.get_activation(
-                db.total_transactions.index(bytes.fromhex(c['txId'])[::-1]), c['n']
+                db.transaction_num_mapping[bytes.fromhex(c['txId'])[::-1]], c['n']
             ))
             self.assertEqual(c['effectiveAmount'], db.get_effective_amount(claim_hash))
 
