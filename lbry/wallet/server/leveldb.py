@@ -417,7 +417,7 @@ class LevelDB:
         for _k, _v in self.db.iterator(prefix=Prefixes.claim_expiration.pack_partial_key(height)):
             k, v = Prefixes.claim_expiration.unpack_item(_k, _v)
             tx_hash = self.total_transactions[k.tx_num]
-            tx = self.coin.transaction(self.db.get(DB_PREFIXES.TX_PREFIX.value + tx_hash))
+            tx = self.coin.transaction(self.db.get(DB_PREFIXES.tx.value + tx_hash))
             # treat it like a claim spend so it will delete/abandon properly
             # the _spend_claim function this result is fed to expects a txi, so make a mock one
             # print(f"\texpired lbry://{v.name} {v.claim_hash.hex()}")
@@ -443,7 +443,7 @@ class LevelDB:
 
     def get_claim_metadata(self, tx_hash, nout):
         raw = self.db.get(
-            DB_PREFIXES.TX_PREFIX.value + tx_hash
+            DB_PREFIXES.tx.value + tx_hash
         )
         try:
             output = self.coin.transaction(raw).outputs[nout]
@@ -493,7 +493,7 @@ class LevelDB:
         if reposted_claim:
             reposted_tx_hash = self.total_transactions[reposted_claim.tx_num]
             raw_reposted_claim_tx = self.db.get(
-                DB_PREFIXES.TX_PREFIX.value + reposted_tx_hash
+                DB_PREFIXES.tx.value + reposted_tx_hash
             )
             try:
                 reposted_claim_txo = self.coin.transaction(
@@ -659,8 +659,8 @@ class LevelDB:
 
         def get_counts():
             return tuple(
-                util.unpack_be_uint64(tx_count)
-                for tx_count in self.db.iterator(prefix=DB_PREFIXES.TX_COUNT_PREFIX.value, include_key=False)
+                Prefixes.tx_count.unpack_value(packed_tx_count).tx_count
+                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.value, include_key=False)
             )
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(self.executor, get_counts)
@@ -675,7 +675,7 @@ class LevelDB:
 
     async def _read_txids(self):
         def get_txids():
-            return list(self.db.iterator(prefix=DB_PREFIXES.TX_HASH_PREFIX.value, include_key=False))
+            return list(self.db.iterator(prefix=Prefixes.tx_hash.prefix, include_key=False))
 
         start = time.perf_counter()
         self.logger.info("loading txids")
@@ -694,7 +694,7 @@ class LevelDB:
 
         def get_headers():
             return [
-                header for header in self.db.iterator(prefix=DB_PREFIXES.HEADER_PREFIX.value, include_key=False)
+                header for header in self.db.iterator(prefix=Prefixes.header.prefix, include_key=False)
             ]
 
         headers = await asyncio.get_event_loop().run_in_executor(self.executor, get_headers)
