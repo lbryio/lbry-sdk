@@ -176,14 +176,13 @@ class SessionManager:
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
-    def __init__(self, env: 'Env', db: LevelDB, bp: BlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
-                 shutdown_event: asyncio.Event):
+    def __init__(self, env: 'Env', db: LevelDB, bp: BlockProcessor, daemon: 'Daemon', shutdown_event: asyncio.Event):
         env.max_send = max(350000, env.max_send)
         self.env = env
         self.db = db
         self.bp = bp
         self.daemon = daemon
-        self.mempool = mempool
+        self.mempool = bp.mempool
         self.shutdown_event = shutdown_event
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.servers: typing.Dict[str, asyncio.AbstractServer] = {}
