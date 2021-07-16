@@ -17,8 +17,13 @@ class BaseResolveTestCase(CommandTestCase):
         if claim_id is None:
             self.assertIn('error', other)
             self.assertEqual(other['error']['name'], 'NOT_FOUND')
+            claims_from_es = (await self.conductor.spv_node.server.bp.db.search_index.search(name=name))[0]
+            claims_from_es = [c['claim_hash'][::-1].hex() for c in claims_from_es]
+            self.assertNotIn(claim_id, claims_from_es)
         else:
+            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
             self.assertEqual(claim_id, other['claim_id'])
+            self.assertEqual(claim_id, claim_from_es[0][0]['claim_hash'][::-1].hex())
 
     async def assertNoClaimForName(self, name: str):
         lbrycrd_winning = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
@@ -28,11 +33,18 @@ class BaseResolveTestCase(CommandTestCase):
             self.assertIsInstance(stream, LookupError)
         else:
             self.assertIsInstance(channel, LookupError)
+        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(name=name)
+        self.assertListEqual([], claim_from_es[0])
 
     async def assertMatchWinningClaim(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
         stream, channel = await self.conductor.spv_node.server.bp.db.fs_resolve(name)
         claim = stream if stream else channel
+        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+            claim_id=claim.claim_hash.hex()
+        )
+        self.assertEqual(len(claim_from_es[0]), 1)
+        self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim.claim_hash.hex())
         self.assertEqual(expected['claimId'], claim.claim_hash.hex())
         self.assertEqual(expected['validAtHeight'], claim.activation_height)
         self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)

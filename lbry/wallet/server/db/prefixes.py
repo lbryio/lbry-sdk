@@ -387,6 +387,20 @@ class RepostedValue(typing.NamedTuple):
         return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
 
 
+class TouchedOrDeletedClaimKey(typing.NamedTuple):
+    height: int
+
+
+class TouchedOrDeletedClaimValue(typing.NamedTuple):
+    touched_claims: typing.Set[bytes]
+    deleted_claims: typing.Set[bytes]
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(" \
+               f"touched_claims={','.join(map(lambda x: x.hex(), self.touched_claims))}," \
+               f"deleted_claims={','.join(map(lambda x: x.hex(), self.deleted_claims))})"
+
+
 class ActiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.active_amount.value
     key_struct = struct.Struct(b'>20sBLLH')
@@ -1219,6 +1233,38 @@ class HashXHistoryPrefixRow(PrefixRow):
         return cls.pack_key(hashX, height), cls.pack_value(history)
 
 
+class TouchedOrDeletedPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.claim_diff.value
+    key_struct = struct.Struct(b'>L')
+    value_struct = struct.Struct(b'>LL')
+
+    @classmethod
+    def pack_key(cls, height: int):
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TouchedOrDeletedClaimKey:
+        return TouchedOrDeletedClaimKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, touched, deleted) -> bytes:
+        return cls.value_struct.pack(len(touched), len(deleted)) + b''.join(touched) + b''.join(deleted)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TouchedOrDeletedClaimValue:
+        touched_len, deleted_len = cls.value_struct.unpack(data[:8])
+        assert len(data) == 20 * (touched_len + deleted_len) + 8
+        touched_bytes, deleted_bytes = data[8:touched_len*20+8], data[touched_len*20+8:touched_len*20+deleted_len*20+8]
+        return TouchedOrDeletedClaimValue(
+            {touched_bytes[8+20*i:8+20*(i+1)] for i in range(touched_len)},
+            {deleted_bytes[8+20*i:8+20*(i+1)] for i in range(deleted_len)}
+        )
+
+    @classmethod
+    def pack_item(cls, height, touched, deleted):
+        return cls.pack_key(height), cls.pack_value(touched, deleted)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -1252,6 +1298,8 @@ class Prefixes:
     tx_num = TXNumPrefixRow
     tx = TXPrefixRow
     header = BlockHeaderPrefixRow
+    touched_or_deleted = TouchedOrDeletedPrefixRow
+
 
 
 ROW_TYPES = {

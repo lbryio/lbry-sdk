@@ -249,8 +249,12 @@ class BlockProcessor:
         self.possible_future_claim_amount_by_name_and_hash: Dict[Tuple[str, bytes], int] = {}
         self.possible_future_support_txos_by_claim_hash: DefaultDict[bytes, List[Tuple[int, int]]] = defaultdict(list)
 
-        self.removed_claims_to_send_es = set()
+        self.removed_claims_to_send_es = set()  # cumulative changes across blocks to send ES
         self.touched_claims_to_send_es = set()
+
+        self.removed_claim_hashes: Set[bytes] = set()  # per block changes
+        self.touched_claim_hashes: Set[bytes] = set()
+
         self.signatures_changed = set()
 
         self.pending_reposted = set()
@@ -268,16 +272,9 @@ class BlockProcessor:
         if self.db.db_height <= 1:
             return
 
-        to_send_es = set(self.touched_claims_to_send_es)
-        to_send_es.update(self.pending_reposted.difference(self.removed_claims_to_send_es))
-        to_send_es.update(
-            {k for k, v in self.pending_channel_counts.items() if v != 0}.difference(
-                self.removed_claims_to_send_es)
-        )
-
         for claim_hash in self.removed_claims_to_send_es:
             yield 'delete', claim_hash.hex()
-        for claim in self.db.claims_producer(to_send_es):
+        for claim in self.db.claims_producer(self.touched_claims_to_send_es):
             yield 'update', claim
 
     async def run_in_thread_with_lock(self, func, *args):
@@ -313,14 +310,12 @@ class BlockProcessor:
                     await self.run_in_thread_with_lock(self.advance_block, block)
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
-                    if not self.db.first_sync:
-                        await self.db.search_index.claim_consumer(self.claim_producer())
-                    self.db.search_index.clear_caches()
-                    self.touched_claims_to_send_es.clear()
-                    self.removed_claims_to_send_es.clear()
-                    self.pending_reposted.clear()
-                    self.pending_channel_counts.clear()
-                    # print("******************\n")
+                if not self.db.first_sync:
+                    await self.db.search_index.claim_consumer(self.claim_producer())
+                self.db.search_index.clear_caches()
+                self.touched_claims_to_send_es.clear()
+                self.removed_claims_to_send_es.clear()
+                # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
@@ -351,6 +346,14 @@ class BlockProcessor:
                 assert count > 0, count
                 for _ in range(count):
                     await self.run_in_thread_with_lock(self.backup_block)
+                for touched in self.touched_claims_to_send_es:
+                    if not self.db.get_claim_txo(touched):
+                        self.removed_claims_to_send_es.add(touched)
+                self.touched_claims_to_send_es.difference_update(self.removed_claims_to_send_es)
+                await self.db.search_index.claim_consumer(self.claim_producer())
+                self.db.search_index.clear_caches()
+                self.touched_claims_to_send_es.clear()
+                self.removed_claims_to_send_es.clear()
                 await self.prefetcher.reset_height(self.height)
                 self.reorg_count_metric.inc()
             except:
@@ -995,6 +998,9 @@ class BlockProcessor:
                                 ).get_activate_ops()
                             )
                     self.db_op_stack.extend(get_takeover_name_ops(name, winning_including_future_activations, height, controlling))
+                    self.touched_claim_hashes.add(winning_including_future_activations)
+                    if controlling and controlling.claim_hash not in self.abandoned_claims:
+                        self.touched_claim_hashes.add(controlling.claim_hash)
                 elif not controlling or (winning_claim_hash != controlling.claim_hash and
                                        name in names_with_abandoned_controlling_claims) or \
                         ((winning_claim_hash != controlling.claim_hash) and (amounts[winning_claim_hash] > amounts[controlling.claim_hash])):
@@ -1025,6 +1031,9 @@ class BlockProcessor:
                                 ).get_activate_ops()
                             )
                     self.db_op_stack.extend(get_takeover_name_ops(name, winning_claim_hash, height, controlling))
+                    if controlling and controlling.claim_hash not in self.abandoned_claims:
+                        self.touched_claim_hashes.add(controlling.claim_hash)
+                    self.touched_claim_hashes.add(winning_claim_hash)
                 elif winning_claim_hash == controlling.claim_hash:
                     # print("\tstill winning")
                     pass
@@ -1048,19 +1057,23 @@ class BlockProcessor:
             if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
                 # print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
                 self.db_op_stack.extend(get_takeover_name_ops(name, winning, height, controlling))
+                if controlling:
+                    self.touched_claim_hashes.add(controlling.claim_hash)
+                self.touched_claim_hashes.add(winning)
 
+    def _get_cumulative_update_ops(self):
         # gather cumulative removed/touched sets to update the search index
-        self.removed_claims_to_send_es.update(set(self.abandoned_claims.keys()))
-        self.touched_claims_to_send_es.update(
+        self.removed_claim_hashes.update(set(self.abandoned_claims.keys()))
+        self.touched_claim_hashes.update(
             set(self.activated_support_amount_by_claim.keys()).union(
                 set(claim_hash for (_, claim_hash) in self.activated_claim_amount_by_name_and_hash.keys())
             ).union(self.signatures_changed).union(
                 set(self.removed_active_support_amount_by_claim.keys())
-            ).difference(self.removed_claims_to_send_es)
+            ).difference(self.removed_claim_hashes)
         )
 
         # use the cumulative changes to update bid ordered resolve
-        for removed in self.removed_claims_to_send_es:
+        for removed in self.removed_claim_hashes:
             removed_claim = self.db.get_claim_txo(removed)
             if removed_claim:
                 amt = self.db.get_url_effective_amount(
@@ -1071,7 +1084,7 @@ class BlockProcessor:
                         removed_claim.name, amt.effective_amount, amt.tx_num,
                         amt.position, removed
                     ))
-        for touched in self.touched_claims_to_send_es:
+        for touched in self.touched_claim_hashes:
             if touched in self.claim_hash_to_txo:
                 pending = self.txo_to_claim[self.claim_hash_to_txo[touched]]
                 name, tx_num, position = pending.name, pending.tx_num, pending.position
@@ -1097,6 +1110,16 @@ class BlockProcessor:
                 get_add_effective_amount_ops(name, self._get_pending_effective_amount(name, touched),
                                              tx_num, position, touched)
             )
+
+        self.touched_claim_hashes.update(
+            {k for k in self.pending_reposted if k not in self.removed_claim_hashes}
+        )
+        self.touched_claim_hashes.update(
+            {k for k, v in self.pending_channel_counts.items() if v != 0 and k not in self.removed_claim_hashes}
+        )
+        self.touched_claims_to_send_es.difference_update(self.removed_claim_hashes)
+        self.touched_claims_to_send_es.update(self.touched_claim_hashes)
+        self.removed_claims_to_send_es.update(self.removed_claim_hashes)
 
     def advance_block(self, block):
         height = self.height + 1
@@ -1168,6 +1191,9 @@ class BlockProcessor:
         # activate claims and process takeovers
         self._get_takeover_ops(height)
 
+        # update effective amount and update sets of touched and deleted claims
+        self._get_cumulative_update_ops()
+
         self.db_op_stack.append(RevertablePut(*Prefixes.header.pack_item(height, block.header)))
         self.db_op_stack.append(RevertablePut(*Prefixes.tx_count.pack_item(height, tx_count)))
 
@@ -1185,8 +1211,20 @@ class BlockProcessor:
         self.tx_count = tx_count
         self.db.tx_counts.append(self.tx_count)
 
-        if height >= self.daemon.cached_height() - self.env.reorg_limit:
-            self.db_op_stack.append(RevertablePut(*Prefixes.undo.pack_item(height, self.db_op_stack.get_undo_ops())))
+        cached_max_reorg_depth = self.daemon.cached_height() - self.env.reorg_limit
+        if height >= cached_max_reorg_depth:
+            self.db_op_stack.append(
+                RevertablePut(
+                    *Prefixes.touched_or_deleted.pack_item(
+                        height, self.touched_claim_hashes, self.removed_claim_hashes
+                    )
+                )
+            )
+            self.db_op_stack.append(
+                RevertablePut(
+                    *Prefixes.undo.pack_item(height, self.db_op_stack.get_undo_ops())
+                )
+            )
 
         self.height = height
         self.db.headers.append(block.header)
@@ -1220,16 +1258,26 @@ class BlockProcessor:
         self.hashXs_by_tx.clear()
         self.history_cache.clear()
         self.notifications.notified_mempool_txs.clear()
+        self.removed_claim_hashes.clear()
+        self.touched_claim_hashes.clear()
+        self.pending_reposted.clear()
+        self.pending_channel_counts.clear()
 
     def backup_block(self):
         self.db.assert_flushed(self.flush_data())
         self.logger.info("backup block %i", self.height)
         # Check and update self.tip
-        undo_ops = self.db.read_undo_info(self.height)
+        undo_ops, touched_and_deleted_bytes = self.db.read_undo_info(self.height)
         if undo_ops is None:
             raise ChainError(f'no undo information found for height {self.height:,d}')
-        self.db_op_stack.apply_packed_undo_ops(undo_ops)
         self.db_op_stack.append(RevertableDelete(Prefixes.undo.pack_key(self.height), undo_ops))
+        self.db_op_stack.apply_packed_undo_ops(undo_ops)
+
+        touched_and_deleted = Prefixes.touched_or_deleted.unpack_value(touched_and_deleted_bytes)
+        self.touched_claims_to_send_es.update(touched_and_deleted.touched_claims)
+        self.removed_claims_to_send_es.difference_update(touched_and_deleted.touched_claims)
+        self.removed_claims_to_send_es.update(touched_and_deleted.deleted_claims)
+
         self.db.headers.pop()
         self.block_hashes.pop()
         self.db.tx_counts.pop()

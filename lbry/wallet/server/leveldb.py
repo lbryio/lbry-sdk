@@ -784,10 +784,16 @@ class LevelDB:
 
         min_height = self.min_undo_height(self.db_height)
         delete_undo_keys = []
-        if min_height > 0:
+        if min_height > 0:  # delete undos for blocks deep enough they can't be reorged
             delete_undo_keys.extend(
                 self.db.iterator(
                     start=Prefixes.undo.pack_key(0), stop=Prefixes.undo.pack_key(min_height), include_value=False
+                )
+            )
+            delete_undo_keys.extend(
+                self.db.iterator(
+                    start=Prefixes.touched_or_deleted.pack_key(0),
+                    stop=Prefixes.touched_or_deleted.pack_key(min_height), include_value=False
                 )
             )
 
@@ -1006,7 +1012,7 @@ class LevelDB:
         return Prefixes.undo.pack_key(height)
 
     def read_undo_info(self, height: int):
-        return self.db.get(Prefixes.undo.pack_key(height))
+        return self.db.get(Prefixes.undo.pack_key(height)), self.db.get(Prefixes.touched_or_deleted.pack_key(height))
 
     # -- UTXO database
 
