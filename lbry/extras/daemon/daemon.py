@@ -5368,7 +5368,9 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         comments = comments['items']
         claim_ids = {comment['claim_id'] for comment in comments}
-        claims = {cid: await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id=cid) for cid in claim_ids}
+        claim_ids.update({comment['channel_id'] for comment in comments})
+
+        claims = {cid: await self.ledger.get_claim_by_claim_id(cid, wallet.accounts) for cid in claim_ids}
         pieces = []
         for comment in comments:
             claim = claims.get(comment['claim_id'])
@@ -5376,8 +5378,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 channel = await self.get_channel_or_none(
                     wallet,
                     account_ids=[],
-                    channel_id=claim.channel.claim_id,
-                    channel_name=claim.channel.claim_name,
+                    channel_id=claims.get(comment['channel_id']).claim_id,
+                    channel_name=claims.get(comment['channel_id']).claim_name,
                     for_signing=True
                 )
                 piece = {'comment_id': comment['comment_id']}
