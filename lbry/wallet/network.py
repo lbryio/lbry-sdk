@@ -238,7 +238,7 @@ class Network:
                 log.exception("error looking up dns for spv server %s:%i", server, port)
 
         # accumulate the dns results
-        if self.config['explicit_servers']:
+        if self.config.get('explicit_servers', []):
             hubs = self.config['explicit_servers']
         elif self.known_hubs:
             hubs = self.known_hubs
@@ -254,7 +254,7 @@ class Network:
         sent_ping_timestamps = {}
         _, ip_to_hostnames = await self.resolve_spv_dns()
         n = len(ip_to_hostnames)
-        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config['explicit_servers']))
+        log.info("%i possible spv servers to try (%i urls in config)", n, len(self.config.get('explicit_servers', [])))
         pongs = {}
         known_hubs = self.known_hubs
         try:
@@ -299,8 +299,8 @@ class Network:
             if (pong is not None and self.jurisdiction is not None) and \
                     (pong.country_name != self.jurisdiction):
                 continue
-            client = ClientSession(network=self, server=(host, port), timeout=self.config['hub_timeout'],
-                                   concurrency=self.config['concurrent_hub_requests'])
+            client = ClientSession(network=self, server=(host, port), timeout=self.config.get('hub_timeout', 30),
+                                   concurrency=self.config.get('concurrent_hub_requests', 30))
             try:
                 await client.create_connection()
                 log.warning("Connected to spv server %s:%i", host, port)
