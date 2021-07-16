@@ -4051,7 +4051,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
 
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, wallet.accounts)
             if not isinstance(txo, Output) or not txo.is_claim:
                 raise Exception(f"Could not find collection with claim_id '{claim_id}'. ")
         elif url:
