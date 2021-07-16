@@ -195,14 +195,14 @@ class TestHubDiscovery(CommandTestCase):
         )
 
 
-class TestStress(CommandTestCase):
-    async def test_flush_over_66_thousand(self):
-        history = self.conductor.spv_node.server.db.history
-        history.flush_count = 66_000
-        history.flush()
-        self.assertEqual(history.flush_count, 66_001)
-        await self.generate(1)
-        self.assertEqual(history.flush_count, 66_002)
+class TestStressFlush(CommandTestCase):
+#     async def test_flush_over_66_thousand(self):
+#         history = self.conductor.spv_node.server.db.history
+#         history.flush_count = 66_000
+#         history.flush()
+#         self.assertEqual(history.flush_count, 66_001)
+#         await self.generate(1)
+#         self.assertEqual(history.flush_count, 66_002)
 
     async def test_thousands_claim_ids_on_search(self):
         await self.stream_create()

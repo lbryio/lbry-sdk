@@ -136,7 +136,7 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
-        original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
+        original_summary = self.conductor.spv_node.server.bp.mempool.transaction_summaries
 
         def random_summary(*args, **kwargs):
             summary = original_summary(*args, **kwargs)
@@ -145,7 +145,7 @@ class BasicTransactionTests(IntegrationTestCase):
                 while summary == ordered:
                     random.shuffle(summary)
             return summary
-        self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
+        self.conductor.spv_node.server.bp.mempool.transaction_summaries = random_summary
         # 10 unconfirmed txs, all from blockchain wallet
         sends = [self.blockchain.send_to_address(address, 10) for _ in range(10)]
         # use batching to reduce issues with send_to_address on cli
