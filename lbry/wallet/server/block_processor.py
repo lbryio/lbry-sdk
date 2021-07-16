@@ -328,7 +328,7 @@ class BlockProcessor:
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
                 await self.notifications.on_block(self.touched, self.height)
-            self.touched = set()
+            self.touched.clear()
         elif hprevs[0] != chain[0]:
             min_start_height = max(self.height - self.coin.REORG_LIMIT, 0)
             count = 1
@@ -1296,6 +1296,7 @@ class BlockProcessor:
     def add_utxo(self, tx_hash: bytes, tx_num: int, nout: int, txout: 'TxOutput') -> Optional[bytes]:
         hashX = self.coin.hashX_from_script(txout.pk_script)
         if hashX:
+            self.touched.add(hashX)
             self.utxo_cache[(tx_hash, nout)] = hashX
             self.db_op_stack.extend([
                 RevertablePut(
@@ -1332,6 +1333,7 @@ class BlockProcessor:
                 )
                 raise ChainError(f"{hash_to_hex_str(tx_hash)}:{nout} is not found in UTXO db for {hash_to_hex_str(hashX)}")
             # Remove both entries for this UTXO
+            self.touched.add(hashX)
             self.db_op_stack.extend([
                 RevertableDelete(hdb_key, hashX),
                 RevertableDelete(udb_key, utxo_value_packed)
