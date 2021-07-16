@@ -178,7 +178,7 @@ class UDPServerFailDiscoveryTest(AsyncioTestCase):
 class ServerPickingTestCase(AsyncioTestCase):
     async def _make_udp_server(self, port, latency) -> StatusServer:
         s = StatusServer()
-        await s.start(0, b'\x00' * 32, '127.0.0.1', port)
+        await s.start(0, b'\x00' * 32, 'US', '127.0.0.1', port, True)
         s.set_available()
         sendto = s._protocol.transport.sendto
 
