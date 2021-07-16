@@ -23,6 +23,7 @@ from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.crypto.hash import hash160
 from lbry.wallet.server.leveldb import FlushData
+from lbry.wallet.server.mempool import MemPool
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport
 from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, StagedActivation, get_add_effective_amount_ops
@@ -174,11 +175,12 @@ class BlockProcessor:
         "reorg_count", "Number of reorgs", namespace=NAMESPACE
     )
 
-    def __init__(self, env, db: 'LevelDB', daemon, mempool, shutdown_event: asyncio.Event):
+    def __init__(self, env, db: 'LevelDB', daemon, shutdown_event: asyncio.Event):
+        self.state_lock = asyncio.Lock()
         self.env = env
         self.db = db
         self.daemon = daemon
-        self.mempool = mempool
+        self.mempool = MemPool(env.coin, daemon, db, self.state_lock)
         self.shutdown_event = shutdown_event
 
         self.coin = env.coin
@@ -209,10 +211,6 @@ class BlockProcessor:
 
         # Claimtrie cache
         self.db_op_stack: Optional[RevertableOpStack] = None
-
-        # If the lock is successfully acquired, in-memory chain state
-        # is consistent with self.height
-        self.state_lock = asyncio.Lock()
 
         # self.search_cache = {}
         self.history_cache = {}
