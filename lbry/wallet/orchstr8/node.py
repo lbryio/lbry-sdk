@@ -223,7 +223,7 @@ class SPVNode:
         # TODO: don't use os.environ
         os.environ.update(conf)
         self.server = Server(Env(self.coin_class))
-        self.server.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
+        self.server.bp.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
         await self.server.start()
 
     async def stop(self, cleanup=True):

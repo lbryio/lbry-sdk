@@ -22,12 +22,11 @@ class Server:
 
         self.daemon = daemon = env.coin.DAEMON(env.coin, env.daemon_url)
         self.db = db = LevelDB(env)
-        self.mempool = mempool = MemPool(env.coin, daemon, db)
-        self.bp = bp = BlockProcessor(env, db, daemon, mempool, self.shutdown_event)
+        self.bp = bp = BlockProcessor(env, db, daemon, self.shutdown_event)
         self.prometheus_server: typing.Optional[PrometheusServer] = None
 
         self.session_mgr = LBRYSessionManager(
-            env, db, bp, daemon, mempool, self.shutdown_event
+            env, db, bp, daemon, self.shutdown_event
         )
         self._indexer_task = None
 
@@ -55,8 +54,8 @@ class Server:
         await _start_cancellable(self.bp.fetch_and_process_blocks)
 
         await self.db.populate_header_merkle_cache()
-        await _start_cancellable(self.mempool.keep_synchronized)
-        await _start_cancellable(self.session_mgr.serve, self.mempool)
+        await _start_cancellable(self.bp.mempool.keep_synchronized)
+        await _start_cancellable(self.session_mgr.serve, self.bp.mempool)
 
     async def stop(self):
         for task in reversed(self.cancellable_tasks):

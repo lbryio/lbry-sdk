@@ -49,7 +49,7 @@ mempool_process_time_metric = Histogram(
 
 
 class MemPool:
-    def __init__(self, coin, daemon, db, refresh_secs=1.0, log_status_secs=120.0):
+    def __init__(self, coin, daemon, db, state_lock: asyncio.Lock, refresh_secs=1.0, log_status_secs=120.0):
         self.coin = coin
         self._daemon = daemon
         self._db = db
@@ -64,7 +64,7 @@ class MemPool:
         self.refresh_secs = refresh_secs
         self.log_status_secs = log_status_secs
         # Prevents mempool refreshes during fee histogram calculation
-        self.lock = asyncio.Lock()
+        self.lock = state_lock
         self.wakeup = asyncio.Event()
         self.mempool_process_time_metric = mempool_process_time_metric
         self.notified_mempool_txs = set()
