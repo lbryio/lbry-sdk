@@ -9,15 +9,16 @@
 import asyncio
 import itertools
 import time
-from abc import ABC, abstractmethod
+import attr
+import typing
+from typing import Set, Optional, Callable, Awaitable
 from collections import defaultdict
 from prometheus_client import Histogram
-
-import attr
-
 from lbry.wallet.server.hash import hash_to_hex_str, hex_str_to_hash
 from lbry.wallet.server.util import class_logger, chunks
 from lbry.wallet.server.leveldb import UTXO
+if typing.TYPE_CHECKING:
+    from lbry.wallet.server.session import LBRYSessionManager
 
 
 @attr.s(slots=True)
@@ -37,47 +38,6 @@ class MemPoolTxSummary:
     has_unconfirmed_inputs = attr.ib()
 
 
-class MemPoolAPI(ABC):
-    """A concrete instance of this class is passed to the MemPool object
-    and used by it to query DB and blockchain state."""
-
-    @abstractmethod
-    async def height(self):
-        """Query bitcoind for its height."""
-
-    @abstractmethod
-    def cached_height(self):
-        """Return the height of bitcoind the last time it was queried,
-        for any reason, without actually querying it.
-        """
-
-    @abstractmethod
-    async def mempool_hashes(self):
-        """Query bitcoind for the hashes of all transactions in its
-        mempool, returned as a list."""
-
-    @abstractmethod
-    async def raw_transactions(self, hex_hashes):
-        """Query bitcoind for the serialized raw transactions with the given
-        hashes.  Missing transactions are returned as None.
-
-        hex_hashes is an iterable of hexadecimal hash strings."""
-
-    @abstractmethod
-    async def lookup_utxos(self, prevouts):
-        """Return a list of (hashX, value) pairs each prevout if unspent,
-        otherwise return None if spent or not found.
-
-        prevouts - an iterable of (hash, index) pairs
-        """
-
-    @abstractmethod
-    async def on_mempool(self, touched, new_touched, height):
-        """Called each time the mempool is synchronized.  touched is a set of
-        hashXs touched since the previous call.  height is the
-        daemon's height at the time the mempool was obtained."""
-
-
 NAMESPACE = "wallet_server"
 HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
@@ -89,23 +49,14 @@ mempool_process_time_metric = Histogram(
 
 
 class MemPool:
-    """Representation of the daemon's mempool.
-
-        coin - a coin class from coins.py
-        api - an object implementing MemPoolAPI
-
-    Updated regularly in caught-up state.  Goal is to enable efficient
-    response to the calls in the external interface.  To that end we
-    maintain the following maps:
-
-       tx:     tx_hash -> MemPoolTx
-       hashXs: hashX   -> set of all hashes of txs touching the hashX
-    """
-
-    def __init__(self, coin, api, refresh_secs=1.0, log_status_secs=120.0):
-        assert isinstance(api, MemPoolAPI)
+    def __init__(self, coin, daemon, db, refresh_secs=1.0, log_status_secs=120.0):
         self.coin = coin
-        self.api = api
+        self._daemon = daemon
+        self._db = db
+        self._touched_mp = {}
+        self._touched_bp = {}
+        self._highest_block = -1
+
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.txs = {}
         self.hashXs = defaultdict(set)  # None can be a key
@@ -117,6 +68,7 @@ class MemPool:
         self.wakeup = asyncio.Event()
         self.mempool_process_time_metric = mempool_process_time_metric
         self.notified_mempool_txs = set()
+        self.notify_sessions: Optional[Callable[[int, Set[bytes], Set[bytes]], Awaitable[None]]] = None
 
     async def _logging(self, synchronized_event):
         """Print regular logs of mempool stats."""
@@ -189,9 +141,9 @@ class MemPool:
         """Refresh our view of the daemon's mempool."""
         while True:
             start = time.perf_counter()
-            height = self.api.cached_height()
-            hex_hashes = await self.api.mempool_hashes()
-            if height != await self.api.height():
+            height = self._daemon.cached_height()
+            hex_hashes = await self._daemon.mempool_hashes()
+            if height != await self._daemon.height():
                 continue
             hashes = {hex_str_to_hash(hh) for hh in hex_hashes}
             async with self.lock:
@@ -203,7 +155,7 @@ class MemPool:
                 }
             synchronized_event.set()
             synchronized_event.clear()
-            await self.api.on_mempool(touched, new_touched, height)
+            await self.on_mempool(touched, new_touched, height)
             duration = time.perf_counter() - start
             self.mempool_process_time_metric.observe(duration)
             try:
@@ -258,8 +210,7 @@ class MemPool:
 
     async def _fetch_and_accept(self, hashes, all_hashes, touched):
         """Fetch a list of mempool transactions."""
-        hex_hashes_iter = (hash_to_hex_str(hash) for hash in hashes)
-        raw_txs = await self.api.raw_transactions(hex_hashes_iter)
+        raw_txs = await self._daemon.getrawtransactions((hash_to_hex_str(hash) for hash in hashes))
 
         to_hashX = self.coin.hashX_from_script
         deserializer = self.coin.DESERIALIZER
@@ -289,7 +240,7 @@ class MemPool:
         prevouts = tuple(prevout for tx in tx_map.values()
                          for prevout in tx.prevouts
                          if prevout[0] not in all_hashes)
-        utxos = await self.api.lookup_utxos(prevouts)
+        utxos = await self._db.lookup_utxos(prevouts)
         utxo_map = dict(zip(prevouts, utxos))
 
         return self._accept_transactions(tx_map, utxo_map, touched)
@@ -373,3 +324,37 @@ class MemPool:
         if unspent_inputs:
             return -1
         return 0
+
+    async def _maybe_notify(self, new_touched):
+        tmp, tbp = self._touched_mp, self._touched_bp
+        common = set(tmp).intersection(tbp)
+        if common:
+            height = max(common)
+        elif tmp and max(tmp) == self._highest_block:
+            height = self._highest_block
+        else:
+            # Either we are processing a block and waiting for it to
+            # come in, or we have not yet had a mempool update for the
+            # new block height
+            return
+        touched = tmp.pop(height)
+        for old in [h for h in tmp if h <= height]:
+            del tmp[old]
+        for old in [h for h in tbp if h <= height]:
+            touched.update(tbp.pop(old))
+        # print("notify", height, len(touched), len(new_touched))
+        await self.notify_sessions(height, touched, new_touched)
+
+    async def start(self, height, session_manager: 'LBRYSessionManager'):
+        self._highest_block = height
+        self.notify_sessions = session_manager._notify_sessions
+        await self.notify_sessions(height, set(), set())
+
+    async def on_mempool(self, touched, new_touched, height):
+        self._touched_mp[height] = touched
+        await self._maybe_notify(new_touched)
+
+    async def on_block(self, touched, height):
+        self._touched_bp[height] = touched
+        self._highest_block = height
+        await self._maybe_notify(set())
