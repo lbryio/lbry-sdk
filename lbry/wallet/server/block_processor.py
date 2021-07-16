@@ -174,11 +174,11 @@ class BlockProcessor:
         "reorg_count", "Number of reorgs", namespace=NAMESPACE
     )
 
-    def __init__(self, env, db: 'LevelDB', daemon, notifications, shutdown_event: asyncio.Event):
+    def __init__(self, env, db: 'LevelDB', daemon, mempool, shutdown_event: asyncio.Event):
         self.env = env
         self.db = db
         self.daemon = daemon
-        self.notifications = notifications
+        self.mempool = mempool
         self.shutdown_event = shutdown_event
 
         self.coin = env.coin
@@ -327,7 +327,7 @@ class BlockProcessor:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             if self._caught_up_event.is_set():
-                await self.notifications.on_block(self.touched, self.height)
+                await self.mempool.on_block(self.touched, self.height)
             self.touched.clear()
         elif hprevs[0] != chain[0]:
             min_start_height = max(self.height - self.coin.REORG_LIMIT, 0)
@@ -370,7 +370,6 @@ class BlockProcessor:
             self.logger.warning('daemon blocks do not form a chain; '
                                 'resetting the prefetcher')
             await self.prefetcher.reset_height(self.height)
-
 
     # - Flushing
     def flush_data(self):
@@ -1135,7 +1134,6 @@ class BlockProcessor:
         # Use local vars for speed in the loops
         spend_utxo = self.spend_utxo
         add_utxo = self.add_utxo
-
         spend_claim_or_support_txo = self._spend_claim_or_support_txo
         add_claim_or_support = self._add_claim_or_support
 
@@ -1257,7 +1255,7 @@ class BlockProcessor:
         self.utxo_cache.clear()
         self.hashXs_by_tx.clear()
         self.history_cache.clear()
-        self.notifications.notified_mempool_txs.clear()
+        self.mempool.notified_mempool_txs.clear()
         self.removed_claim_hashes.clear()
         self.touched_claim_hashes.clear()
         self.pending_reposted.clear()

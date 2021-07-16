@@ -554,7 +554,7 @@ class SessionManager:
 
     # --- External Interface
 
-    async def serve(self, notifications, server_listening_event):
+    async def serve(self, mempool, server_listening_event):
         """Start the RPC server if enabled.  When the event is triggered,
         start TCP and SSL servers."""
         try:
@@ -568,7 +568,7 @@ class SessionManager:
             if self.env.drop_client is not None:
                 self.logger.info(f'drop clients matching: {self.env.drop_client.pattern}')
             # Start notifications; initialize hsub_results
-            await notifications.start(self.db.db_height, self._notify_sessions)
+            await mempool.start(self.db.db_height, self)
             await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
