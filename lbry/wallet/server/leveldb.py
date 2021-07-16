@@ -660,7 +660,7 @@ class LevelDB:
         def get_counts():
             return tuple(
                 Prefixes.tx_count.unpack_value(packed_tx_count).tx_count
-                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.value, include_key=False)
+                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.prefix, include_key=False)
             )
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(self.executor, get_counts)
@@ -1083,8 +1083,12 @@ class LevelDB:
             utxos = []
             utxo_append = utxos.append
             for (tx_hash, nout) in prevouts:
+                if tx_hash not in self.transaction_num_mapping:
+                    continue
                 tx_num = self.transaction_num_mapping[tx_hash]
                 hashX = self.db.get(Prefixes.hashX_utxo.pack_key(tx_hash[:4], tx_num, nout))
+                if not hashX:
+                    continue
                 utxo_value = self.db.get(Prefixes.utxo.pack_key(hashX, tx_num, nout))
                 if utxo_value:
                     utxo_append((hashX, Prefixes.utxo.unpack_value(utxo_value).amount))

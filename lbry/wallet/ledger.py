@@ -556,7 +556,7 @@ class Ledger(metaclass=LedgerRegistry):
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
-                f"{len(pending_synced_history)} vs {len(remote_history)}"
+                f"{len(pending_synced_history)} vs {len(remote_history)} for {address}"
             synced_history = ""
             for remote_i, i in zip(range(len(remote_history)), sorted(pending_synced_history.keys())):
                 assert i == remote_i, f"{i} vs {remote_i}"
