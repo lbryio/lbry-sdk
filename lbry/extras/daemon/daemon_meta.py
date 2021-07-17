@@ -4,9 +4,12 @@ Meta class definition for the Daemon class, and auxiliary methods.
 """
 import json
 from functools import wraps
+from typing import List, Optional
 
 from lbry.error import (ComponentsNotStartedError,
                         ComponentStartConditionNotMetError)
+
+DEFAULT_PAGE_SIZE = 20
 
 
 class JSONRPCServerType(type):
@@ -56,3 +59,19 @@ def deprecated(new_command=None):
         return f
 
     return _deprecated_wrapper
+
+
+def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
+    page = max(1, page or 1)
+    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
+    total_items = len(items)
+    offset = page_size * (page - 1)
+    subitems = []
+    if offset <= total_items:
+        subitems = items[offset:offset+page_size]
+    return {
+        "items": subitems,
+        "total_pages": int((total_items + (page_size - 1)) / page_size),
+        "total_items": total_items,
+        "page": page, "page_size": page_size
+    }
