@@ -70,38 +70,10 @@ def is_transactional_function(name):
         if action in name:
             return True
 
-
-def requires(*components, **conditions):
-    if conditions and ["conditions"] != list(conditions.keys()):
-        raise SyntaxError("invalid conditions argument")
-    condition_names = conditions.get("conditions", [])
-
-    def _wrap(method):
-        @wraps(method)
-        def _inner(*args, **kwargs):
-            component_manager = args[0].component_manager
-            for condition_name in condition_names:
-                condition_result, err_msg = component_manager.evaluate_condition(condition_name)
-                if not condition_result:
-                    raise ComponentStartConditionNotMetError(err_msg)
-            if not component_manager.all_components_running(*components):
-                raise ComponentsNotStartedError(
-                    f"the following required components have not yet started: {json.dumps(components)}"
-                )
-            return method(*args, **kwargs)
-
-        return _inner
-
-    return _wrap
+from lbry.extras.daemon.daemon_meta import requires
 
 
-def deprecated(new_command=None):
-    def _deprecated_wrapper(f):
-        f.new_command = new_command
-        f._deprecated = True
-        return f
-
-    return _deprecated_wrapper
+from lbry.extras.daemon.daemon_meta import deprecated
 
 
 INITIALIZING_CODE = 'initializing'
@@ -269,28 +241,15 @@ def trap(err, *to_trap):
     err.trap(*to_trap)
 
 
-class JSONRPCServerType(type):
-    def __new__(mcs, name, bases, newattrs):
-        klass = type.__new__(mcs, name, bases, newattrs)
-        klass.callable_methods = {}
-        klass.deprecated_methods = {}
-
-        for methodname in dir(klass):
-            if methodname.startswith("jsonrpc_"):
-                method = getattr(klass, methodname)
-                if not hasattr(method, '_deprecated'):
-                    klass.callable_methods.update({methodname.split("jsonrpc_")[1]: method})
-                else:
-                    klass.deprecated_methods.update({methodname.split("jsonrpc_")[1]: method})
-        return klass
-
+from lbry.extras.daemon.daemon_meta import JSONRPCServerType
+from lbry.extras.daemon.daemon_get import Daemon_get
 
 HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
 )
 
 
-class Daemon(metaclass=JSONRPCServerType):
+class Daemon(Daemon_get):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
@@ -1069,43 +1028,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return results
 
-    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
-              FILE_MANAGER_COMPONENT)
-    async def jsonrpc_get(
-            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
-        """
-        Download stream from a LBRY name.
-
-        Usage:
-            get <uri> [<file_name> | --file_name=<file_name>]
-             [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
-
-
-        Options:
-            --uri=<uri>              : (str) uri of the content to download
-            --file_name=<file_name>  : (str) specified name for the downloaded file, overrides the stream file name
-            --download_directory=<download_directory>  : (str) full path to the directory to download into
-            --timeout=<timeout>      : (int) download timeout in number of seconds
-            --save_file=<save_file>  : (bool) save the file to the downloads directory
-            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
-
-        Returns: {File}
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if download_directory and not os.path.isdir(download_directory):
-            return {"error": f"specified download directory \"{download_directory}\" does not exist"}
-        try:
-            stream = await self.file_manager.download_from_uri(
-                uri, self.exchange_rate_manager, timeout, file_name, download_directory,
-                save_file=save_file, wallet=wallet
-            )
-            if not stream:
-                raise DownloadSDTimeoutError(uri)
-        except Exception as e:
-            log.warning("Error downloading %s: %s", uri, str(e))
-            return {"error": str(e)}
-        return stream
+    # jsonrpc_get
 
     SETTINGS_DOC = """
     Settings management.
