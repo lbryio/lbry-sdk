@@ -15,6 +15,10 @@ def length_encoded_name(name: str) -> bytes:
     return len(encoded).to_bytes(2, byteorder='big') + encoded
 
 
+def length_prefix(key: str) -> bytes:
+    return len(key).to_bytes(1, byteorder='big') + key.encode()
+
+
 class PrefixRow:
     prefix: bytes
     key_struct: struct.Struct
@@ -187,12 +191,12 @@ class TXOToClaimValue(typing.NamedTuple):
 
 class ClaimShortIDKey(typing.NamedTuple):
     name: str
-    claim_hash: bytes
+    partial_claim_id: str
     root_tx_num: int
     root_position: int
 
     def __str__(self):
-        return f"{self.__class__.__name__}(name={self.name}, claim_hash={self.claim_hash.hex()}, " \
+        return f"{self.__class__.__name__}(name={self.name}, partial_claim_id={self.partial_claim_id}, " \
                f"root_tx_num={self.root_tx_num}, root_position={self.root_position})"
 
 
@@ -517,26 +521,25 @@ def shortid_key_helper(struct_fmt):
     return wrapper
 
 
-def shortid_key_partial_claim_helper(name: str, partial_claim_hash: bytes):
-    assert len(partial_claim_hash) <= 20
-    return length_encoded_name(name) + partial_claim_hash
+def shortid_key_partial_claim_helper(name: str, partial_claim_id: str):
+    assert len(partial_claim_id) < 40
+    return length_encoded_name(name) + length_prefix(partial_claim_id)
 
 
 class ClaimShortIDPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_short_id_prefix.value
-    key_struct = struct.Struct(b'>20sLH')
+    key_struct = struct.Struct(b'>LH')
     value_struct = struct.Struct(b'>LH')
     key_part_lambdas = [
         lambda: b'',
         length_encoded_name,
-        shortid_key_partial_claim_helper,
-        shortid_key_helper(b'>20sL'),
-        shortid_key_helper(b'>20sLH'),
+        shortid_key_partial_claim_helper
     ]
 
     @classmethod
-    def pack_key(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int):
-        return cls.prefix + length_encoded_name(name) + cls.key_struct.pack(claim_hash, root_tx_num, root_position)
+    def pack_key(cls, name: str, short_claim_id: str, root_tx_num: int, root_position: int):
+        return cls.prefix + length_encoded_name(name) + length_prefix(short_claim_id) +\
+               cls.key_struct.pack(root_tx_num, root_position)
 
     @classmethod
     def pack_value(cls, tx_num: int, position: int):
@@ -547,16 +550,18 @@ class ClaimShortIDPrefixRow(PrefixRow):
         assert key[:1] == cls.prefix
         name_len = int.from_bytes(key[1:3], byteorder='big')
         name = key[3:3 + name_len].decode()
-        return ClaimShortIDKey(name, *cls.key_struct.unpack(key[3 + name_len:]))
+        claim_id_len = int.from_bytes(key[3+name_len:4+name_len], byteorder='big')
+        partial_claim_id = key[4+name_len:4+name_len+claim_id_len].decode()
+        return ClaimShortIDKey(name, partial_claim_id, *cls.key_struct.unpack(key[4 + name_len + claim_id_len:]))
 
     @classmethod
     def unpack_value(cls, data: bytes) -> ClaimShortIDValue:
         return ClaimShortIDValue(*super().unpack_value(data))
 
     @classmethod
-    def pack_item(cls, name: str, claim_hash: bytes, root_tx_num: int, root_position: int,
+    def pack_item(cls, name: str, partial_claim_id: str, root_tx_num: int, root_position: int,
                   tx_num: int, position: int):
-        return cls.pack_key(name, claim_hash, root_tx_num, root_position), \
+        return cls.pack_key(name, partial_claim_id, root_tx_num, root_position), \
                cls.pack_value(tx_num, position)
 
 
