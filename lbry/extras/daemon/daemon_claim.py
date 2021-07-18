@@ -199,6 +199,9 @@ class Daemon_claim(metaclass=JSONRPCServerType):
         Returns: {Paginated[Output]}
         """
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
+        if ("claim_ids" in kwargs and not kwargs["claim_ids"]
+                and "claim_id" in kwargs and kwargs["claim_id"]):
+            kwargs.pop("claim_ids")
         if {'claim_id', 'claim_ids'}.issubset(kwargs):
             raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
         if kwargs.pop('valid_channel_signature', False):
