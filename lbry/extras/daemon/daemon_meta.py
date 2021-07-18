@@ -4,7 +4,7 @@ Meta class definition for the Daemon class, and auxiliary methods.
 """
 import json
 from functools import wraps
-from typing import List, Optional
+from typing import Callable, List, Optional
 
 from lbry.error import (ComponentsNotStartedError,
                         ComponentStartConditionNotMetError)
@@ -75,3 +75,20 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
         "total_items": total_items,
         "page": page, "page_size": page_size
     }
+
+
+async def paginate_rows(get_records: Callable, get_record_count: Optional[Callable],
+                        page: Optional[int], page_size: Optional[int], **constraints):
+    page = max(1, page or 1)
+    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
+    constraints.update({
+        "offset": page_size * (page - 1),
+        "limit": page_size
+    })
+    items = await get_records(**constraints)
+    result = {"items": items, "page": page, "page_size": page_size}
+    if get_record_count is not None:
+        total_items = await get_record_count(**constraints)
+        result["total_pages"] = int((total_items + (page_size - 1)) / page_size)
+        result["total_items"] = total_items
+    return result

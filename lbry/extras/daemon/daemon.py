@@ -108,21 +108,7 @@ def encode_pagination_doc(items):
     }
 
 
-async def paginate_rows(get_records: Callable, get_record_count: Optional[Callable],
-                        page: Optional[int], page_size: Optional[int], **constraints):
-    page = max(1, page or 1)
-    page_size = max(1, page_size or DEFAULT_PAGE_SIZE)
-    constraints.update({
-        "offset": page_size * (page - 1),
-        "limit": page_size
-    })
-    items = await get_records(**constraints)
-    result = {"items": items, "page": page, "page_size": page_size}
-    if get_record_count is not None:
-        total_items = await get_record_count(**constraints)
-        result["total_pages"] = int((total_items + (page_size - 1)) / page_size)
-        result["total_items"] = total_items
-    return result
+from lbry.extras.daemon.daemon_meta import paginate_rows
 
 
 from lbry.extras.daemon.daemon_meta import paginate_list
@@ -235,6 +221,7 @@ from lbry.extras.daemon.daemon_settings import Daemon_settings
 from lbry.extras.daemon.daemon_wallet import Daemon_wallet
 from lbry.extras.daemon.daemon_account import Daemon_account
 from lbry.extras.daemon.daemon_sync import Daemon_sync
+from lbry.extras.daemon.daemon_address import Daemon_address
 
 HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
@@ -242,7 +229,7 @@ HISTOGRAM_BUCKETS = (
 
 
 class Daemon(Daemon_base, Daemon_get, Daemon_settings, Daemon_wallet,
-             Daemon_account, Daemon_sync):
+             Daemon_account, Daemon_sync, Daemon_address):
     """
     LBRYnet daemon, a jsonrpc interface to lbry functions
     """
@@ -800,82 +787,9 @@ class Daemon(Daemon_base, Daemon_get, Daemon_settings, Daemon_wallet,
     ADDRESS_DOC = """
     List, generate and verify addresses.
     """
-
-    @requires(WALLET_COMPONENT)
-    async def jsonrpc_address_is_mine(self, address, account_id=None, wallet_id=None):
-        """
-        Checks if an address is associated with the current wallet.
-
-        Usage:
-            address_is_mine (<address> | --address=<address>)
-                            [<account_id> | --account_id=<account_id>] [--wallet_id=<wallet_id>]
-
-        Options:
-            --address=<address>       : (str) address to check
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns:
-            (bool) true, if address is associated with current wallet
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        account = wallet.get_account_or_default(account_id)
-        match = await self.ledger.db.get_address(read_only=True, address=address, accounts=[account])
-        if match is not None:
-            return True
-        return False
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_address_list(self, address=None, account_id=None, wallet_id=None, page=None, page_size=None):
-        """
-        List account addresses or details of single address.
-
-        Usage:
-            address_list [--address=<address>] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-                         [--page=<page>] [--page_size=<page_size>]
-
-        Options:
-            --address=<address>        : (str) just show details for single address
-            --account_id=<account_id>  : (str) id of the account to use
-            --wallet_id=<wallet_id>    : (str) restrict operation to specific wallet
-            --page=<page>              : (int) page to return during paginating
-            --page_size=<page_size>    : (int) number of items on page during pagination
-
-        Returns: {Paginated[Address]}
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        constraints = {
-            'cols': ('address', 'account', 'used_times', 'pubkey', 'chain_code', 'n', 'depth')
-        }
-        if address:
-            constraints['address'] = address
-        if account_id:
-            constraints['accounts'] = [wallet.get_account_or_error(account_id)]
-        else:
-            constraints['accounts'] = wallet.accounts
-        return paginate_rows(
-            self.ledger.get_addresses,
-            self.ledger.get_address_count,
-            page, page_size, read_only=True, **constraints
-        )
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_address_unused(self, account_id=None, wallet_id=None):
-        """
-        Return an address containing no balance, will create
-        a new address if there is none.
-
-        Usage:
-            address_unused [--account_id=<account_id>] [--wallet_id=<wallet_id>]
-
-        Options:
-            --account_id=<account_id> : (str) id of the account to use
-            --wallet_id=<wallet_id>   : (str) restrict operation to specific wallet
-
-        Returns: {Address}
-        """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        return wallet.get_account_or_default(account_id).receiving.get_or_create_usable_address()
+    # jsonrpc_address_is_mine
+    # jsonrpc_address_list
+    # jsonrpc_address_unused
 
     FILE_DOC = """
     File management.
