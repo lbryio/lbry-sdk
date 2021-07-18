@@ -3,6 +3,7 @@
 Meta class definition for the Daemon class, and auxiliary methods.
 """
 import json
+import re
 from functools import wraps
 from typing import Callable, List, Optional
 
@@ -10,6 +11,7 @@ from lbry.error import (ComponentsNotStartedError,
                         ComponentStartConditionNotMetError)
 
 DEFAULT_PAGE_SIZE = 20
+VALID_FULL_CLAIM_ID = re.compile('[0-9a-fA-F]{40}')
 
 
 class JSONRPCServerType(type):
