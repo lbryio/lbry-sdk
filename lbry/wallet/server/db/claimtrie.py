@@ -171,13 +171,15 @@ class StagedClaimtrieItem(typing.NamedTuple):
                 )
             ),
             # short url resolution
+        ]
+        ops.extend([
             op(
                 *Prefixes.claim_short_id.pack_item(
-                    self.name, self.claim_hash, self.root_tx_num, self.root_position, self.tx_num,
-                    self.position
+                    self.name, self.claim_hash.hex()[:prefix_len + 1], self.root_tx_num, self.root_position,
+                    self.tx_num, self.position
                 )
-            )
-        ]
+            ) for prefix_len in range(10)
+        ])
 
         if self.signing_hash and self.channel_signature_is_valid:
             ops.extend([
