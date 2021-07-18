@@ -209,6 +209,17 @@ class LevelDB:
             supports.append((unpacked_k.tx_num, unpacked_k.position, unpacked_v.amount))
         return supports
 
+    def get_short_claim_id_url(self, name: str, claim_hash: bytes, root_tx_num: int, root_position: int) -> str:
+        claim_id = claim_hash.hex()
+        for prefix_len in range(10):
+            prefix = Prefixes.claim_short_id.pack_partial_key(name, claim_id[:prefix_len+1])
+            for _k in self.db.iterator(prefix=prefix, include_value=False):
+                k = Prefixes.claim_short_id.unpack_key(_k)
+                if k.root_tx_num == root_tx_num and k.root_position == root_position:
+                    return f'{name}#{k.partial_claim_id}'
+                break
+        raise Exception('wat')
+
     def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
                                 root_position: int, activation_height: int, signature_valid: bool) -> ResolveResult:
         controlling_claim = self.get_controlling_claim(name)
@@ -225,8 +236,7 @@ class LevelDB:
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
         reposted_claim_hash = self.get_repost(claim_hash)
-
-        short_url = f'{name}#{claim_hash.hex()}'
+        short_url = self.get_short_claim_id_url(name, claim_hash, root_tx_num, root_position)
         canonical_url = short_url
         claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
@@ -264,15 +274,24 @@ class LevelDB:
         amount_order = max(int(amount_order or 1), 1)
 
         if claim_id:
+            if len(claim_id) == 40:  # a full claim id
+                claim_txo = self.get_claim_txo(bytes.fromhex(claim_id))
+                if normalized_name != claim_txo.name:
+                    return
+                return self._prepare_resolve_result(
+                    claim_txo.tx_num, claim_txo.position, bytes.fromhex(claim_id), claim_txo.name,
+                    claim_txo.root_tx_num, claim_txo.root_position,
+                    self.get_activation(claim_txo.tx_num, claim_txo.position), claim_txo.channel_signature_is_valid
+                )
             # resolve by partial/complete claim id
-            short_claim_hash = bytes.fromhex(claim_id)
-            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, short_claim_hash)
+            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, claim_id[:10])
             for k, v in self.db.iterator(prefix=prefix):
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
-                signature_is_valid = self.get_claim_txo(key.claim_hash).channel_signature_is_valid
+                claim_hash = self.get_claim_from_txo(claim_txo.tx_num, claim_txo.position).claim_hash
+                signature_is_valid = self.get_claim_txo(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
-                    claim_txo.tx_num, claim_txo.position, key.claim_hash, key.name, key.root_tx_num,
+                    claim_txo.tx_num, claim_txo.position, claim_hash, key.name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
                     signature_is_valid
                 )
@@ -396,11 +415,12 @@ class LevelDB:
 
     def get_claims_for_name(self, name):
         claims = []
-        for _k, _v in self.db.iterator(prefix=Prefixes.claim_short_id.pack_partial_key(name)):
-            k, v = Prefixes.claim_short_id.unpack_key(_k), Prefixes.claim_short_id.unpack_value(_v)
-            # claims[v.claim_hash] = (k, v)
-            if k.claim_hash not in claims:
-                claims.append(k.claim_hash)
+        prefix = Prefixes.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
+        for _k, _v in self.db.iterator(prefix=prefix):
+            v = Prefixes.claim_short_id.unpack_value(_v)
+            claim_hash = self.get_claim_from_txo(v.tx_num, v.position).claim_hash
+            if claim_hash not in claims:
+                claims.append(claim_hash)
         return claims
 
     def get_claims_in_channel_count(self, channel_hash) -> int:
@@ -435,10 +455,10 @@ class LevelDB:
 
     def get_claim_txos_for_name(self, name: str):
         txos = {}
-        for k, v in self.db.iterator(prefix=Prefixes.claim_short_id.pack_partial_key(name)):
-            claim_hash = Prefixes.claim_short_id.unpack_key(k).claim_hash
+        prefix = Prefixes.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
+        for k, v in self.db.iterator(prefix=prefix):
             tx_num, nout = Prefixes.claim_short_id.unpack_value(v)
-            txos[claim_hash] = tx_num, nout
+            txos[self.get_claim_from_txo(tx_num, nout).claim_hash] = tx_num, nout
         return txos
 
     def get_claim_metadata(self, tx_hash, nout):

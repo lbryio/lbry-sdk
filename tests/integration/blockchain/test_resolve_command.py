@@ -3,6 +3,7 @@ import json
 import hashlib
 from bisect import bisect_right
 from binascii import hexlify, unhexlify
+from collections import defaultdict
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.schema.compat import OldClaimMessage
@@ -100,6 +101,35 @@ class BaseResolveTestCase(CommandTestCase):
 
 
 class ResolveCommand(BaseResolveTestCase):
+    async def test_colliding_short_id(self):
+        prefixes = defaultdict(list)
+
+        colliding_claim_ids = []
+        first_claims_one_char_shortid = {}
+
+        while True:
+            chan = self.get_claim_id(
+                await self.channel_create('@abc', '0.01', allow_duplicate_name=True)
+            )
+            if chan[:1] not in first_claims_one_char_shortid:
+                first_claims_one_char_shortid[chan[:1]] = chan
+            prefixes[chan[:2]].append(chan)
+            if len(prefixes[chan[:2]]) > 1:
+                colliding_claim_ids.extend(prefixes[chan[:2]])
+                break
+        first_claim = first_claims_one_char_shortid[colliding_claim_ids[0][:1]]
+        await self.assertResolvesToClaimId(
+            f'@abc#{colliding_claim_ids[0][:1]}', first_claim
+        )
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:2]}', colliding_claim_ids[0])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:7]}', colliding_claim_ids[0])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:17]}', colliding_claim_ids[0])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0]}', colliding_claim_ids[0])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:3]}', colliding_claim_ids[1])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:7]}', colliding_claim_ids[1])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:17]}', colliding_claim_ids[1])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1]}', colliding_claim_ids[1])
+
     async def test_resolve_response(self):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '0.01')
