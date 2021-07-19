@@ -11,6 +11,7 @@ ENV DOCKER_TAG=$DOCKER_TAG DOCKER_COMMIT=$DOCKER_COMMIT
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       wget \
+      automake libtool \
       tar unzip \
       build-essential \
       pkg-config \

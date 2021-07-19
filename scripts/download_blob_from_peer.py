@@ -1,3 +1,19 @@
+"""A simple script that attempts to directly download a single blob.
+
+To Do:
+------
+Currently `lbrynet blob get <hash>` does not work to download single blobs
+which are not already present in the system. The function locks up and
+never returns.
+It only works for blobs that are in the `blobfiles` directory already.
+
+This bug is reported in lbryio/lbry-sdk, issue #2070.
+
+Maybe this script can be investigated, and certain parts can be added to
+`lbry.extras.daemon.daemon.jsonrpc_blob_get`
+in order to solve the previous issue, and finally download single blobs
+from the network (peers or reflector servers).
+"""
 import sys
 import os
 import asyncio
@@ -47,7 +63,11 @@ async def main(blob_hash: str, url: str):
         print(f"deleted {blob_hash}")
 
 
-if __name__ == "__main__":  # usage: python download_blob_from_peer.py <blob_hash> [host url:port]
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("usage: download_blob_from_peer.py <blob_hash> [host_url:port]")
+        sys.exit(1)
+
     url = 'reflector.lbry.com:5567'
     if len(sys.argv) > 2:
         url = sys.argv[2]
