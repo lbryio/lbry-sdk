@@ -9,20 +9,29 @@ Here's a video walkthrough of this setup, which is itself hosted by the LBRY net
 
 ## Prerequisites
 
-Running `lbrynet` from source requires Python 3.7 or higher. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/).
+Running `lbrynet` from source requires Python 3.7. Get the installer for your OS [here](https://www.python.org/downloads/release/python-370/).
 
-After installing python 3, you'll need to install some additional libraries depending on your operating system.
+After installing Python 3.7, you'll need to install some additional libraries depending on your operating system.
+
+Because of [issue #2769](https://github.com/lbryio/lbry-sdk/issues/2769)
+at the moment the `lbrynet` daemon will only work correctly with Python 3.7.
+If Python 3.8+ is used, the daemon will start but the RPC server
+may not accept messages, returning the following:
+```
+Could not connect to daemon. Are you sure it's running?
+```
 
 ### macOS
 
 macOS users will need to install [xcode command line tools](https://developer.xamarin.com/guides/testcloud/calabash/configuring/osx/install-xcode-command-line-tools/) and [homebrew](http://brew.sh/).
 
 These environment variables also need to be set:
-1. PYTHONUNBUFFERED=1
-2. EVENT_NOKQUEUE=1
+```
+PYTHONUNBUFFERED=1
+EVENT_NOKQUEUE=1
+```
 
 Remaining dependencies can then be installed by running:
-
 ```
 brew install python protobuf
 ```
@@ -31,13 +40,16 @@ Assistance installing Python3: https://docs.python-guide.org/starting/install3/o
 
 ### Linux
 
-On Ubuntu (16.04 minimum, we recommend 18.04), install the following:
-
+On Ubuntu (we recommend 18.04 or 20.04), install the following:
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
 sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
 ```
+
+The [deadsnakes PPA](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa) provides Python 3.7
+for those Ubuntu distributions that no longer have it in their
+official repositories.
 
 On Raspbian, you will also need to install `python-pyparsing`.
 
@@ -47,49 +59,68 @@ If you're running another Linux distro, install the equivalent of the above pack
 
 ### Linux/Mac
 
-To install on Linux/Mac:
+Clone the repository:
+```bash
+git clone https://github.com/lbryio/lbry-sdk.git
+cd lbry-sdk
+```
 
- ```
- Clone the repository:
- $ git clone https://github.com/lbryio/lbry-sdk.git
- $ cd lbry-sdk
+Create a Python virtual environment for lbry-sdk:
+```bash
+python3.7 -m venv lbry-venv
+```
 
- Create a Python virtual environment for lbry-sdk:
- $ python3.7 -m venv lbry-venv
- 
- Activating lbry-sdk virtual environment:
- $ source lbry-venv/bin/activate
- 
- Make sure you're on Python 3.7+ (as the default Python in virtual environment):
- $ python --version
+Activate virtual environment:
+```bash
+source lbry-venv/bin/activate
+```
 
- Install packages:
- $ make install
+Make sure you're on Python 3.7+ as default in the virtual environment:
+```bash
+python --version
+```
 
- If you are on Linux and using PyCharm, generates initial configs:
- $ make idea
- ```
+Install packages:
+```bash
+make install
+```
 
-To verify your installation, `which lbrynet` should return a path inside of the `lbry-venv` folder created by the `python3.7 -m venv lbry-venv` command.
+If you are on Linux and using PyCharm, generates initial configs:
+```bash
+make idea
+```
+
+To verify your installation, `which lbrynet` should return a path inside
+of the `lbry-venv` folder.
+```bash
+(lbry-venv) $ which lbrynet
+/opt/lbry-sdk/lbry-venv/bin/lbrynet
+```
+
+To exit the virtual environment simply use the command `deactivate`.
 
 ### Windows
 
-To install on Windows:
+Clone the repository:
+```bash
+git clone https://github.com/lbryio/lbry-sdk.git
+cd lbry-sdk
+```
 
- ```
- Clone the repository:
- > git clone https://github.com/lbryio/lbry-sdk.git
- > cd lbry-sdk
+Create a Python virtual environment for lbry-sdk:
+```bash
+python -m venv lbry-venv
+```
 
- Create a Python virtual environment for lbry-sdk:
- > python -m venv lbry-venv
+Activate virtual environment:
+```bash
+lbry-venv\Scripts\activate
+```
 
- Activating lbry-sdk virtual environment:
- > lbry-venv\Scripts\activate
-
- Install packages:
- > pip install -e .
- ```
+Install packages:
+```bash
+pip install -e .
+```
 
 ## Run the tests
 ### Elasticsearch
@@ -100,21 +131,47 @@ The easiest way to start it is using docker with:
 ```bash
 make elastic-docker
 ```
+
 Alternative installation methods are available [at Elasticsearch website](https://www.elastic.co/guide/en/elasticsearch/reference/current/install-elasticsearch.html).
 
-
-
 To run the unit and integration tests from the repo directory:
-
- ```
- python -m unittest discover tests.unit
- python -m unittest discover tests.integration
- ```
+```
+python -m unittest discover tests.unit
+python -m unittest discover tests.integration
+```
 
 ## Usage
 
 To start the API server:
-    `lbrynet start`
+```
+lbrynet start
+```
 
+Whenever the code inside [lbry-sdk/lbry](./lbry)
+is modified we should run `make install` to recompile the `lbrynet`
+executable with the newest code.
+
+## Development
+
+When developing, remember to enter the environment,
+and if you wish start the server interactively.
+```bash
+$ source lbry-venv/bin/activate
+
+(lbry-venv) $ python lbry/extras/cli.py start
+```
+
+Parameters can be passed in the same way.
+```bash
+(lbry-venv) $ python lbry/extras/cli.py wallet balance
+```
+
+If a Python debugger (`pdb` or `ipdb`) is installed we can also start it
+in this way, set up break points, and step through the code.
+```bash
+(lbry-venv) $ pip install ipdb
+
+(lbry-venv) $ ipdb lbry/extras/cli.py
+```
 
 Happy hacking!
