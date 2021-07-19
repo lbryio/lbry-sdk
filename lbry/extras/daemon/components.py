@@ -481,6 +481,10 @@ class UPnPComponent(Component):
             log.info("external ip changed from %s to %s", self.external_ip, external_ip)
         if external_ip:
             self.external_ip = external_ip
+            dht_component = self.component_manager.get_component(DHT_COMPONENT)
+            if dht_component:
+                dht_node = dht_component.component
+                dht_node.protocol.external_ip = external_ip
         # assert self.external_ip is not None   # TODO: handle going/starting offline
 
         if not self.upnp_redirects and self.upnp:  # setup missing redirects

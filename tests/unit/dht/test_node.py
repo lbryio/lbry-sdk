@@ -1,4 +1,5 @@
 import asyncio
+import time
 import unittest
 import typing
 from lbry.testcase import AsyncioTestCase
@@ -92,11 +93,11 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 
 
 class TestTemporarilyLosingConnection(AsyncioTestCase):
-    @unittest.SkipTest
+    TIMEOUT = None  # not supported as it advances time
     async def test_losing_connection(self):
         async def wait_for(check_ok, insist, timeout=20):
-            start = loop.time()
-            while loop.time() - start < timeout:
+            start = time.time()
+            while time.time() - start < timeout:
                 if check_ok():
                     break
                 await asyncio.sleep(0)
