@@ -47,7 +47,7 @@ sudo apt-get update
 sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
 ```
 
-The `deadsnakes` personal package archive (PPA) provides Python 3.7
+The [deadsnakes PPA](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa) provides Python 3.7
 for those Ubuntu distributions that no longer have it in their
 official repositories.
 
