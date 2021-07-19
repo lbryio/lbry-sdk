@@ -60,39 +60,39 @@ If you're running another Linux distro, install the equivalent of the above pack
 ### Linux/Mac
 
 Clone the repository:
-```
-$ git clone https://github.com/lbryio/lbry-sdk.git
-$ cd lbry-sdk
+```bash
+git clone https://github.com/lbryio/lbry-sdk.git
+cd lbry-sdk
 ```
 
 Create a Python virtual environment for lbry-sdk:
-```
-$ python3.7 -m venv lbry-venv
+```bash
+python3.7 -m venv lbry-venv
 ```
 
 Activate virtual environment:
-```
-$ source lbry-venv/bin/activate
+```bash
+source lbry-venv/bin/activate
 ```
 
 Make sure you're on Python 3.7+ as default in the virtual environment:
-```
-$ python --version
+```bash
+python --version
 ```
 
 Install packages:
-```
-$ make install
+```bash
+make install
 ```
 
 If you are on Linux and using PyCharm, generates initial configs:
-```
-$ make idea
+```bash
+make idea
 ```
 
 To verify your installation, `which lbrynet` should return a path inside
 of the `lbry-venv` folder.
-```
+```bash
 (lbry-venv) $ which lbrynet
 /opt/lbry-sdk/lbry-venv/bin/lbrynet
 ```
@@ -102,24 +102,24 @@ To exit the virtual environment simply use the command `deactivate`.
 ### Windows
 
 Clone the repository:
-```
-> git clone https://github.com/lbryio/lbry-sdk.git
-> cd lbry-sdk
+```bash
+git clone https://github.com/lbryio/lbry-sdk.git
+cd lbry-sdk
 ```
 
 Create a Python virtual environment for lbry-sdk:
-```
-> python -m venv lbry-venv
+```bash
+python -m venv lbry-venv
 ```
 
 Activate virtual environment:
-```
-> lbry-venv\Scripts\activate
+```bash
+lbry-venv\Scripts\activate
 ```
 
 Install packages:
-```
-> pip install -e .
+```bash
+pip install -e .
 ```
 
 ## Run the tests
@@ -155,20 +155,20 @@ executable with the newest code.
 
 When developing, remember to enter the environment,
 and if you wish start the server interactively.
-```
+```bash
 $ source lbry-venv/bin/activate
 
 (lbry-venv) $ python lbry/extras/cli.py start
 ```
 
 Parameters can be passed in the same way.
-```
+```bash
 (lbry-venv) $ python lbry/extras/cli.py wallet balance
 ```
 
 If a Python debugger (`pdb` or `ipdb`) is installed we can also start it
 in this way, set up break points, and step through the code.
-```
+```bash
 (lbry-venv) $ pip install ipdb
 
 (lbry-venv) $ ipdb lbry/extras/cli.py
