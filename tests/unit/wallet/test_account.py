@@ -1,3 +1,4 @@
+import asyncio
 from binascii import hexlify
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet import Wallet, Ledger, Database, Headers, Account, SingleKey, HierarchicalDeterministic
@@ -36,6 +37,18 @@ class TestAccount(AsyncioTestCase):
         self.assertEqual(len(addresses), 20)
         addresses = await account.change.get_addresses()
         self.assertEqual(len(addresses), 6)
+
+    async def test_unused_address_on_account_creation_does_not_cause_a_race(self):
+        account = Account.generate(self.ledger, Wallet(), 'lbryum')
+        await account.ledger.db.db.executescript("update pubkey_address set used_times=10")
+        await account.receiving.address_generator_lock.acquire()
+        delayed1 = asyncio.ensure_future(account.receiving.ensure_address_gap())
+        delayed = asyncio.ensure_future(account.receiving.get_or_create_usable_address())
+        await asyncio.sleep(0)
+        # wallet being created and queried at the same time
+        account.receiving.address_generator_lock.release()
+        await delayed1
+        await delayed
 
     async def test_generate_keys_over_batch_threshold_saves_it_properly(self):
         account = Account.generate(self.ledger, Wallet(), 'lbryum')

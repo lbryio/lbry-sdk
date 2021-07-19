@@ -13,6 +13,7 @@ RUN apt-get update && \
       wget \
       tar unzip \
       build-essential \
+      automake libtool \
       pkg-config \
       libleveldb-dev \
       python3.7 \
