@@ -614,7 +614,8 @@ class BlockProcessor:
             self.db_op_stack.extend(claim.get_invalidate_signature_ops())
 
         for staged in list(self.txo_to_claim.values()):
-            if staged.signing_hash == claim_hash and staged.claim_hash not in self.doesnt_have_valid_signature:
+            needs_invalidate = staged.claim_hash not in self.doesnt_have_valid_signature
+            if staged.signing_hash == claim_hash and needs_invalidate:
                 self.db_op_stack.extend(staged.get_invalidate_signature_ops())
                 self.txo_to_claim[self.claim_hash_to_txo[staged.claim_hash]] = staged.invalidate_signature()
                 self.signatures_changed.add(staged.claim_hash)
@@ -1173,8 +1174,18 @@ class BlockProcessor:
                 )
 
             # Handle abandoned claims
+            abandoned_channels = {}
+            # abandon the channels last to handle abandoned signed claims in the same tx,
+            # see test_abandon_channel_and_claims_in_same_tx
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
-                # print(f"\tabandon {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                if name.startswith('@'):
+                    abandoned_channels[abandoned_claim_hash] = (tx_num, nout, name)
+                else:
+                    # print(f"\tabandon {name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+
+            for abandoned_claim_hash, (tx_num, nout, name) in abandoned_channels.items():
+                # print(f"\tabandon {name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
                 self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
 
             self.db.total_transactions.append(tx_hash)

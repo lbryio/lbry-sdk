@@ -219,9 +219,6 @@ class LevelDB:
                     return f'{name}#{k.partial_claim_id}'
                 break
         print(f"{claim_id} has a collision")
-        # FIXME: there are a handful of claims that appear to have short id collisions but really do not
-        # these claims are actually abandoned, but are not handled correctly because they are abandoned in the
-        # same tx as their channel.
         return f'{name}#{claim_id}'
 
     def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
@@ -246,8 +243,10 @@ class LevelDB:
         if channel_hash:
             channel_vals = self.get_claim_txo(channel_hash)
             if channel_vals:
-                channel_name = channel_vals.name
-                canonical_url = f'{channel_name}#{channel_hash.hex()}/{name}#{claim_hash.hex()}'
+                channel_short_url = self.get_short_claim_id_url(
+                    channel_vals.name, channel_hash, channel_vals.root_tx_num, channel_vals.root_position
+                )
+                canonical_url = f'{channel_short_url}/{short_url}'
         return ResolveResult(
             name, claim_hash, tx_num, position, tx_hash, height, claim_amount, short_url=short_url,
             is_controlling=controlling_claim.claim_hash == claim_hash, canonical_url=canonical_url,
@@ -552,11 +551,6 @@ class LevelDB:
         )
         tags = list(set(claim_tags).union(set(reposted_tags)))
         languages = list(set(claim_languages).union(set(reposted_languages)))
-        canonical_url = f'{claim.name}#{claim.claim_hash.hex()}'
-        if metadata.is_signed:
-            channel = self.get_claim_txo(metadata.signing_channel_hash[::-1])
-            if channel:
-                canonical_url = f'{channel.name}#{metadata.signing_channel_hash[::-1].hex()}/{canonical_url}'
         value = {
             'claim_hash': claim_hash[::-1],
             # 'claim_id': claim_hash.hex(),
@@ -576,10 +570,8 @@ class LevelDB:
             'support_amount': claim.support_amount,
             'is_controlling': claim.is_controlling,
             'last_take_over_height': claim.last_takeover_height,
-
-            'short_url': f'{claim.name}#{claim.claim_hash.hex()}',  # TODO: fix
-            'canonical_url': canonical_url,
-
+            'short_url': claim.short_url,
+            'canonical_url': claim.canonical_url,
             'title': None if not metadata.is_stream else metadata.stream.title,
             'author': None if not metadata.is_stream else metadata.stream.author,
             'description': None if not metadata.is_stream else metadata.stream.description,
