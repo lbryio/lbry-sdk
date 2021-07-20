@@ -218,7 +218,11 @@ class LevelDB:
                 if k.root_tx_num == root_tx_num and k.root_position == root_position:
                     return f'{name}#{k.partial_claim_id}'
                 break
-        raise Exception('wat')
+        print(f"{claim_id} has a collision")
+        # FIXME: there are a handful of claims that appear to have short id collisions but really do not
+        # these claims are actually abandoned, but are not handled correctly because they are abandoned in the
+        # same tx as their channel.
+        return f'{name}#{claim_id}'
 
     def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
                                 root_position: int, activation_height: int, signature_valid: bool) -> ResolveResult:
