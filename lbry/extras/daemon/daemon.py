@@ -1,43 +1,25 @@
-import linecache
 import os
-import re
 import asyncio
 import logging
 import json
 import time
 import inspect
 import typing
-import random
-import hashlib
-import tracemalloc
 from urllib.parse import urlencode, quote
-from typing import Callable, Optional, List
-from binascii import hexlify, unhexlify
+from typing import Optional, List
 from traceback import format_exc
-from functools import wraps, partial
 
-import ecdsa
 import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
 from google.protobuf.message import DecodeError
 
-from lbry.wallet import (
-    Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
-    Transaction, Output, Input, Account, database
-)
-from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
-from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
+from lbry.wallet import Wallet, Output, Account
+from lbry.wallet.dewies import lbc_to_dewies
 
 from lbry import utils
-from lbry.conf import Config, Setting, NOT_SET
-from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
-from lbry.blob_exchange.downloader import download_blob
-from lbry.dht.peer import make_kademlia_peer
-from lbry.error import (
-    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
-    CommandDoesNotExistError
-)
+from lbry.conf import Config
+from lbry.error import CommandDoesNotExistError
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
@@ -46,7 +28,6 @@ from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
@@ -70,11 +51,6 @@ def is_transactional_function(name):
         if action in name:
             return True
 
-from lbry.extras.daemon.daemon_meta import requires
-
-
-from lbry.extras.daemon.daemon_meta import deprecated
-
 
 INITIALIZING_CODE = 'initializing'
 
@@ -95,8 +71,6 @@ SHORT_ID_LEN = 20
 MAX_UPDATE_FEE_ESTIMATE = 0.3
 from lbry.extras.daemon.daemon_meta import DEFAULT_PAGE_SIZE
 
-from lbry.extras.daemon.daemon_meta import VALID_FULL_CLAIM_ID
-
 
 def encode_pagination_doc(items):
     return {
@@ -106,12 +80,6 @@ def encode_pagination_doc(items):
         "total_items": "Total number of items.",
         "items": [items],
     }
-
-
-from lbry.extras.daemon.daemon_meta import paginate_rows
-
-
-from lbry.extras.daemon.daemon_meta import paginate_list
 
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
