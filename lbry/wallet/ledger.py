@@ -750,7 +750,7 @@ class Ledger(metaclass=LedgerRegistry):
             ))[1] if record['history'] else []
             for txid, local_height in local_history:
                 if txid == tx.id:
-                    if local_height >= height:
+                    if local_height >= height or (local_height == 0 and height > local_height):
                         return True
                     log.warning(
                         "local history has higher height than remote for %s (%i vs %i)", txid,
