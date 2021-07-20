@@ -130,6 +130,27 @@ class ResolveCommand(BaseResolveTestCase):
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:17]}', colliding_claim_ids[1])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1]}', colliding_claim_ids[1])
 
+    async def test_abandon_channel_and_claims_in_same_tx(self):
+        channel_id = self.get_claim_id(
+            await self.channel_create('@abc', '0.01')
+        )
+        await self.stream_create('foo', '0.01', channel_id=channel_id)
+        await self.channel_update(channel_id, bid='0.001')
+        foo2_id = self.get_claim_id(await self.stream_create('foo2', '0.01', channel_id=channel_id))
+        await self.stream_update(foo2_id, bid='0.0001', channel_id=channel_id, confirm=False)
+        tx = await self.stream_create('foo3', '0.01', channel_id=channel_id, confirm=False, return_tx=True)
+        await self.ledger.wait(tx)
+
+        # db = self.conductor.spv_node.server.bp.db
+        # claims = list(db.all_claims_producer())
+        # print("claims", claims)
+        await self.daemon.jsonrpc_txo_spend(blocking=True)
+        await self.generate(1)
+        await self.assertNoClaimForName('@abc')
+        await self.assertNoClaimForName('foo')
+        await self.assertNoClaimForName('foo2')
+        await self.assertNoClaimForName('foo3')
+
     async def test_resolve_response(self):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '0.01')
