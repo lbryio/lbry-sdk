@@ -490,13 +490,15 @@ class CommandTestCase(IntegrationTestCase):
         """ Synchronous version of `out` method. """
         return json.loads(jsonrpc_dumps_pretty(value, ledger=self.ledger))['result']
 
-    async def confirm_and_render(self, awaitable, confirm) -> Transaction:
+    async def confirm_and_render(self, awaitable, confirm, return_tx=False) -> Transaction:
         tx = await awaitable
         if confirm:
             await self.ledger.wait(tx)
             await self.generate(1)
             await self.ledger.wait(tx, self.blockchain.block_expected)
-        return self.sout(tx)
+        if not return_tx:
+            return self.sout(tx)
+        return tx
 
     def create_upload_file(self, data, prefix=None, suffix=None):
         file_path = tempfile.mktemp(prefix=prefix or "tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)
@@ -507,19 +509,19 @@ class CommandTestCase(IntegrationTestCase):
 
     async def stream_create(
             self, name='hovercraft', bid='1.0', file_path=None,
-            data=b'hi!', confirm=True, prefix=None, suffix=None, **kwargs):
+            data=b'hi!', confirm=True, prefix=None, suffix=None, return_tx=False, **kwargs):
         if file_path is None and data is not None:
             file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
         return await self.confirm_and_render(
-            self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm
+            self.daemon.jsonrpc_stream_create(name, bid, file_path=file_path, **kwargs), confirm, return_tx
         )
 
     async def stream_update(
-            self, claim_id, data=None, prefix=None, suffix=None, confirm=True, **kwargs):
+            self, claim_id, data=None, prefix=None, suffix=None, confirm=True, return_tx=False, **kwargs):
         if data is not None:
             file_path = self.create_upload_file(data=data, prefix=prefix, suffix=suffix)
             return await self.confirm_and_render(
-                self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs), confirm
+                self.daemon.jsonrpc_stream_update(claim_id, file_path=file_path, **kwargs), confirm, return_tx
             )
         return await self.confirm_and_render(
             self.daemon.jsonrpc_stream_update(claim_id, **kwargs), confirm
