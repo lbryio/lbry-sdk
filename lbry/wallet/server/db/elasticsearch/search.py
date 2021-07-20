@@ -411,7 +411,7 @@ class SearchIndex:
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
         referenced_ids = set(filter(None, map(itemgetter('reposted_claim_id'), txo_rows)))
         referenced_ids |= set(filter(None, (row['channel_id'] for row in txo_rows)))
-        referenced_ids |= set(map(parse_claim_id, filter(None, (row['censoring_channel_id'] for row in txo_rows))))
+        referenced_ids |= set(filter(None, (row['censoring_channel_id'] for row in txo_rows)))
 
         referenced_txos = []
         if referenced_ids:
@@ -606,8 +606,6 @@ def expand_result(results):
         result['channel_hash'] = unhexlify(result['channel_id'])[::-1] if result['channel_id'] else None
         result['txo_hash'] = unhexlify(result['tx_id'])[::-1] + struct.pack('<I', result['tx_nout'])
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
-        if result['censoring_channel_id']:
-            result['censoring_channel_hash'] = unhexlify(result['censoring_channel_id'])[::-1]
         expanded.append(result)
     if inner_hits:
         return expand_result(inner_hits)
