@@ -828,21 +828,22 @@ class SQLDB:
             claim = claim._asdict()
             id_set = set(filter(None, (claim['claim_hash'], claim['channel_hash'], claim['reposted_claim_hash'])))
             claim['censor_type'] = 0
-            claim['censoring_channel_hash'] = None
+            censoring_channel_hash = None
             claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
             for reason_id in id_set:
                 if reason_id in self.blocked_streams:
                     claim['censor_type'] = 2
-                    claim['censoring_channel_hash'] = self.blocked_streams.get(reason_id)
+                    censoring_channel_hash = self.blocked_streams.get(reason_id)
                 elif reason_id in self.blocked_channels:
                     claim['censor_type'] = 2
-                    claim['censoring_channel_hash'] = self.blocked_channels.get(reason_id)
+                    censoring_channel_hash = self.blocked_channels.get(reason_id)
                 elif reason_id in self.filtered_streams:
                     claim['censor_type'] = 1
-                    claim['censoring_channel_hash'] = self.filtered_streams.get(reason_id)
+                    censoring_channel_hash = self.filtered_streams.get(reason_id)
                 elif reason_id in self.filtered_channels:
                     claim['censor_type'] = 1
-                    claim['censoring_channel_hash'] = self.filtered_channels.get(reason_id)
+                    censoring_channel_hash = self.filtered_channels.get(reason_id)
+            claim['censoring_channel_id'] = censoring_channel_hash[::-1].hex() if censoring_channel_hash else None
 
             claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
             claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []

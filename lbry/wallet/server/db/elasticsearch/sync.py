@@ -36,7 +36,7 @@ ORDER BY claim.height desc
         claim = dict(claim._asdict())
         claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
         claim['censor_type'] = 0
-        claim['censoring_channel_hash'] = None
+        claim['censoring_channel_id'] = None
         claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
         claim['languages'] = claim['languages'].split(' ') if claim['languages'] else []
         if num % 10_000 == 0:
