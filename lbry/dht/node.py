@@ -257,3 +257,10 @@ class Node:
                          ) -> typing.Tuple[asyncio.Queue, asyncio.Task]:
         queue = peer_queue or asyncio.Queue(loop=self.loop)
         return queue, self.loop.create_task(self._accumulate_peers_for_value(search_queue, queue))
+
+
+async def get_kademlia_peers_from_hosts(peer_list: typing.List[typing.Tuple[str, int]]) -> typing.List['KademliaPeer']:
+    peer_address_list = [(await resolve_host(url, port, proto='tcp'), port) for url, port in peer_list]
+    kademlia_peer_list = [make_kademlia_peer(None, address, None, tcp_port=port, allow_localhost=True)
+                          for address, port in peer_address_list]
+    return kademlia_peer_list

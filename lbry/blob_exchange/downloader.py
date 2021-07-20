@@ -3,6 +3,7 @@ import typing
 import logging
 from lbry.utils import cache_concurrent
 from lbry.blob_exchange.client import request_blob
+from lbry.dht.node import get_kademlia_peers_from_hosts
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.dht.node import Node
@@ -133,11 +134,14 @@ class BlobDownloader:
             protocol.close()
 
 
-async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', node: 'Node',
+async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', dht_node: 'Node',
                         blob_hash: str) -> 'AbstractBlob':
     search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)
-    peer_queue, accumulate_task = node.accumulate_peers(search_queue)
+    peer_queue, accumulate_task = dht_node.accumulate_peers(search_queue)
+    fixed_peers = None if not config.fixed_peers else await get_kademlia_peers_from_hosts(config.fixed_peers)
+    if fixed_peers:
+        loop.call_later(config.fixed_peer_delay, peer_queue.put_nowait, fixed_peers)
     downloader = BlobDownloader(loop, config, blob_manager, peer_queue)
     try:
         return await downloader.download_blob(blob_hash)

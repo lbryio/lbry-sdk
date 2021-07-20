@@ -3,9 +3,9 @@ import typing
 import logging
 import binascii
 
-from lbry.dht.peer import make_kademlia_peer
+from lbry.dht.node import get_kademlia_peers_from_hosts
 from lbry.error import DownloadSDTimeoutError
-from lbry.utils import resolve_host, lru_cache_concurrent
+from lbry.utils import lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.blob_exchange.downloader import BlobDownloader
 if typing.TYPE_CHECKING:
@@ -48,26 +48,19 @@ class StreamDownloader:
         self.cached_read_blob = cached_read_blob
 
     async def add_fixed_peers(self):
-        def _delayed_add_fixed_peers():
+        def _add_fixed_peers(fixed_peers):
+            self.peer_queue.put_nowait(fixed_peers)
             self.added_fixed_peers = True
-            self.peer_queue.put_nowait([
-                make_kademlia_peer(None, address, None, tcp_port=port, allow_localhost=True)
-                for address, port in addresses
-            ])
 
         if not self.config.fixed_peers:
             return
-        addresses = [
-            (await resolve_host(url, port, proto='tcp'), port)
-            for url, port in self.config.fixed_peers
-        ]
         if 'dht' in self.config.components_to_skip or not self.node or not \
                 len(self.node.protocol.routing_table.get_peers()) > 0:
             self.fixed_peers_delay = 0.0
         else:
             self.fixed_peers_delay = self.config.fixed_peer_delay
-
-        self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _delayed_add_fixed_peers)
+        fixed_peers = await get_kademlia_peers_from_hosts(self.config.fixed_peers)
+        self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _add_fixed_peers, fixed_peers)
 
     async def load_descriptor(self, connection_id: int = 0):
         # download or get the sd blob

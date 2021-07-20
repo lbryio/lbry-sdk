@@ -1,19 +1,22 @@
 import asyncio
 import tempfile
 from io import BytesIO
+from unittest import mock
 
 import shutil
 import os
+import copy
 
 from lbry.blob_exchange.serialization import BlobRequest
 from lbry.testcase import AsyncioTestCase
 from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
+from lbry.extras.daemon.daemon import Daemon
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob_exchange.server import BlobServer, BlobServerProtocol
 from lbry.blob_exchange.client import request_blob
 from lbry.dht.peer import PeerManager, make_kademlia_peer
-
+from lbry.dht.node import Node
 
 # import logging
 # logging.getLogger("lbry").setLevel(logging.DEBUG)
@@ -326,3 +329,34 @@ class TestBlobExchange(BlobExchangeTestBase):
         with self.assertRaises(asyncio.CancelledError):
             await request_blob(self.loop, client_blob, self.server_from_client.address,
                                self.server_from_client.tcp_port, 2, 3)
+
+    async def test_download_blob_using_jsonrpc_blob_get(self):
+        blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
+        mock_blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
+        await self._add_blob_to_server(blob_hash, mock_blob_bytes)
+
+        # setup RPC Daemon
+        daemon_config = copy.deepcopy(self.client_config)
+        daemon_config.fixed_peers = [(self.server_from_client.address, self.server_from_client.tcp_port)]
+        daemon = Daemon(daemon_config)
+
+        mock_node = mock.Mock(spec=Node)
+
+        def _mock_accumulate_peers(q1, q2=None):
+            async def _task():
+                pass
+            q2 = q2 or asyncio.Queue(loop=self.loop)
+            return q2, self.loop.create_task(_task())
+
+        mock_node.accumulate_peers = _mock_accumulate_peers
+        with mock.patch('lbry.extras.daemon.componentmanager.ComponentManager.all_components_running',
+                        return_value=True):
+            with mock.patch('lbry.extras.daemon.daemon.Daemon.dht_node', new_callable=mock.PropertyMock) \
+                    as daemon_mock_dht:
+                with mock.patch('lbry.extras.daemon.daemon.Daemon.blob_manager', new_callable=mock.PropertyMock) \
+                        as daemon_mock_blob_manager:
+                    daemon_mock_dht.return_value = mock_node
+                    daemon_mock_blob_manager.return_value = self.client_blob_manager
+                    result = await daemon.jsonrpc_blob_get(blob_hash, read=True)
+                    self.assertIsNotNone(result)
+                    self.assertEqual(mock_blob_bytes.decode(), result, "Downloaded blob is different than server blob")
