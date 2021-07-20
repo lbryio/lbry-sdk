@@ -179,7 +179,7 @@ class Outputs:
                 txo_message.error.code = ErrorMessage.NOT_FOUND
             elif isinstance(txo, ResolveCensoredError):
                 txo_message.error.code = ErrorMessage.BLOCKED
-                set_reference(txo_message.error.blocked.channel, extra_row_dict.get(txo.censor_hash))
+                set_reference(txo_message.error.blocked.channel, extra_row_dict.get(bytes.fromhex(txo.censor_id)[::-1]))
             return
         txo_message.tx_hash = txo['txo_hash'][:32]
         txo_message.nout, = struct.unpack('<I', txo['txo_hash'][32:])
