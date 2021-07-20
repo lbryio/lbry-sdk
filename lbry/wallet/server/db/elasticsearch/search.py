@@ -17,7 +17,7 @@ from lbry.schema.url import URL, normalize_name
 from lbry.utils import LRUCache
 from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
 from lbry.wallet.server.db.elasticsearch.constants import INDEX_DEFAULT_SETTINGS, REPLACEMENTS, FIELDS, TEXT_FIELDS, \
-    RANGE_FIELDS
+    RANGE_FIELDS, ALL_FIELDS
 from lbry.wallet.server.util import class_logger
 
 
@@ -133,7 +133,7 @@ class SearchIndex:
             update = expand_query(claim_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         key = 'channel_id' if channels else 'claim_id'
         update['script'] = {
-            "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_hash=params[ctx._source.{key}]",
+            "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_id=params[ctx._source.{key}]",
             "lang": "painless",
             "params": blockdict
         }
@@ -208,7 +208,7 @@ class SearchIndex:
 
         censored = [
             result if not isinstance(result, dict) or not censor.censor(result)
-            else ResolveCensoredError(url, result['censoring_channel_hash'])
+            else ResolveCensoredError(url, result['censoring_channel_id'])
             for url, result in zip(urls, results)
         ]
         return results, censored, censor
@@ -411,7 +411,7 @@ class SearchIndex:
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
         referenced_ids = set(filter(None, map(itemgetter('reposted_claim_id'), txo_rows)))
         referenced_ids |= set(filter(None, (row['channel_id'] for row in txo_rows)))
-        referenced_ids |= set(map(parse_claim_id, filter(None, (row['censoring_channel_hash'] for row in txo_rows))))
+        referenced_ids |= set(map(parse_claim_id, filter(None, (row['censoring_channel_id'] for row in txo_rows))))
 
         referenced_txos = []
         if referenced_ids:
@@ -432,8 +432,7 @@ def extract_doc(doc, index):
         doc['reposted_claim_id'] = None
     channel_hash = doc.pop('channel_hash')
     doc['channel_id'] = channel_hash[::-1].hex() if channel_hash else channel_hash
-    channel_hash = doc.pop('censoring_channel_hash')
-    doc['censoring_channel_hash'] = channel_hash[::-1].hex() if channel_hash else channel_hash
+    doc['censoring_channel_id'] = doc.get('censoring_channel_id')
     txo_hash = doc.pop('txo_hash')
     doc['tx_id'] = txo_hash[:32][::-1].hex()
     doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
@@ -441,11 +440,12 @@ def extract_doc(doc, index):
     doc['signature'] = (doc.pop('signature') or b'').hex() or None
     doc['signature_digest'] = (doc.pop('signature_digest') or b'').hex() or None
     doc['public_key_bytes'] = (doc.pop('public_key_bytes') or b'').hex() or None
-    doc['public_key_hash'] = (doc.pop('public_key_hash') or b'').hex() or None
+    doc['public_key_id'] = (doc.pop('public_key_hash') or b'').hex() or None
     doc['signature_valid'] = bool(doc['signature_valid'])
     doc['claim_type'] = doc.get('claim_type', 0) or 0
     doc['stream_type'] = int(doc.get('stream_type', 0) or 0)
     doc['has_source'] = bool(doc['has_source'])
+    doc = {key: value for key, value in doc.items() if key in ALL_FIELDS}
     return {'doc': doc, '_id': doc['claim_id'], '_index': index, '_op_type': 'update', 'doc_as_upsert': True}
 
 
@@ -484,7 +484,6 @@ def expand_query(**kwargs):
             if not many and key in ('_id', 'claim_id') and len(value) < 20:
                 partial_id = True
             if key == 'public_key_id':
-                key = 'public_key_hash'
                 value = Base58.decode(value)[1:21].hex()
             if key == 'signature_valid':
                 continue  # handled later
@@ -607,8 +606,8 @@ def expand_result(results):
         result['channel_hash'] = unhexlify(result['channel_id'])[::-1] if result['channel_id'] else None
         result['txo_hash'] = unhexlify(result['tx_id'])[::-1] + struct.pack('<I', result['tx_nout'])
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
-        if result['censoring_channel_hash']:
-            result['censoring_channel_hash'] = unhexlify(result['censoring_channel_hash'])[::-1]
+        if result['censoring_channel_id']:
+            result['censoring_channel_hash'] = unhexlify(result['censoring_channel_id'])[::-1]
         expanded.append(result)
     if inner_hits:
         return expand_result(inner_hits)

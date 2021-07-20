@@ -38,13 +38,13 @@ INDEX_DEFAULT_SETTINGS = {
 FIELDS = {'is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', 'normalized', 'tx_position', 'amount',
           'timestamp', 'creation_timestamp', 'height', 'creation_height', 'activation_height', 'expiration_height',
           'release_time', 'short_url', 'canonical_url', 'title', 'author', 'description', 'claim_type', 'reposted',
-          'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'reposted_claim_hash', 'censor_type',
+          'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'censor_type',
           'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
           'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
-          'signature', 'signature_digest', 'public_key_bytes', 'public_key_hash', 'public_key_id', '_id', 'tags',
+          'signature', 'signature_digest', 'public_key_bytes', 'public_key_id', '_id', 'tags', 'censoring_channel_id',
           'reposted_claim_id'}
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id',
-               'media_type', 'normalized', 'public_key_bytes', 'public_key_hash', 'short_url', 'signature',
+               'media_type', 'normalized', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
@@ -54,8 +54,8 @@ RANGE_FIELDS = {
     'trending_group', 'trending_mixed', 'censor_type',
     'trending_local', 'trending_global',
 }
+ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 REPLACEMENTS = {
     'name': 'normalized',
-    'txid': 'tx_id',
-    'claim_hash': '_id'
+    'txid': 'tx_id'
 }
