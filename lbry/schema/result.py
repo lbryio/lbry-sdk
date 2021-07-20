@@ -40,7 +40,7 @@ class Censor:
 
     def censor(self, row) -> bool:
         if self.is_censored(row):
-            censoring_channel_hash = row['censoring_channel_hash']
+            censoring_channel_hash = bytes.fromhex(row['censoring_channel_id'])[::-1]
             self.censored.setdefault(censoring_channel_hash, set())
             self.censored[censoring_channel_hash].add(row['tx_hash'])
             return True

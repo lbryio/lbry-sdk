@@ -215,10 +215,10 @@ class ResolveTimeoutError(WalletError):
 
 class ResolveCensoredError(WalletError):
 
-    def __init__(self, url, censor_hash):
+    def __init__(self, url, censor_id):
         self.url = url
-        self.censor_hash = censor_hash
-        super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{claim_id(censor_hash)}'.")
+        self.censor_hash = censor_id
+        super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{censor_id}'.")
 
 
 class KeyFeeAboveMaxAllowedError(WalletError):
