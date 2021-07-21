@@ -643,8 +643,20 @@ class BlockProcessor:
             if (tx_num, position) not in self.txo_to_claim:
                 self._spend_claim_txo(txi, spent_claims)
         if expired:
-            # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
+            # abandon the channels last to handle abandoned signed claims in the same tx,
+            # see test_abandon_channel_and_claims_in_same_tx
+            expired_channels = {}
             for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+
+                if name.startswith('@'):
+                    expired_channels[abandoned_claim_hash] = (tx_num, nout, name)
+                else:
+                    # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+
+            # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
+            for abandoned_claim_hash, (tx_num, nout, name) in expired_channels.items():
                 # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
                 self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
 
