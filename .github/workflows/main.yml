@@ -155,7 +155,14 @@ jobs:
           zip --junk-paths lbrynet-linux.zip lbrynet-linux/lbrynet
           zip --junk-paths lbrynet-windows.zip lbrynet-windows/lbrynet.exe
           ls -lh
-      - run: gh release upload ${GITHUB_REF#refs/tags/} lbrynet-mac.zip lbrynet-linux.zip lbrynet-windows.zip
+      - name: upload binaries & publish
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          files: |
+            lbrynet-mac.zip
+            lbrynet-linux.zip
+            lbrynet-windows.zip
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ github.token }}
-
