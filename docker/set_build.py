@@ -20,7 +20,7 @@ def _check_and_set(d: dict, key: str, value: str):
 def main():
     build_info = {item: build_info_mod.__dict__[item] for item in dir(build_info_mod) if not item.startswith("__")}
 
-    commit_hash = os.getenv('DOCKER_COMMIT', os.getenv('CI_COMMIT_SHA', os.getenv('TRAVIS_COMMIT')))
+    commit_hash = os.getenv('DOCKER_COMMIT', os.getenv('GITHUB_SHA'))
     if commit_hash is None:
         raise ValueError("Commit hash not found in env vars")
     _check_and_set(build_info, "COMMIT_HASH", commit_hash[:6])
@@ -30,7 +30,7 @@ def main():
         _check_and_set(build_info, "DOCKER_TAG", docker_tag)
         _check_and_set(build_info, "BUILD", "docker")
     else:
-        ci_tag = os.getenv('CI_COMMIT_TAG', os.getenv('TRAVIS_TAG'))
+        ci_tag = os.getenv('CI_COMMIT_TAG', os.getenv('GITHUB_REF'))
         _check_and_set(build_info, "BUILD", "release" if re.match(r'v\d+\.\d+\.\d+$', str(ci_tag)) else "qa")
 
     log.debug("build info: %s", ", ".join([f"{k}={v}" for k, v in build_info.items()]))
