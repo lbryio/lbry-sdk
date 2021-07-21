@@ -160,5 +160,5 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
             await advance(1000)
             await wait_for(
                 lambda: len(node.protocol.routing_table.get_peers()) >= num_seeds,
-                lambda: self.assertTrue(len(node.protocol.routing_table.get_peers()) >= num_seeds)
+                lambda: self.assertGreaterEqual(len(node.protocol.routing_table.get_peers()), num_seeds)
             )
