@@ -35,17 +35,31 @@ INDEX_DEFAULT_SETTINGS = {
         }
     }
 }
-FIELDS = {'is_controlling', 'last_take_over_height', 'claim_id', 'claim_name', 'normalized', 'tx_position', 'amount',
-          'timestamp', 'creation_timestamp', 'height', 'creation_height', 'activation_height', 'expiration_height',
-          'release_time', 'short_url', 'canonical_url', 'title', 'author', 'description', 'claim_type', 'reposted',
-          'stream_type', 'media_type', 'fee_amount', 'fee_currency', 'duration', 'censor_type',
-          'claims_in_channel', 'channel_join', 'signature_valid', 'effective_amount', 'support_amount',
-          'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'channel_id', 'tx_id', 'tx_nout',
-          'signature', 'signature_digest', 'public_key_bytes', 'public_key_id', '_id', 'tags',
-          'reposted_claim_id'}
+
+FIELDS = {
+    '_id',
+    'claim_id', 'claim_type', 'claim_name', 'normalized_name',
+    'tx_id', 'tx_nout', 'tx_position',
+    'short_url', 'canonical_url',
+    'is_controlling', 'last_take_over_height',
+    'public_key_bytes', 'public_key_id', 'claims_in_channel', 'channel_join',
+    'channel_id', 'signature', 'signature_digest', 'is_signature_valid',
+    'amount', 'effective_amount', 'support_amount',
+    'fee_amount', 'fee_currency',
+    'height', 'creation_height', 'activation_height', 'expiration_height',
+    'stream_type', 'media_type', 'censor_type',
+    'title', 'author', 'description',
+    'timestamp', 'creation_timestamp',
+    'duration', 'release_time',
+    'tags',
+    'reposted_claim_id', 'reposted',
+    'trending_group', 'trending_mixed', 'trending_local', 'trending_global',
+}
+
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id', 'censoring_channel_id',
-               'media_type', 'normalized', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
+               'media_type', 'normalized_name', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
                'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
+
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
@@ -54,8 +68,10 @@ RANGE_FIELDS = {
     'trending_group', 'trending_mixed', 'censor_type',
     'trending_local', 'trending_global',
 }
+
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
+
 REPLACEMENTS = {
-    'name': 'normalized',
+    'name': 'normalized_name',
     'txid': 'tx_id'
 }
