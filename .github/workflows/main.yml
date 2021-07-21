@@ -170,6 +170,7 @@ jobs:
     needs: ["build"]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v1
       - uses: actions/download-artifact@v2
       - name: zip binaries
         run: |
