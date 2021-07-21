@@ -139,31 +139,6 @@ jobs:
           name: lbrynet-${{ steps.os-name.outputs.lowercase }}
           path: dist/
 
-  docker:
-    name: "build / docker"
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: ["build"]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v1
-      - uses: actions/download-artifact@v2
-        with:
-          name: lbrynet-linux
-      - run: |
-          chmod +x lbrynet
-          mv lbrynet docker
-      - name: build and push docker image
-        uses: docker/build-push-action@v1
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          repository: lbry/lbrynet
-          path: docker
-          dockerfile: docker/Dockerfile.wallet_server
-          tag_with_ref: true
-          tag_with_sha: true
-          add_git_labels: true
-
   release:
     name: "release"
     if: startsWith(github.ref, 'refs/tags/v')
