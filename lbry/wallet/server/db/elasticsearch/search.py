@@ -436,15 +436,17 @@ def extract_doc(doc, index):
     txo_hash = doc.pop('txo_hash')
     doc['tx_id'] = txo_hash[:32][::-1].hex()
     doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
+    doc['repost_count'] = doc.pop('reposted')
     doc['is_controlling'] = bool(doc['is_controlling'])
     doc['signature'] = (doc.pop('signature') or b'').hex() or None
     doc['signature_digest'] = (doc.pop('signature_digest') or b'').hex() or None
     doc['public_key_bytes'] = (doc.pop('public_key_bytes') or b'').hex() or None
     doc['public_key_id'] = (doc.pop('public_key_hash') or b'').hex() or None
-    doc['signature_valid'] = bool(doc['signature_valid'])
+    doc['is_signature_valid'] = bool(doc['signature_valid'])
     doc['claim_type'] = doc.get('claim_type', 0) or 0
     doc['stream_type'] = int(doc.get('stream_type', 0) or 0)
     doc['has_source'] = bool(doc['has_source'])
+    doc['normalized_name'] = doc.pop('normalized')
     doc = {key: value for key, value in doc.items() if key in ALL_FIELDS}
     return {'doc': doc, '_id': doc['claim_id'], '_index': index, '_op_type': 'update', 'doc_as_upsert': True}
 
@@ -535,12 +537,12 @@ def expand_query(**kwargs):
     if kwargs.get('has_channel_signature'):
         query['must'].append({"exists": {"field": "signature_digest"}})
         if 'signature_valid' in kwargs:
-            query['must'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
+            query['must'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     elif 'signature_valid' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
         query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
-        query['should'].append({"term": {"signature_valid": bool(kwargs["signature_valid"])}})
+        query['should'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     if 'has_source' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
@@ -606,6 +608,9 @@ def expand_result(results):
         result['channel_hash'] = unhexlify(result['channel_id'])[::-1] if result['channel_id'] else None
         result['txo_hash'] = unhexlify(result['tx_id'])[::-1] + struct.pack('<I', result['tx_nout'])
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
+        result['reposted'] = result.pop('repost_count')
+        result['signature_valid'] = result.pop('is_signature_valid')
+        result['normalized'] = result.pop('normalized_name')
         expanded.append(result)
     if inner_hits:
         return expand_result(inner_hits)

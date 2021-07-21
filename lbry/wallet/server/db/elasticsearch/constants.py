@@ -73,5 +73,6 @@ ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 
 REPLACEMENTS = {
     'name': 'normalized_name',
-    'txid': 'tx_id'
+    'txid': 'tx_id',
+    'reposted': 'repost_count'
 }
