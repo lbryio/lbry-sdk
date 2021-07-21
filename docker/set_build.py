@@ -30,8 +30,10 @@ def main():
         _check_and_set(build_info, "DOCKER_TAG", docker_tag)
         _check_and_set(build_info, "BUILD", "docker")
     else:
-        ci_tag = os.getenv('CI_COMMIT_TAG', os.getenv('GITHUB_REF'))
-        _check_and_set(build_info, "BUILD", "release" if re.match(r'v\d+\.\d+\.\d+$', str(ci_tag)) else "qa")
+        if re.match(r'refs/tags/v\d+\.\d+\.\d+$', str(os.getenv('GITHUB_REF'))):
+            _check_and_set(build_info, "BUILD", "release")
+        else:
+            _check_and_set(build_info, "BUILD", "qa")
 
     log.debug("build info: %s", ", ".join([f"{k}={v}" for k, v in build_info.items()]))
     with open(build_info_mod.__file__, 'w') as f:
