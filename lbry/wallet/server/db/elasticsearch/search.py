@@ -487,7 +487,7 @@ def expand_query(**kwargs):
                 partial_id = True
             if key == 'public_key_id':
                 value = Base58.decode(value)[1:21].hex()
-            if key == 'signature_valid':
+            if key in ('signature_valid', 'has_source'):
                 continue  # handled later
             if key in TEXT_FIELDS:
                 key += '.keyword'
