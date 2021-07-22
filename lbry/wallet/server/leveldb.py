@@ -279,7 +279,7 @@ class LevelDB:
         if claim_id:
             if len(claim_id) == 40:  # a full claim id
                 claim_txo = self.get_claim_txo(bytes.fromhex(claim_id))
-                if normalized_name != claim_txo.name:
+                if not claim_txo or normalized_name != claim_txo.name:
                     return
                 return self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, bytes.fromhex(claim_id), claim_txo.name,
