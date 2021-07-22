@@ -1167,8 +1167,8 @@ class BlockProcessor:
                 hashX = spend_utxo(txin.prev_hash, txin.prev_idx)
                 if hashX:
                     # self._set_hashX_cache(hashX)
-                    if txin_num not in self.hashXs_by_tx[hashX]:
-                        self.hashXs_by_tx[hashX].append(txin_num)
+                    if tx_count not in self.hashXs_by_tx[hashX]:
+                        self.hashXs_by_tx[hashX].append(tx_count)
                 # spend claim/support txo
                 spend_claim_or_support_txo(txin, spent_claims)
 
