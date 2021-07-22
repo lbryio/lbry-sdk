@@ -51,7 +51,7 @@ FIELDS = {
     'title', 'author', 'description',
     'timestamp', 'creation_timestamp',
     'duration', 'release_time',
-    'tags',
+    'tags', 'languages', 'has_source', 'reposted_claim_type',
     'reposted_claim_id', 'repost_count',
     'trending_group', 'trending_mixed', 'trending_local', 'trending_global',
 }
