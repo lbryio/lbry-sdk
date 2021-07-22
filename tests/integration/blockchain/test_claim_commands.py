@@ -70,7 +70,9 @@ class ClaimSearchCommand(ClaimTestCase):
     async def assertFindsClaims(self, claims, **kwargs):
         kwargs.setdefault('order_by', ['height', '^name'])
         results = await self.claim_search(**kwargs)
-        self.assertEqual(len(claims), len(results))
+        self.assertEqual(
+            len(claims), len(results),
+            f"{[claim['outputs'][0]['name'] for claim in claims]} != {[result['name'] for result in results]}")
         for claim, result in zip(claims, results):
             self.assertEqual(
                 (claim['txid'], self.get_claim_id(claim)),
