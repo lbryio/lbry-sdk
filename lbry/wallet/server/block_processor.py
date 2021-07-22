@@ -201,7 +201,6 @@ class BlockProcessor:
         self.touched = set()
 
         # Caches of unflushed items.
-        self.block_hashes = []
         self.block_txs = []
         self.undo_infos = []
 
@@ -336,7 +335,7 @@ class BlockProcessor:
             for height, block_hash in zip(
                     reversed(range(min_start_height, min_start_height + self.coin.REORG_LIMIT)),
                     reversed(block_hashes_from_lbrycrd)):
-                if self.block_hashes[height][::-1].hex() == block_hash:
+                if self.db.get_block_hash(height)[::-1].hex() == block_hash:
                     break
                 count += 1
             self.logger.warning(f"blockchain reorg detected at {self.height}, unwinding last {count} blocks")
@@ -373,8 +372,7 @@ class BlockProcessor:
     def flush_data(self):
         """The data for a flush.  The lock must be taken."""
         assert self.state_lock.locked()
-        return FlushData(self.height, self.tx_count, self.block_hashes,
-                         self.block_txs, self.db_op_stack, self.tip)
+        return FlushData(self.height, self.tx_count, self.block_txs, self.db_op_stack, self.tip)
 
     async def flush(self):
         def flush():
@@ -1137,7 +1135,6 @@ class BlockProcessor:
         txs: List[Tuple[Tx, bytes]] = block.transactions
         block_hash = self.coin.header_hash(block.header)
 
-        self.block_hashes.append(block_hash)
         self.db_op_stack.append(RevertablePut(*Prefixes.block_hash.pack_item(height, block_hash)))
 
         tx_count = self.tx_count
@@ -1298,7 +1295,6 @@ class BlockProcessor:
         self.removed_claims_to_send_es.update(touched_and_deleted.deleted_claims)
 
         self.db.headers.pop()
-        self.block_hashes.pop()
         self.db.tx_counts.pop()
         self.tip = self.coin.header_hash(self.db.headers[-1])
         while len(self.db.total_transactions) > self.db.tx_counts[-1]:
