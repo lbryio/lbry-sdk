@@ -65,7 +65,6 @@ TXO_STRUCT_pack = TXO_STRUCT.pack
 class FlushData:
     height = attr.ib()
     tx_count = attr.ib()
-    block_txs = attr.ib()
     put_and_delete_ops = attr.ib()
     tip = attr.ib()
 
@@ -380,7 +379,9 @@ class LevelDB:
         )
 
     def get_claim_txo_amount(self, claim_hash: bytes) -> Optional[int]:
-        v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
+        claim = self.get_claim_txo(claim_hash)
+        if claim:
+            return claim.amount
 
     def get_block_hash(self, height: int) -> Optional[bytes]:
         v = self.db.get(Prefixes.block_hash.pack_key(height))
