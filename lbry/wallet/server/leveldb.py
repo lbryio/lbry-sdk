@@ -65,7 +65,6 @@ TXO_STRUCT_pack = TXO_STRUCT.pack
 class FlushData:
     height = attr.ib()
     tx_count = attr.ib()
-    block_hashes = attr.ib()
     block_txs = attr.ib()
     put_and_delete_ops = attr.ib()
     tip = attr.ib()
@@ -382,8 +381,11 @@ class LevelDB:
 
     def get_claim_txo_amount(self, claim_hash: bytes) -> Optional[int]:
         v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
+
+    def get_block_hash(self, height: int) -> Optional[bytes]:
+        v = self.db.get(Prefixes.block_hash.pack_key(height))
         if v:
-            return Prefixes.claim_to_txo.unpack_value(v).amount
+            return Prefixes.block_hash.unpack_value(v).block_hash
 
     def get_support_txo_amount(self, claim_hash: bytes, tx_num: int, position: int) -> Optional[int]:
         v = self.db.get(Prefixes.claim_to_support.pack_key(claim_hash, tx_num, position))
@@ -790,7 +792,6 @@ class LevelDB:
         assert flush_data.tx_count == self.fs_tx_count == self.db_tx_count
         assert flush_data.height == self.fs_height == self.db_height
         assert flush_data.tip == self.db_tip
-        assert not flush_data.block_txs
         assert not len(flush_data.put_and_delete_ops)
 
     def flush_dbs(self, flush_data: FlushData):
@@ -840,7 +841,6 @@ class LevelDB:
             self.write_db_state(batch)
 
     def flush_backup(self, flush_data):
-        assert not flush_data.block_txs
         assert flush_data.height < self.db_height
         assert not self.hist_unflushed
 
