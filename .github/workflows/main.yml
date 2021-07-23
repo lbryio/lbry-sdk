@@ -147,22 +147,17 @@ jobs:
     steps:
       - uses: actions/checkout@v1
       - uses: actions/download-artifact@v2
-      - name: zip binaries
+      - name: upload binaries
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          pip install githubrelease
           chmod +x lbrynet-macos/lbrynet
           chmod +x lbrynet-linux/lbrynet
           zip --junk-paths lbrynet-mac.zip lbrynet-macos/lbrynet
           zip --junk-paths lbrynet-linux.zip lbrynet-linux/lbrynet
           zip --junk-paths lbrynet-windows.zip lbrynet-windows/lbrynet.exe
           ls -lh
-      - name: upload binaries & publish
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: false
-          files: |
-            lbrynet-mac.zip
-            lbrynet-linux.zip
-            lbrynet-windows.zip
-          fail_on_unmatched_files: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+          githubrelease --no-progress asset lbryio/lbry-sdk upload ${GITHUB_REF#refs/tags/} \
+            lbrynet-mac.zip lbrynet-linux.zip lbrynet-windows.zip
+          githubrelease --no-progress release lbryio/lbry-sdk publish ${GITHUB_REF#refs/tags/}
