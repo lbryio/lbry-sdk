@@ -173,13 +173,13 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"name", "claim_name", "normalized", "reposted_claim_id", "_id", "public_key_hash",
+    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", "public_key_id",
                        "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
                        "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
                        "canonical_url", "short_url", "claim_id"}
     value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
                     "limit_claims_per_channel", "tx_nout", "remove_duplicates",
-                    "signature_valid", "is_controlling", "amount_order", "no_totals"}
+                    "is_signature_valid", "is_controlling", "amount_order", "no_totals"}
     ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
     for key in list(kwargs.keys()):
         value = kwargs[key]
@@ -191,11 +191,11 @@ def fix_kwargs_for_hub(**kwargs):
             kwargs["tx_nout"] = kwargs.pop("nout")
             key = "tx_nout"
         if key == "valid_channel_signature":
-            kwargs["signature_valid"] = kwargs.pop("valid_channel_signature")
+            kwargs["is_signature_valid"] = kwargs.pop("valid_channel_signature")
         if key == "invalid_channel_signature":
-            kwargs["signature_valid"] = not kwargs.pop("invalid_channel_signature")
+            kwargs["is_signature_valid"] = not kwargs.pop("invalid_channel_signature")
         if key in {"valid_channel_signature", "invalid_channel_signature"}:
-            key = "signature_valid"
+            key = "is_signature_valid"
             value = kwargs[key]
         if key == "has_no_source":
             kwargs["has_source"] = not kwargs.pop("has_no_source")
@@ -2498,7 +2498,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
-            --name=<name>                   : (str) claim name (normalized)
+            --name=<name>                   : (str) claim name (normalized_name)
             --text=<text>                   : (str) full text search
             --claim_id=<claim_id>           : (str) full or partial claim id
             --claim_ids=<claim_ids>         : (list) list of full claim ids
@@ -2630,17 +2630,17 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs = fix_kwargs_for_hub(**kwargs)
         else:
             # Don't do this if using the hub server, it screws everything up
-        if "claim_ids" in kwargs and not kwargs["claim_ids"]:
-            kwargs.pop("claim_ids")
-        if {'claim_id', 'claim_ids'}.issubset(kwargs):
-            # TODO: use error from lbry.error
-            raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
-        if kwargs.pop('valid_channel_signature', False):
-            kwargs['signature_valid'] = 1
-        if kwargs.pop('invalid_channel_signature', False):
-            kwargs['signature_valid'] = 0
-        if 'has_no_source' in kwargs:
-            kwargs['has_source'] = not kwargs.pop('has_no_source')
+            if "claim_ids" in kwargs and not kwargs["claim_ids"]:
+                kwargs.pop("claim_ids")
+            if {'claim_id', 'claim_ids'}.issubset(kwargs):
+                # TODO: use error from lbry.error
+                raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
+            if kwargs.pop('valid_channel_signature', False):
+                kwargs['signature_valid'] = 1
+            if kwargs.pop('invalid_channel_signature', False):
+                kwargs['signature_valid'] = 0
+            if 'has_no_source' in kwargs:
+                kwargs['has_source'] = not kwargs.pop('has_no_source')
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
