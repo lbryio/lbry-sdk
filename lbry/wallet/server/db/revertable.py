@@ -84,7 +84,7 @@ class RevertableOpStack:
         self._get = get_fn
         self._items = defaultdict(list)
 
-    def append(self, op: RevertableOp):
+    def append_op(self, op: RevertableOp):
         inverted = op.invert()
         if self._items[op.key] and inverted == self._items[op.key][-1]:
             self._items[op.key].pop()  # if the new op is the inverse of the last op, we can safely null both
@@ -109,9 +109,9 @@ class RevertableOpStack:
             raise OpStackIntegrity(f"db op tries to delete with incorrect value: {op}")
         self._items[op.key].append(op)
 
-    def extend(self, ops: Iterable[RevertableOp]):
+    def extend_ops(self, ops: Iterable[RevertableOp]):
         for op in ops:
-            self.append(op)
+            self.append_op(op)
 
     def clear(self):
         self._items.clear()
@@ -135,4 +135,4 @@ class RevertableOpStack:
     def apply_packed_undo_ops(self, packed: bytes):
         while packed:
             op, packed = RevertableOp.unpack(packed)
-            self.append(op)
+            self.append_op(op)
