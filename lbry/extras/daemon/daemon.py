@@ -174,7 +174,7 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", "public_key_id",
+    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", # "public_key_id",
                        "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
                        "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
                        "canonical_url", "short_url", "claim_id"}
@@ -185,6 +185,9 @@ def fix_kwargs_for_hub(**kwargs):
     for key in list(kwargs.keys()):
         value = kwargs[key]
 
+        if key == "reposted":
+            kwargs["repost_count"] = kwargs.pop("reposted")
+            key = "repost_count"
         if key == "txid":
             kwargs["tx_id"] = kwargs.pop("txid")
             key = "tx_id"
@@ -2617,9 +2620,9 @@ class Daemon(metaclass=JSONRPCServerType):
             if {'claim_id', 'claim_ids'}.issubset(kwargs):
                 raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
             if kwargs.pop('valid_channel_signature', False):
-                kwargs['is_signature_valid'] = 1
+                kwargs['signature_valid'] = 1
             if kwargs.pop('invalid_channel_signature', False):
-                kwargs['is_signature_valid'] = 0
+                kwargs['signature_valid'] = 0
             if 'has_no_source' in kwargs:
                 kwargs['has_source'] = not kwargs.pop('has_no_source')
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
