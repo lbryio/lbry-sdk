@@ -173,7 +173,7 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", "public_key_id",
+    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", # "public_key_id",
                        "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
                        "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
                        "canonical_url", "short_url", "claim_id"}
@@ -184,6 +184,9 @@ def fix_kwargs_for_hub(**kwargs):
     for key in list(kwargs.keys()):
         value = kwargs[key]
 
+        if key == "reposted":
+            kwargs["repost_count"] = kwargs.pop("reposted")
+            key = "repost_count"
         if key == "txid":
             kwargs["tx_id"] = kwargs.pop("txid")
             key = "tx_id"
