@@ -895,16 +895,16 @@ class BlockProcessor:
         # upon the delayed activation of B, we need to detect to activate C and make it take over early instead
 
         claim_exists = {}
-        for activated, activated_txos in self.db.get_future_activated(height).items():
+        for activated, activated_claim_txo in self.db.get_future_activated(height):
             # uses the pending effective amount for the future activation height, not the current height
             future_amount = self._get_pending_claim_amount(
-                activated.name, activated.claim_hash, activated_txos[-1].height + 1
+                activated.name, activated.claim_hash, activated_claim_txo.height + 1
             )
             if activated.claim_hash not in claim_exists:
                 claim_exists[activated.claim_hash] = activated.claim_hash in self.claim_hash_to_txo or (
                         self.db.get_claim_txo(activated.claim_hash) is not None)
             if claim_exists[activated.claim_hash] and activated.claim_hash not in self.abandoned_claims:
-                v = future_amount, activated, activated_txos[-1]
+                v = future_amount, activated, activated_claim_txo
                 future_activations[activated.name][activated.claim_hash] = v
 
         for name, future_activated in activate_in_future.items():
