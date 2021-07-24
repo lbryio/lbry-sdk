@@ -652,15 +652,17 @@ class LevelDB:
             activated[v].append(k)
         return activated
 
-    def get_future_activated(self, height: int) -> DefaultDict[PendingActivationValue, List[PendingActivationKey]]:
-        activated = defaultdict(list)
+    def get_future_activated(self, height: int) -> typing.Generator[
+            Tuple[PendingActivationValue, PendingActivationKey], None, None]:
+        yielded = set()
         start_prefix = Prefixes.pending_activation.pack_partial_key(height + 1)
         stop_prefix = Prefixes.pending_activation.pack_partial_key(height + 1 + self.coin.maxTakeoverDelay)
-        for _k, _v in self.db.iterator(start=start_prefix, stop=stop_prefix):
-            k = Prefixes.pending_activation.unpack_key(_k)
+        for _k, _v in self.db.iterator(start=start_prefix, stop=stop_prefix, reverse=True):
             v = Prefixes.pending_activation.unpack_value(_v)
-            activated[v].append(k)
-        return activated
+            if v not in yielded:
+                yielded.add(v)
+                k = Prefixes.pending_activation.unpack_key(_k)
+                yield v, k
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
