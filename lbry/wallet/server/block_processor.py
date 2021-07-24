@@ -1327,27 +1327,22 @@ class BlockProcessor:
         if cache_value:
             return cache_value
 
-        prefix = Prefixes.hashX_utxo.pack_partial_key(tx_hash[:4])
-        candidates = {db_key: hashX for db_key, hashX in self.db.db.iterator(prefix=prefix)}
-        for hdb_key, hashX in candidates.items():
-            key = Prefixes.hashX_utxo.unpack_key(hdb_key)
-            if len(candidates) > 1:
-                hash = self.db.total_transactions[key.tx_num]
-                if hash != tx_hash:
-                    assert hash is not None  # Should always be found
-                    continue
-                if key.nout != nout:
-                    continue
-            udb_key = Prefixes.utxo.pack_key(hashX, key.tx_num, nout)
+        txin_num = self.db.transaction_num_mapping[tx_hash]
+        hdb_key = Prefixes.hashX_utxo.pack_key(tx_hash[:4], txin_num, nout)
+        hashX = self.db.db.get(hdb_key)
+        if hashX:
+            udb_key = Prefixes.utxo.pack_key(hashX, txin_num, nout)
             utxo_value_packed = self.db.db.get(udb_key)
             if utxo_value_packed is None:
                 self.logger.warning(
                     "%s:%s is not found in UTXO db for %s", hash_to_hex_str(tx_hash), nout, hash_to_hex_str(hashX)
                 )
-                raise ChainError(f"{hash_to_hex_str(tx_hash)}:{nout} is not found in UTXO db for {hash_to_hex_str(hashX)}")
+                raise ChainError(
+                    f"{hash_to_hex_str(tx_hash)}:{nout} is not found in UTXO db for {hash_to_hex_str(hashX)}"
+                )
             # Remove both entries for this UTXO
             self.touched_hashXs.add(hashX)
-            self.db_op_stack.extend([
+            self.db_op_stack.extend_ops([
                 RevertableDelete(hdb_key, hashX),
                 RevertableDelete(udb_key, utxo_value_packed)
             ])
