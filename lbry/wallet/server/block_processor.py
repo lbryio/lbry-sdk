@@ -673,18 +673,15 @@ class BlockProcessor:
     def _cached_get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
         if (claim_hash, txo_type, height) in self.amount_cache:
             return self.amount_cache[(claim_hash, txo_type, height)]
-        self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db._get_active_amount(
-            claim_hash, txo_type, height
-        )
+        if txo_type == ACTIVATED_CLAIM_TXO_TYPE:
+            self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db.get_active_amount_as_of_height(
+                claim_hash, height
+            )
+        else:
+            self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db._get_active_amount(
+                claim_hash, txo_type, height
+            )
         return amount
-
-    def _cached_get_effective_amount(self, claim_hash: bytes, support_only=False) -> int:
-        support_amount = self._cached_get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.db.db_height + 1)
-        if support_only:
-            return support_only
-        return support_amount + self._cached_get_active_amount(
-            claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db.db_height + 1
-        )
 
     def _get_pending_claim_amount(self, name: str, claim_hash: bytes, height=None) -> int:
         if (name, claim_hash) in self.activated_claim_amount_by_name_and_hash:
