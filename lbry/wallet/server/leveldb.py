@@ -21,7 +21,7 @@ from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List
 from functools import partial
 from asyncio import sleep
 from bisect import bisect_right
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from lbry.utils import LRUCacheWithMetrics
 from lbry.schema.url import URL
 from lbry.wallet.server import util
@@ -130,6 +130,9 @@ class LevelDB:
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
         self.total_transactions = None
         self.transaction_num_mapping = {}
+
+        self.claim_to_txo: typing.OrderedDict[bytes, ClaimToTXOValue] = OrderedDict()
+        self.txo_to_claim: typing.OrderedDict[Tuple[int, int], bytes] = OrderedDict()
 
         # Search index
         self.search_index = SearchIndex(
@@ -281,7 +284,7 @@ class LevelDB:
             for k, v in self.db.iterator(prefix=prefix):
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
-                claim_hash = self.get_claim_from_txo(claim_txo.tx_num, claim_txo.position).claim_hash
+                claim_hash = self.txo_to_claim[(claim_txo.tx_num, claim_txo.position)]
                 signature_is_valid = self.get_claim_txo(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, claim_hash, key.name, key.root_tx_num,
@@ -701,6 +704,20 @@ class LevelDB:
         ts = time.perf_counter() - start
         self.logger.info("loaded %i txids in %ss", len(self.total_transactions), round(ts, 4))
 
+    async def _read_claim_txos(self):
+        def read_claim_txos():
+            for _k, _v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
+                k = Prefixes.claim_to_txo.unpack_key(_k)
+                v = Prefixes.claim_to_txo.unpack_value(_v)
+                self.claim_to_txo[k.claim_hash] = v
+                self.txo_to_claim[(v.tx_num, v.position)] = k.claim_hash
+
+        start = time.perf_counter()
+        self.logger.info("loading claims")
+        await asyncio.get_event_loop().run_in_executor(None, read_claim_txos)
+        ts = time.perf_counter() - start
+        self.logger.info("loaded %i claim txos in %ss", len(self.claim_to_txo), round(ts, 4))
+
     async def _read_headers(self):
         if self.headers is not None:
             return
@@ -756,6 +773,7 @@ class LevelDB:
         if self.total_transactions is None:
             await self._read_txids()
         await self._read_headers()
+        await self._read_claim_txos()
 
         # start search index
         await self.search_index.start()
