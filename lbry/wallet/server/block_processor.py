@@ -345,7 +345,7 @@ class BlockProcessor:
                     await self.flush()
                     self.logger.info(f'backed up to height {self.height:,d}')
 
-                await self.db._read_claim_txos()
+                await self.db._read_claim_txos()  # TODO: don't do this
 
                 for touched in self.touched_claims_to_send_es:
                     if not self.db.get_claim_txo(touched):
