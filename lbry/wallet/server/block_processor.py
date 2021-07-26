@@ -345,6 +345,8 @@ class BlockProcessor:
                     await self.flush()
                     self.logger.info(f'backed up to height {self.height:,d}')
 
+                await self.db._read_claim_txos()
+
                 for touched in self.touched_claims_to_send_es:
                     if not self.db.get_claim_txo(touched):
                         self.removed_claims_to_send_es.add(touched)
@@ -478,6 +480,11 @@ class BlockProcessor:
                     ).get_remove_activate_ops()
                 )
 
+        self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
+            tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
+        )
+        self.db.txo_to_claim[(tx_num, nout)] = claim_hash
+
         pending = StagedClaimtrieItem(
             claim_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout, root_tx_num,
             root_idx, channel_signature_is_valid, signing_channel_hash, reposted_claim_hash
@@ -536,12 +543,14 @@ class BlockProcessor:
         if (txin_num, txin.prev_idx) in self.txo_to_claim:
             spent = self.txo_to_claim[(txin_num, txin.prev_idx)]
         else:
+            if (txin_num, txin.prev_idx) not in self.db.txo_to_claim:  # txo is not a claim
+                return False
             spent_claim_hash_and_name = self.db.get_claim_from_txo(
                 txin_num, txin.prev_idx
             )
-            if not spent_claim_hash_and_name:  # txo is not a claim
-                return False
+            assert spent_claim_hash_and_name is not None
             spent = self._make_pending_claim_txo(spent_claim_hash_and_name.claim_hash)
+        self.db.claim_to_txo.pop(self.db.txo_to_claim.pop((txin_num, txin.prev_idx)))
         if spent.reposted_claim_hash:
             self.pending_reposted.add(spent.reposted_claim_hash)
         if spent.signing_hash and spent.channel_signature_is_valid:
