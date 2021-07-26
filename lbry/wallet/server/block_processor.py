@@ -283,6 +283,11 @@ class BlockProcessor:
                 return await asyncio.get_event_loop().run_in_executor(None, func, *args)
         return await asyncio.shield(run_in_thread_locked())
 
+    @staticmethod
+    async def run_in_thread(func, *args):
+        async def run_in_thread():
+            return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+        return await asyncio.shield(run_in_thread())
     async def check_and_advance_blocks(self, raw_blocks):
         """Process the list of raw blocks passed.  Detects and handles
         reorgs.
@@ -302,7 +307,7 @@ class BlockProcessor:
             try:
                 for block in blocks:
                     start = time.perf_counter()
-                    await self.advance_block(block)
+                    await self.run_in_thread(self.advance_block, block)
                     await self.flush()
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
@@ -1135,7 +1140,7 @@ class BlockProcessor:
         self.touched_claims_to_send_es.update(self.touched_claim_hashes)
         self.removed_claims_to_send_es.update(self.removed_claim_hashes)
 
-    async def advance_block(self, block):
+    def advance_block(self, block):
         height = self.height + 1
         # print("advance ", height)
         # Use local vars for speed in the loops
