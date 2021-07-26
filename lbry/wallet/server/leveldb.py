@@ -225,7 +225,7 @@ class LevelDB:
 
         expiration_height = self.coin.get_expiration_height(height)
         support_amount = self.get_support_amount(claim_hash)
-        claim_amount = self.get_claim_txo_amount(claim_hash)
+        claim_amount = self.claim_to_txo[claim_hash].amount
 
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
@@ -234,7 +234,7 @@ class LevelDB:
         canonical_url = short_url
         claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
-            channel_vals = self.get_claim_txo(channel_hash)
+            channel_vals = self.claim_to_txo.get(channel_hash)
             if channel_vals:
                 channel_short_url = self.get_short_claim_id_url(
                     channel_vals.name, channel_hash, channel_vals.root_tx_num, channel_vals.root_position
@@ -285,7 +285,7 @@ class LevelDB:
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
                 claim_hash = self.txo_to_claim[(claim_txo.tx_num, claim_txo.position)]
-                signature_is_valid = self.get_claim_txo(claim_hash).channel_signature_is_valid
+                signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, claim_hash, key.name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
@@ -300,7 +300,7 @@ class LevelDB:
                 continue
             key = Prefixes.effective_amount.unpack_key(k)
             claim_val = Prefixes.effective_amount.unpack_value(v)
-            claim_txo = self.get_claim_txo(claim_val.claim_hash)
+            claim_txo = self.claim_to_txo.get(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
                 key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo.root_tx_num,
@@ -359,13 +359,11 @@ class LevelDB:
          return await asyncio.get_event_loop().run_in_executor(None, self._fs_resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
-        claim = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
+        claim = self.claim_to_txo.get(claim_hash)
         if claim:
-            v = Prefixes.claim_to_txo.unpack_value(claim)
-            activation_height = self.get_activation(v.tx_num, v.position)
             return self._prepare_resolve_result(
-                v.tx_num, v.position, claim_hash, v.name,
-                v.root_tx_num, v.root_position, activation_height, v.channel_signature_is_valid
+                claim.tx_num, claim.position, claim_hash, claim.name, claim.root_tx_num, claim.root_position,
+                self.get_activation(claim.tx_num, claim.position), claim.channel_signature_is_valid
             )
 
     async def fs_getclaimbyid(self, claim_id):
@@ -507,7 +505,7 @@ class LevelDB:
         reposted_claim = None
         reposted_metadata = None
         if reposted_claim_hash:
-            reposted_claim = self.get_claim_txo(reposted_claim_hash)
+            reposted_claim = self.claim_to_txo.get(reposted_claim_hash)
             if not reposted_claim:
                 return
             reposted_metadata = self.get_claim_metadata(
