@@ -638,6 +638,13 @@ class LevelDB:
     def claims_producer(self, claim_hashes: Set[bytes]):
         batch = []
         for claim_hash in claim_hashes:
+            if claim_hash not in self.claim_to_txo:
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+                continue
+            name = self.claim_to_txo[claim_hash].name
+            if not self.db.get(Prefixes.claim_takeover.pack_key(name)):
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+                continue
             claim = self._fs_get_claim_by_hash(claim_hash)
             if claim:
                 batch.append(claim)
