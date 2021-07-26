@@ -402,6 +402,14 @@ class LevelDB:
                 claim_hash, txo_type, height), include_key=False)
         )
 
+    def get_active_amount_as_of_height(self, claim_hash: bytes, height: int) -> int:
+        for v in self.db.iterator(
+                start=Prefixes.active_amount.pack_partial_key(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, 0),
+                stop=Prefixes.active_amount.pack_partial_key(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, height),
+                include_key=False, reverse=True):
+            return Prefixes.active_amount.unpack_value(v).amount
+        return 0
+
     def get_effective_amount(self, claim_hash: bytes, support_only=False) -> int:
         support_amount = self._get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.db_height + 1)
         if support_only:
