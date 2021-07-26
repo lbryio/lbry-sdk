@@ -562,6 +562,44 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.assertNoClaimForName(name)
         await self._test_activation_delay()
 
+    async def test_resolve_signed_claims_with_fees(self):
+        channel_name = '@abc'
+        channel_id = self.get_claim_id(
+            await self.channel_create(channel_name, '0.01')
+        )
+        self.assertEqual(channel_id, (await self.assertMatchWinningClaim(channel_name)).claim_hash.hex())
+        stream_name = 'foo'
+        stream_with_no_fee = self.get_claim_id(
+            await self.stream_create(stream_name, '0.01', channel_id=channel_id)
+        )
+        stream_with_fee = self.get_claim_id(
+            await self.stream_create('with_a_fee', '0.01', channel_id=channel_id, fee_amount='1', fee_currency='LBC')
+        )
+        greater_than_or_equal_to_zero = [
+            claim['claim_id'] for claim in (
+                await self.conductor.spv_node.server.bp.db.search_index.search(
+                    channel_id=channel_id, fee_amount=">=0"
+                ))[0]
+        ]
+        self.assertEqual(2, len(greater_than_or_equal_to_zero))
+        self.assertSetEqual(set(greater_than_or_equal_to_zero), {stream_with_no_fee, stream_with_fee})
+        greater_than_zero = [
+            claim['claim_id'] for claim in (
+                await self.conductor.spv_node.server.bp.db.search_index.search(
+                    channel_id=channel_id, fee_amount=">0"
+                ))[0]
+        ]
+        self.assertEqual(1, len(greater_than_zero))
+        self.assertSetEqual(set(greater_than_zero), {stream_with_fee})
+        equal_to_zero = [
+            claim['claim_id'] for claim in (
+                await self.conductor.spv_node.server.bp.db.search_index.search(
+                    channel_id=channel_id, fee_amount="<=0"
+                ))[0]
+        ]
+        self.assertEqual(1, len(equal_to_zero))
+        self.assertSetEqual(set(equal_to_zero), {stream_with_no_fee})
+
     async def test_early_takeover(self):
         name = 'derp'
         # block 207

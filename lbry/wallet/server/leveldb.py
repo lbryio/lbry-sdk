@@ -490,7 +490,7 @@ class LevelDB:
         if not metadata:
             return
         if not metadata.is_stream or not metadata.stream.has_fee:
-            fee_amount = None
+            fee_amount = 0
         else:
             fee_amount = int(max(metadata.stream.fee.amount or 0, 0) * 1000)
             if fee_amount >= 9223372036854775807:
