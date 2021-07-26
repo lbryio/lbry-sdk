@@ -719,6 +719,8 @@ class LevelDB:
                 self.claim_to_txo[k.claim_hash] = v
                 self.txo_to_claim[(v.tx_num, v.position)] = k.claim_hash
 
+        self.claim_to_txo.clear()
+        self.txo_to_claim.clear()
         start = time.perf_counter()
         self.logger.info("loading claims")
         await asyncio.get_event_loop().run_in_executor(None, read_claim_txos)
