@@ -151,19 +151,21 @@ def release(args):
     for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/lbry-sdk"):
         area_labels = list(get_labels(pr, 'area'))
         type_label = get_label(pr, 'type')
+        pr_url = f'[#{pr.number}]({pr.html_url})'
+        user_url = f'[{pr.user["login"]}]({pr.user["html_url"]})'
         if area_labels and type_label:
             for area_name in area_labels:
                 for incompat in get_backwards_incompatible(pr.body or ""):
-                    incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr.html_url})')
+                    incompats.append(f'  * [{area_name}] {incompat.strip()} ({pr_url})')
                 for release_text in get_release_text(pr.body or ""):
                     release_texts.append(release_text)
                 if type_label == 'fixup':
-                    fixups.append(f'  * {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+                    fixups.append(f'  * {pr.title} ({pr_url}) by {user_url}')
                 else:
                     area = areas.setdefault(area_name, [])
-                    area.append(f'  * [{type_label}] {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+                    area.append(f'  * [{type_label}] {pr.title} ({pr_url}) by {user_url}')
         else:
-            unlabeled.append(f'  * {pr.title} ({pr.html_url}) by {pr.user["login"]}')
+            unlabeled.append(f'  * {pr.title} ({pr_url}) by {user_url}')
 
     area_names = list(areas.keys())
     area_names.sort()

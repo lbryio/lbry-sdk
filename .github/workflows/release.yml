@@ -1,4 +1,5 @@
 name: slack
+
 on:
   release:
     types: [published]
@@ -8,10 +9,14 @@ jobs:
     name: "slack notification"
     runs-on: ubuntu-latest
     steps:
-      - name: send message
-        uses: slackapi/slack-github-action@v1.14.0
+      - uses: LoveToKnow/slackify-markdown-action@v1.0.0
+        id: markdown
         with:
-          payload: '{"type": "mrkdwn", "text":"Hello, *World*!"}'
+          text: "There is a new SDK release: ${{github.event.release.html_url}}\n${{ github.event.release.body }}"
+      - uses: slackapi/slack-github-action@v1.14.0
         env:
+          CHANGELOG: ${{ toJSON(steps.markdown.outputs.text) }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_RELEASE_BOT_WEBHOOK }}
+        with:
+          payload: '{"type": "mrkdwn", "text": ${{ env.CHANGELOG }}}'
 
