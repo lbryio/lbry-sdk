@@ -29,7 +29,7 @@ from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrie
 from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, StagedActivation, get_add_effective_amount_ops
 from lbry.wallet.server.db.claimtrie import get_remove_name_ops, get_remove_effective_amount_ops
 from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
-from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, Prefixes
+from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, Prefixes, ClaimToTXOValue
 from lbry.wallet.server.udp import StatusServer
 from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete, RevertableOpStack
 if typing.TYPE_CHECKING:
@@ -204,7 +204,7 @@ class BlockProcessor:
         self.touched_hashXs: Set[bytes] = set()
 
         # UTXO cache
-        self.utxo_cache: Dict[Tuple[bytes, int], bytes] = {}
+        self.utxo_cache: Dict[Tuple[bytes, int], Tuple[bytes, int]] = {}
 
         # Claimtrie cache
         self.db_op_stack: Optional[RevertableOpStack] = None
@@ -1159,7 +1159,6 @@ class BlockProcessor:
             for txin in tx.inputs:
                 if txin.is_generation():
                     continue
-                txin_num = self.db.transaction_num_mapping[txin.prev_hash]
                 # spend utxo for address histories
                 hashX = spend_utxo(txin.prev_hash, txin.prev_idx)
                 if hashX:
@@ -1305,7 +1304,7 @@ class BlockProcessor:
         hashX = self.coin.hashX_from_script(txout.pk_script)
         if hashX:
             self.touched_hashXs.add(hashX)
-            self.utxo_cache[(tx_hash, nout)] = hashX
+            self.utxo_cache[(tx_hash, nout)] = (hashX, txout.value)
             self.db_op_stack.extend_ops([
                 RevertablePut(
                     *Prefixes.utxo.pack_item(hashX, tx_num, nout, txout.value)
@@ -1317,15 +1316,13 @@ class BlockProcessor:
             return hashX
 
     def spend_utxo(self, tx_hash: bytes, nout: int):
-        # Fast track is it being in the cache
-        cache_value = self.utxo_cache.pop((tx_hash, nout), None)
-        if cache_value:
-            return cache_value
-
+        hashX, amount = self.utxo_cache.pop((tx_hash, nout), (None, None))
         txin_num = self.db.transaction_num_mapping[tx_hash]
         hdb_key = Prefixes.hashX_utxo.pack_key(tx_hash[:4], txin_num, nout)
-        hashX = self.db.db.get(hdb_key)
-        if hashX:
+        if not hashX:
+            hashX = self.db.db.get(hdb_key)
+            if not hashX:
+                return
             udb_key = Prefixes.utxo.pack_key(hashX, txin_num, nout)
             utxo_value_packed = self.db.db.get(udb_key)
             if utxo_value_packed is None:
@@ -1335,17 +1332,20 @@ class BlockProcessor:
                 raise ChainError(
                     f"{hash_to_hex_str(tx_hash)}:{nout} is not found in UTXO db for {hash_to_hex_str(hashX)}"
                 )
-            # Remove both entries for this UTXO
             self.touched_hashXs.add(hashX)
             self.db_op_stack.extend_ops([
                 RevertableDelete(hdb_key, hashX),
                 RevertableDelete(udb_key, utxo_value_packed)
             ])
             return hashX
-
-        self.logger.error('UTXO {hash_to_hex_str(tx_hash)} / {tx_idx} not found in "h" table')
-        raise ChainError('UTXO {} / {:,d} not found in "h" table'
-                         .format(hash_to_hex_str(tx_hash), nout))
+        elif amount is not None:
+            udb_key = Prefixes.utxo.pack_key(hashX, txin_num, nout)
+            self.touched_hashXs.add(hashX)
+            self.db_op_stack.extend_ops([
+                RevertableDelete(hdb_key, hashX),
+                RevertableDelete(udb_key, Prefixes.utxo.pack_value(amount))
+            ])
+            return hashX
 
     async def _process_prefetched_blocks(self):
         """Loop forever processing blocks as they arrive."""

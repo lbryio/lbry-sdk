@@ -658,9 +658,9 @@ class LevelDB:
         start_prefix = Prefixes.pending_activation.pack_partial_key(height + 1)
         stop_prefix = Prefixes.pending_activation.pack_partial_key(height + 1 + self.coin.maxTakeoverDelay)
         for _k, _v in self.db.iterator(start=start_prefix, stop=stop_prefix, reverse=True):
-            v = Prefixes.pending_activation.unpack_value(_v)
-            if v not in yielded:
-                yielded.add(v)
+            if _v not in yielded:
+                yielded.add(_v)
+                v = Prefixes.pending_activation.unpack_value(_v)
                 k = Prefixes.pending_activation.unpack_key(_k)
                 yield v, k
 
