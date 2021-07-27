@@ -149,7 +149,7 @@ jobs:
       - uses: actions/download-artifact@v2
       - name: upload binaries
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_API_TOKEN }}
         run: |
           pip install githubrelease
           chmod +x lbrynet-macos/lbrynet
@@ -158,11 +158,8 @@ jobs:
           zip --junk-paths lbrynet-linux.zip lbrynet-linux/lbrynet
           zip --junk-paths lbrynet-windows.zip lbrynet-windows/lbrynet.exe
           ls -lh
-          githubrelease release lbryio/lbry-sdk list
           githubrelease release lbryio/lbry-sdk info ${GITHUB_REF#refs/tags/}
-          githubrelease release --github-token ${GITHUB_TOKEN} lbryio/lbry-sdk list
-          githubrelease release --github-token ${GITHUB_TOKEN} lbryio/lbry-sdk info ${GITHUB_REF#refs/tags/}
-          echo "${GITHUB_REF#refs/tags/}"
-          githubrelease --no-progress asset lbryio/lbry-sdk upload ${GITHUB_REF#refs/tags/} \
+          githubrelease asset lbryio/lbry-sdk upload ${GITHUB_REF#refs/tags/} \
             lbrynet-mac.zip lbrynet-linux.zip lbrynet-windows.zip
-          githubrelease --no-progress release lbryio/lbry-sdk publish ${GITHUB_REF#refs/tags/}
+          githubrelease release lbryio/lbry-sdk publish ${GITHUB_REF#refs/tags/}
+
