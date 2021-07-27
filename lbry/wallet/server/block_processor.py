@@ -263,13 +263,13 @@ class BlockProcessor:
         self.claim_channels: Dict[bytes, bytes] = {}
         self.hashXs_by_tx: DefaultDict[bytes, List[int]] = defaultdict(list)
 
-    def claim_producer(self):
+    async def claim_producer(self):
         if self.db.db_height <= 1:
             return
 
         for claim_hash in self.removed_claims_to_send_es:
             yield 'delete', claim_hash.hex()
-        for claim in self.db.claims_producer(self.touched_claims_to_send_es):
+        async for claim in self.db.claims_producer(self.touched_claims_to_send_es):
             yield 'update', claim
 
     async def run_in_thread_with_lock(self, func, *args):
@@ -288,6 +288,7 @@ class BlockProcessor:
         async def run_in_thread():
             return await asyncio.get_event_loop().run_in_executor(None, func, *args)
         return await asyncio.shield(run_in_thread())
+
     async def check_and_advance_blocks(self, raw_blocks):
         """Process the list of raw blocks passed.  Detects and handles
         reorgs.
