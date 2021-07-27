@@ -618,31 +618,47 @@ class LevelDB:
             value['release_time'] = metadata.stream.release_time
         return value
 
-    def all_claims_producer(self, batch_size=500_000):
+    async def all_claims_producer(self, batch_size=500_000):
+        loop = asyncio.get_event_loop()
         batch = []
+        tasks = []
         for claim_hash, v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
             # TODO: fix the couple of claim txos that dont have controlling names
             if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).name)):
                 continue
-            claim = self._fs_get_claim_by_hash(claim_hash[1:])
-            if claim:
-                batch.append(claim)
-            if len(batch) == batch_size:
+            tasks.append(
+                loop.run_in_executor(None, self._fs_get_claim_by_hash, claim_hash[1:])
+            )
+            if len(tasks) == batch_size:
+                for t in asyncio.as_completed(tasks):
+                    claim = await t
+                    if claim:
+                        batch.append(claim)
+                tasks.clear()
                 batch.sort(key=lambda x: x.tx_hash)
-                for claim in batch:
-                    meta = self._prepare_claim_metadata(claim.claim_hash, claim)
+                for claim_fut in asyncio.as_completed(
+                    [loop.run_in_executor(None, self._prepare_claim_metadata, claim.claim_hash, claim)
+                     for claim in batch]):
+                    meta = await claim_fut
                     if meta:
                         yield meta
                 batch.clear()
+        for t in asyncio.as_completed(tasks):
+            claim = await t
+            if claim:
+                batch.append(claim)
         batch.sort(key=lambda x: x.tx_hash)
-        for claim in batch:
-            meta = self._prepare_claim_metadata(claim.claim_hash, claim)
+        for claim_fut in asyncio.as_completed(
+                [loop.run_in_executor(None, self._prepare_claim_metadata, claim.claim_hash, claim)
+                 for claim in batch]):
+            meta = await claim_fut
             if meta:
                 yield meta
-        batch.clear()
 
-    def claims_producer(self, claim_hashes: Set[bytes]):
+    async def claims_producer(self, claim_hashes: Set[bytes]):
         batch = []
+        loop = asyncio.get_event_loop()
+        tasks = []
         for claim_hash in claim_hashes:
             if claim_hash not in self.claim_to_txo:
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
@@ -651,12 +667,18 @@ class LevelDB:
             if not self.db.get(Prefixes.claim_takeover.pack_key(name)):
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
-            claim = self._fs_get_claim_by_hash(claim_hash)
+            tasks.append(
+                loop.run_in_executor(None, self._fs_get_claim_by_hash, claim_hash)
+            )
+        for t in asyncio.as_completed(tasks):
+            claim = await t
             if claim:
                 batch.append(claim)
         batch.sort(key=lambda x: x.tx_hash)
-        for claim in batch:
-            meta = self._prepare_claim_metadata(claim.claim_hash, claim)
+        for claim_fut in asyncio.as_completed(
+            [loop.run_in_executor(None, self._prepare_claim_metadata, claim.claim_hash, claim)
+                 for claim in batch]):
+            meta = await claim_fut
             if meta:
                 yield meta
 
