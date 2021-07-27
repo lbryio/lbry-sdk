@@ -263,16 +263,6 @@ class SessionManager:
                 await self._start_external_servers()
                 paused = False
 
-    async def _log_sessions(self):
-        """Periodically log sessions."""
-        log_interval = self.env.log_sessions
-        if log_interval:
-            while True:
-                await sleep(log_interval)
-                data = self._session_data(for_log=True)
-                for line in text.sessions_lines(data):
-                    self.logger.info(line)
-                self.logger.info(json.dumps(self._get_info()))
 
     def _group_map(self):
         group_map = defaultdict(list)
@@ -375,23 +365,6 @@ class SessionManager:
             'uptime': util.formatted_time(time.time() - self.start_time),
             'version': lbry.__version__,
         }
-
-    def _session_data(self, for_log):
-        """Returned to the RPC 'sessions' call."""
-        now = time.time()
-        sessions = sorted(self.sessions.values(), key=lambda s: s.start_time)
-        return [(session.session_id,
-                 session.flags(),
-                 session.peer_address_str(for_log=for_log),
-                 session.client_version,
-                 session.protocol_version_string(),
-                 session.count_pending_items(),
-                 session.txs_sent,
-                 session.sub_count(),
-                 session.recv_count, session.recv_size,
-                 session.send_count, session.send_size,
-                 now - session.start_time)
-                for session in sessions]
 
     def _group_data(self):
         """Returned to the RPC 'groups' call."""
@@ -537,10 +510,6 @@ class SessionManager:
 
         return lines
 
-    async def rpc_sessions(self):
-        """Return statistics about connected sessions."""
-        return self._session_data(for_log=False)
-
     # async def rpc_reorg(self, count):
     #     """Force a reorg of the given number of blocks.
     #
@@ -576,7 +545,6 @@ class SessionManager:
             # because we connect to ourself
             await asyncio.wait([
                 self._clear_stale_sessions(),
-                self._log_sessions(),
                 self._manage_servers()
             ])
         finally:
@@ -747,16 +715,6 @@ class SessionBase(RPCSession):
 
     def toggle_logging(self):
         self.log_me = not self.log_me
-
-    def flags(self):
-        """Status flags."""
-        status = self.kind[0]
-        if self.is_closing():
-            status += 'C'
-        if self.log_me:
-            status += 'L'
-        status += str(self._concurrency.max_concurrent)
-        return status
 
     def connection_made(self, transport):
         """Handle an incoming client connection."""
