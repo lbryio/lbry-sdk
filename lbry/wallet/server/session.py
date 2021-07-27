@@ -663,7 +663,9 @@ class SessionManager:
             for hashX in touched.intersection(self.mempool_statuses.keys()):
                 self.mempool_statuses.pop(hashX, None)
 
-        touched.intersection_update(self.hashx_subscriptions_by_session.keys())
+        await asyncio.get_event_loop().run_in_executor(
+            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
+        )
 
         if touched or (height_changed and self.mempool_statuses):
             notified_hashxs = 0
