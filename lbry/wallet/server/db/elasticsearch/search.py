@@ -104,7 +104,7 @@ class SearchIndex:
 
     async def _consume_claim_producer(self, claim_producer):
         count = 0
-        for op, doc in claim_producer:
+        async for op, doc in claim_producer:
             if op == 'delete':
                 yield {'_index': self.index, '_op_type': 'delete', '_id': doc}
             else:

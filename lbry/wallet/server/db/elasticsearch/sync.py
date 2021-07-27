@@ -17,7 +17,7 @@ async def get_all_claims(index_name='claims', db=None):
         await db.open_dbs()
     try:
         cnt = 0
-        for claim in db.all_claims_producer():
+        async for claim in db.all_claims_producer():
             yield extract_doc(claim, index_name)
             cnt += 1
             if cnt % 10000 == 0:
