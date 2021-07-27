@@ -12,7 +12,7 @@ jobs:
       - uses: LoveToKnow/slackify-markdown-action@v1.0.0
         id: markdown
         with:
-          text: "There is a new SDK release: ${{github.event.release.html_url}}\n${{ github.event.release.body }}"
+          text: "<!channel> There is a new SDK release: ${{github.event.release.html_url}}\n${{ github.event.release.body }}"
       - uses: slackapi/slack-github-action@v1.14.0
         env:
           CHANGELOG: ${{ toJSON(steps.markdown.outputs.text) }}
