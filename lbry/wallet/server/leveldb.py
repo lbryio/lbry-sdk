@@ -8,7 +8,7 @@
 
 """Interface to the blockchain database."""
 
-
+import os
 import asyncio
 import array
 import time
@@ -17,6 +17,7 @@ import struct
 import attr
 import zlib
 import base64
+import plyvel
 from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List
 from functools import partial
 from asyncio import sleep
@@ -28,7 +29,6 @@ from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str
 from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
-from lbry.wallet.server.storage import db_class
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue
@@ -107,7 +107,6 @@ class LevelDB:
 
         self.logger.info(f'switching current directory to {env.db_dir}')
 
-        self.db_class = db_class(env.db_dir, self.env.db_engine)
         self.db = None
 
         self.hist_unflushed = defaultdict(partial(array.array, 'I'))
@@ -771,12 +770,19 @@ class LevelDB:
     async def open_dbs(self):
         if self.db:
             return
-        assert self.db is None
-        self.db = self.db_class(f'lbry-{self.env.db_engine}', True)
-        if self.db.is_new:
-            self.logger.info('created new db: %s', f'lbry-{self.env.db_engine}')
+
+        path = os.path.join(self.env.db_dir, 'lbry-leveldb')
+        is_new = os.path.isdir(path)
+        self.db = plyvel.DB(
+            path, create_if_missing=True, max_open_files=512,
+            lru_cache_size=self.env.cache_MB * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
+            max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
+        )
+
+        if is_new:
+            self.logger.info('created new db: %s', f'lbry-leveldb')
         else:
-            self.logger.info(f'opened db: %s', f'lbry-{self.env.db_engine}')
+            self.logger.info(f'opened db: %s', f'lbry-leveldb')
 
         # read db state
         self.read_db_state()
@@ -793,8 +799,6 @@ class LevelDB:
         self.logger.info(f'height: {self.db_height:,d}')
         self.logger.info(f'tip: {hash_to_hex_str(self.db_tip)}')
         self.logger.info(f'tx count: {self.db_tx_count:,d}')
-        if self.db.for_sync:
-            self.logger.info(f'flushing DB cache at {self.env.cache_MB:,d} MB')
         if self.first_sync:
             self.logger.info(f'sync time so far: {util.formatted_time(self.wall_time)}')
         if self.hist_db_version not in self.DB_VERSIONS:
@@ -859,7 +863,7 @@ class LevelDB:
                 )
             )
 
-        with self.db.write_batch() as batch:
+        with self.db.write_batch(transaction=True) as batch:
             batch_put = batch.put
             batch_delete = batch.delete
 
@@ -900,7 +904,7 @@ class LevelDB:
         self.hist_flush_count += 1
         nremoves = 0
 
-        with self.db.write_batch() as batch:
+        with self.db.write_batch(transaction=True) as batch:
             batch_put = batch.put
             batch_delete = batch.delete
             for op in flush_data.put_and_delete_ops:

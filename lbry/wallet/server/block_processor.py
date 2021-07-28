@@ -392,7 +392,7 @@ class BlockProcessor:
 
     async def write_state(self):
         def flush():
-            with self.db.db.write_batch() as batch:
+            with self.db.db.write_batch(transaction=True) as batch:
                 self.db.write_db_state(batch)
 
         await self.run_in_thread_with_lock(flush)

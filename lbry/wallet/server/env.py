@@ -57,7 +57,7 @@ class Env:
             self.coin = Coin.lookup_coin_class(coin_name, network)
         self.es_index_prefix = self.default('ES_INDEX_PREFIX', '')
         self.es_mode = self.default('ES_MODE', 'writer')
-        self.cache_MB = self.integer('CACHE_MB', 1200)
+        self.cache_MB = self.integer('CACHE_MB', 4096)
         self.reorg_limit = self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
         self.tcp_port = self.integer('TCP_PORT', None)
