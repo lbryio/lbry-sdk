@@ -658,6 +658,13 @@ class ClaimToSupportPrefixRow(PrefixRow):
     key_struct = struct.Struct(b'>20sLH')
     value_struct = struct.Struct(b'>Q')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack,
+        struct.Struct(b'>20sL').pack,
+        struct.Struct(b'>20sLH').pack
+    ]
+
     @classmethod
     def pack_key(cls, claim_hash: bytes, tx_num: int, position: int):
         return super().pack_key(claim_hash, tx_num, position)
