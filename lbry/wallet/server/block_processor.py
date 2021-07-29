@@ -311,6 +311,11 @@ class BlockProcessor:
                     await self.run_in_thread(self.advance_block, block)
                     await self.flush()
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
+                    if self.height == self.coin.nExtendedClaimExpirationForkHeight:
+                        self.logger.warning(
+                            "applying extended claim expiration fork on claims accepted by, %i", self.height
+                        )
+                        await self.run_in_thread(self.db.apply_expiration_extension_fork)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
                 if not self.db.first_sync:
                     await self.db.search_index.claim_consumer(self.claim_producer())
@@ -646,7 +651,10 @@ class BlockProcessor:
         reposted_claim_hash = self.db.get_repost(claim_hash)
         return StagedClaimtrieItem(
             claim.name, claim_hash, claim.amount,
-            self.coin.get_expiration_height(bisect_right(self.db.tx_counts, claim.tx_num)),
+            self.coin.get_expiration_height(
+                bisect_right(self.db.tx_counts, claim.tx_num),
+                extended=self.height >= self.coin.nExtendedClaimExpirationForkHeight
+            ),
             claim.tx_num, claim.position, claim.root_tx_num, claim.root_position,
             claim.channel_signature_is_valid, signing_hash, reposted_claim_hash
         )

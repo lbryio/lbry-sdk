@@ -1079,7 +1079,24 @@ class LevelDB:
     def read_undo_info(self, height: int):
         return self.db.get(Prefixes.undo.pack_key(height)), self.db.get(Prefixes.touched_or_deleted.pack_key(height))
 
-    # -- UTXO database
+    def apply_expiration_extension_fork(self):
+        # TODO: this can't be reorged
+        deletes = []
+        adds = []
+
+        for k, v in self.db.iterator(prefix=Prefixes.claim_expiration.prefix):
+            old_key = Prefixes.claim_expiration.unpack_key(k)
+            new_key = Prefixes.claim_expiration.pack_key(
+                bisect_right(self.tx_counts, old_key.tx_num) + self.coin.nExtendedClaimExpirationTime,
+                old_key.tx_num, old_key.position
+            )
+            deletes.append(k)
+            adds.append((new_key, v))
+        with self.db.write_batch(transaction=True) as batch:
+            for k in deletes:
+                batch.delete(k)
+            for k, v in adds:
+                batch.put(k, v)
 
     def write_db_state(self, batch):
         """Write (UTXO) state to the batch."""
