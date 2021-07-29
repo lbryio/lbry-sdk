@@ -706,8 +706,8 @@ class BlockProcessor:
 
     def _get_pending_claim_name(self, claim_hash: bytes) -> Optional[str]:
         assert claim_hash is not None
-        if claim_hash in self.txo_to_claim:
-            return self.txo_to_claim[claim_hash].name
+        if claim_hash in self.claim_hash_to_txo:
+            return self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].name
         claim_info = self.db.get_claim_txo(claim_hash)
         if claim_info:
             return claim_info.name
