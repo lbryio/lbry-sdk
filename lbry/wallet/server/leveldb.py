@@ -189,13 +189,13 @@ class LevelDB:
 
     def get_support_amount(self, claim_hash: bytes):
         total = 0
-        for packed in self.db.iterator(prefix=DB_PREFIXES.claim_to_support.value + claim_hash, include_key=False):
+        for packed in self.db.iterator(prefix=Prefixes.claim_to_support.pack_partial_key(claim_hash), include_key=False):
             total += Prefixes.claim_to_support.unpack_value(packed).amount
         return total
 
     def get_supports(self, claim_hash: bytes):
         supports = []
-        for k, v in self.db.iterator(prefix=DB_PREFIXES.claim_to_support.value + claim_hash):
+        for k, v in self.db.iterator(prefix=Prefixes.claim_to_support.pack_partial_key(claim_hash)):
             unpacked_k = Prefixes.claim_to_support.unpack_key(k)
             unpacked_v = Prefixes.claim_to_support.unpack_value(v)
             supports.append((unpacked_k.tx_num, unpacked_k.position, unpacked_v.amount))
