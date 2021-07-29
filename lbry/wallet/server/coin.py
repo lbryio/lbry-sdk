@@ -351,7 +351,9 @@ class LBC(Coin):
             return sha256(script).digest()[:HASHX_LEN]
 
     @classmethod
-    def get_expiration_height(cls, last_updated_height: int) -> int:
+    def get_expiration_height(cls, last_updated_height: int, extended: bool = False) -> int:
+        if extended:
+            return last_updated_height + cls.nExtendedClaimExpirationTime
         if last_updated_height < cls.nExtendedClaimExpirationForkHeight:
             return last_updated_height + cls.nOriginalClaimExpirationTime
         return last_updated_height + cls.nExtendedClaimExpirationTime
