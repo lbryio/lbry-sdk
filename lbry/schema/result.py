@@ -1,6 +1,5 @@
 import base64
-import struct
-from typing import List, TYPE_CHECKING, Union
+from typing import List, TYPE_CHECKING, Union, Optional
 from binascii import hexlify
 from itertools import chain
 
@@ -43,19 +42,19 @@ class Censor:
     def apply(self, rows):
         return [row for row in rows if not self.censor(row)]
 
-    def censor(self, row) -> bool:
+    def censor(self, row) -> Optional[bytes]:
         if self.is_censored(row):
             censoring_channel_hash = row['censoring_channel_hash']
             self.censored.setdefault(censoring_channel_hash, set())
             self.censored[censoring_channel_hash].add(row['tx_hash'])
-            return True
-        return False
+            return censoring_channel_hash
+        return None
 
     def to_message(self, outputs: OutputsMessage, extra_txo_rows: dict):
         for censoring_channel_hash, count in self.censored.items():
             blocked = outputs.blocked.add()
             blocked.count = len(count)
-            set_reference(blocked.channel, extra_txo_rows.get(censoring_channel_hash))
+            set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
             outputs.blocked_total += len(count)
 
 
@@ -178,8 +177,8 @@ class Outputs:
         page.offset = offset
         if total is not None:
             page.total = total
-        # if blocked is not None:
-        #     blocked.to_message(page, extra_txo_rows)
+        if blocked is not None:
+            blocked.to_message(page, extra_txo_rows)
         for row in extra_txo_rows:
             cls.encode_txo(page.extra_txos.add(), row)
 
@@ -192,7 +191,8 @@ class Outputs:
                     set_reference(txo_message.claim.channel, row.channel_hash, extra_txo_rows)
                 if row.reposted_claim_hash:
                     set_reference(txo_message.claim.repost, row.reposted_claim_hash, extra_txo_rows)
-                # set_reference(txo_message.error.blocked.channel, row.censor_hash, extra_txo_rows)
+            elif isinstance(row, ResolveCensoredError):
+                set_reference(txo_message.error.blocked.channel, row.censor_hash, extra_txo_rows)
         return page.SerializeToString()
 
     @classmethod
