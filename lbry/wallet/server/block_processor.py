@@ -478,6 +478,11 @@ class BlockProcessor:
             if claim_hash not in spent_claims:
                 # print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
                 return
+            if claim_name != spent_claims[claim_hash][2]:
+                self.logger.warning(
+                    f"{tx_hash[::-1].hex()} contains mismatched name for claim update {claim_hash.hex()}"
+                )
+                return
             (prev_tx_num, prev_idx, _) = spent_claims.pop(claim_hash)
             # print(f"\tupdate {claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.txo_to_claim:
