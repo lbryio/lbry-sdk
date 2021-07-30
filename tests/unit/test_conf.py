@@ -21,6 +21,27 @@ class TestConfig(BaseConfig):
 
 class ConfigurationTests(unittest.TestCase):
 
+    @unittest.skipIf('darwin' not in sys.platform, 'skipping mac only test')
+    def test_mac_defaults(self):
+        c = Config()
+        self.assertEqual(c.data_dir, os.path.expanduser("~/Library/Application Support/LBRY"))
+        self.assertEqual(c.wallet_dir, os.path.expanduser('~/.lbryum'))
+        self.assertEqual(c.download_dir, os.path.expanduser('~/Downloads'))
+        self.assertEqual(c.config, os.path.join(c.data_dir, 'daemon_settings.yml'))
+        self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
+        self.assertEqual(c.log_file_path, os.path.join(c.data_dir, 'lbrynet.log'))
+
+    @unittest.skipIf('win32' not in sys.platform, 'skipping windows only test')
+    def test_windows_defaults(self):
+        c = Config()
+        prefix = os.path.join(r"C:\Users", os.getlogin(), r"AppData\Local\lbry")
+        self.assertEqual(c.data_dir, os.path.join(prefix, 'lbrynet'))
+        self.assertEqual(c.wallet_dir, os.path.join(prefix, 'lbryum'))
+        self.assertEqual(c.download_dir, os.path.join(r"C:\Users", os.getlogin(), "Downloads"))
+        self.assertEqual(c.config, os.path.join(c.data_dir, 'daemon_settings.yml'))
+        self.assertEqual(c.api_connection_url, 'http://localhost:5279/lbryapi')
+        self.assertEqual(c.log_file_path, os.path.join(c.data_dir, 'lbrynet.log'))
+
     @unittest.skipIf('linux' not in sys.platform, 'skipping linux only test')
     def test_linux_defaults(self):
         c = Config()
