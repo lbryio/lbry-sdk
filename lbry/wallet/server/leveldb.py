@@ -594,14 +594,18 @@ class LevelDB:
                 )
                 return
         if reposted_metadata:
-            meta = reposted_metadata.stream if reposted_metadata.is_stream else reposted_metadata.channel
-            reposted_tags = [tag for tag in meta.tags]
-            reposted_languages = [lang.language or 'none' for lang in meta.languages] or ['none']
+            reposted_tags = [] if not reposted_metadata.is_stream else [tag for tag in reposted_metadata.stream.tags]
+            reposted_languages = [] if not reposted_metadata.is_stream else (
+                [lang.language or 'none' for lang in reposted_metadata.stream.languages] or ['none']
+            )
             reposted_has_source = False if not reposted_metadata.is_stream else reposted_metadata.stream.has_source
             reposted_claim_type = CLAIM_TYPES[reposted_metadata.claim_type]
-        lang_tags = metadata.stream if metadata.is_stream else metadata.channel if metadata.is_channel else metadata.repost
-        claim_tags = [tag for tag in lang_tags.tags]
-        claim_languages = [lang.language or 'none' for lang in lang_tags.languages] or ['none']
+
+        claim_tags = [] if not metadata.is_stream else [tag for tag in metadata.stream.tags]
+        claim_languages = [] if not metadata.is_stream else (
+            [lang.language or 'none' for lang in metadata.stream.languages] or ['none']
+        )
+
         tags = list(set(claim_tags).union(set(reposted_tags)))
         languages = list(set(claim_languages).union(set(reposted_languages)))
         blocked_hash = self.blocked_streams.get(claim_hash) or self.blocked_streams.get(
