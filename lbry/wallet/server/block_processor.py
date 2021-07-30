@@ -482,6 +482,7 @@ class BlockProcessor:
             # print(f"\tupdate {claim_hash.hex()} {tx_hash[::-1].hex()} {txo.amount}")
             if (prev_tx_num, prev_idx) in self.txo_to_claim:
                 previous_claim = self.txo_to_claim.pop((prev_tx_num, prev_idx))
+                self.claim_hash_to_txo.pop(claim_hash)
                 root_tx_num, root_idx = previous_claim.root_tx_num, previous_claim.root_position
             else:
                 previous_claim = self._make_pending_claim_txo(claim_hash)
@@ -581,6 +582,7 @@ class BlockProcessor:
     def _abandon_claim(self, claim_hash, tx_num, nout, name):
         if (tx_num, nout) in self.txo_to_claim:
             pending = self.txo_to_claim.pop((tx_num, nout))
+            self.claim_hash_to_txo.pop(claim_hash)
             self.abandoned_claims[pending.claim_hash] = pending
             claim_root_tx_num, claim_root_idx = pending.root_tx_num, pending.root_position
             prev_amount, prev_signing_hash = pending.amount, pending.signing_hash
