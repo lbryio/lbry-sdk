@@ -1492,12 +1492,10 @@ class StreamCommands(ClaimTestCase):
         filtering_channel_id = self.get_claim_id(
             await self.channel_create('@filtering', '0.1')
         )
-        # self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
-        #     unhexlify(filtering_channel_id)[::-1]
-        # )
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_streams))
+        self.conductor.spv_node.server.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_streams))
         await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_streams))
 
         # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
@@ -1539,12 +1537,10 @@ class StreamCommands(ClaimTestCase):
         blocking_channel_id = self.get_claim_id(
             await self.channel_create('@blocking', '0.1')
         )
-        self.conductor.spv_node.server.db.sql.blocking_channel_hashes.add(
-            unhexlify(blocking_channel_id)[::-1]
-        )
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_streams))
+        self.conductor.spv_node.server.db.blocking_channel_hashes.add(bytes.fromhex(blocking_channel_id))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_streams))
         await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_streams))
 
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
@@ -1567,9 +1563,9 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual('@bad_channel', result['items'][1]['name'])
 
         # filter channel out
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_channels))
         await self.stream_repost(bad_channel_id, 'filter2', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_channels))
 
         # same claim search as previous now returns 0 results
         result = await self.out(self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height']))
@@ -1594,9 +1590,9 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(worse_content_id, result['claim_id'])
 
         # block channel
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_channels))
         await self.stream_repost(bad_channel_id, 'block2', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_channels))
 
         # channel, claim in channel or claim individually no longer resolve
         self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')

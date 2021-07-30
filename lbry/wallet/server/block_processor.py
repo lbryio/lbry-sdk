@@ -318,7 +318,10 @@ class BlockProcessor:
                         await self.run_in_thread(self.db.apply_expiration_extension_fork)
                     # TODO: we shouldnt wait on the search index updating before advancing to the next block
                 if not self.db.first_sync:
+                    self.db.reload_blocking_filtering_streams()
                     await self.db.search_index.claim_consumer(self.claim_producer())
+                    await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
+                                                            self.db.filtered_streams, self.db.filtered_channels)
                 self.db.search_index.clear_caches()
                 self.touched_claims_to_send_es.clear()
                 self.removed_claims_to_send_es.clear()
