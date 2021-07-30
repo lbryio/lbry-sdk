@@ -23,6 +23,9 @@ from functools import partial
 from asyncio import sleep
 from bisect import bisect_right
 from collections import defaultdict, OrderedDict
+
+from lbry.error import ResolveCensoredError
+from lbry.schema.result import Censor
 from lbry.utils import LRUCacheWithMetrics
 from lbry.schema.url import URL
 from lbry.wallet.server import util
@@ -114,6 +117,20 @@ class LevelDB:
         self.hist_flush_count = 0
         self.hist_comp_flush_count = -1
         self.hist_comp_cursor = -1
+
+        # blocking/filtering dicts
+        blocking_channels = self.env.default('BLOCKING_CHANNEL_IDS', '').split(' ')
+        filtering_channels = self.env.default('FILTERING_CHANNEL_IDS', '').split(' ')
+        self.blocked_streams = {}
+        self.blocked_channels = {}
+        self.blocking_channel_hashes = {
+            bytes.fromhex(channel_id)[::-1] for channel_id in blocking_channels if channel_id
+        }
+        self.filtered_streams = {}
+        self.filtered_channels = {}
+        self.filtering_channel_hashes = {
+            bytes.fromhex(channel_id)[::-1] for channel_id in filtering_channels if channel_id
+        }
 
         self.tx_counts = None
         self.headers = None
@@ -352,6 +369,16 @@ class LevelDB:
             if not resolved_stream:
                 return LookupError(f'Could not find claim at "{url}".'), None
 
+        if resolved_stream or resolved_channel:
+            claim_hash = resolved_stream.claim_hash if resolved_stream else resolved_channel.claim_hash
+            claim = resolved_stream if resolved_stream else resolved_channel
+            reposted_claim_hash = resolved_stream.reposted_claim_hash if resolved_stream else None
+            blocker_hash = self.blocked_streams.get(claim_hash) or self.blocked_streams.get(
+                reposted_claim_hash) or self.blocked_channels.get(claim_hash) or self.blocked_channels.get(
+                reposted_claim_hash) or self.blocked_channels.get(claim.channel_hash)
+            if blocker_hash:
+                reason_row = self._fs_get_claim_by_hash(blocker_hash)
+                return None, ResolveCensoredError(url, blocker_hash, censor_row=reason_row)
         return resolved_stream, resolved_channel
 
     async def fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError]:
@@ -434,6 +461,31 @@ class LevelDB:
         for _ in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash), include_key=False):
             count += 1
         return count
+
+    def reload_blocking_filtering_streams(self):
+        self.blocked_streams, self.blocked_channels = self.get_streams_and_channels_reposted_by_channel_hashes(self.blocking_channel_hashes)
+        self.filtered_streams, self.filtered_channels = self.get_streams_and_channels_reposted_by_channel_hashes(self.filtering_channel_hashes)
+
+    def get_streams_and_channels_reposted_by_channel_hashes(self, reposter_channel_hashes: bytes):
+        streams, channels = {}, {}
+        for reposter_channel_hash in reposter_channel_hashes:
+            reposts = self.get_reposts_in_channel(reposter_channel_hash)
+            for repost in reposts:
+                txo = self.get_claim_txo(repost)
+                if txo.name.startswith('@'):
+                    channels[repost] = reposter_channel_hash
+                else:
+                    streams[repost] = reposter_channel_hash
+        return streams, channels
+
+    def get_reposts_in_channel(self, channel_hash):
+        reposts = set()
+        for value in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash), include_key=False):
+            stream = Prefixes.channel_to_claim.unpack_value(value)
+            repost = self.get_repost(stream.claim_hash)
+            if repost:
+                reposts.add(repost)
+        return reposts
 
     def get_channel_for_claim(self, claim_hash, tx_num, position) -> Optional[bytes]:
         return self.db.get(Prefixes.claim_to_channel.pack_key(claim_hash, tx_num, position))
@@ -542,18 +594,22 @@ class LevelDB:
                 )
                 return
         if reposted_metadata:
-            reposted_tags = [] if not reposted_metadata.is_stream else [tag for tag in reposted_metadata.stream.tags]
-            reposted_languages = [] if not reposted_metadata.is_stream else (
-                    [lang.language or 'none' for lang in reposted_metadata.stream.languages] or ['none']
-            )
+            meta = reposted_metadata.stream if reposted_metadata.is_stream else reposted_metadata.channel
+            reposted_tags = [tag for tag in meta.tags]
+            reposted_languages = [lang.language or 'none' for lang in meta.languages] or ['none']
             reposted_has_source = False if not reposted_metadata.is_stream else reposted_metadata.stream.has_source
             reposted_claim_type = CLAIM_TYPES[reposted_metadata.claim_type]
-        claim_tags = [] if not metadata.is_stream else [tag for tag in metadata.stream.tags]
-        claim_languages = [] if not metadata.is_stream else (
-                [lang.language or 'none' for lang in metadata.stream.languages] or ['none']
-        )
+        lang_tags = metadata.stream if metadata.is_stream else metadata.channel if metadata.is_channel else metadata.repost
+        claim_tags = [tag for tag in lang_tags.tags]
+        claim_languages = [lang.language or 'none' for lang in lang_tags.languages] or ['none']
         tags = list(set(claim_tags).union(set(reposted_tags)))
         languages = list(set(claim_languages).union(set(reposted_languages)))
+        blocked_hash = self.blocked_streams.get(claim_hash) or self.blocked_streams.get(
+            reposted_claim_hash) or self.blocked_channels.get(claim_hash) or self.blocked_channels.get(
+            reposted_claim_hash) or self.blocked_channels.get(claim.channel_hash)
+        filtered_hash = self.filtered_streams.get(claim_hash) or self.filtered_streams.get(
+            reposted_claim_hash) or self.filtered_channels.get(claim_hash) or self.filtered_channels.get(
+            reposted_claim_hash) or self.filtered_channels.get(claim.channel_hash)
         value = {
             'claim_hash': claim_hash[::-1],
             # 'claim_id': claim_hash.hex(),
@@ -603,8 +659,8 @@ class LevelDB:
             'signature_valid': claim.signature_valid,
             'tags': tags,
             'languages': languages,
-            'censor_type': 0,  # TODO: fix
-            'censoring_channel_hash': None,  # TODO: fix
+            'censor_type': Censor.RESOLVE if blocked_hash else Censor.SEARCH if filtered_hash else Censor.NOT_CENSORED,
+            'censoring_channel_hash': blocked_hash or filtered_hash or None,
             'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash)
             # 'trending_group': 0,
             # 'trending_mixed': 0,
