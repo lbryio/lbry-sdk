@@ -55,9 +55,9 @@ jobs:
         env:
           HOME: /tmp
         run: make test-unit-coverage
-      - if: !startsWith(runner.os, 'linux')
+      - if: startsWith(runner.os, 'linux') != true
         run: pip install -e .[test]
-      - if: !startsWith(runner.os, 'linux')
+      - if: startsWith(runner.os, 'linux') != true
         env:
           HOME: /tmp
         run: python -m unittest tests/unit/test_conf.py
