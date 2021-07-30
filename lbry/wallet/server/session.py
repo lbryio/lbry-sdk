@@ -21,7 +21,7 @@ from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
-from lbry.error import TooManyClaimSearchParametersError
+from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.schema.result import Outputs
 from lbry.wallet.server.block_processor import BlockProcessor
@@ -997,7 +997,13 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.urls_to_resolve_count_metric.inc()
             stream, channel = await self.db.fs_resolve(url)
             self.session_mgr.resolved_url_count_metric.inc()
-            if channel and not stream:
+            if isinstance(channel, ResolveCensoredError):
+                rows.append(channel)
+                extra.append(channel.censor_row)
+            elif isinstance(stream, ResolveCensoredError):
+                rows.append(stream)
+                extra.append(stream.censor_row)
+            elif channel and not stream:
                 rows.append(channel)
                 # print("resolved channel", channel.name.decode())
             elif stream:
