@@ -130,7 +130,7 @@ class SearchIndex:
         self.logger.debug("Indexing done.")
 
     def update_filter_query(self, censor_type, blockdict, channels=False):
-        blockdict = {key[::-1].hex(): value[::-1].hex() for key, value in blockdict.items()}
+        blockdict = {key.hex(): value.hex() for key, value in blockdict.items()}
         if channels:
             update = expand_query(channel_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         else:
@@ -483,7 +483,7 @@ def extract_doc(doc, index):
     channel_hash = doc.pop('channel_hash')
     doc['channel_id'] = channel_hash[::-1].hex() if channel_hash else channel_hash
     channel_hash = doc.pop('censoring_channel_hash')
-    doc['censoring_channel_hash'] = channel_hash[::-1].hex() if channel_hash else channel_hash
+    doc['censoring_channel_hash'] = channel_hash.hex() if channel_hash else channel_hash
     # txo_hash = doc.pop('txo_hash')
     # doc['tx_id'] = txo_hash[:32][::-1].hex()
     # doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
