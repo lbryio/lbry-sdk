@@ -156,9 +156,9 @@ class KademliaPeer:
             if not len(self._node_id) == constants.HASH_LENGTH:
                 raise ValueError("invalid node_id: {}".format(hexlify(self._node_id).decode()))
         if self.udp_port is not None and not 1024 <= self.udp_port <= 65535:
-            raise ValueError("invalid udp port")
+            raise ValueError(f"invalid udp port: {self.address}:{self.udp_port}")
         if self.tcp_port is not None and not 1024 <= self.tcp_port <= 65535:
-            raise ValueError("invalid tcp port")
+            raise ValueError(f"invalid tcp port: {self.address}:{self.tcp_port}")
         if not is_valid_public_ipv4(self.address, self.allow_localhost):
             raise ValueError(f"invalid ip address: '{self.address}'")
 

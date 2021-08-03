@@ -452,7 +452,11 @@ class KademliaProtocol(DatagramProtocol):
         try:
             peer = self.routing_table.get_peer(request_datagram.node_id)
         except IndexError:
-            peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
+            try:
+                peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
+            except ValueError as err:
+                log.warning("error replying to %s: %s", address[0], str(err))
+                return
         try:
             self._handle_rpc(peer, request_datagram)
             # if the contact is not known to be bad (yet) and we haven't yet queried it, send it a ping so that it
