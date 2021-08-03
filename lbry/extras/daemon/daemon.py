@@ -2507,7 +2507,7 @@ class Daemon(metaclass=JSONRPCServerType):
             kwargs['signature_valid'] = 0
         if 'has_no_source' in kwargs:
             kwargs['has_source'] = not kwargs.pop('has_no_source')
-        page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
+        page_num, page_size = abs(kwargs.pop('page', 1)), max(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
         txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
         result = {
