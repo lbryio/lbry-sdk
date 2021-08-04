@@ -304,13 +304,15 @@ class ClaimSearchCommand(ClaimTestCase):
         claim3 = await self.stream_create('claim3', fee_amount='0.5', fee_currency='lbc')
         claim4 = await self.stream_create('claim4', fee_amount='0.1', fee_currency='lbc')
         claim5 = await self.stream_create('claim5', fee_amount='1.0', fee_currency='usd')
+        repost1 = await self.stream_repost(self.get_claim_id(claim1), 'repost1')
+        repost5 = await self.stream_repost(self.get_claim_id(claim5), 'repost5')
 
-        await self.assertFindsClaims([claim5, claim4, claim3, claim2, claim1], fee_amount='>0')
-        await self.assertFindsClaims([claim4, claim3, claim2, claim1], fee_currency='lbc')
-        await self.assertFindsClaims([claim3, claim2, claim1], fee_amount='>0.1', fee_currency='lbc')
+        await self.assertFindsClaims([repost5, repost1, claim5, claim4, claim3, claim2, claim1], fee_amount='>0')
+        await self.assertFindsClaims([repost1, claim4, claim3, claim2, claim1], fee_currency='lbc')
+        await self.assertFindsClaims([repost1, claim3, claim2, claim1], fee_amount='>0.1', fee_currency='lbc')
         await self.assertFindsClaims([claim4, claim3, claim2], fee_amount='<1.0', fee_currency='lbc')
         await self.assertFindsClaims([claim3], fee_amount='0.5', fee_currency='lbc')
-        await self.assertFindsClaims([claim5], fee_currency='usd')
+        await self.assertFindsClaims([repost5, claim5], fee_currency='usd')
 
     async def test_search_by_language(self):
         claim1 = await self.stream_create('claim1', fee_amount='1.0', fee_currency='lbc')
@@ -476,7 +478,8 @@ class ClaimSearchCommand(ClaimTestCase):
         octet = await self.stream_create()
         video = await self.stream_create('chrome', file_path=self.video_file_name)
         image = await self.stream_create('blank-image', data=self.image_data, suffix='.png')
-        repost = await self.stream_repost(self.get_claim_id(image))
+        image_repost = await self.stream_repost(self.get_claim_id(image), 'image-repost')
+        video_repost = await self.stream_repost(self.get_claim_id(video), 'video-repost')
         collection = await self.collection_create('a-collection', claims=[self.get_claim_id(video)])
         channel = await self.channel_create()
         unknown = self.sout(tx)
@@ -484,25 +487,25 @@ class ClaimSearchCommand(ClaimTestCase):
         # claim_type
         await self.assertFindsClaims([image, video, octet, unknown], claim_type='stream')
         await self.assertFindsClaims([channel], claim_type='channel')
-        await self.assertFindsClaims([repost], claim_type='repost')
+        await self.assertFindsClaims([video_repost, image_repost], claim_type='repost')
         await self.assertFindsClaims([collection], claim_type='collection')
 
         # stream_type
         await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
-        await self.assertFindsClaims([video], stream_types=['video'])
-        await self.assertFindsClaims([repost, image], stream_types=['image'])
-        await self.assertFindsClaims([repost, image, video], stream_types=['video', 'image'])
+        await self.assertFindsClaims([video_repost, video], stream_types=['video'])
+        await self.assertFindsClaims([image_repost, image], stream_types=['image'])
+        await self.assertFindsClaims([video_repost, image_repost, image, video], stream_types=['video', 'image'])
 
         # media_type
         await self.assertFindsClaims([octet, unknown], media_types=['application/octet-stream'])
-        await self.assertFindsClaims([video], media_types=['video/mp4'])
-        await self.assertFindsClaims([repost, image], media_types=['image/png'])
-        await self.assertFindsClaims([repost, image, video], media_types=['video/mp4', 'image/png'])
+        await self.assertFindsClaims([video_repost, video], media_types=['video/mp4'])
+        await self.assertFindsClaims([image_repost, image], media_types=['image/png'])
+        await self.assertFindsClaims([video_repost, image_repost, image, video], media_types=['video/mp4', 'image/png'])
 
         # duration
-        await self.assertFindsClaim(video, duration='>14')
-        await self.assertFindsClaim(video, duration='<16')
-        await self.assertFindsClaim(video, duration=15)
+        await self.assertFindsClaims([video_repost, video], duration='>14')
+        await self.assertFindsClaims([video_repost, video], duration='<16')
+        await self.assertFindsClaims([video_repost, video], duration=15)
         await self.assertFindsClaims([], duration='>100')
         await self.assertFindsClaims([], duration='<14')
 
