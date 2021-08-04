@@ -820,6 +820,7 @@ class SQLDB:
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
                (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
                (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
+               (select cr.stream_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_stream_type,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
@@ -830,6 +831,7 @@ class SQLDB:
             claim['censor_type'] = 0
             censoring_channel_hash = None
             claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
+            claim['stream_type'] = claim.pop('reposted_stream_type') or claim['stream_type']
             for reason_id in id_set:
                 if reason_id in self.blocked_streams:
                     claim['censor_type'] = 2

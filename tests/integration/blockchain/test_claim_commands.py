@@ -490,8 +490,8 @@ class ClaimSearchCommand(ClaimTestCase):
         # stream_type
         await self.assertFindsClaims([octet, unknown], stream_types=['binary'])
         await self.assertFindsClaims([video], stream_types=['video'])
-        await self.assertFindsClaims([image], stream_types=['image'])
-        await self.assertFindsClaims([image, video], stream_types=['video', 'image'])
+        await self.assertFindsClaims([repost, image], stream_types=['image'])
+        await self.assertFindsClaims([repost, image, video], stream_types=['video', 'image'])
 
         # media_type
         await self.assertFindsClaims([octet, unknown], media_types=['application/octet-stream'])
