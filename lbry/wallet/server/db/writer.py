@@ -821,6 +821,7 @@ class SQLDB:
                (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
                (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
                (select cr.stream_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_stream_type,
+               (select cr.media_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_media_type,
                claim.*
         FROM claim LEFT JOIN claimtrie USING (claim_hash)
         WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
@@ -832,6 +833,7 @@ class SQLDB:
             censoring_channel_hash = None
             claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
             claim['stream_type'] = claim.pop('reposted_stream_type') or claim['stream_type']
+            claim['media_type'] = claim.pop('reposted_media_type') or claim['media_type']
             for reason_id in id_set:
                 if reason_id in self.blocked_streams:
                     claim['censor_type'] = 2
