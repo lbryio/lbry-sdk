@@ -818,15 +818,15 @@ class SQLDB:
                claimtrie.last_take_over_height,
                (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
                (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
-               (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
-               (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
-               (select cr.stream_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_stream_type,
-               (select cr.media_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_media_type,
-               (select cr.duration from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_duration,
-               (select cr.fee_amount from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_fee_amount,
-               (select cr.fee_currency from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_fee_currency,
+               cr.has_source as reposted_has_source,
+               cr.claim_type  as reposted_claim_type,
+               cr.stream_type as reposted_stream_type,
+               cr.media_type as reposted_media_type,
+               cr.duration as reposted_duration,
+               cr.fee_amount as reposted_fee_amount,
+               cr.fee_currency as reposted_fee_currency,
                claim.*
-        FROM claim LEFT JOIN claimtrie USING (claim_hash)
+        FROM claim LEFT JOIN claimtrie USING (claim_hash) LEFT JOIN claim cr ON cr.claim_hash=claim.reposted_claim_hash
         WHERE claim.claim_hash in (SELECT claim_hash FROM changelog)
         """
         for claim in self.execute(query):
