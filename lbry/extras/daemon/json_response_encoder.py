@@ -313,7 +313,7 @@ class JSONResponseEncoder(JSONEncoder):
             'protobuf': managed_stream.metadata_protobuf,
             'channel_claim_id': managed_stream.channel_claim_id,
             'channel_name': managed_stream.channel_name,
-            'claim_name': managed_stream.claim_name,
+            'name': managed_stream.claim_name,
             'content_fee': managed_stream.content_fee,
             'purchase_receipt': self.encode_output(managed_stream.purchase_receipt),
             'added_on': managed_stream.added_on,

@@ -3011,7 +3011,7 @@
                         "is_required": false
                     },
                     {
-                        "name": "claim_name",
+                        "name": "name",
                         "type": "str",
                         "description": "get file with matching claim name",
                         "is_required": false
