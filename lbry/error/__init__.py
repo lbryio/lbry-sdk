@@ -234,6 +234,13 @@ class InvalidPasswordError(WalletError):
         super().__init__("Password is invalid.")
 
 
+class TooManyClaimSearchParameters(WalletError):
+
+    def __init__(self, key, limit):
+        self.key = key
+        super().__init__(f"{key} cant be set for more than {limit} items.")
+
+
 class IncompatibleWalletServerError(WalletError):
 
     def __init__(self, server, port):

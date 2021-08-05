@@ -15,14 +15,13 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from binascii import hexlify
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
-from lbry.utils import LRUCacheWithMetrics
+from lbry.error import TooManyClaimSearchParameters
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
@@ -1028,7 +1027,11 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_search(self, **kwargs):
         if kwargs:
-            return await self.run_and_cache_query('search', kwargs)
+            try:
+                return await self.run_and_cache_query('search', kwargs)
+            except TooManyClaimSearchParameters as err:
+                self.loop.call_later(0, self.synchronous_close)
+                return RPCError(1, str(err))
 
     async def claimtrie_resolve(self, *urls):
         if urls:

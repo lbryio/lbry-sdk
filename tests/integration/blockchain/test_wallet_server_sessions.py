@@ -4,6 +4,7 @@ import lbry
 import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
+from lbry.wallet.rpc import RPCError
 from lbry.wallet.server.db.elasticsearch.sync import run as run_sync, make_es_index
 from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
@@ -191,7 +192,7 @@ class TestHubDiscovery(CommandTestCase):
         )
 
 
-class TestStressFlush(CommandTestCase):
+class TestStress(CommandTestCase):
     async def test_flush_over_66_thousand(self):
         history = self.conductor.spv_node.server.db.history
         history.flush_count = 66_000
@@ -199,3 +200,9 @@ class TestStressFlush(CommandTestCase):
         self.assertEqual(history.flush_count, 66_001)
         await self.generate(1)
         self.assertEqual(history.flush_count, 66_002)
+
+    async def test_thousands_claim_ids_on_search(self):
+        await self.stream_create()
+        with self.assertRaises(RPCError) as err:
+            await self.claim_search(not_channel_ids=[("%040x" % i) for i in range(8196)])
+        self.assertEqual(err.exception.message, 'not_channel_ids cant be set for more than 2048 items.')
