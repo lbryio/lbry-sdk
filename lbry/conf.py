@@ -634,6 +634,7 @@ class Config(CLIConfig):
 
     # blob announcement and download
     save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
+    blob_storage_limit = Integer("Disk space in MB to be allocated for blob storage. 0 = no limit", 0)
     blob_lru_cache_size = Integer(
         "LRU cache size for decrypted downloaded blobs used to minimize re-downloading the same blobs when "
         "replying to a range request. Set to 0 to disable.", 32

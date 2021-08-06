@@ -511,3 +511,15 @@ class FileCommands(CommandTestCase):
         await tx.sign([self.account])
         await self.broadcast(tx)
         await self.confirm_tx(tx.id)
+
+
+class DiskSpaceManagement(CommandTestCase):
+
+    async def test_file_management(self):
+        status = await self.daemon.jsonrpc_status()
+        self.assertIn('disk_space', status)
+        self.assertEqual(status['disk_space']['used'], '0')
+        await self.stream_create('foo', '0.01', data=('0' * 3 * 1024 * 1024).encode())
+        status = await self.daemon.jsonrpc_status()
+        self.assertIn('disk_space', status)
+        self.assertEqual(status['disk_space']['used'], '3')

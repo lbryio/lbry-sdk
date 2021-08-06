@@ -41,7 +41,7 @@ from lbry.error import (
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT
+from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT, DISK_SPACE_COMPONENT
 from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
