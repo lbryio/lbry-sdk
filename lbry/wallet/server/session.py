@@ -21,7 +21,7 @@ from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
-from lbry.error import TooManyClaimSearchParameters
+from lbry.error import TooManyClaimSearchParametersError
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.wallet.server.block_processor import LBRYBlockProcessor
 from lbry.wallet.server.db.writer import LBRYLevelDB
@@ -1029,7 +1029,7 @@ class LBRYElectrumX(SessionBase):
         if kwargs:
             try:
                 return await self.run_and_cache_query('search', kwargs)
-            except TooManyClaimSearchParameters as err:
+            except TooManyClaimSearchParametersError as err:
                 self.loop.call_later(0, self.synchronous_close)
                 return RPCError(1, str(err))
 
