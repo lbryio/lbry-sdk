@@ -106,9 +106,19 @@ class SearchIndex:
         count = 0
         async for op, doc in claim_producer:
             if op == 'delete':
-                yield {'_index': self.index, '_op_type': 'delete', '_id': doc}
+                yield {
+                    '_index': self.index,
+                    '_op_type': 'delete',
+                    '_id': doc
+                }
             else:
-                yield extract_doc(doc, self.index)
+                yield {
+                    'doc': {key: value for key, value in doc.items() if key in ALL_FIELDS},
+                    '_id': doc['claim_id'],
+                    '_index': self.index,
+                    '_op_type': 'update',
+                    'doc_as_upsert': True
+                }
             count += 1
             if count % 100 == 0:
                 self.logger.debug("Indexing in progress, %d claims.", count)
@@ -474,34 +484,6 @@ class SearchIndex:
         return referenced_txos
 
 
-def extract_doc(doc, index):
-    doc['claim_id'] = doc.pop('claim_hash')[::-1].hex()
-    if doc['reposted_claim_hash'] is not None:
-        doc['reposted_claim_id'] = doc.pop('reposted_claim_hash').hex()
-    else:
-        doc['reposted_claim_id'] = None
-    channel_hash = doc.pop('channel_hash')
-    doc['channel_id'] = channel_hash[::-1].hex() if channel_hash else channel_hash
-    channel_hash = doc.pop('censoring_channel_hash')
-    doc['censoring_channel_hash'] = channel_hash.hex() if channel_hash else channel_hash
-    # txo_hash = doc.pop('txo_hash')
-    # doc['tx_id'] = txo_hash[:32][::-1].hex()
-    # doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
-    doc['repost_count'] = doc.pop('reposted')
-    doc['is_controlling'] = bool(doc['is_controlling'])
-    doc['signature'] = (doc.pop('signature') or b'').hex() or None
-    doc['signature_digest'] = doc['signature']
-    doc['public_key_bytes'] = (doc.pop('public_key_bytes') or b'').hex() or None
-    doc['public_key_id'] = (doc.pop('public_key_hash') or b'').hex() or None
-    doc['is_signature_valid'] = bool(doc['signature_valid'])
-    doc['claim_type'] = doc.get('claim_type', 0) or 0
-    doc['stream_type'] = int(doc.get('stream_type', 0) or 0)
-    doc['has_source'] = bool(doc['has_source'])
-    doc['normalized_name'] = doc.pop('normalized')
-    doc = {key: value for key, value in doc.items() if key in ALL_FIELDS}
-    return {'doc': doc, '_id': doc['claim_id'], '_index': index, '_op_type': 'update', 'doc_as_upsert': True}
-
-
 def expand_query(**kwargs):
     if "amount_order" in kwargs:
         kwargs["limit"] = 1
@@ -533,8 +515,8 @@ def expand_query(**kwargs):
                     value = CLAIM_TYPES[value]
                 else:
                     value = [CLAIM_TYPES[claim_type] for claim_type in value]
-            elif key == 'stream_type':
-                value = STREAM_TYPES[value] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
+            # elif key == 'stream_type':
+            #     value = STREAM_TYPES[value] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
             if key == '_id':
                 if isinstance(value, Iterable):
                     value = [item[::-1].hex() for item in value]
@@ -590,13 +572,13 @@ def expand_query(**kwargs):
         elif key == 'limit_claims_per_channel':
             collapse = ('channel_id.keyword', value)
     if kwargs.get('has_channel_signature'):
-        query['must'].append({"exists": {"field": "signature_digest"}})
+        query['must'].append({"exists": {"field": "signature"}})
         if 'signature_valid' in kwargs:
             query['must'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     elif 'signature_valid' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
-        query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
+        query['should'].append({"bool": {"must_not": {"exists": {"field": "signature"}}}})
         query['should'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     if 'has_source' in kwargs:
         query.setdefault('should', [])
