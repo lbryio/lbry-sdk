@@ -1030,7 +1030,7 @@ class LBRYElectrumX(SessionBase):
             try:
                 return await self.run_and_cache_query('search', kwargs)
             except TooManyClaimSearchParametersError as err:
-                self.loop.call_later(0, self.synchronous_close)
+                await asyncio.sleep(2)
                 return RPCError(1, str(err))
 
     async def claimtrie_resolve(self, *urls):
