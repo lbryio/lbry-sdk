@@ -234,19 +234,20 @@ class InvalidPasswordError(WalletError):
         super().__init__("Password is invalid.")
 
 
-class TooManyClaimSearchParameters(WalletError):
-
-    def __init__(self, key, limit):
-        self.key = key
-        super().__init__(f"{key} cant be set for more than {limit} items.")
-
-
 class IncompatibleWalletServerError(WalletError):
 
     def __init__(self, server, port):
         self.server = server
         self.port = port
         super().__init__(f"'{server}:{port}' has an incompatibly old version.")
+
+
+class TooManyClaimSearchParametersError(WalletError):
+
+    def __init__(self, key, limit):
+        self.key = key
+        self.limit = limit
+        super().__init__(f"{key} cant be set for more than {limit} items.")
 
 
 class ServerPaymentInvalidAddressError(WalletError):

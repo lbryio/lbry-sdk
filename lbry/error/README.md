@@ -53,10 +53,11 @@ Code | Name | Message
 407 | DataDownload | Failed to download blob. *generic*
 410 | Resolve | Failed to resolve '{url}'.
 411 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
-411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{claim_id(censor_hash)}'.
+411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{censor_id}'.
 420 | KeyFeeAboveMaxAllowed | {message}
 421 | InvalidPassword | Password is invalid.
 422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
+423 | TooManyClaimSearchParameters | {key} cant be set for more than {limit} items.
 431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
 432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
 433 | ServerPaymentFeeAboveMaxAllowed | Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.

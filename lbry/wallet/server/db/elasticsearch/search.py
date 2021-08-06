@@ -10,7 +10,7 @@ from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_streaming_bulk
 
 from lbry.crypto.base58 import Base58
-from lbry.error import ResolveCensoredError, TooManyClaimSearchParameters
+from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
 from lbry.schema.url import URL, normalize_name
@@ -466,7 +466,7 @@ def expand_query(**kwargs):
         key = key.replace('claim.', '')
         many = key.endswith('__in') or isinstance(value, list)
         if many and len(value) > 2048:
-            raise TooManyClaimSearchParameters(key, 2048)
+            raise TooManyClaimSearchParametersError(key, 2048)
         if many:
             key = key.replace('__in', '')
             value = list(filter(None, value))
