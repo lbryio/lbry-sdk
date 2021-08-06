@@ -520,6 +520,7 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertIn('disk_space', status)
         self.assertEqual(status['disk_space']['used'], '0')
         await self.stream_create('foo', '0.01', data=('0' * 3 * 1024 * 1024).encode())
+        await self.stream_create('foo', '0.01', data=('0' * 2 * 1024 * 1024).encode())
         status = await self.daemon.jsonrpc_status()
         self.assertIn('disk_space', status)
-        self.assertEqual(status['disk_space']['used'], '3')
+        self.assertEqual(status['disk_space']['used'], '5')
