@@ -44,7 +44,7 @@ class Censor:
 
     def censor(self, row) -> Optional[bytes]:
         if self.is_censored(row):
-            censoring_channel_hash = row['censoring_channel_hash']
+            censoring_channel_hash = bytes.fromhex(row['censoring_channel_id'])[::-1]
             self.censored.setdefault(censoring_channel_hash, set())
             self.censored[censoring_channel_hash].add(row['tx_hash'])
             return censoring_channel_hash
@@ -192,7 +192,7 @@ class Outputs:
                 if row.reposted_claim_hash:
                     set_reference(txo_message.claim.repost, row.reposted_claim_hash, extra_txo_rows)
             elif isinstance(row, ResolveCensoredError):
-                set_reference(txo_message.error.blocked.channel, row.censor_hash, extra_txo_rows)
+                set_reference(txo_message.error.blocked.channel, row.censor_id, extra_txo_rows)
         return page.SerializeToString()
 
     @classmethod

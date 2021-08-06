@@ -65,7 +65,7 @@ class FlushData:
     tip = attr.ib()
 
 
-OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, LookupError, ValueError]]
+OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, ResolveCensoredError, LookupError, ValueError]]
 
 DB_STATE_STRUCT = struct.Struct(b'>32sLL32sLLBBlll')
 DB_STATE_STRUCT_SIZE = 94
@@ -527,7 +527,7 @@ class LevelDB:
             output = self.coin.transaction(raw).outputs[nout]
             script = OutputScript(output.pk_script)
             script.parse()
-            return Claim.from_bytes(script.values['claim'])
+            return Claim.from_bytes(script.values['claim']), ''.join(chr(c) for c in script.values['claim_name'])
         except:
             self.logger.error(
                 "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
@@ -546,6 +546,7 @@ class LevelDB:
         metadata = self.get_claim_metadata(claim.tx_hash, claim.position)
         if not metadata:
             return
+        metadata, non_normalized_name = metadata
         if not metadata.is_stream or not metadata.stream.has_fee:
             fee_amount = 0
         else:
@@ -564,6 +565,7 @@ class LevelDB:
             )
             if not reposted_metadata:
                 return
+            reposted_metadata, _ = reposted_metadata
         reposted_tags = []
         reposted_languages = []
         reposted_has_source = None
@@ -632,10 +634,9 @@ class LevelDB:
             reposted_claim_hash) or self.filtered_channels.get(claim_hash) or self.filtered_channels.get(
             reposted_claim_hash) or self.filtered_channels.get(claim.channel_hash)
         value = {
-            'claim_hash': claim_hash[::-1],
-            # 'claim_id': claim_hash.hex(),
-            'claim_name': claim.name,
-            'normalized': claim.name,
+            'claim_id': claim_hash.hex(),
+            'claim_name': non_normalized_name,
+            'normalized_name': claim.name,
             'tx_id': claim.tx_hash[::-1].hex(),
             'tx_num': claim.tx_num,
             'tx_nout': claim.position,
@@ -648,7 +649,7 @@ class LevelDB:
             'expiration_height': claim.expiration_height,
             'effective_amount': claim.effective_amount,
             'support_amount': claim.support_amount,
-            'is_controlling': claim.is_controlling,
+            'is_controlling': bool(claim.is_controlling),
             'last_take_over_height': claim.last_takeover_height,
             'short_url': claim.short_url,
             'canonical_url': claim.canonical_url,
@@ -658,30 +659,26 @@ class LevelDB:
             'claim_type': CLAIM_TYPES[metadata.claim_type],
             'has_source': reposted_has_source if reposted_has_source is not None else (
                 False if not metadata.is_stream else metadata.stream.has_source),
-            'stream_type': None if not metadata.is_stream else STREAM_TYPES[
+            'stream_type': 0 if not metadata.is_stream else STREAM_TYPES[
                 guess_stream_type(metadata.stream.source.media_type)],
             'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
             'fee_amount': fee_amount,
             'fee_currency': None if not metadata.is_stream else metadata.stream.fee.currency,
 
-            'reposted': self.get_reposted_count(claim_hash),
-            'reposted_claim_hash': reposted_claim_hash,
+            'repost_count': self.get_reposted_count(claim_hash),
+            'reposted_claim_id': None if not reposted_claim_hash else reposted_claim_hash.hex(),
             'reposted_claim_type': reposted_claim_type,
             'reposted_has_source': reposted_has_source,
-
-            'channel_hash': metadata.signing_channel_hash,
-
-            'public_key_bytes': None if not metadata.is_channel else metadata.channel.public_key_bytes,
-            'public_key_hash': None if not metadata.is_channel else self.ledger.address_to_hash160(
-                self.ledger.public_key_to_address(metadata.channel.public_key_bytes)
-            ),
-            'signature': metadata.signature,
-            'signature_digest': None,  # TODO: fix
-            'signature_valid': claim.signature_valid,
+            'channel_id': None if not metadata.is_signed else metadata.signing_channel_hash[::-1].hex(),
+            'public_key_id': None if not metadata.is_channel else
+            self.ledger.public_key_to_address(metadata.channel.public_key_bytes),
+            'signature': (metadata.signature or b'').hex() or None,
+            # 'signature_digest': metadata.signature,
+            'is_signature_valid': bool(claim.signature_valid),
             'tags': tags,
             'languages': languages,
             'censor_type': Censor.RESOLVE if blocked_hash else Censor.SEARCH if filtered_hash else Censor.NOT_CENSORED,
-            'censoring_channel_hash': blocked_hash or filtered_hash or None,
+            'censoring_channel_id': (blocked_hash or filtered_hash or b'').hex() or None,
             'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash)
             # 'trending_group': 0,
             # 'trending_mixed': 0,
@@ -695,9 +692,7 @@ class LevelDB:
         return value
 
     async def all_claims_producer(self, batch_size=500_000):
-        loop = asyncio.get_event_loop()
         batch = []
-        tasks = []
         for claim_hash, v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
             # TODO: fix the couple of claim txos that dont have controlling names
             if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).name)):
