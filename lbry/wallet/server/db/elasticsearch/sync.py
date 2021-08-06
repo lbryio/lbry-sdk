@@ -6,7 +6,8 @@ from elasticsearch.helpers import async_bulk
 from lbry.wallet.server.env import Env
 from lbry.wallet.server.coin import LBC
 from lbry.wallet.server.leveldb import LevelDB
-from lbry.wallet.server.db.elasticsearch.search import extract_doc, SearchIndex, IndexVersionMismatch
+from lbry.wallet.server.db.elasticsearch.search import SearchIndex, IndexVersionMismatch
+from lbry.wallet.server.db.elasticsearch.constants import ALL_FIELDS
 
 
 async def get_all_claims(index_name='claims', db=None):
@@ -18,7 +19,13 @@ async def get_all_claims(index_name='claims', db=None):
     try:
         cnt = 0
         async for claim in db.all_claims_producer():
-            yield extract_doc(claim, index_name)
+            yield {
+                'doc': {key: value for key, value in claim.items() if key in ALL_FIELDS},
+                '_id': claim['claim_id'],
+                '_index': index_name,
+                '_op_type': 'update',
+                'doc_as_upsert': True
+            }
             cnt += 1
             if cnt % 10000 == 0:
                 print(f"{cnt} claims sent")
