@@ -51,7 +51,7 @@ from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
-from lbry.schema.url import URL
+from lbry.schema.url import URL, normalize_name
 
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
@@ -2270,7 +2270,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_type=<claim_type>  : (str or list) claim type: channel, stream, repost, collection
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) streams in this channel
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --is_spent                 : (bool) shows previous claim updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
@@ -2888,7 +2888,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
-            --name=<name>              : (str or list) channel name
+            --name=<name>              : (str or list) channel name (normalized)
             --claim_id=<claim_id>      : (str or list) channel id
             --is_spent                 : (bool) shows previous channel updates and abandons
             --account_id=<account_id>  : (str) id of the account to use
@@ -3664,7 +3664,7 @@ class Daemon(metaclass=JSONRPCServerType):
                         [--page=<page>] [--page_size=<page_size>] [--resolve] [--no_totals]
 
         Options:
-            --name=<name>              : (str or list) stream name
+            --name=<name>              : (str or list) stream name (normalized)
             --claim_id=<claim_id>      : (str or list) stream id
             --is_spent                 : (bool) shows previous stream updates and abandons
             --account_id=<account_id>  : (str) id of the account to query
@@ -4158,7 +4158,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--page=<page>] [--page_size=<page_size>] [--no_totals]
 
         Options:
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --claim_id=<claim_id>      : (str or list) claim id
             --received                 : (bool) only show received (tips)
             --sent                     : (bool) only show sent (tips)
@@ -4393,7 +4393,7 @@ class Daemon(metaclass=JSONRPCServerType):
         database.constrain_single_or_list(constraints, 'channel_id', channel_id)
         database.constrain_single_or_list(constraints, 'channel_id', not_channel_id, negate=True)
         database.constrain_single_or_list(constraints, 'claim_id', claim_id)
-        database.constrain_single_or_list(constraints, 'claim_name', name)
+        database.constrain_single_or_list(constraints, 'claim_name', name, normalize_name)
         database.constrain_single_or_list(constraints, 'txid', txid)
         database.constrain_single_or_list(constraints, 'reposted_claim_id', reposted_claim_id)
         return constraints
@@ -4423,7 +4423,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
       --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --is_spent                 : (bool) only show spent txos
             --is_not_spent             : (bool) only show not spent txos
             --is_my_input_or_output    : (bool) txos which have your inputs or your outputs,
@@ -4495,7 +4495,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --claim_id=<claim_id>      : (str or list) claim id
             --channel_id=<channel_id>  : (str or list) claims in this channel
       --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --is_my_input              : (bool) show outputs created by you
             --is_not_my_input          : (bool) show outputs not created by you
            --exclude_internal_transfers: (bool) excludes any outputs that are exactly this combination:
@@ -4555,7 +4555,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                          purchase, collection, repost, other
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --channel_id=<channel_id>  : (str or list) claims in this channel
       --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --is_spent                 : (bool) only show spent txos
@@ -4606,7 +4606,7 @@ class Daemon(metaclass=JSONRPCServerType):
                                          purchase, collection, repost, other
             --txid=<txid>              : (str or list) transaction id of outputs
             --claim_id=<claim_id>      : (str or list) claim id
-            --name=<name>              : (str or list) claim name
+            --name=<name>              : (str or list) claim name (normalized)
             --channel_id=<channel_id>  : (str or list) claims in this channel
       --not_channel_id=<not_channel_id>: (str or list) claims not in this channel
             --is_spent                 : (bool) only show spent txos
