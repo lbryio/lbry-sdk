@@ -568,8 +568,13 @@ class LevelDB:
             reposted_metadata, _ = reposted_metadata
         reposted_tags = []
         reposted_languages = []
-        reposted_has_source = None
+        reposted_has_source = False
         reposted_claim_type = None
+        reposted_stream_type = None
+        reposted_media_type = None
+        reposted_fee_amount = None
+        reposted_fee_currency = None
+        reposted_duration = None
         if reposted_claim:
             reposted_tx_hash = self.total_transactions[reposted_claim.tx_num]
             raw_reposted_claim_tx = self.db.get(
@@ -608,10 +613,22 @@ class LevelDB:
                 return
             reposted_tags = [tag for tag in meta.tags]
             reposted_languages = [lang.language or 'none' for lang in meta.languages] or ['none']
-
             reposted_has_source = False if not reposted_metadata.is_stream else reposted_metadata.stream.has_source
             reposted_claim_type = CLAIM_TYPES[reposted_metadata.claim_type]
-
+            reposted_stream_type = STREAM_TYPES[guess_stream_type(reposted_metadata.stream.source.media_type)] \
+                if reposted_metadata.is_stream else 0
+            reposted_media_type = reposted_metadata.stream.source.media_type if reposted_metadata.is_stream else 0
+            if not reposted_metadata.is_stream or not reposted_metadata.stream.has_fee:
+                reposted_fee_amount = 0
+            else:
+                reposted_fee_amount = int(max(reposted_metadata.stream.fee.amount or 0, 0) * 1000)
+                if reposted_fee_amount >= 9223372036854775807:
+                    return
+            reposted_fee_currency = None if not reposted_metadata.is_stream else reposted_metadata.stream.fee.currency
+            reposted_duration = None
+            if reposted_metadata.is_stream and \
+                    (reposted_metadata.stream.video.duration or reposted_metadata.stream.audio.duration):
+                reposted_duration = reposted_metadata.stream.video.duration or reposted_metadata.stream.audio.duration
         if metadata.is_stream:
             meta = metadata.stream
         elif metadata.is_channel:
@@ -657,14 +674,15 @@ class LevelDB:
             'author': None if not metadata.is_stream else metadata.stream.author,
             'description': None if not metadata.is_stream else metadata.stream.description,
             'claim_type': CLAIM_TYPES[metadata.claim_type],
-            'has_source': reposted_has_source if reposted_has_source is not None else (
+            'has_source': reposted_has_source if metadata.is_repost else (
                 False if not metadata.is_stream else metadata.stream.has_source),
-            'stream_type': 0 if not metadata.is_stream else STREAM_TYPES[
-                guess_stream_type(metadata.stream.source.media_type)],
-            'media_type': None if not metadata.is_stream else metadata.stream.source.media_type,
-            'fee_amount': fee_amount,
-            'fee_currency': None if not metadata.is_stream else metadata.stream.fee.currency,
-
+            'stream_type': STREAM_TYPES[guess_stream_type(metadata.stream.source.media_type)]
+                if metadata.is_stream else reposted_stream_type if metadata.is_repost else 0,
+            'media_type': metadata.stream.source.media_type
+                if metadata.is_stream else reposted_media_type if metadata.is_repost else None,
+            'fee_amount': fee_amount if not metadata.is_repost else reposted_fee_amount,
+            'fee_currency': metadata.stream.fee.currency
+                if metadata.is_stream else reposted_fee_currency if metadata.is_repost else None,
             'repost_count': self.get_reposted_count(claim_hash),
             'reposted_claim_id': None if not reposted_claim_hash else reposted_claim_hash.hex(),
             'reposted_claim_type': reposted_claim_type,
@@ -685,7 +703,9 @@ class LevelDB:
             # 'trending_local': 0,
             # 'trending_global': 0,
         }
-        if metadata.is_stream and (metadata.stream.video.duration or metadata.stream.audio.duration):
+        if metadata.is_repost and reposted_duration is not None:
+            value['duration'] = reposted_duration
+        elif metadata.is_stream and (metadata.stream.video.duration or metadata.stream.audio.duration):
             value['duration'] = metadata.stream.video.duration or metadata.stream.audio.duration
         if metadata.is_stream and metadata.stream.release_time:
             value['release_time'] = metadata.stream.release_time
