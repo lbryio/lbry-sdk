@@ -22,19 +22,29 @@ async def get_all(db, shard_num, shards_total, limit=0, index_name='claims'):
     db.row_factory = namedtuple_factory
     total = db.execute(f"select count(*) as total from claim where height % {shards_total} = {shard_num};").fetchone()[0]
     for num, claim in enumerate(db.execute(f"""
-SELECT claimtrie.claim_hash as is_controlling,
-       claimtrie.last_take_over_height,
-       (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
-       (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
-       (select cr.has_source from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_has_source,
-       (select cr.claim_type from claim cr where cr.claim_hash = claim.reposted_claim_hash) as reposted_claim_type,
-       claim.*
-FROM claim LEFT JOIN claimtrie USING (claim_hash)
-WHERE claim.height % {shards_total} = {shard_num}
-ORDER BY claim.height desc
+        SELECT claimtrie.claim_hash as is_controlling,
+               claimtrie.last_take_over_height,
+               (select group_concat(tag, ',,') from tag where tag.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as tags,
+               (select group_concat(language, ' ') from language where language.claim_hash in (claim.claim_hash, claim.reposted_claim_hash)) as languages,
+               cr.has_source as reposted_has_source,
+               cr.claim_type  as reposted_claim_type,
+               cr.stream_type as reposted_stream_type,
+               cr.media_type as reposted_media_type,
+               cr.duration as reposted_duration,
+               cr.fee_amount as reposted_fee_amount,
+               cr.fee_currency as reposted_fee_currency,
+               claim.*
+        FROM claim LEFT JOIN claimtrie USING (claim_hash) LEFT JOIN claim cr ON cr.claim_hash=claim.reposted_claim_hash
+        WHERE claim.height % {shards_total} = {shard_num}
+        ORDER BY claim.height desc
 """)):
         claim = dict(claim._asdict())
         claim['has_source'] = bool(claim.pop('reposted_has_source') or claim['has_source'])
+        claim['stream_type'] = claim.pop('reposted_stream_type') or claim['stream_type']
+        claim['media_type'] = claim.pop('reposted_media_type') or claim['media_type']
+        claim['fee_amount'] = claim.pop('reposted_fee_amount') or claim['fee_amount']
+        claim['fee_currency'] = claim.pop('reposted_fee_currency') or claim['fee_currency']
+        claim['duration'] = claim.pop('reposted_duration') or claim['duration']
         claim['censor_type'] = 0
         claim['censoring_channel_id'] = None
         claim['tags'] = claim['tags'].split(',,') if claim['tags'] else []
