@@ -191,6 +191,10 @@ def get_argument_parser():
         help='Disable all logging of any kind.'
     )
     start.add_argument(
+        '--show-stack-trace', dest='show_stack_trace', action="store_true",
+        help='Show full stack trace on error.'
+    )
+    start.add_argument(
         '--verbose', nargs="*",
         help=('Enable debug output for lbry logger and event loop. Optionally specify loggers for which debug output '
               'should selectively be applied.')
@@ -255,10 +259,28 @@ def setup_logging(logger: logging.Logger, args: argparse.Namespace, conf: Config
             logger.getChild('lbry').setLevel(logging.DEBUG)
 
 
+def make_stack_trace_supressing_record_factory(original_factory):
+    def factory(*args, **kwargs):
+        record = original_factory(*args, **kwargs)
+        if record.exc_info:
+            record.msg += f" ({record.exc_info[0].__name__}: {record.exc_info[1]})"
+            record.exc_info = None
+            record.exc_text = None
+        return record
+    return factory
+
+
+def warning_error_handler(loop, context):
+    logging.warning("Uncaught exception: %s", context)
+
+
 def run_daemon(args: argparse.Namespace, conf: Config):
     loop = asyncio.get_event_loop()
     if args.verbose is not None:
         loop.set_debug(True)
+    elif not args.show_stack_trace:
+        loop.set_exception_handler(warning_error_handler)
+        logging.setLogRecordFactory(make_stack_trace_supressing_record_factory(logging.getLogRecordFactory()))
     if not args.no_logging:
         setup_logging(logging.getLogger(), args, conf)
     daemon = Daemon(conf)
