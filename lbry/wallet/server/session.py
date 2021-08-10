@@ -987,6 +987,11 @@ class LBRYElectrumX(SessionBase):
         except ConnectionTimeout:
             self.session_mgr.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
+        except TooManyClaimSearchParametersError as err:
+            await asyncio.sleep(2)
+            self.logger.warning("Got an invalid query from %s, for %s with more than %d elements.",
+                                self.peer_address()[0], err.key, err.limit)
+            return RPCError(1, str(err))
         finally:
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
