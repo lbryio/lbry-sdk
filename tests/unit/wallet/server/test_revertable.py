@@ -21,8 +21,8 @@ class TestRevertableOpStack(unittest.TestCase):
         self.stack.clear()
 
     def update(self, key1: bytes, value1: bytes, key2: bytes, value2: bytes):
-        self.stack.append(RevertableDelete(key1, value1))
-        self.stack.append(RevertablePut(key2, value2))
+        self.stack.append_op(RevertableDelete(key1, value1))
+        self.stack.append_op(RevertablePut(key2, value2))
 
     def test_simplify(self):
         key1 = Prefixes.claim_to_txo.pack_key(b'\x01' * 20)
@@ -36,22 +36,22 @@ class TestRevertableOpStack(unittest.TestCase):
 
         # check that we can't delete a non existent value
         with self.assertRaises(OpStackIntegrity):
-            self.stack.append(RevertableDelete(key1, val1))
+            self.stack.append_op(RevertableDelete(key1, val1))
 
-        self.stack.append(RevertablePut(key1, val1))
+        self.stack.append_op(RevertablePut(key1, val1))
         self.assertEqual(1, len(self.stack))
-        self.stack.append(RevertableDelete(key1, val1))
+        self.stack.append_op(RevertableDelete(key1, val1))
         self.assertEqual(0, len(self.stack))
 
-        self.stack.append(RevertablePut(key1, val1))
+        self.stack.append_op(RevertablePut(key1, val1))
         self.assertEqual(1, len(self.stack))
         # try to delete the wrong value
         with self.assertRaises(OpStackIntegrity):
-            self.stack.append(RevertableDelete(key2, val2))
+            self.stack.append_op(RevertableDelete(key2, val2))
 
-        self.stack.append(RevertableDelete(key1, val1))
+        self.stack.append_op(RevertableDelete(key1, val1))
         self.assertEqual(0, len(self.stack))
-        self.stack.append(RevertablePut(key2, val3))
+        self.stack.append_op(RevertablePut(key2, val3))
         self.assertEqual(1, len(self.stack))
 
         self.process_stack()
@@ -60,12 +60,12 @@ class TestRevertableOpStack(unittest.TestCase):
 
         # check that we can't put on top of the existing stored value
         with self.assertRaises(OpStackIntegrity):
-            self.stack.append(RevertablePut(key2, val1))
+            self.stack.append_op(RevertablePut(key2, val1))
 
         self.assertEqual(0, len(self.stack))
-        self.stack.append(RevertableDelete(key2, val3))
+        self.stack.append_op(RevertableDelete(key2, val3))
         self.assertEqual(1, len(self.stack))
-        self.stack.append(RevertablePut(key2, val3))
+        self.stack.append_op(RevertablePut(key2, val3))
         self.assertEqual(0, len(self.stack))
 
         self.update(key2, val3, key2, val1)
@@ -84,11 +84,11 @@ class TestRevertableOpStack(unittest.TestCase):
             self.update(key2, val3, key2, val2)
         self.update(key2, val2, key2, val3)
         self.assertEqual(2, len(self.stack))
-        self.stack.append(RevertableDelete(key2, val3))
+        self.stack.append_op(RevertableDelete(key2, val3))
         self.process_stack()
         self.assertDictEqual({}, self.fake_db)
 
-        self.stack.append(RevertablePut(key2, val3))
+        self.stack.append_op(RevertablePut(key2, val3))
         self.process_stack()
         with self.assertRaises(OpStackIntegrity):
             self.update(key2, val2, key2, val2)
