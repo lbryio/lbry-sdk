@@ -48,7 +48,7 @@ class Conductor:
         self.wallet_node = WalletNode(
             self.manager_module, RegTestLedger, default_seed=seed
         )
-        self.hub_node = HubNode(__hub_url__, "hub", "hub")
+        self.hub_node = HubNode(__hub_url__, "hub", self.spv_node)
 
         self.blockchain_started = False
         self.spv_started = False
@@ -193,9 +193,11 @@ class SPVNode:
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
         self.stopped = False
+        self.index_name = None
 
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
+        self.index_name = uuid4().hex
         conf = {
             'DESCRIPTION': '',
             'PAYMENT_ADDRESS': '',
@@ -210,7 +212,7 @@ class SPVNode:
             'MAX_QUERY_WORKERS': '0',
             'INDIVIDUAL_TAG_INDEXES': '',
             'RPC_PORT': self.rpc_port,
-            'ES_INDEX_PREFIX': uuid4().hex,
+            'ES_INDEX_PREFIX': self.index_name,
             'ES_MODE': 'writer',
         }
         if extraconf:
@@ -487,7 +489,8 @@ class HubProcess(asyncio.SubprocessProtocol):
 
 class HubNode:
 
-    def __init__(self, url, daemon, cli):
+    def __init__(self, url, daemon, spv_node):
+        self.spv_node = spv_node
         self.debug = False
 
         self.latest_release_url = url
@@ -552,7 +555,7 @@ class HubNode:
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
         command = [
-            self.daemon_bin, 'serve', '--dev'
+            self.daemon_bin, 'serve', '--esindex', self.spv_node.index_name + 'claims'
         ]
         self.log.info(' '.join(command))
         while not self.stopped:
