@@ -2647,24 +2647,17 @@ class Daemon(metaclass=JSONRPCServerType):
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
-        try:
-            txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
-            result = {
-                "items": txos,
-                "blocked": blocked,
-                "page": page_num,
-                "page_size": page_size
-            }
-            if not kwargs.pop('no_totals', False):
-                result['total_pages'] = int((total + (page_size - 1)) / page_size)
-                result['total_items'] = total
-            return result
-        except Exception as e:
-            if self.ledger.config['use_go_hub']:
-                log.warning("failed, trying again without hub")
-                self.ledger.config['use_go_hub'] = False
-                return await self.jsonrpc_claim_search(**kwargs_old)
-            raise e
+        txos, blocked, _, total = await self.ledger.claim_search(wallet.accounts, **kwargs)
+        result = {
+            "items": txos,
+            "blocked": blocked,
+            "page": page_num,
+            "page_size": page_size
+        }
+        if not kwargs.pop('no_totals', False):
+            result['total_pages'] = int((total + (page_size - 1)) / page_size)
+            result['total_items'] = total
+        return result
 
     CHANNEL_DOC = """
     Create, update, abandon and list your channel claims.
