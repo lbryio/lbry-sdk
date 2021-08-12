@@ -173,20 +173,21 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"name", "claim_name", "normalized_name", "reposted_claim_id", "_id", # "public_key_id",
-                       "public_key_bytes", "signature_digest", "signature", "tx_id", "channel_id",
-                       "fee_currency", "media_type", "stream_type", "claim_type", "description", "author", "title",
-                       "canonical_url", "short_url", "claim_id"}
-    value_fields = {"offset", "limit", "has_channel_signature", "has_source", "has_no_source",
-                    "limit_claims_per_channel", "tx_nout", "remove_duplicates",
-                    "is_signature_valid", "is_controlling", "amount_order", "no_totals"}
+    repeated_fields = {"media_type", "stream_type", "claim_type", "claim_id"}
+    value_fields = {"tx_nout", "has_source", "is_signature_valid"}
     ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
     for key in list(kwargs.keys()):
         value = kwargs[key]
 
+        if key == "name":
+            kwargs["claim_name"] = kwargs.pop("name")
         if key == "reposted":
             kwargs["repost_count"] = kwargs.pop("reposted")
             key = "repost_count"
+        if key == "limit_claims_per_channel":
+            value = kwargs.pop("limit_claims_per_channel") or 0
+            if value > 0:
+                kwargs["limit_claims_per_channel"] = value
         if key == "txid":
             kwargs["tx_id"] = kwargs.pop("txid")
             key = "tx_id"
@@ -235,25 +236,15 @@ def fix_kwargs_for_hub(**kwargs):
         if key == "channel_id":
             kwargs["channel_id"] = {
                 "invert": False,
-                "value": kwargs["channel_id"]
-            }
-        if key == "channel":
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs.pop("channel")
-            }
-        if key == "not_channel_id":
-            kwargs["channel_id"] = {
-                "invert": True,
-                "value": kwargs.pop("not_channel_id")
+                "value": [kwargs["channel_id"]]
             }
         if key == "channel_ids":
-            kwargs["channel_ids"] = {
+            kwargs["channel_id"] = {
                 "invert": False,
-                "value": kwargs["channel_ids"]
+                "value": kwargs.pop("channel_ids")
             }
         if key == "not_channel_ids":
-            kwargs["channel_ids"] = {
+            kwargs["channel_id"] = {
                 "invert": True,
                 "value": kwargs.pop("not_channel_ids")
             }
