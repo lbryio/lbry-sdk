@@ -407,10 +407,11 @@ class BlockProcessor:
 
     def _add_claim_or_update(self, height: int, txo: 'Output', tx_hash: bytes, tx_num: int, nout: int,
                              spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]):
+        claim_name = txo.script.values['claim_name'].decode()
         try:
-            claim_name = txo.normalized_name
+            normalized_name = txo.normalized_name
         except UnicodeDecodeError:
-            claim_name = ''.join(chr(c) for c in txo.script.values['claim_name'])
+            normalized_name = claim_name
         if txo.script.is_claim_name:
             claim_hash = hash160(tx_hash + pack('>I', nout))[::-1]
             # print(f"\tnew {claim_hash.hex()} ({tx_num} {txo.amount})")
@@ -478,7 +479,7 @@ class BlockProcessor:
             if claim_hash not in spent_claims:
                 # print(f"\tthis is a wonky tx, contains unlinked claim update {claim_hash.hex()}")
                 return
-            if claim_name != spent_claims[claim_hash][2]:
+            if normalized_name != spent_claims[claim_hash][2]:
                 self.logger.warning(
                     f"{tx_hash[::-1].hex()} contains mismatched name for claim update {claim_hash.hex()}"
                 )
@@ -493,9 +494,10 @@ class BlockProcessor:
                 previous_claim = self._make_pending_claim_txo(claim_hash)
                 root_tx_num, root_idx = previous_claim.root_tx_num, previous_claim.root_position
                 activation = self.db.get_activation(prev_tx_num, prev_idx)
+                claim_name = previous_claim.name
                 self.db_op_stack.extend_ops(
                     StagedActivation(
-                        ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, claim_name,
+                        ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, normalized_name,
                         previous_claim.amount
                     ).get_remove_activate_ops()
                 )
@@ -506,8 +508,8 @@ class BlockProcessor:
         self.db.txo_to_claim[(tx_num, nout)] = claim_hash
 
         pending = StagedClaimtrieItem(
-            claim_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout, root_tx_num,
-            root_idx, channel_signature_is_valid, signing_channel_hash, reposted_claim_hash
+            claim_name, normalized_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout,
+            root_tx_num, root_idx, channel_signature_is_valid, signing_channel_hash, reposted_claim_hash
         )
         self.txo_to_claim[(tx_num, nout)] = pending
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
@@ -575,7 +577,7 @@ class BlockProcessor:
             self.pending_reposted.add(spent.reposted_claim_hash)
         if spent.signing_hash and spent.channel_signature_is_valid:
             self.pending_channel_counts[spent.signing_hash] -= 1
-        spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.name)
+        spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.normalized_name)
         # print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
         self.db_op_stack.extend_ops(spent.get_spend_claim_txo_ops())
         return True
@@ -584,14 +586,14 @@ class BlockProcessor:
         if not self._spend_claim_txo(txin, spent_claims):
             self._spend_support_txo(txin)
 
-    def _abandon_claim(self, claim_hash, tx_num, nout, name):
+    def _abandon_claim(self, claim_hash: bytes, tx_num: int, nout: int, normalized_name: str):
         if (tx_num, nout) in self.txo_to_claim:
             pending = self.txo_to_claim.pop((tx_num, nout))
             self.claim_hash_to_txo.pop(claim_hash)
             self.abandoned_claims[pending.claim_hash] = pending
             claim_root_tx_num, claim_root_idx = pending.root_tx_num, pending.root_position
             prev_amount, prev_signing_hash = pending.amount, pending.signing_hash
-            reposted_claim_hash = pending.reposted_claim_hash
+            reposted_claim_hash, name = pending.reposted_claim_hash, pending.name
             expiration = self.coin.get_expiration_height(self.height)
             signature_is_valid = pending.channel_signature_is_valid
         else:
@@ -599,12 +601,12 @@ class BlockProcessor:
                 claim_hash
             )
             claim_root_tx_num, claim_root_idx, prev_amount = v.root_tx_num,  v.root_position, v.amount
-            signature_is_valid = v.channel_signature_is_valid
+            signature_is_valid, name = v.channel_signature_is_valid, v.name
             prev_signing_hash = self.db.get_channel_for_claim(claim_hash, tx_num, nout)
             reposted_claim_hash = self.db.get_repost(claim_hash)
             expiration = self.coin.get_expiration_height(bisect_right(self.db.tx_counts, tx_num))
         self.abandoned_claims[claim_hash] = staged = StagedClaimtrieItem(
-            name, claim_hash, prev_amount, expiration, tx_num, nout, claim_root_tx_num,
+            name, normalized_name, claim_hash, prev_amount, expiration, tx_num, nout, claim_root_tx_num,
             claim_root_idx, signature_is_valid, prev_signing_hash, reposted_claim_hash
         )
         if prev_signing_hash and prev_signing_hash in self.pending_channel_counts:
@@ -614,8 +616,7 @@ class BlockProcessor:
             self.support_txo_to_claim.pop(support_txo_to_clear)
         self.support_txos_by_claim[claim_hash].clear()
         self.support_txos_by_claim.pop(claim_hash)
-
-        if name.startswith('@'):  # abandon a channel, invalidate signatures
+        if normalized_name.startswith('@'):  # abandon a channel, invalidate signatures
             self._invalidate_channel_signatures(claim_hash)
 
     def _invalidate_channel_signatures(self, claim_hash: bytes):
@@ -660,7 +661,7 @@ class BlockProcessor:
             signing_hash = self.db.get_channel_for_claim(claim_hash, claim.tx_num, claim.position)
         reposted_claim_hash = self.db.get_repost(claim_hash)
         return StagedClaimtrieItem(
-            claim.name, claim_hash, claim.amount,
+            claim.name, claim.normalized_name, claim_hash, claim.amount,
             self.coin.get_expiration_height(
                 bisect_right(self.db.tx_counts, claim.tx_num),
                 extended=self.height >= self.coin.nExtendedClaimExpirationForkHeight
@@ -680,19 +681,19 @@ class BlockProcessor:
             # abandon the channels last to handle abandoned signed claims in the same tx,
             # see test_abandon_channel_and_claims_in_same_tx
             expired_channels = {}
-            for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
-                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+            for abandoned_claim_hash, (tx_num, nout, normalized_name) in spent_claims.items():
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
 
-                if name.startswith('@'):
-                    expired_channels[abandoned_claim_hash] = (tx_num, nout, name)
+                if normalized_name.startswith('@'):
+                    expired_channels[abandoned_claim_hash] = (tx_num, nout, normalized_name)
                 else:
                     # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
 
             # do this to follow the same content claim removing pathway as if a claim (possible channel) was abandoned
-            for abandoned_claim_hash, (tx_num, nout, name) in expired_channels.items():
+            for abandoned_claim_hash, (tx_num, nout, normalized_name) in expired_channels.items():
                 # print(f"\texpire {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
 
     def _cached_get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
         if (claim_hash, txo_type, height) in self.amount_cache:
@@ -717,10 +718,10 @@ class BlockProcessor:
     def _get_pending_claim_name(self, claim_hash: bytes) -> Optional[str]:
         assert claim_hash is not None
         if claim_hash in self.claim_hash_to_txo:
-            return self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].name
+            return self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].normalized_name
         claim_info = self.db.get_claim_txo(claim_hash)
         if claim_info:
-            return claim_info.name
+            return claim_info.normalized_name
 
     def _get_pending_supported_amount(self, claim_hash: bytes, height: Optional[int] = None) -> int:
         amount = self._cached_get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, height or (self.height + 1))
@@ -799,9 +800,9 @@ class BlockProcessor:
         # determine names needing takeover/deletion due to controlling claims being abandoned
         # and add ops to deactivate abandoned claims
         for claim_hash, staged in self.abandoned_claims.items():
-            controlling = get_controlling(staged.name)
+            controlling = get_controlling(staged.normalized_name)
             if controlling and controlling.claim_hash == claim_hash:
-                names_with_abandoned_controlling_claims.append(staged.name)
+                names_with_abandoned_controlling_claims.append(staged.normalized_name)
                 # print(f"\t{staged.name} needs takeover")
             activation = self.db.get_activation(staged.tx_num, staged.position)
             if activation > 0:  #  db returns -1 for non-existent txos
@@ -809,7 +810,7 @@ class BlockProcessor:
                 self.db_op_stack.extend_ops(
                     StagedActivation(
                         ACTIVATED_CLAIM_TXO_TYPE, staged.claim_hash, staged.tx_num, staged.position,
-                        activation, staged.name, staged.amount
+                        activation, staged.normalized_name, staged.amount
                     ).get_remove_activate_ops()
                 )
             else:
@@ -830,7 +831,8 @@ class BlockProcessor:
         # prepare to activate or delay activation of the pending claims being added this block
         for (tx_num, nout), staged in self.txo_to_claim.items():
             self.db_op_stack.extend_ops(get_delayed_activate_ops(
-                staged.name, staged.claim_hash, not staged.is_update, tx_num, nout, staged.amount, is_support=False
+                staged.normalized_name, staged.claim_hash, not staged.is_update, tx_num, nout, staged.amount,
+                is_support=False
             ))
 
         # and the supports
@@ -838,7 +840,7 @@ class BlockProcessor:
             if claim_hash in self.abandoned_claims:
                 continue
             elif claim_hash in self.claim_hash_to_txo:
-                name = self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].name
+                name = self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].normalized_name
                 staged_is_new_claim = not self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].is_update
             else:
                 supported_claim_info = self.db.get_claim_txo(claim_hash)
@@ -847,7 +849,7 @@ class BlockProcessor:
                     continue
                 else:
                     v = supported_claim_info
-                name = v.name
+                name = v.normalized_name
                 staged_is_new_claim = (v.root_tx_num, v.root_position) == (v.tx_num, v.position)
             self.db_op_stack.extend_ops(get_delayed_activate_ops(
                 name, claim_hash, staged_is_new_claim, tx_num, nout, amount, is_support=True
@@ -855,7 +857,7 @@ class BlockProcessor:
 
         # add the activation/delayed-activation ops
         for activated, activated_txos in activated_at_height.items():
-            controlling = get_controlling(activated.name)
+            controlling = get_controlling(activated.normalized_name)
             if activated.claim_hash in self.abandoned_claims:
                 continue
             reactivate = False
@@ -864,7 +866,7 @@ class BlockProcessor:
                 reactivate = True
             for activated_txo in activated_txos:
                 if activated_txo.is_support and (activated_txo.tx_num, activated_txo.position) in \
-                        self.removed_support_txos_by_name_by_claim[activated.name][activated.claim_hash]:
+                        self.removed_support_txos_by_name_by_claim[activated.normalized_name][activated.claim_hash]:
                     # print("\tskip activate support for pending abandoned claim")
                     continue
                 if activated_txo.is_claim:
@@ -876,7 +878,7 @@ class BlockProcessor:
                         amount = self.db.get_claim_txo_amount(
                             activated.claim_hash
                         )
-                    self.activated_claim_amount_by_name_and_hash[(activated.name, activated.claim_hash)] = amount
+                    self.activated_claim_amount_by_name_and_hash[(activated.normalized_name, activated.claim_hash)] = amount
                 else:
                     txo_type = ACTIVATED_SUPPORT_TXO_TYPE
                     txo_tup = (activated_txo.tx_num, activated_txo.position)
@@ -890,7 +892,7 @@ class BlockProcessor:
                         # print("\tskip activate support for non existent claim")
                         continue
                     self.activated_support_amount_by_claim[activated.claim_hash].append(amount)
-                self.activation_by_claim_by_name[activated.name][activated.claim_hash].append((activated_txo, amount))
+                self.activation_by_claim_by_name[activated.normalized_name][activated.claim_hash].append((activated_txo, amount))
                 # print(f"\tactivate {'support' if txo_type == ACTIVATED_SUPPORT_TXO_TYPE else 'claim'} "
                 #       f"{activated.claim_hash.hex()} @ {activated_txo.height}")
 
@@ -933,14 +935,14 @@ class BlockProcessor:
         for activated, activated_claim_txo in self.db.get_future_activated(height):
             # uses the pending effective amount for the future activation height, not the current height
             future_amount = self._get_pending_claim_amount(
-                activated.name, activated.claim_hash, activated_claim_txo.height + 1
+                activated.normalized_name, activated.claim_hash, activated_claim_txo.height + 1
             )
             if activated.claim_hash not in claim_exists:
                 claim_exists[activated.claim_hash] = activated.claim_hash in self.claim_hash_to_txo or (
                         self.db.get_claim_txo(activated.claim_hash) is not None)
             if claim_exists[activated.claim_hash] and activated.claim_hash not in self.abandoned_claims:
                 v = future_amount, activated, activated_claim_txo
-                future_activations[activated.name][activated.claim_hash] = v
+                future_activations[activated.normalized_name][activated.claim_hash] = v
 
         for name, future_activated in activate_in_future.items():
             for claim_hash, activated in future_activated.items():
@@ -1115,17 +1117,17 @@ class BlockProcessor:
             removed_claim = self.db.get_claim_txo(removed)
             if removed_claim:
                 amt = self.db.get_url_effective_amount(
-                    removed_claim.name, removed
+                    removed_claim.normalized_name, removed
                 )
                 if amt:
                     self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
-                        removed_claim.name, amt.effective_amount, amt.tx_num,
+                        removed_claim.normalized_name, amt.effective_amount, amt.tx_num,
                         amt.position, removed
                     ))
         for touched in self.touched_claim_hashes:
             if touched in self.claim_hash_to_txo:
                 pending = self.txo_to_claim[self.claim_hash_to_txo[touched]]
-                name, tx_num, position = pending.name, pending.tx_num, pending.position
+                name, tx_num, position = pending.normalized_name, pending.tx_num, pending.position
                 claim_from_db = self.db.get_claim_txo(touched)
                 if claim_from_db:
                     claim_amount_info = self.db.get_url_effective_amount(name, touched)
@@ -1138,7 +1140,7 @@ class BlockProcessor:
                 v = self.db.get_claim_txo(touched)
                 if not v:
                     continue
-                name, tx_num, position = v.name, v.tx_num, v.position
+                name, tx_num, position = v.normalized_name, v.tx_num, v.position
                 amt = self.db.get_url_effective_amount(name, touched)
                 if amt:
                     self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
@@ -1215,16 +1217,16 @@ class BlockProcessor:
             abandoned_channels = {}
             # abandon the channels last to handle abandoned signed claims in the same tx,
             # see test_abandon_channel_and_claims_in_same_tx
-            for abandoned_claim_hash, (tx_num, nout, name) in spent_claims.items():
-                if name.startswith('@'):
-                    abandoned_channels[abandoned_claim_hash] = (tx_num, nout, name)
+            for abandoned_claim_hash, (tx_num, nout, normalized_name) in spent_claims.items():
+                if normalized_name.startswith('@'):
+                    abandoned_channels[abandoned_claim_hash] = (tx_num, nout, normalized_name)
                 else:
-                    # print(f"\tabandon {name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+                    # print(f"\tabandon {normalized_name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                    self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
 
-            for abandoned_claim_hash, (tx_num, nout, name) in abandoned_channels.items():
-                # print(f"\tabandon {name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
-                self._abandon_claim(abandoned_claim_hash, tx_num, nout, name)
+            for abandoned_claim_hash, (tx_num, nout, normalized_name) in abandoned_channels.items():
+                # print(f"\tabandon {normalized_name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
+                self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
 
             self.db.total_transactions.append(tx_hash)
             self.db.transaction_num_mapping[tx_hash] = tx_count

@@ -424,6 +424,7 @@ INDEXED_LANGUAGES = [
 
 class ResolveResult(typing.NamedTuple):
     name: str
+    normalized_name: str
     claim_hash: bytes
     tx_num: int
     position: int

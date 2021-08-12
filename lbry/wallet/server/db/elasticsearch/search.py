@@ -205,7 +205,8 @@ class SearchIndex:
                 total_referenced.extend(response)
             response = [
                 ResolveResult(
-                    name=r['claim_name'],
+                    name=r['name'],
+                    normalized_name=r['normalized'],
                     claim_hash=r['claim_hash'],
                     tx_num=r['tx_num'],
                     position=r['tx_nout'],
@@ -230,7 +231,8 @@ class SearchIndex:
             ]
             extra = [
                 ResolveResult(
-                    name=r['claim_name'],
+                    name=r['name'],
+                    normalized_name=r['normalized'],
                     claim_hash=r['claim_hash'],
                     tx_num=r['tx_num'],
                     position=r['tx_nout'],
@@ -647,7 +649,7 @@ def expand_result(results):
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
         result['reposted'] = result.pop('repost_count')
         result['signature_valid'] = result.pop('is_signature_valid')
-        result['normalized'] = result.pop('normalized_name')
+        # result['normalized'] = result.pop('normalized_name')
         # if result['censoring_channel_hash']:
         #     result['censoring_channel_hash'] = unhexlify(result['censoring_channel_hash'])[::-1]
         expanded.append(result)
