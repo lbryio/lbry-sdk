@@ -2,7 +2,6 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
 import lbry.schema.types.v2.hub_pb2 as hub__pb2
 import lbry.schema.types.v2.result_pb2 as result__pb2
 
@@ -16,116 +15,17 @@ class HubStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.SubscribeHeaders = channel.unary_stream(
-                '/pb.Hub/SubscribeHeaders',
-                request_serializer=hub__pb2.BlockRequest.SerializeToString,
-                response_deserializer=result__pb2.BlockHeaderOutput.FromString,
-                )
         self.Search = channel.unary_unary(
                 '/pb.Hub/Search',
                 request_serializer=hub__pb2.SearchRequest.SerializeToString,
                 response_deserializer=result__pb2.Outputs.FromString,
-                )
-        self.GetBlock = channel.unary_unary(
-                '/pb.Hub/GetBlock',
-                request_serializer=hub__pb2.BlockRequest.SerializeToString,
-                response_deserializer=result__pb2.BlockOutput.FromString,
-                )
-        self.GetBlockHeader = channel.unary_unary(
-                '/pb.Hub/GetBlockHeader',
-                request_serializer=hub__pb2.BlockRequest.SerializeToString,
-                response_deserializer=result__pb2.BlockHeaderOutput.FromString,
-                )
-        self.GetServerHeight = channel.unary_unary(
-                '/pb.Hub/GetServerHeight',
-                request_serializer=hub__pb2.NoParamsThisIsSilly.SerializeToString,
-                response_deserializer=google_dot_protobuf_dot_wrappers__pb2.UInt64Value.FromString,
-                )
-        self.GetHeaders = channel.unary_stream(
-                '/pb.Hub/GetHeaders',
-                request_serializer=hub__pb2.BlockRequest.SerializeToString,
-                response_deserializer=result__pb2.BlockHeaderOutput.FromString,
-                )
-        self.Ping = channel.unary_unary(
-                '/pb.Hub/Ping',
-                request_serializer=hub__pb2.NoParamsThisIsSilly.SerializeToString,
-                response_deserializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-                )
-        self.Version = channel.unary_unary(
-                '/pb.Hub/Version',
-                request_serializer=hub__pb2.NoParamsThisIsSilly.SerializeToString,
-                response_deserializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-                )
-        self.Features = channel.unary_unary(
-                '/pb.Hub/Features',
-                request_serializer=hub__pb2.NoParamsThisIsSilly.SerializeToString,
-                response_deserializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-                )
-        self.Broadcast = channel.unary_unary(
-                '/pb.Hub/Broadcast',
-                request_serializer=hub__pb2.NoParamsThisIsSilly.SerializeToString,
-                response_deserializer=google_dot_protobuf_dot_wrappers__pb2.UInt64Value.FromString,
                 )
 
 
 class HubServicer(object):
     """Missing associated documentation comment in .proto file."""
 
-    def SubscribeHeaders(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
     def Search(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetBlock(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetBlockHeader(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetServerHeight(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def GetHeaders(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Ping(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Version(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Features(self, request, context):
-        """Missing associated documentation comment in .proto file."""
-        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
-        context.set_details('Method not implemented!')
-        raise NotImplementedError('Method not implemented!')
-
-    def Broadcast(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -134,55 +34,10 @@ class HubServicer(object):
 
 def add_HubServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'SubscribeHeaders': grpc.unary_stream_rpc_method_handler(
-                    servicer.SubscribeHeaders,
-                    request_deserializer=hub__pb2.BlockRequest.FromString,
-                    response_serializer=result__pb2.BlockHeaderOutput.SerializeToString,
-            ),
             'Search': grpc.unary_unary_rpc_method_handler(
                     servicer.Search,
                     request_deserializer=hub__pb2.SearchRequest.FromString,
                     response_serializer=result__pb2.Outputs.SerializeToString,
-            ),
-            'GetBlock': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetBlock,
-                    request_deserializer=hub__pb2.BlockRequest.FromString,
-                    response_serializer=result__pb2.BlockOutput.SerializeToString,
-            ),
-            'GetBlockHeader': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetBlockHeader,
-                    request_deserializer=hub__pb2.BlockRequest.FromString,
-                    response_serializer=result__pb2.BlockHeaderOutput.SerializeToString,
-            ),
-            'GetServerHeight': grpc.unary_unary_rpc_method_handler(
-                    servicer.GetServerHeight,
-                    request_deserializer=hub__pb2.NoParamsThisIsSilly.FromString,
-                    response_serializer=google_dot_protobuf_dot_wrappers__pb2.UInt64Value.SerializeToString,
-            ),
-            'GetHeaders': grpc.unary_stream_rpc_method_handler(
-                    servicer.GetHeaders,
-                    request_deserializer=hub__pb2.BlockRequest.FromString,
-                    response_serializer=result__pb2.BlockHeaderOutput.SerializeToString,
-            ),
-            'Ping': grpc.unary_unary_rpc_method_handler(
-                    servicer.Ping,
-                    request_deserializer=hub__pb2.NoParamsThisIsSilly.FromString,
-                    response_serializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.SerializeToString,
-            ),
-            'Version': grpc.unary_unary_rpc_method_handler(
-                    servicer.Version,
-                    request_deserializer=hub__pb2.NoParamsThisIsSilly.FromString,
-                    response_serializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.SerializeToString,
-            ),
-            'Features': grpc.unary_unary_rpc_method_handler(
-                    servicer.Features,
-                    request_deserializer=hub__pb2.NoParamsThisIsSilly.FromString,
-                    response_serializer=google_dot_protobuf_dot_wrappers__pb2.StringValue.SerializeToString,
-            ),
-            'Broadcast': grpc.unary_unary_rpc_method_handler(
-                    servicer.Broadcast,
-                    request_deserializer=hub__pb2.NoParamsThisIsSilly.FromString,
-                    response_serializer=google_dot_protobuf_dot_wrappers__pb2.UInt64Value.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -193,23 +48,6 @@ def add_HubServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class Hub(object):
     """Missing associated documentation comment in .proto file."""
-
-    @staticmethod
-    def SubscribeHeaders(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/pb.Hub/SubscribeHeaders',
-            hub__pb2.BlockRequest.SerializeToString,
-            result__pb2.BlockHeaderOutput.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
 
     @staticmethod
     def Search(request,
@@ -225,141 +63,5 @@ class Hub(object):
         return grpc.experimental.unary_unary(request, target, '/pb.Hub/Search',
             hub__pb2.SearchRequest.SerializeToString,
             result__pb2.Outputs.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def GetBlock(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/GetBlock',
-            hub__pb2.BlockRequest.SerializeToString,
-            result__pb2.BlockOutput.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def GetBlockHeader(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/GetBlockHeader',
-            hub__pb2.BlockRequest.SerializeToString,
-            result__pb2.BlockHeaderOutput.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def GetServerHeight(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/GetServerHeight',
-            hub__pb2.NoParamsThisIsSilly.SerializeToString,
-            google_dot_protobuf_dot_wrappers__pb2.UInt64Value.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def GetHeaders(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_stream(request, target, '/pb.Hub/GetHeaders',
-            hub__pb2.BlockRequest.SerializeToString,
-            result__pb2.BlockHeaderOutput.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Ping(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Ping',
-            hub__pb2.NoParamsThisIsSilly.SerializeToString,
-            google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Version(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Version',
-            hub__pb2.NoParamsThisIsSilly.SerializeToString,
-            google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Features(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Features',
-            hub__pb2.NoParamsThisIsSilly.SerializeToString,
-            google_dot_protobuf_dot_wrappers__pb2.StringValue.FromString,
-            options, channel_credentials,
-            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
-
-    @staticmethod
-    def Broadcast(request,
-            target,
-            options=(),
-            channel_credentials=None,
-            call_credentials=None,
-            insecure=False,
-            compression=None,
-            wait_for_ready=None,
-            timeout=None,
-            metadata=None):
-        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Broadcast',
-            hub__pb2.NoParamsThisIsSilly.SerializeToString,
-            google_dot_protobuf_dot_wrappers__pb2.UInt64Value.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)

@@ -478,10 +478,6 @@ class Network:
             return result['result']
 
     async def new_claim_search(self, server, **kwargs):
-        if "offset" in kwargs and isinstance(kwargs["offset"], int):
-            kwargs["offset"] = {"value": kwargs["offset"]}
-        if "limit" in kwargs and isinstance(kwargs["limit"], int):
-            kwargs["limit"] = {"value": kwargs["limit"]}
         async with grpc.aio.insecure_channel(server) as channel:
             stub = hub_pb2_grpc.HubStub(channel)
             response = await stub.Search(SearchRequest(**kwargs))

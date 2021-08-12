@@ -11,7 +11,6 @@ from google.protobuf import symbol_database as _symbol_database
 _sym_db = _symbol_database.Default()
 
 
-from google.protobuf import wrappers_pb2 as google_dot_protobuf_dot_wrappers__pb2
 import lbry.schema.types.v2.result_pb2 as result__pb2
 
 
@@ -21,9 +20,9 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=b'Z$github.com/lbryio/hub/protobuf/go/pb',
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\thub.proto\x12\x02pb\x1a\x1egoogle/protobuf/wrappers.proto\x1a\x0cresult.proto\"\x15\n\x13NoParamsThisIsSilly\"0\n\x0fInvertibleField\x12\x0e\n\x06invert\x18\x01 \x01(\x08\x12\r\n\x05value\x18\x02 \x03(\t\"j\n\nRangeField\x12\x1d\n\x02op\x18\x01 \x01(\x0e\x32\x11.pb.RangeField.Op\x12\r\n\x05value\x18\x02 \x03(\t\".\n\x02Op\x12\x06\n\x02\x45Q\x10\x00\x12\x07\n\x03LTE\x10\x01\x12\x07\n\x03GTE\x10\x02\x12\x06\n\x02LT\x10\x03\x12\x06\n\x02GT\x10\x04\"\xb6\x10\n\rSearchRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x0c\n\x04name\x18\x02 \x03(\t\x12\x31\n\x0c\x61mount_order\x18\x03 \x01(\x0b\x32\x1b.google.protobuf.Int32Value\x12*\n\x05limit\x18\x04 \x01(\x0b\x32\x1b.google.protobuf.Int32Value\x12\x10\n\x08order_by\x18\x05 \x03(\t\x12+\n\x06offset\x18\x06 \x01(\x0b\x32\x1b.google.protobuf.Int32Value\x12\x32\n\x0eis_controlling\x18\x07 \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12\x1d\n\x15last_take_over_height\x18\x13 \x01(\t\x12%\n\x08\x63laim_id\x18\x14 \x01(\x0b\x32\x13.pb.InvertibleField\x12\x12\n\nclaim_name\x18\x16 \x03(\t\x12\x17\n\x0fnormalized_name\x18\x17 \x03(\t\x12#\n\x0btx_position\x18\x18 \x01(\x0b\x32\x0e.pb.RangeField\x12\x1e\n\x06\x61mount\x18\x19 \x01(\x0b\x32\x0e.pb.RangeField\x12!\n\ttimestamp\x18\x1a \x01(\x0b\x32\x0e.pb.RangeField\x12*\n\x12\x63reation_timestamp\x18\x1b \x01(\x0b\x32\x0e.pb.RangeField\x12\x1e\n\x06height\x18\x1c \x01(\x0b\x32\x0e.pb.RangeField\x12\'\n\x0f\x63reation_height\x18\x1d \x01(\x0b\x32\x0e.pb.RangeField\x12)\n\x11\x61\x63tivation_height\x18\x1e \x01(\x0b\x32\x0e.pb.RangeField\x12)\n\x11\x65xpiration_height\x18\x1f \x01(\x0b\x32\x0e.pb.RangeField\x12$\n\x0crelease_time\x18  \x01(\x0b\x32\x0e.pb.RangeField\x12\x11\n\tshort_url\x18! \x03(\t\x12\x15\n\rcanonical_url\x18\" \x03(\t\x12\r\n\x05title\x18# \x03(\t\x12\x0e\n\x06\x61uthor\x18$ \x03(\t\x12\x13\n\x0b\x64\x65scription\x18% \x03(\t\x12\x12\n\nclaim_type\x18& \x03(\t\x12$\n\x0crepost_count\x18\' \x01(\x0b\x32\x0e.pb.RangeField\x12\x13\n\x0bstream_type\x18( \x03(\t\x12\x12\n\nmedia_type\x18) \x03(\t\x12\"\n\nfee_amount\x18* \x01(\x0b\x32\x0e.pb.RangeField\x12\x14\n\x0c\x66\x65\x65_currency\x18+ \x03(\t\x12 \n\x08\x64uration\x18, \x01(\x0b\x32\x0e.pb.RangeField\x12\x1b\n\x13reposted_claim_hash\x18- \x01(\t\x12#\n\x0b\x63\x65nsor_type\x18. \x01(\x0b\x32\x0e.pb.RangeField\x12\x19\n\x11\x63laims_in_channel\x18/ \x01(\t\x12$\n\x0c\x63hannel_join\x18\x30 \x01(\x0b\x32\x0e.pb.RangeField\x12\x36\n\x12is_signature_valid\x18\x31 \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12(\n\x10\x65\x66\x66\x65\x63tive_amount\x18\x33 \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0esupport_amount\x18\x34 \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_group\x18\x35 \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_mixed\x18\x36 \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_local\x18\x37 \x01(\x0b\x32\x0e.pb.RangeField\x12\'\n\x0ftrending_global\x18\x38 \x01(\x0b\x32\x0e.pb.RangeField\x12\'\n\nchannel_id\x18\x39 \x01(\x0b\x32\x13.pb.InvertibleField\x12(\n\x0b\x63hannel_ids\x18: \x01(\x0b\x32\x13.pb.InvertibleField\x12\r\n\x05tx_id\x18; \x03(\t\x12,\n\x07tx_nout\x18< \x01(\x0b\x32\x1b.google.protobuf.Int32Value\x12\x11\n\tsignature\x18= \x03(\t\x12\x18\n\x10signature_digest\x18> \x03(\t\x12\x18\n\x10public_key_bytes\x18? \x03(\t\x12\x15\n\rpublic_key_id\x18\x41 \x01(\t\x12\x0b\n\x03_id\x18\x42 \x03(\x0c\x12\x10\n\x08\x61ny_tags\x18\x43 \x03(\t\x12\x10\n\x08\x61ll_tags\x18\x44 \x03(\t\x12\x10\n\x08not_tags\x18\x45 \x03(\t\x12\x19\n\x11reposted_claim_id\x18\x46 \x03(\t\x12\x39\n\x15has_channel_signature\x18G \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12.\n\nhas_source\x18H \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12=\n\x18limit_claims_per_channel\x18I \x01(\x0b\x32\x1b.google.protobuf.Int32Value\x12\x15\n\rany_languages\x18J \x03(\t\x12\x15\n\rall_languages\x18K \x03(\t\x12\x35\n\x11remove_duplicates\x18L \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12-\n\tno_totals\x18M \x01(\x0b\x32\x1a.google.protobuf.BoolValue\x12\x16\n\x0esearch_indices\x18N \x03(\t\"2\n\x0c\x42lockRequest\x12\x11\n\tblockhash\x18\x01 \x01(\t\x12\x0f\n\x07verbose\x18\x02 \x01(\x08\x32\xf7\x04\n\x03Hub\x12?\n\x10SubscribeHeaders\x12\x10.pb.BlockRequest\x1a\x15.pb.BlockHeaderOutput\"\x00\x30\x01\x12*\n\x06Search\x12\x11.pb.SearchRequest\x1a\x0b.pb.Outputs\"\x00\x12/\n\x08GetBlock\x12\x10.pb.BlockRequest\x1a\x0f.pb.BlockOutput\"\x00\x12;\n\x0eGetBlockHeader\x12\x10.pb.BlockRequest\x1a\x15.pb.BlockHeaderOutput\"\x00\x12J\n\x0fGetServerHeight\x12\x17.pb.NoParamsThisIsSilly\x1a\x1c.google.protobuf.UInt64Value\"\x00\x12\x39\n\nGetHeaders\x12\x10.pb.BlockRequest\x1a\x15.pb.BlockHeaderOutput\"\x00\x30\x01\x12?\n\x04Ping\x12\x17.pb.NoParamsThisIsSilly\x1a\x1c.google.protobuf.StringValue\"\x00\x12\x42\n\x07Version\x12\x17.pb.NoParamsThisIsSilly\x1a\x1c.google.protobuf.StringValue\"\x00\x12\x43\n\x08\x46\x65\x61tures\x12\x17.pb.NoParamsThisIsSilly\x1a\x1c.google.protobuf.StringValue\"\x00\x12\x44\n\tBroadcast\x12\x17.pb.NoParamsThisIsSilly\x1a\x1c.google.protobuf.UInt64Value\"\x00\x42&Z$github.com/lbryio/hub/protobuf/go/pbb\x06proto3'
+  serialized_pb=b'\n\thub.proto\x12\x02pb\x1a\x0cresult.proto\"0\n\x0fInvertibleField\x12\x0e\n\x06invert\x18\x01 \x01(\x08\x12\r\n\x05value\x18\x02 \x03(\t\"\x1a\n\tBoolValue\x12\r\n\x05value\x18\x01 \x01(\x08\"\x1c\n\x0bUInt32Value\x12\r\n\x05value\x18\x01 \x01(\r\"j\n\nRangeField\x12\x1d\n\x02op\x18\x01 \x01(\x0e\x32\x11.pb.RangeField.Op\x12\r\n\x05value\x18\x02 \x03(\t\".\n\x02Op\x12\x06\n\x02\x45Q\x10\x00\x12\x07\n\x03LTE\x10\x01\x12\x07\n\x03GTE\x10\x02\x12\x06\n\x02LT\x10\x03\x12\x06\n\x02GT\x10\x04\"\x9c\r\n\rSearchRequest\x12%\n\x08\x63laim_id\x18\x01 \x01(\x0b\x32\x13.pb.InvertibleField\x12\'\n\nchannel_id\x18\x02 \x01(\x0b\x32\x13.pb.InvertibleField\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\r\n\x05limit\x18\x04 \x01(\r\x12\x10\n\x08order_by\x18\x05 \x03(\t\x12\x0e\n\x06offset\x18\x06 \x01(\r\x12\x16\n\x0eis_controlling\x18\x07 \x01(\x08\x12\x1d\n\x15last_take_over_height\x18\x08 \x01(\t\x12\x12\n\nclaim_name\x18\t \x01(\t\x12\x17\n\x0fnormalized_name\x18\n \x01(\t\x12#\n\x0btx_position\x18\x0b \x01(\x0b\x32\x0e.pb.RangeField\x12\x1e\n\x06\x61mount\x18\x0c \x01(\x0b\x32\x0e.pb.RangeField\x12!\n\ttimestamp\x18\r \x01(\x0b\x32\x0e.pb.RangeField\x12*\n\x12\x63reation_timestamp\x18\x0e \x01(\x0b\x32\x0e.pb.RangeField\x12\x1e\n\x06height\x18\x0f \x01(\x0b\x32\x0e.pb.RangeField\x12\'\n\x0f\x63reation_height\x18\x10 \x01(\x0b\x32\x0e.pb.RangeField\x12)\n\x11\x61\x63tivation_height\x18\x11 \x01(\x0b\x32\x0e.pb.RangeField\x12)\n\x11\x65xpiration_height\x18\x12 \x01(\x0b\x32\x0e.pb.RangeField\x12$\n\x0crelease_time\x18\x13 \x01(\x0b\x32\x0e.pb.RangeField\x12\x11\n\tshort_url\x18\x14 \x01(\t\x12\x15\n\rcanonical_url\x18\x15 \x01(\t\x12\r\n\x05title\x18\x16 \x01(\t\x12\x0e\n\x06\x61uthor\x18\x17 \x01(\t\x12\x13\n\x0b\x64\x65scription\x18\x18 \x01(\t\x12\x12\n\nclaim_type\x18\x19 \x03(\t\x12$\n\x0crepost_count\x18\x1a \x01(\x0b\x32\x0e.pb.RangeField\x12\x13\n\x0bstream_type\x18\x1b \x03(\t\x12\x12\n\nmedia_type\x18\x1c \x03(\t\x12\"\n\nfee_amount\x18\x1d \x01(\x0b\x32\x0e.pb.RangeField\x12\x14\n\x0c\x66\x65\x65_currency\x18\x1e \x01(\t\x12 \n\x08\x64uration\x18\x1f \x01(\x0b\x32\x0e.pb.RangeField\x12\x19\n\x11reposted_claim_id\x18  \x01(\t\x12#\n\x0b\x63\x65nsor_type\x18! \x01(\x0b\x32\x0e.pb.RangeField\x12\x19\n\x11\x63laims_in_channel\x18\" \x01(\t\x12$\n\x0c\x63hannel_join\x18# \x01(\x0b\x32\x0e.pb.RangeField\x12)\n\x12is_signature_valid\x18$ \x01(\x0b\x32\r.pb.BoolValue\x12(\n\x10\x65\x66\x66\x65\x63tive_amount\x18% \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0esupport_amount\x18& \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_group\x18\' \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_mixed\x18( \x01(\x0b\x32\x0e.pb.RangeField\x12&\n\x0etrending_local\x18) \x01(\x0b\x32\x0e.pb.RangeField\x12\'\n\x0ftrending_global\x18* \x01(\x0b\x32\x0e.pb.RangeField\x12\r\n\x05tx_id\x18+ \x01(\t\x12 \n\x07tx_nout\x18, \x01(\x0b\x32\x0f.pb.UInt32Value\x12\x11\n\tsignature\x18- \x01(\t\x12\x18\n\x10signature_digest\x18. \x01(\t\x12\x18\n\x10public_key_bytes\x18/ \x01(\t\x12\x15\n\rpublic_key_id\x18\x30 \x01(\t\x12\x10\n\x08\x61ny_tags\x18\x31 \x03(\t\x12\x10\n\x08\x61ll_tags\x18\x32 \x03(\t\x12\x10\n\x08not_tags\x18\x33 \x03(\t\x12\x1d\n\x15has_channel_signature\x18\x34 \x01(\x08\x12!\n\nhas_source\x18\x35 \x01(\x0b\x32\r.pb.BoolValue\x12 \n\x18limit_claims_per_channel\x18\x36 \x01(\r\x12\x15\n\rany_languages\x18\x37 \x03(\t\x12\x15\n\rall_languages\x18\x38 \x03(\t\x12\x19\n\x11remove_duplicates\x18\x39 \x01(\x08\x12\x11\n\tno_totals\x18: \x01(\x08\x32\x31\n\x03Hub\x12*\n\x06Search\x12\x11.pb.SearchRequest\x1a\x0b.pb.Outputs\"\x00\x42&Z$github.com/lbryio/hub/protobuf/go/pbb\x06proto3'
   ,
-  dependencies=[google_dot_protobuf_dot_wrappers__pb2.DESCRIPTOR,result__pb2.DESCRIPTOR,])
+  dependencies=[result__pb2.DESCRIPTOR,])
 
 
 
@@ -62,35 +61,10 @@ _RANGEFIELD_OP = _descriptor.EnumDescriptor(
   ],
   containing_type=None,
   serialized_options=None,
-  serialized_start=196,
-  serialized_end=242,
+  serialized_start=199,
+  serialized_end=245,
 )
 _sym_db.RegisterEnumDescriptor(_RANGEFIELD_OP)
-
-
-_NOPARAMSTHISISSILLY = _descriptor.Descriptor(
-  name='NoParamsThisIsSilly',
-  full_name='pb.NoParamsThisIsSilly',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  create_key=_descriptor._internal_create_key,
-  fields=[
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=63,
-  serialized_end=84,
-)
 
 
 _INVERTIBLEFIELD = _descriptor.Descriptor(
@@ -127,8 +101,72 @@ _INVERTIBLEFIELD = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=86,
-  serialized_end=134,
+  serialized_start=31,
+  serialized_end=79,
+)
+
+
+_BOOLVALUE = _descriptor.Descriptor(
+  name='BoolValue',
+  full_name='pb.BoolValue',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='value', full_name='pb.BoolValue.value', index=0,
+      number=1, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=81,
+  serialized_end=107,
+)
+
+
+_UINT32VALUE = _descriptor.Descriptor(
+  name='UInt32Value',
+  full_name='pb.UInt32Value',
+  filename=None,
+  file=DESCRIPTOR,
+  containing_type=None,
+  create_key=_descriptor._internal_create_key,
+  fields=[
+    _descriptor.FieldDescriptor(
+      name='value', full_name='pb.UInt32Value.value', index=0,
+      number=1, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+  ],
+  extensions=[
+  ],
+  nested_types=[],
+  enum_types=[
+  ],
+  serialized_options=None,
+  is_extendable=False,
+  syntax='proto3',
+  extension_ranges=[],
+  oneofs=[
+  ],
+  serialized_start=109,
+  serialized_end=137,
 )
 
 
@@ -167,8 +205,8 @@ _RANGEFIELD = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=136,
-  serialized_end=242,
+  serialized_start=139,
+  serialized_end=245,
 )
 
 
@@ -181,30 +219,30 @@ _SEARCHREQUEST = _descriptor.Descriptor(
   create_key=_descriptor._internal_create_key,
   fields=[
     _descriptor.FieldDescriptor(
-      name='text', full_name='pb.SearchRequest.text', index=0,
-      number=1, type=9, cpp_type=9, label=1,
+      name='claim_id', full_name='pb.SearchRequest.claim_id', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='channel_id', full_name='pb.SearchRequest.channel_id', index=1,
+      number=2, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='text', full_name='pb.SearchRequest.text', index=2,
+      number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='name', full_name='pb.SearchRequest.name', index=1,
-      number=2, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='amount_order', full_name='pb.SearchRequest.amount_order', index=2,
-      number=3, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
       name='limit', full_name='pb.SearchRequest.limit', index=3,
-      number=4, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=4, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
@@ -217,452 +255,371 @@ _SEARCHREQUEST = _descriptor.Descriptor(
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='offset', full_name='pb.SearchRequest.offset', index=5,
-      number=6, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=6, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='is_controlling', full_name='pb.SearchRequest.is_controlling', index=6,
-      number=7, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      number=7, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='last_take_over_height', full_name='pb.SearchRequest.last_take_over_height', index=7,
-      number=19, type=9, cpp_type=9, label=1,
+      number=8, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='claim_id', full_name='pb.SearchRequest.claim_id', index=8,
-      number=20, type=11, cpp_type=10, label=1,
+      name='claim_name', full_name='pb.SearchRequest.claim_name', index=8,
+      number=9, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='normalized_name', full_name='pb.SearchRequest.normalized_name', index=9,
+      number=10, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='tx_position', full_name='pb.SearchRequest.tx_position', index=10,
+      number=11, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='claim_name', full_name='pb.SearchRequest.claim_name', index=9,
-      number=22, type=9, cpp_type=9, label=3,
+      name='amount', full_name='pb.SearchRequest.amount', index=11,
+      number=12, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='timestamp', full_name='pb.SearchRequest.timestamp', index=12,
+      number=13, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='creation_timestamp', full_name='pb.SearchRequest.creation_timestamp', index=13,
+      number=14, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='height', full_name='pb.SearchRequest.height', index=14,
+      number=15, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='creation_height', full_name='pb.SearchRequest.creation_height', index=15,
+      number=16, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='activation_height', full_name='pb.SearchRequest.activation_height', index=16,
+      number=17, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='expiration_height', full_name='pb.SearchRequest.expiration_height', index=17,
+      number=18, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='release_time', full_name='pb.SearchRequest.release_time', index=18,
+      number=19, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='short_url', full_name='pb.SearchRequest.short_url', index=19,
+      number=20, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='canonical_url', full_name='pb.SearchRequest.canonical_url', index=20,
+      number=21, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='title', full_name='pb.SearchRequest.title', index=21,
+      number=22, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='author', full_name='pb.SearchRequest.author', index=22,
+      number=23, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='description', full_name='pb.SearchRequest.description', index=23,
+      number=24, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='claim_type', full_name='pb.SearchRequest.claim_type', index=24,
+      number=25, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='normalized_name', full_name='pb.SearchRequest.normalized_name', index=10,
-      number=23, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='tx_position', full_name='pb.SearchRequest.tx_position', index=11,
-      number=24, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='amount', full_name='pb.SearchRequest.amount', index=12,
-      number=25, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='timestamp', full_name='pb.SearchRequest.timestamp', index=13,
+      name='repost_count', full_name='pb.SearchRequest.repost_count', index=25,
       number=26, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='creation_timestamp', full_name='pb.SearchRequest.creation_timestamp', index=14,
-      number=27, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='stream_type', full_name='pb.SearchRequest.stream_type', index=26,
+      number=27, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='height', full_name='pb.SearchRequest.height', index=15,
-      number=28, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='media_type', full_name='pb.SearchRequest.media_type', index=27,
+      number=28, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='creation_height', full_name='pb.SearchRequest.creation_height', index=16,
+      name='fee_amount', full_name='pb.SearchRequest.fee_amount', index=28,
       number=29, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='activation_height', full_name='pb.SearchRequest.activation_height', index=17,
-      number=30, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='fee_currency', full_name='pb.SearchRequest.fee_currency', index=29,
+      number=30, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='expiration_height', full_name='pb.SearchRequest.expiration_height', index=18,
+      name='duration', full_name='pb.SearchRequest.duration', index=30,
       number=31, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='release_time', full_name='pb.SearchRequest.release_time', index=19,
-      number=32, type=11, cpp_type=10, label=1,
+      name='reposted_claim_id', full_name='pb.SearchRequest.reposted_claim_id', index=31,
+      number=32, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='censor_type', full_name='pb.SearchRequest.censor_type', index=32,
+      number=33, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='short_url', full_name='pb.SearchRequest.short_url', index=20,
-      number=33, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='claims_in_channel', full_name='pb.SearchRequest.claims_in_channel', index=33,
+      number=34, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='canonical_url', full_name='pb.SearchRequest.canonical_url', index=21,
-      number=34, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='channel_join', full_name='pb.SearchRequest.channel_join', index=34,
+      number=35, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='title', full_name='pb.SearchRequest.title', index=22,
-      number=35, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='is_signature_valid', full_name='pb.SearchRequest.is_signature_valid', index=35,
+      number=36, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='author', full_name='pb.SearchRequest.author', index=23,
-      number=36, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='effective_amount', full_name='pb.SearchRequest.effective_amount', index=36,
+      number=37, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='description', full_name='pb.SearchRequest.description', index=24,
-      number=37, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='support_amount', full_name='pb.SearchRequest.support_amount', index=37,
+      number=38, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='claim_type', full_name='pb.SearchRequest.claim_type', index=25,
-      number=38, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='repost_count', full_name='pb.SearchRequest.repost_count', index=26,
+      name='trending_group', full_name='pb.SearchRequest.trending_group', index=38,
       number=39, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='stream_type', full_name='pb.SearchRequest.stream_type', index=27,
-      number=40, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='trending_mixed', full_name='pb.SearchRequest.trending_mixed', index=39,
+      number=40, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='media_type', full_name='pb.SearchRequest.media_type', index=28,
-      number=41, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='trending_local', full_name='pb.SearchRequest.trending_local', index=40,
+      number=41, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='fee_amount', full_name='pb.SearchRequest.fee_amount', index=29,
+      name='trending_global', full_name='pb.SearchRequest.trending_global', index=41,
       number=42, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='fee_currency', full_name='pb.SearchRequest.fee_currency', index=30,
-      number=43, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='tx_id', full_name='pb.SearchRequest.tx_id', index=42,
+      number=43, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='duration', full_name='pb.SearchRequest.duration', index=31,
+      name='tx_nout', full_name='pb.SearchRequest.tx_nout', index=43,
       number=44, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='reposted_claim_hash', full_name='pb.SearchRequest.reposted_claim_hash', index=32,
+      name='signature', full_name='pb.SearchRequest.signature', index=44,
       number=45, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='censor_type', full_name='pb.SearchRequest.censor_type', index=33,
-      number=46, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='signature_digest', full_name='pb.SearchRequest.signature_digest', index=45,
+      number=46, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='claims_in_channel', full_name='pb.SearchRequest.claims_in_channel', index=34,
+      name='public_key_bytes', full_name='pb.SearchRequest.public_key_bytes', index=46,
       number=47, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='channel_join', full_name='pb.SearchRequest.channel_join', index=35,
-      number=48, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='public_key_id', full_name='pb.SearchRequest.public_key_id', index=47,
+      number=48, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='is_signature_valid', full_name='pb.SearchRequest.is_signature_valid', index=36,
-      number=49, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='any_tags', full_name='pb.SearchRequest.any_tags', index=48,
+      number=49, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='effective_amount', full_name='pb.SearchRequest.effective_amount', index=37,
-      number=51, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='all_tags', full_name='pb.SearchRequest.all_tags', index=49,
+      number=50, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='support_amount', full_name='pb.SearchRequest.support_amount', index=38,
-      number=52, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='not_tags', full_name='pb.SearchRequest.not_tags', index=50,
+      number=51, type=9, cpp_type=9, label=3,
+      has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='trending_group', full_name='pb.SearchRequest.trending_group', index=39,
+      name='has_channel_signature', full_name='pb.SearchRequest.has_channel_signature', index=51,
+      number=52, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
+      message_type=None, enum_type=None, containing_type=None,
+      is_extension=False, extension_scope=None,
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+    _descriptor.FieldDescriptor(
+      name='has_source', full_name='pb.SearchRequest.has_source', index=52,
       number=53, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='trending_mixed', full_name='pb.SearchRequest.trending_mixed', index=40,
-      number=54, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='limit_claims_per_channel', full_name='pb.SearchRequest.limit_claims_per_channel', index=53,
+      number=54, type=13, cpp_type=3, label=1,
+      has_default_value=False, default_value=0,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='trending_local', full_name='pb.SearchRequest.trending_local', index=41,
-      number=55, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='trending_global', full_name='pb.SearchRequest.trending_global', index=42,
-      number=56, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='channel_id', full_name='pb.SearchRequest.channel_id', index=43,
-      number=57, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='channel_ids', full_name='pb.SearchRequest.channel_ids', index=44,
-      number=58, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='tx_id', full_name='pb.SearchRequest.tx_id', index=45,
-      number=59, type=9, cpp_type=9, label=3,
+      name='any_languages', full_name='pb.SearchRequest.any_languages', index=54,
+      number=55, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='tx_nout', full_name='pb.SearchRequest.tx_nout', index=46,
-      number=60, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='signature', full_name='pb.SearchRequest.signature', index=47,
-      number=61, type=9, cpp_type=9, label=3,
+      name='all_languages', full_name='pb.SearchRequest.all_languages', index=55,
+      number=56, type=9, cpp_type=9, label=3,
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='signature_digest', full_name='pb.SearchRequest.signature_digest', index=48,
-      number=62, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
+      name='remove_duplicates', full_name='pb.SearchRequest.remove_duplicates', index=56,
+      number=57, type=8, cpp_type=7, label=1,
+      has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='public_key_bytes', full_name='pb.SearchRequest.public_key_bytes', index=49,
-      number=63, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='public_key_id', full_name='pb.SearchRequest.public_key_id', index=50,
-      number=65, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=b"".decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='_id', full_name='pb.SearchRequest._id', index=51,
-      number=66, type=12, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='any_tags', full_name='pb.SearchRequest.any_tags', index=52,
-      number=67, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='all_tags', full_name='pb.SearchRequest.all_tags', index=53,
-      number=68, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='not_tags', full_name='pb.SearchRequest.not_tags', index=54,
-      number=69, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='reposted_claim_id', full_name='pb.SearchRequest.reposted_claim_id', index=55,
-      number=70, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='has_channel_signature', full_name='pb.SearchRequest.has_channel_signature', index=56,
-      number=71, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='has_source', full_name='pb.SearchRequest.has_source', index=57,
-      number=72, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='limit_claims_per_channel', full_name='pb.SearchRequest.limit_claims_per_channel', index=58,
-      number=73, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='any_languages', full_name='pb.SearchRequest.any_languages', index=59,
-      number=74, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='all_languages', full_name='pb.SearchRequest.all_languages', index=60,
-      number=75, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='remove_duplicates', full_name='pb.SearchRequest.remove_duplicates', index=61,
-      number=76, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='no_totals', full_name='pb.SearchRequest.no_totals', index=62,
-      number=77, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='search_indices', full_name='pb.SearchRequest.search_indices', index=63,
-      number=78, type=9, cpp_type=9, label=3,
-      has_default_value=False, default_value=[],
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-  ],
-  extensions=[
-  ],
-  nested_types=[],
-  enum_types=[
-  ],
-  serialized_options=None,
-  is_extendable=False,
-  syntax='proto3',
-  extension_ranges=[],
-  oneofs=[
-  ],
-  serialized_start=245,
-  serialized_end=2347,
-)
-
-
-_BLOCKREQUEST = _descriptor.Descriptor(
-  name='BlockRequest',
-  full_name='pb.BlockRequest',
-  filename=None,
-  file=DESCRIPTOR,
-  containing_type=None,
-  create_key=_descriptor._internal_create_key,
-  fields=[
-    _descriptor.FieldDescriptor(
-      name='blockhash', full_name='pb.BlockRequest.blockhash', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=b"".decode('utf-8'),
-      message_type=None, enum_type=None, containing_type=None,
-      is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
-    _descriptor.FieldDescriptor(
-      name='verbose', full_name='pb.BlockRequest.verbose', index=1,
-      number=2, type=8, cpp_type=7, label=1,
+      name='no_totals', full_name='pb.SearchRequest.no_totals', index=57,
+      number=58, type=8, cpp_type=7, label=1,
       has_default_value=False, default_value=False,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
@@ -679,17 +636,14 @@ _BLOCKREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=2349,
-  serialized_end=2399,
+  serialized_start=248,
+  serialized_end=1940,
 )
 
 _RANGEFIELD.fields_by_name['op'].enum_type = _RANGEFIELD_OP
 _RANGEFIELD_OP.containing_type = _RANGEFIELD
-_SEARCHREQUEST.fields_by_name['amount_order'].message_type = google_dot_protobuf_dot_wrappers__pb2._INT32VALUE
-_SEARCHREQUEST.fields_by_name['limit'].message_type = google_dot_protobuf_dot_wrappers__pb2._INT32VALUE
-_SEARCHREQUEST.fields_by_name['offset'].message_type = google_dot_protobuf_dot_wrappers__pb2._INT32VALUE
-_SEARCHREQUEST.fields_by_name['is_controlling'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
 _SEARCHREQUEST.fields_by_name['claim_id'].message_type = _INVERTIBLEFIELD
+_SEARCHREQUEST.fields_by_name['channel_id'].message_type = _INVERTIBLEFIELD
 _SEARCHREQUEST.fields_by_name['tx_position'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['amount'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['timestamp'].message_type = _RANGEFIELD
@@ -704,34 +658,21 @@ _SEARCHREQUEST.fields_by_name['fee_amount'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['duration'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['censor_type'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['channel_join'].message_type = _RANGEFIELD
-_SEARCHREQUEST.fields_by_name['is_signature_valid'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
+_SEARCHREQUEST.fields_by_name['is_signature_valid'].message_type = _BOOLVALUE
 _SEARCHREQUEST.fields_by_name['effective_amount'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['support_amount'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['trending_group'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['trending_mixed'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['trending_local'].message_type = _RANGEFIELD
 _SEARCHREQUEST.fields_by_name['trending_global'].message_type = _RANGEFIELD
-_SEARCHREQUEST.fields_by_name['channel_id'].message_type = _INVERTIBLEFIELD
-_SEARCHREQUEST.fields_by_name['channel_ids'].message_type = _INVERTIBLEFIELD
-_SEARCHREQUEST.fields_by_name['tx_nout'].message_type = google_dot_protobuf_dot_wrappers__pb2._INT32VALUE
-_SEARCHREQUEST.fields_by_name['has_channel_signature'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
-_SEARCHREQUEST.fields_by_name['has_source'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
-_SEARCHREQUEST.fields_by_name['limit_claims_per_channel'].message_type = google_dot_protobuf_dot_wrappers__pb2._INT32VALUE
-_SEARCHREQUEST.fields_by_name['remove_duplicates'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
-_SEARCHREQUEST.fields_by_name['no_totals'].message_type = google_dot_protobuf_dot_wrappers__pb2._BOOLVALUE
-DESCRIPTOR.message_types_by_name['NoParamsThisIsSilly'] = _NOPARAMSTHISISSILLY
+_SEARCHREQUEST.fields_by_name['tx_nout'].message_type = _UINT32VALUE
+_SEARCHREQUEST.fields_by_name['has_source'].message_type = _BOOLVALUE
 DESCRIPTOR.message_types_by_name['InvertibleField'] = _INVERTIBLEFIELD
+DESCRIPTOR.message_types_by_name['BoolValue'] = _BOOLVALUE
+DESCRIPTOR.message_types_by_name['UInt32Value'] = _UINT32VALUE
 DESCRIPTOR.message_types_by_name['RangeField'] = _RANGEFIELD
 DESCRIPTOR.message_types_by_name['SearchRequest'] = _SEARCHREQUEST
-DESCRIPTOR.message_types_by_name['BlockRequest'] = _BLOCKREQUEST
 _sym_db.RegisterFileDescriptor(DESCRIPTOR)
-
-NoParamsThisIsSilly = _reflection.GeneratedProtocolMessageType('NoParamsThisIsSilly', (_message.Message,), {
-  'DESCRIPTOR' : _NOPARAMSTHISISSILLY,
-  '__module__' : 'hub_pb2'
-  # @@protoc_insertion_point(class_scope:pb.NoParamsThisIsSilly)
-  })
-_sym_db.RegisterMessage(NoParamsThisIsSilly)
 
 InvertibleField = _reflection.GeneratedProtocolMessageType('InvertibleField', (_message.Message,), {
   'DESCRIPTOR' : _INVERTIBLEFIELD,
@@ -739,6 +680,20 @@ InvertibleField = _reflection.GeneratedProtocolMessageType('InvertibleField', (_
   # @@protoc_insertion_point(class_scope:pb.InvertibleField)
   })
 _sym_db.RegisterMessage(InvertibleField)
+
+BoolValue = _reflection.GeneratedProtocolMessageType('BoolValue', (_message.Message,), {
+  'DESCRIPTOR' : _BOOLVALUE,
+  '__module__' : 'hub_pb2'
+  # @@protoc_insertion_point(class_scope:pb.BoolValue)
+  })
+_sym_db.RegisterMessage(BoolValue)
+
+UInt32Value = _reflection.GeneratedProtocolMessageType('UInt32Value', (_message.Message,), {
+  'DESCRIPTOR' : _UINT32VALUE,
+  '__module__' : 'hub_pb2'
+  # @@protoc_insertion_point(class_scope:pb.UInt32Value)
+  })
+_sym_db.RegisterMessage(UInt32Value)
 
 RangeField = _reflection.GeneratedProtocolMessageType('RangeField', (_message.Message,), {
   'DESCRIPTOR' : _RANGEFIELD,
@@ -754,13 +709,6 @@ SearchRequest = _reflection.GeneratedProtocolMessageType('SearchRequest', (_mess
   })
 _sym_db.RegisterMessage(SearchRequest)
 
-BlockRequest = _reflection.GeneratedProtocolMessageType('BlockRequest', (_message.Message,), {
-  'DESCRIPTOR' : _BLOCKREQUEST,
-  '__module__' : 'hub_pb2'
-  # @@protoc_insertion_point(class_scope:pb.BlockRequest)
-  })
-_sym_db.RegisterMessage(BlockRequest)
-
 
 DESCRIPTOR._options = None
 
@@ -771,106 +719,16 @@ _HUB = _descriptor.ServiceDescriptor(
   index=0,
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_start=2402,
-  serialized_end=3033,
+  serialized_start=1942,
+  serialized_end=1991,
   methods=[
-  _descriptor.MethodDescriptor(
-    name='SubscribeHeaders',
-    full_name='pb.Hub.SubscribeHeaders',
-    index=0,
-    containing_service=None,
-    input_type=_BLOCKREQUEST,
-    output_type=result__pb2._BLOCKHEADEROUTPUT,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
   _descriptor.MethodDescriptor(
     name='Search',
     full_name='pb.Hub.Search',
-    index=1,
+    index=0,
     containing_service=None,
     input_type=_SEARCHREQUEST,
     output_type=result__pb2._OUTPUTS,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='GetBlock',
-    full_name='pb.Hub.GetBlock',
-    index=2,
-    containing_service=None,
-    input_type=_BLOCKREQUEST,
-    output_type=result__pb2._BLOCKOUTPUT,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='GetBlockHeader',
-    full_name='pb.Hub.GetBlockHeader',
-    index=3,
-    containing_service=None,
-    input_type=_BLOCKREQUEST,
-    output_type=result__pb2._BLOCKHEADEROUTPUT,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='GetServerHeight',
-    full_name='pb.Hub.GetServerHeight',
-    index=4,
-    containing_service=None,
-    input_type=_NOPARAMSTHISISSILLY,
-    output_type=google_dot_protobuf_dot_wrappers__pb2._UINT64VALUE,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='GetHeaders',
-    full_name='pb.Hub.GetHeaders',
-    index=5,
-    containing_service=None,
-    input_type=_BLOCKREQUEST,
-    output_type=result__pb2._BLOCKHEADEROUTPUT,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='Ping',
-    full_name='pb.Hub.Ping',
-    index=6,
-    containing_service=None,
-    input_type=_NOPARAMSTHISISSILLY,
-    output_type=google_dot_protobuf_dot_wrappers__pb2._STRINGVALUE,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='Version',
-    full_name='pb.Hub.Version',
-    index=7,
-    containing_service=None,
-    input_type=_NOPARAMSTHISISSILLY,
-    output_type=google_dot_protobuf_dot_wrappers__pb2._STRINGVALUE,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='Features',
-    full_name='pb.Hub.Features',
-    index=8,
-    containing_service=None,
-    input_type=_NOPARAMSTHISISSILLY,
-    output_type=google_dot_protobuf_dot_wrappers__pb2._STRINGVALUE,
-    serialized_options=None,
-    create_key=_descriptor._internal_create_key,
-  ),
-  _descriptor.MethodDescriptor(
-    name='Broadcast',
-    full_name='pb.Hub.Broadcast',
-    index=9,
-    containing_service=None,
-    input_type=_NOPARAMSTHISISSILLY,
-    output_type=google_dot_protobuf_dot_wrappers__pb2._UINT64VALUE,
     serialized_options=None,
     create_key=_descriptor._internal_create_key,
   ),
