@@ -352,19 +352,37 @@ class ResolveCommand(BaseResolveTestCase):
         one = 'ΣίσυφοςﬁÆ'
         two = 'ΣΊΣΥΦΟσFIæ'
 
-        _ = await self.stream_create(one, '0.1')
-        c = await self.stream_create(two, '0.2')
+        c1 = await self.stream_create(one, '0.1')
+        c2 = await self.stream_create(two, '0.2')
 
-        winner_id = self.get_claim_id(c)
+        loser_id = self.get_claim_id(c1)
+        winner_id = self.get_claim_id(c2)
 
         # winning_one = await self.check_lbrycrd_winning(one)
         await self.assertMatchClaimIsWinning(two, winner_id)
 
-        r1 = await self.resolve(f'lbry://{one}')
-        r2 = await self.resolve(f'lbry://{two}')
+        claim1 = await self.resolve(f'lbry://{one}')
+        claim2 = await self.resolve(f'lbry://{two}')
+        claim3 = await self.resolve(f'lbry://{one}:{winner_id[:5]}')
+        claim4 = await self.resolve(f'lbry://{two}:{winner_id[:5]}')
 
-        self.assertEqual(winner_id, r1['claim_id'])
-        self.assertEqual(winner_id, r2['claim_id'])
+        claim5 = await self.resolve(f'lbry://{one}:{loser_id[:5]}')
+        claim6 = await self.resolve(f'lbry://{two}:{loser_id[:5]}')
+
+        self.assertEqual(winner_id, claim1['claim_id'])
+        self.assertEqual(winner_id, claim2['claim_id'])
+        self.assertEqual(winner_id, claim3['claim_id'])
+        self.assertEqual(winner_id, claim4['claim_id'])
+
+        self.assertEqual(two, claim1['name'])
+        self.assertEqual(two, claim2['name'])
+        self.assertEqual(two, claim3['name'])
+        self.assertEqual(two, claim4['name'])
+
+        self.assertEqual(loser_id, claim5['claim_id'])
+        self.assertEqual(loser_id, claim6['claim_id'])
+        self.assertEqual(one, claim5['name'])
+        self.assertEqual(one, claim6['name'])
 
     async def test_resolve_old_claim(self):
         channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')

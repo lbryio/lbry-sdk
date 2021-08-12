@@ -4,7 +4,7 @@ import array
 import base64
 from typing import Union, Tuple, NamedTuple
 from lbry.wallet.server.db import DB_PREFIXES
-
+from lbry.schema.url import normalize_name
 
 ACTIVATED_CLAIM_TXO_TYPE = 1
 ACTIVATED_SUPPORT_TXO_TYPE = 2
@@ -19,7 +19,18 @@ def length_prefix(key: str) -> bytes:
     return len(key).to_bytes(1, byteorder='big') + key.encode()
 
 
-class PrefixRow:
+_ROW_TYPES = {}
+
+
+class PrefixRowType(type):
+    def __new__(cls, name, bases, kwargs):
+        klass = super().__new__(cls, name, bases, kwargs)
+        if name != "PrefixRow":
+            _ROW_TYPES[klass.prefix] = klass
+        return klass
+
+
+class PrefixRow(metaclass=PrefixRowType):
     prefix: bytes
     key_struct: struct.Struct
     value_struct: struct.Struct
@@ -175,6 +186,13 @@ class ClaimToTXOValue(typing.NamedTuple):
     channel_signature_is_valid: bool
     name: str
 
+    @property
+    def normalized_name(self) -> str:
+        try:
+            return normalize_name(self.name)
+        except UnicodeDecodeError:
+            return self.name
+
 
 class TXOToClaimKey(typing.NamedTuple):
     tx_num: int
@@ -190,13 +208,14 @@ class TXOToClaimValue(typing.NamedTuple):
 
 
 class ClaimShortIDKey(typing.NamedTuple):
-    name: str
+    normalized_name: str
     partial_claim_id: str
     root_tx_num: int
     root_position: int
 
     def __str__(self):
-        return f"{self.__class__.__name__}(name={self.name}, partial_claim_id={self.partial_claim_id}, " \
+        return f"{self.__class__.__name__}(normalized_name={self.normalized_name}, " \
+               f"partial_claim_id={self.partial_claim_id}, " \
                f"root_tx_num={self.root_tx_num}, root_position={self.root_position})"
 
 
@@ -274,14 +293,14 @@ class ClaimExpirationKey(typing.NamedTuple):
 
 class ClaimExpirationValue(typing.NamedTuple):
     claim_hash: bytes
-    name: str
+    normalized_name: str
 
     def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, normalized_name={self.normalized_name})"
 
 
 class ClaimTakeoverKey(typing.NamedTuple):
-    name: str
+    normalized_name: str
 
 
 class ClaimTakeoverValue(typing.NamedTuple):
@@ -309,10 +328,10 @@ class PendingActivationKey(typing.NamedTuple):
 
 class PendingActivationValue(typing.NamedTuple):
     claim_hash: bytes
-    name: str
+    normalized_name: str
 
     def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, normalized_name={self.normalized_name})"
 
 
 class ActivationKey(typing.NamedTuple):
@@ -324,10 +343,11 @@ class ActivationKey(typing.NamedTuple):
 class ActivationValue(typing.NamedTuple):
     height: int
     claim_hash: bytes
-    name: str
+    normalized_name: str
 
     def __str__(self):
-        return f"{self.__class__.__name__}(height={self.height}, claim_hash={self.claim_hash.hex()}, name={self.name})"
+        return f"{self.__class__.__name__}(height={self.height}, claim_hash={self.claim_hash.hex()}, " \
+               f"normalized_name={self.normalized_name})"
 
 
 class ActiveAmountKey(typing.NamedTuple):
@@ -347,7 +367,7 @@ class ActiveAmountValue(typing.NamedTuple):
 
 
 class EffectiveAmountKey(typing.NamedTuple):
-    name: str
+    normalized_name: str
     effective_amount: int
     tx_num: int
     position: int
@@ -1345,6 +1365,6 @@ ROW_TYPES = {
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:
     try:
-        return ROW_TYPES[key[:1]].unpack_item(key, value)
+        return _ROW_TYPES[key[:1]].unpack_item(key, value)
     except KeyError:
         return key, value

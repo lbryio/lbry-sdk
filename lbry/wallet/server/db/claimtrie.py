@@ -128,6 +128,7 @@ def get_add_effective_amount_ops(name: str, effective_amount: int, tx_num: int, 
 
 class StagedClaimtrieItem(typing.NamedTuple):
     name: str
+    normalized_name: str
     claim_hash: bytes
     amount: int
     expiration_height: int
@@ -161,13 +162,13 @@ class StagedClaimtrieItem(typing.NamedTuple):
             ),
             # claim hash by txo
             op(
-                *Prefixes.txo_to_claim.pack_item(self.tx_num, self.position, self.claim_hash, self.name)
+                *Prefixes.txo_to_claim.pack_item(self.tx_num, self.position, self.claim_hash, self.normalized_name)
             ),
             # claim expiration
             op(
                 *Prefixes.claim_expiration.pack_item(
                     self.expiration_height, self.tx_num, self.position, self.claim_hash,
-                    self.name
+                    self.normalized_name
                 )
             ),
             # short url resolution
@@ -175,7 +176,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
         ops.extend([
             op(
                 *Prefixes.claim_short_id.pack_item(
-                    self.name, self.claim_hash.hex()[:prefix_len + 1], self.root_tx_num, self.root_position,
+                    self.normalized_name, self.claim_hash.hex()[:prefix_len + 1], self.root_tx_num, self.root_position,
                     self.tx_num, self.position
                 )
             ) for prefix_len in range(10)
@@ -192,7 +193,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
                 # stream by channel
                 op(
                     *Prefixes.channel_to_claim.pack_item(
-                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
+                        self.signing_hash, self.normalized_name, self.tx_num, self.position, self.claim_hash
                     )
                 )
             ])
@@ -231,7 +232,7 @@ class StagedClaimtrieItem(typing.NamedTuple):
                 # delete channel_to_claim/claim_to_channel
                 RevertableDelete(
                     *Prefixes.channel_to_claim.pack_item(
-                        self.signing_hash, self.name, self.tx_num, self.position, self.claim_hash
+                        self.signing_hash, self.normalized_name, self.tx_num, self.position, self.claim_hash
                     )
                 ),
                 # update claim_to_txo with channel_signature_is_valid=False
@@ -252,6 +253,6 @@ class StagedClaimtrieItem(typing.NamedTuple):
 
     def invalidate_signature(self) -> 'StagedClaimtrieItem':
         return StagedClaimtrieItem(
-            self.name, self.claim_hash, self.amount, self.expiration_height, self.tx_num, self.position,
-            self.root_tx_num, self.root_position, False, None, self.reposted_claim_hash
+            self.name, self.normalized_name, self.claim_hash, self.amount, self.expiration_height, self.tx_num,
+            self.position, self.root_tx_num, self.root_position, False, None, self.reposted_claim_hash
         )

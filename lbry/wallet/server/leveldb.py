@@ -27,7 +27,7 @@ from collections import defaultdict, OrderedDict
 from lbry.error import ResolveCensoredError
 from lbry.schema.result import Censor
 from lbry.utils import LRUCacheWithMetrics
-from lbry.schema.url import URL
+from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str
 from lbry.wallet.server.tx import TxInput
@@ -218,10 +218,11 @@ class LevelDB:
             supports.append((unpacked_k.tx_num, unpacked_k.position, unpacked_v.amount))
         return supports
 
-    def get_short_claim_id_url(self, name: str, claim_hash: bytes, root_tx_num: int, root_position: int) -> str:
+    def get_short_claim_id_url(self, name: str, normalized_name: str, claim_hash: bytes,
+                               root_tx_num: int, root_position: int) -> str:
         claim_id = claim_hash.hex()
         for prefix_len in range(10):
-            prefix = Prefixes.claim_short_id.pack_partial_key(name, claim_id[:prefix_len+1])
+            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, claim_id[:prefix_len+1])
             for _k in self.db.iterator(prefix=prefix, include_value=False):
                 k = Prefixes.claim_short_id.unpack_key(_k)
                 if k.root_tx_num == root_tx_num and k.root_position == root_position:
@@ -230,9 +231,14 @@ class LevelDB:
         print(f"{claim_id} has a collision")
         return f'{name}#{claim_id}'
 
-    def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str, root_tx_num: int,
-                                root_position: int, activation_height: int, signature_valid: bool) -> ResolveResult:
-        controlling_claim = self.get_controlling_claim(name)
+    def _prepare_resolve_result(self, tx_num: int, position: int, claim_hash: bytes, name: str,
+                                root_tx_num: int, root_position: int, activation_height: int,
+                                signature_valid: bool) -> ResolveResult:
+        try:
+            normalized_name = normalize_name(name)
+        except UnicodeDecodeError:
+            normalized_name = name
+        controlling_claim = self.get_controlling_claim(normalized_name)
 
         tx_hash = self.total_transactions[tx_num]
         height = bisect_right(self.tx_counts, tx_num)
@@ -246,18 +252,19 @@ class LevelDB:
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
         reposted_claim_hash = self.get_repost(claim_hash)
-        short_url = self.get_short_claim_id_url(name, claim_hash, root_tx_num, root_position)
+        short_url = self.get_short_claim_id_url(name, normalized_name, claim_hash, root_tx_num, root_position)
         canonical_url = short_url
         claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
             channel_vals = self.claim_to_txo.get(channel_hash)
             if channel_vals:
                 channel_short_url = self.get_short_claim_id_url(
-                    channel_vals.name, channel_hash, channel_vals.root_tx_num, channel_vals.root_position
+                    channel_vals.name, channel_vals.normalized_name, channel_hash, channel_vals.root_tx_num,
+                    channel_vals.root_position
                 )
                 canonical_url = f'{channel_short_url}/{short_url}'
         return ResolveResult(
-            name, claim_hash, tx_num, position, tx_hash, height, claim_amount, short_url=short_url,
+            name, normalized_name, claim_hash, tx_num, position, tx_hash, height, claim_amount, short_url=short_url,
             is_controlling=controlling_claim.claim_hash == claim_hash, canonical_url=canonical_url,
             last_takeover_height=last_take_over_height, claims_in_channel=claims_in_channel,
             creation_height=created_height, activation_height=activation_height,
@@ -288,7 +295,7 @@ class LevelDB:
         if claim_id:
             if len(claim_id) == 40:  # a full claim id
                 claim_txo = self.get_claim_txo(bytes.fromhex(claim_id))
-                if not claim_txo or normalized_name != claim_txo.name:
+                if not claim_txo or normalized_name != claim_txo.normalized_name:
                     return
                 return self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, bytes.fromhex(claim_id), claim_txo.name,
@@ -303,7 +310,7 @@ class LevelDB:
                 claim_hash = self.txo_to_claim[(claim_txo.tx_num, claim_txo.position)]
                 signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
-                    claim_txo.tx_num, claim_txo.position, claim_hash, key.name, key.root_tx_num,
+                    claim_txo.tx_num, claim_txo.position, claim_hash, key.normalized_name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
                     signature_is_valid
                 )
@@ -319,7 +326,7 @@ class LevelDB:
             claim_txo = self.claim_to_txo.get(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
-                key.tx_num, key.position, claim_val.claim_hash, key.name, claim_txo.root_tx_num,
+                key.tx_num, key.position, claim_val.claim_hash, key.normalized_name, claim_txo.root_tx_num,
                 claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
             )
         return
@@ -472,7 +479,7 @@ class LevelDB:
             reposts = self.get_reposts_in_channel(reposter_channel_hash)
             for repost in reposts:
                 txo = self.get_claim_txo(repost)
-                if txo.name.startswith('@'):
+                if txo.normalized_name.startswith('@'):
                     channels[repost] = reposter_channel_hash
                 else:
                     streams[repost] = reposter_channel_hash
@@ -495,12 +502,12 @@ class LevelDB:
         for _k, _v in self.db.iterator(prefix=Prefixes.claim_expiration.pack_partial_key(height)):
             k, v = Prefixes.claim_expiration.unpack_item(_k, _v)
             tx_hash = self.total_transactions[k.tx_num]
-            tx = self.coin.transaction(self.db.get(DB_PREFIXES.tx.value + tx_hash))
+            tx = self.coin.transaction(self.db.get(Prefixes.tx.pack_key(tx_hash)))
             # treat it like a claim spend so it will delete/abandon properly
             # the _spend_claim function this result is fed to expects a txi, so make a mock one
             # print(f"\texpired lbry://{v.name} {v.claim_hash.hex()}")
             expired[v.claim_hash] = (
-                k.tx_num, k.position, v.name,
+                k.tx_num, k.position, v.normalized_name,
                 TxInput(prev_hash=tx_hash, prev_idx=k.position, script=tx.outputs[k.position].pk_script, sequence=0)
             )
         return expired
@@ -520,14 +527,12 @@ class LevelDB:
         return txos
 
     def get_claim_metadata(self, tx_hash, nout):
-        raw = self.db.get(
-            DB_PREFIXES.tx.value + tx_hash
-        )
+        raw = self.db.get(Prefixes.tx.pack_key(tx_hash))
         try:
             output = self.coin.transaction(raw).outputs[nout]
             script = OutputScript(output.pk_script)
             script.parse()
-            return Claim.from_bytes(script.values['claim']), ''.join(chr(c) for c in script.values['claim_name'])
+            return Claim.from_bytes(script.values['claim'])
         except:
             self.logger.error(
                 "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
@@ -546,7 +551,7 @@ class LevelDB:
         metadata = self.get_claim_metadata(claim.tx_hash, claim.position)
         if not metadata:
             return
-        metadata, non_normalized_name = metadata
+        metadata = metadata
         if not metadata.is_stream or not metadata.stream.has_fee:
             fee_amount = 0
         else:
@@ -565,7 +570,6 @@ class LevelDB:
             )
             if not reposted_metadata:
                 return
-            reposted_metadata, _ = reposted_metadata
         reposted_tags = []
         reposted_languages = []
         reposted_has_source = False
@@ -577,9 +581,7 @@ class LevelDB:
         reposted_duration = None
         if reposted_claim:
             reposted_tx_hash = self.total_transactions[reposted_claim.tx_num]
-            raw_reposted_claim_tx = self.db.get(
-                DB_PREFIXES.tx.value + reposted_tx_hash
-            )
+            raw_reposted_claim_tx = self.db.get(Prefixes.tx.pack_key(reposted_tx_hash))
             try:
                 reposted_claim_txo = self.coin.transaction(
                     raw_reposted_claim_tx
@@ -652,8 +654,8 @@ class LevelDB:
             reposted_claim_hash) or self.filtered_channels.get(claim.channel_hash)
         value = {
             'claim_id': claim_hash.hex(),
-            'claim_name': non_normalized_name,
-            'normalized_name': claim.name,
+            'name': claim.name,
+            'normalized': claim.normalized_name,
             'tx_id': claim.tx_hash[::-1].hex(),
             'tx_num': claim.tx_num,
             'tx_nout': claim.position,
@@ -715,7 +717,7 @@ class LevelDB:
         batch = []
         for claim_hash, v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
             # TODO: fix the couple of claim txos that dont have controlling names
-            if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).name)):
+            if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).normalized_name)):
                 continue
             claim = self._fs_get_claim_by_hash(claim_hash[1:])
             if claim:
@@ -740,7 +742,7 @@ class LevelDB:
             if claim_hash not in self.claim_to_txo:
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
-            name = self.claim_to_txo[claim_hash].name
+            name = self.claim_to_txo[claim_hash].normalized_name
             if not self.db.get(Prefixes.claim_takeover.pack_key(name)):
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
