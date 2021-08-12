@@ -38,7 +38,7 @@ INDEX_DEFAULT_SETTINGS = {
 
 FIELDS = {
     '_id',
-    'claim_id', 'claim_type', 'claim_name', 'normalized_name',
+    'claim_id', 'claim_type', 'name', 'normalized',
     'tx_id', 'tx_nout', 'tx_position',
     'short_url', 'canonical_url',
     'is_controlling', 'last_take_over_height',
@@ -56,9 +56,10 @@ FIELDS = {
     'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'tx_num'
 }
 
-TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id', 'censoring_channel_id',
-               'media_type', 'normalized_name', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
-               'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
+TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id', 'censoring_channel_id',
+               'media_type', 'normalized', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
+               'name', 'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
+               'tags'}
 
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
@@ -72,7 +73,7 @@ RANGE_FIELDS = {
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 
 REPLACEMENTS = {
-    'name': 'normalized_name',
+    # 'name': 'normalized_name',
     'txid': 'tx_id',
     'nout': 'tx_nout',
     'valid_channel_signature': 'is_signature_valid',
