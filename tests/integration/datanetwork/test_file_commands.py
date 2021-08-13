@@ -1,10 +1,11 @@
+from unittest import skipIf
 import asyncio
 import os
 from binascii import hexlify
 
 from lbry.schema import Claim
 from lbry.testcase import CommandTestCase
-from lbry.torrent.session import TorrentSession
+from lbry.extras.daemon.components import TorrentSession
 from lbry.wallet import Transaction
 
 
@@ -40,6 +41,7 @@ class FileCommands(CommandTestCase):
         self.client_session.wait_start = False  # fixme: this is super slow on tests
         return tx, btih
 
+    @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
         tx, btih = await self.initialize_torrent()
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
