@@ -173,7 +173,7 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 
 
 def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"media_type", "stream_type", "claim_type", "claim_id"}
+    repeated_fields = {"media_type", "stream_type", "claim_type"}
     value_fields = {"tx_nout", "has_source", "is_signature_valid"}
     opcodes = {'=': 0, '<=': 1, '>=': 2, '<': 3, '>': 4}
     for key in list(kwargs.keys()):
