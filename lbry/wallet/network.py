@@ -480,7 +480,10 @@ class Network:
     async def new_claim_search(self, server, **kwargs):
         async with grpc.aio.insecure_channel(server) as channel:
             stub = hub_pb2_grpc.HubStub(channel)
-            response = await stub.Search(SearchRequest(**kwargs))
+            try:
+                response = await stub.Search(SearchRequest(**kwargs))
+            except grpc.aio.AioRpcError as error:
+                raise RPCError(error.code(), error.details())
             return response
 
     async def sum_supports(self, server, **kwargs):
