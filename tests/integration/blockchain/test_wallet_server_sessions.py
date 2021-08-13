@@ -205,4 +205,4 @@ class TestStress(CommandTestCase):
         await self.stream_create()
         with self.assertRaises(RPCError) as err:
             await self.claim_search(not_channel_ids=[("%040x" % i) for i in range(8196)])
-        self.assertEqual(err.exception.message, 'not_channel_ids cant be set for more than 2048 items.')
+        self.assertEqual(err.exception.message, 'not_channel_ids cant have more than 2048 items.')
