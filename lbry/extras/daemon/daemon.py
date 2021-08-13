@@ -217,22 +217,11 @@ def fix_kwargs_for_hub(**kwargs):
                 "invert": False,
                 "value": kwargs["claim_id"]
             }
-        if key == "not_claim_id":
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs.pop("not_claim_id")
-            }
         if key == "claim_ids":
             kwargs["claim_id"] = {
                 "invert": False,
                 "value": kwargs.pop("claim_ids")
             }
-        if key == "not_claim_ids":
-            kwargs["claim_id"] = {
-                "invert": True,
-                "value": kwargs["not_claim_ids"]
-            }
-            del kwargs["not_claim_ids"]
         if key == "channel_id":
             kwargs["channel_id"] = {
                 "invert": False,
