@@ -75,5 +75,8 @@ REPLACEMENTS = {
     'name': 'normalized_name',
     'txid': 'tx_id',
     'nout': 'tx_nout',
+    'valid_channel_signature': 'is_signature_valid',
+    'stream_types': 'stream_type',
+    'media_types': 'media_type',
     'reposted': 'repost_count'
 }

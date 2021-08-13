@@ -1,4 +1,3 @@
-import copy
 import linecache
 import os
 import re
@@ -53,7 +52,7 @@ from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL, normalize_name
-from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS
+from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS, REPLACEMENTS
 MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 
 if typing.TYPE_CHECKING:
@@ -176,66 +175,38 @@ def fix_kwargs_for_hub(**kwargs):
     repeated_fields = {"media_type", "stream_type", "claim_type"}
     value_fields = {"tx_nout", "has_source", "is_signature_valid"}
     opcodes = {'=': 0, '<=': 1, '>=': 2, '<': 3, '>': 4}
-    for key in list(kwargs.keys()):
-        value = kwargs[key]
+    for key, value in list(kwargs.items()):
+        if key in REPLACEMENTS:
+            kwargs[REPLACEMENTS[key]] = kwargs.pop(key)
+            key = REPLACEMENTS[key]
 
-        if key == "name":
-            kwargs["normalized_name"] = normalize_name(kwargs.pop("name"))
-        if key == "reposted":
-            kwargs["repost_count"] = kwargs.pop("reposted")
-            key = "repost_count"
+        if key == "normalized_name":
+            kwargs[key] = normalize_name(value)
         if key == "limit_claims_per_channel":
             value = kwargs.pop("limit_claims_per_channel") or 0
             if value > 0:
                 kwargs["limit_claims_per_channel"] = value
-        if key == "txid":
-            kwargs["tx_id"] = kwargs.pop("txid")
-            key = "tx_id"
-        if key == "nout":
-            kwargs["tx_nout"] = kwargs.pop("nout")
-            key = "tx_nout"
-        if key == "valid_channel_signature":
-            kwargs["is_signature_valid"] = kwargs.pop("valid_channel_signature")
-        if key == "invalid_channel_signature":
-            kwargs["is_signature_valid"] = not kwargs.pop("invalid_channel_signature")
-        if key in {"valid_channel_signature", "invalid_channel_signature"}:
-            key = "is_signature_valid"
-            value = kwargs[key]
-        if key == "has_no_source":
-            kwargs["has_source"] = not kwargs.pop("has_no_source")
-            key = "has_source"
-            value = kwargs[key]
-
-        if key in value_fields:
+        elif key == "invalid_channel_signature":
+            kwargs["is_signature_valid"] = {"value": not kwargs.pop("invalid_channel_signature")}
+        elif key == "has_no_source":
+            kwargs["has_source"] = {"value": not kwargs.pop("has_no_source")}
+        elif key in value_fields:
             kwargs[key] = {"value": value} if not isinstance(value, dict) else value
         elif key in repeated_fields and isinstance(value, str):
             kwargs[key] = [value]
         elif key in ("claim_id", "channel_id"):
-            kwargs[key] = {
-                "invert": False,
-                "value": [kwargs[key]]
-            }
+            kwargs[key] = {"invert": False, "value": [kwargs[key]]}
         elif key in ("claim_ids", "channel_ids"):
-            kwargs[key[:-1]] = {
-                "invert": False,
-                "value": kwargs.pop(key)
-            }
+            kwargs[key[:-1]] = {"invert": False, "value": kwargs.pop(key)}
         elif key == "not_channel_ids":
-            kwargs["channel_id"] = {
-                "invert": True,
-                "value": kwargs.pop("not_channel_ids")
-            }
+            kwargs["channel_id"] = {"invert": True, "value": kwargs.pop("not_channel_ids")}
         elif key in MY_RANGE_FIELDS:
+            operator = '='
             if isinstance(value, str) and value[0] in opcodes:
                 operator_length = 2 if value[:2] in opcodes else 1
                 operator, value = value[:operator_length], value[operator_length:]
-            else:
-                operator = '='
-            kwargs[key] = {"op": opcodes[operator], "value": [str(value if key != 'fee_amount' else Decimal(value)*1000)]}
-        elif key == 'stream_types':
-            kwargs['stream_type'] = kwargs.pop('stream_types')
-        elif key == 'media_types':
-            kwargs['media_type'] = kwargs.pop('media_types')
+            value = [str(value if key != 'fee_amount' else Decimal(value)*1000)]
+            kwargs[key] = {"op": opcodes[operator], "value": value}
     return kwargs
 
 
