@@ -52,7 +52,7 @@ from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
-from lbry.schema.url import URL
+from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS
 MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 
@@ -175,12 +175,12 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
 def fix_kwargs_for_hub(**kwargs):
     repeated_fields = {"media_type", "stream_type", "claim_type", "claim_id"}
     value_fields = {"tx_nout", "has_source", "is_signature_valid"}
-    ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
+    opcodes = {'=': 0, '<=': 1, '>=': 2, '<': 3, '>': 4}
     for key in list(kwargs.keys()):
         value = kwargs[key]
 
         if key == "name":
-            kwargs["claim_name"] = kwargs.pop("name")
+            kwargs["normalized_name"] = normalize_name(kwargs.pop("name"))
         if key == "reposted":
             kwargs["repost_count"] = kwargs.pop("reposted")
             key = "repost_count"
@@ -208,64 +208,36 @@ def fix_kwargs_for_hub(**kwargs):
 
         if key in value_fields:
             kwargs[key] = {"value": value} if not isinstance(value, dict) else value
-
-        if key in repeated_fields and isinstance(value, str):
+        elif key in repeated_fields and isinstance(value, str):
             kwargs[key] = [value]
-
-        if key == "claim_id":
-            kwargs["claim_id"] = {
+        elif key in ("claim_id", "channel_id"):
+            kwargs[key] = {
                 "invert": False,
-                "value": kwargs["claim_id"]
+                "value": [kwargs[key]]
             }
-        if key == "claim_ids":
-            kwargs["claim_id"] = {
+        elif key in ("claim_ids", "channel_ids"):
+            kwargs[key[:-1]] = {
                 "invert": False,
-                "value": kwargs.pop("claim_ids")
+                "value": kwargs.pop(key)
             }
-        if key == "channel_id":
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": [kwargs["channel_id"]]
-            }
-        if key == "channel_ids":
-            kwargs["channel_id"] = {
-                "invert": False,
-                "value": kwargs.pop("channel_ids")
-            }
-        if key == "not_channel_ids":
+        elif key == "not_channel_ids":
             kwargs["channel_id"] = {
                 "invert": True,
                 "value": kwargs.pop("not_channel_ids")
             }
-
-        if key in MY_RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
-            operator_length = 2 if value[:2] in ops else 1
-            operator, value = value[:operator_length], value[operator_length:]
-
-            op = 0
-            if operator == '=':
-                op = 0
-            if operator in ('<=', 'lte'):
-                op = 1
-            if operator in ('>=', 'gte'):
-                op = 2
-            if operator in ('<', 'lt'):
-                op = 3
-            if operator in ('>', 'gt'):
-                op = 4
-            kwargs[key] = {"op": op, "value": [str(value)]}
         elif key in MY_RANGE_FIELDS:
-            kwargs[key] = {"op": 0, "value": [str(value)]}
-
-        if key == 'fee_amount':
-            value = kwargs['fee_amount']
-            value.update({"value": [str(Decimal(value['value'][0]) * 1000)]})
-            kwargs['fee_amount'] = value
-        if key == 'stream_types':
+            if isinstance(value, str) and value[0] in opcodes:
+                operator_length = 2 if value[:2] in opcodes else 1
+                operator, value = value[:operator_length], value[operator_length:]
+            else:
+                operator = '='
+            kwargs[key] = {"op": opcodes[operator], "value": [str(value if key != 'fee_amount' else Decimal(value)*1000)]}
+        elif key == 'stream_types':
             kwargs['stream_type'] = kwargs.pop('stream_types')
-        if key == 'media_types':
+        elif key == 'media_types':
             kwargs['media_type'] = kwargs.pop('media_types')
     return kwargs
+
 
 DHT_HAS_CONTACTS = "dht_has_contacts"
 
