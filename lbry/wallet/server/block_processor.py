@@ -451,9 +451,7 @@ class BlockProcessor:
             signing_channel = self.db.get_claim_txo(signing_channel_hash)
 
             if signing_channel:
-                raw_channel_tx = self.db.db.get(
-                    DB_PREFIXES.tx.value + self.db.total_transactions[signing_channel.tx_num]
-                )
+                raw_channel_tx = self.db.prefix_db.tx.get(self.db.total_transactions[signing_channel.tx_num]).raw_tx
             channel_pub_key_bytes = None
             try:
                 if not signing_channel:
@@ -1189,20 +1187,16 @@ class BlockProcessor:
         add_claim_or_support = self._add_claim_or_support
         txs: List[Tuple[Tx, bytes]] = block.transactions
 
-        self.db_op_stack.extend_ops([
-            RevertablePut(*Prefixes.block_hash.pack_item(height, self.coin.header_hash(block.header))),
-            RevertablePut(*Prefixes.header.pack_item(height, block.header))
-        ])
+        self.db.prefix_db.block_hash.stage_put(key_args=(height,), value_args=(self.coin.header_hash(block.header),))
+        self.db.prefix_db.header.stage_put(key_args=(height,), value_args=(block.header,))
 
         for tx, tx_hash in txs:
             spent_claims = {}
             txos = Transaction(tx.raw).outputs
 
-            self.db_op_stack.extend_ops([
-                RevertablePut(*Prefixes.tx.pack_item(tx_hash, tx.raw)),
-                RevertablePut(*Prefixes.tx_num.pack_item(tx_hash, tx_count)),
-                RevertablePut(*Prefixes.tx_hash.pack_item(tx_count, tx_hash))
-            ])
+            self.db.prefix_db.tx.stage_put(key_args=(tx_hash,), value_args=(tx.raw,))
+            self.db.prefix_db.tx_num.stage_put(key_args=(tx_hash,), value_args=(tx_count,))
+            self.db.prefix_db.tx_hash.stage_put(key_args=(tx_count,), value_args=(tx_hash,))
 
             # Spend the inputs
             for txin in tx.inputs:
@@ -1211,7 +1205,6 @@ class BlockProcessor:
                 # spend utxo for address histories
                 hashX = spend_utxo(txin.prev_hash, txin.prev_idx)
                 if hashX:
-                    # self._set_hashX_cache(hashX)
                     if tx_count not in self.hashXs_by_tx[hashX]:
                         self.hashXs_by_tx[hashX].append(tx_count)
                 # spend claim/support txo
@@ -1439,7 +1432,7 @@ class BlockProcessor:
         self._caught_up_event = caught_up_event
         try:
             await self.db.open_dbs()
-            self.db_op_stack = RevertableOpStack(self.db.db.get)
+            self.db_op_stack = self.db.db_op_stack
             self.height = self.db.db_height
             self.tip = self.db.db_tip
             self.tx_count = self.db.db_tx_count

@@ -2,8 +2,10 @@ import typing
 import struct
 import array
 import base64
-from typing import Union, Tuple, NamedTuple
+import plyvel
+from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
 
 ACTIVATED_CLAIM_TXO_TYPE = 1
@@ -19,14 +21,14 @@ def length_prefix(key: str) -> bytes:
     return len(key).to_bytes(1, byteorder='big') + key.encode()
 
 
-_ROW_TYPES = {}
+ROW_TYPES = {}
 
 
 class PrefixRowType(type):
     def __new__(cls, name, bases, kwargs):
         klass = super().__new__(cls, name, bases, kwargs)
         if name != "PrefixRow":
-            _ROW_TYPES[klass.prefix] = klass
+            ROW_TYPES[klass.prefix] = klass
         return klass
 
 
@@ -35,6 +37,42 @@ class PrefixRow(metaclass=PrefixRowType):
     key_struct: struct.Struct
     value_struct: struct.Struct
     key_part_lambdas = []
+
+    def __init__(self, db: plyvel.DB, op_stack: RevertableOpStack):
+        self._db = db
+        self._op_stack = op_stack
+
+    def iterate(self, prefix=None, start=None, stop=None,
+                reverse: bool = False, include_key: bool = True, include_value: bool = True):
+        if prefix is not None:
+            prefix = self.pack_partial_key(*prefix)
+        if start is not None:
+            start = self.pack_partial_key(*start)
+        if stop is not None:
+            stop = self.pack_partial_key(*stop)
+
+        if include_key and include_value:
+            for k, v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse):
+                yield self.unpack_key(k), self.unpack_value(v)
+        elif include_key:
+            for k in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_value=False):
+                yield self.unpack_key(k)
+        elif include_value:
+            for v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False):
+                yield self.unpack_value(v)
+        else:
+            raise RuntimeError
+
+    def get(self, *key_args):
+        v = self._db.get(self.pack_key(*key_args))
+        if v:
+            return self.unpack_value(v)
+
+    def stage_put(self, key_args=(), value_args=()):
+        self._op_stack.append_op(RevertablePut(self.pack_key(*key_args), self.pack_value(*value_args)))
+
+    def stage_delete(self, key_args=(), value_args=()):
+        self._op_stack.append_op(RevertableDelete(self.pack_key(*key_args), self.pack_value(*value_args)))
 
     @classmethod
     def pack_partial_key(cls, *args) -> bytes:
@@ -1333,38 +1371,55 @@ class Prefixes:
     touched_or_deleted = TouchedOrDeletedPrefixRow
 
 
+class PrefixDB:
+    def __init__(self, db: plyvel.DB, op_stack: RevertableOpStack):
+        self._db = db
+        self._op_stack = op_stack
 
-ROW_TYPES = {
-    Prefixes.claim_to_support.prefix: Prefixes.claim_to_support,
-    Prefixes.support_to_claim.prefix: Prefixes.support_to_claim,
-    Prefixes.claim_to_txo.prefix: Prefixes.claim_to_txo,
-    Prefixes.txo_to_claim.prefix: Prefixes.txo_to_claim,
-    Prefixes.claim_to_channel.prefix: Prefixes.claim_to_channel,
-    Prefixes.channel_to_claim.prefix: Prefixes.channel_to_claim,
-    Prefixes.claim_short_id.prefix: Prefixes.claim_short_id,
-    Prefixes.claim_expiration.prefix: Prefixes.claim_expiration,
-    Prefixes.claim_takeover.prefix: Prefixes.claim_takeover,
-    Prefixes.pending_activation.prefix: Prefixes.pending_activation,
-    Prefixes.activated.prefix: Prefixes.activated,
-    Prefixes.active_amount.prefix: Prefixes.active_amount,
-    Prefixes.effective_amount.prefix: Prefixes.effective_amount,
-    Prefixes.repost.prefix: Prefixes.repost,
-    Prefixes.reposted_claim.prefix: Prefixes.reposted_claim,
-    Prefixes.undo.prefix: Prefixes.undo,
-    Prefixes.utxo.prefix: Prefixes.utxo,
-    Prefixes.hashX_utxo.prefix: Prefixes.hashX_utxo,
-    Prefixes.hashX_history.prefix: Prefixes.hashX_history,
-    Prefixes.block_hash.prefix: Prefixes.block_hash,
-    Prefixes.tx_count.prefix: Prefixes.tx_count,
-    Prefixes.tx_hash.prefix: Prefixes.tx_hash,
-    Prefixes.tx_num.prefix: Prefixes.tx_num,
-    Prefixes.tx.prefix: Prefixes.tx,
-    Prefixes.header.prefix: Prefixes.header
-}
+        self.claim_to_support = ClaimToSupportPrefixRow(db, op_stack)
+        self.support_to_claim = SupportToClaimPrefixRow(db, op_stack)
+        self.claim_to_txo = ClaimToTXOPrefixRow(db, op_stack)
+        self.txo_to_claim = TXOToClaimPrefixRow(db, op_stack)
+        self.claim_to_channel = ClaimToChannelPrefixRow(db, op_stack)
+        self.channel_to_claim = ChannelToClaimPrefixRow(db, op_stack)
+        self.claim_short_id = ClaimShortIDPrefixRow(db, op_stack)
+        self.claim_expiration = ClaimExpirationPrefixRow(db, op_stack)
+        self.claim_takeover = ClaimTakeoverPrefixRow(db, op_stack)
+        self.pending_activation = PendingActivationPrefixRow(db, op_stack)
+        self.activated = ActivatedPrefixRow(db, op_stack)
+        self.active_amount = ActiveAmountPrefixRow(db, op_stack)
+        self.effective_amount = EffectiveAmountPrefixRow(db, op_stack)
+        self.repost = RepostPrefixRow(db, op_stack)
+        self.reposted_claim = RepostedPrefixRow(db, op_stack)
+        self.undo = UndoPrefixRow(db, op_stack)
+        self.utxo = UTXOPrefixRow(db, op_stack)
+        self.hashX_utxo = HashXUTXOPrefixRow(db, op_stack)
+        self.hashX_history = HashXHistoryPrefixRow(db, op_stack)
+        self.block_hash = BlockHashPrefixRow(db, op_stack)
+        self.tx_count = TxCountPrefixRow(db, op_stack)
+        self.tx_hash = TXHashPrefixRow(db, op_stack)
+        self.tx_num = TXNumPrefixRow(db, op_stack)
+        self.tx = TXPrefixRow(db, op_stack)
+        self.header = BlockHeaderPrefixRow(db, op_stack)
+        self.touched_or_deleted = TouchedOrDeletedPrefixRow(db, op_stack)
+
+    def commit(self):
+        try:
+            with self._db.write_batch(transaction=True) as batch:
+                batch_put = batch.put
+                batch_delete = batch.delete
+
+                for staged_change in self._op_stack:
+                    if staged_change.is_put:
+                        batch_put(staged_change.key, staged_change.value)
+                    else:
+                        batch_delete(staged_change.key)
+        finally:
+            self._op_stack.clear()
 
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:
     try:
-        return _ROW_TYPES[key[:1]].unpack_item(key, value)
+        return ROW_TYPES[key[:1]].unpack_item(key, value)
     except KeyError:
         return key, value
