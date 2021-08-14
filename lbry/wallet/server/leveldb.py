@@ -34,7 +34,8 @@ from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
-from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue
+from lbry.wallet.server.db.revertable import RevertableOpStack
+from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, PrefixDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
 from lbry.wallet.transaction import OutputScript
@@ -111,6 +112,7 @@ class LevelDB:
         self.logger.info(f'switching current directory to {env.db_dir}')
 
         self.db = None
+        self.prefix_db = None
 
         self.hist_unflushed = defaultdict(partial(array.array, 'I'))
         self.hist_unflushed_count = 0
@@ -415,30 +417,25 @@ class LevelDB:
             return Prefixes.block_hash.unpack_value(v).block_hash
 
     def get_support_txo_amount(self, claim_hash: bytes, tx_num: int, position: int) -> Optional[int]:
-        v = self.db.get(Prefixes.claim_to_support.pack_key(claim_hash, tx_num, position))
-        if v:
-            return Prefixes.claim_to_support.unpack_value(v).amount
+        v = self.prefix_db.claim_to_support.get(claim_hash, tx_num, position)
+        return None if not v else v.amount
 
     def get_claim_txo(self, claim_hash: bytes) -> Optional[ClaimToTXOValue]:
         assert claim_hash
-        v = self.db.get(Prefixes.claim_to_txo.pack_key(claim_hash))
-        if v:
-            return Prefixes.claim_to_txo.unpack_value(v)
+        return self.prefix_db.claim_to_txo.get(claim_hash)
 
     def _get_active_amount(self, claim_hash: bytes, txo_type: int, height: int) -> int:
         return sum(
-            Prefixes.active_amount.unpack_value(v).amount
-            for v in self.db.iterator(start=Prefixes.active_amount.pack_partial_key(
-                claim_hash, txo_type, 0), stop=Prefixes.active_amount.pack_partial_key(
-                claim_hash, txo_type, height), include_key=False)
+            v.amount for v in self.prefix_db.active_amount.iterate(
+                start=(claim_hash, txo_type, 0), stop=(claim_hash, txo_type, height), include_key=False
+            )
         )
 
     def get_active_amount_as_of_height(self, claim_hash: bytes, height: int) -> int:
-        for v in self.db.iterator(
-                start=Prefixes.active_amount.pack_partial_key(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, 0),
-                stop=Prefixes.active_amount.pack_partial_key(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, height),
+        for v in self.prefix_db.active_amount.iterate(
+                start=(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, 0), stop=(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, height),
                 include_key=False, reverse=True):
-            return Prefixes.active_amount.unpack_value(v).amount
+            return v.amount
         return 0
 
     def get_effective_amount(self, claim_hash: bytes, support_only=False) -> int:
@@ -448,14 +445,13 @@ class LevelDB:
         return support_amount + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
 
     def get_url_effective_amount(self, name: str, claim_hash: bytes):
-        for _k, _v in self.db.iterator(prefix=Prefixes.effective_amount.pack_partial_key(name)):
-            v = Prefixes.effective_amount.unpack_value(_v)
+        for k, v in self.prefix_db.effective_amount.iterate(prefix=(name,)):
             if v.claim_hash == claim_hash:
-                return Prefixes.effective_amount.unpack_key(_k)
+                return k
 
     def get_claims_for_name(self, name):
         claims = []
-        prefix = Prefixes.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
+        prefix = Prefixes.claim_short_id.pack_partial_key(name) + bytes([1])
         for _k, _v in self.db.iterator(prefix=prefix):
             v = Prefixes.claim_short_id.unpack_value(_v)
             claim_hash = self.get_claim_from_txo(v.tx_num, v.position).claim_hash
@@ -465,7 +461,7 @@ class LevelDB:
 
     def get_claims_in_channel_count(self, channel_hash) -> int:
         count = 0
-        for _ in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash), include_key=False):
+        for _ in self.prefix_db.channel_to_claim.iterate(prefix=(channel_hash,), include_key=False):
             count += 1
         return count
 
@@ -853,6 +849,8 @@ class LevelDB:
             lru_cache_size=self.env.cache_MB * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
             max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
         )
+        self.db_op_stack = RevertableOpStack(self.db.get)
+        self.prefix_db = PrefixDB(self.db, self.db_op_stack)
 
         if is_new:
             self.logger.info('created new db: %s', f'lbry-leveldb')
