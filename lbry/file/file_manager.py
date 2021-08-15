@@ -114,6 +114,11 @@ class FileManager:
             resolved_time = self.loop.time() - start_time
             await self.storage.save_claim_from_output(self.wallet_manager.ledger, txo)
 
+            if claim.is_collection:
+                raise InvalidStreamURLError(uri)
+            if not claim.is_stream:
+                raise InvalidStreamURLError(uri)
+
             ####################
             # update or replace
             ####################
