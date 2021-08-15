@@ -38,6 +38,7 @@ Code | Name | Message
 114 | InputStringIsBlank | {argument} cannot be blank.
 115 | EmptyPublishedFile | Cannot publish empty file: {file_path}
 116 | MissingPublishedFile | File does not exist: {file_path}
+117 | InvalidStreamURL | Invalid LBRY stream URL: '{url}' -- When an URL cannot be downloaded, such as '@Channel/' or a collection
 **2xx** | Configuration | Configuration errors.
 201 | ConfigWrite | Cannot write configuration file '{path}'. -- When writing the default config fails on startup, such as due to permission issues.
 202 | ConfigRead | Cannot find provided configuration file '{path}'. -- Can't open the config file user provided via command line args.

@@ -105,6 +105,16 @@ class MissingPublishedFileError(InputValueError):
         super().__init__(f"File does not exist: {file_path}")
 
 
+class InvalidStreamURLError(InputValueError):
+    """
+    When an URL cannot be downloaded, such as '@Channel/' or a collection
+    """
+
+    def __init__(self, url):
+        self.url = url
+        super().__init__(f"Invalid LBRY stream URL: '{url}'")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.
