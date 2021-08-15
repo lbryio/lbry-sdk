@@ -411,7 +411,10 @@ class BlockProcessor:
 
     def _add_claim_or_update(self, height: int, txo: 'Output', tx_hash: bytes, tx_num: int, nout: int,
                              spent_claims: typing.Dict[bytes, typing.Tuple[int, int, str]]):
-        claim_name = txo.script.values['claim_name'].decode()
+        try:
+            claim_name = txo.script.values['claim_name'].decode()
+        except UnicodeDecodeError:
+            claim_name = ''.join(chr(c) for c in txo.script.values['claim_name'])
         try:
             normalized_name = txo.normalized_name
         except UnicodeDecodeError:
