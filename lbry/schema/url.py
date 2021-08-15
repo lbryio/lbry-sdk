@@ -1,6 +1,7 @@
 import re
 import unicodedata
 from typing import NamedTuple, Tuple
+from lbry.error import ResolveError
 
 
 def _create_url_regex():
@@ -111,7 +112,7 @@ class URL(NamedTuple):
         match = re.match(URL_REGEX, url)
 
         if match is None:
-            raise ValueError('Invalid LBRY URL')
+            raise ResolveError('Invalid LBRY URL')
 
         segments = {}
         parts = match.groupdict()

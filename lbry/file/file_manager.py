@@ -244,7 +244,7 @@ class FileManager:
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
             expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
-                        KeyFeeAboveMaxAllowedError)
+                        KeyFeeAboveMaxAllowedError, ResolveError)
             if isinstance(err, expected):
                 log.warning("Failed to download %s: %s", uri, str(err))
             elif isinstance(err, asyncio.CancelledError):

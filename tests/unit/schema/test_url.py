@@ -1,7 +1,7 @@
 import unittest
 
 from lbry.schema.url import URL
-
+from lbry.error import ResolveError
 
 claim_id = "63f2da17b0d90042c559cc73b6b17f853945c43e"
 
@@ -36,7 +36,7 @@ class TestURLParsing(unittest.TestCase):
                     )
 
     def _fail_url(self, url):
-        with self.assertRaisesRegex(ValueError, 'Invalid LBRY URL'):
+        with self.assertRaisesRegex(ResolveError, 'Invalid LBRY URL'):
             URL.parse(url)
 
     def test_parser_valid_urls(self):
