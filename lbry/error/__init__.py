@@ -84,6 +84,16 @@ class ConflictingInputValueError(InputValueError):
         super().__init__(f"Only '{first_argument}' or '{second_argument}' is allowed, not both.")
 
 
+class InvalidStreamURLError(InputValueError):
+    """
+    When an URL cannot be downloaded, such as '@Channel/' or a collection
+    """
+
+    def __init__(self, url):
+        self.url = url
+        super().__init__(f"Invalid LBRY stream URL: '{url}'")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.

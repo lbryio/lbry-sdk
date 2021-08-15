@@ -5,6 +5,7 @@ from typing import Optional
 from aiohttp.web import Request
 from lbry.error import ResolveError, DownloadSDTimeoutError, InsufficientFundsError
 from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
+from lbry.error import InvalidStreamURLError
 from lbry.stream.managed_stream import ManagedStream
 from lbry.torrent.torrent_manager import TorrentSource
 from lbry.utils import cache_concurrent
@@ -81,8 +82,11 @@ class FileManager:
         payment = None
         try:
             # resolve the claim
-            if not URL.parse(uri).has_stream:
-                raise ResolveError("cannot download a channel claim, specify a /path")
+            try:
+                if not URL.parse(uri).has_stream:
+                    raise InvalidStreamURLError(uri)
+            except ValueError:
+                raise InvalidStreamURLError(uri)
             try:
                 resolved_result = await asyncio.wait_for(
                     self.wallet_manager.ledger.resolve(
@@ -244,7 +248,7 @@ class FileManager:
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
             expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
-                        KeyFeeAboveMaxAllowedError)
+                        KeyFeeAboveMaxAllowedError, ResolveError, InvalidStreamURLError)
             if isinstance(err, expected):
                 log.warning("Failed to download %s: %s", uri, str(err))
             elif isinstance(err, asyncio.CancelledError):
