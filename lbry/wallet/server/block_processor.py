@@ -30,6 +30,7 @@ from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, StagedActivat
 from lbry.wallet.server.db.claimtrie import get_remove_name_ops, get_remove_effective_amount_ops
 from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, Prefixes, ClaimToTXOValue
+from lbry.wallet.server.db.trending import TrendingDB
 from lbry.wallet.server.udp import StatusServer
 from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete, RevertableOpStack
 if typing.TYPE_CHECKING:
@@ -263,6 +264,8 @@ class BlockProcessor:
         self.claim_channels: Dict[bytes, bytes] = {}
         self.hashXs_by_tx: DefaultDict[bytes, List[int]] = defaultdict(list)
 
+        self.trending_db = TrendingDB(env.db_dir)
+
     async def claim_producer(self):
         if self.db.db_height <= 1:
             return
@@ -310,6 +313,7 @@ class BlockProcessor:
                     start = time.perf_counter()
                     await self.run_in_thread(self.advance_block, block)
                     await self.flush()
+                    self.trending_db.process_block(self.height, self.daemon.cached_height())
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     if self.height == self.coin.nExtendedClaimExpirationForkHeight:
                         self.logger.warning(
@@ -514,6 +518,9 @@ class BlockProcessor:
         self.txo_to_claim[(tx_num, nout)] = pending
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
         self.db_op_stack.extend_ops(pending.get_add_claim_utxo_ops())
+        self.trending_db.add_event({"claim_hash": claim_hash,
+                                      "event": "upsert",
+                                      "lbc":   1E-8*txo.amount})
 
     def _add_support(self, txo: 'Output', tx_num: int, nout: int):
         supported_claim_hash = txo.claim_hash[::-1]
@@ -523,6 +530,9 @@ class BlockProcessor:
         self.db_op_stack.extend_ops(StagedClaimtrieSupport(
             supported_claim_hash, tx_num, nout, txo.amount
         ).get_add_support_utxo_ops())
+        self.trending_db.add_event({"claim_hash": supported_claim_hash,
+                                      "event": "support",
+                                      "lbc":   1E-8*txo.amount})
 
     def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_num: int, nout: int, txo: 'Output',
                               spent_claims: typing.Dict[bytes, Tuple[int, int, str]]):
@@ -542,6 +552,10 @@ class BlockProcessor:
             self.db_op_stack.extend_ops(StagedClaimtrieSupport(
                 spent_support, txin_num, txin.prev_idx, support_amount
             ).get_spend_support_txo_ops())
+            self.trending_db.add_event({"claim_hash": spent_support,
+                                          "event": "support",
+                                          "lbc": -1E-8*support_amount})
+
         spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
         if spent_support:
             supported_name = self._get_pending_claim_name(spent_support)
@@ -618,6 +632,9 @@ class BlockProcessor:
         self.support_txos_by_claim.pop(claim_hash)
         if normalized_name.startswith('@'):  # abandon a channel, invalidate signatures
             self._invalidate_channel_signatures(claim_hash)
+
+        self.trending_db.add_event({"claim_hash": claim_hash,
+                                      "event": "delete"})
 
     def _invalidate_channel_signatures(self, claim_hash: bytes):
         for k, signed_claim_hash in self.db.db.iterator(
