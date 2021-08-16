@@ -24,6 +24,7 @@ class ConfigurationTests(unittest.TestCase):
                 with open(os.path.join(config.data_dir, 'blobfiles', f'3mb-{file_no}'), 'w') as blob:
                     blob.write('0' * 1 * 1024 * 1024)
             self.assertEqual(10, dsm.space_used_mb)
-            dsm.clean()
+            self.assertTrue(dsm.clean())
             self.assertEqual(5, dsm.space_used_mb)
+            self.assertFalse(dsm.clean())
 
