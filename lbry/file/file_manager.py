@@ -103,6 +103,8 @@ class FileManager:
             if not resolved_result or uri not in resolved_result:
                 raise ResolveError(f"Failed to resolve stream at '{uri}'")
             txo = resolved_result[uri]
+            if not hasattr(txo, "claim") and "error" in txo and "text" in txo["error"]:
+                raise ResolveError(f"{txo['error']['text']}")
             if isinstance(txo, dict):
                 raise ResolveError(f"Failed to resolve stream at '{uri}': {txo}")
             claim = txo.claim
@@ -244,7 +246,7 @@ class FileManager:
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
             expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
-                        KeyFeeAboveMaxAllowedError)
+                        KeyFeeAboveMaxAllowedError, ResolveError)
             if isinstance(err, expected):
                 log.warning("Failed to download %s: %s", uri, str(err))
             elif isinstance(err, asyncio.CancelledError):
