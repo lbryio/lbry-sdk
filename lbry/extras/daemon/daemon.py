@@ -56,7 +56,7 @@ from lbry.schema.url import URL
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
     from lbry.dht.node import Node
-    from lbry.extras.daemon.components import UPnPComponent
+    from lbry.extras.daemon.components import UPnPComponent, DiskSpaceManager
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
     from lbry.extras.daemon.storage import SQLiteStorage
     from lbry.wallet import WalletManager, Ledger
@@ -374,6 +374,10 @@ class Daemon(metaclass=JSONRPCServerType):
     @property
     def blob_manager(self) -> typing.Optional['BlobManager']:
         return self.component_manager.get_component(BLOB_COMPONENT)
+
+    @property
+    def disk_space_manager(self) -> typing.Optional['DiskSpaceManager']:
+        return self.component_manager.get_component(DISK_SPACE_COMPONENT)
 
     @property
     def upnp(self) -> typing.Optional['UPnPComponent']:
@@ -4915,6 +4919,22 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         raise NotImplementedError()
+
+    @requires(DISK_SPACE_COMPONENT)
+    async def jsonrpc_blob_clean(self):
+        """
+        Deletes blobs to cleanup disk space
+
+        Usage:
+            blob_clean
+
+        Options:
+            None
+
+        Returns:
+            (bool) true if successful
+        """
+        return self.disk_space_manager.clean()
 
     @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_reflect(self, **kwargs):

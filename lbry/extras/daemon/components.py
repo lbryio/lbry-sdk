@@ -390,14 +390,15 @@ class DiskSpaceComponent(Component):
 
     async def get_status(self):
         return {
-            'used': str(self.disk_space_manager.space_used_mb),
+            'space_used': str(self.disk_space_manager.space_used_mb),
+            'running': self.disk_space_manager.running,
         }
 
     async def start(self):
-        pass
+        await self.disk_space_manager.start()
 
     async def stop(self):
-        pass
+        await self.disk_space_manager.stop()
 
 
 class TorrentComponent(Component):

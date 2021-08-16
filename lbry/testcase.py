@@ -607,6 +607,12 @@ class CommandTestCase(IntegrationTestCase):
             await asyncio.wait([self.ledger.wait(tx, self.blockchain.block_expected) for tx in txs])
         return self.sout(txs)
 
+    async def blob_clean(self):
+        return await self.out(self.daemon.jsonrpc_blob_clean())
+
+    async def status(self):
+        return await self.out(self.daemon.jsonrpc_status())
+
     async def resolve(self, uri, **kwargs):
         return (await self.out(self.daemon.jsonrpc_resolve(uri, **kwargs)))[uri]
 
