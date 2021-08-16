@@ -276,13 +276,17 @@ class LevelDB:
             signature_valid=None if not channel_hash else signature_valid
         )
 
-    def _resolve(self, normalized_name: str, claim_id: Optional[str] = None,
+    def _resolve(self, name: str, claim_id: Optional[str] = None,
                  amount_order: Optional[int] = None) -> Optional[ResolveResult]:
         """
         :param normalized_name: name
         :param claim_id: partial or complete claim id
         :param amount_order: '$<value>' suffix to a url, defaults to 1 (winning) if no claim id modifier is provided
         """
+        try:
+            normalized_name = normalize_name(name)
+        except UnicodeDecodeError:
+            normalized_name = name
         if (not amount_order and not claim_id) or amount_order == 1:
             # winning resolution
             controlling = self.get_controlling_claim(normalized_name)
@@ -310,9 +314,10 @@ class LevelDB:
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
                 claim_hash = self.txo_to_claim[(claim_txo.tx_num, claim_txo.position)]
+                non_normalized_name = self.claim_to_txo.get(claim_hash).name
                 signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
-                    claim_txo.tx_num, claim_txo.position, claim_hash, key.normalized_name, key.root_tx_num,
+                    claim_txo.tx_num, claim_txo.position, claim_hash, non_normalized_name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
                     signature_is_valid
                 )
@@ -362,7 +367,7 @@ class LevelDB:
         elif parsed.has_stream:
             stream = parsed.stream
         if channel:
-            resolved_channel = self._resolve(channel.normalized, channel.claim_id, channel.amount_order)
+            resolved_channel = self._resolve(channel.name, channel.claim_id, channel.amount_order)
             if not resolved_channel:
                 return None, LookupError(f'Could not find channel in "{url}".')
         if stream:
@@ -372,7 +377,7 @@ class LevelDB:
                     stream_claim_id, stream_tx_num, stream_tx_pos, effective_amount = stream_claim
                     resolved_stream = self._fs_get_claim_by_hash(stream_claim_id)
             else:
-                resolved_stream = self._resolve(stream.normalized, stream.claim_id, stream.amount_order)
+                resolved_stream = self._resolve(stream.name, stream.claim_id, stream.amount_order)
                 if not channel and not resolved_channel and resolved_stream and resolved_stream.channel_hash:
                     resolved_channel = self._fs_get_claim_by_hash(resolved_stream.channel_hash)
             if not resolved_stream:
