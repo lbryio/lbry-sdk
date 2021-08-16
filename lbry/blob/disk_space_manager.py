@@ -28,7 +28,7 @@ class DiskSpaceManager:
 
     def clean(self):
         if not self.config.blob_storage_limit:
-            return False
+            return 0
         used = 0
         files = []
         data_dir = os.path.join(self.config.data_dir, 'blobfiles')
@@ -39,13 +39,13 @@ class DiskSpaceManager:
                 files.append((file_stats.st_mtime, file_stats.st_size, file.path))
         files.sort()
         available = (self.config.blob_storage_limit*1024*1024) - used
-        cleaned = False
+        cleaned = 0
         for _, file_size, file in files:
             available += file_size
             if available > 0:
                 break
             os.remove(file)
-            cleaned = True
+            cleaned += 1
         return cleaned
 
     async def cleaning_loop(self):
