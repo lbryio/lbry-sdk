@@ -31,8 +31,8 @@ jobs:
       matrix:
         os:
           - ubuntu-latest
-         #- macos-latest
-         #- windows-latest
+          - macos-latest
+          - windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -49,10 +49,18 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - run: pip install --user --upgrade pip wheel
-      - run: pip install -e .[torrent,test]
-      - env:
+      - if: startsWith(runner.os, 'linux')
+        run: pip install -e .[torrent,test]
+      - if: startsWith(runner.os, 'linux')
+        env:
           HOME: /tmp
         run: make test-unit-coverage
+      - if: startsWith(runner.os, 'linux') != true
+        run: pip install -e .[test]
+      - if: startsWith(runner.os, 'linux') != true
+        env:
+          HOME: /tmp
+        run: python -m unittest tests/unit/test_conf.py
 
   tests-integration:
     name: "tests / integration"

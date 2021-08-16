@@ -15,6 +15,7 @@ from lbry.dht.node import Node
 from lbry.dht.peer import is_valid_public_ipv4
 from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
+from lbry.blob.disk_space_manager import DiskSpaceManager
 from lbry.blob_exchange.server import BlobServer
 from lbry.stream.stream_manager import StreamManager
 from lbry.file.file_manager import FileManager
@@ -40,6 +41,7 @@ WALLET_SERVER_PAYMENTS_COMPONENT = "wallet_server_payments"
 DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
 FILE_MANAGER_COMPONENT = "file_manager"
+DISK_SPACE_COMPONENT = "disk_space"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
@@ -373,6 +375,30 @@ class FileManagerComponent(Component):
 
     async def stop(self):
         self.file_manager.stop()
+
+
+class DiskSpaceComponent(Component):
+    component_name = DISK_SPACE_COMPONENT
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.disk_space_manager = DiskSpaceManager(self.conf)
+
+    @property
+    def component(self) -> typing.Optional[DiskSpaceManager]:
+        return self.disk_space_manager
+
+    async def get_status(self):
+        return {
+            'space_used': str(self.disk_space_manager.space_used_mb),
+            'running': self.disk_space_manager.running,
+        }
+
+    async def start(self):
+        await self.disk_space_manager.start()
+
+    async def stop(self):
+        await self.disk_space_manager.stop()
 
 
 class TorrentComponent(Component):

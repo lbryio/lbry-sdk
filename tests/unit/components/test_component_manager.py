@@ -15,6 +15,7 @@ class TestComponentManager(AsyncioTestCase):
         self.default_components_sort = [
             [
                 components.DatabaseComponent,
+                components.DiskSpaceComponent,
                 components.ExchangeRateManagerComponent,
                 components.TorrentComponent,
                 components.UPnPComponent
