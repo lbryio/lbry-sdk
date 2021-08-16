@@ -25,5 +25,5 @@ class ConfigurationTests(unittest.TestCase):
                     blob.write('0' * 1 * 1024 * 1024)
             self.assertEqual(10, dsm.space_used_mb)
             dsm.clean()
-            self.assertEqual(4, dsm.space_used_mb)
+            self.assertEqual(5, dsm.space_used_mb)
 
