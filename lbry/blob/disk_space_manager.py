@@ -36,7 +36,7 @@ class DiskSpaceManager:
             if file.is_file:
                 file_stats = file.stat()
                 used += file_stats.st_size
-                files.append((file_stats.st_mtime, file_stats.st_size, file))
+                files.append((file_stats.st_mtime, file_stats.st_size, file.path))
         files.sort()
         available = (self.config.blob_storage_limit*1024*1024) - used
         for _, file_size, file in files:
