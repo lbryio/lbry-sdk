@@ -8,7 +8,7 @@ INDEX_DEFAULT_SETTINGS = {
                  "number_of_shards": 1,
                  "number_of_replicas": 0,
                  "sort": {
-                     "field": ["trending_mixed", "release_time"],
+                     "field": ["trending_score", "release_time"],
                      "order": ["desc", "desc"]
                  }}
         },
@@ -30,7 +30,7 @@ INDEX_DEFAULT_SETTINGS = {
             "height": {"type": "integer"},
             "claim_type": {"type": "byte"},
             "censor_type": {"type": "byte"},
-            "trending_mixed": {"type": "float"},
+            "trending_score": {"type": "float"},
             "release_time": {"type": "long"},
         }
     }
@@ -53,7 +53,7 @@ FIELDS = {
     'duration', 'release_time',
     'tags', 'languages', 'has_source', 'reposted_claim_type',
     'reposted_claim_id', 'repost_count',
-    'trending_group', 'trending_mixed', 'trending_local', 'trending_global', 'tx_num'
+    'trending_score', 'tx_num'
 }
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id', 'censoring_channel_id',
@@ -66,8 +66,7 @@ RANGE_FIELDS = {
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
     'tx_position', 'channel_join', 'repost_count', 'limit_claims_per_channel',
     'amount', 'effective_amount', 'support_amount',
-    'trending_group', 'trending_mixed', 'censor_type',
-    'trending_local', 'trending_global', 'tx_num'
+    'trending_score', 'censor_type', 'tx_num'
 }
 
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
