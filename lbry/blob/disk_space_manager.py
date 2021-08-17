@@ -50,8 +50,8 @@ class DiskSpaceManager:
 
     async def cleaning_loop(self):
         while self.running:
-            await asyncio.get_event_loop().run_in_executor(None, self.clean)
             await asyncio.sleep(self.cleaning_interval)
+            await asyncio.get_event_loop().run_in_executor(None, self.clean)
 
     async def start(self):
         self.running = True
