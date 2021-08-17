@@ -38,6 +38,7 @@ from lbry.wallet.server.db.revertable import RevertableOpStack
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, PrefixDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
+from lbry.wallet.server.db.trending import TrendingDB
 from lbry.wallet.transaction import OutputScript
 from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
@@ -166,6 +167,8 @@ class LevelDB:
             self.ledger = TestNetLedger
         else:
             self.ledger = RegTestLedger
+
+        self.trending_db = TrendingDB(self.env.db_dir)
 
     def get_claim_from_txo(self, tx_num: int, tx_idx: int) -> Optional[TXOToClaimValue]:
         claim_hash_and_name = self.db.get(Prefixes.txo_to_claim.pack_key(tx_num, tx_idx))
@@ -700,7 +703,8 @@ class LevelDB:
             'languages': languages,
             'censor_type': Censor.RESOLVE if blocked_hash else Censor.SEARCH if filtered_hash else Censor.NOT_CENSORED,
             'censoring_channel_id': (blocked_hash or filtered_hash or b'').hex() or None,
-            'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash)
+            'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash),
+            'trending_score': self.trending_db.get_trending_score(claim_hash)
             # 'trending_group': 0,
             # 'trending_mixed': 0,
             # 'trending_local': 0,
