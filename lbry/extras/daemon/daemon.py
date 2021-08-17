@@ -36,7 +36,7 @@ from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
-    CommandDoesNotExistError
+    CommandDoesNotExistError, BaseError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -702,7 +702,10 @@ class Daemon(metaclass=JSONRPCServerType):
             raise
         except Exception as e:  # pylint: disable=broad-except
             self.failed_request_metric.labels(method=function_name).inc()
-            log.exception("error handling api request")
+            if not isinstance(e, BaseError):
+                log.exception("error handling api request")
+            else:
+                log.error("error handling api request: %s", e)
             return JSONRPCError.create_command_exception(
                 command=function_name, args=_args, kwargs=_kwargs, exception=e, traceback=format_exc()
             )
