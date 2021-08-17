@@ -18,5 +18,5 @@ jobs:
           CHANGELOG: '<!channel> ${{ steps.markdown.outputs.text }}'
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_RELEASE_BOT_WEBHOOK }}
         with:
-          payload: '{"type": "mrkdwn", "text": ${{ toJSON(env.CHANGELOG) }}'
+          payload: '{"type": "mrkdwn", "text": ${{ toJSON(env.CHANGELOG) }} }'
 
