@@ -313,7 +313,12 @@ class BlockProcessor:
                     start = time.perf_counter()
                     await self.run_in_thread(self.advance_block, block)
                     await self.flush()
-                    self.trending_db.process_block(self.height, self.daemon.cached_height())
+
+                    # trending
+                    extra_claims = self.trending_db.process_block(self.height,
+                                                                  self.daemon.cached_height())
+                    self.touched_claims_to_send_es.union(extra_claims)
+
                     self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     if self.height == self.coin.nExtendedClaimExpirationForkHeight:
                         self.logger.warning(
