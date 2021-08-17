@@ -1110,6 +1110,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if not stream:
                 raise DownloadSDTimeoutError(uri)
         except Exception as e:
+            # TODO: use error from lbry.error
             log.warning("Error downloading %s: %s", uri, str(e))
             return {"error": str(e)}
         return stream
@@ -1498,7 +1499,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     )
                 )
             else:
-                raise ValueError(f"Unsupported address: '{address}'")
+                raise ValueError(f"Unsupported address: '{address}'")  # TODO: use error from lbry.error
 
         tx = await Transaction.create(
             [], outputs, accounts, account
@@ -1776,8 +1777,10 @@ class Daemon(metaclass=JSONRPCServerType):
         from_account = wallet.get_account_or_default(from_account)
         amount = self.get_dewies_or_error('amount', amount) if amount else None
         if not isinstance(outputs, int):
+            # TODO: use error from lbry.error
             raise ValueError("--outputs must be an integer.")
         if everything and outputs > 1:
+            # TODO: use error from lbry.error
             raise ValueError("Using --everything along with --outputs is not supported.")
         return from_account.fund(
             to_account=to_account, amount=amount, everything=everything,
@@ -2048,10 +2051,12 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         if status not in ['start', 'stop']:
+            # TODO: use error from lbry.error
             raise Exception('Status must be "start" or "stop".')
 
         streams = self.file_manager.get_filtered(**kwargs)
         if not streams:
+            # TODO: use error from lbry.error
             raise Exception(f'Unable to find a file for {kwargs}')
         stream = streams[0]
         if status == 'start' and not stream.running:
@@ -2234,20 +2239,25 @@ class Daemon(metaclass=JSONRPCServerType):
         if claim_id:
             txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
+                # TODO: use error from lbry.error
                 raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
         elif url:
             txo = (await self.ledger.resolve(accounts, [url], include_purchase_receipt=True))[url]
             if not isinstance(txo, Output) or not txo.is_claim:
+                # TODO: use error from lbry.error
                 raise Exception(f"Could not find claim with url '{url}'. ")
         else:
+            # TODO: use error from lbry.error
             raise Exception(f"Missing argument claim_id or url. ")
         if not allow_duplicate_purchase and txo.purchase_receipt:
+            # TODO: use error from lbry.error
             raise Exception(
                 f"You already have a purchase for claim_id '{claim_id}'. "
                 f"Use --allow-duplicate-purchase flag to override."
             )
         claim = txo.claim
         if not claim.is_stream or not claim.stream.has_fee:
+            # TODO: use error from lbry.error
             raise Exception(f"Claim '{claim_id}' does not have a purchase price.")
         tx = await self.wallet_manager.create_purchase_transaction(
             accounts, txo, self.exchange_rate_manager, override_max_key_fee
@@ -2489,6 +2499,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if "claim_ids" in kwargs and not kwargs["claim_ids"]:
             kwargs.pop("claim_ids")
         if {'claim_id', 'claim_ids'}.issubset(kwargs):
+            # TODO: use error from lbry.error
             raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
         if kwargs.pop('valid_channel_signature', False):
             kwargs['signature_valid'] = 1
@@ -2608,6 +2619,7 @@ class Daemon(metaclass=JSONRPCServerType):
         existing_channels = await self.ledger.get_channels(accounts=wallet.accounts, claim_name=name)
         if len(existing_channels) > 0:
             if not allow_duplicate_name:
+                # TODO: use error from lbry.error
                 raise Exception(
                     f"You already have a channel under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
@@ -2740,11 +2752,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         if len(existing_channels) != 1:
             account_ids = ', '.join(f"'{account.id}'" for account in accounts)
+            # TODO: use error from lbry.error
             raise Exception(
                 f"Can't find the channel '{claim_id}' in account(s) {account_ids}."
             )
         old_txo = existing_channels[0]
         if not old_txo.claim.is_channel:
+            # TODO: use error from lbry.error
             raise Exception(
                 f"A claim with id '{claim_id}' was found but it is not a channel."
             )
@@ -2867,9 +2881,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 wallet=wallet, accounts=accounts, claim_id=claim_id
             )
         else:
+            # TODO: use error from lbry.error
             raise Exception('Must specify claim_id, or txid and nout')
 
         if not claims:
+            # TODO: use error from lbry.error
             raise Exception('No claim found for the specified claim_id or txid:nout')
 
         tx = await Transaction.create(
@@ -2938,6 +2954,7 @@ class Daemon(metaclass=JSONRPCServerType):
         address = channel.get_address(self.ledger)
         public_key = await self.ledger.get_public_key_for_address(wallet, address)
         if not public_key:
+            # TODO: use error from lbry.error
             raise Exception("Can't find public key for address holding the channel.")
         export = {
             'name': channel.claim_name,
@@ -2999,6 +3016,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     await self.ledger._update_tasks.done.wait()
             # Case 3: the holding address has changed and we can't create or find an account for it
             else:
+                # TODO: use error from lbry.error
                 raise Exception(
                     "Channel owning account has changed since the channel was exported and "
                     "it is not an account to which you have access."
@@ -3124,11 +3142,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         if len(claims) == 0:
             if 'bid' not in kwargs:
+                # TODO: use error from lbry.error
                 raise Exception("'bid' is a required argument for new publishes.")
             return await self.jsonrpc_stream_create(name, **kwargs)
         elif len(claims) == 1:
             assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
             return await self.jsonrpc_stream_update(claims[0].claim_id, replace=True, **kwargs)
+        # TODO: use error from lbry.error
         raise Exception(
             f"There are {len(claims)} claims for '{name}', please use 'stream update' command "
             f"to update a specific stream claim."
@@ -3180,11 +3200,13 @@ class Daemon(metaclass=JSONRPCServerType):
         claims = await account.get_claims(claim_name=name)
         if len(claims) > 0:
             if not allow_duplicate_name:
+                # TODO: use error from lbry.error
                 raise Exception(
                     f"You already have a stream claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
                 )
         if not VALID_FULL_CLAIM_ID.fullmatch(claim_id):
+            # TODO: use error from lbry.error
             raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
 
         claim = Claim()
@@ -3328,6 +3350,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claims = await account.get_claims(claim_name=name)
         if len(claims) > 0:
             if not allow_duplicate_name:
+                # TODO: use error from lbry.error
                 raise Exception(
                     f"You already have a stream claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
@@ -3511,11 +3534,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         if len(existing_claims) != 1:
             account_ids = ', '.join(f"'{account.id}'" for account in accounts)
+            # TODO: use error from lbry.error
             raise Exception(
                 f"Can't find the stream '{claim_id}' in account(s) {account_ids}."
             )
         old_txo = existing_claims[0]
         if not old_txo.claim.is_stream:
+            # TODO: use error from lbry.error
             raise Exception(
                 f"A claim with id '{claim_id}' was found but it is not a stream claim."
             )
@@ -3643,9 +3668,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 wallet=wallet, accounts=accounts, claim_id=claim_id
             )
         else:
+            # TODO: use error from lbry.error
             raise Exception('Must specify claim_id, or txid and nout')
 
         if not claims:
+            # TODO: use error from lbry.error
             raise Exception('No claim found for the specified claim_id or txid:nout')
 
         tx = await Transaction.create(
@@ -3807,6 +3834,7 @@ class Daemon(metaclass=JSONRPCServerType):
         existing_collections = await self.ledger.get_collections(accounts=wallet.accounts, claim_name=name)
         if len(existing_collections) > 0:
             if not allow_duplicate_name:
+                # TODO: use error from lbry.error
                 raise Exception(
                     f"You already have a collection under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
@@ -3930,11 +3958,13 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         if len(existing_collections) != 1:
             account_ids = ', '.join(f"'{account.id}'" for account in accounts)
+            # TODO: use error from lbry.error
             raise Exception(
                 f"Can't find the collection '{claim_id}' in account(s) {account_ids}."
             )
         old_txo = existing_collections[0]
         if not old_txo.claim.is_collection:
+            # TODO: use error from lbry.error
             raise Exception(
                 f"A claim with id '{claim_id}' was found but it is not a collection."
             )
@@ -4060,12 +4090,15 @@ class Daemon(metaclass=JSONRPCServerType):
         if claim_id:
             txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
             if not isinstance(txo, Output) or not txo.is_claim:
+                # TODO: use error from lbry.error
                 raise Exception(f"Could not find collection with claim_id '{claim_id}'. ")
         elif url:
             txo = (await self.ledger.resolve(wallet.accounts, [url]))[url]
             if not isinstance(txo, Output) or not txo.is_claim:
+                # TODO: use error from lbry.error
                 raise Exception(f"Could not find collection with url '{url}'. ")
         else:
+            # TODO: use error from lbry.error
             raise Exception(f"Missing argument claim_id or url. ")
 
         page_num, page_size = abs(page), min(abs(page_size), 50)
@@ -4240,9 +4273,11 @@ class Daemon(metaclass=JSONRPCServerType):
                 wallet=wallet, accounts=accounts, claim_id=claim_id
             )
         else:
+            # TODO: use error from lbry.error
             raise Exception('Must specify claim_id, or txid and nout')
 
         if not supports:
+            # TODO: use error from lbry.error
             raise Exception('No supports found for the specified claim_id or txid:nout')
 
         if keep is not None:
@@ -4477,6 +4512,7 @@ class Daemon(metaclass=JSONRPCServerType):
             elif order_by in ('height', 'amount', 'none'):
                 constraints['order_by'] = order_by
             else:
+                # TODO: use error from lbry.error
                 raise ValueError(f"'{order_by}' is not a valid --order_by value.")
         self._constrain_txo_from_kwargs(constraints, **kwargs)
         return paginate_rows(claims, None if no_totals else claim_count, page, page_size, **constraints)
@@ -4783,10 +4819,12 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         if not is_valid_blobhash(blob_hash):
+            # TODO: use error from lbry.error
             raise Exception("invalid blob hash")
         if search_bottom_out_limit is not None:
             search_bottom_out_limit = int(search_bottom_out_limit)
             if search_bottom_out_limit <= 0:
+                # TODO: use error from lbry.error
                 raise Exception("invalid bottom out limit")
         else:
             search_bottom_out_limit = 4
@@ -4830,12 +4868,14 @@ class Daemon(metaclass=JSONRPCServerType):
             blob_hashes.append(blob_hash)
         elif stream_hash or sd_hash:
             if sd_hash and stream_hash:
+                # TODO: use error from lbry.error
                 raise Exception("either the sd hash or the stream hash should be provided, not both")
             if sd_hash:
                 stream_hash = await self.storage.get_stream_hash_for_sd_hash(sd_hash)
             blobs = await self.storage.get_blobs_for_stream(stream_hash, only_completed=True)
             blob_hashes.extend(blob.blob_hash for blob in blobs if blob.blob_hash is not None)
         else:
+            # TODO: use error from lbry.error
             raise Exception('single argument must be specified')
         await self.storage.should_single_announce_blobs(blob_hashes, immediate=True)
         return True
@@ -5102,6 +5142,7 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         if not tracemalloc.is_tracing():
+            # TODO: use error from lbry.error
             raise Exception("Enable tracemalloc first! See 'tracemalloc set' command.")
         stats = tracemalloc.take_snapshot().filter_traces((
             tracemalloc.Filter(False, "<frozen importlib._bootstrap>"),
@@ -5311,6 +5352,7 @@ class Daemon(metaclass=JSONRPCServerType):
             comment_id=comment_id
         )
         if 'error' in channel:
+            # TODO: use error from lbry.error
             raise ValueError(channel['error'])
 
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
@@ -5567,51 +5609,64 @@ class Daemon(metaclass=JSONRPCServerType):
                 allow_script_address and self.ledger.is_script_address(address)
             )
         except:
+            # TODO: use error from lbry.error
             raise Exception(f"'{address}' is not a valid address")
 
     @staticmethod
     def valid_stream_name_or_error(name: str):
         try:
             if not name:
+                # TODO: use error from lbry.error
                 raise Exception('Stream name cannot be blank.')
             parsed = URL.parse(name)
             if parsed.has_channel:
+                # TODO: use error from lbry.error
                 raise Exception(
                     "Stream names cannot start with '@' symbol. This is reserved for channels claims."
                 )
             if not parsed.has_stream or parsed.stream.name != name:
+                # TODO: use error from lbry.error
                 raise Exception('Stream name has invalid characters.')
         except (TypeError, ValueError):
+            # TODO: use error from lbry.error
             raise Exception("Invalid stream name.")
 
     @staticmethod
     def valid_collection_name_or_error(name: str):
         try:
             if not name:
+                # TODO: use error from lbry.error
                 raise Exception('Collection name cannot be blank.')
             parsed = URL.parse(name)
             if parsed.has_channel:
+                # TODO: use error from lbry.error
                 raise Exception(
                     "Collection names cannot start with '@' symbol. This is reserved for channels claims."
                 )
             if not parsed.has_stream or parsed.stream.name != name:
+                # TODO: use error from lbry.error
                 raise Exception('Collection name has invalid characters.')
         except (TypeError, ValueError):
+            # TODO: use error from lbry.error
             raise Exception("Invalid collection name.")
 
     @staticmethod
     def valid_channel_name_or_error(name: str):
         try:
             if not name:
+                # TODO: use error from lbry.error
                 raise Exception(
                     "Channel name cannot be blank."
                 )
             parsed = URL.parse(name)
             if not parsed.has_channel:
+                # TODO: use error from lbry.error
                 raise Exception("Channel names must start with '@' symbol.")
             if parsed.channel.name != name:
+                # TODO: use error from lbry.error
                 raise Exception("Channel name has invalid character")
         except (TypeError, ValueError):
+            # TODO: use error from lbry.error
             raise Exception("Invalid channel name.")
 
     def get_fee_address(self, kwargs: dict, claim_address: str) -> str:
@@ -5643,6 +5698,7 @@ class Daemon(metaclass=JSONRPCServerType):
         elif channel_name:
             key, value = 'name', channel_name
         else:
+            # TODO: use error from lbry.error
             raise ValueError("Couldn't find channel because a channel_id or channel_name was not provided.")
         channels = await self.ledger.get_channels(
             wallet=wallet, accounts=wallet.get_accounts_or_all(account_ids),
@@ -5650,13 +5706,16 @@ class Daemon(metaclass=JSONRPCServerType):
         )
         if len(channels) == 1:
             if for_signing and not channels[0].has_private_key:
+                # TODO: use error from lbry.error
                 raise Exception(f"Couldn't find private key for {key} '{value}'. ")
             return channels[0]
         elif len(channels) > 1:
+            # TODO: use error from lbry.error
             raise ValueError(
                 f"Multiple channels found with channel_{key} '{value}', "
                 f"pass a channel_id to narrow it down."
             )
+        # TODO: use error from lbry.error
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     @staticmethod
@@ -5664,9 +5723,11 @@ class Daemon(metaclass=JSONRPCServerType):
         try:
             dewies = lbc_to_dewies(lbc)
             if positive_value and dewies <= 0:
+                # TODO: use error from lbry.error
                 raise ValueError(f"'{argument}' value must be greater than 0.0")
             return dewies
         except ValueError as e:
+            # TODO: use error from lbry.error
             raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
 
     async def resolve(self, accounts, urls, **kwargs):
