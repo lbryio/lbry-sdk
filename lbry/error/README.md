@@ -61,6 +61,7 @@ Code | Name | Message
 431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
 432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
 433 | ServerPaymentFeeAboveMaxAllowed | Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.
+434 | WalletNotLoaded | Wallet {wallet_id} is not loaded.
 **5xx** | Blob | **Blobs**
 500 | BlobNotFound | Blob not found.
 501 | BlobPermissionDenied | Permission denied to read blob.
