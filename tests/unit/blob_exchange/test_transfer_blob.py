@@ -20,7 +20,7 @@ from lbry.dht.peer import PeerManager, make_kademlia_peer
 
 
 def mock_config():
-    config = Config()
+    config = Config(save_files=True)
     config.fixed_peer_delay = 10000
     return config
 
@@ -34,15 +34,25 @@ class BlobExchangeTestBase(AsyncioTestCase):
         self.addCleanup(shutil.rmtree, self.client_wallet_dir)
         self.addCleanup(shutil.rmtree, self.client_dir)
         self.addCleanup(shutil.rmtree, self.server_dir)
-        self.server_config = Config(data_dir=self.server_dir, download_dir=self.server_dir, wallet=self.server_dir,
-                                    fixed_peers=[])
+        self.server_config = Config(
+            data_dir=self.server_dir,
+            download_dir=self.server_dir,
+            wallet=self.server_dir,
+            save_files=True,
+            fixed_peers=[]
+        )
         self.server_config.transaction_cache_size = 10000
         self.server_storage = SQLiteStorage(self.server_config, os.path.join(self.server_dir, "lbrynet.sqlite"))
         self.server_blob_manager = BlobManager(self.loop, self.server_dir, self.server_storage, self.server_config)
         self.server = BlobServer(self.loop, self.server_blob_manager, 'bQEaw42GXsgCAGio1nxFncJSyRmnztSCjP')
 
-        self.client_config = Config(data_dir=self.client_dir, download_dir=self.client_dir,
-                                    wallet=self.client_wallet_dir, fixed_peers=[])
+        self.client_config = Config(
+            data_dir=self.client_dir,
+            download_dir=self.client_dir,
+            wallet=self.client_wallet_dir,
+            save_files=True,
+            fixed_peers=[]
+        )
         self.client_config.transaction_cache_size = 10000
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
         self.client_blob_manager = BlobManager(self.loop, self.client_dir, self.client_storage, self.client_config)
@@ -101,7 +111,7 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         second_client_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, second_client_dir)
-        second_client_conf = Config()
+        second_client_conf = Config(save_files=True)
         second_client_storage = SQLiteStorage(second_client_conf, os.path.join(second_client_dir, "lbrynet.sqlite"))
         second_client_blob_manager = BlobManager(
             self.loop, second_client_dir, second_client_storage, second_client_conf
@@ -196,7 +206,7 @@ class TestBlobExchange(BlobExchangeTestBase):
 
         second_client_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, second_client_dir)
-        second_client_conf = Config()
+        second_client_conf = Config(save_files=True)
 
         second_client_storage = SQLiteStorage(second_client_conf, os.path.join(second_client_dir, "lbrynet.sqlite"))
         second_client_blob_manager = BlobManager(

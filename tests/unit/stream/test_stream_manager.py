@@ -105,6 +105,7 @@ async def get_mock_wallet(sd_hash, storage, wallet_dir, balance=10.0, fee=None):
     wallet.generate_account(ledger)
     manager = WalletManager()
     manager.config = Config()
+    manager.config.save_files = True
     manager.config.transaction_cache_size = 10000
     manager.wallets.append(wallet)
     manager.ledgers[Ledger] = ledger
