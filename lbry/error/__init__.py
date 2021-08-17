@@ -271,6 +271,34 @@ class ServerPaymentFeeAboveMaxAllowedError(WalletError):
         super().__init__(f"Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.")
 
 
+class WalletNotLoadedError(WalletError):
+
+    def __init__(self, wallet_id):
+        self.wallet_id = wallet_id
+        super().__init__(f"Wallet {wallet_id} is not loaded.")
+
+
+class WalletAlreadyLoadedError(WalletError):
+
+    def __init__(self, wallet_path):
+        self.wallet_path = wallet_path
+        super().__init__(f"Wallet {wallet_path} is already loaded.")
+
+
+class WalletNotFoundError(WalletError):
+
+    def __init__(self, wallet_path):
+        self.wallet_path = wallet_path
+        super().__init__(f"Wallet not found at {wallet_path}.")
+
+
+class WalletAlreadyExistsError(WalletError):
+
+    def __init__(self, wallet_path):
+        self.wallet_path = wallet_path
+        super().__init__(f"Wallet {wallet_path} already exists, use `wallet_add` to load it.")
+
+
 class BlobError(BaseError):
     """
     **Blobs**

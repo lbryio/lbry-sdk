@@ -61,6 +61,10 @@ Code | Name | Message
 431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
 432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
 433 | ServerPaymentFeeAboveMaxAllowed | Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.
+434 | WalletNotLoaded | Wallet {wallet_id} is not loaded.
+435 | WalletAlreadyLoaded | Wallet {wallet_path} is already loaded.
+436 | WalletNotFound | Wallet not found at {wallet_path}.
+437 | WalletAlreadyExists | Wallet {wallet_path} already exists, use `wallet_add` to load it.
 **5xx** | Blob | **Blobs**
 500 | BlobNotFound | Blob not found.
 501 | BlobPermissionDenied | Permission denied to read blob.

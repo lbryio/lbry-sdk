@@ -7,7 +7,7 @@ from binascii import unhexlify
 from decimal import Decimal
 from typing import List, Type, MutableSequence, MutableMapping, Optional
 
-from lbry.error import KeyFeeAboveMaxAllowedError
+from lbry.error import KeyFeeAboveMaxAllowedError, WalletNotLoadedError
 from lbry.conf import Config, NOT_SET
 
 from .dewies import dewies_to_lbc
@@ -95,7 +95,7 @@ class WalletManager:
         for wallet in self.wallets:
             if wallet.id == wallet_id:
                 return wallet
-        raise ValueError(f"Couldn't find wallet: {wallet_id}.")
+        raise WalletNotLoadedError(wallet_id)
 
     @staticmethod
     def get_balance(wallet):
