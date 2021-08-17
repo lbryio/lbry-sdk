@@ -36,7 +36,7 @@ from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
-    CommandDoesNotExistError, BaseError
+    CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -1276,9 +1276,9 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
         for wallet in self.wallet_manager.wallets:
             if wallet.id == wallet_id:
-                raise Exception(f"Wallet at path '{wallet_path}' already exists and is loaded.")
+                raise WalletAlreadyLoadedError(wallet_path)
         if os.path.exists(wallet_path):
-            raise Exception(f"Wallet at path '{wallet_path}' already exists, use 'wallet_add' to load wallet.")
+            raise WalletAlreadyExistsError(wallet_path)
 
         wallet = self.wallet_manager.import_wallet(wallet_path)
         if not wallet.accounts and create_account:
@@ -1311,9 +1311,9 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet_path = os.path.join(self.conf.wallet_dir, 'wallets', wallet_id)
         for wallet in self.wallet_manager.wallets:
             if wallet.id == wallet_id:
-                raise Exception(f"Wallet at path '{wallet_path}' is already loaded.")
+                raise WalletAlreadyLoadedError(wallet_path)
         if not os.path.exists(wallet_path):
-            raise Exception(f"Wallet at path '{wallet_path}' was not found.")
+            raise WalletNotFoundError(wallet_path)
         wallet = self.wallet_manager.import_wallet(wallet_path)
         if self.ledger.network.is_connected:
             for account in wallet.accounts:
