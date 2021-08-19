@@ -704,7 +704,7 @@ class Config(CLIConfig):
     blockchain_name = String("Blockchain name - lbrycrd_main, lbrycrd_regtest, or lbrycrd_testnet", 'lbrycrd_main')
 
     # daemon
-    save_files = Toggle("Save downloaded files when calling `get` by default", True)
+    save_files = Toggle("Save downloaded files when calling `get` by default", False)
     components_to_skip = Strings("components which will be skipped during start-up of daemon", [])
     share_usage_data = Toggle(
         "Whether to share usage stats and diagnostic info with LBRY.", False,
