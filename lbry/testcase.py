@@ -353,6 +353,7 @@ class CommandTestCase(IntegrationTestCase):
         self.server_config = Config(
             data_dir=server_tmp_dir,
             wallet_dir=server_tmp_dir,
+            save_files=True,
             download_dir=server_tmp_dir
         )
         self.server_config.transaction_cache_size = 10000
@@ -395,6 +396,7 @@ class CommandTestCase(IntegrationTestCase):
             # needed during instantiation to access known_hubs path
             data_dir=wallet_node.data_path,
             wallet_dir=wallet_node.data_path,
+            save_files=True,
             download_dir=wallet_node.data_path
         )
         conf.upload_dir = upload_dir  # not a real conf setting
