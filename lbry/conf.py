@@ -203,7 +203,7 @@ class MaxKeyFee(Setting[dict]):
         )
         parser.add_argument(
             self.no_cli_name,
-            help=f"Disable maximum key fee check.",
+            help="Disable maximum key fee check.",
             dest=self.name,
             const=None,
             action="store_const",

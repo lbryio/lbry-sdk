@@ -101,7 +101,7 @@ class ArgumentParser(argparse.ArgumentParser):
         self._optionals.title = 'Options'
         if group_name is None:
             self.epilog = (
-                f"Run 'lbrynet COMMAND --help' for more information on a command or group."
+                "Run 'lbrynet COMMAND --help' for more information on a command or group."
             )
         else:
             self.epilog = (

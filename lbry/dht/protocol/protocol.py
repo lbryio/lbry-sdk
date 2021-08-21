@@ -556,7 +556,7 @@ class KademliaProtocol(DatagramProtocol):
                     address[0], address[1], OLD_PROTOCOL_ERRORS[error_datagram.response]
                 )
 
-    def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:  # pylint: disable=arguments-differ
+    def datagram_received(self, datagram: bytes, address: typing.Tuple[str, int]) -> None:  # pylint: disable=arguments-renamed
         try:
             message = decode_datagram(datagram)
         except (ValueError, TypeError, DecodeError):

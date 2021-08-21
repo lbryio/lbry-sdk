@@ -63,7 +63,7 @@ class ErrorClass:
     @staticmethod
     def get_fields(args):
         if len(args) > 1:
-            return f''.join(f'\n{INDENT*2}self.{field} = {field}' for field in args[1:])
+            return ''.join(f'\n{INDENT*2}self.{field} = {field}' for field in args[1:])
         return ''
 
     @staticmethod

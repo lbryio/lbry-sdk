@@ -46,9 +46,11 @@ class _KeyBase:
         if len(raw_serkey) != 33:
             raise ValueError('raw_serkey must have length 33')
 
-        return (ver_bytes + bytes((self.depth,))
-                + self.parent_fingerprint() + self.n.to_bytes(4, 'big')
-                + self.chain_code + raw_serkey)
+        return (
+            ver_bytes + bytes((self.depth,))
+            + self.parent_fingerprint() + self.n.to_bytes(4, 'big')
+            + self.chain_code + raw_serkey
+        )
 
     def identifier(self):
         raise NotImplementedError

@@ -254,7 +254,7 @@ class ManagedStream(ManagedDownloadSource):
         self.finished_writing.clear()
         self.started_writing.clear()
         try:
-            open(output_path, 'wb').close()
+            open(output_path, 'wb').close()  # pylint: disable=consider-using-with
             async for blob_info, decrypted in self._aiter_read_stream(connection_id=self.SAVING_ID):
                 log.info("write blob %i/%i", blob_info.blob_num + 1, len(self.descriptor.blobs) - 1)
                 await self.loop.run_in_executor(None, self._write_decrypted_blob, output_path, decrypted)

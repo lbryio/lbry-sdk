@@ -123,7 +123,7 @@ class JSONResponseEncoder(JSONEncoder):
         self.ledger = ledger
         self.include_protobuf = include_protobuf
 
-    def default(self, obj):  # pylint: disable=method-hidden,arguments-differ,too-many-return-statements
+    def default(self, obj):  # pylint: disable=method-hidden,arguments-renamed,too-many-return-statements
         if isinstance(obj, Account):
             return self.encode_account(obj)
         if isinstance(obj, Wallet):

@@ -250,7 +250,7 @@ class Account:
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
         self.address_generator = self.address_generators[generator_name]
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
-        self.address_managers = {am.chain_number: am for am in {self.receiving, self.change}}
+        self.address_managers = {am.chain_number: am for am in (self.receiving, self.change)}
         self.channel_keys = channel_keys
         ledger.add_account(self)
         wallet.add_account(self)

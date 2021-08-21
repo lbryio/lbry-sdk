@@ -82,10 +82,10 @@ class AIOSQLite:
         "read_count", "Number of database reads", namespace="daemon_database"
     )
     acquire_write_lock_metric = Histogram(
-        f'write_lock_acquired', 'Time to acquire the write lock', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
+        'write_lock_acquired', 'Time to acquire the write lock', namespace="daemon_database", buckets=HISTOGRAM_BUCKETS
     )
     held_write_lock_metric = Histogram(
-        f'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database",
+        'write_lock_held', 'Length of time the write lock is held for', namespace="daemon_database",
         buckets=HISTOGRAM_BUCKETS
     )
 
@@ -506,7 +506,7 @@ def _get_spendable_utxos(transaction: sqlite3.Connection, accounts: List, decode
                          amount_to_reserve: int, reserved_amount: int, floor: int, ceiling: int,
                          fee_per_byte: int) -> int:
     accounts_fmt = ",".join(["?"] * len(accounts))
-    txo_query = f"""
+    txo_query = """
         SELECT tx.txid, txo.txoid, tx.raw, tx.height, txo.position as nout, tx.is_verified, txo.amount FROM txo
         INNER JOIN account_address USING (address)
         LEFT JOIN txi USING (txoid)
