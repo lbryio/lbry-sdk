@@ -80,8 +80,6 @@ class MarketFeed:
             self.rate = ExchangeRate(self.market, rate, int(time.time()))
             self.last_check = time.time()
             return self.rate
-        except asyncio.CancelledError:
-            raise
         except asyncio.TimeoutError:
             log.warning("Timed out fetching exchange rate from %s.", self.name)
         except json.JSONDecodeError as e:
