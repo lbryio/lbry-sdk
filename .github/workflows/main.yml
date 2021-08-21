@@ -60,7 +60,7 @@ jobs:
       - if: startsWith(runner.os, 'linux') != true
         env:
           HOME: /tmp
-        run: python -m unittest tests/unit/test_conf.py
+        run: coverage run --source=lbry -m unittest tests/unit/test_conf.py
       - name: submit coverage report
         env:
           GITHUB_TOKEN: ${{ secrets.github_token }}
