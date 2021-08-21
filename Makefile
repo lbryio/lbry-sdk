@@ -13,7 +13,7 @@ test-unit:
 	python -m unittest discover tests.unit
 
 test-unit-coverage:
-	coverage run -p --source=lbry -m unittest discover -vv tests.unit
+	coverage run --source=lbry -m unittest discover -vv tests.unit
 
 test-integration:
 	tox
