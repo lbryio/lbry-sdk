@@ -65,7 +65,7 @@ class BlobDownloader:
 
     async def new_peer_or_finished(self):
         active_tasks = list(self.active_connections.values()) + [asyncio.sleep(1)]
-        await asyncio.wait(active_tasks, loop=self.loop, return_when='FIRST_COMPLETED')
+        await asyncio.wait(active_tasks, return_when='FIRST_COMPLETED')
 
     def cleanup_active(self):
         if not self.active_connections and not self.connections:

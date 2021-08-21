@@ -249,7 +249,7 @@ class PingQueue:
                     del self._pending_contacts[peer]
                     self.maybe_ping(peer)
                     break
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     def start(self):
         assert not self._running
@@ -443,7 +443,7 @@ class KademliaProtocol(DatagramProtocol):
             while self._to_add:
                 async with self._split_lock:
                     await self._add_peer(self._to_add.pop())
-            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1, loop=self.loop), loop=self.loop)
+            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1))
             self._wakeup_routing_task.clear()
 
     def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):

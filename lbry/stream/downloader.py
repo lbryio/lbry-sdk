@@ -72,7 +72,7 @@ class StreamDownloader:
                 now = self.loop.time()
                 sd_blob = await asyncio.wait_for(
                     self.blob_downloader.download_blob(self.sd_hash, connection_id),
-                    self.config.blob_download_timeout, loop=self.loop
+                    self.config.blob_download_timeout
                 )
                 log.info("downloaded sd blob %s", self.sd_hash)
                 self.time_to_descriptor = self.loop.time() - now
@@ -111,7 +111,7 @@ class StreamDownloader:
             raise ValueError(f"blob {blob_info.blob_hash} is not part of stream with sd hash {self.sd_hash}")
         blob = await asyncio.wait_for(
             self.blob_downloader.download_blob(blob_info.blob_hash, blob_info.length, connection_id),
-            self.config.blob_download_timeout * 10, loop=self.loop
+            self.config.blob_download_timeout * 10
         )
         return blob
 

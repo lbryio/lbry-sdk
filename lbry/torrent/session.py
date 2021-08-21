@@ -121,7 +121,7 @@ class TorrentHandle:
             self._show_status()
             if self.finished.is_set():
                 break
-            await asyncio.sleep(0.1, loop=self._loop)
+            await asyncio.sleep(0.1)
 
     async def pause(self):
         await self._loop.run_in_executor(
@@ -186,7 +186,7 @@ class TorrentSession:
             await self._loop.run_in_executor(
                 self._executor, self._pop_alerts
             )
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     async def pause(self):
         await self._loop.run_in_executor(

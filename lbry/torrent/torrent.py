@@ -58,7 +58,7 @@ class Torrent:
                 log.info("finished downloading torrent!")
                 await self.pause()
                 break
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     async def pause(self):
         log.info("pause torrent")

@@ -37,7 +37,7 @@ class BlobServerProtocol(asyncio.Protocol):
     async def close_on_idle(self):
         while self.transport:
             try:
-                await asyncio.wait_for(self.started_transfer.wait(), self.idle_timeout, loop=self.loop)
+                await asyncio.wait_for(self.started_transfer.wait(), self.idle_timeout)
             except asyncio.TimeoutError:
                 log.debug("closing idle connection from %s", self.peer_address_and_port)
                 return self.close()
@@ -101,7 +101,7 @@ class BlobServerProtocol(asyncio.Protocol):
                 log.debug("send %s to %s:%i", blob_hash, peer_address, peer_port)
                 self.started_transfer.set()
                 try:
-                    sent = await asyncio.wait_for(blob.sendfile(self), self.transfer_timeout, loop=self.loop)
+                    sent = await asyncio.wait_for(blob.sendfile(self), self.transfer_timeout)
                     if sent and sent > 0:
                         self.blob_manager.connection_manager.sent_data(self.peer_address_and_port, sent)
                         log.info("sent %s (%i bytes) to %s:%i", blob_hash, sent, peer_address, peer_port)
