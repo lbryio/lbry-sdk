@@ -68,7 +68,7 @@ jobs:
           COVERALLS_PARALLEL: true
         run: |
           pip install coveralls
-          coveralls --service=github
+          coveralls -v
 
   tests-integration:
     name: "tests / integration"
@@ -108,7 +108,8 @@ jobs:
       - run: tox -e ${{ matrix.test }}
 
   coverage:
-    needs: ["tests-unit", "tests-integration"]
+    #needs: ["tests-unit", "tests-integration"]
+    needs: ["tests-unit"]
     runs-on: ubuntu-latest
     steps:
       - name: finalize coverage report submission
@@ -116,7 +117,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.github_token }}
         run: |
           pip install coveralls
-          coveralls --service=github --finish
+          coveralls -v --finish
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
