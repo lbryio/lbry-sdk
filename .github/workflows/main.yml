@@ -62,11 +62,13 @@ jobs:
           HOME: /tmp
         run: python -m unittest tests/unit/test_conf.py
       - name: submit coverage report
-        uses: AndreMiras/coveralls-python-action@master
-        with:
-          github-token: ${{ secrets.github_token }}
-          flag-name: tests-unit-${{ matrix.os }}
-          parallel: true
+				env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+					COVERALLS_FLAG_NAME: tests-unit-${{ runner.os }}
+          COVERALLS_PARALLEL: true
+        run: |
+					pip install coveralls
+          coveralls --service=github
 
   tests-integration:
     name: "tests / integration"
@@ -109,11 +111,12 @@ jobs:
     needs: ["tests-unit", "tests-integration"]
     runs-on: ubuntu-latest
     steps:
-      - name: Coveralls Finished
-        uses: AndreMiras/coveralls-python-action@master
-        with:
-          github-token: ${{ secrets.github_token }}
-          parallel-finished: true
+      - name: finalize coverage report submission
+				env:
+          GITHUB_TOKEN: ${{ secrets.github_token }}
+        run: |
+					pip install coveralls
+          coveralls --service=github --finish
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
