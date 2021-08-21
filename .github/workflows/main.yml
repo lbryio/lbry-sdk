@@ -121,8 +121,7 @@ jobs:
 
 
   coverage:
-    #needs: ["tests-unit", "tests-integration"]
-    needs: ["tests-unit"]
+    needs: ["tests-unit", "tests-integration"]
     runs-on: ubuntu-latest
     steps:
       - name: finalize coverage report submission
