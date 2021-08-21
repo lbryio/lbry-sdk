@@ -110,6 +110,15 @@ jobs:
           restore-keys: txo-integration-${{ matrix.test }}-
       - run: pip install tox
       - run: tox -e ${{ matrix.test }}
+      - name: submit coverage report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_FLAG_NAME: tests-integration-${{ steps.os-name.outputs.lowercase }}
+          COVERALLS_PARALLEL: true
+        run: |
+          pip install coveralls
+          coveralls --service=github
+
 
   coverage:
     #needs: ["tests-unit", "tests-integration"]
