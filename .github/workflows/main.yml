@@ -48,6 +48,10 @@ jobs:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
+      - id: os-name
+        uses: ASzc/change-string-case-action@v1
+        with:
+          string: ${{ runner.os }}
       - run: pip install --user --upgrade pip wheel
       - if: startsWith(runner.os, 'linux')
         run: pip install -e .[torrent,test]
@@ -63,12 +67,12 @@ jobs:
         run: coverage run --source=lbry -m unittest tests/unit/test_conf.py
       - name: submit coverage report
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
-          COVERALLS_FLAG_NAME: tests-unit-${{ runner.os }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COVERALLS_FLAG_NAME: tests-unit-${{ steps.os-name.outputs.lowercase }}
           COVERALLS_PARALLEL: true
         run: |
           pip install coveralls
-          coveralls -v --service=github
+          coveralls --service=github
 
   tests-integration:
     name: "tests / integration"
@@ -114,10 +118,10 @@ jobs:
     steps:
       - name: finalize coverage report submission
         env:
-          GITHUB_TOKEN: ${{ secrets.github_token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pip install coveralls
-          coveralls -v --service=github --finish
+          coveralls --service=github --finish
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
