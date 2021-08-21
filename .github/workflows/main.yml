@@ -108,7 +108,7 @@ jobs:
           path: ./.tox
           key: tox-integration-${{ matrix.test }}-${{ hashFiles('setup.py') }}
           restore-keys: txo-integration-${{ matrix.test }}-
-      - run: pip install tox
+      - run: pip install tox coverage coveralls
       - run: tox -e ${{ matrix.test }}
       - name: submit coverage report
         env:
@@ -116,7 +116,7 @@ jobs:
           COVERALLS_FLAG_NAME: tests-integration-${{ steps.os-name.outputs.lowercase }}
           COVERALLS_PARALLEL: true
         run: |
-          pip install coveralls
+          coverage combine tests
           coveralls --service=github
 
 
