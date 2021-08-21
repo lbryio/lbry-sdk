@@ -62,7 +62,7 @@ jobs:
           HOME: /tmp
         run: python -m unittest tests/unit/test_conf.py
       - name: submit coverage report
-        uses: coverallsapp/github-action@master
+        uses: AndreMiras/coveralls-python-action@master
         with:
           github-token: ${{ secrets.github_token }}
           flag-name: tests-unit-${{ matrix.os }}
@@ -110,7 +110,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Coveralls Finished
-        uses: coverallsapp/github-action@master
+        uses: AndreMiras/coveralls-python-action@master
         with:
           github-token: ${{ secrets.github_token }}
           parallel-finished: true
