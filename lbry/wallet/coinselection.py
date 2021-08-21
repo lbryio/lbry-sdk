@@ -141,7 +141,7 @@ class CoinSelector:
                     _) -> List[OutputEffectiveAmountEstimator]:
         """ Accumulate UTXOs at random until there is enough to cover the target. """
         target = self.target + self.cost_of_change
-        self.random.shuffle(txos, self.random.random)
+        self.random.shuffle(txos)
         selection = []
         amount = 0
         for coin in txos:
