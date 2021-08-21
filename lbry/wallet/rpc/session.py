@@ -395,8 +395,8 @@ class RPCSession(SessionBase):
         namespace=NAMESPACE, labelnames=("version",)
     )
 
-    def __init__(self, *, framer=None, loop=None, connection=None):
-        super().__init__(framer=framer, loop=loop)
+    def __init__(self, *, framer=None, connection=None):
+        super().__init__(framer=framer)
         self.connection = connection or self.default_connection()
         self.client_version = 'unknown'
 

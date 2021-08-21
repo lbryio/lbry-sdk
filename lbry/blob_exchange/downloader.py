@@ -30,7 +30,7 @@ class BlobDownloader:
         self.failures: typing.Dict['KademliaPeer', int] = {}
         self.connection_failures: typing.Set['KademliaPeer'] = set()
         self.connections: typing.Dict['KademliaPeer', 'BlobExchangeClientProtocol'] = {}
-        self.is_running = asyncio.Event(loop=self.loop)
+        self.is_running = asyncio.Event()
 
     def should_race_continue(self, blob: 'AbstractBlob'):
         max_probes = self.config.max_connections_per_download * (1 if self.connections else 10)
@@ -65,7 +65,7 @@ class BlobDownloader:
 
     async def new_peer_or_finished(self):
         active_tasks = list(self.active_connections.values()) + [asyncio.sleep(1)]
-        await asyncio.wait(active_tasks, loop=self.loop, return_when='FIRST_COMPLETED')
+        await asyncio.wait(active_tasks, return_when='FIRST_COMPLETED')
 
     def cleanup_active(self):
         if not self.active_connections and not self.connections:
@@ -126,7 +126,7 @@ class BlobDownloader:
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', dht_node: 'Node',
                         blob_hash: str) -> 'AbstractBlob':
-    search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
+    search_queue = asyncio.Queue(maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)
     peer_queue, accumulate_task = dht_node.accumulate_peers(search_queue)
     fixed_peers = None if not config.fixed_peers else await get_kademlia_peers_from_hosts(config.fixed_peers)

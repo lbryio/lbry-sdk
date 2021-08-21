@@ -2,7 +2,6 @@ import unittest
 from unittest import mock
 import json
 
-from lbry.conf import Config
 from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.components import DATABASE_COMPONENT, DHT_COMPONENT, WALLET_COMPONENT
@@ -11,6 +10,7 @@ from lbry.extras.daemon.components import UPNP_COMPONENT, BLOB_COMPONENT
 from lbry.extras.daemon.components import PEER_PROTOCOL_SERVER_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT
 from lbry.extras.daemon.daemon import Daemon as LBRYDaemon
 from lbry.wallet import WalletManager, Wallet
+from lbry.conf import Config
 
 from tests import test_utils
 # from tests.mocks import mock_conf_settings, FakeNetwork, FakeFileManager

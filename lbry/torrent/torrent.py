@@ -36,7 +36,7 @@ class Torrent:
     def __init__(self, loop, handle):
         self._loop = loop
         self._handle = handle
-        self.finished = asyncio.Event(loop=loop)
+        self.finished = asyncio.Event()
 
     def _threaded_update_status(self):
         status = self._handle.status()
@@ -58,7 +58,7 @@ class Torrent:
                 log.info("finished downloading torrent!")
                 await self.pause()
                 break
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     async def pause(self):
         log.info("pause torrent")

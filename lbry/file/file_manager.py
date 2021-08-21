@@ -240,8 +240,7 @@ class FileManager:
                 claim_info = await self.storage.get_content_claim_for_torrent(stream.identifier)
                 stream.set_claim(claim_info, claim)
             if save_file:
-                await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download),
-                                       loop=self.loop)
+                await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download))
             return stream
         except asyncio.TimeoutError:
             error = DownloadDataTimeoutError(stream.sd_hash)

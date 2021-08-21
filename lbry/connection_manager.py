@@ -67,7 +67,7 @@ class ConnectionManager:
 
         while True:
             last = time.perf_counter()
-            await asyncio.sleep(0.1, loop=self.loop)
+            await asyncio.sleep(0.1)
             self._status['incoming_bps'].clear()
             self._status['outgoing_bps'].clear()
             now = time.perf_counter()

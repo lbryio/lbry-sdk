@@ -36,7 +36,7 @@ class TestBlob(AsyncioTestCase):
         writer.write(self.blob_bytes)
         await blob.verified.wait()
         self.assertTrue(blob.get_is_verified())
-        await asyncio.sleep(0, loop=self.loop)  # wait for the db save task
+        await asyncio.sleep(0)  # wait for the db save task
         return blob
 
     async def _test_close_writers_on_finished(self, blob_class=AbstractBlob, blob_directory=None):
@@ -48,7 +48,7 @@ class TestBlob(AsyncioTestCase):
         with self.assertRaises(InvalidDataError):
             writers[1].write(self.blob_bytes * 2)
             await writers[1].finished
-        await asyncio.sleep(0, loop=self.loop)
+        await asyncio.sleep(0)
         self.assertEqual(4, len(blob.writers))
 
         # write the blob
@@ -208,7 +208,7 @@ class TestBlob(AsyncioTestCase):
         async def read_blob_buffer():
             with reader as read_handle:
                 self.assertEqual(1, len(blob.readers))
-                await asyncio.sleep(2, loop=self.loop)
+                await asyncio.sleep(2)
                 self.assertEqual(0, len(blob.readers))
                 return read_handle.read()
 

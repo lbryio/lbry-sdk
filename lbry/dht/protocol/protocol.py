@@ -253,7 +253,7 @@ class PingQueue:
                     del self._pending_contacts[peer]
                     self.maybe_ping(peer)
                     break
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     def start(self):
         assert not self._running
@@ -319,10 +319,10 @@ class KademliaProtocol(DatagramProtocol):
         self.ping_queue = PingQueue(self.loop, self)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
         self.rpc_timeout = rpc_timeout
-        self._split_lock = asyncio.Lock(loop=self.loop)
+        self._split_lock = asyncio.Lock()
         self._to_remove: typing.Set['KademliaPeer'] = set()
         self._to_add: typing.Set['KademliaPeer'] = set()
-        self._wakeup_routing_task = asyncio.Event(loop=self.loop)
+        self._wakeup_routing_task = asyncio.Event()
         self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
 
     @functools.lru_cache(128)
@@ -385,7 +385,7 @@ class KademliaProtocol(DatagramProtocol):
             while self._to_add:
                 async with self._split_lock:
                     await self._add_peer(self._to_add.pop())
-            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1, loop=self.loop), loop=self.loop)
+            await asyncio.gather(self._wakeup_routing_task.wait(), asyncio.sleep(.1))
             self._wakeup_routing_task.clear()
 
     def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):

@@ -60,9 +60,9 @@ class ManagedStream(ManagedDownloadSource):
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
         self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
-        self.fully_reflected = asyncio.Event(loop=self.loop)
-        self.streaming = asyncio.Event(loop=self.loop)
-        self._running = asyncio.Event(loop=self.loop)
+        self.fully_reflected = asyncio.Event()
+        self.streaming = asyncio.Event()
+        self._running = asyncio.Event()
 
     @property
     def sd_hash(self) -> str:
@@ -161,7 +161,7 @@ class ManagedStream(ManagedDownloadSource):
         log.info("start downloader for stream (sd hash: %s)", self.sd_hash)
         self._running.set()
         try:
-            await asyncio.wait_for(self.downloader.start(), timeout, loop=self.loop)
+            await asyncio.wait_for(self.downloader.start(), timeout)
         except asyncio.TimeoutError:
             self._running.clear()
             raise DownloadSDTimeoutError(self.sd_hash)
@@ -321,7 +321,7 @@ class ManagedStream(ManagedDownloadSource):
         await self.update_status(ManagedStream.STATUS_RUNNING)
         self.file_output_task = self.loop.create_task(self._save_file(self.full_path))
         try:
-            await asyncio.wait_for(self.started_writing.wait(), self.config.download_timeout, loop=self.loop)
+            await asyncio.wait_for(self.started_writing.wait(), self.config.download_timeout)
         except asyncio.TimeoutError:
             log.warning("timeout starting to write data for lbry://%s#%s", self.claim_name, self.claim_id)
             self.stop_tasks()
@@ -401,7 +401,7 @@ class ManagedStream(ManagedDownloadSource):
                          self.sd_hash[:6])
                 await self.stop()
                 return
-            await asyncio.sleep(1, loop=self.loop)
+            await asyncio.sleep(1)
 
     def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int, int]:
         if '=' in get_range:

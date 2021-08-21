@@ -83,7 +83,7 @@ class IterativeFinder(AsyncIterator):
         self.contacted: typing.Set['KademliaPeer'] = set()
         self.distance = Distance(key)
 
-        self.iteration_queue = asyncio.Queue(loop=self.loop)
+        self.iteration_queue = asyncio.Queue()
 
         self.running_probes: typing.Dict['KademliaPeer', asyncio.Task] = {}
         self.iteration_count = 0
