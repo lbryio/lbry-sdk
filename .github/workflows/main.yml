@@ -62,12 +62,12 @@ jobs:
           HOME: /tmp
         run: python -m unittest tests/unit/test_conf.py
       - name: submit coverage report
-				env:
+        env:
           GITHUB_TOKEN: ${{ secrets.github_token }}
-					COVERALLS_FLAG_NAME: tests-unit-${{ runner.os }}
+          COVERALLS_FLAG_NAME: tests-unit-${{ runner.os }}
           COVERALLS_PARALLEL: true
         run: |
-					pip install coveralls
+          pip install coveralls
           coveralls --service=github
 
   tests-integration:
@@ -112,10 +112,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: finalize coverage report submission
-				env:
+        env:
           GITHUB_TOKEN: ${{ secrets.github_token }}
         run: |
-					pip install coveralls
+          pip install coveralls
           coveralls --service=github --finish
 
   build:
