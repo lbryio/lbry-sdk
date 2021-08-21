@@ -37,7 +37,7 @@ class Node:
         self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
                                          split_buckets_under_index, is_bootstrap_node)
         self.listening_port: asyncio.DatagramTransport = None
-        self.joined = asyncio.Event(loop=self.loop)
+        self.joined = asyncio.Event()
         self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
         self._storage = storage
@@ -79,7 +79,7 @@ class Node:
             else:
                 if force_once:
                     break
-                fut = asyncio.Future(loop=self.loop)
+                fut = asyncio.Future()
                 self.loop.call_later(constants.REFRESH_INTERVAL // 4, fut.set_result, None)
                 await fut
                 continue
@@ -93,7 +93,7 @@ class Node:
             if force_once:
                 break
 
-            fut = asyncio.Future(loop=self.loop)
+            fut = asyncio.Future()
             self.loop.call_later(constants.REFRESH_INTERVAL, fut.set_result, None)
             await fut
 
@@ -108,7 +108,7 @@ class Node:
         for peer in peers:
             log.debug("store to %s %s %s", peer.address, peer.udp_port, peer.tcp_port)
         stored_to_tup = await asyncio.gather(
-            *(self.protocol.store_to_peer(hash_value, peer) for peer in peers), loop=self.loop
+            *(self.protocol.store_to_peer(hash_value, peer) for peer in peers)
         )
         stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
         if stored_to:
@@ -182,14 +182,14 @@ class Node:
                             for address, udp_port in known_node_urls or []
                         ]))
                     except socket.gaierror:
-                        await asyncio.sleep(30, loop=self.loop)
+                        await asyncio.sleep(30)
                         continue
 
                 self.protocol.peer_manager.reset()
                 self.protocol.ping_queue.enqueue_maybe_ping(*seed_peers, delay=0.0)
                 await self.peer_search(self.protocol.node_id, shortlist=seed_peers, count=32)
 
-            await asyncio.sleep(1, loop=self.loop)
+            await asyncio.sleep(1)
 
     def start(self, interface: str, known_node_urls: typing.Optional[typing.List[typing.Tuple[str, int]]] = None):
         self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))
@@ -271,7 +271,7 @@ class Node:
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None
                          ) -> typing.Tuple[asyncio.Queue, asyncio.Task]:
-        queue = peer_queue or asyncio.Queue(loop=self.loop)
+        queue = peer_queue or asyncio.Queue()
         return queue, self.loop.create_task(self._accumulate_peers_for_value(search_queue, queue))
 
 

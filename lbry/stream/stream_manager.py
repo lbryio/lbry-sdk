@@ -54,7 +54,7 @@ class StreamManager(SourceManager):
         self.re_reflect_task: Optional[asyncio.Task] = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.running_reflector_uploads: typing.Dict[str, asyncio.Task] = {}
-        self.started = asyncio.Event(loop=self.loop)
+        self.started = asyncio.Event()
 
     @property
     def streams(self):
@@ -150,7 +150,7 @@ class StreamManager(SourceManager):
                 file_info['added_on'], file_info['fully_reflected']
             )))
         if add_stream_tasks:
-            await asyncio.gather(*add_stream_tasks, loop=self.loop)
+            await asyncio.gather(*add_stream_tasks)
         log.info("Started stream manager with %i files", len(self._sources))
         if not self.node:
             log.info("no DHT node given, resuming downloads trusting that we can contact reflector")
@@ -159,7 +159,6 @@ class StreamManager(SourceManager):
             self.resume_saving_task = asyncio.ensure_future(asyncio.gather(
                 *(self._sources[sd_hash].save_file(file_name, download_directory)
                   for (file_name, download_directory, sd_hash) in to_resume_saving),
-                loop=self.loop
             ))
 
     async def reflect_streams(self):
@@ -186,14 +185,14 @@ class StreamManager(SourceManager):
                         batch.append(self.reflect_stream(stream))
                     if len(batch) >= self.config.concurrent_reflector_uploads:
                         log.debug("waiting for batch of %s reflecting streams", len(batch))
-                        await asyncio.gather(*batch, loop=self.loop)
+                        await asyncio.gather(*batch)
                         log.debug("done processing %s streams", len(batch))
                         batch = []
                 if batch:
                     log.debug("waiting for batch of %s reflecting streams", len(batch))
-                    await asyncio.gather(*batch, loop=self.loop)
+                    await asyncio.gather(*batch)
                     log.debug("done processing %s streams", len(batch))
-            await asyncio.sleep(300, loop=self.loop)
+            await asyncio.sleep(300)
 
     async def start(self):
         await super().start()

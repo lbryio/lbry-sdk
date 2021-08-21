@@ -22,9 +22,9 @@ class TorrentHandle:
         self._loop = loop
         self._executor = executor
         self._handle: libtorrent.torrent_handle = handle
-        self.started = asyncio.Event(loop=loop)
-        self.finished = asyncio.Event(loop=loop)
-        self.metadata_completed = asyncio.Event(loop=loop)
+        self.started = asyncio.Event()
+        self.finished = asyncio.Event()
+        self.metadata_completed = asyncio.Event()
         self.size = 0
         self.total_wanted_done = 0
         self.name = ''
@@ -87,7 +87,7 @@ class TorrentHandle:
             self._show_status()
             if self.finished.is_set():
                 break
-            await asyncio.sleep(0.1, loop=self._loop)
+            await asyncio.sleep(0.1)
 
     async def pause(self):
         await self._loop.run_in_executor(
@@ -150,7 +150,7 @@ class TorrentSession:
             await self._loop.run_in_executor(
                 self._executor, self._pop_alerts
             )
-            await asyncio.sleep(1, loop=self._loop)
+            await asyncio.sleep(1)
 
     async def pause(self):
         await self._loop.run_in_executor(

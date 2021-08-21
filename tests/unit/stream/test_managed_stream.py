@@ -109,9 +109,9 @@ class TestManagedStream(BlobExchangeTestBase):
         await self._test_transfer_stream(10, stop_when_done=False)
         self.assertEqual(self.stream.status, "finished")
         self.assertTrue(self.stream._running.is_set())
-        await asyncio.sleep(0.5, loop=self.loop)
+        await asyncio.sleep(0.5)
         self.assertTrue(self.stream._running.is_set())
-        await asyncio.sleep(2, loop=self.loop)
+        await asyncio.sleep(2)
         self.assertEqual(self.stream.status, "finished")
         self.assertFalse(self.stream._running.is_set())
 

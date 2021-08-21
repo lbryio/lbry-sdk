@@ -42,7 +42,7 @@ class ComponentManager:
         self.analytics_manager = analytics_manager
         self.component_classes = {}
         self.components = set()
-        self.started = asyncio.Event(loop=self.loop)
+        self.started = asyncio.Event()
         self.peer_manager = peer_manager or PeerManager(asyncio.get_event_loop_policy().get_event_loop())
 
         for component_name, component_class in self.default_component_classes.items():

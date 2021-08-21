@@ -86,13 +86,13 @@ class TestReflector(AsyncioTestCase):
         self.assertListEqual(sent, [])
 
     async def test_reflect_stream(self):
-        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=50), 3, loop=self.loop)
+        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=50), 3)
 
     async def test_reflect_stream_but_reflector_changes_its_mind(self):
-        return await asyncio.wait_for(self._test_reflect_stream(partial_needs=True), 3, loop=self.loop)
+        return await asyncio.wait_for(self._test_reflect_stream(partial_needs=True), 3)
 
     async def test_reflect_stream_small_response_chunks(self):
-        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=30), 3, loop=self.loop)
+        return await asyncio.wait_for(self._test_reflect_stream(response_chunk_size=30), 3)
 
     async def test_announces(self):
         to_announce = await self.storage.get_blobs_to_announce()

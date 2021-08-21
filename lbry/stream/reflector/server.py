@@ -21,7 +21,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: asyncio.Task = None
-        self.started_listening = asyncio.Event(loop=self.loop)
+        self.started_listening = asyncio.Event()
         self.buf = b''
         self.transport: asyncio.StreamWriter = None
         self.writer: typing.Optional['HashBlobWriter'] = None
@@ -29,9 +29,9 @@ class ReflectorServerProtocol(asyncio.Protocol):
         self.descriptor: typing.Optional['StreamDescriptor'] = None
         self.sd_blob: typing.Optional['BlobFile'] = None
         self.received = []
-        self.incoming = incoming_event or asyncio.Event(loop=self.loop)
-        self.not_incoming = not_incoming_event or asyncio.Event(loop=self.loop)
-        self.stop_event = stop_event or asyncio.Event(loop=self.loop)
+        self.incoming = incoming_event or asyncio.Event()
+        self.not_incoming = not_incoming_event or asyncio.Event()
+        self.stop_event = stop_event or asyncio.Event()
         self.chunk_size = response_chunk_size
         self.wait_for_stop_task: typing.Optional[asyncio.Task] = None
         self.partial_event = partial_event
@@ -94,7 +94,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 self.incoming.set()
                 self.send_response({"send_sd_blob": True})
                 try:
-                    await asyncio.wait_for(self.sd_blob.verified.wait(), 30, loop=self.loop)
+                    await asyncio.wait_for(self.sd_blob.verified.wait(), 30)
                     self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
                         self.loop, self.blob_manager.blob_dir, self.sd_blob
                     )
@@ -140,7 +140,7 @@ class ReflectorServerProtocol(asyncio.Protocol):
                 self.incoming.set()
                 self.send_response({"send_blob": True})
                 try:
-                    await asyncio.wait_for(blob.verified.wait(), 30, loop=self.loop)
+                    await asyncio.wait_for(blob.verified.wait(), 30)
                     self.send_response({"received_blob": True})
                 except asyncio.TimeoutError:
                     self.send_response({"received_blob": False})
@@ -162,10 +162,10 @@ class ReflectorServer:
         self.loop = asyncio.get_event_loop()
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
-        self.started_listening = asyncio.Event(loop=self.loop)
-        self.stopped_listening = asyncio.Event(loop=self.loop)
-        self.incoming_event = incoming_event or asyncio.Event(loop=self.loop)
-        self.not_incoming_event = not_incoming_event or asyncio.Event(loop=self.loop)
+        self.started_listening = asyncio.Event()
+        self.stopped_listening = asyncio.Event()
+        self.incoming_event = incoming_event or asyncio.Event()
+        self.not_incoming_event = not_incoming_event or asyncio.Event()
         self.response_chunk_size = response_chunk_size
         self.stop_event = stop_event
         self.partial_needs = partial_needs  # for testing cases where it doesn't know what it wants

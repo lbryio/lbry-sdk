@@ -32,7 +32,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.buf = b''
 
         # this is here to handle the race when the downloader is closed right as response_fut gets a result
-        self.closed = asyncio.Event(loop=self.loop)
+        self.closed = asyncio.Event()
 
     def data_received(self, data: bytes):
         if self.connection_manager:
@@ -111,7 +111,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
             self.transport.write(msg)
             if self.connection_manager:
                 self.connection_manager.sent_data(f"{self.peer_address}:{self.peer_port}", len(msg))
-            response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout, loop=self.loop)
+            response: BlobResponse = await asyncio.wait_for(self._response_fut, self.peer_timeout)
             availability_response = response.get_availability_response()
             price_response = response.get_price_response()
             blob_response = response.get_blob_response()
@@ -151,7 +151,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
                 f" timeout in {self.peer_timeout}"
             log.debug(msg)
             msg = f"downloaded {self.blob.blob_hash[:8]} from {self.peer_address}:{self.peer_port}"
-            await asyncio.wait_for(self.writer.finished, self.peer_timeout, loop=self.loop)
+            await asyncio.wait_for(self.writer.finished, self.peer_timeout)
             # wait for the io to finish
             await self.blob.verified.wait()
             log.info("%s at %fMB/s", msg,
@@ -187,7 +187,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         try:
             self._blob_bytes_received = 0
             self.blob, self.writer = blob, blob.get_blob_writer(self.peer_address, self.peer_port)
-            self._response_fut = asyncio.Future(loop=self.loop)
+            self._response_fut = asyncio.Future()
             return await self._download_blob()
         except OSError:
             # i'm not sure how to fix this race condition - jack
@@ -244,7 +244,7 @@ async def request_blob(loop: asyncio.AbstractEventLoop, blob: Optional['Abstract
     try:
         if not connected_protocol:
             await asyncio.wait_for(loop.create_connection(lambda: protocol, address, tcp_port),
-                                   peer_connect_timeout, loop=loop)
+                                   peer_connect_timeout)
             connected_protocol = protocol
         if blob is None or blob.get_is_verified() or not blob.is_writeable():
             # blob is None happens when we are just opening a connection

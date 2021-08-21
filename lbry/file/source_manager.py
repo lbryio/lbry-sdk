@@ -54,7 +54,7 @@ class SourceManager:
         self.storage = storage
         self.analytics_manager = analytics_manager
         self._sources: typing.Dict[str, ManagedDownloadSource] = {}
-        self.started = asyncio.Event(loop=self.loop)
+        self.started = asyncio.Event()
 
     def add(self, source: ManagedDownloadSource):
         self._sources[source.identifier] = source

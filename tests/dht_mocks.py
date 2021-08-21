@@ -51,7 +51,8 @@ def mock_network_loop(loop: asyncio.AbstractEventLoop,
                 return rx.datagram_received(data, from_addr)
 
         protocol = proto_lam()
-        transport = asyncio.DatagramTransport(extra={'socket': mock_sock})
+        transport = mock.Mock(spec=asyncio.DatagramTransport)
+        transport.get_extra_info = lambda k: {'socket': mock_sock}[k]
         transport.is_closing = lambda: False
         transport.close = lambda: mock_sock.close()
         mock_sock.sendto = sendto
