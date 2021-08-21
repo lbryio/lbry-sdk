@@ -27,8 +27,8 @@ class StreamDownloader:
         self.config = config
         self.blob_manager = blob_manager
         self.sd_hash = sd_hash
-        self.search_queue = asyncio.Queue(loop=loop)     # blob hashes to feed into the iterative finder
-        self.peer_queue = asyncio.Queue(loop=loop)       # new peers to try
+        self.search_queue = asyncio.Queue()     # blob hashes to feed into the iterative finder
+        self.peer_queue = asyncio.Queue()       # new peers to try
         self.blob_downloader = BlobDownloader(self.loop, self.config, self.blob_manager, self.peer_queue)
         self.descriptor: typing.Optional[StreamDescriptor] = descriptor
         self.node: typing.Optional['Node'] = None

@@ -25,13 +25,13 @@ class BlobServerProtocol(asyncio.Protocol):
         self.idle_timeout = idle_timeout
         self.transfer_timeout = transfer_timeout
         self.server_task: typing.Optional[asyncio.Task] = None
-        self.started_listening = asyncio.Event(loop=self.loop)
+        self.started_listening = asyncio.Event()
         self.buf = b''
         self.transport: typing.Optional[asyncio.Transport] = None
         self.lbrycrd_address = lbrycrd_address
         self.peer_address_and_port: typing.Optional[str] = None
-        self.started_transfer = asyncio.Event(loop=self.loop)
-        self.transfer_finished = asyncio.Event(loop=self.loop)
+        self.started_transfer = asyncio.Event()
+        self.transfer_finished = asyncio.Event()
         self.close_on_idle_task: typing.Optional[asyncio.Task] = None
 
     async def close_on_idle(self):
@@ -157,7 +157,7 @@ class BlobServer:
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
-        self.started_listening = asyncio.Event(loop=self.loop)
+        self.started_listening = asyncio.Event()
         self.lbrycrd_address = lbrycrd_address
         self.idle_timeout = idle_timeout
         self.transfer_timeout = transfer_timeout

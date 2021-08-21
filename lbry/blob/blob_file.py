@@ -87,8 +87,8 @@ class AbstractBlob:
         self.blob_completed_callback = blob_completed_callback
         self.blob_directory = blob_directory
         self.writers: typing.Dict[typing.Tuple[typing.Optional[str], typing.Optional[int]], HashBlobWriter] = {}
-        self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
-        self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
+        self.verified: asyncio.Event = asyncio.Event()
+        self.writing: asyncio.Event = asyncio.Event()
         self.readers: typing.List[typing.BinaryIO] = []
         self.added_on = added_on or time.time()
         self.is_mine = is_mine

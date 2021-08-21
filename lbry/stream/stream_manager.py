@@ -54,7 +54,7 @@ class StreamManager(SourceManager):
         self.re_reflect_task: Optional[asyncio.Task] = None
         self.update_stream_finished_futs: typing.List[asyncio.Future] = []
         self.running_reflector_uploads: typing.Dict[str, asyncio.Task] = {}
-        self.started = asyncio.Event(loop=self.loop)
+        self.started = asyncio.Event()
 
     @property
     def streams(self):

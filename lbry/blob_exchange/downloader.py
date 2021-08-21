@@ -30,7 +30,7 @@ class BlobDownloader:
         self.failures: typing.Dict['KademliaPeer', int] = {}
         self.connection_failures: typing.Set['KademliaPeer'] = set()
         self.connections: typing.Dict['KademliaPeer', 'BlobExchangeClientProtocol'] = {}
-        self.is_running = asyncio.Event(loop=self.loop)
+        self.is_running = asyncio.Event()
 
     def should_race_continue(self, blob: 'AbstractBlob'):
         max_probes = self.config.max_connections_per_download * (1 if self.connections else 10)

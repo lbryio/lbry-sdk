@@ -32,7 +32,7 @@ class BlobExchangeClientProtocol(asyncio.Protocol):
         self.buf = b''
 
         # this is here to handle the race when the downloader is closed right as response_fut gets a result
-        self.closed = asyncio.Event(loop=self.loop)
+        self.closed = asyncio.Event()
 
     def data_received(self, data: bytes):
         if self.connection_manager:

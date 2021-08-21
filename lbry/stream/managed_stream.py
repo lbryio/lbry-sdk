@@ -60,9 +60,9 @@ class ManagedStream(ManagedDownloadSource):
         self.file_output_task: typing.Optional[asyncio.Task] = None
         self.delayed_stop_task: typing.Optional[asyncio.Task] = None
         self.streaming_responses: typing.List[typing.Tuple[Request, StreamResponse]] = []
-        self.fully_reflected = asyncio.Event(loop=self.loop)
-        self.streaming = asyncio.Event(loop=self.loop)
-        self._running = asyncio.Event(loop=self.loop)
+        self.fully_reflected = asyncio.Event()
+        self.streaming = asyncio.Event()
+        self._running = asyncio.Event()
 
     @property
     def sd_hash(self) -> str:
@@ -267,7 +267,7 @@ class ManagedStream(ManagedDownloadSource):
             log.info("finished saving file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id,
                      self.sd_hash[:6], self.full_path)
             await self.blob_manager.storage.set_saved_file(self.stream_hash)
-        except Exception as err:
+        except (Exception, asyncio.CancelledError) as err:
             if os.path.isfile(output_path):
                 log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
                 os.remove(output_path)
