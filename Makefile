@@ -3,10 +3,6 @@
 install:
 	pip install -e .
 
-tools:
-	pip install pylint==2.10.0
-	pip install coverage
-
 lint:
 	pylint --rcfile=setup.cfg lbry
 	#mypy --ignore-missing-imports lbry

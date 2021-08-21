@@ -59,7 +59,7 @@ setup(
     ] + PLYVEL,
     extras_require={
         'torrent': ['lbry-libtorrent'],
-        'lint': ['mypy==0.701', 'pylint==2.4.4'],
+        'lint': ['pylint==2.10.0'],
         'test': ['coverage'],
     },
     classifiers=[
