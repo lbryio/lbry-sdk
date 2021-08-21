@@ -61,6 +61,12 @@ jobs:
         env:
           HOME: /tmp
         run: python -m unittest tests/unit/test_conf.py
+    - name: submit coverage report
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        flag-name: tests-unit-${{ matrix.os }}
+        parallel: true
 
   tests-integration:
     name: "tests / integration"
@@ -98,6 +104,16 @@ jobs:
           restore-keys: txo-integration-${{ matrix.test }}-
       - run: pip install tox
       - run: tox -e ${{ matrix.test }}
+
+  coverage:
+    needs: ["tests-unit", "tests-integration"]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Coveralls Finished
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.github_token }}
+        parallel-finished: true
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
