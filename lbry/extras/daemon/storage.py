@@ -617,7 +617,7 @@ class SQLiteStorage(SQLiteMixin):
             ).fetchall()
             download_dir = binascii.hexlify(self.conf.download_dir.encode()).decode()
             transaction.executemany(
-                f"update file set download_directory=? where stream_hash=?",
+                "update file set download_directory=? where stream_hash=?",
                 ((download_dir, stream_hash) for stream_hash in stream_hashes)
             ).fetchall()
         await self.db.run_with_foreign_keys_disabled(_recover)
@@ -861,6 +861,6 @@ class SQLiteStorage(SQLiteMixin):
             transaction.execute('delete from peer').fetchall()
             transaction.executemany(
                 'insert into peer(node_id, address, udp_port, tcp_port) values (?, ?, ?, ?)',
-                tuple([(binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers])
+                ((binascii.hexlify(p.node_id), p.address, p.udp_port, p.tcp_port) for p in peers)
             ).fetchall()
         return await self.db.run(_save_kademlia_peers)

@@ -50,7 +50,7 @@ class KBucket:
             self.peers.append(peer)
             return True
         else:
-            for i in range(len(self.peers)):
+            for i, _ in enumerate(self.peers):
                 local_peer = self.peers[i]
                 if local_peer.node_id == peer.node_id:
                     self.peers.remove(local_peer)

@@ -1701,9 +1701,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 'change': {'gap': change_gap, 'maximum_uses_per_address': change_max_uses},
                 'receiving': {'gap': receiving_gap, 'maximum_uses_per_address': receiving_max_uses},
             }
-            for chain_name in address_changes:
+            for chain_name, changes in address_changes.items():
                 chain = getattr(account, chain_name)
-                for attr, value in address_changes[chain_name].items():
+                for attr, value in changes.items():
                     if value is not None:
                         setattr(chain, attr, value)
                         change_made = True
@@ -2240,15 +2240,15 @@ class Daemon(metaclass=JSONRPCServerType):
             txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
-                raise Exception(f"Could not find claim with claim_id '{claim_id}'. ")
+                raise Exception(f"Could not find claim with claim_id '{claim_id}'.")
         elif url:
             txo = (await self.ledger.resolve(accounts, [url], include_purchase_receipt=True))[url]
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
-                raise Exception(f"Could not find claim with url '{url}'. ")
+                raise Exception(f"Could not find claim with url '{url}'.")
         else:
             # TODO: use error from lbry.error
-            raise Exception(f"Missing argument claim_id or url. ")
+            raise Exception("Missing argument claim_id or url.")
         if not allow_duplicate_purchase and txo.purchase_receipt:
             # TODO: use error from lbry.error
             raise Exception(
@@ -4091,15 +4091,15 @@ class Daemon(metaclass=JSONRPCServerType):
             txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
-                raise Exception(f"Could not find collection with claim_id '{claim_id}'. ")
+                raise Exception(f"Could not find collection with claim_id '{claim_id}'.")
         elif url:
             txo = (await self.ledger.resolve(wallet.accounts, [url]))[url]
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
-                raise Exception(f"Could not find collection with url '{url}'. ")
+                raise Exception(f"Could not find collection with url '{url}'.")
         else:
             # TODO: use error from lbry.error
-            raise Exception(f"Missing argument claim_id or url. ")
+            raise Exception("Missing argument claim_id or url.")
 
         page_num, page_size = abs(page), min(abs(page_size), 50)
         items = await self.ledger.resolve_collection(txo, page_size * (page_num - 1), page_size)
@@ -5072,7 +5072,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'buckets': {}
         }
 
-        for i in range(len(self.dht_node.protocol.routing_table.buckets)):
+        for i, _ in enumerate(self.dht_node.protocol.routing_table.buckets):
             result['buckets'][i] = []
             for peer in self.dht_node.protocol.routing_table.buckets[i].peers:
                 host = {

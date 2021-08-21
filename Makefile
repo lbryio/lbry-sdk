@@ -3,10 +3,6 @@
 install:
 	pip install -e .
 
-tools:
-	pip install mypy==0.701 pylint==2.4.4
-	pip install coverage astroid pylint
-
 lint:
 	pylint --rcfile=setup.cfg lbry
 	#mypy --ignore-missing-imports lbry

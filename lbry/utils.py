@@ -155,7 +155,7 @@ def async_timed_cache(duration: int):
         async def _inner(*args, **kwargs) -> typing.Any:
             loop = asyncio.get_running_loop()
             time_now = loop.time()
-            key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
+            key = (args, tuple(kwargs.items()))
             if key in cache and (time_now - cache[key][1] < duration):
                 return cache[key][0]
             to_cache = await func(*args, **kwargs)
@@ -173,7 +173,7 @@ def cache_concurrent(async_fn):
 
     @functools.wraps(async_fn)
     async def wrapper(*args, **kwargs):
-        key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
+        key = (args, tuple(kwargs.items()))
         cache[key] = cache.get(key) or asyncio.create_task(async_fn(*args, **kwargs))
         try:
             return await cache[key]
@@ -342,7 +342,7 @@ def lru_cache_concurrent(cache_size: typing.Optional[int] = None,
 
         @functools.wraps(async_fn)
         async def _inner(*args, **kwargs):
-            key = tuple([args, tuple([tuple([k, kwargs[k]]) for k in kwargs])])
+            key = (args, tuple(kwargs.items()))
             if key in lru_cache:
                 return lru_cache.get(key)
 

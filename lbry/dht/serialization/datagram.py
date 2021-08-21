@@ -181,7 +181,7 @@ def decode_datagram(datagram: bytes) -> typing.Union[RequestDatagram, ResponseDa
 def make_compact_ip(address: str) -> bytearray:
     compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), address.split('.'), bytearray())
     if len(compact_ip) != 4:
-        raise ValueError(f"invalid IPv4 length")
+        raise ValueError("invalid IPv4 length")
     return compact_ip
 
 
@@ -190,7 +190,7 @@ def make_compact_address(node_id: bytes, address: str, port: int) -> bytearray:
     if not 0 < port < 65536:
         raise ValueError(f'Invalid port: {port}')
     if len(node_id) != constants.HASH_BITS // 8:
-        raise ValueError(f"invalid node node_id length")
+        raise ValueError("invalid node node_id length")
     return compact_ip + port.to_bytes(2, 'big') + node_id
 
 
@@ -201,5 +201,5 @@ def decode_compact_address(compact_address: bytes) -> typing.Tuple[bytes, str, i
     if not 0 < port < 65536:
         raise ValueError(f'Invalid port: {port}')
     if len(node_id) != constants.HASH_BITS // 8:
-        raise ValueError(f"invalid node node_id length")
+        raise ValueError("invalid node node_id length")
     return node_id, address, port
