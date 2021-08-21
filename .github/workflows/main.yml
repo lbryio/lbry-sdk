@@ -113,7 +113,7 @@ jobs:
       - name: submit coverage report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_FLAG_NAME: tests-integration
+          COVERALLS_FLAG_NAME: tests-integration-${{ matrix.test }}
           COVERALLS_PARALLEL: true
         run: |
           coverage combine tests
