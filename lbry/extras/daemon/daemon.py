@@ -1124,14 +1124,15 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               FILE_MANAGER_COMPONENT)
     async def jsonrpc_get(
-            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
+            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None,
+            claim_id=False):
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
+             [--save_file=<save_file>] [--wallet_id=<wallet_id>] [--claim_id]
 
 
         Options:
@@ -1141,12 +1142,24 @@ class Daemon(metaclass=JSONRPCServerType):
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
             --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
+            --claim_id               : (bool) treat <uri> as a claim_id, that is, download by claim_id
+                                       instead of canonical URL
 
         Returns: {File}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if download_directory and not os.path.isdir(download_directory):
-            return {"error": f"specified download directory \"{download_directory}\" does not exist"}
+            return {"error": f'specified download directory "{download_directory}" does not exist'}
+
+        if claim_id:
+            out = await self.jsonrpc_claim_search(claim_id=uri, wallet_id=wallet_id)
+            if out["total_items"] < 1:
+                return {"error":
+                        f'No item found with specified claim_id "{uri}"'}
+
+            txo = out["items"][-1]
+            uri = txo.meta["canonical_url"]
+
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         try:
             stream = await self.file_manager.download_from_uri(
                 uri, self.exchange_rate_manager, timeout, file_name, download_directory,
