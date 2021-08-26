@@ -951,7 +951,12 @@ class Daemon(metaclass=JSONRPCServerType):
                         },
                         'total_outgoing_mps': (float) megabytes per second sent,
                         'total_incoming_mps': (float) megabytes per second received,
-                        'time': (float) timestamp
+                        'max_outgoing_mbs': (float) maximum bandwidth (megabytes per second) sent, since the
+                                            daemon was started
+                        'max_incoming_mbs': (float) maximum bandwidth (megabytes per second) received, since the
+                                            daemon was started
+                        'total_sent' : (int) total number of bytes sent since the daemon was started
+                        'total_received' : (int) total number of bytes received since the daemon was started
                     }
                 },
                 'hash_announcer': {
@@ -4959,7 +4964,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --finished                   : (bool) only return finished blobs
             --uri=<uri>                  : (str) filter blobs by stream in a uri
             --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
-            --sd_hash=<sd_hash>          : (str) filter blobs by sd hash
+            --sd_hash=<sd_hash>          : (str) only return blobs in the stream with matching sd hash. The daemon must
+                                           know about that sd_hash (eg the header blob of the stream was downloaded)
             --page=<page>                : (int) page to return during paginating
             --page_size=<page_size>      : (int) number of items on page during pagination
 
