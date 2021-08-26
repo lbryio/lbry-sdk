@@ -1181,6 +1181,69 @@ class Daemon(metaclass=JSONRPCServerType):
             return {"error": str(e)}
         return stream
 
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+              FILE_MANAGER_COMPONENT)
+    async def jsonrpc_getch(self,
+                            channel, number=1,
+                            download_directory=None, timeout=None, save_file=False, wallet_id=None,
+                            download_repost=False):
+        """
+        Download the latest claims from a LBRY channel.
+
+        Usage:
+            getch <channel> [<number> | --number=<number>]
+             [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
+             [--save_file] [--wallet_id=<wallet_id>] [--download_repost]
+
+
+        Options:
+            --channel=<channel>      : (str) channel from which content will be downloaded
+            --number=<number>        : (int) number of latest claims to download from the channel
+                                       (default 1)
+            --download_directory=<download_directory>  : (str) full path to the directory to download into
+            --timeout=<timeout>      : (int) download timeout in number of seconds
+            --save_file              : (bool) save the file to the downloads directory
+            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
+            --download_repost        : (bool) if a claim is a repost, download the original claim
+
+        Returns: {File}
+        """
+        if not channel.startswith("@"):
+            channel = "@" + channel
+
+        # If the claim is a livestream it will not have 'source'
+        # and won't be able to be downloaded, thus we want `has_source=True`
+        out = await self.jsonrpc_claim_search(channel=channel,
+                                              page_size=number,
+                                              order_by="release_time",
+                                              has_source=True,
+                                              wallet_id=wallet_id)
+        if out["total_items"] < 1:
+            return {"error":
+                    f'No items found with specified channel "{channel}"'}
+
+        txos = out["items"]
+
+        streams = []
+        for txo in txos:
+            uri = txo.meta["canonical_url"]
+
+            # file_name=None because we don't want to rename all streams
+            # claim_id=False because we are sure these are URLs not IDs
+            stream = await self.jsonrpc_get(uri, file_name=None,
+                                            download_directory=download_directory,
+                                            timeout=timeout, save_file=save_file,
+                                            wallet_id=wallet_id,
+                                            claim_id=False,
+                                            download_repost=download_repost)
+            if isinstance(stream, dict) and "error" in stream:
+                typ = txo.claim.claim_type
+                stream = {"error": stream["error"] + f" ({typ})" + " " + uri}
+            streams.append(stream)
+
+        return {"items": streams,
+                "total_items": len(streams)}
+
     SETTINGS_DOC = """
     Settings management.
     """
