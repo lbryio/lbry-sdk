@@ -1125,14 +1125,14 @@ class Daemon(metaclass=JSONRPCServerType):
               FILE_MANAGER_COMPONENT)
     async def jsonrpc_get(
             self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None,
-            claim_id=False):
+            claim_id=False, download_repost=False):
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>] [--claim_id]
+             [--save_file=<save_file>] [--wallet_id=<wallet_id>] [--claim_id] [--download_repost]
 
 
         Options:
@@ -1144,20 +1144,28 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
             --claim_id               : (bool) treat <uri> as a claim_id, that is, download by claim_id
                                        instead of canonical URL
+            --download_repost        : (bool) resolve the claim, and if it is a repost, download the original claim
 
         Returns: {File}
         """
         if download_directory and not os.path.isdir(download_directory):
             return {"error": f'specified download directory "{download_directory}" does not exist'}
 
-        if claim_id:
-            out = await self.jsonrpc_claim_search(claim_id=uri, wallet_id=wallet_id)
-            if out["total_items"] < 1:
-                return {"error":
-                        f'No item found with specified claim_id "{uri}"'}
+        if claim_id or download_repost:
+            if claim_id:
+                out = await self.jsonrpc_claim_search(claim_id=uri, wallet_id=wallet_id)
+                if out["total_items"] < 1:
+                    return {"error":
+                            f'No item found with specified claim_id "{uri}"'}
 
-            txo = out["items"][-1]
-            uri = txo.meta["canonical_url"]
+                txo = out["items"][-1]
+                uri = txo.meta["canonical_url"]
+            else:
+                out = await self.jsonrpc_resolve(uri, wallet_id=wallet_id)
+                txo = out[uri]
+
+            if download_repost and txo.reposted_claim:
+                uri = txo.reposted_claim.meta["canonical_url"]
 
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         try:
