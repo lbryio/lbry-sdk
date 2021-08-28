@@ -1121,17 +1121,35 @@ class Daemon(metaclass=JSONRPCServerType):
 
         return results
 
+    async def _get(self, uri, exchange_rate_manager, timeout=None, file_name=None,
+                   download_directory=None, save_file=None, wallet_id=None):
+        """The inner method to download a claim."""
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        try:
+            stream = await self.file_manager.download_from_uri(
+                uri, exchange_rate_manager, timeout, file_name,
+                download_directory, save_file=save_file, wallet=wallet)
+            if not stream:
+                raise DownloadSDTimeoutError(uri)
+        except Exception as e:
+            # TODO: use error from lbry.error
+            log.warning("Error downloading %s: %s", uri, str(e))
+            return {"error": str(e)}
+        return stream
+
     @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
               FILE_MANAGER_COMPONENT)
     async def jsonrpc_get(
-            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None):
+            self, uri, file_name=None, download_directory=None, timeout=None, save_file=None, wallet_id=None,
+            download_collection=False, max_claims=2, reverse_collection=False):
         """
         Download stream from a LBRY name.
 
         Usage:
             get <uri> [<file_name> | --file_name=<file_name>]
              [<download_directory> | --download_directory=<download_directory>] [<timeout> | --timeout=<timeout>]
-             [--save_file=<save_file>] [--wallet_id=<wallet_id>]
+             [--save_file=<save_file>] [--wallet_id=<wallet_id>] [--download_collection] [--max_claims=<max_claims>]
+             [--reverse_collection]
 
 
         Options:
@@ -1141,24 +1159,65 @@ class Daemon(metaclass=JSONRPCServerType):
             --timeout=<timeout>      : (int) download timeout in number of seconds
             --save_file=<save_file>  : (bool) save the file to the downloads directory
             --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
+            --download_collection    : (bool) resolve the claim, and if it's a collection,
+                                       try to download the individual claims in this collection
+            --max_claims=<max_claims>  : (int) if it's a collection it will download
+                                         as many claims indicated by this option
+                                         (default 2)
+            --reverse_collection     : (bool) reverse the order of the collection's claims,
+                                       that is, the most recently added claims will be downloaded first
 
         Returns: {File}
         """
-        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if download_directory and not os.path.isdir(download_directory):
-            return {"error": f"specified download directory \"{download_directory}\" does not exist"}
-        try:
-            stream = await self.file_manager.download_from_uri(
-                uri, self.exchange_rate_manager, timeout, file_name, download_directory,
-                save_file=save_file, wallet=wallet
-            )
-            if not stream:
-                raise DownloadSDTimeoutError(uri)
-        except Exception as e:
-            # TODO: use error from lbry.error
-            log.warning("Error downloading %s: %s", uri, str(e))
-            return {"error": str(e)}
-        return stream
+            return {"error": f'specified download directory "{download_directory}" does not exist'}
+
+        if not download_collection:
+            stream = await self._get(uri, self.exchange_rate_manager, timeout, file_name,
+                                     download_directory, save_file, wallet_id)
+            return stream
+
+        out = await self.jsonrpc_resolve(uri, wallet_id=wallet_id)
+        txo = out[uri]
+
+        if isinstance(txo, dict) and "error" in txo:
+            return txo
+
+        if txo.claim and not txo.claim.is_collection:
+            stream = await self._get(uri, self.exchange_rate_manager, timeout, file_name,
+                                     download_directory, save_file, wallet_id)
+            return stream
+
+        collection = txo.claim.collection.claims.ids
+        if reverse_collection:
+            collection.reverse()
+
+        streams = []
+
+        for num, cid in enumerate(collection, start=1):
+            if num > max_claims:
+                break
+            out = await self.jsonrpc_claim_search(claim_id=cid,
+                                                  has_source=True,
+                                                  wallet_id=wallet_id)
+            if out["total_items"] < 1:
+                error = {"error":
+                         f'No item found with specified claim_id "{cid}"'}
+                streams.append(error)
+                continue
+
+            txo = out["items"][-1]
+            uri = txo.meta["canonical_url"]
+
+            # file_name=None because we don't want to rename all streams
+            # in the collection with the same name
+            stream = await self._get(uri, self.exchange_rate_manager, timeout, file_name=None,
+                                     download_directory=download_directory,
+                                     save_file=save_file, wallet_id=wallet_id)
+            streams.append(stream)
+
+        return {"items": streams,
+                "total_items": len(streams)}
 
     SETTINGS_DOC = """
     Settings management.
