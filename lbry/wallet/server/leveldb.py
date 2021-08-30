@@ -22,7 +22,7 @@ from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List
 from functools import partial
 from asyncio import sleep
 from bisect import bisect_right
-from collections import defaultdict, OrderedDict
+from collections import defaultdict
 
 from lbry.error import ResolveCensoredError
 from lbry.schema.result import Censor
@@ -38,7 +38,6 @@ from lbry.wallet.server.db.revertable import RevertableOpStack
 from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, PrefixDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
-from lbry.wallet.server.db.trending import TrendingDB
 from lbry.wallet.transaction import OutputScript
 from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
@@ -150,13 +149,15 @@ class LevelDB:
         self.total_transactions = None
         self.transaction_num_mapping = {}
 
-        self.claim_to_txo: typing.OrderedDict[bytes, ClaimToTXOValue] = OrderedDict()
-        self.txo_to_claim: typing.OrderedDict[Tuple[int, int], bytes] = OrderedDict()
+        self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
+        self.txo_to_claim: Dict[Tuple[int, int], bytes] = {}
 
         # Search index
         self.search_index = SearchIndex(
             self.env.es_index_prefix, self.env.database_query_timeout,
-            elastic_host=env.elastic_host, elastic_port=env.elastic_port
+            elastic_host=env.elastic_host, elastic_port=env.elastic_port,
+            half_life=self.env.trending_half_life, whale_threshold=self.env.trending_whale_threshold,
+            whale_half_life=self.env.trending_whale_half_life
         )
 
         self.genesis_bytes = bytes.fromhex(self.coin.GENESIS_HASH)
@@ -167,8 +168,6 @@ class LevelDB:
             self.ledger = TestNetLedger
         else:
             self.ledger = RegTestLedger
-
-        self.trending_db = TrendingDB(self.env.db_dir)
 
     def get_claim_from_txo(self, tx_num: int, tx_idx: int) -> Optional[TXOToClaimValue]:
         claim_hash_and_name = self.db.get(Prefixes.txo_to_claim.pack_key(tx_num, tx_idx))
@@ -187,6 +186,12 @@ class LevelDB:
         for _ in self.db.iterator(prefix=Prefixes.reposted_claim.pack_partial_key(claim_hash)):
             cnt += 1
         return cnt
+
+    def get_trending_spike_sum(self, height: int, claim_hash: bytes) -> float:
+        spikes = 0.0
+        for k, v in self.prefix_db.trending_spike.iterate(prefix=(height, claim_hash)):
+            spikes += v.mass
+        return spikes
 
     def get_activation(self, tx_num, position, is_support=False) -> int:
         activation = self.db.get(
@@ -704,12 +709,9 @@ class LevelDB:
             'censor_type': Censor.RESOLVE if blocked_hash else Censor.SEARCH if filtered_hash else Censor.NOT_CENSORED,
             'censoring_channel_id': (blocked_hash or filtered_hash or b'').hex() or None,
             'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash),
-            'trending_score': self.trending_db.get_trending_score(claim_hash)
-            # 'trending_group': 0,
-            # 'trending_mixed': 0,
-            # 'trending_local': 0,
-            # 'trending_global': 0,
+            'trending_score_change': self.get_trending_spike_sum(self.db_height, claim_hash)
         }
+
         if metadata.is_repost and reposted_duration is not None:
             value['duration'] = reposted_duration
         elif metadata.is_stream and (metadata.stream.video.duration or metadata.stream.audio.duration):
@@ -748,7 +750,7 @@ class LevelDB:
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
             name = self.claim_to_txo[claim_hash].normalized_name
-            if not self.db.get(Prefixes.claim_takeover.pack_key(name)):
+            if not self.prefix_db.claim_takeover.get(name):
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
             claim = self._fs_get_claim_by_hash(claim_hash)
@@ -942,6 +944,11 @@ class LevelDB:
                 self.db.iterator(
                     start=Prefixes.touched_or_deleted.pack_key(0),
                     stop=Prefixes.touched_or_deleted.pack_key(min_height), include_value=False
+                )
+            )
+            delete_undo_keys.extend(
+                self.db.iterator(
+                    prefix=Prefixes.trending_spike.pack_partial_key(min_height), include_value=False
                 )
             )
 

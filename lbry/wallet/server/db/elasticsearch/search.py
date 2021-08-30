@@ -1,3 +1,4 @@
+import math
 import asyncio
 import struct
 from binascii import unhexlify
@@ -9,7 +10,6 @@ from typing import Optional, List, Iterable, Union
 from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_streaming_bulk
 
-from lbry.crypto.base58 import Base58
 from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
@@ -43,7 +43,8 @@ class IndexVersionMismatch(Exception):
 class SearchIndex:
     VERSION = 1
 
-    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200):
+    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200,
+                 half_life=0.4, whale_threshold=10000, whale_half_life=0.99):
         self.search_timeout = search_timeout
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
         self.search_client: Optional[AsyncElasticsearch] = None
@@ -56,6 +57,9 @@ class SearchIndex:
         self.resolution_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
         self._elastic_port = elastic_port
+        self._trending_half_life = half_life
+        self._trending_whale_threshold = whale_threshold
+        self._trending_whale_half_life = whale_half_life
 
     async def get_index_version(self) -> int:
         try:
@@ -121,7 +125,7 @@ class SearchIndex:
                 }
             count += 1
             if count % 100 == 0:
-                self.logger.debug("Indexing in progress, %d claims.", count)
+                self.logger.info("Indexing in progress, %d claims.", count)
         if count:
             self.logger.info("Indexing done for %d claims.", count)
         else:
@@ -140,18 +144,56 @@ class SearchIndex:
         self.logger.debug("Indexing done.")
 
     def update_filter_query(self, censor_type, blockdict, channels=False):
-        blockdict = {key.hex(): value.hex() for key, value in blockdict.items()}
+        blockdict = {blocked.hex(): blocker.hex() for blocked, blocker in blockdict.items()}
         if channels:
             update = expand_query(channel_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         else:
             update = expand_query(claim_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         key = 'channel_id' if channels else 'claim_id'
         update['script'] = {
-            "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_id=params[ctx._source.{key}]",
+            "source": f"ctx._source.censor_type={censor_type}; "
+                      f"ctx._source.censoring_channel_id=params[ctx._source.{key}];",
             "lang": "painless",
             "params": blockdict
         }
         return update
+
+    async def apply_update_and_decay_trending_score(self):
+        update_trending_score_script = """
+        if (ctx._source.trending_score == null) {
+            ctx._source.trending_score = ctx._source.trending_score_change;
+        } else {
+            ctx._source.trending_score += ctx._source.trending_score_change;
+        }
+        ctx._source.trending_score_change = 0.0;
+        """
+        await self.sync_client.update_by_query(
+            self.index, body={
+                'query': {
+                    'bool': {'must_not': [{'match': {'trending_score_change': 0.0}}]}
+                },
+                'script': {'source': update_trending_score_script, 'lang': 'painless'}
+            }, slices=4, conflicts='proceed'
+        )
+
+        whale_decay_factor = 2 * (2.0 ** (-1 / self._trending_whale_half_life))
+        decay_factor = 2 * (2.0 ** (-1 / self._trending_half_life))
+        decay_script = """
+        if (ctx._source.trending_score == null) { ctx._source.trending_score = 0.0; }
+        if ((-0.000001 <= ctx._source.trending_score) && (ctx._source.trending_score <= 0.000001)) {
+            ctx._source.trending_score = 0.0;
+        } else if (ctx._source.effective_amount >= %s) {
+            ctx._source.trending_score *= %s;
+        } else {
+            ctx._source.trending_score *= %s;
+        }
+        """ % (self._trending_whale_threshold, whale_decay_factor, decay_factor)
+        await self.sync_client.update_by_query(
+            self.index, body={
+                'query': {'bool': {'must_not': [{'match': {'trending_score': 0.0}}]}},
+                'script': {'source': decay_script, 'lang': 'painless'}
+            }, slices=4, conflicts='proceed'
+        )
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         if filtered_streams:

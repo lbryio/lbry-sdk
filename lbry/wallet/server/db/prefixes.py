@@ -463,6 +463,21 @@ class TouchedOrDeletedClaimValue(typing.NamedTuple):
                f"deleted_claims={','.join(map(lambda x: x.hex(), self.deleted_claims))})"
 
 
+class TrendingSpikeKey(typing.NamedTuple):
+    height: int
+    claim_hash: bytes
+    tx_num: int
+    position: int
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(height={self.height}, claim_hash={self.claim_hash.hex()}, " \
+               f"tx_num={self.tx_num}, position={self.position})"
+
+
+class TrendingSpikeValue(typing.NamedTuple):
+    mass: float
+
+
 class ActiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.active_amount.value
     key_struct = struct.Struct(b'>20sBLLH')
@@ -1335,6 +1350,47 @@ class TouchedOrDeletedPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(touched, deleted)
 
 
+class TrendingSpikePrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.trending_spike.value
+    key_struct = struct.Struct(b'>L20sLH')
+    value_struct = struct.Struct(b'>f')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack,
+        struct.Struct(b'>L20s').pack,
+        struct.Struct(b'>L20sL').pack,
+        struct.Struct(b'>L20sLH').pack
+    ]
+
+    def pack_spike(self, height: int, claim_hash: bytes, tx_num: int, position: int, amount: int, half_life: int,
+                   depth: int = 0, subtract: bool = False) -> RevertablePut:
+        softened_change = (((amount * 1E-8) + 1E-8) ** 0.25).real
+        spike_mass = (-1.0 if subtract else 1.0) * softened_change * 2 * ((2.0 ** (-1 / half_life)) ** depth)
+        # trending_spike_height = self.height + delay_trending_spike(self.amount * 1E-8)
+        return RevertablePut(*self.pack_item(height, claim_hash, tx_num, position, spike_mass))
+
+    @classmethod
+    def pack_key(cls, height: int, claim_hash: bytes, tx_num: int, position: int):
+        return super().pack_key(height, claim_hash, tx_num, position)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TrendingSpikeKey:
+        return TrendingSpikeKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, mass: float) -> bytes:
+        return super().pack_value(mass)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TrendingSpikeValue:
+        return TrendingSpikeValue(*cls.value_struct.unpack(data))
+
+    @classmethod
+    def pack_item(cls, height: int, claim_hash: bytes, tx_num: int, position: int, mass: float):
+        return cls.pack_key(height, claim_hash, tx_num, position), cls.pack_value(mass)
+
+
 class Prefixes:
     claim_to_support = ClaimToSupportPrefixRow
     support_to_claim = SupportToClaimPrefixRow
@@ -1369,6 +1425,7 @@ class Prefixes:
     tx = TXPrefixRow
     header = BlockHeaderPrefixRow
     touched_or_deleted = TouchedOrDeletedPrefixRow
+    trending_spike = TrendingSpikePrefixRow
 
 
 class PrefixDB:
@@ -1402,6 +1459,7 @@ class PrefixDB:
         self.tx = TXPrefixRow(db, op_stack)
         self.header = BlockHeaderPrefixRow(db, op_stack)
         self.touched_or_deleted = TouchedOrDeletedPrefixRow(db, op_stack)
+        self.trending_spike = TrendingSpikePrefixRow(db, op_stack)
 
     def commit(self):
         try:
