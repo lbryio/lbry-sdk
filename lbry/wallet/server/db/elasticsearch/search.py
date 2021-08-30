@@ -1,4 +1,4 @@
-import math
+import time
 import asyncio
 import struct
 from binascii import unhexlify
@@ -167,6 +167,8 @@ class SearchIndex:
         }
         ctx._source.trending_score_change = 0.0;
         """
+
+        start = time.perf_counter()
         await self.sync_client.update_by_query(
             self.index, body={
                 'query': {
@@ -175,6 +177,7 @@ class SearchIndex:
                 'script': {'source': update_trending_score_script, 'lang': 'painless'}
             }, slices=4, conflicts='proceed'
         )
+        self.logger.info("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
 
         whale_decay_factor = 2 * (2.0 ** (-1 / self._trending_whale_half_life))
         decay_factor = 2 * (2.0 ** (-1 / self._trending_half_life))
@@ -188,12 +191,14 @@ class SearchIndex:
             ctx._source.trending_score *= %s;
         }
         """ % (self._trending_whale_threshold, whale_decay_factor, decay_factor)
+        start = time.perf_counter()
         await self.sync_client.update_by_query(
             self.index, body={
                 'query': {'bool': {'must_not': [{'match': {'trending_score': 0.0}}]}},
                 'script': {'source': decay_script, 'lang': 'painless'}
             }, slices=4, conflicts='proceed'
         )
+        self.logger.info("decayed trending scores in %ims", int((time.perf_counter() - start) * 1000))
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         if filtered_streams:
