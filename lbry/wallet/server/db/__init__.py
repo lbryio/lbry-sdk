@@ -37,3 +37,4 @@ class DB_PREFIXES(enum.Enum):
     hashx_utxo = b'h'
     hashx_history = b'x'
     db_state = b's'
+    trending_spike = b't'
