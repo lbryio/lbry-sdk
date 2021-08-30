@@ -73,6 +73,7 @@ RANGE_FIELDS = {
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 
 REPLACEMENTS = {
+    'trending_mixed': 'trending_score'
     # 'name': 'normalized_name',
     'txid': 'tx_id',
     'nout': 'tx_nout',
