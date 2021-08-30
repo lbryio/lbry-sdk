@@ -42,6 +42,9 @@ class Env:
         self.trending_algorithms = [
             trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
         ]
+        self.trending_half_life = float(self.string_amount('TRENDING_HALF_LIFE', "0.9"))
+        self.trending_whale_half_life = float(self.string_amount('TRENDING_WHALE_HALF_LIFE', "0.99"))
+        self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000))
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
         self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
