@@ -520,7 +520,7 @@ class BlockProcessor:
 
         # add the spike for trending
         self.db_op_stack.append_op(self.db.prefix_db.trending_spike.pack_spike(
-            height, claim_hash, tx_num, nout, txo.amount - previous_amount, half_life=self.env.trending_half_life
+            height, claim_hash, tx_num, nout, txo.amount, half_life=self.env.trending_half_life
         ))
 
     def _add_support(self, height: int, txo: 'Output', tx_num: int, nout: int):

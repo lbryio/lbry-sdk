@@ -178,9 +178,8 @@ class SearchIndex:
             }, slices=4, conflicts='proceed'
         )
         self.logger.info("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
-
-        whale_decay_factor = 2 * (2.0 ** (-1 / self._trending_whale_half_life))
-        decay_factor = 2 * (2.0 ** (-1 / self._trending_half_life))
+        whale_decay_factor = 2.0 ** ((-1 / self._trending_whale_half_life) + 1)
+        decay_factor = 2.0 ** ((-1 / self._trending_half_life) + 1)
         decay_script = """
         if (ctx._source.trending_score == null) { ctx._source.trending_score = 0.0; }
         if ((-0.1 <= ctx._source.trending_score) && (ctx._source.trending_score <= 0.1)) {
