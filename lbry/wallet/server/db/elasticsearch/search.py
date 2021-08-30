@@ -183,7 +183,7 @@ class SearchIndex:
         decay_factor = 2 * (2.0 ** (-1 / self._trending_half_life))
         decay_script = """
         if (ctx._source.trending_score == null) { ctx._source.trending_score = 0.0; }
-        if ((-0.000001 <= ctx._source.trending_score) && (ctx._source.trending_score <= 0.000001)) {
+        if ((-0.1 <= ctx._source.trending_score) && (ctx._source.trending_score <= 0.1)) {
             ctx._source.trending_score = 0.0;
         } else if (ctx._source.effective_amount >= %s) {
             ctx._source.trending_score *= %s;
