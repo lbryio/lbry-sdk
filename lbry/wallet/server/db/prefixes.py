@@ -1363,12 +1363,14 @@ class TrendingSpikePrefixRow(PrefixRow):
         struct.Struct(b'>L20sLH').pack
     ]
 
-    def pack_spike(self, height: int, claim_hash: bytes, tx_num: int, position: int, amount: int, half_life: int,
+    @classmethod
+    def pack_spike(cls, height: int, claim_hash: bytes, tx_num: int, position: int, amount: int, half_life: int,
                    depth: int = 0, subtract: bool = False) -> RevertablePut:
-        softened_change = (((amount * 1E-8) + 1E-8) ** 0.25).real
-        spike_mass = (-1.0 if subtract else 1.0) * softened_change * 2 * ((2.0 ** (-1 / half_life)) ** depth)
-        # trending_spike_height = self.height + delay_trending_spike(self.amount * 1E-8)
-        return RevertablePut(*self.pack_item(height, claim_hash, tx_num, position, spike_mass))
+        softened_change = (((amount * 1E-8) + 1E-8) ** (1 / 4))
+        spike_mass = softened_change * ((2.0 ** (-1 / half_life)) ** depth)
+        if subtract:
+            spike_mass = -spike_mass
+        return RevertablePut(*cls.pack_item(height, claim_hash, tx_num, position, spike_mass))
 
     @classmethod
     def pack_key(cls, height: int, claim_hash: bytes, tx_num: int, position: int):
