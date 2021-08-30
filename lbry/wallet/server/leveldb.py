@@ -860,7 +860,7 @@ class LevelDB:
             lru_cache_size=self.env.cache_MB * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
             max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
         )
-        self.db_op_stack = RevertableOpStack(self.db.get)
+        self.db_op_stack = RevertableOpStack(self.db.get, unsafe_prefixes={DB_PREFIXES.trending_spike.value})
         self.prefix_db = PrefixDB(self.db, self.db_op_stack)
 
         if is_new:
