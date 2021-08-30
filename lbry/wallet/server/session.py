@@ -897,7 +897,7 @@ class LBRYElectrumX(SessionBase):
             'donation_address': env.donation_address,
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
-            'trending_algorithm': env.trending_algorithms[0]
+            'trending_algorithm': 'variable_decay'
         })
 
     async def server_features_async(self):

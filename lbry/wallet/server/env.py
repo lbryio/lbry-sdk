@@ -5,7 +5,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-
+import math
 import re
 import resource
 from os import environ
@@ -39,12 +39,13 @@ class Env:
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
-        self.trending_algorithms = [
-            trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
-        ]
-        self.trending_half_life = float(self.string_amount('TRENDING_HALF_LIFE', "0.9"))
-        self.trending_whale_half_life = float(self.string_amount('TRENDING_WHALE_HALF_LIFE', "0.99"))
-        self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000))
+        # self.trending_algorithms = [
+        #     trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
+        # ]
+        self.trending_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_DECAY_RATE', 48)))) + 1
+        self.trending_whale_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_WHALE_DECAY_RATE', 24)))) + 1
+        self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000)) * 1E8
+
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
         self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
