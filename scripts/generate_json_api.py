@@ -13,7 +13,6 @@ from lbry.extras.cli import set_kwargs, get_argument_parser
 from lbry.extras.daemon.daemon import (
     Daemon, jsonrpc_dumps_pretty, encode_pagination_doc
 )
-from tests.integration.other.test_comment_commands import MockedCommentServer
 from lbry.extras.daemon.json_response_encoder import (
     encode_tx_doc, encode_txo_doc, encode_account_doc, encode_file_doc,
     encode_wallet_doc
@@ -67,10 +66,6 @@ class Examples(CommandTestCase):
 
     async def asyncSetUp(self):
         await super().asyncSetUp()
-        self.daemon.conf.comment_server = 'http://localhost:2903/api'
-        self.comment_server = MockedCommentServer(2903)
-        await self.comment_server.start()
-        self.addCleanup(self.comment_server.stop)
         self.recorder = ExampleRecorder(self)
 
     async def play(self):
@@ -330,41 +325,6 @@ class Examples(CommandTestCase):
             await self.daemon.jsonrpc_channel_abandon(self.get_claim_id(big_stream))
             await self.generate(1)
 
-        # comments
-
-        comment = await r(
-            'Posting a comment as your channel',
-            'comment', 'create', '--comment="Thank you Based God"',
-            '--channel_name=@channel', f'--claim_id={stream_id}'
-        )
-
-        reply = await r(
-            'Use the parent_id param to make replies',
-            'comment', 'create',
-            '--comment="I have photographic evidence confirming Sasquatch exists"',
-            f'--channel_name=@channel', f'--parent_id={comment["comment_id"]}',
-            f'--claim_id={stream_id}'
-        )
-
-        await r(
-            'List all comments on a claim',
-            'comment', 'list',  stream_id, '--include_replies'
-        )
-
-        await r(
-            'List a comment thread replying to a top level comment',
-            'comment', 'list', stream_id,
-            f'--parent_id={comment["comment_id"]}'
-        )
-
-        await r(
-            'Edit the contents of a comment',
-            'comment', 'update', 'Where there was once sasquatch, there is not',
-            f'--comment_id={comment["comment_id"]}'
-        )
-
-        await self.daemon.jsonrpc_comment_abandon(reply['comment_id'])
-
         # collections
         collection = await r(
             'Create a collection of one stream',
@@ -430,11 +390,6 @@ class Examples(CommandTestCase):
         )
 
         # abandon all the things
-
-        await r(
-            'Abandon a comment',
-            'comment', 'abandon', comment['comment_id']
-        )
 
         abandon_stream = await r(
             'Abandon a stream claim',
