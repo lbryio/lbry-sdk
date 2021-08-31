@@ -46,7 +46,6 @@ from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
 from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
-from lbry.extras.daemon import comment_client
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
@@ -2837,7 +2836,12 @@ class Daemon(metaclass=JSONRPCServerType):
         signing_channel = await self.get_channel_or_error(
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
-        return comment_client.sign(signing_channel, unhexlify(hexdata))
+        timestamp = str(int(time.time()))
+        signature = signing_channel.sign_data(unhexlify(hexdata), timestamp)
+        return {
+            'signature': signature,
+            'signing_ts': timestamp
+        }
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_abandon(

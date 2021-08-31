@@ -5,18 +5,37 @@ import asyncio
 from binascii import unhexlify
 from unittest import skip
 from urllib.request import urlopen
+import ecdsa
 
 from lbry.error import InsufficientFundsError
-from lbry.extras.daemon.comment_client import verify
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
-from lbry.wallet.transaction import Transaction
+from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.util import satoshis_to_coins as lbc
-
+from lbry.crypto.hash import sha256
 
 log = logging.getLogger(__name__)
+
+def get_encoded_signature(signature):
+    signature = signature.encode() if isinstance(signature, str) else signature
+    r = int(signature[:int(len(signature) / 2)], 16)
+    s = int(signature[int(len(signature) / 2):], 16)
+    return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
+
+
+def verify(channel, data, signature, channel_hash=None):
+    pieces = [
+        signature['signing_ts'].encode(),
+        channel_hash or channel.claim_hash,
+        data
+    ]
+    return Output.is_signature_valid(
+        get_encoded_signature(signature['signature']),
+        sha256(b''.join(pieces)),
+        channel.claim.channel.public_key_bytes
+    )
 
 
 class ClaimTestCase(CommandTestCase):

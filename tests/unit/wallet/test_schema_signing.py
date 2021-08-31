@@ -2,10 +2,9 @@ from binascii import unhexlify
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
-
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from lbry.schema.claim import Claim
-
+from lbry.crypto.hash import sha256
 
 def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
     return Transaction() \
@@ -114,3 +113,21 @@ class TestValidatingOldSignatures(AsyncioTestCase):
         })
 
         self.assertTrue(stream.is_signed_by(channel, ledger))
+
+
+class TestValidateSignContent(AsyncioTestCase):
+
+    async def test_sign_some_content(self):
+        some_content = "MEANINGLESS CONTENT AEE3353320".encode()
+        timestamp_str = "1630564175"
+        channel = await get_channel()
+        stream = get_stream()
+        signature = channel.sign_data(some_content, timestamp_str)
+        stream.signable.signature = unhexlify(signature.encode())
+        encoded_signature = stream.get_encoded_signature()
+        pieces = [timestamp_str.encode(), channel.claim_hash, some_content]
+        self.assertTrue(Output.is_signature_valid(
+            encoded_signature,
+            sha256(b''.join(pieces)),
+            channel.claim.channel.public_key_bytes
+        ))
