@@ -364,7 +364,6 @@ class Daemon(metaclass=JSONRPCServerType):
     )
 
     def __init__(self, conf: Config, component_manager: typing.Optional[ComponentManager] = None):
-        self.use_go_hub = True
         self.conf = conf
         self.platform_info = system_info.get_platform()
         self._video_file_analyzer = VideoFileAnalyzer(conf)
@@ -2540,7 +2539,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        if self.ledger.config['use_go_hub']:
+        if self.ledger.config.get('use_go_hub'):
             host = self.ledger.network.client.server[0]
             port = "50051"
             kwargs['new_sdk_server'] = f"{host}:{port}"

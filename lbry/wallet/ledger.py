@@ -112,7 +112,6 @@ class Ledger(metaclass=LedgerRegistry):
 
     def __init__(self, config=None):
         self.config = config or {}
-        self.config.update({"use_go_hub": True})
         self.db: Database = self.config.get('db') or Database(
             os.path.join(self.path, "blockchain.db")
         )
