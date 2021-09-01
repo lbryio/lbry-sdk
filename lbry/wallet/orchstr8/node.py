@@ -8,6 +8,8 @@ import logging
 import tempfile
 import subprocess
 import importlib
+from distutils.util import strtobool
+
 from binascii import hexlify
 from typing import Type, Optional
 import urllib.request
@@ -144,6 +146,7 @@ class WalletNode:
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
+                    'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
                     'api_port': self.port,
                     'explicit_servers': [(spv_node.hostname, spv_node.port)],
                     'default_servers': Config.lbryum_servers.default,
@@ -555,7 +558,7 @@ class HubNode:
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
         command = [
-            self.daemon_bin, 'serve', '--esindex', self.spv_node.index_name + 'claims'
+            self.daemon_bin, 'serve', '--esindex', self.spv_node.index_name + 'claims', '--debug'
         ]
         self.log.info(' '.join(command))
         while not self.stopped:
@@ -591,23 +594,3 @@ class HubNode:
 
     def cleanup(self):
         pass
-
-    async def _cli_cmnd(self, *args):
-        cmnd_args = [
-            self.daemon_bin,
-        ] + list(args)
-        self.log.info(' '.join(cmnd_args))
-        loop = asyncio.get_event_loop()
-        asyncio.get_child_watcher().attach_loop(loop)
-        process = await asyncio.create_subprocess_exec(
-            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
-        )
-        out, _ = await process.communicate()
-        result = out.decode().strip()
-        self.log.info(result)
-        if result.startswith('error code'):
-            raise Exception(result)
-        return result
-
-    async def name_query(self, name):
-        return await self._cli_cmnd('--name', name)

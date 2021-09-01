@@ -3,6 +3,8 @@ import json
 import typing
 import logging
 import asyncio
+from distutils.util import strtobool
+
 from binascii import unhexlify
 from decimal import Decimal
 from typing import List, Type, MutableSequence, MutableMapping, Optional
@@ -181,6 +183,7 @@ class WalletManager:
         }[config.blockchain_name]
 
         ledger_config = {
+            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
             'auto_connect': True,
             'explicit_servers': [],
             'hub_timeout': config.hub_timeout,
@@ -233,7 +236,7 @@ class WalletManager:
 
     async def reset(self):
         self.ledger.config = {
-            'use_go_hub': True,
+            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
             'auto_connect': True,
             'explicit_servers': [],
             'default_servers': Config.lbryum_servers.default,
