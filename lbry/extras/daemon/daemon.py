@@ -2311,9 +2311,9 @@ class Daemon(metaclass=JSONRPCServerType):
     async def jsonrpc_support_sum(self, claim_id, new_sdk_server, include_channel_content=False, **kwargs):
         """
         List total staked supports for a claim, grouped by the channel that signed the support.
-+
-+       If claim_id is a channel claim, you can use --include_channel_content to also include supports for
-+       content claims in the channel.
+
+        If claim_id is a channel claim, you can use --include_channel_content to also include supports for
+        content claims in the channel.
 
         !!!! NOTE: PAGINATION DOES NOT DO ANYTHING AT THE MOMENT !!!!!
 
