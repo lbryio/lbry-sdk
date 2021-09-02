@@ -247,7 +247,7 @@ class TooManyClaimSearchParametersError(WalletError):
     def __init__(self, key, limit):
         self.key = key
         self.limit = limit
-        super().__init__(f"{key} cant be set for more than {limit} items.")
+        super().__init__(f"{key} cant have more than {limit} items.")
 
 
 class ServerPaymentInvalidAddressError(WalletError):
