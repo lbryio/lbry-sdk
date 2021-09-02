@@ -58,7 +58,7 @@ FIELDS = {
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'claim_name', 'description', 'claim_id', 'censoring_channel_id',
                'media_type', 'normalized_name', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
-               'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
+               'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id', 'tags'}
 
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',

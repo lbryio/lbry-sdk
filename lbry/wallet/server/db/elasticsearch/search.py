@@ -480,6 +480,8 @@ def expand_query(**kwargs):
                     value = CLAIM_TYPES[value]
                 else:
                     value = [CLAIM_TYPES[claim_type] for claim_type in value]
+            elif key == 'stream_type':
+                value = STREAM_TYPES[value] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
             if key == '_id':
                 if isinstance(value, Iterable):
                     value = [item[::-1].hex() for item in value]
@@ -518,8 +520,6 @@ def expand_query(**kwargs):
             query['must'].append({"terms": {'claim_id.keyword': value}})
         elif key == 'media_types':
             query['must'].append({"terms": {'media_type.keyword': value}})
-        elif key == 'stream_types':
-            query['must'].append({"terms": {'stream_type': [STREAM_TYPES[stype] for stype in value]}})
         elif key == 'any_languages':
             query['must'].append({"terms": {'languages': clean_tags(value)}})
         elif key == 'any_languages':
