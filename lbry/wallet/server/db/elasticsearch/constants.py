@@ -31,7 +31,6 @@ INDEX_DEFAULT_SETTINGS = {
             "claim_type": {"type": "byte"},
             "censor_type": {"type": "byte"},
             "trending_score": {"type": "float"},
-            "trending_score_change": {"type": "float"},
             "release_time": {"type": "long"}
         }
     }

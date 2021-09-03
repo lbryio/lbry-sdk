@@ -5,7 +5,7 @@ import struct
 from bisect import bisect_right
 from struct import pack, unpack
 from concurrent.futures.thread import ThreadPoolExecutor
-from typing import Optional, List, Tuple, Set, DefaultDict, Dict
+from typing import Optional, List, Tuple, Set, DefaultDict, Dict, NamedTuple
 from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 import array
@@ -33,6 +33,13 @@ from lbry.wallet.server.udp import StatusServer
 from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete, RevertableOpStack
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
+
+
+class TrendingNotification(NamedTuple):
+    height: int
+    added: bool
+    prev_amount: int
+    new_amount: int
 
 
 class Prefetcher:
@@ -245,6 +252,7 @@ class BlockProcessor:
 
         self.removed_claims_to_send_es = set()  # cumulative changes across blocks to send ES
         self.touched_claims_to_send_es = set()
+        self.activation_info_to_send_es: DefaultDict[str, List[TrendingNotification]] = defaultdict(list)
 
         self.removed_claim_hashes: Set[bytes] = set()  # per block changes
         self.touched_claim_hashes: Set[bytes] = set()
@@ -316,16 +324,17 @@ class BlockProcessor:
                             "applying extended claim expiration fork on claims accepted by, %i", self.height
                         )
                         await self.run_in_thread(self.db.apply_expiration_extension_fork)
-                    # TODO: we shouldnt wait on the search index updating before advancing to the next block
-                    if not self.db.first_sync:
-                        self.db.reload_blocking_filtering_streams()
-                        await self.db.search_index.claim_consumer(self.claim_producer())
-                        await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
+                # TODO: we shouldnt wait on the search index updating before advancing to the next block
+                if not self.db.first_sync:
+                    self.db.reload_blocking_filtering_streams()
+                    await self.db.search_index.claim_consumer(self.claim_producer())
+                    await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
                                                                  self.db.filtered_streams, self.db.filtered_channels)
-                        await self.db.search_index.apply_update_and_decay_trending_score()
-                    self.db.search_index.clear_caches()
-                    self.touched_claims_to_send_es.clear()
-                    self.removed_claims_to_send_es.clear()
+                    await self.db.search_index.update_trending_score(self.activation_info_to_send_es)
+                self.db.search_index.clear_caches()
+                self.touched_claims_to_send_es.clear()
+                self.removed_claims_to_send_es.clear()
+                self.activation_info_to_send_es.clear()
                 # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
@@ -369,6 +378,7 @@ class BlockProcessor:
                     self.db.search_index.clear_caches()
                     self.touched_claims_to_send_es.clear()
                     self.removed_claims_to_send_es.clear()
+                    self.activation_info_to_send_es.clear()
                 await self.prefetcher.reset_height(self.height)
                 self.reorg_count_metric.inc()
             except:
@@ -518,11 +528,6 @@ class BlockProcessor:
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
         self.db_op_stack.extend_ops(pending.get_add_claim_utxo_ops())
 
-        # add the spike for trending
-        self.db_op_stack.append_op(self.db.prefix_db.trending_spike.pack_spike(
-            height, claim_hash, tx_num, nout, txo.amount, half_life=self.env.trending_half_life
-        ))
-
     def _add_support(self, height: int, txo: 'Output', tx_num: int, nout: int):
         supported_claim_hash = txo.claim_hash[::-1]
         self.support_txos_by_claim[supported_claim_hash].append((tx_num, nout))
@@ -531,11 +536,6 @@ class BlockProcessor:
         self.db_op_stack.extend_ops(StagedClaimtrieSupport(
             supported_claim_hash, tx_num, nout, txo.amount
         ).get_add_support_utxo_ops())
-
-        # add the spike for trending
-        self.db_op_stack.append_op(self.db.prefix_db.trending_spike.pack_spike(
-            height, supported_claim_hash, tx_num, nout, txo.amount, half_life=self.env.trending_half_life
-        ))
 
     def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_num: int, nout: int, txo: 'Output',
                               spent_claims: typing.Dict[bytes, Tuple[int, int, str]]):
@@ -552,7 +552,6 @@ class BlockProcessor:
             self.support_txos_by_claim[spent_support].remove((txin_num, txin.prev_idx))
             supported_name = self._get_pending_claim_name(spent_support)
             self.removed_support_txos_by_name_by_claim[supported_name][spent_support].append((txin_num, txin.prev_idx))
-            txin_height = height
         else:
             spent_support, support_amount = self.db.get_supported_claim_from_txo(txin_num, txin.prev_idx)
             if not spent_support:  # it is not a support
@@ -562,7 +561,6 @@ class BlockProcessor:
                 self.removed_support_txos_by_name_by_claim[supported_name][spent_support].append(
                     (txin_num, txin.prev_idx))
             activation = self.db.get_activation(txin_num, txin.prev_idx, is_support=True)
-            txin_height = bisect_right(self.db.tx_counts, self.db.transaction_num_mapping[txin.prev_hash])
             if 0 < activation < self.height + 1:
                 self.removed_active_support_amount_by_claim[spent_support].append(support_amount)
             if supported_name is not None and activation > 0:
@@ -574,11 +572,6 @@ class BlockProcessor:
         self.db_op_stack.extend_ops(StagedClaimtrieSupport(
             spent_support, txin_num, txin.prev_idx, support_amount
         ).get_spend_support_txo_ops())
-        # add the spike for trending
-        self.db_op_stack.append_op(self.db.prefix_db.trending_spike.pack_spike(
-            height, spent_support, txin_num, txin.prev_idx, support_amount, subtract=True,
-            depth=height-txin_height-1, half_life=self.env.trending_half_life
-        ))
 
     def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]) -> bool:
         txin_num = self.db.transaction_num_mapping[txin.prev_hash]
@@ -1121,15 +1114,30 @@ class BlockProcessor:
                     self.touched_claim_hashes.add(controlling.claim_hash)
                 self.touched_claim_hashes.add(winning)
 
-    def _get_cumulative_update_ops(self):
+    def _add_claim_activation_change_notification(self, claim_id: str, height: int, added: bool, prev_amount: int,
+                                                  new_amount: int):
+        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, added, prev_amount, new_amount))
+
+    def _get_cumulative_update_ops(self, height: int):
         # gather cumulative removed/touched sets to update the search index
         self.removed_claim_hashes.update(set(self.abandoned_claims.keys()))
+        self.touched_claim_hashes.difference_update(self.removed_claim_hashes)
         self.touched_claim_hashes.update(
-            set(self.activated_support_amount_by_claim.keys()).union(
-                set(claim_hash for (_, claim_hash) in self.activated_claim_amount_by_name_and_hash.keys())
-            ).union(self.signatures_changed).union(
+            set(
+                map(lambda item: item[1], self.activated_claim_amount_by_name_and_hash.keys())
+            ).union(
+                set(self.claim_hash_to_txo.keys())
+            ).union(
+                self.removed_active_support_amount_by_claim.keys()
+            ).union(
+                self.signatures_changed
+            ).union(
                 set(self.removed_active_support_amount_by_claim.keys())
-            ).difference(self.removed_claim_hashes)
+            ).union(
+                set(self.activated_support_amount_by_claim.keys())
+            ).difference(
+                self.removed_claim_hashes
+            )
         )
 
         # use the cumulative changes to update bid ordered resolve
@@ -1145,6 +1153,8 @@ class BlockProcessor:
                         amt.position, removed
                     ))
         for touched in self.touched_claim_hashes:
+            prev_effective_amount = 0
+
             if touched in self.claim_hash_to_txo:
                 pending = self.txo_to_claim[self.claim_hash_to_txo[touched]]
                 name, tx_num, position = pending.normalized_name, pending.tx_num, pending.position
@@ -1152,6 +1162,7 @@ class BlockProcessor:
                 if claim_from_db:
                     claim_amount_info = self.db.get_url_effective_amount(name, touched)
                     if claim_amount_info:
+                        prev_effective_amount = claim_amount_info.effective_amount
                         self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
                             name, claim_amount_info.effective_amount, claim_amount_info.tx_num,
                             claim_amount_info.position, touched
@@ -1163,12 +1174,33 @@ class BlockProcessor:
                 name, tx_num, position = v.normalized_name, v.tx_num, v.position
                 amt = self.db.get_url_effective_amount(name, touched)
                 if amt:
-                    self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
-                        name, amt.effective_amount, amt.tx_num, amt.position, touched
-                    ))
+                    prev_effective_amount = amt.effective_amount
+                    self.db_op_stack.extend_ops(
+                        get_remove_effective_amount_ops(
+                            name, amt.effective_amount, amt.tx_num, amt.position, touched
+                        )
+                    )
+
+            if (name, touched) in self.activated_claim_amount_by_name_and_hash:
+                self._add_claim_activation_change_notification(
+                    touched.hex(), height, True, prev_effective_amount,
+                    self.activated_claim_amount_by_name_and_hash[(name, touched)]
+                )
+            if touched in self.activated_support_amount_by_claim:
+                for support_amount in self.activated_support_amount_by_claim[touched]:
+                    self._add_claim_activation_change_notification(
+                        touched.hex(), height, True, prev_effective_amount, support_amount
+                    )
+            if touched in self.removed_active_support_amount_by_claim:
+                for support_amount in self.removed_active_support_amount_by_claim[touched]:
+                    self._add_claim_activation_change_notification(
+                        touched.hex(), height, False, prev_effective_amount, support_amount
+                    )
+            new_effective_amount = self._get_pending_effective_amount(name, touched)
             self.db_op_stack.extend_ops(
-                get_add_effective_amount_ops(name, self._get_pending_effective_amount(name, touched),
-                                             tx_num, position, touched)
+                get_add_effective_amount_ops(
+                    name, new_effective_amount, tx_num, position, touched
+                )
             )
 
         self.touched_claim_hashes.update(
@@ -1254,7 +1286,7 @@ class BlockProcessor:
         self._get_takeover_ops(height)
 
         # update effective amount and update sets of touched and deleted claims
-        self._get_cumulative_update_ops()
+        self._get_cumulative_update_ops(height)
 
         self.db_op_stack.append_op(RevertablePut(*Prefixes.tx_count.pack_item(height, tx_count)))
 
@@ -1441,7 +1473,6 @@ class BlockProcessor:
             self.height = self.db.db_height
             self.tip = self.db.db_tip
             self.tx_count = self.db.db_tx_count
-
             self.status_server.set_height(self.db.fs_height, self.db.db_tip)
             await asyncio.wait([
                 self.prefetcher.main_loop(self.height),

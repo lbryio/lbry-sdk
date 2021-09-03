@@ -158,46 +158,74 @@ class SearchIndex:
         }
         return update
 
-    async def apply_update_and_decay_trending_score(self):
+    async def update_trending_score(self, params):
         update_trending_score_script = """
-        if (ctx._source.trending_score == null) {
-            ctx._source.trending_score = ctx._source.trending_score_change;
-        } else {
-            ctx._source.trending_score += ctx._source.trending_score_change;
+        double softenLBC(double lbc) { Math.pow(lbc, 1.0f / 3.0f) }
+        double inflateUnits(int height) { Math.pow(2.0, height / 400.0f) }
+        double spikePower(double newAmount) {
+            if (newAmount < 50.0) {
+                0.5
+            } else if (newAmount < 85.0) {
+                newAmount / 100.0
+            } else {
+                0.85
+            }
         }
-        ctx._source.trending_score_change = 0.0;
+        double spikeMass(double oldAmount, double newAmount) {
+            double softenedChange = softenLBC(Math.abs(newAmount - oldAmount));
+            double changeInSoftened = Math.abs(softenLBC(newAmount) - softenLBC(oldAmount));
+            if (oldAmount > newAmount) {
+                -1.0 * Math.pow(changeInSoftened, spikePower(newAmount)) * Math.pow(softenedChange, 1.0 - spikePower(newAmount))
+            } else {
+                Math.pow(changeInSoftened, spikePower(newAmount)) * Math.pow(softenedChange, 1.0 - spikePower(newAmount))
+            }
+        }
+        for (i in params.src.changes) {
+            if (i.added) {
+                if (ctx._source.trending_score == null) {
+                    ctx._source.trending_score = spikeMass(i.prev_amount, i.prev_amount + i.new_amount);
+                } else {
+                    ctx._source.trending_score += spikeMass(i.prev_amount, i.prev_amount + i.new_amount);
+                }
+            } else {
+                if (ctx._source.trending_score == null) {
+                    ctx._source.trending_score = spikeMass(i.prev_amount, i.prev_amount - i.new_amount);
+                } else {
+                    ctx._source.trending_score += spikeMass(i.prev_amount, i.prev_amount - i.new_amount);
+                }
+            }
+        }
         """
+        start = time.perf_counter()
 
-        start = time.perf_counter()
-        await self.sync_client.update_by_query(
-            self.index, body={
-                'query': {
-                    'bool': {'must_not': [{'match': {'trending_score_change': 0.0}}]}
-                },
-                'script': {'source': update_trending_score_script, 'lang': 'painless'}
-            }, slices=4, conflicts='proceed'
-        )
-        self.logger.info("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
-        whale_decay_factor = 2.0 ** ((-1 / self._trending_whale_half_life) + 1)
-        decay_factor = 2.0 ** ((-1 / self._trending_half_life) + 1)
-        decay_script = """
-        if (ctx._source.trending_score == null) { ctx._source.trending_score = 0.0; }
-        if ((-0.1 <= ctx._source.trending_score) && (ctx._source.trending_score <= 0.1)) {
-            ctx._source.trending_score = 0.0;
-        } else if (ctx._source.effective_amount >= %s) {
-            ctx._source.trending_score *= %s;
-        } else {
-            ctx._source.trending_score *= %s;
-        }
-        """ % (self._trending_whale_threshold, whale_decay_factor, decay_factor)
-        start = time.perf_counter()
-        await self.sync_client.update_by_query(
-            self.index, body={
-                'query': {'bool': {'must_not': [{'match': {'trending_score': 0.0}}]}},
-                'script': {'source': decay_script, 'lang': 'painless'}
-            }, slices=4, conflicts='proceed'
-        )
-        self.logger.info("decayed trending scores in %ims", int((time.perf_counter() - start) * 1000))
+        def producer():
+            for claim_id, claim_updates in params.items():
+                yield {
+                    '_id': claim_id,
+                    '_index': self.index,
+                    '_op_type': 'update',
+                    'script': {
+                        'lang': 'painless',
+                        'source': update_trending_score_script,
+                        'params': {'src': {
+                            'changes': [
+                                {
+                                    'height': p.height,
+                                    'added': p.added,
+                                    'prev_amount': p.prev_amount,
+                                    'new_amount': p.new_amount,
+                                } for p in claim_updates
+                            ]
+                        }}
+                    },
+                }
+        if not params:
+            return
+        async for ok, item in async_streaming_bulk(self.sync_client, producer(), raise_on_error=False):
+            if not ok:
+                self.logger.warning("updating trending failed for an item: %s", item)
+        await self.sync_client.indices.refresh(self.index)
+        self.logger.warning("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         if filtered_streams:
