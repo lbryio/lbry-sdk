@@ -37,6 +37,15 @@ class BaseResolveTestCase(CommandTestCase):
         claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(name=name)
         self.assertListEqual([], claim_from_es[0])
 
+    async def assertNoClaim(self, claim_id: str):
+        self.assertDictEqual(
+            {}, json.loads(await self.blockchain._cli_cmnd('getclaimbyid', claim_id))
+        )
+        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
+        self.assertListEqual([], claim_from_es[0])
+        claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
+        self.assertIsNone(claim)
+
     async def assertMatchWinningClaim(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
         stream, channel = await self.conductor.spv_node.server.bp.db.fs_resolve(name)
@@ -61,6 +70,11 @@ class BaseResolveTestCase(CommandTestCase):
         if not expected:
             self.assertIsNone(claim)
             return
+        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+            claim_id=claim.claim_hash.hex()
+        )
+        self.assertEqual(len(claim_from_es[0]), 1)
+        self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim.claim_hash.hex())
         self.assertEqual(expected['claimId'], claim.claim_hash.hex())
         self.assertEqual(expected['validAtHeight'], claim.activation_height)
         self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)
@@ -944,6 +958,24 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.assertMatchClaimIsWinning(name, second_claim_id)
         await self.generate(1)
         await self.assertNoClaimForName(name)
+
+    async def _test_add_non_winning_already_claimed(self):
+        name = 'derp'
+        # initially claim the name
+        first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
+        self.assertEqual(first_claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
+        await self.generate(32)
+
+        second_claim_id = (await self.stream_create(name, '0.01', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertNoClaim(second_claim_id)
+        self.assertEqual(
+            len((await self.conductor.spv_node.server.bp.db.search_index.search(claim_name=name))[0]), 1
+        )
+        await self.generate(1)
+        await self.assertMatchClaim(second_claim_id)
+        self.assertEqual(
+            len((await self.conductor.spv_node.server.bp.db.search_index.search(claim_name=name))[0]), 2
+        )
 
 
 class ResolveAfterReorg(BaseResolveTestCase):

@@ -18,7 +18,7 @@ import attr
 import zlib
 import base64
 import plyvel
-from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List
+from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List, TYPE_CHECKING
 from functools import partial
 from asyncio import sleep
 from bisect import bisect_right
@@ -43,6 +43,9 @@ from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
 
 from lbry.wallet.server.db.elasticsearch import SearchIndex
+
+if TYPE_CHECKING:
+    from lbry.wallet.server.db.prefixes import EffectiveAmountKey
 
 
 class UTXO(typing.NamedTuple):
@@ -186,12 +189,6 @@ class LevelDB:
         for _ in self.db.iterator(prefix=Prefixes.reposted_claim.pack_partial_key(claim_hash)):
             cnt += 1
         return cnt
-
-    def get_trending_spike_sum(self, height: int, claim_hash: bytes) -> float:
-        spikes = 0.0
-        for k, v in self.prefix_db.trending_spike.iterate(prefix=(height, claim_hash)):
-            spikes += v.mass
-        return spikes
 
     def get_activation(self, tx_num, position, is_support=False) -> int:
         activation = self.db.get(
@@ -409,9 +406,10 @@ class LevelDB:
     def _fs_get_claim_by_hash(self, claim_hash):
         claim = self.claim_to_txo.get(claim_hash)
         if claim:
+            activation = self.get_activation(claim.tx_num, claim.position)
             return self._prepare_resolve_result(
                 claim.tx_num, claim.position, claim_hash, claim.name, claim.root_tx_num, claim.root_position,
-                self.get_activation(claim.tx_num, claim.position), claim.channel_signature_is_valid
+                activation, claim.channel_signature_is_valid
             )
 
     async def fs_getclaimbyid(self, claim_id):
@@ -457,7 +455,7 @@ class LevelDB:
             return support_only
         return support_amount + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
 
-    def get_url_effective_amount(self, name: str, claim_hash: bytes):
+    def get_url_effective_amount(self, name: str, claim_hash: bytes) -> Optional['EffectiveAmountKey']:
         for k, v in self.prefix_db.effective_amount.iterate(prefix=(name,)):
             if v.claim_hash == claim_hash:
                 return k
@@ -708,8 +706,7 @@ class LevelDB:
             'languages': languages,
             'censor_type': Censor.RESOLVE if blocked_hash else Censor.SEARCH if filtered_hash else Censor.NOT_CENSORED,
             'censoring_channel_id': (blocked_hash or filtered_hash or b'').hex() or None,
-            'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash),
-            'trending_score_change': self.get_trending_spike_sum(self.db_height, claim_hash)
+            'claims_in_channel': None if not metadata.is_channel else self.get_claims_in_channel_count(claim_hash)
         }
 
         if metadata.is_repost and reposted_duration is not None:
@@ -944,11 +941,6 @@ class LevelDB:
                 self.db.iterator(
                     start=Prefixes.touched_or_deleted.pack_key(0),
                     stop=Prefixes.touched_or_deleted.pack_key(min_height), include_value=False
-                )
-            )
-            delete_undo_keys.extend(
-                self.db.iterator(
-                    prefix=Prefixes.trending_spike.pack_partial_key(min_height), include_value=False
                 )
             )
 
