@@ -78,8 +78,8 @@ jobs:
         test:
           - datanetwork
           - blockchain
+          - blockchain_legacy_search
           - other
-        hub_type: ['legacy_hub', 'new_hub']
     steps:
       - name: Configure sysctl limits
         run: |
@@ -106,10 +106,7 @@ jobs:
           key: tox-integration-${{ matrix.test }}-${{ hashFiles('setup.py') }}
           restore-keys: txo-integration-${{ matrix.test }}-
       - run: pip install tox coverage coveralls
-      - name: run tox
-        env:
-          ENABLE_LEGACY_SEARCH: ${{ matrix.hub_type == 'legacy_hub' }}
-        run: tox -e ${{ matrix.test }}
+      - run: tox -e ${{ matrix.test }}
       - name: submit coverage report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
