@@ -161,7 +161,11 @@ class SearchIndex:
     async def update_trending_score(self, params):
         update_trending_score_script = """
         double softenLBC(double lbc) { Math.pow(lbc, 1.0f / 3.0f) }
-        double inflateUnits(int height) { Math.pow(2.0, height / 400.0f) }
+        double inflateUnits(int height) {
+            int renormalizationPeriod = 300000;
+            double doublingRate = 400.0f;
+            Math.pow(2.0, (height % renormalizationPeriod) / doublingRate)
+        }
         double spikePower(double newAmount) {
             if (newAmount < 50.0) {
                 0.5
@@ -174,10 +178,11 @@ class SearchIndex:
         double spikeMass(double oldAmount, double newAmount) {
             double softenedChange = softenLBC(Math.abs(newAmount - oldAmount));
             double changeInSoftened = Math.abs(softenLBC(newAmount) - softenLBC(oldAmount));
+            double power = spikePower(newAmount);
             if (oldAmount > newAmount) {
-                -1.0 * Math.pow(changeInSoftened, spikePower(newAmount)) * Math.pow(softenedChange, 1.0 - spikePower(newAmount))
+                -1.0 * Math.pow(changeInSoftened, power) * Math.pow(softenedChange, 1.0 - power)
             } else {
-                Math.pow(changeInSoftened, spikePower(newAmount)) * Math.pow(softenedChange, 1.0 - spikePower(newAmount))
+                Math.pow(changeInSoftened, power) * Math.pow(softenedChange, 1.0 - power)
             }
         }
         for (i in params.src.changes) {
@@ -212,8 +217,8 @@ class SearchIndex:
                                 {
                                     'height': p.height,
                                     'added': p.added,
-                                    'prev_amount': p.prev_amount,
-                                    'new_amount': p.new_amount,
+                                    'prev_amount': p.prev_amount * 1E-9,
+                                    'new_amount': p.new_amount * 1E-9,
                                 } for p in claim_updates
                             ]
                         }}
