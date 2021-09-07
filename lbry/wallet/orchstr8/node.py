@@ -146,7 +146,7 @@ class WalletNode:
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
-                    'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
+                    'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'yes'),
                     'api_port': self.port,
                     'explicit_servers': [(spv_node.hostname, spv_node.port)],
                     'default_servers': Config.lbryum_servers.default,

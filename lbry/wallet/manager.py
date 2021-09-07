@@ -183,7 +183,7 @@ class WalletManager:
         }[config.blockchain_name]
 
         ledger_config = {
-            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
+            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'yes'),
             'auto_connect': True,
             'explicit_servers': [],
             'hub_timeout': config.hub_timeout,
@@ -236,7 +236,7 @@ class WalletManager:
 
     async def reset(self):
         self.ledger.config = {
-            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'no'),
+            'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'yes'),
             'auto_connect': True,
             'explicit_servers': [],
             'default_servers': Config.lbryum_servers.default,
