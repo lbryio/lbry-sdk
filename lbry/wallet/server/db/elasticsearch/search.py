@@ -162,7 +162,7 @@ class SearchIndex:
         update_trending_score_script = """
         double softenLBC(double lbc) { Math.pow(lbc, 1.0f / 3.0f) }
         double inflateUnits(int height) {
-            int renormalizationPeriod = 300000;
+            int renormalizationPeriod = 100000;
             double doublingRate = 400.0f;
             Math.pow(2.0, (height % renormalizationPeriod) / doublingRate)
         }
@@ -186,17 +186,18 @@ class SearchIndex:
             }
         }
         for (i in params.src.changes) {
+            double units = inflateUnits(i.height);
             if (i.added) {
                 if (ctx._source.trending_score == null) {
-                    ctx._source.trending_score = spikeMass(i.prev_amount, i.prev_amount + i.new_amount);
+                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
                 } else {
-                    ctx._source.trending_score += spikeMass(i.prev_amount, i.prev_amount + i.new_amount);
+                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
                 }
             } else {
                 if (ctx._source.trending_score == null) {
-                    ctx._source.trending_score = spikeMass(i.prev_amount, i.prev_amount - i.new_amount);
+                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
                 } else {
-                    ctx._source.trending_score += spikeMass(i.prev_amount, i.prev_amount - i.new_amount);
+                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
                 }
             }
         }
