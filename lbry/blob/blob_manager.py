@@ -105,9 +105,13 @@ class BlobManager:
         if isinstance(blob, BlobFile):
             if blob.blob_hash not in self.completed_blob_hashes:
                 self.completed_blob_hashes.add(blob.blob_hash)
-            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=True))
+            return self.loop.create_task(self.storage.add_blobs(
+                (blob.blob_hash, blob.length, blob.added_on, blob.is_mine), finished=True)
+            )
         else:
-            return self.loop.create_task(self.storage.add_blobs((blob.blob_hash, blob.length), finished=False))
+            return self.loop.create_task(self.storage.add_blobs(
+                (blob.blob_hash, blob.length, blob.added_on, blob.is_mine), finished=False)
+            )
 
     def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
         """Returns of the blobhashes_to_check, which are valid"""

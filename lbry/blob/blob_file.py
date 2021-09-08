@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import asyncio
 import binascii
 import logging
@@ -70,12 +71,15 @@ class AbstractBlob:
         'writers',
         'verified',
         'writing',
-        'readers'
+        'readers',
+        'is_mine',
+        'added_on',
     ]
 
     def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
                  blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-                 blob_directory: typing.Optional[str] = None):
+                 blob_directory: typing.Optional[str] = None, is_mine: bool = False,
+                 added_on: typing.Optional[int] = None):
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
@@ -85,6 +89,8 @@ class AbstractBlob:
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
         self.readers: typing.List[typing.BinaryIO] = []
+        self.is_mine = is_mine
+        self.added_on = added_on or time.time()
 
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)

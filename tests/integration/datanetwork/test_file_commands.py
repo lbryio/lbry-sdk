@@ -522,9 +522,12 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertEqual(True, status['disk_space']['running'])
         await self.stream_create('foo1', '0.01', data=('0' * 3 * 1024 * 1024).encode())
         await self.stream_create('foo2', '0.01', data=('0' * 2 * 1024 * 1024).encode())
-        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
+        stream = await self.stream_create('foo3', '0.01', data=('0' * 2 * 1024 * 1024).encode())
+        stream_hash = stream['outputs'][0]['value']['source']['hash']
+        await self.daemon.storage.update_blob_ownership(stream_hash, False)
+        self.assertEqual('7', (await self.status())['disk_space']['space_used'])
         await self.blob_clean()
-        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('7', (await self.status())['disk_space']['space_used'])
         self.daemon.conf.blob_storage_limit = 3
         await self.blob_clean()
-        self.assertEqual('3', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('2', (await self.status())['disk_space']['space_used'])
