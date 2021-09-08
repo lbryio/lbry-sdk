@@ -742,22 +742,47 @@ class LevelDB:
 
     async def claims_producer(self, claim_hashes: Set[bytes]):
         batch = []
-        for claim_hash in claim_hashes:
+        results = []
+
+        loop = asyncio.get_event_loop()
+
+        def produce_claim(claim_hash):
             if claim_hash not in self.claim_to_txo:
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                continue
+                return
             name = self.claim_to_txo[claim_hash].normalized_name
             if not self.prefix_db.claim_takeover.get(name):
                 self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                continue
-            claim = self._fs_get_claim_by_hash(claim_hash)
+                return
+            claim_txo = self.claim_to_txo.get(claim_hash)
+            if not claim_txo:
+                return
+            activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
+            claim = self._prepare_resolve_result(
+                claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
+                claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+            )
             if claim:
                 batch.append(claim)
-        batch.sort(key=lambda x: x.tx_hash)
-        for claim in batch:
+
+        def get_metadata(claim):
             meta = self._prepare_claim_metadata(claim.claim_hash, claim)
             if meta:
-                yield meta
+                results.append(meta)
+
+        if claim_hashes:
+            await asyncio.wait(
+                [loop.run_in_executor(None, produce_claim, claim_hash) for claim_hash in claim_hashes]
+            )
+        batch.sort(key=lambda x: x.tx_hash)
+
+        if batch:
+            await asyncio.wait(
+                [loop.run_in_executor(None, get_metadata, claim) for claim in batch]
+            )
+        for meta in results:
+            yield meta
+
         batch.clear()
 
     def get_activated_at_height(self, height: int) -> DefaultDict[PendingActivationValue, List[PendingActivationKey]]:
