@@ -69,7 +69,7 @@ class Server:
 
     def run(self):
         loop = asyncio.get_event_loop()
-        executor = ThreadPoolExecutor(4)
+        executor = ThreadPoolExecutor(self.env.max_query_workers)
         loop.set_default_executor(executor)
 
         def __exit():

@@ -46,7 +46,7 @@ class Env:
         self.trending_whale_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_WHALE_DECAY_RATE', 24)))) + 1
         self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000)) * 1E8
 
-        self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
+        self.max_query_workers = self.integer('MAX_QUERY_WORKERS', 4)
         self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
         self.websocket_host = self.default('WEBSOCKET_HOST', self.host)
