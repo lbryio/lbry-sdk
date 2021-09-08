@@ -170,8 +170,8 @@ def get_all_lbry_files(transaction: sqlite3.Connection) -> typing.List[typing.Di
 def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descriptor: 'StreamDescriptor'):
     # add all blobs, except the last one, which is empty
     transaction.executemany(
-        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
-        ((blob.blob_hash, blob.length, 0, 0, "pending", 0, 0)
+        "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        ((blob.blob_hash, blob.length, 0, 0, "pending", 0, 0, blob.added_on, blob.is_mine)
          for blob in (descriptor.blobs[:-1] if len(descriptor.blobs) > 1 else descriptor.blobs) + [sd_blob])
     ).fetchall()
     # associate the blobs to the stream
@@ -242,7 +242,9 @@ class SQLiteStorage(SQLiteMixin):
                 should_announce integer not null default 0,
                 status text not null,
                 last_announced_time integer,
-                single_announce integer
+                single_announce integer,
+                added_on integer not null,
+                is_mine integer not null default 0
             );
 
             create table if not exists stream (
@@ -356,19 +358,19 @@ class SQLiteStorage(SQLiteMixin):
 
     # # # # # # # # # blob functions # # # # # # # # #
 
-    async def add_blobs(self, *blob_hashes_and_lengths: typing.Tuple[str, int], finished=False):
+    async def add_blobs(self, *blob_hashes_and_lengths: typing.Tuple[str, int, int, int], finished=False):
         def _add_blobs(transaction: sqlite3.Connection):
             transaction.executemany(
-                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?)",
+                "insert or ignore into blob values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    (blob_hash, length, 0, 0, "pending" if not finished else "finished", 0, 0)
-                    for blob_hash, length in blob_hashes_and_lengths
+                    (blob_hash, length, 0, 0, "pending" if not finished else "finished", 0, 0, added_on, is_mine)
+                    for blob_hash, length, added_on, is_mine in blob_hashes_and_lengths
                 )
             ).fetchall()
             if finished:
                 transaction.executemany(
                     "update blob set status='finished' where blob.blob_hash=?", (
-                        (blob_hash, ) for blob_hash, _ in blob_hashes_and_lengths
+                        (blob_hash, ) for blob_hash, _, _, _ in blob_hashes_and_lengths
                     )
                 ).fetchall()
         return await self.db.run(_add_blobs)
@@ -434,6 +436,25 @@ class SQLiteStorage(SQLiteMixin):
 
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
+
+    async def get_stored_blobs(self, is_mine):
+        return await self.db.execute_fetchall(
+            "select blob_hash, blob_length from blob where is_mine=? order by added_on", (is_mine,)
+        )
+
+    async def get_stored_blob_disk_usage(self, is_mine=None):
+        if is_mine is None:
+            sql, args = "select coalesce(sum(blob_length), 0) from blob", ()
+        else:
+            sql, args = "select coalesce(sum(blob_length), 0) from blob where is_mine=?", (is_mine,)
+        return (await self.db.execute_fetchone(sql, args))[0]
+
+    async def update_blob_ownership(self, stream_hash, is_mine: bool):
+        await self.db.execute_fetchall(
+            "update blob set is_mine = ? where blob_hash in ("
+            "   select blob_hash from stream_blob where stream_hash = ?"
+            ")", (1 if is_mine else 0, stream_hash)
+        )
 
     def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
         def _sync_blobs(transaction: sqlite3.Connection) -> typing.Set[str]:

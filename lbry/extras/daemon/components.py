@@ -379,22 +379,28 @@ class FileManagerComponent(Component):
 
 class DiskSpaceComponent(Component):
     component_name = DISK_SPACE_COMPONENT
+    depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.disk_space_manager = DiskSpaceManager(self.conf)
+        self.disk_space_manager: typing.Optional[DiskSpaceManager] = None
 
     @property
     def component(self) -> typing.Optional[DiskSpaceManager]:
         return self.disk_space_manager
 
     async def get_status(self):
-        return {
-            'space_used': str(self.disk_space_manager.space_used_mb),
-            'running': self.disk_space_manager.running,
-        }
+        if self.disk_space_manager:
+            return {
+                'space_used': str(await self.disk_space_manager.get_space_used_mb()),
+                'running': self.disk_space_manager.running,
+            }
+        return {'space_used': '0', 'running': False}
 
     async def start(self):
+        db = self.component_manager.get_component(DATABASE_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        self.disk_space_manager = DiskSpaceManager(self.conf, db, blob_manager)
         await self.disk_space_manager.start()
 
     async def stop(self):
