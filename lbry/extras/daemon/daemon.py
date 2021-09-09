@@ -2426,7 +2426,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
-            --name=<name>                   : (str) claim name (normalized_name)
+            --name=<name>                   : (str) claim name (normalized)
             --text=<text>                   : (str) full text search
             --claim_id=<claim_id>           : (str) full or partial claim id
             --claim_ids=<claim_ids>         : (list) list of full claim ids
