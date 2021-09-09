@@ -461,25 +461,15 @@ class BlockchainNode:
 
 
 class HubProcess(asyncio.SubprocessProtocol):
-
-    IGNORE_OUTPUT = [
-        b'keypool keep',
-        b'keypool reserve',
-        b'keypool return',
-    ]
-
     def __init__(self):
         self.ready = asyncio.Event()
         self.stopped = asyncio.Event()
         self.log = log.getChild('hub')
 
     def pipe_data_received(self, fd, data):
-        if self.log and not any(ignore in data for ignore in self.IGNORE_OUTPUT):
-            if b'Error:' in data:
-                self.log.error(data.decode())
-            else:
-                self.log.info(data.decode())
-        if b'Error:' in data:
+        if self.log:
+            self.log.info(data.decode())
+        if b'error' in data.lower():
             self.ready.set()
             raise SystemError(data.decode())
         if b'listening on' in data:
