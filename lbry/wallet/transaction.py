@@ -459,6 +459,12 @@ class Output(InputOutput):
         self.signable.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
         self.script.generate()
 
+    def sign_data(self, data:bytes, timestamp:str) -> str:
+        pieces = [timestamp.encode(), self.claim_hash, data]
+        digest = sha256(b''.join(pieces))
+        signature = self.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        return hexlify(signature).decode()
+
     def clear_signature(self):
         self.channel = None
         self.signable.clear_signature()
