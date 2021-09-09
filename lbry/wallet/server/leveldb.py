@@ -667,8 +667,8 @@ class LevelDB:
             'tx_num': claim.tx_num,
             'tx_nout': claim.position,
             'amount': claim.amount,
-            'timestamp': 0,  # TODO: fix
-            'creation_timestamp': 0,  # TODO: fix
+            'timestamp': self.estimate_timestamp(claim.height),
+            'creation_timestamp': self.estimate_timestamp(claim.creation_height),
             'height': claim.height,
             'creation_height': claim.creation_height,
             'activation_height': claim.activation_height,
@@ -713,8 +713,10 @@ class LevelDB:
             value['duration'] = reposted_duration
         elif metadata.is_stream and (metadata.stream.video.duration or metadata.stream.audio.duration):
             value['duration'] = metadata.stream.video.duration or metadata.stream.audio.duration
-        if metadata.is_stream and metadata.stream.release_time:
-            value['release_time'] = metadata.stream.release_time
+        if metadata.is_stream:
+            value['release_time'] = metadata.stream.release_time or value['creation_timestamp']
+        elif metadata.is_repost or metadata.is_collection:
+            value['release_time'] = value['creation_timestamp']
         return value
 
     async def all_claims_producer(self, batch_size=500_000):
@@ -870,6 +872,11 @@ class LevelDB:
         headers = await asyncio.get_event_loop().run_in_executor(None, get_headers)
         assert len(headers) - 1 == self.db_height, f"{len(headers)} vs {self.db_height}"
         self.headers = headers
+
+    def estimate_timestamp(self, height: int) -> int:
+        if height < len(self.headers):
+            return struct.unpack('<I', self.headers[height][100:104])[0]
+        return int(160.6855883050695 * height)
 
     async def open_dbs(self):
         if self.db:

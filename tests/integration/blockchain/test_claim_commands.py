@@ -1764,6 +1764,15 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=self.account.id), 3)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=account2_id), 1)
 
+        self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(release_time='>=0', order_by=['release_time'])))
+        self.assertEqual(4, len(await self.claim_search(order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(claim_type='stream', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(claim_type='channel', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(release_time='>=123456', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(release_time='>123456', order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time='<123457', order_by=['release_time'])))
+
     async def test_setting_fee_fields(self):
         tx = await self.out(self.stream_create('paid-stream'))
         txo = tx['outputs'][0]
