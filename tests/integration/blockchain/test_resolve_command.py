@@ -632,6 +632,82 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertEqual(1, len(equal_to_zero))
         self.assertSetEqual(set(equal_to_zero), {stream_with_no_fee})
 
+    async def test_spec_example(self):
+        # https://spec.lbry.com/#claim-activation-example
+        # this test has adjusted block heights from the example because it uses the regtest chain instead of mainnet
+        # on regtest, claims expire much faster, so we can't do the ~1000 block delay in the spec example exactly
+
+        name = 'test'
+        await self.generate(494)
+        address = (await self.account.receiving.get_addresses(True))[0]
+        await self.blockchain.send_to_address(address, 400.0)
+        await self.account.ledger.on_address.first
+        await self.generate(100)
+        self.assertEqual(800, self.conductor.spv_node.server.bp.db.db_height)
+
+        # Block 801: Claim A for 10 LBC is accepted.
+        # It is the first claim, so it immediately becomes active and controlling.
+        # State: A(10) is controlling
+        claim_id_A = (await self.stream_create(name, '10.0',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        # Block 1121: Claim B for 20 LBC is accepted.
+        # Its activation height is 1121 + min(4032, floor((1121-801) / 32)) = 1121 + 10 = 1131.
+        # State: A(10) is controlling, B(20) is accepted.
+        await self.generate(32 * 10 - 1)
+        self.assertEqual(1120, self.conductor.spv_node.server.bp.db.db_height)
+        claim_id_B = (await self.stream_create(name, '20.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        claim_B, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_B}")
+        self.assertEqual(1121, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(1131, claim_B.activation_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        # Block 1122: Support X for 14 LBC for claim A is accepted.
+        # Since it is a support for the controlling claim, it activates immediately.
+        # State: A(10+14) is controlling, B(20) is accepted.
+        await self.support_create(claim_id_A, bid='14.0')
+        self.assertEqual(1122, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        # Block 1123: Claim C for 50 LBC is accepted.
+        # The activation height is 1123 + min(4032, floor((1123-801) / 32)) = 1123 + 10 = 1133.
+        # State: A(10+14) is controlling, B(20) is accepted, C(50) is accepted.
+        claim_id_C = (await self.stream_create(name, '50.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        self.assertEqual(1123, self.conductor.spv_node.server.bp.db.db_height)
+        claim_C, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_C}")
+        self.assertEqual(1133, claim_C.activation_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        await self.generate(7)
+        self.assertEqual(1130, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+        await self.generate(1)
+
+        # Block 1131: Claim B activates. It has 20 LBC, while claim A has 24 LBC (10 original + 14 from support X). There is no takeover, and claim A remains controlling.
+        # State: A(10+14) is controlling, B(20) is active, C(50) is accepted.
+        self.assertEqual(1131, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        # Block 1132: Claim D for 300 LBC is accepted. The activation height is 1132 + min(4032, floor((1132-801) / 32)) = 1132 + 10 = 1142.
+        # State: A(10+14) is controlling, B(20) is active, C(50) is accepted, D(300) is accepted.
+        claim_id_D = (await self.stream_create(name, '300.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        self.assertEqual(1132, self.conductor.spv_node.server.bp.db.db_height)
+        claim_D, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_D}")
+        self.assertEqual(False, claim_D.is_controlling)
+        self.assertEqual(801, claim_D.last_takeover_height)
+        self.assertEqual(1142, claim_D.activation_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_A)
+
+        # Block 1133: Claim C activates. It has 50 LBC, while claim A has 24 LBC, so a takeover is initiated. The takeover height for this name is set to 1133, and therefore the activation delay for all the claims becomes min(4032, floor((1133-1133) / 32)) = 0. All the claims become active. The totals for each claim are recalculated, and claim D becomes controlling because it has the highest total.
+        # State: A(10+14) is active, B(20) is active, C(50) is active, D(300) is controlling
+        await self.generate(1)
+        self.assertEqual(1133, self.conductor.spv_node.server.bp.db.db_height)
+        claim_D, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_D}")
+        self.assertEqual(True, claim_D.is_controlling)
+        self.assertEqual(1133, claim_D.last_takeover_height)
+        self.assertEqual(1133, claim_D.activation_height)
+        await self.assertMatchClaimIsWinning(name, claim_id_D)
+
     async def test_early_takeover(self):
         name = 'derp'
         # block 207
