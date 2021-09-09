@@ -66,7 +66,7 @@ RANGE_FIELDS = {
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
     'tx_position', 'channel_join', 'repost_count', 'limit_claims_per_channel',
     'amount', 'effective_amount', 'support_amount',
-    'trending_score', 'censor_type', 'tx_num', 'trending_score_change'
+    'trending_score', 'censor_type', 'tx_num'
 }
 
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
