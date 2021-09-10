@@ -4,6 +4,7 @@ import binascii
 import logging
 import typing
 import asyncio
+import time
 import re
 from collections import OrderedDict
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
@@ -252,14 +253,17 @@ class StreamDescriptor:
         iv_generator = iv_generator or random_iv_generator()
         key = key or os.urandom(AES.block_size // 8)
         blob_num = -1
+        added_on = time.time()
         async for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
-                loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
+                loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, added_on, True, blob_completed_callback
             )
             blobs.append(blob_info)
         blobs.append(
-            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator
+            # add the stream terminator
+            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode(), None, added_on, True)
+        )
         file_name = os.path.basename(file_path)
         suggested_file_name = sanitize_file_name(file_name)
         descriptor = cls(

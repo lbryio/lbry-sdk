@@ -25,12 +25,14 @@ class DiskSpaceManager:
         if not self.config.blob_storage_limit:
             return 0
         delete = []
-        available = (self.config.blob_storage_limit*1024*1024) - await self.db.get_stored_blob_disk_usage()
-        for blob_hash, file_size in await self.db.get_stored_blobs(is_mine=False):
+        available = (self.config.blob_storage_limit*1024*1024) - await self.get_space_used_bytes()
+        if available > 0:
+            return 0
+        for blob_hash, file_size, added_on in await self.db.get_stored_blobs(is_mine=False):
+            delete.append(blob_hash)
             available += file_size
             if available > 0:
                 break
-            delete.append(blob_hash)
         if delete:
             await self.blob_manager.delete_blobs(delete, delete_from_db=True)
         return len(delete)

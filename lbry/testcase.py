@@ -649,6 +649,9 @@ class CommandTestCase(IntegrationTestCase):
     async def transaction_list(self, *args, **kwargs):
         return (await self.out(self.daemon.jsonrpc_transaction_list(*args, **kwargs)))['items']
 
+    async def blob_list(self, *args, **kwargs):
+        return (await self.out(self.daemon.jsonrpc_blob_list(*args, **kwargs)))['items']
+
     @staticmethod
     def get_claim_id(tx):
         return tx['outputs'][0]['claim_id']

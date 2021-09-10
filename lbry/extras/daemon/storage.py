@@ -437,23 +437,27 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
 
-    async def get_stored_blobs(self, is_mine):
+    async def get_stored_blobs(self, is_mine: bool):
+        is_mine = 1 if is_mine else 0
         return await self.db.execute_fetchall(
-            "select blob_hash, blob_length from blob where is_mine=? order by added_on", (is_mine,)
+            "select blob_hash, blob_length, added_on from blob where is_mine=? order by added_on asc",
+            (is_mine,)
         )
 
-    async def get_stored_blob_disk_usage(self, is_mine=None):
+    async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None):
         if is_mine is None:
             sql, args = "select coalesce(sum(blob_length), 0) from blob", ()
         else:
+            is_mine = 1 if is_mine else 0
             sql, args = "select coalesce(sum(blob_length), 0) from blob where is_mine=?", (is_mine,)
         return (await self.db.execute_fetchone(sql, args))[0]
 
-    async def update_blob_ownership(self, stream_hash, is_mine: bool):
+    async def update_blob_ownership(self, sd_hash, is_mine: bool):
+        is_mine = 1 if is_mine else 0
         await self.db.execute_fetchall(
             "update blob set is_mine = ? where blob_hash in ("
-            "   select blob_hash from stream_blob where stream_hash = ?"
-            ")", (1 if is_mine else 0, stream_hash)
+            "   select blob_hash from blob natural join stream_blob natural join stream where sd_hash = ?"
+            ")", (is_mine, sd_hash)
         )
 
     def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
