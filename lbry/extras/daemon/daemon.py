@@ -37,7 +37,8 @@ from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
-    CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError
+    CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
+    ConflictingInputValueError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -2557,8 +2558,7 @@ class Daemon(metaclass=JSONRPCServerType):
             if "claim_ids" in kwargs and not kwargs["claim_ids"]:
                 kwargs.pop("claim_ids")
             if {'claim_id', 'claim_ids'}.issubset(kwargs):
-                # TODO: use error from lbry.error
-                raise ValueError("Only 'claim_id' or 'claim_ids' is allowed, not both.")
+                raise ConflictingInputValueError('claim_id', 'claim_ids')
             if kwargs.pop('valid_channel_signature', False):
                 kwargs['signature_valid'] = 1
             if kwargs.pop('invalid_channel_signature', False):
