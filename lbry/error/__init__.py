@@ -76,6 +76,14 @@ class InputValueIsNoneError(InputValueError):
         super().__init__(f"None or null is not valid value for argument '{argument}'.")
 
 
+class ConflictingInputValueError(InputValueError):
+
+    def __init__(self, first_argument, second_argument):
+        self.first_argument = first_argument
+        self.second_argument = second_argument
+        super().__init__(f"Only '{first_argument}' or '{second_argument}' is allowed, not both.")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.
