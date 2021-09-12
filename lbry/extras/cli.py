@@ -1,7 +1,9 @@
+import errno
 import os
 import sys
 import shutil
 import signal
+import tempfile
 import pathlib
 import json
 import asyncio
@@ -16,6 +18,7 @@ from docopt import docopt
 from lbry import __version__ as lbrynet_version
 from lbry.extras.daemon.daemon import Daemon
 from lbry.conf import Config, CLIConfig
+from lbry.error import ConfigWriteError
 
 log = logging.getLogger('lbry')
 
@@ -225,7 +228,28 @@ def get_argument_parser():
 
 def ensure_directory_exists(path: str):
     if not os.path.isdir(path):
+        if os.path.exists(path):
+            # pathlib raises FileExistsError in this case, which may be confusing
+            raise NotADirectoryError(f"{path} was expected to be a directory")
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+
+    try:
+        with tempfile.TemporaryFile(dir=path) as _tmpf:
+            pass # Just need it to open and be writable
+    except (OSError, PermissionError) as err:
+        if err.errno in (errno.EACCES, errno.EROFS):
+            raise ConfigWriteError(path) from err
+        raise
+
+
+def ensure_directory_not_full(path: str, test_size: int = 1048576):
+    try:
+        with tempfile.TemporaryFile(dir=path) as tmpf:
+            tmpf.write(b'\0' * test_size)
+    except OSError as err:
+        if err.errno == errno.ENOSPC:
+            raise RuntimeError(f"Directory {path} does not have enough free space") from err
+        raise
 
 
 LOG_MODULES = 'lbry', 'aioupnp'
@@ -293,6 +317,7 @@ def main(argv=None):
     conf = Config.create_from_arguments(args)
     for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
         ensure_directory_exists(directory)
+        ensure_directory_not_full(directory)
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")
