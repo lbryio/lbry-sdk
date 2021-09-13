@@ -54,6 +54,7 @@ from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS, REPLACEMENTS
+from lbry.extras.daemon.files import print_items
 MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 
 if typing.TYPE_CHECKING:
@@ -2213,6 +2214,95 @@ class Daemon(metaclass=JSONRPCServerType):
             stream.downloader.node = self.dht_node
         await stream.save_file(file_name, download_directory)
         return stream
+
+    @requires(FILE_MANAGER_COMPONENT)
+    def _sort_items(self, sort=None, reverse=False, comparison=None,
+                    channel_name=None, wallet_id=None, **kwargs):
+        """Get all items downloaded, and ordered."""
+        if not sort or sort in "release_time":
+            sort = "claim_height"
+        comparison = comparison or 'eq'
+
+        if channel_name:
+            items = self.file_manager.get_filtered(sort, reverse, comparison,
+                                                   channel_name=channel_name, **kwargs)
+        else:
+            items = self.file_manager.get_filtered(sort, reverse, comparison,
+                                                   **kwargs)
+        n_items = len(items)
+
+        if n_items < 1:
+            return False, False
+
+        print(f"Number of items: {n_items}")
+
+        sorted_items = items
+
+        release_times = []
+        for item in sorted_items:
+            _time = self.ledger.headers.estimated_timestamp(item.claim_height)
+            release_times.append(_time)
+
+        return sorted_items, release_times
+
+    @requires(FILE_MANAGER_COMPONENT)
+    async def jsonrpc_file_summary(self, show=None,
+                                   blobs=None, show_channel=None,
+                                   title=None, stream_type=None, path=None,
+                                   start=1, end=0, channel=None,
+                                   file=None, fdate=None, sep=";",
+                                   sort=None, reverse=False, comparison=None, wallet_id=None,
+                                   **kwargs):
+        """
+        Print summary of all downloaded claims.
+
+        Usage:
+            file_summary [--show=<show>] [--blobs] [--show_channel] [--title] [--stream_type] [--path]
+            [--start=<start>] [--end=<end>]
+            [--channel=<channel>] [--file=<file>] [--fdate] [--sep=<sep>]
+            [--sort=<sort_by>] [--reverse] [--comparison=<comparison>] [--wallet_id=<wallet_id>]
+
+        Options:
+            --show=<show>        : (str) what to show, it may be 'all' (default), 'incomplete', 'full', or 'media'
+            --blobs              : (bool) show the number of blobs in the stream
+            --show_channel       : (bool) show the channel that published the stream
+            --title              : (bool) show the title of the claim
+            --stream_type        : (bool) show the type of stream (video, audio, document, etc.)
+            --path               : (bool) show the full path of the downloaded media file if it exists
+            --start=<start>      : (int) show claims starting from this index (default 1)
+            --end=<end>          : (int) show claims until and including this index (default 0);
+                                   if it is 0, it is the same as the last index
+            --channel=<channel>  : (str) show only the claims by this channel
+            --file=<file>        : (str) name of the output file where the summary will be placed,
+                                   if it is omitted it will show the summary in the terminal
+            --fdate              : (bool) add the current date to the summary file
+            --sep=<sep>          : (str) string used as separator for fields (default ;)
+            --sort=<sort_by>     : (str) sort by one of the filter fields;
+                                   by default it uses 'claim_height', that is, time.
+                                   Other fields are those available for the 'file_list' command
+                                   such as 'claim_name' and 'claim_id'.
+            --reverse            : (bool) reverse the order of the list
+            --comparison=<comparison>  : (str) logical comparison, (eq | ne | g | ge | l | le | in)
+        """
+        if show is None or show not in ("all", "incomplete", "full", "media", "missing"):
+            show = "all"
+
+        items, release_times = self._sort_items(sort=sort, reverse=reverse, comparison=comparison,
+                                                channel_name=channel, wallet_id=wallet_id,
+                                                **kwargs)
+        if not items or len(items) < 1:
+            error = {"error": "No downloaded claims"}
+            if file:
+                error["error"] += f'; no file written "{file}"'
+            return error
+
+        n_out, file_out = print_items(items=items, release_times=release_times,
+                                      show=show, title=title, typ=stream_type, path=path,
+                                      cid=True, blobs=blobs, show_channel=show_channel,
+                                      name=True, start=start, end=end,
+                                      file=file, fdate=fdate, sep=sep)
+        return {"total_items": n_out,
+                "file": file_out}
 
     PURCHASE_DOC = """
     List and make purchases of claims.
