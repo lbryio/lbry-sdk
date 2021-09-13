@@ -357,7 +357,8 @@ class LevelDB:
             return
         return list(sorted(candidates, key=lambda item: item[1]))[0]
 
-    def _fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError]:
+    def _fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError,
+                                               OptionalResolveResultOrError]:
         try:
             parsed = URL.parse(url)
         except ValueError as e:
@@ -374,7 +375,7 @@ class LevelDB:
         if channel:
             resolved_channel = self._resolve(channel.name, channel.claim_id, channel.amount_order)
             if not resolved_channel:
-                return None, LookupError(f'Could not find channel in "{url}".')
+                return None, LookupError(f'Could not find channel in "{url}".'), None
         if stream:
             if resolved_channel:
                 stream_claim = self._resolve_claim_in_channel(resolved_channel.claim_hash, stream.normalized)
@@ -386,8 +387,9 @@ class LevelDB:
                 if not channel and not resolved_channel and resolved_stream and resolved_stream.channel_hash:
                     resolved_channel = self._fs_get_claim_by_hash(resolved_stream.channel_hash)
             if not resolved_stream:
-                return LookupError(f'Could not find claim at "{url}".'), None
+                return LookupError(f'Could not find claim at "{url}".'), None, None
 
+        repost = None
         if resolved_stream or resolved_channel:
             claim_hash = resolved_stream.claim_hash if resolved_stream else resolved_channel.claim_hash
             claim = resolved_stream if resolved_stream else resolved_channel
@@ -397,10 +399,13 @@ class LevelDB:
                 reposted_claim_hash) or self.blocked_channels.get(claim.channel_hash)
             if blocker_hash:
                 reason_row = self._fs_get_claim_by_hash(blocker_hash)
-                return None, ResolveCensoredError(url, blocker_hash, censor_row=reason_row)
-        return resolved_stream, resolved_channel
+                return None, ResolveCensoredError(url, blocker_hash, censor_row=reason_row), None
+            if claim.reposted_claim_hash:
+                repost = self._fs_get_claim_by_hash(claim.reposted_claim_hash)
+        return resolved_stream, resolved_channel, repost
 
-    async def fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError]:
+    async def fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError,
+                                                    OptionalResolveResultOrError]:
          return await asyncio.get_event_loop().run_in_executor(None, self._fs_resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
@@ -721,9 +726,9 @@ class LevelDB:
 
     async def all_claims_producer(self, batch_size=500_000):
         batch = []
-        for claim_hash, v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
+        for claim_hash, claim_txo in self.claim_to_txo.items():
             # TODO: fix the couple of claim txos that dont have controlling names
-            if not self.db.get(Prefixes.claim_takeover.pack_key(Prefixes.claim_to_txo.unpack_value(v).normalized_name)):
+            if not self.db.get(Prefixes.claim_takeover.pack_key(claim_txo.normalized_name)):
                 continue
             claim = self._fs_get_claim_by_hash(claim_hash[1:])
             if claim:

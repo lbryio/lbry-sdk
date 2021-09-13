@@ -231,7 +231,7 @@ class SearchIndex:
             if not ok:
                 self.logger.warning("updating trending failed for an item: %s", item)
         await self.sync_client.indices.refresh(self.index)
-        self.logger.warning("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
+        self.logger.info("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         if filtered_streams:
@@ -341,24 +341,6 @@ class SearchIndex:
             cache_item.result = result
             return result
 
-    # async def resolve(self, *urls):
-    #     censor = Censor(Censor.RESOLVE)
-    #     results = [await self.resolve_url(url) for url in urls]
-    #     # just heat the cache
-    #     await self.populate_claim_cache(*filter(lambda x: isinstance(x, str), results))
-    #     results = [self._get_from_cache_or_error(url, result) for url, result in zip(urls, results)]
-    #
-    #     censored = [
-    #         result if not isinstance(result, dict) or not censor.censor(result)
-    #         else ResolveCensoredError(url, result['censoring_channel_hash'])
-    #         for url, result in zip(urls, results)
-    #     ]
-    #     return results, censored, censor
-
-    def _get_from_cache_or_error(self, url: str, resolution: Union[LookupError, StreamResolution, ChannelResolution]):
-        cached = self.claim_cache.get(resolution)
-        return cached or (resolution if isinstance(resolution, LookupError) else resolution.lookup_error(url))
-
     async def get_many(self, *claim_ids):
         await self.populate_claim_cache(*claim_ids)
         return filter(None, map(self.claim_cache.get, claim_ids))
@@ -389,10 +371,6 @@ class SearchIndex:
         return self.short_id_cache.get(key, None)
 
     async def search(self, **kwargs):
-        if 'channel' in kwargs:
-            kwargs['channel_id'] = await self.resolve_url(kwargs.pop('channel'))
-            if not kwargs['channel_id'] or not isinstance(kwargs['channel_id'], str):
-                return [], 0, 0
         try:
             return await self.search_ahead(**kwargs)
         except NotFoundError:
@@ -476,78 +454,6 @@ class SearchIndex:
                 else:
                     next_page_hits_maybe_check_later.append((hit_id, hit_channel_id))
         return reordered_hits
-
-    async def resolve_url(self, raw_url):
-        if raw_url not in self.resolution_cache:
-            self.resolution_cache[raw_url] = await self._resolve_url(raw_url)
-        return self.resolution_cache[raw_url]
-
-    async def _resolve_url(self, raw_url):
-        try:
-            url = URL.parse(raw_url)
-        except ValueError as e:
-            return e
-
-        stream = LookupError(f'Could not find claim at "{raw_url}".')
-
-        channel_id = await self.resolve_channel_id(url)
-        if isinstance(channel_id, LookupError):
-            return channel_id
-        stream = (await self.resolve_stream(url, channel_id if isinstance(channel_id, str) else None)) or stream
-        if url.has_stream:
-            return StreamResolution(stream)
-        else:
-            return ChannelResolution(channel_id)
-
-    async def resolve_channel_id(self, url: URL):
-        if not url.has_channel:
-            return
-        if url.channel.is_fullid:
-            return url.channel.claim_id
-        if url.channel.is_shortid:
-            channel_id = await self.full_id_from_short_id(url.channel.name, url.channel.claim_id)
-            if not channel_id:
-                return LookupError(f'Could not find channel in "{url}".')
-            return channel_id
-
-        query = url.channel.to_dict()
-        if set(query) == {'name'}:
-            query['is_controlling'] = True
-        else:
-            query['order_by'] = ['^creation_height']
-        matches, _, _ = await self.search(**query, limit=1)
-        if matches:
-            channel_id = matches[0]['claim_id']
-        else:
-            return LookupError(f'Could not find channel in "{url}".')
-        return channel_id
-
-    async def resolve_stream(self, url: URL, channel_id: str = None):
-        if not url.has_stream:
-            return None
-        if url.has_channel and channel_id is None:
-            return None
-        query = url.stream.to_dict()
-        if url.stream.claim_id is not None:
-            if url.stream.is_fullid:
-                claim_id = url.stream.claim_id
-            else:
-                claim_id = await self.full_id_from_short_id(query['name'], query['claim_id'], channel_id)
-            return claim_id
-
-        if channel_id is not None:
-            if set(query) == {'name'}:
-                # temporarily emulate is_controlling for claims in channel
-                query['order_by'] = ['effective_amount', '^height']
-            else:
-                query['order_by'] = ['^channel_join']
-            query['channel_id'] = channel_id
-            query['signature_valid'] = True
-        elif set(query) == {'name'}:
-            query['is_controlling'] = True
-        matches, _, _ = await self.search(**query, limit=1)
-        if matches:
-            return matches[0]['claim_id']
 
     async def _get_referenced_rows(self, txo_rows: List[dict]):
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
