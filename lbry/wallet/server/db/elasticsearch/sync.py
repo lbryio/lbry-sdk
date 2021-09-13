@@ -57,8 +57,9 @@ async def run_sync(index_name='claims', db=None, clients=32):
     logging.info("ES sync host: %s:%i", env.elastic_host, env.elastic_port)
     es = AsyncElasticsearch([{'host': env.elastic_host, 'port': env.elastic_port}])
     claim_generator = get_all_claims(index_name=index_name, db=db)
+
     try:
-        await asyncio.gather(*(async_bulk(es, claim_generator, request_timeout=600) for _ in range(clients)))
+        await async_bulk(es, claim_generator, request_timeout=600)
         await es.indices.refresh(index=index_name)
     finally:
         await es.close()
