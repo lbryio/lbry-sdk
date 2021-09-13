@@ -273,4 +273,4 @@ class Env:
             return self.PD_ON
 
     def extract_peer_hubs(self):
-        return [hub.strip() for hub in self.default('PEER_HUBS', '').split(',')]
+        return [hub.strip() for hub in self.default('PEER_HUBS', '').split(',') if hub.strip()]
