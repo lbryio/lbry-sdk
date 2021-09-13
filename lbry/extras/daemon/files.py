@@ -114,3 +114,68 @@ def print_items(items=None, release_times=None, show="all",
         print("\n".join(out_list))
 
     return len(out_list), file
+
+
+def parse_claim_file(file=None, sep=";", start=1, end=0):
+    """
+    Parse a CSV file containing claim_ids.
+    """
+    if not file:
+        return False
+
+    with open(file, "r") as fdescriptor:
+        lines = fdescriptor.readlines()
+
+    n_lines = len(lines)
+    claims = []
+
+    if n_lines < 1:
+        return False
+
+    out_list = []
+
+    for num, line in enumerate(lines, start=1):
+        # Skip lines with only whitespace, and starting with # (comments)
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+
+        if num < start:
+            continue
+        if end != 0 and num > end:
+            break
+
+        out = "{:4d}/{:4d}".format(num, n_lines) + f"{sep} "
+
+        # Split by using the separator, and remove whitespaces
+        parts = line.split(sep)
+        clean_parts = [i.strip() for i in parts]
+
+        part = clean_parts[0]
+        found = True
+
+        for part in clean_parts:
+            # Find the 40 character long alphanumeric string
+            # without confusing it with an URI like 'lbry://@some/video#4'
+            if (len(part) == 40
+                    and "/" not in part
+                    and "@" not in part
+                    and "#" not in part
+                    and ":" not in part):
+                found = True
+                claims.append({"claim_id": part})
+                break
+            found = False
+
+        if found:
+            out_list.append(out + f"claim_id: {part}")
+        else:
+            out_list.append(out + "no 'claim_id' found, "
+                            "it must be a 40-character alphanumeric string "
+                            "without special symbols like '/', '@', '#', ':'")
+
+    print(f'Read summary: "{file}"')
+    print("\n".join(out_list))
+    n_claims = len(claims)
+    print(f"Effective claims found: {n_claims}")
+    return claims

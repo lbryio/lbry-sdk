@@ -54,7 +54,7 @@ from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL, normalize_name
 from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS, REPLACEMENTS
-from lbry.extras.daemon.files import print_items
+from lbry.extras.daemon.files import print_items, parse_claim_file
 MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
 
 if typing.TYPE_CHECKING:
@@ -2303,6 +2303,67 @@ class Daemon(metaclass=JSONRPCServerType):
                                       file=file, fdate=fdate, sep=sep)
         return {"total_items": n_out,
                 "file": file_out}
+
+    @requires(WALLET_COMPONENT, EXCHANGE_RATE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT,
+              FILE_MANAGER_COMPONENT)
+    async def jsonrpc_file_read(self, file=None, download_directory=None,
+                                timeout=None, save_file=None, wallet_id=None,
+                                sep=";", start=1, end=0):
+        """
+        Read the claims from a file, and download the corresponding claims.
+
+        Usage:
+            file_read [--file=<file>] [--download_directory=<download_directory>]
+            [--timeout=<timeout>] [--save_file=<save_file>] [--wallet_id=<wallet_id>]
+            [--sep=<sep>] [--start=<start>] [--end=<end>]
+
+        Options:
+            --file=<file>            : (str) name of the input file from which to read the claim_ids
+            --download_directory=<download_directory>  : (str) full path to the directory to download into
+            --timeout=<timeout>      : (int) download timeout in number of seconds
+            --save_file=<save_file>  : (bool) save the file to the downloads directory
+            --wallet_id=<wallet_id>  : (str) wallet to check for claim purchase receipts
+            --sep=<sep>              : (str) string used as separator for fields (default ;)
+            --start=<start>          : (int) show claims starting from this index (default 1)
+            --end=<end>              : (int) show claims until and including this index (default 0);
+                                       if it is 0, it is the same as the last index
+        """
+        if not file:
+            return {"error": "No file to read"}
+        elif not os.path.exists(file):
+            return {"error": f'File does not exist "{file}"'}
+
+        sorted_items = parse_claim_file(file=file, sep=sep)
+
+        if not sorted_items or len(sorted_items) < 1:
+            return {"error": f'File does not contain claim IDs, "{file}"'}
+
+        list_downloaded = []
+
+        for num, item in enumerate(sorted_items, start=1):
+            if num < start:
+                continue
+            if end != 0 and num > end:
+                break
+
+            out = await self.jsonrpc_claim_search(claim_id=item["claim_id"], wallet_id=wallet_id)
+            if out["total_items"] < 1:
+                continue
+
+            txo = out["items"][-1]
+            uri = txo.meta["canonical_url"]
+
+            out = await self.jsonrpc_get(uri, file_name=None,
+                                         download_directory=download_directory,
+                                         timeout=timeout, save_file=save_file,
+                                         wallet_id=wallet_id)
+            if out:
+                list_downloaded.append(out)
+
+        n_read = len(list_downloaded)
+
+        return {"total_items": n_read,
+                "file": file}
 
     PURCHASE_DOC = """
     List and make purchases of claims.
