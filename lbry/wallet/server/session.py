@@ -983,6 +983,12 @@ class LBRYElectrumX(SessionBase):
             kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
         try:
             self.session_mgr.pending_query_metric.inc()
+            if 'channel' in kwargs:
+                channel_url = kwargs.pop('channel')
+                _, channel_claim, _ = await self.db.fs_resolve(channel_url)
+                if not channel_claim or isinstance(channel_claim, (ResolveCensoredError, LookupError, ValueError)):
+                    return Outputs.to_base64([], [], 0, None, None)
+                kwargs['channel_id'] = channel_claim.claim_hash.hex()
             return await self.db.search_index.cached_search(kwargs)
         except ConnectionTimeout:
             self.session_mgr.interrupt_count_metric.inc()
@@ -1000,7 +1006,7 @@ class LBRYElectrumX(SessionBase):
         rows, extra = [], []
         for url in urls:
             self.session_mgr.urls_to_resolve_count_metric.inc()
-            stream, channel = await self.db.fs_resolve(url)
+            stream, channel, repost = await self.db.fs_resolve(url)
             self.session_mgr.resolved_url_count_metric.inc()
             if isinstance(channel, ResolveCensoredError):
                 rows.append(channel)
@@ -1011,12 +1017,16 @@ class LBRYElectrumX(SessionBase):
             elif channel and not stream:
                 rows.append(channel)
                 # print("resolved channel", channel.name.decode())
+                if repost:
+                    extra.append(repost)
             elif stream:
                 # print("resolved stream", stream.name.decode())
                 rows.append(stream)
                 if channel:
                     # print("and channel", channel.name.decode())
                     extra.append(channel)
+                if repost:
+                    extra.append(repost)
         # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
 

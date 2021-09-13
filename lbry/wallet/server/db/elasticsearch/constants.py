@@ -72,11 +72,13 @@ RANGE_FIELDS = {
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 
 REPLACEMENTS = {
-    'trending_mixed': 'trending_score',
+    'name': 'normalized',
     'txid': 'tx_id',
     'nout': 'tx_nout',
+    'trending_mixed': 'trending_score',
     'normalized_name': 'normalized',
-    'stream_types': 'stream_type',
-    'media_types': 'media_type',
-    'reposted': 'repost_count'
+    'reposted': 'repost_count',
+    # 'stream_types': 'stream_type',
+    # 'media_types': 'media_type',
+    'valid_channel_signature': 'is_signature_valid'
 }
