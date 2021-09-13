@@ -730,7 +730,7 @@ class LevelDB:
             # TODO: fix the couple of claim txos that dont have controlling names
             if not self.db.get(Prefixes.claim_takeover.pack_key(claim_txo.normalized_name)):
                 continue
-            claim = self._fs_get_claim_by_hash(claim_hash[1:])
+            claim = self._fs_get_claim_by_hash(claim_hash)
             if claim:
                 batch.append(claim)
             if len(batch) == batch_size:
