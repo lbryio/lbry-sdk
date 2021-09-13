@@ -9,7 +9,6 @@ from typing import Optional, List, Iterable, Union
 
 from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_streaming_bulk
-
 from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
@@ -503,8 +502,8 @@ def expand_query(**kwargs):
                     value = CLAIM_TYPES[value]
                 else:
                     value = [CLAIM_TYPES[claim_type] for claim_type in value]
-            # elif key == 'stream_type':
-            #     value = STREAM_TYPES[value] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
+            elif key == 'stream_type':
+                value = [STREAM_TYPES[value]] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
             if key == '_id':
                 if isinstance(value, Iterable):
                     value = [item[::-1].hex() for item in value]
@@ -512,8 +511,6 @@ def expand_query(**kwargs):
                     value = value[::-1].hex()
             if not many and key in ('_id', 'claim_id') and len(value) < 20:
                 partial_id = True
-            if key == 'public_key_id':
-                value = Base58.decode(value)[1:21].hex()
             if key in ('signature_valid', 'has_source'):
                 continue  # handled later
             if key in TEXT_FIELDS:

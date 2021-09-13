@@ -58,7 +58,7 @@ FIELDS = {
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id', 'censoring_channel_id',
                'media_type', 'normalized', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
-               'name', 'signature_digest', 'stream_type', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
+               'name', 'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
                'tags'}
 
 RANGE_FIELDS = {
@@ -78,7 +78,7 @@ REPLACEMENTS = {
     'trending_mixed': 'trending_score',
     'normalized_name': 'normalized',
     'reposted': 'repost_count',
-    # 'stream_types': 'stream_type',
-    # 'media_types': 'media_type',
+    'stream_types': 'stream_type',
+    'media_types': 'media_type',
     'valid_channel_signature': 'is_signature_valid'
 }
