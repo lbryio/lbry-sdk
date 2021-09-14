@@ -44,8 +44,8 @@ class FileCommands(CommandTestCase):
     @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
         tx, btih = await self.initialize_torrent()
-#        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
-#        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         # second call, see its there and move on
 #        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
 #        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
