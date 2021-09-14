@@ -49,7 +49,7 @@ class FileCommands(CommandTestCase):
         # second call, see its there and move on
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
-#        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
 #        self.assertIn(btih, self.client_session._handles)
 #        tx, new_btih = await self.initialize_torrent(tx)
 #        self.assertNotEqual(btih, new_btih)
