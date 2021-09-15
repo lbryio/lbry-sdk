@@ -284,8 +284,8 @@ class SearchIndex:
                 total_referenced.extend(response)
             response = [
                 ResolveResult(
-                    name=r['name'],
-                    normalized_name=r['normalized'],
+                    name=r['claim_name'],
+                    normalized_name=r['normalized_name'],
                     claim_hash=r['claim_hash'],
                     tx_num=r['tx_num'],
                     position=r['tx_nout'],
@@ -310,8 +310,8 @@ class SearchIndex:
             ]
             extra = [
                 ResolveResult(
-                    name=r['name'],
-                    normalized_name=r['normalized'],
+                    name=r['claim_name'],
+                    normalized_name=r['normalized_name'],
                     claim_hash=r['claim_hash'],
                     tx_num=r['tx_num'],
                     position=r['tx_nout'],
