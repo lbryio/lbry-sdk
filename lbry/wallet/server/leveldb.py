@@ -666,8 +666,8 @@ class LevelDB:
             reposted_claim_hash) or self.filtered_channels.get(claim.channel_hash)
         value = {
             'claim_id': claim_hash.hex(),
-            'name': claim.name,
-            'normalized': claim.normalized_name,
+            'claim_name': claim.name,
+            'normalized_name': claim.normalized_name,
             'tx_id': claim.tx_hash[::-1].hex(),
             'tx_num': claim.tx_num,
             'tx_nout': claim.position,

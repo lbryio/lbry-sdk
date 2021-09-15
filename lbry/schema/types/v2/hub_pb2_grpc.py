@@ -2,8 +2,8 @@
 """Client and server classes corresponding to protobuf-defined services."""
 import grpc
 
-import lbry.schema.types.v2.hub_pb2 as hub__pb2
-import lbry.schema.types.v2.result_pb2 as result__pb2
+from . import hub_pb2 as hub__pb2
+from . import result_pb2 as result__pb2
 
 
 class HubStub(object):
