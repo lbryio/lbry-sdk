@@ -194,35 +194,22 @@ class CLITest(AsyncioTestCase):
     def test_ensure_directory_exists_not_exists(self):
         with tempfile.TemporaryDirectory() as tempdir:
             test_dir = pathlib.Path(tempdir).joinpath("test_ensure")
-            cli.ensure_directory_exists(str(test_dir))
+            cli.ensure_directory_exists(test_dir)
             self.assertTrue(test_dir.is_dir())
 
 
     def test_ensure_directory_exists_not_writable(self):
-        if os.getuid() == 0:
-            logger = logging.getLogger(__name__)
-            logger.warning("test_ensure_directory_exists_not_writable cannot fail when run as root")
-            # prefer un-failable test to un-passable test
-            return
-
         with tempfile.TemporaryDirectory() as tempdir:
             test_dir = pathlib.Path(tempdir).joinpath("test_ensure")
             test_dir.mkdir(mode=0o555)
-            self.assertRaises(ConfigWriteError, cli.ensure_directory_exists, str(test_dir))
-
-
-    def test_ensure_directory_exists_success(self):
-        with tempfile.TemporaryDirectory() as tempdir:
-            test_dir = pathlib.Path(tempdir).joinpath("test_ensure")
-            test_dir.mkdir(mode=0o777)
-            cli.ensure_directory_exists(str(test_dir))
+            self.assertRaises(ConfigWriteError, cli.ensure_directory_exists, test_dir)
 
 
     def test_ensure_directory_exists_not_a_directory(self):
         with tempfile.TemporaryDirectory() as tempdir:
             test_file = pathlib.Path(tempdir).joinpath("test_ensure")
             test_file.touch()
-            self.assertRaises(NotADirectoryError, cli.ensure_directory_exists, str(test_file))
+            self.assertRaises(NotADirectoryError, cli.ensure_directory_exists, test_file)
 
 
 class DaemonDocsTests(TestCase):
