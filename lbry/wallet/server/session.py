@@ -979,8 +979,12 @@ class LBRYElectrumX(SessionBase):
 
     async def claimtrie_search(self, **kwargs):
         start = time.perf_counter()
-        if isinstance(kwargs, dict):
-            kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
+        if 'release_time' in kwargs:
+            release_time = kwargs.pop('release_time')
+            try:
+                kwargs['release_time'] = format_release_time(release_time)
+            except ValueError:
+                pass
         try:
             self.session_mgr.pending_query_metric.inc()
             if 'channel' in kwargs:
