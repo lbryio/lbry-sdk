@@ -208,4 +208,5 @@ class TestStressFlush(CommandTestCase):
         await self.stream_create()
         with self.assertRaises(RPCError) as err:
             await self.claim_search(not_channel_ids=[("%040x" % i) for i in range(8196)])
-        self.assertEqual(err.exception.message, 'not_channel_ids cant have more than 2048 items.')
+        # in the go hub this doesnt have a `.` at the end, in python it does
+        self.assertTrue(err.exception.message.startswith('not_channel_ids cant have more than 2048 items'))

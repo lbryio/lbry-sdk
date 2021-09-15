@@ -38,7 +38,7 @@ INDEX_DEFAULT_SETTINGS = {
 
 FIELDS = {
     '_id',
-    'claim_id', 'claim_type', 'name', 'normalized',
+    'claim_id', 'claim_type', 'claim_name', 'normalized_name',
     'tx_id', 'tx_nout', 'tx_position',
     'short_url', 'canonical_url',
     'is_controlling', 'last_take_over_height',
@@ -57,8 +57,8 @@ FIELDS = {
 }
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id', 'censoring_channel_id',
-               'media_type', 'normalized', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
-               'name', 'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
+               'media_type', 'normalized_name', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
+               'claim_name', 'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
                'tags'}
 
 RANGE_FIELDS = {
@@ -72,11 +72,11 @@ RANGE_FIELDS = {
 ALL_FIELDS = RANGE_FIELDS | TEXT_FIELDS | FIELDS
 
 REPLACEMENTS = {
-    'name': 'normalized',
+    'claim_name': 'normalized_name',
+    'name': 'normalized_name',
     'txid': 'tx_id',
     'nout': 'tx_nout',
     'trending_mixed': 'trending_score',
-    'normalized_name': 'normalized',
     'reposted': 'repost_count',
     'stream_types': 'stream_type',
     'media_types': 'media_type',
