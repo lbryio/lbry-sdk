@@ -1767,6 +1767,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
         self.assertEqual(3, len(await self.claim_search(release_time='>=0', order_by=['release_time'])))
         self.assertEqual(4, len(await self.claim_search(order_by=['release_time'])))
+        self.assertEqual(4, len(await self.claim_search(release_time='<derp', order_by=['release_time'])))
         self.assertEqual(3, len(await self.claim_search(claim_type='stream', order_by=['release_time'])))
         self.assertEqual(1, len(await self.claim_search(claim_type='channel', order_by=['release_time'])))
         self.assertEqual(1, len(await self.claim_search(release_time='>=123456', order_by=['release_time'])))
