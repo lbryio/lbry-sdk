@@ -236,7 +236,7 @@ class StreamManager(SourceManager):
             blob_completed_callback=self.blob_manager.blob_completed
         )
         await self.storage.store_stream(
-            self.blob_manager.get_blob(descriptor.sd_hash), descriptor
+            self.blob_manager.get_blob(descriptor.sd_hash, is_mine=True), descriptor
         )
         row_id = await self.storage.save_published_file(
             descriptor.stream_hash, os.path.basename(file_path), os.path.dirname(file_path), 0

@@ -356,7 +356,7 @@ class BlobFile(AbstractBlob):
     @classmethod
     async def create_from_unencrypted(
         cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
-        unencrypted: bytes, blob_num: int, added_on: int, is_mine: bool,
+        unencrypted: bytes, blob_num: int, added_on: float, is_mine: bool,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None
     ) -> BlobInfo:
         if not blob_dir or not os.path.isdir(blob_dir):

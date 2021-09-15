@@ -34,6 +34,7 @@ class DiskSpaceManager:
             if available > 0:
                 break
         if delete:
+            await self.db.stop_all_files()
             await self.blob_manager.delete_blobs(delete, delete_from_db=True)
         return len(delete)
 
