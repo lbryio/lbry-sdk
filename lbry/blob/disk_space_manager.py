@@ -1,4 +1,3 @@
-import os
 import asyncio
 import logging
 
@@ -28,7 +27,7 @@ class DiskSpaceManager:
         available = (self.config.blob_storage_limit*1024*1024) - await self.get_space_used_bytes()
         if available > 0:
             return 0
-        for blob_hash, file_size, added_on in await self.db.get_stored_blobs(is_mine=False):
+        for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False):
             delete.append(blob_hash)
             available += file_size
             if available > 0:
