@@ -36,30 +36,30 @@ class BlobManager:
             self.config.blob_lru_cache_size)
         self.connection_manager = ConnectionManager(loop)
 
-    def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None):
+    def _get_blob(self, blob_hash: str, length: typing.Optional[int] = None, is_mine: bool = False):
         if self.config.save_blobs or (
                 is_valid_blobhash(blob_hash) and os.path.isfile(os.path.join(self.blob_dir, blob_hash))):
             return BlobFile(
-                self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+                self.loop, blob_hash, length, self.blob_completed, self.blob_dir, is_mine=is_mine
             )
         return BlobBuffer(
-            self.loop, blob_hash, length, self.blob_completed, self.blob_dir
+            self.loop, blob_hash, length, self.blob_completed, self.blob_dir, is_mine=is_mine
         )
 
-    def get_blob(self, blob_hash, length: typing.Optional[int] = None):
+    def get_blob(self, blob_hash, length: typing.Optional[int] = None, is_mine: bool = False):
         if blob_hash in self.blobs:
             if self.config.save_blobs and isinstance(self.blobs[blob_hash], BlobBuffer):
                 buffer = self.blobs.pop(blob_hash)
                 if blob_hash in self.completed_blob_hashes:
                     self.completed_blob_hashes.remove(blob_hash)
-                self.blobs[blob_hash] = self._get_blob(blob_hash, length)
+                self.blobs[blob_hash] = self._get_blob(blob_hash, length, is_mine)
                 if buffer.is_readable():
                     with buffer.reader_context() as reader:
                         self.blobs[blob_hash].write_blob(reader.read())
             if length and self.blobs[blob_hash].length is None:
                 self.blobs[blob_hash].set_length(length)
         else:
-            self.blobs[blob_hash] = self._get_blob(blob_hash, length)
+            self.blobs[blob_hash] = self._get_blob(blob_hash, length, is_mine)
         return self.blobs[blob_hash]
 
     def is_blob_verified(self, blob_hash: str, length: typing.Optional[int] = None) -> bool:

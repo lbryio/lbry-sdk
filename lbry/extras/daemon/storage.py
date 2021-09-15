@@ -457,7 +457,7 @@ class SQLiteStorage(SQLiteMixin):
         await self.db.execute_fetchall(
             "update blob set is_mine = ? where blob_hash in ("
             "   select blob_hash from blob natural join stream_blob natural join stream where sd_hash = ?"
-            ")", (is_mine, sd_hash)
+            ") OR blob_hash = ?", (is_mine, sd_hash, sd_hash)
         )
 
     def sync_missing_blobs(self, blob_files: typing.Set[str]) -> typing.Awaitable[typing.Set[str]]:
@@ -594,6 +594,10 @@ class SQLiteStorage(SQLiteMixin):
     def change_file_status(self, stream_hash: str, new_status: str):
         log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute_fetchall("update file set status=? where stream_hash=?", (new_status, stream_hash))
+
+    def stop_all_files(self):
+        log.debug("stopping all files")
+        return self.db.execute_fetchall("update file set status=?", ("stopped",))
 
     async def change_file_download_dir_and_file_name(self, stream_hash: str, download_dir: typing.Optional[str],
                                                      file_name: typing.Optional[str]):

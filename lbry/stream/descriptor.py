@@ -153,15 +153,19 @@ class StreamDescriptor:
         h.update(self.old_sort_json())
         return h.hexdigest()
 
-    async def make_sd_blob(self, blob_file_obj: typing.Optional[AbstractBlob] = None,
-                           old_sort: typing.Optional[bool] = False,
-                           blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None):
+    async def make_sd_blob(
+            self, blob_file_obj: typing.Optional[AbstractBlob] = None, old_sort: typing.Optional[bool] = False,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
+            added_on: float = None, is_mine: bool = False
+        ):
         sd_hash = self.calculate_sd_hash() if not old_sort else self.calculate_old_sort_sd_hash()
         if not old_sort:
             sd_data = self.as_json()
         else:
             sd_data = self.old_sort_json()
-        sd_blob = blob_file_obj or BlobFile(self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir)
+        sd_blob = blob_file_obj or BlobFile(
+            self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir, added_on, is_mine
+        )
         if blob_file_obj:
             blob_file_obj.set_length(len(sd_data))
         if not sd_blob.get_is_verified():
@@ -269,7 +273,9 @@ class StreamDescriptor:
         descriptor = cls(
             loop, blob_dir, file_name, binascii.hexlify(key).decode(), suggested_file_name, blobs
         )
-        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort, blob_completed_callback=blob_completed_callback)
+        sd_blob = await descriptor.make_sd_blob(
+            old_sort=old_sort, blob_completed_callback=blob_completed_callback, added_on=added_on, is_mine=True
+        )
         descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 
