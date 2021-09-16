@@ -64,24 +64,37 @@ class BaseResolveTestCase(CommandTestCase):
         self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
         return claim
 
-    async def assertMatchClaim(self, claim_id):
+    async def assertMatchClaim(self, claim_id, is_active_in_lbrycrd=True):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimbyid', claim_id))
         claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
-        if not expected:
-            self.assertIsNone(claim)
-            return
+        if is_active_in_lbrycrd:
+            if not expected:
+                self.assertIsNone(claim)
+                return
+            self.assertEqual(expected['claimId'], claim.claim_hash.hex())
+            self.assertEqual(expected['validAtHeight'], claim.activation_height)
+            self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)
+            self.assertEqual(expected['txId'], claim.tx_hash[::-1].hex())
+            self.assertEqual(expected['n'], claim.position)
+            self.assertEqual(expected['amount'], claim.amount)
+            self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
+        else:
+            self.assertDictEqual({}, expected)
+
         claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
             claim_id=claim.claim_hash.hex()
         )
         self.assertEqual(len(claim_from_es[0]), 1)
         self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim.claim_hash.hex())
-        self.assertEqual(expected['claimId'], claim.claim_hash.hex())
-        self.assertEqual(expected['validAtHeight'], claim.activation_height)
-        self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)
-        self.assertEqual(expected['txId'], claim.tx_hash[::-1].hex())
-        self.assertEqual(expected['n'], claim.position)
-        self.assertEqual(expected['amount'], claim.amount)
-        self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
+
+
+        self.assertEqual(claim_from_es[0][0]['claim_id'], claim.claim_hash.hex())
+        self.assertEqual(claim_from_es[0][0]['activation_height'], claim.activation_height)
+        self.assertEqual(claim_from_es[0][0]['last_take_over_height'], claim.last_takeover_height)
+        self.assertEqual(claim_from_es[0][0]['tx_id'], claim.tx_hash[::-1].hex())
+        self.assertEqual(claim_from_es[0][0]['tx_nout'], claim.position)
+        self.assertEqual(claim_from_es[0][0]['amount'], claim.amount)
+        self.assertEqual(claim_from_es[0][0]['effective_amount'], claim.effective_amount)
         return claim
 
     async def assertMatchClaimIsWinning(self, name, claim_id):
@@ -593,6 +606,64 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(1)
         await self.assertNoClaimForName(name)
         await self._test_activation_delay()
+
+    async def test_claim_and_update_delays(self):
+        name = 'derp'
+        first_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(320)
+        second_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        third_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+
+        await self.generate(8)
+
+        self.assertEqual(537, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        second_claim = await self.assertMatchClaim(second_claim_id, is_active_in_lbrycrd=False)
+        self.assertEqual(538, second_claim.activation_height)
+        self.assertEqual(207, second_claim.last_takeover_height)
+        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
+        self.assertEqual(539, third_claim.activation_height)
+        self.assertEqual(207, third_claim.last_takeover_height)
+
+        await self.generate(1)
+
+        self.assertEqual(538, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        second_claim = await self.assertMatchClaim(second_claim_id)
+        self.assertEqual(538, second_claim.activation_height)
+        self.assertEqual(207, second_claim.last_takeover_height)
+        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
+        self.assertEqual(539, third_claim.activation_height)
+        self.assertEqual(207, third_claim.last_takeover_height)
+
+        await self.generate(1)
+
+        self.assertEqual(539, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        second_claim = await self.assertMatchClaim(second_claim_id)
+        self.assertEqual(538, second_claim.activation_height)
+        self.assertEqual(207, second_claim.last_takeover_height)
+        third_claim = await self.assertMatchClaim(third_claim_id)
+        self.assertEqual(539, third_claim.activation_height)
+        self.assertEqual(207, third_claim.last_takeover_height)
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.21')
+        await self.generate(1)
+
+        self.assertEqual(540, self.conductor.spv_node.server.bp.db.db_height)
+
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        second_claim = await self.assertMatchClaim(second_claim_id)
+        self.assertEqual(538, second_claim.activation_height)
+        self.assertEqual(207, second_claim.last_takeover_height)
+        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
+        self.assertEqual(550, third_claim.activation_height)
+        self.assertEqual(207, third_claim.last_takeover_height)
+
+        await self.generate(10)
+        self.assertEqual(550, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, third_claim_id)
 
     async def test_resolve_signed_claims_with_fees(self):
         channel_name = '@abc'
