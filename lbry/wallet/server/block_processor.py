@@ -712,9 +712,13 @@ class BlockProcessor:
         if (claim_hash, txo_type, height) in self.amount_cache:
             return self.amount_cache[(claim_hash, txo_type, height)]
         if txo_type == ACTIVATED_CLAIM_TXO_TYPE:
-            self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db.get_active_amount_as_of_height(
-                claim_hash, height
-            )
+            if claim_hash in self.claim_hash_to_txo:
+                amount = self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].amount
+            else:
+                amount = self.db.get_active_amount_as_of_height(
+                    claim_hash, height
+                )
+            self.amount_cache[(claim_hash, txo_type, height)] = amount
         else:
             self.amount_cache[(claim_hash, txo_type, height)] = amount = self.db._get_active_amount(
                 claim_hash, txo_type, height
