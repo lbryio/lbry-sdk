@@ -5068,8 +5068,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
-            self.file_manager['stream'].reflect_stream(stream, server, port)
-            for stream in self.file_manager.get_filtered_streams(**kwargs)
+            self.file_manager.source_managers['stream'].reflect_stream(stream, server, port)
+            for stream in self.file_manager.get_filtered(**kwargs)
         ])
         total = []
         for reflected_for_stream in reflected:

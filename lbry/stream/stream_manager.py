@@ -228,6 +228,7 @@ class StreamManager(SourceManager):
         while not stream.is_fully_reflected and stream.reflector_progress > 0 and len(sent) > 0:
             stream.reflector_progress = 0
             sent = await stream.upload_to_reflector(host, port)
+        return sent
 
     async def create(self, file_path: str, key: Optional[bytes] = None,
                      iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
