@@ -69,6 +69,16 @@ class FileCommands(CommandTestCase):
             t = await self.stream_create(f'Stream_{i}', '0.00001')
             self.stream_claim_ids.append(t['outputs'][0]['claim_id'])
 
+    async def test_file_reflect(self):
+        tx = await self.stream_create('mirror', '0.01')
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
+        self.assertEqual([], await self.daemon.jsonrpc_file_reflect(sd_hash=sd_hash))
+        all_except_sd = [
+            blob_hash for blob_hash in self.server.blob_manager.completed_blob_hashes if blob_hash != sd_hash
+        ]
+        await self.reflector.blob_manager.delete_blobs(all_except_sd)
+        self.assertEqual(all_except_sd, await self.daemon.jsonrpc_file_reflect(sd_hash=sd_hash))
+
     async def test_file_management(self):
         await self.stream_create('foo', '0.01')
         await self.stream_create('foo2', '0.01')
