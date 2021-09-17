@@ -91,6 +91,20 @@ class InputStringIsBlankError(InputValueError):
         super().__init__(f"{argument} cannot be blank.")
 
 
+class EmptyPublishedFileError(InputValueError):
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+        super().__init__(f"Cannot publish empty file: {file_path}")
+
+
+class MissingPublishedFileError(InputValueError):
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+        super().__init__(f"File does not exist: {file_path}")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.
