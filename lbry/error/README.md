@@ -63,7 +63,7 @@ Code | Name | Message
 421 | InvalidPassword | Password is invalid.
 422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
 423 | TooManyClaimSearchParameters | {key} cant have more than {limit} items.
-424 | AlreadyPurchased | You already have a purchase for claim_id '{claim_id}'. Use --allow-duplicate-purchase flag to override.
+424 | AlreadyPurchased | You already have a purchase for claim_id '{claim_id_hex}'. Use --allow-duplicate-purchase flag to override.
 431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
 432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
 433 | ServerPaymentFeeAboveMaxAllowed | Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.
