@@ -82,8 +82,10 @@ class SourceManager:
                      iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedDownloadSource:
         raise NotImplementedError()
 
-    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
-        self.remove(source)
+    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False,
+                     delete_source: Optional[bool] = True):
+        if delete_source:
+            self.remove(source)
         if delete_file and source.output_file_exists:
             os.remove(source.full_path)
 

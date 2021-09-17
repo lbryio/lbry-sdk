@@ -252,17 +252,19 @@ class StreamManager(SourceManager):
             self.reflect_stream(stream)
         return stream
 
-    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
+    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False,
+                     delete_source: Optional[bool] = True):
         if not isinstance(source, ManagedStream):
             return
-        if source.identifier in self.running_reflector_uploads:
-            self.running_reflector_uploads[source.identifier].cancel()
-        source.stop_tasks()
-        if source.identifier in self.streams:
-            del self.streams[source.identifier]
-        blob_hashes = [source.identifier] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
-        await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        await self.storage.delete_stream(source.descriptor)
+        if delete_source:
+            if source.identifier in self.running_reflector_uploads:
+                self.running_reflector_uploads[source.identifier].cancel()
+            source.stop_tasks()
+            if source.identifier in self.streams:
+                del self.streams[source.identifier]
+            blob_hashes = [source.identifier] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
+            await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
+            await self.storage.delete_stream(source.descriptor)
         if delete_file and source.output_file_exists:
             os.remove(source.full_path)
 

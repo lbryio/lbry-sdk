@@ -2120,24 +2120,24 @@ class Daemon(metaclass=JSONRPCServerType):
         return msg
 
     @requires(FILE_MANAGER_COMPONENT)
-    async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, **kwargs):
+    async def jsonrpc_file_delete(self, delete_from_download_dir=False, delete_all=False, what=None, **kwargs):
         """
-        Delete a LBRY file
+        Delete the blobs and file from a downloaded LBRY claim
 
         Usage:
             file_delete [--delete_from_download_dir] [--delete_all] [--sd_hash=<sd_hash>] [--file_name=<file_name>]
                         [--stream_hash=<stream_hash>] [--rowid=<rowid>] [--claim_id=<claim_id>] [--txid=<txid>]
                         [--nout=<nout>] [--claim_name=<claim_name>] [--channel_claim_id=<channel_claim_id>]
-                        [--channel_name=<channel_name>]
+                        [--channel_name=<channel_name>] [--what=<what>]
 
         Options:
             --delete_from_download_dir             : (bool) delete file from download directory,
-                                                    instead of just deleting blobs
+                                                     together with the blobs
             --delete_all                           : (bool) if there are multiple matching files,
                                                      allow the deletion of multiple files.
                                                      Otherwise do not delete anything.
             --sd_hash=<sd_hash>                    : (str) delete by file sd hash
-            --file_name=<file_name>                 : (str) delete by file name in downloads folder
+            --file_name=<file_name>                : (str) delete by file name in downloads folder
             --stream_hash=<stream_hash>            : (str) delete by file stream hash
             --rowid=<rowid>                        : (int) delete by file row id
             --claim_id=<claim_id>                  : (str) delete by file claim id
@@ -2145,7 +2145,10 @@ class Daemon(metaclass=JSONRPCServerType):
             --nout=<nout>                          : (int) delete by file claim nout
             --claim_name=<claim_name>              : (str) delete by file claim name
             --channel_claim_id=<channel_claim_id>  : (str) delete by file channel claim id
-            --channel_name=<channel_name>                 : (str) delete by file channel claim name
+            --channel_name=<channel_name>          : (str) delete by file channel claim name
+            --what=<what>                          : (str) choose to delete 'file', 'blobs', or 'both';
+                                                     if only the file is deleted, the blobs can still share
+                                                     the content in the network
 
         Returns:
             (bool) true if deletion was successful
@@ -2155,20 +2158,35 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if len(streams) > 1:
             if not delete_all:
-                log.warning("There are %i files to delete, use narrower filters to select one",
+                log.warning("There are %i streams to delete, use narrower filters to select one",
                             len(streams))
                 return False
             else:
-                log.warning("Deleting %i files",
+                log.warning("Deleting %i streams",
                             len(streams))
 
         if not streams:
-            log.warning("There is no file to delete")
+            log.warning("There is no stream to delete")
             return False
         else:
+            # Compatibility for the old behavior when `what` is not provided
+            # and the only options are `delete_from_download_dir=True` or `False`
+            # TODO: deprecate `delete_from_download_dir`
+            if not what:
+                if delete_from_download_dir:
+                    what = "both"
+                else:
+                    what = "blobs"
             for stream in streams:
-                message = f"Deleted file {stream.file_name}"
-                await self.file_manager.delete(stream, delete_file=delete_from_download_dir)
+                if what == "file":
+                    message = f"Deleted file '{stream.file_name}' (only file)"
+                    await self.file_manager.delete(stream, delete_file=True, delete_blobs=False)
+                elif what == "blobs":
+                    message = f"Deleted file '{stream.file_name}' (only blobs)"
+                    await self.file_manager.delete(stream, delete_file=False, delete_blobs=True)
+                elif what == "both":
+                    message = f"Deleted file '{stream.file_name}' (both file and blobs)"
+                    await self.file_manager.delete(stream, delete_file=True, delete_blobs=True)
                 log.info(message)
             result = True
         return result

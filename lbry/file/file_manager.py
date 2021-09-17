@@ -297,6 +297,6 @@ class FileManager:
         """
         return sum((manager.get_filtered(*args, **kwargs) for manager in self.source_managers.values()), [])
 
-    async def delete(self, source: ManagedDownloadSource, delete_file=False):
+    async def delete(self, source: ManagedDownloadSource, delete_file=False, delete_blobs=True):
         for manager in self.source_managers.values():
-            await manager.delete(source, delete_file)
+            await manager.delete(source, delete_file, delete_blobs)

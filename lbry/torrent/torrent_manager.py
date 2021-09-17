@@ -122,8 +122,9 @@ class TorrentManager(SourceManager):
         super().stop()
         log.info("finished stopping the torrent manager")
 
-    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
-        await super().delete(source, delete_file)
+    async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False,
+                     delete_source: Optional[bool] = True):
+        await super().delete(source, delete_file, delete_source)
         self.torrent_session.remove_torrent(source.identifier, delete_file)
 
     async def create(self, file_path: str, key: Optional[bytes] = None,
