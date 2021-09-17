@@ -7,12 +7,6 @@ class UserInputError(BaseError):
     """
 
 
-class EmptyStreamNameError(UserInputError):
-
-    def __init__(self):
-        super().__init__("Stream name cannot be blank.")
-
-
 class CommandError(UserInputError):
     """
     Errors preparing to execute commands.
@@ -88,6 +82,13 @@ class ConflictingInputValueError(InputValueError):
         self.first_argument = first_argument
         self.second_argument = second_argument
         super().__init__(f"Only '{first_argument}' or '{second_argument}' is allowed, not both.")
+
+
+class InputStringIsBlankError(InputValueError):
+
+    def __init__(self, argument):
+        self.argument = argument
+        super().__init__(f"{argument} cannot be blank.")
 
 
 class ConfigurationError(BaseError):

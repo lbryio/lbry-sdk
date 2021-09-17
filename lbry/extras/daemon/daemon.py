@@ -38,7 +38,7 @@ from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
-    ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, EmptyStreamNameError
+    ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -5242,7 +5242,7 @@ class Daemon(metaclass=JSONRPCServerType):
     def valid_stream_name_or_error(name: str):
         try:
             if not name:
-                raise EmptyStreamNameError()
+                raise InputStringIsBlankError('Stream name')
             parsed = URL.parse(name)
             if parsed.has_channel:
                 # TODO: use error from lbry.error

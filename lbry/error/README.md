@@ -25,7 +25,6 @@ Message | User friendly error message explaining the exceptional event. Supports
 Code | Name | Message
 ---:|---|---
 **1xx** | UserInput | User input errors.
-111 | EmptyStreamName | Stream name cannot be blank.
 **10x** | Command | Errors preparing to execute commands.
 101 | CommandDoesNotExist | Command '{command}' does not exist.
 102 | CommandDeprecated | Command '{command}' is deprecated.
@@ -36,6 +35,7 @@ Code | Name | Message
 111 | GenericInputValue | The value '{value}' for argument '{argument}' is not valid.
 112 | InputValueIsNone | None or null is not valid value for argument '{argument}'.
 113 | ConflictingInputValue | Only '{first_argument}' or '{second_argument}' is allowed, not both.
+114 | InputStringIsBlank | {argument} cannot be blank.
 **2xx** | Configuration | Configuration errors.
 201 | ConfigWrite | Cannot write configuration file '{path}'. -- When writing the default config fails on startup, such as due to permission issues.
 202 | ConfigRead | Cannot find provided configuration file '{path}'. -- Can't open the config file user provided via command line args.
