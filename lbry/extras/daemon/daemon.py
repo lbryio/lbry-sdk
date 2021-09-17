@@ -38,7 +38,7 @@ from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
-    ConflictingInputValueError, AlreadyPurchasedError
+    ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -5333,7 +5333,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if len(channels) == 1:
             if for_signing and not channels[0].has_private_key:
                 # TODO: use error from lbry.error
-                raise Exception(f"Couldn't find private key for {key} '{value}'. ")
+                raise PrivateKeyNotFoundError(key, value)
             return channels[0]
         elif len(channels) > 1:
             # TODO: use error from lbry.error

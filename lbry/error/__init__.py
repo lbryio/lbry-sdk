@@ -207,6 +207,14 @@ class DataDownloadError(WalletError):
         super().__init__("Failed to download blob. *generic*")
 
 
+class PrivateKeyNotFoundError(WalletError):
+
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+        super().__init__(f"Couldn't find private key for {key} '{value}'.")
+
+
 class ResolveError(WalletError):
 
     def __init__(self, url):
