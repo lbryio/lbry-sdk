@@ -7,6 +7,12 @@ class UserInputError(BaseError):
     """
 
 
+class EmptyStreamNameError(UserInputError):
+
+    def __init__(self):
+        super().__init__("Stream name cannot be blank.")
+
+
 class CommandError(UserInputError):
     """
     Errors preparing to execute commands.
