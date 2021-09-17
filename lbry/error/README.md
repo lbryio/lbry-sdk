@@ -52,6 +52,7 @@ Code | Name | Message
 405 | ChannelKeyNotFound | Channel signing key not found.
 406 | ChannelKeyInvalid | Channel signing key is out of date. -- For example, channel was updated but you don't have the updated key.
 407 | DataDownload | Failed to download blob. *generic*
+408 | PrivateKeyNotFound | Couldn't find private key for {key} '{value}'.
 410 | Resolve | Failed to resolve '{url}'.
 411 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
 411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{censor_id}'.
