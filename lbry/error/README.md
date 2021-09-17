@@ -25,6 +25,7 @@ Message | User friendly error message explaining the exceptional event. Supports
 Code | Name | Message
 ---:|---|---
 **1xx** | UserInput | User input errors.
+111 | EmptyStreamName | Stream name cannot be blank.
 **10x** | Command | Errors preparing to execute commands.
 101 | CommandDoesNotExist | Command '{command}' does not exist.
 102 | CommandDeprecated | Command '{command}' is deprecated.
