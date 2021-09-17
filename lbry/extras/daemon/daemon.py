@@ -38,7 +38,7 @@ from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
-    ConflictingInputValueError
+    ConflictingInputValueError, AlreadyPurchasedError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -2295,11 +2295,7 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: use error from lbry.error
             raise Exception("Missing argument claim_id or url.")
         if not allow_duplicate_purchase and txo.purchase_receipt:
-            # TODO: use error from lbry.error
-            raise Exception(
-                f"You already have a purchase for claim_id '{claim_id}'. "
-                f"Use --allow-duplicate-purchase flag to override."
-            )
+            raise AlreadyPurchasedError(claim_id)
         claim = txo.claim
         if not claim.is_stream or not claim.stream.has_fee:
             # TODO: use error from lbry.error

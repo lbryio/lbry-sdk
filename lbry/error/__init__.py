@@ -258,6 +258,16 @@ class TooManyClaimSearchParametersError(WalletError):
         super().__init__(f"{key} cant have more than {limit} items.")
 
 
+class AlreadyPurchasedError(WalletError):
+    """
+    allow-duplicate-purchase flag to override.
+    """
+
+    def __init__(self, claim_id):
+        self.claim_id = claim_id
+        super().__init__(f"You already have a purchase for claim_id '{claim_id}'. Use")
+
+
 class ServerPaymentInvalidAddressError(WalletError):
 
     def __init__(self, address):
