@@ -68,7 +68,7 @@ jobs:
           COVERALLS_PARALLEL: true
         run: |
           pip install coveralls
-          coveralls --service=github
+          #coveralls --service=github
 
   tests-integration:
     name: "tests / integration"
@@ -114,7 +114,7 @@ jobs:
           COVERALLS_PARALLEL: true
         run: |
           coverage combine tests
-          coveralls --service=github
+          #coveralls --service=github
 
 
   coverage:
@@ -126,7 +126,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           pip install coveralls
-          coveralls --service=github --finish
+          #coveralls --service=github --finish
 
   build:
     needs: ["lint", "tests-unit", "tests-integration"]
