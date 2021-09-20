@@ -9,7 +9,7 @@ def do_migration(conf):
 
     cursor.executescript("""
         alter table blob add column added_on integer not null default 0;
-        alter table blob add column is_mine integer not null default 0;
+        alter table blob add column is_mine integer not null default 1;
     """)
 
     connection.commit()
