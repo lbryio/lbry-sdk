@@ -81,7 +81,7 @@ class StorageTest(AsyncioTestCase):
         await self.storage.close()
 
     async def store_fake_blob(self, blob_hash, length=100):
-        await self.storage.add_blobs((blob_hash, length), finished=True)
+        await self.storage.add_blobs((blob_hash, length, 0, 0), finished=True)
 
     async def store_fake_stream(self, stream_hash, blobs=None, file_name="fake_file", key="DEADBEEF"):
         blobs = blobs or [BlobInfo(1, 100, "DEADBEEF", random_lbry_hash())]

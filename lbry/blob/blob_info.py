@@ -13,7 +13,7 @@ class BlobInfo:
 
     def __init__(
             self, blob_num: int, length: int, iv: str,
-             blob_hash: typing.Optional[str] = None, added_on=None, is_mine=None):
+             blob_hash: typing.Optional[str] = None, added_on=0, is_mine=False):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
         self.length = length
