@@ -515,16 +515,49 @@ class FileCommands(CommandTestCase):
 
 class DiskSpaceManagement(CommandTestCase):
 
+    async def get_referenced_blobs(self, tx):
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
+        stream_hash = await self.daemon.storage.get_stream_hash_for_sd_hash(sd_hash)
+        return tx['outputs'][0]['value']['source']['sd_hash'], set(await self.blob_list(
+            stream_hash=stream_hash
+        ))
+
     async def test_file_management(self):
         status = await self.status()
         self.assertIn('disk_space', status)
         self.assertEqual('0', status['disk_space']['space_used'])
         self.assertEqual(True, status['disk_space']['running'])
-        await self.stream_create('foo1', '0.01', data=('0' * 3 * 1024 * 1024).encode())
-        await self.stream_create('foo2', '0.01', data=('0' * 2 * 1024 * 1024).encode())
-        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
+        sd_hash1, blobs1 = await self.get_referenced_blobs(
+            await self.stream_create('foo1', '0.01', data=('0' * 2 * 1024 * 1024).encode())
+        )
+        sd_hash2, blobs2 = await self.get_referenced_blobs(
+            await self.stream_create('foo2', '0.01', data=('0' * 3 * 1024 * 1024).encode())
+        )
+        sd_hash3, blobs3 = await self.get_referenced_blobs(
+            await self.stream_create('foo3', '0.01', data=('0' * 3 * 1024 * 1024).encode())
+        )
+        sd_hash4, blobs4 = await self.get_referenced_blobs(
+            await self.stream_create('foo4', '0.01', data=('0' * 2 * 1024 * 1024).encode())
+        )
+
+        await self.daemon.storage.update_blob_ownership(sd_hash1, False)
+        await self.daemon.storage.update_blob_ownership(sd_hash3, False)
+        await self.daemon.storage.update_blob_ownership(sd_hash4, False)
+
+        self.assertEqual('10', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(blobs1 | blobs2 | blobs3 | blobs4, set(await self.blob_list()))
+
         await self.blob_clean()
-        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
-        self.daemon.conf.blob_storage_limit = 3
+
+        self.assertEqual('10', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(blobs1 | blobs2 | blobs3 | blobs4, set(await self.blob_list()))
+
+        self.daemon.conf.blob_storage_limit = 6
         await self.blob_clean()
-        self.assertEqual('3', (await self.status())['disk_space']['space_used'])
+
+        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
+        blobs = set(await self.blob_list())
+        self.assertFalse(blobs1.issubset(blobs))
+        self.assertTrue(blobs2.issubset(blobs))
+        self.assertFalse(blobs3.issubset(blobs))
+        self.assertTrue(blobs4.issubset(blobs))

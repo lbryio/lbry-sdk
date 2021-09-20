@@ -1,5 +1,6 @@
 import os
 import re
+import time
 import asyncio
 import binascii
 import logging
@@ -70,12 +71,16 @@ class AbstractBlob:
         'writers',
         'verified',
         'writing',
-        'readers'
+        'readers',
+        'added_on',
+        'is_mine',
     ]
 
-    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-                 blob_directory: typing.Optional[str] = None):
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+        blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
+        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False,
+    ):
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
@@ -85,6 +90,8 @@ class AbstractBlob:
         self.verified: asyncio.Event = asyncio.Event(loop=self.loop)
         self.writing: asyncio.Event = asyncio.Event(loop=self.loop)
         self.readers: typing.List[typing.BinaryIO] = []
+        self.added_on = added_on or time.time()
+        self.is_mine = is_mine
 
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)
@@ -180,20 +187,21 @@ class AbstractBlob:
 
     @classmethod
     async def create_from_unencrypted(
-            cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
-            unencrypted: bytes, blob_num: int,
-            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None) -> BlobInfo:
+        cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+        unencrypted: bytes, blob_num: int, added_on: int, is_mine: bool,
+        blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
+    ) -> BlobInfo:
         """
         Create an encrypted BlobFile from plaintext bytes
         """
 
         blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
         length = len(blob_bytes)
-        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_dir)
+        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_dir, added_on, is_mine)
         writer = blob.get_blob_writer()
         writer.write(blob_bytes)
         await blob.verified.wait()
-        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash)
+        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash, added_on, is_mine)
 
     def save_verified_blob(self, verified_bytes: bytes):
         if self.verified.is_set():
@@ -248,11 +256,13 @@ class BlobBuffer(AbstractBlob):
     """
     An in-memory only blob
     """
-    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-                 blob_directory: typing.Optional[str] = None):
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+        blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
+        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False
+    ):
         self._verified_bytes: typing.Optional[BytesIO] = None
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory, added_on, is_mine)
 
     @contextlib.contextmanager
     def _reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
@@ -289,10 +299,12 @@ class BlobFile(AbstractBlob):
     """
     A blob existing on the local file system
     """
-    def __init__(self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
-                 blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-                 blob_directory: typing.Optional[str] = None):
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory)
+    def __init__(
+        self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
+        blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
+        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False
+    ):
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory, added_on, is_mine)
         if not blob_directory or not os.path.isdir(blob_directory):
             raise OSError(f"invalid blob directory '{blob_directory}'")
         self.file_path = os.path.join(self.blob_directory, self.blob_hash)
@@ -343,12 +355,12 @@ class BlobFile(AbstractBlob):
 
     @classmethod
     async def create_from_unencrypted(
-            cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
-            unencrypted: bytes, blob_num: int,
-            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'],
-                                                                     asyncio.Task]] = None) -> BlobInfo:
+        cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+        unencrypted: bytes, blob_num: int, added_on: float, is_mine: bool,
+        blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None
+    ) -> BlobInfo:
         if not blob_dir or not os.path.isdir(blob_dir):
             raise OSError(f"cannot create blob in directory: '{blob_dir}'")
         return await super().create_from_unencrypted(
-            loop, blob_dir, key, iv, unencrypted, blob_num, blob_completed_callback
+            loop, blob_dir, key, iv, unencrypted, blob_num, added_on, is_mine, blob_completed_callback
         )

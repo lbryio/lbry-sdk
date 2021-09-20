@@ -4,6 +4,7 @@ import binascii
 import logging
 import typing
 import asyncio
+import time
 import re
 from collections import OrderedDict
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
@@ -152,15 +153,19 @@ class StreamDescriptor:
         h.update(self.old_sort_json())
         return h.hexdigest()
 
-    async def make_sd_blob(self, blob_file_obj: typing.Optional[AbstractBlob] = None,
-                           old_sort: typing.Optional[bool] = False,
-                           blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None):
+    async def make_sd_blob(
+            self, blob_file_obj: typing.Optional[AbstractBlob] = None, old_sort: typing.Optional[bool] = False,
+            blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
+            added_on: float = None, is_mine: bool = False
+        ):
         sd_hash = self.calculate_sd_hash() if not old_sort else self.calculate_old_sort_sd_hash()
         if not old_sort:
             sd_data = self.as_json()
         else:
             sd_data = self.old_sort_json()
-        sd_blob = blob_file_obj or BlobFile(self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir)
+        sd_blob = blob_file_obj or BlobFile(
+            self.loop, sd_hash, len(sd_data), blob_completed_callback, self.blob_dir, added_on, is_mine
+        )
         if blob_file_obj:
             blob_file_obj.set_length(len(sd_data))
         if not sd_blob.get_is_verified():
@@ -252,20 +257,25 @@ class StreamDescriptor:
         iv_generator = iv_generator or random_iv_generator()
         key = key or os.urandom(AES.block_size // 8)
         blob_num = -1
+        added_on = time.time()
         async for blob_bytes in file_reader(file_path):
             blob_num += 1
             blob_info = await BlobFile.create_from_unencrypted(
-                loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, blob_completed_callback
+                loop, blob_dir, key, next(iv_generator), blob_bytes, blob_num, added_on, True, blob_completed_callback
             )
             blobs.append(blob_info)
         blobs.append(
-            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode()))  # add the stream terminator
+            # add the stream terminator
+            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode(), None, added_on, True)
+        )
         file_name = os.path.basename(file_path)
         suggested_file_name = sanitize_file_name(file_name)
         descriptor = cls(
             loop, blob_dir, file_name, binascii.hexlify(key).decode(), suggested_file_name, blobs
         )
-        sd_blob = await descriptor.make_sd_blob(old_sort=old_sort, blob_completed_callback=blob_completed_callback)
+        sd_blob = await descriptor.make_sd_blob(
+            old_sort=old_sort, blob_completed_callback=blob_completed_callback, added_on=added_on, is_mine=True
+        )
         descriptor.sd_hash = sd_blob.blob_hash
         return descriptor
 

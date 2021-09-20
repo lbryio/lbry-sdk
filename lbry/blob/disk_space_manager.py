@@ -1,4 +1,3 @@
-import os
 import asyncio
 import logging
 
@@ -7,51 +6,41 @@ log = logging.getLogger(__name__)
 
 class DiskSpaceManager:
 
-    def __init__(self, config, cleaning_interval=30 * 60):
+    def __init__(self, config, db, blob_manager, cleaning_interval=30 * 60):
         self.config = config
+        self.db = db
+        self.blob_manager = blob_manager
         self.cleaning_interval = cleaning_interval
         self.running = False
         self.task = None
 
-    @property
-    def space_used_bytes(self):
-        used = 0
-        data_dir = os.path.join(self.config.data_dir, 'blobfiles')
-        for item in os.scandir(data_dir):
-            if item.is_file:
-                used += item.stat().st_size
-        return used
+    async def get_space_used_bytes(self):
+        return await self.db.get_stored_blob_disk_usage()
 
-    @property
-    def space_used_mb(self):
-        return int(self.space_used_bytes/1024.0/1024.0)
+    async def get_space_used_mb(self):
+        return int(await self.get_space_used_bytes()/1024.0/1024.0)
 
-    def clean(self):
+    async def clean(self):
         if not self.config.blob_storage_limit:
             return 0
-        used = 0
-        files = []
-        data_dir = os.path.join(self.config.data_dir, 'blobfiles')
-        for file in os.scandir(data_dir):
-            if file.is_file:
-                file_stats = file.stat()
-                used += file_stats.st_size
-                files.append((file_stats.st_mtime, file_stats.st_size, file.path))
-        files.sort()
-        available = (self.config.blob_storage_limit*1024*1024) - used
-        cleaned = 0
-        for _, file_size, file in files:
+        delete = []
+        available = (self.config.blob_storage_limit*1024*1024) - await self.get_space_used_bytes()
+        if available > 0:
+            return 0
+        for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False):
+            delete.append(blob_hash)
             available += file_size
             if available > 0:
                 break
-            os.remove(file)
-            cleaned += 1
-        return cleaned
+        if delete:
+            await self.db.stop_all_files()
+            await self.blob_manager.delete_blobs(delete, delete_from_db=True)
+        return len(delete)
 
     async def cleaning_loop(self):
         while self.running:
             await asyncio.sleep(self.cleaning_interval)
-            await asyncio.get_event_loop().run_in_executor(None, self.clean)
+            await self.clean()
 
     async def start(self):
         self.running = True

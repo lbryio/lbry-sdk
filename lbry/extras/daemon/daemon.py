@@ -5041,7 +5041,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (bool) true if successful
         """
-        return self.disk_space_manager.clean()
+        return await self.disk_space_manager.clean()
 
     @requires(FILE_MANAGER_COMPONENT)
     async def jsonrpc_file_reflect(self, **kwargs):
