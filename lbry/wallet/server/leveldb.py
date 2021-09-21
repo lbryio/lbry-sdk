@@ -491,10 +491,11 @@ class LevelDB:
             reposts = self.get_reposts_in_channel(reposter_channel_hash)
             for repost in reposts:
                 txo = self.get_claim_txo(repost)
-                if txo.normalized_name.startswith('@'):
-                    channels[repost] = reposter_channel_hash
-                else:
-                    streams[repost] = reposter_channel_hash
+                if txo:
+                    if txo.normalized_name.startswith('@'):
+                        channels[repost] = reposter_channel_hash
+                    else:
+                        streams[repost] = reposter_channel_hash
         return streams, channels
 
     def get_reposts_in_channel(self, channel_hash):
