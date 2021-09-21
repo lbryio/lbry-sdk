@@ -204,7 +204,6 @@ class BlockProcessor:
         self.blocks_event = asyncio.Event()
         self.prefetcher = Prefetcher(daemon, env.coin, self.blocks_event)
         self.logger = class_logger(__name__, self.__class__.__name__)
-        self.executor = ThreadPoolExecutor(1)
 
         # Meta
         self.touched_hashXs: Set[bytes] = set()
