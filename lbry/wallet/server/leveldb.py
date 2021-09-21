@@ -129,12 +129,12 @@ class LevelDB:
         self.blocked_streams = {}
         self.blocked_channels = {}
         self.blocking_channel_hashes = {
-            bytes.fromhex(channel_id)[::-1] for channel_id in blocking_channels if channel_id
+            bytes.fromhex(channel_id) for channel_id in blocking_channels if channel_id
         }
         self.filtered_streams = {}
         self.filtered_channels = {}
         self.filtering_channel_hashes = {
-            bytes.fromhex(channel_id)[::-1] for channel_id in filtering_channels if channel_id
+            bytes.fromhex(channel_id) for channel_id in filtering_channels if channel_id
         }
 
         self.tx_counts = None
