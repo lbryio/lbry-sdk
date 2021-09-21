@@ -481,31 +481,29 @@ class LevelDB:
             count += 1
         return count
 
-    def reload_blocking_filtering_streams(self):
-        self.blocked_streams, self.blocked_channels = self.get_streams_and_channels_reposted_by_channel_hashes(self.blocking_channel_hashes)
-        self.filtered_streams, self.filtered_channels = self.get_streams_and_channels_reposted_by_channel_hashes(self.filtering_channel_hashes)
+    async def reload_blocking_filtering_streams(self):
+        def reload():
+            self.blocked_streams, self.blocked_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
+                self.blocking_channel_hashes
+            )
+            self.filtered_streams, self.filtered_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
+                self.filtering_channel_hashes
+            )
+        await asyncio.get_event_loop().run_in_executor(None, reload)
 
-    def get_streams_and_channels_reposted_by_channel_hashes(self, reposter_channel_hashes: bytes):
+    def get_streams_and_channels_reposted_by_channel_hashes(self, reposter_channel_hashes: Set[bytes]):
         streams, channels = {}, {}
         for reposter_channel_hash in reposter_channel_hashes:
-            reposts = self.get_reposts_in_channel(reposter_channel_hash)
-            for repost in reposts:
-                txo = self.get_claim_txo(repost)
-                if txo:
-                    if txo.normalized_name.startswith('@'):
-                        channels[repost] = reposter_channel_hash
-                    else:
-                        streams[repost] = reposter_channel_hash
+            for stream in self.prefix_db.channel_to_claim.iterate((reposter_channel_hash, ), include_key=False):
+                repost = self.get_repost(stream.claim_hash)
+                if repost:
+                    txo = self.get_claim_txo(repost)
+                    if txo:
+                        if txo.normalized_name.startswith('@'):
+                            channels[repost] = reposter_channel_hash
+                        else:
+                            streams[repost] = reposter_channel_hash
         return streams, channels
-
-    def get_reposts_in_channel(self, channel_hash):
-        reposts = set()
-        for value in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash), include_key=False):
-            stream = Prefixes.channel_to_claim.unpack_value(value)
-            repost = self.get_repost(stream.claim_hash)
-            if repost:
-                reposts.add(repost)
-        return reposts
 
     def get_channel_for_claim(self, claim_hash, tx_num, position) -> Optional[bytes]:
         return self.db.get(Prefixes.claim_to_channel.pack_key(claim_hash, tx_num, position))
