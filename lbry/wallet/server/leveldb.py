@@ -851,11 +851,11 @@ class LevelDB:
 
     async def _read_claim_txos(self):
         def read_claim_txos():
-            for _k, _v in self.db.iterator(prefix=Prefixes.claim_to_txo.prefix):
-                k = Prefixes.claim_to_txo.unpack_key(_k)
-                v = Prefixes.claim_to_txo.unpack_value(_v)
-                self.claim_to_txo[k.claim_hash] = v
-                self.txo_to_claim[(v.tx_num, v.position)] = k.claim_hash
+            set_txo_to_claim = self.txo_to_claim.__setitem__
+            set_claim_to_txo = self.claim_to_txo.__setitem__
+            for k, v in self.prefix_db.claim_to_txo.iterate():
+                set_claim_to_txo(k.claim_hash, v)
+                set_txo_to_claim((v.tx_num, v.position), k.claim_hash)
 
         self.claim_to_txo.clear()
         self.txo_to_claim.clear()
