@@ -1537,7 +1537,13 @@ class StreamCommands(ClaimTestCase):
         blocking_channel_id = self.get_claim_id(
             await self.channel_create('@blocking', '0.1')
         )
-        self.conductor.spv_node.server.db.blocking_channel_hashes.add(bytes.fromhex(blocking_channel_id))
+        # test setting from env vars and starting from scratch
+        await self.conductor.spv_node.stop(False)
+        await self.conductor.spv_node.start(self.conductor.blockchain_node,
+                                            extraconf={'BLOCKING_CHANNEL_IDS': blocking_channel_id,
+                                                       'FILTERING_CHANNEL_IDS': filtering_channel_id})
+        await self.daemon.wallet_manager.reset()
+
         self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_streams))
         await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
         self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_streams))
