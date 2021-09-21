@@ -44,6 +44,8 @@ class PrefixRow(metaclass=PrefixRowType):
 
     def iterate(self, prefix=None, start=None, stop=None,
                 reverse: bool = False, include_key: bool = True, include_value: bool = True):
+        if not prefix and not start and not stop:
+            prefix = ()
         if prefix is not None:
             prefix = self.pack_partial_key(*prefix)
         if start is not None:
