@@ -153,7 +153,7 @@ class LevelDB:
         self.transaction_num_mapping = {}
 
         self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
-        self.txo_to_claim: Dict[Tuple[int, int], bytes] = {}
+        self.txo_to_claim: DefaultDict[int, Dict[int, bytes]] = defaultdict(dict)
 
         # Search index
         self.search_index = SearchIndex(
@@ -318,7 +318,7 @@ class LevelDB:
             for k, v in self.db.iterator(prefix=prefix):
                 key = Prefixes.claim_short_id.unpack_key(k)
                 claim_txo = Prefixes.claim_short_id.unpack_value(v)
-                claim_hash = self.txo_to_claim[(claim_txo.tx_num, claim_txo.position)]
+                claim_hash = self.txo_to_claim[claim_txo.tx_num][claim_txo.position]
                 non_normalized_name = self.claim_to_txo.get(claim_hash).name
                 signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
                 return self._prepare_resolve_result(
@@ -820,7 +820,8 @@ class LevelDB:
         def get_counts():
             return tuple(
                 Prefixes.tx_count.unpack_value(packed_tx_count).tx_count
-                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.prefix, include_key=False)
+                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.prefix, include_key=False,
+                                                        fill_cache=False)
             )
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(None, get_counts)
@@ -835,7 +836,7 @@ class LevelDB:
 
     async def _read_txids(self):
         def get_txids():
-            return list(self.db.iterator(prefix=Prefixes.tx_hash.prefix, include_key=False))
+            return list(self.db.iterator(prefix=Prefixes.tx_hash.prefix, include_key=False, fill_cache=False))
 
         start = time.perf_counter()
         self.logger.info("loading txids")
@@ -850,11 +851,10 @@ class LevelDB:
 
     async def _read_claim_txos(self):
         def read_claim_txos():
-            set_txo_to_claim = self.txo_to_claim.__setitem__
             set_claim_to_txo = self.claim_to_txo.__setitem__
-            for k, v in self.prefix_db.claim_to_txo.iterate():
+            for k, v in self.prefix_db.claim_to_txo.iterate(fill_cache=False):
                 set_claim_to_txo(k.claim_hash, v)
-                set_txo_to_claim((v.tx_num, v.position), k.claim_hash)
+                self.txo_to_claim[v.tx_num][v.position] = k.claim_hash
 
         self.claim_to_txo.clear()
         self.txo_to_claim.clear()
@@ -870,7 +870,8 @@ class LevelDB:
 
         def get_headers():
             return [
-                header for header in self.db.iterator(prefix=Prefixes.header.prefix, include_key=False)
+                header for header in self.db.iterator(prefix=Prefixes.header.prefix, include_key=False,
+                                                      fill_cache=False)
             ]
 
         headers = await asyncio.get_event_loop().run_in_executor(None, get_headers)
@@ -1126,8 +1127,9 @@ class LevelDB:
                 tx = None
                 tx_height = -1
                 if tx_num is not None:
+                    fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
                     tx_height = bisect_right(tx_counts, tx_num)
-                    tx = tx_db_get(Prefixes.tx.pack_key(tx_hash_bytes))
+                    tx = tx_db_get(Prefixes.tx.pack_key(tx_hash_bytes), fill_cache=fill_cache)
                 if tx_height == -1:
                     merkle = {
                         'block_height': -1

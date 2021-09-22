@@ -43,7 +43,8 @@ class PrefixRow(metaclass=PrefixRowType):
         self._op_stack = op_stack
 
     def iterate(self, prefix=None, start=None, stop=None,
-                reverse: bool = False, include_key: bool = True, include_value: bool = True):
+                reverse: bool = False, include_key: bool = True, include_value: bool = True,
+                fill_cache: bool = True):
         if not prefix and not start and not stop:
             prefix = ()
         if prefix is not None:
@@ -54,19 +55,22 @@ class PrefixRow(metaclass=PrefixRowType):
             stop = self.pack_partial_key(*stop)
 
         if include_key and include_value:
-            for k, v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse):
+            for k, v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse,
+                                          fill_cache=fill_cache):
                 yield self.unpack_key(k), self.unpack_value(v)
         elif include_key:
-            for k in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_value=False):
+            for k in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_value=False,
+                                       fill_cache=fill_cache):
                 yield self.unpack_key(k)
         elif include_value:
-            for v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False):
+            for v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False,
+                                       fill_cache=fill_cache):
                 yield self.unpack_value(v)
         else:
             raise RuntimeError
 
-    def get(self, *key_args):
-        v = self._db.get(self.pack_key(*key_args))
+    def get(self, *key_args, fill_cache=True):
+        v = self._db.get(self.pack_key(*key_args), fill_cache=fill_cache)
         if v:
             return self.unpack_value(v)
 
