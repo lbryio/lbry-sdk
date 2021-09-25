@@ -95,6 +95,7 @@ class SearchIndex:
         if index_version != self.VERSION:
             self.logger.error("es search index has an incompatible version: %s vs %s", index_version, self.VERSION)
             raise IndexVersionMismatch(index_version, self.VERSION)
+        await self.sync_client.indices.refresh(self.index)
         return acked
 
     def stop(self):

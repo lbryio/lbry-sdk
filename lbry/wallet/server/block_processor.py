@@ -1,20 +1,15 @@
 import time
 import asyncio
 import typing
-import struct
 from bisect import bisect_right
 from struct import pack, unpack
-from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional, List, Tuple, Set, DefaultDict, Dict, NamedTuple
 from prometheus_client import Gauge, Histogram
 from collections import defaultdict
-import array
+
 import lbry
 from lbry.schema.claim import Claim
-from lbry.schema.mime_types import guess_stream_type
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
-from lbry.wallet.constants import TXO_TYPES
-from lbry.wallet.server.db.common import STREAM_TYPES, CLAIM_TYPES
 
 from lbry.wallet.transaction import OutputScript, Output, Transaction
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
@@ -222,6 +217,7 @@ class BlockProcessor:
         # attributes used for calculating stake activations and takeovers per block
         #################################
 
+        self.taken_over_names: Set[str] = set()
         # txo to pending claim
         self.txo_to_claim: Dict[Tuple[int, int], StagedClaimtrieItem] = {}
         # claim hash to pending claim txo
@@ -234,6 +230,7 @@ class BlockProcessor:
         self.removed_support_txos_by_name_by_claim: DefaultDict[str, DefaultDict[bytes, List[Tuple[int, int]]]] = \
             defaultdict(lambda: defaultdict(list))
         self.abandoned_claims: Dict[bytes, StagedClaimtrieItem] = {}
+        self.updated_claims: Set[bytes] = set()
         # removed activated support amounts by claim hash
         self.removed_active_support_amount_by_claim: DefaultDict[bytes, List[int]] = defaultdict(list)
         # pending activated support amounts by claim hash
@@ -513,6 +510,7 @@ class BlockProcessor:
                     ).get_remove_activate_ops()
                 )
             previous_amount = previous_claim.amount
+            self.updated_claims.add(claim_hash)
 
         self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
             tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
@@ -730,6 +728,8 @@ class BlockProcessor:
 
     def _get_pending_claim_amount(self, name: str, claim_hash: bytes, height=None) -> int:
         if (name, claim_hash) in self.activated_claim_amount_by_name_and_hash:
+            if claim_hash in self.claim_hash_to_txo:
+                return self.txo_to_claim[self.claim_hash_to_txo[claim_hash]].amount
             return self.activated_claim_amount_by_name_and_hash[(name, claim_hash)]
         if (name, claim_hash) in self.possible_future_claim_amount_by_name_and_hash:
             return self.possible_future_claim_amount_by_name_and_hash[(name, claim_hash)]
@@ -771,7 +771,7 @@ class BlockProcessor:
                 _controlling = controlling_claims[_name]
             return _controlling
 
-        names_with_abandoned_controlling_claims: List[str] = []
+        names_with_abandoned_or_updated_controlling_claims: List[str] = []
 
         # get the claims and supports previously scheduled to be activated at this block
         activated_at_height = self.db.get_activated_at_height(height)
@@ -784,7 +784,7 @@ class BlockProcessor:
             nothing_is_controlling = not controlling
             staged_is_controlling = False if not controlling else claim_hash == controlling.claim_hash
             controlling_is_abandoned = False if not controlling else \
-                controlling.claim_hash in names_with_abandoned_controlling_claims
+                controlling.claim_hash in names_with_abandoned_or_updated_controlling_claims
 
             if nothing_is_controlling or staged_is_controlling or controlling_is_abandoned:
                 delay = 0
@@ -822,7 +822,7 @@ class BlockProcessor:
         for claim_hash, staged in self.abandoned_claims.items():
             controlling = get_controlling(staged.normalized_name)
             if controlling and controlling.claim_hash == claim_hash:
-                names_with_abandoned_controlling_claims.append(staged.normalized_name)
+                names_with_abandoned_or_updated_controlling_claims.append(staged.normalized_name)
                 # print(f"\t{staged.name} needs takeover")
             activation = self.db.get_activation(staged.tx_num, staged.position)
             if activation > 0:  #  db returns -1 for non-existent txos
@@ -845,13 +845,31 @@ class BlockProcessor:
                 continue
             controlling = get_controlling(name)
             if controlling and controlling.claim_hash == claim_hash and \
-                    name not in names_with_abandoned_controlling_claims:
+                    name not in names_with_abandoned_or_updated_controlling_claims:
                 abandoned_support_check_need_takeover[(name, claim_hash)].extend(amounts)
+
+        # get the controlling claims with updates to the claim to check if takeover is needed
+        for claim_hash in self.updated_claims:
+            if claim_hash in self.abandoned_claims:
+                continue
+            name = self._get_pending_claim_name(claim_hash)
+            if name is None:
+                continue
+            controlling = get_controlling(name)
+            if controlling and controlling.claim_hash == claim_hash and \
+                    name not in names_with_abandoned_or_updated_controlling_claims:
+                names_with_abandoned_or_updated_controlling_claims.append(name)
 
         # prepare to activate or delay activation of the pending claims being added this block
         for (tx_num, nout), staged in self.txo_to_claim.items():
+            is_delayed = not staged.is_update
+            if staged.claim_hash in self.db.claim_to_txo:
+                prev_txo = self.db.claim_to_txo[staged.claim_hash]
+                prev_activation = self.db.get_activation(prev_txo.tx_num, prev_txo.position)
+                if height < prev_activation or prev_activation < 0:
+                    is_delayed = True
             self.db_op_stack.extend_ops(get_delayed_activate_ops(
-                staged.normalized_name, staged.claim_hash, not staged.is_update, tx_num, nout, staged.amount,
+                staged.normalized_name, staged.claim_hash, is_delayed, tx_num, nout, staged.amount,
                 is_support=False
             ))
 
@@ -919,7 +937,7 @@ class BlockProcessor:
         # go through claims where the controlling claim or supports to the controlling claim have been abandoned
         # check if takeovers are needed or if the name node is now empty
         need_reactivate_if_takes_over = {}
-        for need_takeover in names_with_abandoned_controlling_claims:
+        for need_takeover in names_with_abandoned_or_updated_controlling_claims:
             existing = self.db.get_claim_txos_for_name(need_takeover)
             has_candidate = False
             # add existing claims to the queue for the takeover
@@ -995,7 +1013,7 @@ class BlockProcessor:
                 amounts[controlling.claim_hash] = self._get_pending_effective_amount(name, controlling.claim_hash)
             winning_claim_hash = max(amounts, key=lambda x: amounts[x])
             if not controlling or (winning_claim_hash != controlling.claim_hash and
-                                   name in names_with_abandoned_controlling_claims) or \
+                                   name in names_with_abandoned_or_updated_controlling_claims) or \
                     ((winning_claim_hash != controlling.claim_hash) and (amounts[winning_claim_hash] > amounts[controlling.claim_hash])):
                 amounts_with_future_activations = {claim_hash: amount for claim_hash, amount in amounts.items()}
                 amounts_with_future_activations.update(
@@ -1056,13 +1074,13 @@ class BlockProcessor:
                                     k.position, height, name, amount
                                 ).get_activate_ops()
                             )
-
+                    self.taken_over_names.add(name)
                     self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning_including_future_activations, height, controlling))
                     self.touched_claim_hashes.add(winning_including_future_activations)
                     if controlling and controlling.claim_hash not in self.abandoned_claims:
                         self.touched_claim_hashes.add(controlling.claim_hash)
                 elif not controlling or (winning_claim_hash != controlling.claim_hash and
-                                       name in names_with_abandoned_controlling_claims) or \
+                                       name in names_with_abandoned_or_updated_controlling_claims) or \
                         ((winning_claim_hash != controlling.claim_hash) and (amounts[winning_claim_hash] > amounts[controlling.claim_hash])):
                     # print(f"\ttakeover by {winning_claim_hash.hex()} at {height}")
                     if (name, winning_claim_hash) in need_reactivate_if_takes_over:
@@ -1090,6 +1108,7 @@ class BlockProcessor:
                                     position, height, name, amount
                                 ).get_activate_ops()
                             )
+                    self.taken_over_names.add(name)
                     self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning_claim_hash, height, controlling))
                     if controlling and controlling.claim_hash not in self.abandoned_claims:
                         self.touched_claim_hashes.add(controlling.claim_hash)
@@ -1114,7 +1133,9 @@ class BlockProcessor:
             if controlling and controlling.claim_hash not in self.abandoned_claims:
                 amounts[controlling.claim_hash] = self._get_pending_effective_amount(name, controlling.claim_hash)
             winning = max(amounts, key=lambda x: amounts[x])
+
             if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
+                self.taken_over_names.add(name)
                 # print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
                 self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning, height, controlling))
                 if controlling:
@@ -1126,6 +1147,13 @@ class BlockProcessor:
         self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, added, prev_amount, new_amount))
 
     def _get_cumulative_update_ops(self, height: int):
+        # update the last takeover height for names with takeovers
+        for name in self.taken_over_names:
+            self.touched_claim_hashes.update(
+                {claim_hash for claim_hash in self.db.get_claims_for_name(name)
+                 if claim_hash not in self.abandoned_claims}
+            )
+
         # gather cumulative removed/touched sets to update the search index
         self.removed_claim_hashes.update(set(self.abandoned_claims.keys()))
         self.touched_claim_hashes.difference_update(self.removed_claim_hashes)
@@ -1359,6 +1387,8 @@ class BlockProcessor:
         self.touched_claim_hashes.clear()
         self.pending_reposted.clear()
         self.pending_channel_counts.clear()
+        self.updated_claims.clear()
+        self.taken_over_names.clear()
 
     async def backup_block(self):
         # self.db.assert_flushed(self.flush_data())
