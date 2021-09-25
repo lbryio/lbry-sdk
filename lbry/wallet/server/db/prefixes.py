@@ -1299,10 +1299,10 @@ class HashXHistoryPrefixRow(PrefixRow):
         return a.tobytes()
 
     @classmethod
-    def unpack_value(cls, data: bytes) -> HashXHistoryValue:
+    def unpack_value(cls, data: bytes) -> array.array:
         a = array.array('I')
         a.frombytes(data)
-        return HashXHistoryValue(a.tolist())
+        return a
 
     @classmethod
     def pack_item(cls, hashX: bytes, height: int, history: typing.List[int]):

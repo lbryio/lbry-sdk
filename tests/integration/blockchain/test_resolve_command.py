@@ -4,11 +4,18 @@ import hashlib
 from bisect import bisect_right
 from binascii import hexlify, unhexlify
 from collections import defaultdict
+from typing import NamedTuple, List
 from lbry.testcase import CommandTestCase
 from lbry.wallet.transaction import Transaction, Output
 from lbry.schema.compat import OldClaimMessage
 from lbry.crypto.hash import sha256
 from lbry.crypto.base58 import Base58
+
+
+class ClaimStateValue(NamedTuple):
+    claim_id: str
+    activation_height: int
+    active_in_lbrycrd: bool
 
 
 class BaseResolveTestCase(CommandTestCase):
@@ -86,8 +93,6 @@ class BaseResolveTestCase(CommandTestCase):
         )
         self.assertEqual(len(claim_from_es[0]), 1)
         self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim.claim_hash.hex())
-
-
         self.assertEqual(claim_from_es[0][0]['claim_id'], claim.claim_hash.hex())
         self.assertEqual(claim_from_es[0][0]['activation_height'], claim.activation_height)
         self.assertEqual(claim_from_es[0][0]['last_take_over_height'], claim.last_takeover_height)
@@ -607,63 +612,313 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.assertNoClaimForName(name)
         await self._test_activation_delay()
 
-    async def test_claim_and_update_delays(self):
+    async def create_stream_claim(self, amount: str, name='derp') -> str:
+        return (await self.stream_create(name, amount,  allow_duplicate_name=True))['outputs'][0]['claim_id']
+
+    async def assertNameState(self, height: int, name: str, winning_claim_id: str, last_takeover_height: int,
+                               non_winning_claims: List[ClaimStateValue]):
+        self.assertEqual(height, self.conductor.spv_node.server.bp.db.db_height)
+        await self.assertMatchClaimIsWinning(name, winning_claim_id)
+        for non_winning in non_winning_claims:
+            claim = await self.assertMatchClaim(
+                non_winning.claim_id, is_active_in_lbrycrd=non_winning.active_in_lbrycrd
+            )
+            self.assertEqual(non_winning.activation_height, claim.activation_height)
+            self.assertEqual(last_takeover_height, claim.last_takeover_height)
+
+    async def test_delay_takeover_with_update(self):
         name = 'derp'
-        first_claim_id = (await self.stream_create(name, '0.2',  allow_duplicate_name=True))['outputs'][0]['claim_id']
+        first_claim_id = await self.create_stream_claim('0.2', name)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(320)
-        second_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
-        third_claim_id = (await self.stream_create(name, '0.1',  allow_duplicate_name=True))['outputs'][0]['claim_id']
-
+        second_claim_id = await self.create_stream_claim('0.1', name)
+        third_claim_id = await self.create_stream_claim('0.1', name)
         await self.generate(8)
-
-        self.assertEqual(537, self.conductor.spv_node.server.bp.db.db_height)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
-        second_claim = await self.assertMatchClaim(second_claim_id, is_active_in_lbrycrd=False)
-        self.assertEqual(538, second_claim.activation_height)
-        self.assertEqual(207, second_claim.last_takeover_height)
-        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
-        self.assertEqual(539, third_claim.activation_height)
-        self.assertEqual(207, third_claim.last_takeover_height)
+        await self.assertNameState(
+            height=537, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=False),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
 
         await self.generate(1)
-
-        self.assertEqual(538, self.conductor.spv_node.server.bp.db.db_height)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
-        second_claim = await self.assertMatchClaim(second_claim_id)
-        self.assertEqual(538, second_claim.activation_height)
-        self.assertEqual(207, second_claim.last_takeover_height)
-        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
-        self.assertEqual(539, third_claim.activation_height)
-        self.assertEqual(207, third_claim.last_takeover_height)
+        await self.assertNameState(
+            height=538, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
 
         await self.generate(1)
-
-        self.assertEqual(539, self.conductor.spv_node.server.bp.db.db_height)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
-        second_claim = await self.assertMatchClaim(second_claim_id)
-        self.assertEqual(538, second_claim.activation_height)
-        self.assertEqual(207, second_claim.last_takeover_height)
-        third_claim = await self.assertMatchClaim(third_claim_id)
-        self.assertEqual(539, third_claim.activation_height)
-        self.assertEqual(207, third_claim.last_takeover_height)
+        await self.assertNameState(
+            height=539, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=True)
+            ]
+        )
 
         await self.daemon.jsonrpc_stream_update(third_claim_id, '0.21')
         await self.generate(1)
+        await self.assertNameState(
+            height=540, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
 
-        self.assertEqual(540, self.conductor.spv_node.server.bp.db.db_height)
+        await self.generate(9)
+        await self.assertNameState(
+            height=549, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
 
+        await self.generate(1)
+        await self.assertNameState(
+            height=550, name=name, winning_claim_id=third_claim_id, last_takeover_height=550,
+            non_winning_claims=[
+                ClaimStateValue(first_claim_id, activation_height=207, active_in_lbrycrd=True),
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True)
+            ]
+        )
+
+    async def test_delay_takeover_with_update_then_update_to_lower_before_takeover(self):
+        name = 'derp'
+        first_claim_id = await self.create_stream_claim('0.2', name)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
-        second_claim = await self.assertMatchClaim(second_claim_id)
-        self.assertEqual(538, second_claim.activation_height)
-        self.assertEqual(207, second_claim.last_takeover_height)
-        third_claim = await self.assertMatchClaim(third_claim_id, is_active_in_lbrycrd=False)
-        self.assertEqual(550, third_claim.activation_height)
-        self.assertEqual(207, third_claim.last_takeover_height)
+        await self.generate(320)
+        second_claim_id = await self.create_stream_claim('0.1', name)
+        third_claim_id = await self.create_stream_claim('0.1', name)
+        await self.generate(8)
+        await self.assertNameState(
+            height=537, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=False),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
 
+        await self.generate(1)
+        await self.assertNameState(
+            height=538, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=539, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=True)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.21')
+        await self.generate(1)
+        await self.assertNameState(
+            height=540, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(8)
+        await self.assertNameState(
+            height=548, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.09')
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=549, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=559, active_in_lbrycrd=False)
+            ]
+        )
         await self.generate(10)
-        self.assertEqual(550, self.conductor.spv_node.server.bp.db.db_height)
-        await self.assertMatchClaimIsWinning(name, third_claim_id)
+        await self.assertNameState(
+            height=559, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=559, active_in_lbrycrd=True)
+            ]
+        )
+
+    async def test_delay_takeover_with_update_then_update_to_lower_on_takeover(self):
+        name = 'derp'
+        first_claim_id = await self.create_stream_claim('0.2', name)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(320)
+        second_claim_id = await self.create_stream_claim('0.1', name)
+        third_claim_id = await self.create_stream_claim('0.1', name)
+        await self.generate(8)
+        await self.assertNameState(
+            height=537, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=False),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=538, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=539, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=True)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.21')
+        await self.generate(1)
+        await self.assertNameState(
+            height=540, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(8)
+        await self.assertNameState(
+            height=548, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=549, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.09')
+        await self.generate(1)
+        await self.assertNameState(
+            height=550, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=560, active_in_lbrycrd=False)
+            ]
+        )
+        await self.generate(10)
+        await self.assertNameState(
+            height=560, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=560, active_in_lbrycrd=True)
+            ]
+        )
+
+    async def test_delay_takeover_with_update_then_update_to_lower_after_takeover(self):
+        name = 'derp'
+        first_claim_id = await self.create_stream_claim('0.2', name)
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.generate(320)
+        second_claim_id = await self.create_stream_claim('0.1', name)
+        third_claim_id = await self.create_stream_claim('0.1', name)
+        await self.generate(8)
+        await self.assertNameState(
+            height=537, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=False),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
+        await self.generate(1)
+        await self.assertNameState(
+            height=538, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=539, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=539, active_in_lbrycrd=True)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.21')
+        await self.generate(1)
+        await self.assertNameState(
+            height=540, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(8)
+        await self.assertNameState(
+            height=548, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=549, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=550, active_in_lbrycrd=False)
+            ]
+        )
+
+        await self.generate(1)
+        await self.assertNameState(
+            height=550, name=name, winning_claim_id=third_claim_id, last_takeover_height=550,
+            non_winning_claims=[
+                ClaimStateValue(first_claim_id, activation_height=207, active_in_lbrycrd=True),
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True)
+            ]
+        )
+
+        await self.daemon.jsonrpc_stream_update(third_claim_id, '0.09')
+        await self.generate(1)
+        await self.assertNameState(
+            height=551, name=name, winning_claim_id=first_claim_id, last_takeover_height=551,
+            non_winning_claims=[
+                ClaimStateValue(second_claim_id, activation_height=538, active_in_lbrycrd=True),
+                ClaimStateValue(third_claim_id, activation_height=551, active_in_lbrycrd=True)
+            ]
+        )
 
     async def test_resolve_signed_claims_with_fees(self):
         channel_name = '@abc'
