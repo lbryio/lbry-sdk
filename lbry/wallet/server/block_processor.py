@@ -916,6 +916,9 @@ class BlockProcessor:
                         amount = self.db.get_claim_txo_amount(
                             activated.claim_hash
                         )
+                    if amount is None:
+                        # print("\tskip activate for non existent claim")
+                        continue
                     self.activated_claim_amount_by_name_and_hash[(activated.normalized_name, activated.claim_hash)] = amount
                 else:
                     txo_type = ACTIVATED_SUPPORT_TXO_TYPE
