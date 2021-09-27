@@ -32,7 +32,7 @@ async def main(host: str, port: int):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="Starts a single DHT node, which then can be used as a seed node or just a contributing node.")
-    parser.add_argument("--host", default='0.0.0.0', help="Host to listen for requests. Default: 0.0.0.0")
-    parser.add_argument("--port", default=4444, help="Port to listen for requests. Default: 4444")
+    parser.add_argument("--host", default='0.0.0.0', type=str, help="Host to listen for requests. Default: 0.0.0.0")
+    parser.add_argument("--port", default=4444, type=int, help="Port to listen for requests. Default: 4444")
     args = parser.parse_args()
     asyncio.run(main(args.host, args.port))
