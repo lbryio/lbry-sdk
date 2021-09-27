@@ -17,13 +17,11 @@ class BasicTransactionTests(IntegrationTestCase):
 
         # send 10 coins to first 10 receiving addresses and then 10 transactions worth 10 coins each
         # to the 10th receiving address for a total of 30 UTXOs on the entire account
-        sends = list(chain(
-            ((address, self.blockchain.send_to_address(address, 10)) for address in addresses[:10]),
-            ((addresses[9], self.blockchain.send_to_address(addresses[9], 10)) for _ in range(10))
-        ))
-
-        await asyncio.wait([self.wait_for_txid(await tx, address) for (address, tx) in sends], timeout=1)
-
+        for i in range(10):
+            txid = await self.blockchain.send_to_address(addresses[i], 10)
+            await self.wait_for_txid(txid, addresses[i])
+            txid = await self.blockchain.send_to_address(addresses[9], 10)
+            await self.wait_for_txid(txid, addresses[9])
 
         # use batching to reduce issues with send_to_address on cli
         await self.assertBalance(self.account, '200.0')
