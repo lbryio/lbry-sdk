@@ -1044,13 +1044,20 @@ class BlockProcessor:
                         activation = self.db.get_activation(tx_num, position)
                     else:
                         tx_num, position = self.claim_hash_to_txo[winning_including_future_activations]
-                        amount = None
+                        amount = self.txo_to_claim[(tx_num, position)].amount
                         activation = None
                         for (k, tx_amount) in activate_in_future[name][winning_including_future_activations]:
                             if (k.tx_num, k.position) == (tx_num, position):
-                                amount = tx_amount
                                 activation = k.height
                                 break
+                        if activation is None:
+                            # TODO: reproduce this in an integration test (block 604718)
+                            _k = PendingActivationValue(winning_including_future_activations, name)
+                            if _k in activated_at_height:
+                                for pending_activation in activated_at_height[_k]:
+                                    if (pending_activation.tx_num, pending_activation.position) == (tx_num, position):
+                                        activation = pending_activation.height
+                                        break
                         assert None not in (amount, activation)
                     # update the claim that's activating early
                     self.db_op_stack.extend_ops(
