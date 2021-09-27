@@ -2657,7 +2657,7 @@
                         "is_required": false
                     },
                     {
-                        "name": "blobs_in_stream<blobs_in_stream>",
+                        "name": "blobs_in_stream",
                         "type": "int",
                         "description": "get file with matching blobs in stream",
                         "is_required": false

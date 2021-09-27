@@ -2040,7 +2040,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id(s)
             --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
-            --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
+            --blobs_in_stream=<blobs_in_stream>    : (int) get file with matching blobs in stream
             --download_path=<download_path>        : (str) get file with matching download path
             --uploading_to_reflector=<uploading_to_reflector> : (bool) get files currently uploading to reflector
             --is_fully_reflected=<is_fully_reflected>         : (bool) get files that have been uploaded to reflector
