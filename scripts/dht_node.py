@@ -12,10 +12,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-4s %(na
 log = logging.getLogger(__name__)
 
 
-async def main(host: str, port: int):
+async def main(host: str, port: int, db_file_path):
     loop = asyncio.get_event_loop()
     conf = Config()
-    storage = SQLiteStorage(conf, ":memory:", loop, loop.time)
+    storage = SQLiteStorage(conf, db_file_path, loop, loop.time)
     await storage.open()
     node = Node(
         loop, PeerManager(loop), generate_id(), port, port, 3333, None,
@@ -34,5 +34,6 @@ if __name__ == '__main__':
         description="Starts a single DHT node, which then can be used as a seed node or just a contributing node.")
     parser.add_argument("--host", default='0.0.0.0', type=str, help="Host to listen for requests. Default: 0.0.0.0")
     parser.add_argument("--port", default=4444, type=int, help="Port to listen for requests. Default: 4444")
+    parser.add_argument("--db_file", default='/tmp/dht.db', type=str, help="DB file to save peers. Default: /tmp/dht.db")
     args = parser.parse_args()
-    asyncio.run(main(args.host, args.port))
+    asyncio.run(main(args.host, args.port, args.db_file))
