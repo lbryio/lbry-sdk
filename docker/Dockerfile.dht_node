@@ -1,0 +1,38 @@
+FROM debian:10-slim
+
+ARG user=lbry
+ARG projects_dir=/home/$user
+
+ARG DOCKER_TAG
+ARG DOCKER_COMMIT=docker
+ENV DOCKER_TAG=$DOCKER_TAG DOCKER_COMMIT=$DOCKER_COMMIT
+
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+      wget \
+      automake libtool \
+      tar unzip \
+      build-essential \
+      pkg-config \
+      libleveldb-dev \
+      python3.7 \
+      python3-dev \
+      python3-pip \
+      python3-wheel \
+      python3-setuptools && \
+    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -g 999 $user && useradd -m -u 999 -g $user $user
+
+COPY . $projects_dir
+RUN chown -R $user:$user $projects_dir
+
+USER $user
+WORKDIR $projects_dir
+
+RUN make install
+RUN python3 docker/set_build.py
+RUN rm ~/.cache -rf
+ENTRYPOINT ["python3", "scripts/dht_node.py"]
+
