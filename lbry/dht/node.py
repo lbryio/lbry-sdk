@@ -1,7 +1,6 @@
 import logging
 import asyncio
 import typing
-import binascii
 import socket
 from lbry.utils import resolve_host
 from lbry.dht import constants
@@ -80,7 +79,7 @@ class Node:
             await fut
 
     async def announce_blob(self, blob_hash: str) -> typing.List[bytes]:
-        hash_value = binascii.unhexlify(blob_hash.encode())
+        hash_value = bytes.fromhex(blob_hash)
         assert len(hash_value) == constants.HASH_LENGTH
         peers = await self.peer_search(hash_value)
 
@@ -95,7 +94,7 @@ class Node:
         stored_to = [node_id for node_id, contacted in stored_to_tup if contacted]
         if stored_to:
             log.debug(
-                "Stored %s to %i of %i attempted peers", binascii.hexlify(hash_value).decode()[:8],
+                "Stored %s to %i of %i attempted peers", hash_value.hex()[:8],
                 len(stored_to), len(peers)
             )
         else:
@@ -223,7 +222,7 @@ class Node:
         # prioritize peers who reply to a dht ping first
         # this minimizes attempting to make tcp connections that won't work later to dead or unreachable peers
 
-        async for results in self.get_iterative_value_finder(binascii.unhexlify(blob_hash.encode())):
+        async for results in self.get_iterative_value_finder(bytes.fromhex(blob_hash)):
             to_put = []
             for peer in results:
                 if peer.address == self.protocol.external_ip and self.protocol.peer_port == peer.tcp_port:
