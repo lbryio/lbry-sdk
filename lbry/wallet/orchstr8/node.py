@@ -196,11 +196,10 @@ class SPVNode:
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
         self.stopped = False
-        self.index_name = None
+        self.index_name = uuid4().hex
 
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
-        self.index_name = uuid4().hex
         conf = {
             'DESCRIPTION': '',
             'PAYMENT_ADDRESS': '',
