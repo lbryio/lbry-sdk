@@ -4,7 +4,6 @@ import functools
 import hashlib
 import asyncio
 import typing
-import binascii
 import random
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
@@ -97,7 +96,7 @@ class KademliaRPC:
             if not rpc_contact.tcp_port or peer.compact_address_tcp() != rpc_contact.compact_address_tcp()
         ]
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
-        if len(peers) < constants.K and binascii.hexlify(key).decode() in self.protocol.data_store.completed_blobs:
+        if len(peers) < constants.K and key.hex() in self.protocol.data_store.completed_blobs:
             peers.append(self.compact_address())
         if not peers:
             response[PAGE_KEY] = 0
@@ -415,8 +414,8 @@ class KademliaProtocol(DatagramProtocol):
             self._wakeup_routing_task.clear()
 
     def _handle_rpc(self, sender_contact: 'KademliaPeer', message: RequestDatagram):
-        assert sender_contact.node_id != self.node_id, (binascii.hexlify(sender_contact.node_id)[:8].decode(),
-                                                        binascii.hexlify(self.node_id)[:8].decode())
+        assert sender_contact.node_id != self.node_id, (sender_contact.node_id.hex()[:8],
+                                                        self.node_id.hex()[:8])
         method = message.method
         if method not in [b'ping', b'store', b'findNode', b'findValue']:
             raise AttributeError('Invalid method: %s' % message.method.decode())
@@ -561,7 +560,7 @@ class KademliaProtocol(DatagramProtocol):
             message = decode_datagram(datagram)
         except (ValueError, TypeError, DecodeError):
             self.peer_manager.report_failure(address[0], address[1])
-            log.warning("Couldn't decode dht datagram from %s: %s", address, binascii.hexlify(datagram).decode())
+            log.warning("Couldn't decode dht datagram from %s: %s", address, datagram.hex())
             return
 
         if isinstance(message, RequestDatagram):
@@ -603,7 +602,7 @@ class KademliaProtocol(DatagramProtocol):
         if len(data) > constants.MSG_SIZE_LIMIT:
             log.warning("cannot send datagram larger than %i bytes (packet is %i bytes)",
                         constants.MSG_SIZE_LIMIT, len(data))
-            log.debug("Packet is too large to send: %s", binascii.hexlify(data[:3500]).decode())
+            log.debug("Packet is too large to send: %s", data[:3500].hex())
             raise ValueError(
                 f"cannot send datagram larger than {constants.MSG_SIZE_LIMIT} bytes (packet is {len(data)} bytes)"
             )
@@ -663,13 +662,13 @@ class KademliaProtocol(DatagramProtocol):
             res = await self.get_rpc_peer(peer).store(hash_value)
             if res != b"OK":
                 raise ValueError(res)
-            log.debug("Stored %s to %s", binascii.hexlify(hash_value).decode()[:8], peer)
+            log.debug("Stored %s to %s", hash_value.hex()[:8], peer)
             return peer.node_id, True
 
         try:
             return await __store()
         except asyncio.TimeoutError:
-            log.debug("Timeout while storing blob_hash %s at %s", binascii.hexlify(hash_value).decode()[:8], peer)
+            log.debug("Timeout while storing blob_hash %s at %s", hash_value.hex()[:8], peer)
             return peer.node_id, False
         except ValueError as err:
             log.error("Unexpected response: %s", err)
