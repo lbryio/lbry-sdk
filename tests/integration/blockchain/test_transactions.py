@@ -210,14 +210,17 @@ class BasicTransactionTests(IntegrationTestCase):
         self.ledger.coin_selection_strategy = 'sqlite'
         await self.ledger.subscribe_account(self.account)
 
-        txids = []
-        txids.append(await self.blockchain.send_to_address(address, 1.0))
-        txids.append(await self.blockchain.send_to_address(address, 1.0))
-        txids.append(await self.blockchain.send_to_address(address, 3.0))
-        txids.append(await self.blockchain.send_to_address(address, 5.0))
-        txids.append(await self.blockchain.send_to_address(address, 10.0))
+        txid = await self.blockchain.send_to_address(address, 1.0)
+        await self.wait_for_txid(txid, address)
+        txid = await self.blockchain.send_to_address(address, 1.0)
+        await self.wait_for_txid(txid, address)
+        txid = await self.blockchain.send_to_address(address, 3.0)
+        await self.wait_for_txid(txid, address)
+        txid = await self.blockchain.send_to_address(address, 5.0)
+        await self.wait_for_txid(txid, address)
+        txid = await self.blockchain.send_to_address(address, 10.0)
+        await self.wait_for_txid(txid, address)
 
-        await asyncio.wait([self.wait_for_txid(txid, address) for txid in txids], timeout=1)
         await self.assertBalance(self.account, '20.0')
         await self.assertSpendable([99992600, 99992600, 299992600, 499992600, 999992600])
 
