@@ -692,6 +692,7 @@ class Config(CLIConfig):
         ('spv19.lbry.com', 50001),
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
+        ('dht.lbry.madiator.com', 4444),  # Madiator
         ('lbrynet1.lbry.com', 4444),  # US EAST
         ('lbrynet2.lbry.com', 4444),  # US WEST
         ('lbrynet3.lbry.com', 4444),  # EU
