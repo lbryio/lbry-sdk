@@ -1,5 +1,4 @@
 import asyncio
-from binascii import hexlify
 from itertools import chain
 from collections import defaultdict
 import typing
@@ -198,7 +197,7 @@ class IterativeFinder:
             added += 1
         log.debug("running %d probes", len(self.running_probes))
         if not added and not self.running_probes:
-            log.debug("search for %s exhausted", hexlify(self.key)[:8])
+            log.debug("search for %s exhausted", self.key.hex()[:8])
             self.search_exhausted()
 
     def _schedule_probe(self, peer: 'KademliaPeer'):
@@ -271,7 +270,7 @@ class IterativeNodeFinder(IterativeFinder):
         self.yielded_peers: typing.Set['KademliaPeer'] = set()
 
     async def send_probe(self, peer: 'KademliaPeer') -> FindNodeResponse:
-        log.debug("probing %s:%d %s", peer.address, peer.udp_port, hexlify(peer.node_id)[:8] if peer.node_id else '')
+        log.debug("probing %s:%d %s", peer.address, peer.udp_port, peer.node_id.hex()[:8] if peer.node_id else '')
         response = await self.protocol.get_rpc_peer(peer).find_node(self.key)
         return FindNodeResponse(self.key, response)
 
