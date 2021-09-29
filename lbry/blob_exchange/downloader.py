@@ -87,7 +87,6 @@ class BlobDownloader:
         if blob.get_is_verified():
             return blob
         self.is_running.set()
-        tried_for_this_blob: typing.Set['KademliaPeer'] = set()
         try:
             while not blob.get_is_verified() and self.is_running.is_set():
                 batch: typing.Set['KademliaPeer'] = set(self.connections.keys())
@@ -101,8 +100,6 @@ class BlobDownloader:
                 for peer in sorted(batch, key=lambda peer: self.scores.get(peer, 0), reverse=True):
                     if peer in self.ignored:
                         continue
-                    if peer in tried_for_this_blob:
-                        continue
                     if peer in self.active_connections:
                         if peer not in re_add:
                             re_add.add(peer)
@@ -112,7 +109,6 @@ class BlobDownloader:
                     log.debug("request %s from %s:%i", blob_hash[:8], peer.address, peer.tcp_port)
                     t = self.loop.create_task(self.request_blob_from_peer(blob, peer, connection_id))
                     self.active_connections[peer] = t
-                    tried_for_this_blob.add(peer)
                 if not re_add:
                     self.peer_queue.put_nowait(list(batch))
                 await self.new_peer_or_finished()
