@@ -96,8 +96,7 @@ class KademliaRPC:
             if not rpc_contact.tcp_port or peer.compact_address_tcp() != rpc_contact.compact_address_tcp()
         ]
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
-        if len(peers) < constants.K and key.hex() in self.protocol.data_store.completed_blobs:
-            peers.append(self.compact_address())
+        peers.append(self.compact_address())
         if not peers:
             response[PAGE_KEY] = 0
         else:
