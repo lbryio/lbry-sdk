@@ -18,7 +18,7 @@ MAX_REQUEST_SIZE = 1200
 
 class BlobServerProtocol(asyncio.Protocol):
     def __init__(self, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str,
-                 idle_timeout: float = 30.0, transfer_timeout: float = 60.0):
+                 idle_timeout: float = 30.0, transfer_timeout: float = 60.0, blob_callback=None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.idle_timeout = idle_timeout
@@ -32,6 +32,7 @@ class BlobServerProtocol(asyncio.Protocol):
         self.started_transfer = asyncio.Event(loop=self.loop)
         self.transfer_finished = asyncio.Event(loop=self.loop)
         self.close_on_idle_task: typing.Optional[asyncio.Task] = None
+        self.blob_handling_callback: typing.Optional[typing.Callable] = blob_callback
 
     async def close_on_idle(self):
         while self.transport:
@@ -92,6 +93,9 @@ class BlobServerProtocol(asyncio.Protocol):
 
         if download_request:
             blob = self.blob_manager.get_blob(download_request.requested_blob)
+            if self.blob_handling_callback:
+                await self.blob_handling_callback(blob)
+                blob = self.blob_manager.get_blob(download_request.requested_blob)
             if blob.get_is_verified():
                 incoming_blob = {'blob_hash': blob.blob_hash, 'length': blob.length}
                 responses.append(BlobDownloadResponse(incoming_blob=incoming_blob))
@@ -152,7 +156,7 @@ class BlobServerProtocol(asyncio.Protocol):
 
 class BlobServer:
     def __init__(self, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', lbrycrd_address: str,
-                 idle_timeout: float = 30.0, transfer_timeout: float = 60.0):
+                 idle_timeout: float = 30.0, transfer_timeout: float = 60.0, blob_callback=None):
         self.loop = loop
         self.blob_manager = blob_manager
         self.server_task: typing.Optional[asyncio.Task] = None
@@ -161,6 +165,7 @@ class BlobServer:
         self.idle_timeout = idle_timeout
         self.transfer_timeout = transfer_timeout
         self.server_protocol_class = BlobServerProtocol
+        self.blob_handling_callback: typing.Optional[typing.Callable] = blob_callback
 
     def start_server(self, port: int, interface: typing.Optional[str] = '0.0.0.0'):
         if self.server_task is not None:
@@ -169,7 +174,8 @@ class BlobServer:
         async def _start_server():
             server = await self.loop.create_server(
                 lambda: self.server_protocol_class(self.loop, self.blob_manager, self.lbrycrd_address,
-                                                   self.idle_timeout, self.transfer_timeout),
+                                                   self.idle_timeout, self.transfer_timeout,
+                                                   blob_callback=self.blob_handling_callback),
                 interface, port
             )
             self.started_listening.set()
