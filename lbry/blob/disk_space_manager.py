@@ -6,13 +6,14 @@ log = logging.getLogger(__name__)
 
 class DiskSpaceManager:
 
-    def __init__(self, config, db, blob_manager, cleaning_interval=30 * 60):
+    def __init__(self, config, db, blob_manager, cleaning_interval=30 * 60, analytics=None):
         self.config = config
         self.db = db
         self.blob_manager = blob_manager
         self.cleaning_interval = cleaning_interval
         self.running = False
         self.task = None
+        self.analytics = analytics
 
     async def get_space_used_bytes(self):
         return await self.db.get_stored_blob_disk_usage()
@@ -21,10 +22,14 @@ class DiskSpaceManager:
         return int(await self.get_space_used_bytes()/1024.0/1024.0)
 
     async def clean(self):
-        if not self.config.blob_storage_limit:
+        space_used_bytes = await self.get_space_used_bytes()
+        storage_limit = self.config.blob_storage_limit*1024*1024 if self.config.blob_storage_limit else None
+        if self.analytics:
+            asyncio.create_task(self.analytics.send_disk_space_used(space_used_bytes, storage_limit))
+        if not storage_limit:
             return 0
         delete = []
-        available = (self.config.blob_storage_limit*1024*1024) - await self.get_space_used_bytes()
+        available = storage_limit - space_used_bytes
         if available > 0:
             return 0
         for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False):
