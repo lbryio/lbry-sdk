@@ -400,7 +400,10 @@ class DiskSpaceComponent(Component):
     async def start(self):
         db = self.component_manager.get_component(DATABASE_COMPONENT)
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
-        self.disk_space_manager = DiskSpaceManager(self.conf, db, blob_manager)
+        self.disk_space_manager = DiskSpaceManager(
+            self.conf, db, blob_manager,
+            analytics=self.component_manager.analytics_manager
+        )
         await self.disk_space_manager.start()
 
     async def stop(self):
