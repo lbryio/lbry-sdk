@@ -1379,6 +1379,17 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
             len((await self.conductor.spv_node.server.bp.db.search_index.search(claim_name=name))[0]), 2
         )
 
+    async def test_abandon_controlling_same_block_as_new_claim(self):
+        name = 'derp'
+
+        first_claim_id = (await self.stream_create(name, '0.1'))['outputs'][0]['claim_id']
+        await self.generate(64)
+        await self.assertNameState(271, name, first_claim_id, last_takeover_height=207, non_winning_claims=[])
+
+        await self.daemon.jsonrpc_txo_spend(type='stream', claim_id=first_claim_id)
+        second_claim_id = (await self.stream_create(name, '0.1', allow_duplicate_name=True))['outputs'][0]['claim_id']
+        await self.assertNameState(272, name, second_claim_id, last_takeover_height=272, non_winning_claims=[])
+
     async def test_trending(self):
         async def get_trending_score(claim_id):
             return (await self.conductor.spv_node.server.bp.db.search_index.search(

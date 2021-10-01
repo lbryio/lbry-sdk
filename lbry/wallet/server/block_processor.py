@@ -784,7 +784,7 @@ class BlockProcessor:
             nothing_is_controlling = not controlling
             staged_is_controlling = False if not controlling else claim_hash == controlling.claim_hash
             controlling_is_abandoned = False if not controlling else \
-                controlling.claim_hash in names_with_abandoned_or_updated_controlling_claims
+                name in names_with_abandoned_or_updated_controlling_claims
 
             if nothing_is_controlling or staged_is_controlling or controlling_is_abandoned:
                 delay = 0
