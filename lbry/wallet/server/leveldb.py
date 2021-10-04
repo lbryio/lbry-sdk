@@ -14,10 +14,8 @@ import array
 import time
 import typing
 import struct
-import attr
 import zlib
 import base64
-import plyvel
 from typing import Optional, Iterable, Tuple, DefaultDict, Set, Dict, List, TYPE_CHECKING
 from functools import partial
 from asyncio import sleep
@@ -32,10 +30,8 @@ from lbry.wallet.server import util
 from lbry.wallet.server.hash import hash_to_hex_str
 from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
-from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
-from lbry.wallet.server.db.revertable import RevertableOpStack
-from lbry.wallet.server.db.prefixes import Prefixes, PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, PrefixDB
+from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, HubDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
 from lbry.wallet.transaction import OutputScript
@@ -59,45 +55,7 @@ class UTXO(typing.NamedTuple):
 TXO_STRUCT = struct.Struct(b'>LH')
 TXO_STRUCT_unpack = TXO_STRUCT.unpack
 TXO_STRUCT_pack = TXO_STRUCT.pack
-
-
-@attr.s(slots=True)
-class FlushData:
-    height = attr.ib()
-    tx_count = attr.ib()
-    put_and_delete_ops = attr.ib()
-    tip = attr.ib()
-
-
 OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, ResolveCensoredError, LookupError, ValueError]]
-
-DB_STATE_STRUCT = struct.Struct(b'>32sLL32sLLBBlll')
-DB_STATE_STRUCT_SIZE = 94
-
-
-class DBState(typing.NamedTuple):
-    genesis: bytes
-    height: int
-    tx_count: int
-    tip: bytes
-    utxo_flush_count: int
-    wall_time: int
-    first_sync: bool
-    db_version: int
-    hist_flush_count: int
-    comp_flush_count: int
-    comp_cursor: int
-
-    def pack(self) -> bytes:
-        return DB_STATE_STRUCT.pack(
-            self.genesis, self.height, self.tx_count, self.tip, self.utxo_flush_count,
-            self.wall_time, 1 if self.first_sync else 0, self.db_version, self.hist_flush_count,
-            self.comp_flush_count, self.comp_cursor
-        )
-
-    @classmethod
-    def unpack(cls, packed: bytes) -> 'DBState':
-        return cls(*DB_STATE_STRUCT.unpack(packed[:DB_STATE_STRUCT_SIZE]))
 
 
 class DBError(Exception):
@@ -114,7 +72,6 @@ class LevelDB:
 
         self.logger.info(f'switching current directory to {env.db_dir}')
 
-        self.db = None
         self.prefix_db = None
 
         self.hist_unflushed = defaultdict(partial(array.array, 'I'))
@@ -149,8 +106,6 @@ class LevelDB:
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
-        self.total_transactions = None
-        self.transaction_num_mapping = {}
 
         self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
         self.txo_to_claim: DefaultDict[int, Dict[int, bytes]] = defaultdict(dict)
@@ -173,65 +128,57 @@ class LevelDB:
             self.ledger = RegTestLedger
 
     def get_claim_from_txo(self, tx_num: int, tx_idx: int) -> Optional[TXOToClaimValue]:
-        claim_hash_and_name = self.db.get(Prefixes.txo_to_claim.pack_key(tx_num, tx_idx))
+        claim_hash_and_name = self.prefix_db.txo_to_claim.get(tx_num, tx_idx)
         if not claim_hash_and_name:
             return
-        return Prefixes.txo_to_claim.unpack_value(claim_hash_and_name)
+        return claim_hash_and_name
 
     def get_repost(self, claim_hash) -> Optional[bytes]:
-        repost = self.db.get(Prefixes.repost.pack_key(claim_hash))
+        repost = self.prefix_db.repost.get(claim_hash)
         if repost:
-            return Prefixes.repost.unpack_value(repost).reposted_claim_hash
+            return repost.reposted_claim_hash
         return
 
     def get_reposted_count(self, claim_hash: bytes) -> int:
-        cnt = 0
-        for _ in self.db.iterator(prefix=Prefixes.reposted_claim.pack_partial_key(claim_hash)):
-            cnt += 1
-        return cnt
+        return sum(
+            1 for _ in self.prefix_db.reposted_claim.iterate(prefix=(claim_hash,), include_value=False)
+        )
 
     def get_activation(self, tx_num, position, is_support=False) -> int:
-        activation = self.db.get(
-            Prefixes.activated.pack_key(
-                ACTIVATED_SUPPORT_TXO_TYPE if is_support else ACTIVATED_CLAIM_TXO_TYPE, tx_num, position
-            )
+        activation = self.prefix_db.activated.get(
+            ACTIVATED_SUPPORT_TXO_TYPE if is_support else ACTIVATED_CLAIM_TXO_TYPE, tx_num, position
         )
         if activation:
-            return Prefixes.activated.unpack_value(activation).height
+            return activation.height
         return -1
 
     def get_supported_claim_from_txo(self, tx_num: int, position: int) -> typing.Tuple[Optional[bytes], Optional[int]]:
-        key = Prefixes.support_to_claim.pack_key(tx_num, position)
-        supported_claim_hash = self.db.get(key)
+        supported_claim_hash = self.prefix_db.support_to_claim.get(tx_num, position)
         if supported_claim_hash:
-            packed_support_amount = self.db.get(
-                Prefixes.claim_to_support.pack_key(supported_claim_hash, tx_num, position)
+            packed_support_amount = self.prefix_db.claim_to_support.get(
+                supported_claim_hash.claim_hash, tx_num, position
             )
             if packed_support_amount:
-                return supported_claim_hash, Prefixes.claim_to_support.unpack_value(packed_support_amount).amount
+                return supported_claim_hash.claim_hash, packed_support_amount.amount
         return None, None
 
     def get_support_amount(self, claim_hash: bytes):
-        total = 0
-        for packed in self.db.iterator(prefix=Prefixes.claim_to_support.pack_partial_key(claim_hash), include_key=False):
-            total += Prefixes.claim_to_support.unpack_value(packed).amount
-        return total
+        support_amount_val = self.prefix_db.support_amount.get(claim_hash)
+        if support_amount_val is None:
+            return 0
+        return support_amount_val.amount
 
     def get_supports(self, claim_hash: bytes):
-        supports = []
-        for k, v in self.db.iterator(prefix=Prefixes.claim_to_support.pack_partial_key(claim_hash)):
-            unpacked_k = Prefixes.claim_to_support.unpack_key(k)
-            unpacked_v = Prefixes.claim_to_support.unpack_value(v)
-            supports.append((unpacked_k.tx_num, unpacked_k.position, unpacked_v.amount))
-        return supports
+        return [
+            (k.tx_num, k.position, v.amount) for k, v in self.prefix_db.claim_to_support.iterate(prefix=(claim_hash,))
+        ]
 
     def get_short_claim_id_url(self, name: str, normalized_name: str, claim_hash: bytes,
                                root_tx_num: int, root_position: int) -> str:
         claim_id = claim_hash.hex()
         for prefix_len in range(10):
-            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, claim_id[:prefix_len+1])
-            for _k in self.db.iterator(prefix=prefix, include_value=False):
-                k = Prefixes.claim_short_id.unpack_key(_k)
+            for k in self.prefix_db.claim_short_id.iterate(prefix=(normalized_name, claim_id[:prefix_len+1]),
+                                                           include_value=False):
                 if k.root_tx_num == root_tx_num and k.root_position == root_position:
                     return f'{name}#{k.partial_claim_id}'
                 break
@@ -247,7 +194,7 @@ class LevelDB:
             normalized_name = name
         controlling_claim = self.get_controlling_claim(normalized_name)
 
-        tx_hash = self.total_transactions[tx_num]
+        tx_hash = self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
         height = bisect_right(self.tx_counts, tx_num)
         created_height = bisect_right(self.tx_counts, root_tx_num)
         last_take_over_height = controlling_claim.height
@@ -314,10 +261,7 @@ class LevelDB:
                     self.get_activation(claim_txo.tx_num, claim_txo.position), claim_txo.channel_signature_is_valid
                 )
             # resolve by partial/complete claim id
-            prefix = Prefixes.claim_short_id.pack_partial_key(normalized_name, claim_id[:10])
-            for k, v in self.db.iterator(prefix=prefix):
-                key = Prefixes.claim_short_id.unpack_key(k)
-                claim_txo = Prefixes.claim_short_id.unpack_value(v)
+            for key, claim_txo in self.prefix_db.claim_short_id.iterate(prefix=(normalized_name, claim_id[:10])):
                 claim_hash = self.txo_to_claim[claim_txo.tx_num][claim_txo.position]
                 non_normalized_name = self.claim_to_txo.get(claim_hash).name
                 signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
@@ -329,12 +273,9 @@ class LevelDB:
             return
 
         # resolve by amount ordering, 1 indexed
-        prefix = Prefixes.effective_amount.pack_partial_key(normalized_name)
-        for idx, (k, v) in enumerate(self.db.iterator(prefix=prefix)):
+        for idx, (key, claim_val) in enumerate(self.prefix_db.effective_amount.iterate(prefix=(normalized_name,))):
             if amount_order > idx + 1:
                 continue
-            key = Prefixes.effective_amount.unpack_key(k)
-            claim_val = Prefixes.effective_amount.unpack_value(v)
             claim_txo = self.claim_to_txo.get(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
@@ -345,9 +286,7 @@ class LevelDB:
 
     def _resolve_claim_in_channel(self, channel_hash: bytes, normalized_name: str):
         candidates = []
-        for k, v in self.db.iterator(prefix=Prefixes.channel_to_claim.pack_partial_key(channel_hash, normalized_name)):
-            key = Prefixes.channel_to_claim.unpack_key(k)
-            stream = Prefixes.channel_to_claim.unpack_value(v)
+        for key, stream in self.prefix_db.channel_to_claim.iterate(prefix=(channel_hash, normalized_name)):
             effective_amount = self.get_effective_amount(stream.claim_hash)
             if not candidates or candidates[-1][-1] == effective_amount:
                 candidates.append((stream.claim_hash, key.tx_num, key.position, effective_amount))
@@ -362,7 +301,7 @@ class LevelDB:
         try:
             parsed = URL.parse(url)
         except ValueError as e:
-            return e, None
+            return e, None, None
 
         stream = channel = resolved_channel = resolved_stream = None
         if parsed.has_stream_in_channel:
@@ -428,9 +367,9 @@ class LevelDB:
             return claim.amount
 
     def get_block_hash(self, height: int) -> Optional[bytes]:
-        v = self.db.get(Prefixes.block_hash.pack_key(height))
+        v = self.prefix_db.block_hash.get(height)
         if v:
-            return Prefixes.block_hash.unpack_value(v).block_hash
+            return v.block_hash
 
     def get_support_txo_amount(self, claim_hash: bytes, tx_num: int, position: int) -> Optional[int]:
         v = self.prefix_db.claim_to_support.get(claim_hash, tx_num, position)
@@ -467,19 +406,19 @@ class LevelDB:
 
     def get_claims_for_name(self, name):
         claims = []
-        prefix = Prefixes.claim_short_id.pack_partial_key(name) + bytes([1])
-        for _k, _v in self.db.iterator(prefix=prefix):
-            v = Prefixes.claim_short_id.unpack_value(_v)
+        prefix = self.prefix_db.claim_short_id.pack_partial_key(name) + bytes([1])
+        for _k, _v in self.prefix_db.iterator(prefix=prefix):
+            v = self.prefix_db.claim_short_id.unpack_value(_v)
             claim_hash = self.get_claim_from_txo(v.tx_num, v.position).claim_hash
             if claim_hash not in claims:
                 claims.append(claim_hash)
         return claims
 
     def get_claims_in_channel_count(self, channel_hash) -> int:
-        count = 0
-        for _ in self.prefix_db.channel_to_claim.iterate(prefix=(channel_hash,), include_key=False):
-            count += 1
-        return count
+        channel_count_val = self.prefix_db.channel_count.get(channel_hash)
+        if channel_count_val is None:
+            return 0
+        return channel_count_val.count
 
     async def reload_blocking_filtering_streams(self):
         def reload():
@@ -506,14 +445,15 @@ class LevelDB:
         return streams, channels
 
     def get_channel_for_claim(self, claim_hash, tx_num, position) -> Optional[bytes]:
-        return self.db.get(Prefixes.claim_to_channel.pack_key(claim_hash, tx_num, position))
+        v = self.prefix_db.claim_to_channel.get(claim_hash, tx_num, position)
+        if v:
+            return v.signing_hash
 
     def get_expired_by_height(self, height: int) -> Dict[bytes, Tuple[int, int, str, TxInput]]:
         expired = {}
-        for _k, _v in self.db.iterator(prefix=Prefixes.claim_expiration.pack_partial_key(height)):
-            k, v = Prefixes.claim_expiration.unpack_item(_k, _v)
-            tx_hash = self.total_transactions[k.tx_num]
-            tx = self.coin.transaction(self.db.get(Prefixes.tx.pack_key(tx_hash)))
+        for k, v in self.prefix_db.claim_expiration.iterate(prefix=(height,)):
+            tx_hash = self.prefix_db.tx_hash.get(k.tx_num, deserialize_value=False)
+            tx = self.coin.transaction(self.prefix_db.tx.get(tx_hash, deserialize_value=False))
             # treat it like a claim spend so it will delete/abandon properly
             # the _spend_claim function this result is fed to expects a txi, so make a mock one
             # print(f"\texpired lbry://{v.name} {v.claim_hash.hex()}")
@@ -524,21 +464,21 @@ class LevelDB:
         return expired
 
     def get_controlling_claim(self, name: str) -> Optional[ClaimTakeoverValue]:
-        controlling = self.db.get(Prefixes.claim_takeover.pack_key(name))
+        controlling = self.prefix_db.claim_takeover.get(name)
         if not controlling:
             return
-        return Prefixes.claim_takeover.unpack_value(controlling)
+        return controlling
 
     def get_claim_txos_for_name(self, name: str):
         txos = {}
-        prefix = Prefixes.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
-        for k, v in self.db.iterator(prefix=prefix):
-            tx_num, nout = Prefixes.claim_short_id.unpack_value(v)
+        prefix = self.prefix_db.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
+        for k, v in self.prefix_db.iterator(prefix=prefix):
+            tx_num, nout = self.prefix_db.claim_short_id.unpack_value(v)
             txos[self.get_claim_from_txo(tx_num, nout).claim_hash] = tx_num, nout
         return txos
 
     def get_claim_metadata(self, tx_hash, nout):
-        raw = self.db.get(Prefixes.tx.pack_key(tx_hash))
+        raw = self.prefix_db.tx.get(tx_hash, deserialize_value=False)
         try:
             output = self.coin.transaction(raw).outputs[nout]
             script = OutputScript(output.pk_script)
@@ -547,7 +487,7 @@ class LevelDB:
         except:
             self.logger.error(
                 "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
-                raw.hex()
+                (raw or b'').hex()
             )
             return
 
@@ -577,7 +517,7 @@ class LevelDB:
             if not reposted_claim:
                 return
             reposted_metadata = self.get_claim_metadata(
-                self.total_transactions[reposted_claim.tx_num], reposted_claim.position
+                self.prefix_db.tx_hash.get(reposted_claim.tx_num, deserialize_value=False), reposted_claim.position
             )
             if not reposted_metadata:
                 return
@@ -591,8 +531,8 @@ class LevelDB:
         reposted_fee_currency = None
         reposted_duration = None
         if reposted_claim:
-            reposted_tx_hash = self.total_transactions[reposted_claim.tx_num]
-            raw_reposted_claim_tx = self.db.get(Prefixes.tx.pack_key(reposted_tx_hash))
+            reposted_tx_hash = self.prefix_db.tx_hash.get(reposted_claim.tx_num, deserialize_value=False)
+            raw_reposted_claim_tx = self.prefix_db.tx.get(reposted_tx_hash, deserialize_value=False)
             try:
                 reposted_claim_txo = self.coin.transaction(
                     raw_reposted_claim_tx
@@ -727,7 +667,7 @@ class LevelDB:
         batch = []
         for claim_hash, claim_txo in self.claim_to_txo.items():
             # TODO: fix the couple of claim txos that dont have controlling names
-            if not self.db.get(Prefixes.claim_takeover.pack_key(claim_txo.normalized_name)):
+            if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
                 continue
             claim = self._fs_get_claim_by_hash(claim_hash)
             if claim:
@@ -793,23 +733,17 @@ class LevelDB:
 
     def get_activated_at_height(self, height: int) -> DefaultDict[PendingActivationValue, List[PendingActivationKey]]:
         activated = defaultdict(list)
-        for _k, _v in self.db.iterator(prefix=Prefixes.pending_activation.pack_partial_key(height)):
-            k = Prefixes.pending_activation.unpack_key(_k)
-            v = Prefixes.pending_activation.unpack_value(_v)
+        for k, v in self.prefix_db.pending_activation.iterate(prefix=(height,)):
             activated[v].append(k)
         return activated
 
-    def get_future_activated(self, height: int) -> typing.Generator[
-            Tuple[PendingActivationValue, PendingActivationKey], None, None]:
-        yielded = set()
-        start_prefix = Prefixes.pending_activation.pack_partial_key(height + 1)
-        stop_prefix = Prefixes.pending_activation.pack_partial_key(height + 1 + self.coin.maxTakeoverDelay)
-        for _k, _v in self.db.iterator(start=start_prefix, stop=stop_prefix, reverse=True):
-            if _v not in yielded:
-                yielded.add(_v)
-                v = Prefixes.pending_activation.unpack_value(_v)
-                k = Prefixes.pending_activation.unpack_key(_k)
-                yield v, k
+    def get_future_activated(self, height: int) -> typing.Dict[PendingActivationValue, PendingActivationKey]:
+        results = {}
+        for k, v in self.prefix_db.pending_activation.iterate(
+                start=(height + 1,), stop=(height + 1 + self.coin.maxTakeoverDelay,), reverse=True):
+            if v not in results:
+                results[v] = k
+        return results
 
     async def _read_tx_counts(self):
         if self.tx_counts is not None:
@@ -818,11 +752,9 @@ class LevelDB:
         # height N.  So tx_counts[0] is 1 - the genesis coinbase
 
         def get_counts():
-            return tuple(
-                Prefixes.tx_count.unpack_value(packed_tx_count).tx_count
-                for packed_tx_count in self.db.iterator(prefix=Prefixes.tx_count.prefix, include_key=False,
-                                                        fill_cache=False)
-            )
+            return [
+                v.tx_count for v in self.prefix_db.tx_count.iterate(include_key=False, fill_cache=False)
+            ]
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(None, get_counts)
         assert len(tx_counts) == self.db_height + 1, f"{len(tx_counts)} vs {self.db_height + 1}"
@@ -834,20 +766,6 @@ class LevelDB:
         else:
             assert self.db_tx_count == 0
 
-    async def _read_txids(self):
-        def get_txids():
-            return list(self.db.iterator(prefix=Prefixes.tx_hash.prefix, include_key=False, fill_cache=False))
-
-        start = time.perf_counter()
-        self.logger.info("loading txids")
-        txids = await asyncio.get_event_loop().run_in_executor(None, get_txids)
-        assert len(txids) == len(self.tx_counts) == 0 or len(txids) == self.tx_counts[-1]
-        self.total_transactions = txids
-        self.transaction_num_mapping = {
-            txid: i for i, txid in enumerate(txids)
-        }
-        ts = time.perf_counter() - start
-        self.logger.info("loaded %i txids in %ss", len(self.total_transactions), round(ts, 4))
 
     async def _read_claim_txos(self):
         def read_claim_txos():
@@ -870,8 +788,9 @@ class LevelDB:
 
         def get_headers():
             return [
-                header for header in self.db.iterator(prefix=Prefixes.header.prefix, include_key=False,
-                                                      fill_cache=False)
+                header for header in self.prefix_db.header.iterate(
+                    include_key=False, fill_cache=False, deserialize_value=False
+                )
             ]
 
         headers = await asyncio.get_event_loop().run_in_executor(None, get_headers)
@@ -884,23 +803,13 @@ class LevelDB:
         return int(160.6855883050695 * height)
 
     async def open_dbs(self):
-        if self.db:
+        if self.prefix_db and not self.prefix_db.closed:
             return
 
-        path = os.path.join(self.env.db_dir, 'lbry-leveldb')
-        is_new = os.path.isdir(path)
-        self.db = plyvel.DB(
-            path, create_if_missing=True, max_open_files=512,
-            lru_cache_size=self.env.cache_MB * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
-            max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
+        self.prefix_db = HubDB(
+            os.path.join(self.env.db_dir, 'lbry-leveldb'), self.env.cache_MB, max_open_files=512
         )
-        self.db_op_stack = RevertableOpStack(self.db.get, unsafe_prefixes={DB_PREFIXES.trending_spike.value})
-        self.prefix_db = PrefixDB(self.db, self.db_op_stack)
-
-        if is_new:
-            self.logger.info('created new db: %s', f'lbry-leveldb')
-        else:
-            self.logger.info(f'opened db: %s', f'lbry-leveldb')
+        self.logger.info(f'opened db: lbry-leveldb')
 
         # read db state
         self.read_db_state()
@@ -929,8 +838,6 @@ class LevelDB:
 
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
-        if self.total_transactions is None:
-            await self._read_txids()
         await self._read_headers()
         await self._read_claim_txos()
 
@@ -938,7 +845,7 @@ class LevelDB:
         await self.search_index.start()
 
     def close(self):
-        self.db.close()
+        self.prefix_db.close()
 
     # Header merkle cache
 
@@ -952,113 +859,6 @@ class LevelDB:
 
     async def header_branch_and_root(self, length, height):
         return await self.header_mc.branch_and_root(length, height)
-
-    # Flushing
-    def assert_flushed(self, flush_data):
-        """Asserts state is fully flushed."""
-        assert flush_data.tx_count == self.fs_tx_count == self.db_tx_count
-        assert flush_data.height == self.fs_height == self.db_height
-        assert flush_data.tip == self.db_tip
-        assert not len(flush_data.put_and_delete_ops)
-
-    def flush_dbs(self, flush_data: FlushData):
-        if flush_data.height == self.db_height:
-            self.assert_flushed(flush_data)
-            return
-
-        min_height = self.min_undo_height(self.db_height)
-        delete_undo_keys = []
-        if min_height > 0:  # delete undos for blocks deep enough they can't be reorged
-            delete_undo_keys.extend(
-                self.db.iterator(
-                    start=Prefixes.undo.pack_key(0), stop=Prefixes.undo.pack_key(min_height), include_value=False
-                )
-            )
-            delete_undo_keys.extend(
-                self.db.iterator(
-                    start=Prefixes.touched_or_deleted.pack_key(0),
-                    stop=Prefixes.touched_or_deleted.pack_key(min_height), include_value=False
-                )
-            )
-
-        with self.db.write_batch(transaction=True) as batch:
-            batch_put = batch.put
-            batch_delete = batch.delete
-
-            for staged_change in flush_data.put_and_delete_ops:
-                if staged_change.is_put:
-                    batch_put(staged_change.key, staged_change.value)
-                else:
-                    batch_delete(staged_change.key)
-            for delete_key in delete_undo_keys:
-                batch_delete(delete_key)
-
-            self.fs_height = flush_data.height
-            self.fs_tx_count = flush_data.tx_count
-            self.hist_flush_count += 1
-            self.hist_unflushed_count = 0
-            self.utxo_flush_count = self.hist_flush_count
-            self.db_height = flush_data.height
-            self.db_tx_count = flush_data.tx_count
-            self.db_tip = flush_data.tip
-            self.last_flush_tx_count = self.fs_tx_count
-            now = time.time()
-            self.wall_time += now - self.last_flush
-            self.last_flush = now
-            self.write_db_state(batch)
-
-    def flush_backup(self, flush_data):
-        assert flush_data.height < self.db_height
-        assert not self.hist_unflushed
-
-        start_time = time.time()
-        tx_delta = flush_data.tx_count - self.last_flush_tx_count
-        ###
-        self.fs_tx_count = flush_data.tx_count
-        # Truncate header_mc: header count is 1 more than the height.
-        self.header_mc.truncate(flush_data.height + 1)
-        ###
-        # Not certain this is needed, but it doesn't hurt
-        self.hist_flush_count += 1
-        nremoves = 0
-
-        with self.db.write_batch(transaction=True) as batch:
-            batch_put = batch.put
-            batch_delete = batch.delete
-            for op in flush_data.put_and_delete_ops:
-                # print("REWIND", op)
-                if op.is_put:
-                    batch_put(op.key, op.value)
-                else:
-                    batch_delete(op.key)
-            while self.fs_height > flush_data.height:
-                self.fs_height -= 1
-
-            start_time = time.time()
-            if self.db.for_sync:
-                block_count = flush_data.height - self.db_height
-                tx_count = flush_data.tx_count - self.db_tx_count
-                elapsed = time.time() - start_time
-                self.logger.info(f'flushed {block_count:,d} blocks with '
-                                 f'{tx_count:,d} txs in '
-                                 f'{elapsed:.1f}s, committing...')
-
-            self.utxo_flush_count = self.hist_flush_count
-            self.db_height = flush_data.height
-            self.db_tx_count = flush_data.tx_count
-            self.db_tip = flush_data.tip
-
-            # Flush state last as it reads the wall time.
-            now = time.time()
-            self.wall_time += now - self.last_flush
-            self.last_flush = now
-            self.last_flush_tx_count = self.fs_tx_count
-            self.write_db_state(batch)
-
-        self.logger.info(f'backing up removed {nremoves:,d} history entries')
-        elapsed = self.last_flush - start_time
-        self.logger.info(f'backup flush #{self.hist_flush_count:,d} took {elapsed:.1f}s. '
-                         f'Height {flush_data.height:,d} txs: {flush_data.tx_count:,d} ({tx_delta:+,d})')
 
     def raw_header(self, height):
         """Return the binary header at the given height."""
@@ -1103,7 +903,7 @@ class LevelDB:
         if tx_height > self.db_height:
             return None, tx_height
         try:
-            return self.total_transactions[tx_num], tx_height
+            return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False), tx_height
         except IndexError:
             self.logger.exception(
                 "Failed to access a cached transaction, known bug #3142 "
@@ -1111,9 +911,17 @@ class LevelDB:
             )
             return None, tx_height
 
+    def get_block_txs(self, height: int) -> List[bytes]:
+        return [
+            tx_hash for tx_hash in self.prefix_db.tx_hash.iterate(
+                start=(self.tx_counts[height-1],), stop=(self.tx_counts[height],),
+                deserialize_value=False, include_key=False
+            )
+        ]
+
     def _fs_transactions(self, txids: Iterable[str]):
         tx_counts = self.tx_counts
-        tx_db_get = self.db.get
+        tx_db_get = self.prefix_db.tx.get
         tx_cache = self._tx_and_merkle_cache
         tx_infos = {}
 
@@ -1123,13 +931,14 @@ class LevelDB:
                 tx, merkle = cached_tx
             else:
                 tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = self.transaction_num_mapping.get(tx_hash_bytes)
+                tx_num = self.prefix_db.tx_num.get(tx_hash_bytes)
                 tx = None
                 tx_height = -1
+                tx_num = None if not tx_num else tx_num.tx_num
                 if tx_num is not None:
                     fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
                     tx_height = bisect_right(tx_counts, tx_num)
-                    tx = tx_db_get(Prefixes.tx.pack_key(tx_hash_bytes), fill_cache=fill_cache)
+                    tx = tx_db_get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
                 if tx_height == -1:
                     merkle = {
                         'block_height': -1
@@ -1137,7 +946,7 @@ class LevelDB:
                 else:
                     tx_pos = tx_num - tx_counts[tx_height - 1]
                     branch, root = self.merkle.branch_and_root(
-                        self.total_transactions[tx_counts[tx_height - 1]:tx_counts[tx_height]], tx_pos
+                        self.get_block_txs(tx_height), tx_pos
                     )
                     merkle = {
                         'block_height': tx_height,
@@ -1160,15 +969,17 @@ class LevelDB:
             raise DBError(f'only got {len(self.headers) - height:,d} headers starting at {height:,d}, not {count:,d}')
         return [self.coin.header_hash(header) for header in self.headers[height:height + count]]
 
-    def read_history(self, hashX: bytes, limit: int = 1000) -> List[int]:
-        txs = array.array('I')
-        for hist in self.db.iterator(prefix=Prefixes.hashX_history.pack_partial_key(hashX), include_key=False):
-            a = array.array('I')
-            a.frombytes(hist)
-            txs.extend(a)
+    def read_history(self, hashX: bytes, limit: int = 1000) -> List[Tuple[bytes, int]]:
+        txs = []
+        txs_extend = txs.extend
+        for hist in self.prefix_db.hashX_history.iterate(prefix=(hashX,), include_key=False):
+            txs_extend([
+                (self.prefix_db.tx_hash.get(tx_num, deserialize_value=False), bisect_right(self.tx_counts, tx_num))
+                for tx_num in hist
+            ])
             if len(txs) >= limit:
                 break
-        return txs.tolist()
+        return txs
 
     async def limited_history(self, hashX, *, limit=1000):
         """Return an unpruned, sorted list of (tx_hash, height) tuples of
@@ -1177,13 +988,7 @@ class LevelDB:
         transactions.  By default returns at most 1000 entries.  Set
         limit to None to get them all.
         """
-        while True:
-            history = await asyncio.get_event_loop().run_in_executor(None, self.read_history, hashX, limit)
-            if history is not None:
-                return [(self.total_transactions[tx_num], bisect_right(self.tx_counts, tx_num)) for tx_num in history]
-            self.logger.warning(f'limited_history: tx hash '
-                                f'not found (reorg?), retrying...')
-            await sleep(0.25)
+        return await asyncio.get_event_loop().run_in_executor(None, self.read_history, hashX, limit)
 
     # -- Undo information
 
@@ -1191,45 +996,33 @@ class LevelDB:
         """Returns a height from which we should store undo info."""
         return max_height - self.env.reorg_limit + 1
 
-    def undo_key(self, height: int) -> bytes:
-        """DB key for undo information at the given height."""
-        return Prefixes.undo.pack_key(height)
-
     def read_undo_info(self, height: int):
-        return self.db.get(Prefixes.undo.pack_key(height)), self.db.get(Prefixes.touched_or_deleted.pack_key(height))
+        return self.prefix_db.undo.get(height), self.prefix_db.touched_or_deleted.get(height)
 
     def apply_expiration_extension_fork(self):
         # TODO: this can't be reorged
-        deletes = []
-        adds = []
-
-        for k, v in self.db.iterator(prefix=Prefixes.claim_expiration.prefix):
-            old_key = Prefixes.claim_expiration.unpack_key(k)
-            new_key = Prefixes.claim_expiration.pack_key(
-                bisect_right(self.tx_counts, old_key.tx_num) + self.coin.nExtendedClaimExpirationTime,
-                old_key.tx_num, old_key.position
+        for k, v in self.prefix_db.claim_expiration.iterate():
+            self.prefix_db.claim_expiration.stage_delete(k, v)
+            self.prefix_db.claim_expiration.stage_put(
+                (bisect_right(self.tx_counts, k.tx_num) + self.coin.nExtendedClaimExpirationTime,
+                 k.tx_num, k.position), v
             )
-            deletes.append(k)
-            adds.append((new_key, v))
-        with self.db.write_batch(transaction=True) as batch:
-            for k in deletes:
-                batch.delete(k)
-            for k, v in adds:
-                batch.put(k, v)
+        self.prefix_db.unsafe_commit()
 
-    def write_db_state(self, batch):
+    def write_db_state(self):
         """Write (UTXO) state to the batch."""
-        batch.put(
-            DB_PREFIXES.db_state.value,
-            DBState(
+        if self.db_height > 0:
+            self.prefix_db.db_state.stage_delete((), self.prefix_db.db_state.get())
+        self.prefix_db.db_state.stage_put((), (
                 self.genesis_bytes, self.db_height, self.db_tx_count, self.db_tip,
                 self.utxo_flush_count, int(self.wall_time), self.first_sync, self.db_version,
                 self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor
-            ).pack()
+            )
         )
 
     def read_db_state(self):
-        state = self.db.get(DB_PREFIXES.db_state.value)
+        state = self.prefix_db.db_state.get()
+
         if not state:
             self.db_height = -1
             self.db_tx_count = 0
@@ -1243,7 +1036,6 @@ class LevelDB:
             self.hist_comp_cursor = -1
             self.hist_db_version = max(self.DB_VERSIONS)
         else:
-            state = DBState.unpack(state)
             self.db_version = state.db_version
             if self.db_version not in self.DB_VERSIONS:
                 raise DBError(f'your DB version is {self.db_version} but this '
@@ -1264,15 +1056,21 @@ class LevelDB:
             self.hist_comp_cursor = state.comp_cursor
             self.hist_db_version = state.db_version
 
+    def assert_db_state(self):
+        state = self.prefix_db.db_state.get()
+        assert self.db_version == state.db_version
+        assert self.db_height == state.height
+        assert self.db_tx_count == state.tx_count
+        assert self.db_tip == state.tip
+        assert self.first_sync == state.first_sync
+
     async def all_utxos(self, hashX):
         """Return all UTXOs for an address sorted in no particular order."""
         def read_utxos():
             utxos = []
             utxos_append = utxos.append
             fs_tx_hash = self.fs_tx_hash
-            for db_key, db_value in self.db.iterator(prefix=Prefixes.utxo.pack_partial_key(hashX)):
-                k = Prefixes.utxo.unpack_key(db_key)
-                v = Prefixes.utxo.unpack_value(db_value)
+            for k, v in self.prefix_db.utxo.iterate(prefix=(hashX, )):
                 tx_hash, height = fs_tx_hash(k.tx_num)
                 utxos_append(UTXO(k.tx_num, k.nout, tx_hash, height, v.amount))
             return utxos
@@ -1290,14 +1088,16 @@ class LevelDB:
             utxos = []
             utxo_append = utxos.append
             for (tx_hash, nout) in prevouts:
-                if tx_hash not in self.transaction_num_mapping:
+                tx_num_val = self.prefix_db.tx_num.get(tx_hash)
+                if not tx_num_val:
                     continue
-                tx_num = self.transaction_num_mapping[tx_hash]
-                hashX = self.db.get(Prefixes.hashX_utxo.pack_key(tx_hash[:4], tx_num, nout))
-                if not hashX:
+                tx_num = tx_num_val.tx_num
+                hashX_val = self.prefix_db.hashX_utxo.get(tx_hash[:4], tx_num, nout)
+                if not hashX_val:
                     continue
-                utxo_value = self.db.get(Prefixes.utxo.pack_key(hashX, tx_num, nout))
+                hashX = hashX_val.hashX
+                utxo_value = self.prefix_db.utxo.get(hashX, tx_num, nout)
                 if utxo_value:
-                    utxo_append((hashX, Prefixes.utxo.unpack_value(utxo_value).amount))
+                    utxo_append((hashX, utxo_value.amount))
             return utxos
         return await asyncio.get_event_loop().run_in_executor(None, lookup_utxos)

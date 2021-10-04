@@ -2,9 +2,9 @@ import typing
 import struct
 import array
 import base64
-import plyvel
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db.db import KeyValueStorage, PrefixDB
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
 
@@ -38,13 +38,13 @@ class PrefixRow(metaclass=PrefixRowType):
     value_struct: struct.Struct
     key_part_lambdas = []
 
-    def __init__(self, db: plyvel.DB, op_stack: RevertableOpStack):
+    def __init__(self, db: KeyValueStorage, op_stack: RevertableOpStack):
         self._db = db
         self._op_stack = op_stack
 
     def iterate(self, prefix=None, start=None, stop=None,
                 reverse: bool = False, include_key: bool = True, include_value: bool = True,
-                fill_cache: bool = True):
+                fill_cache: bool = True, deserialize_key: bool = True, deserialize_value: bool = True):
         if not prefix and not start and not stop:
             prefix = ()
         if prefix is not None:
@@ -54,25 +54,36 @@ class PrefixRow(metaclass=PrefixRowType):
         if stop is not None:
             stop = self.pack_partial_key(*stop)
 
+        if deserialize_key:
+            key_getter = lambda k: self.unpack_key(k)
+        else:
+            key_getter = lambda k: k
+        if deserialize_value:
+            value_getter = lambda v: self.unpack_value(v)
+        else:
+            value_getter = lambda v: v
+
         if include_key and include_value:
             for k, v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse,
                                           fill_cache=fill_cache):
-                yield self.unpack_key(k), self.unpack_value(v)
+                yield key_getter(k), value_getter(v)
         elif include_key:
             for k in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_value=False,
                                        fill_cache=fill_cache):
-                yield self.unpack_key(k)
+                yield key_getter(k)
         elif include_value:
             for v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False,
                                        fill_cache=fill_cache):
-                yield self.unpack_value(v)
+                yield value_getter(v)
         else:
-            raise RuntimeError
+            for _ in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False,
+                                       include_value=False, fill_cache=fill_cache):
+                yield None
 
-    def get(self, *key_args, fill_cache=True):
+    def get(self, *key_args, fill_cache=True, deserialize_value=True):
         v = self._db.get(self.pack_key(*key_args), fill_cache=fill_cache)
         if v:
-            return self.unpack_value(v)
+            return v if not deserialize_value else self.unpack_value(v)
 
     def stage_put(self, key_args=(), value_args=()):
         self._op_stack.append_op(RevertablePut(self.pack_key(*key_args), self.pack_value(*value_args)))
@@ -303,6 +314,28 @@ class ChannelToClaimValue(typing.NamedTuple):
         return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
 
 
+class ChannelCountKey(typing.NamedTuple):
+    channel_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(channel_hash={self.channel_hash.hex()})"
+
+
+class ChannelCountValue(typing.NamedTuple):
+    count: int
+
+
+class SupportAmountKey(typing.NamedTuple):
+    claim_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
+
+
+class SupportAmountValue(typing.NamedTuple):
+    amount: int
+
+
 class ClaimToSupportKey(typing.NamedTuple):
     claim_hash: bytes
     tx_num: int
@@ -469,6 +502,20 @@ class TouchedOrDeletedClaimValue(typing.NamedTuple):
                f"deleted_claims={','.join(map(lambda x: x.hex(), self.deleted_claims))})"
 
 
+class DBState(typing.NamedTuple):
+    genesis: bytes
+    height: int
+    tx_count: int
+    tip: bytes
+    utxo_flush_count: int
+    wall_time: int
+    first_sync: bool
+    db_version: int
+    hist_flush_count: int
+    comp_flush_count: int
+    comp_cursor: int
+
+
 class ActiveAmountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.active_amount.value
     key_struct = struct.Struct(b'>20sBLLH')
@@ -514,9 +561,7 @@ class ClaimToTXOPrefixRow(PrefixRow):
 
     @classmethod
     def pack_key(cls, claim_hash: bytes):
-        return super().pack_key(
-            claim_hash
-        )
+        return super().pack_key(claim_hash)
 
     @classmethod
     def unpack_key(cls, key: bytes) -> ClaimToTXOKey:
@@ -972,6 +1017,11 @@ class EffectiveAmountPrefixRow(PrefixRow):
 class RepostPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.repost.value
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack
+    ]
+
     @classmethod
     def pack_key(cls, claim_hash: bytes):
         return cls.prefix + claim_hash
@@ -1031,6 +1081,11 @@ class UndoPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.undo.value
     key_struct = struct.Struct(b'>Q')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>Q').pack
+    ]
+
     @classmethod
     def pack_key(cls, height: int):
         return super().pack_key(height)
@@ -1059,6 +1114,11 @@ class BlockHashPrefixRow(PrefixRow):
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>32s')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
+
     @classmethod
     def pack_key(cls, height: int) -> bytes:
         return super().pack_key(height)
@@ -1084,6 +1144,11 @@ class BlockHeaderPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.header.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>112s')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
 
     @classmethod
     def pack_key(cls, height: int) -> bytes:
@@ -1111,6 +1176,11 @@ class TXNumPrefixRow(PrefixRow):
     key_struct = struct.Struct(b'>32s')
     value_struct = struct.Struct(b'>L')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>32s').pack
+    ]
+
     @classmethod
     def pack_key(cls, tx_hash: bytes) -> bytes:
         return super().pack_key(tx_hash)
@@ -1136,6 +1206,11 @@ class TxCountPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.tx_count.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>L')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
 
     @classmethod
     def pack_key(cls, height: int) -> bytes:
@@ -1163,6 +1238,11 @@ class TXHashPrefixRow(PrefixRow):
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>32s')
 
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
+
     @classmethod
     def pack_key(cls, tx_num: int) -> bytes:
         return super().pack_key(tx_num)
@@ -1187,6 +1267,11 @@ class TXHashPrefixRow(PrefixRow):
 class TXPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.tx.value
     key_struct = struct.Struct(b'>32s')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>32s').pack
+    ]
 
     @classmethod
     def pack_key(cls, tx_hash: bytes) -> bytes:
@@ -1313,6 +1398,10 @@ class TouchedOrDeletedPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_diff.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>LL')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
 
     @classmethod
     def pack_key(cls, height: int):
@@ -1324,16 +1413,19 @@ class TouchedOrDeletedPrefixRow(PrefixRow):
 
     @classmethod
     def pack_value(cls, touched, deleted) -> bytes:
+        assert True if not touched else all(len(item) == 20 for item in touched)
+        assert True if not deleted else all(len(item) == 20 for item in deleted)
         return cls.value_struct.pack(len(touched), len(deleted)) + b''.join(touched) + b''.join(deleted)
 
     @classmethod
     def unpack_value(cls, data: bytes) -> TouchedOrDeletedClaimValue:
         touched_len, deleted_len = cls.value_struct.unpack(data[:8])
-        assert len(data) == 20 * (touched_len + deleted_len) + 8
-        touched_bytes, deleted_bytes = data[8:touched_len*20+8], data[touched_len*20+8:touched_len*20+deleted_len*20+8]
+        data = data[8:]
+        assert len(data) == 20 * (touched_len + deleted_len)
+        touched_bytes, deleted_bytes = data[:touched_len*20], data[touched_len*20:]
         return TouchedOrDeletedClaimValue(
-            {touched_bytes[8+20*i:8+20*(i+1)] for i in range(touched_len)},
-            {deleted_bytes[8+20*i:8+20*(i+1)] for i in range(deleted_len)}
+            {touched_bytes[20*i:20*(i+1)] for i in range(touched_len)},
+            {deleted_bytes[20*i:20*(i+1)] for i in range(deleted_len)}
         )
 
     @classmethod
@@ -1341,87 +1433,170 @@ class TouchedOrDeletedPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(touched, deleted)
 
 
-class Prefixes:
-    claim_to_support = ClaimToSupportPrefixRow
-    support_to_claim = SupportToClaimPrefixRow
+class ChannelCountPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.channel_count.value
+    key_struct = struct.Struct(b'>20s')
+    value_struct = struct.Struct(b'>L')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack
+    ]
 
-    claim_to_txo = ClaimToTXOPrefixRow
-    txo_to_claim = TXOToClaimPrefixRow
+    @classmethod
+    def pack_key(cls, channel_hash: int):
+        return super().pack_key(channel_hash)
 
-    claim_to_channel = ClaimToChannelPrefixRow
-    channel_to_claim = ChannelToClaimPrefixRow
+    @classmethod
+    def unpack_key(cls, key: bytes) -> ChannelCountKey:
+        return ChannelCountKey(*super().unpack_key(key))
 
-    claim_short_id = ClaimShortIDPrefixRow
-    claim_expiration = ClaimExpirationPrefixRow
+    @classmethod
+    def pack_value(cls, count: int) -> bytes:
+        return super().pack_value(count)
 
-    claim_takeover = ClaimTakeoverPrefixRow
-    pending_activation = PendingActivationPrefixRow
-    activated = ActivatedPrefixRow
-    active_amount = ActiveAmountPrefixRow
+    @classmethod
+    def unpack_value(cls, data: bytes) -> ChannelCountValue:
+        return ChannelCountValue(*super().unpack_value(data))
 
-    effective_amount = EffectiveAmountPrefixRow
-
-    repost = RepostPrefixRow
-    reposted_claim = RepostedPrefixRow
-
-    undo = UndoPrefixRow
-    utxo = UTXOPrefixRow
-    hashX_utxo = HashXUTXOPrefixRow
-    hashX_history = HashXHistoryPrefixRow
-    block_hash = BlockHashPrefixRow
-    tx_count = TxCountPrefixRow
-    tx_hash = TXHashPrefixRow
-    tx_num = TXNumPrefixRow
-    tx = TXPrefixRow
-    header = BlockHeaderPrefixRow
-    touched_or_deleted = TouchedOrDeletedPrefixRow
+    @classmethod
+    def pack_item(cls, channel_hash, count):
+        return cls.pack_key(channel_hash), cls.pack_value(count)
 
 
-class PrefixDB:
-    def __init__(self, db: plyvel.DB, op_stack: RevertableOpStack):
-        self._db = db
-        self._op_stack = op_stack
+class SupportAmountPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.support_amount.value
+    key_struct = struct.Struct(b'>20s')
+    value_struct = struct.Struct(b'>Q')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>20s').pack
+    ]
 
-        self.claim_to_support = ClaimToSupportPrefixRow(db, op_stack)
-        self.support_to_claim = SupportToClaimPrefixRow(db, op_stack)
-        self.claim_to_txo = ClaimToTXOPrefixRow(db, op_stack)
-        self.txo_to_claim = TXOToClaimPrefixRow(db, op_stack)
-        self.claim_to_channel = ClaimToChannelPrefixRow(db, op_stack)
-        self.channel_to_claim = ChannelToClaimPrefixRow(db, op_stack)
-        self.claim_short_id = ClaimShortIDPrefixRow(db, op_stack)
-        self.claim_expiration = ClaimExpirationPrefixRow(db, op_stack)
-        self.claim_takeover = ClaimTakeoverPrefixRow(db, op_stack)
-        self.pending_activation = PendingActivationPrefixRow(db, op_stack)
-        self.activated = ActivatedPrefixRow(db, op_stack)
-        self.active_amount = ActiveAmountPrefixRow(db, op_stack)
-        self.effective_amount = EffectiveAmountPrefixRow(db, op_stack)
-        self.repost = RepostPrefixRow(db, op_stack)
-        self.reposted_claim = RepostedPrefixRow(db, op_stack)
-        self.undo = UndoPrefixRow(db, op_stack)
-        self.utxo = UTXOPrefixRow(db, op_stack)
-        self.hashX_utxo = HashXUTXOPrefixRow(db, op_stack)
-        self.hashX_history = HashXHistoryPrefixRow(db, op_stack)
-        self.block_hash = BlockHashPrefixRow(db, op_stack)
-        self.tx_count = TxCountPrefixRow(db, op_stack)
-        self.tx_hash = TXHashPrefixRow(db, op_stack)
-        self.tx_num = TXNumPrefixRow(db, op_stack)
-        self.tx = TXPrefixRow(db, op_stack)
-        self.header = BlockHeaderPrefixRow(db, op_stack)
-        self.touched_or_deleted = TouchedOrDeletedPrefixRow(db, op_stack)
+    @classmethod
+    def pack_key(cls, claim_hash: bytes):
+        return super().pack_key(claim_hash)
 
-    def commit(self):
-        try:
-            with self._db.write_batch(transaction=True) as batch:
-                batch_put = batch.put
-                batch_delete = batch.delete
+    @classmethod
+    def unpack_key(cls, key: bytes) -> SupportAmountKey:
+        return SupportAmountKey(*super().unpack_key(key))
 
-                for staged_change in self._op_stack:
-                    if staged_change.is_put:
-                        batch_put(staged_change.key, staged_change.value)
-                    else:
-                        batch_delete(staged_change.key)
-        finally:
-            self._op_stack.clear()
+    @classmethod
+    def pack_value(cls, amount: int) -> bytes:
+        return super().pack_value(amount)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> SupportAmountValue:
+        return SupportAmountValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, claim_hash, amount):
+        return cls.pack_key(claim_hash), cls.pack_value(amount)
+
+
+class DBStatePrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.db_state.value
+    value_struct = struct.Struct(b'>32sLL32sLLBBlll')
+    key_struct = struct.Struct(b'')
+
+    key_part_lambdas = [
+        lambda: b''
+    ]
+
+    @classmethod
+    def pack_key(cls) -> bytes:
+        return cls.prefix
+
+    @classmethod
+    def unpack_key(cls, key: bytes):
+        return
+
+    @classmethod
+    def pack_value(cls, genesis: bytes, height: int, tx_count: int, tip: bytes, utxo_flush_count: int, wall_time: int,
+                   first_sync: bool, db_version: int, hist_flush_count: int, comp_flush_count: int,
+                   comp_cursor: int) -> bytes:
+        return super().pack_value(
+            genesis, height, tx_count, tip, utxo_flush_count,
+            wall_time, 1 if first_sync else 0, db_version, hist_flush_count,
+            comp_flush_count, comp_cursor
+        )
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> DBState:
+        return DBState(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, genesis: bytes, height: int, tx_count: int, tip: bytes, utxo_flush_count: int, wall_time: int,
+                  first_sync: bool, db_version: int, hist_flush_count: int, comp_flush_count: int,
+                  comp_cursor: int):
+        return cls.pack_key(), cls.pack_value(
+            genesis, height, tx_count, tip, utxo_flush_count, wall_time, first_sync, db_version, hist_flush_count,
+            comp_flush_count, comp_cursor
+        )
+
+
+class LevelDBStore(KeyValueStorage):
+    def __init__(self, path: str, cache_mb: int, max_open_files: int):
+        import plyvel
+        self.db = plyvel.DB(
+            path, create_if_missing=True, max_open_files=max_open_files,
+            lru_cache_size=cache_mb * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
+            max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
+        )
+
+    def get(self, key: bytes, fill_cache: bool = True) -> Optional[bytes]:
+        return self.db.get(key, fill_cache=fill_cache)
+
+    def iterator(self, reverse=False, start=None, stop=None, include_start=True, include_stop=False, prefix=None,
+                 include_key=True, include_value=True, fill_cache=True):
+        return self.db.iterator(
+            reverse=reverse, start=start, stop=stop, include_start=include_start, include_stop=include_stop,
+            prefix=prefix, include_key=include_key, include_value=include_value, fill_cache=fill_cache
+        )
+
+    def write_batch(self, transaction: bool = False, sync: bool = False):
+        return self.db.write_batch(transaction=transaction, sync=sync)
+
+    def close(self):
+        return self.db.close()
+
+    @property
+    def closed(self) -> bool:
+        return self.db.closed
+
+
+class HubDB(PrefixDB):
+    def __init__(self, path: str, cache_mb: int, max_open_files: int = 512):
+        db = LevelDBStore(path, cache_mb, max_open_files)
+        super().__init__(db, unsafe_prefixes={DB_PREFIXES.db_state.value})
+        self.claim_to_support = ClaimToSupportPrefixRow(db, self._op_stack)
+        self.support_to_claim = SupportToClaimPrefixRow(db, self._op_stack)
+        self.claim_to_txo = ClaimToTXOPrefixRow(db, self._op_stack)
+        self.txo_to_claim = TXOToClaimPrefixRow(db, self._op_stack)
+        self.claim_to_channel = ClaimToChannelPrefixRow(db, self._op_stack)
+        self.channel_to_claim = ChannelToClaimPrefixRow(db, self._op_stack)
+        self.claim_short_id = ClaimShortIDPrefixRow(db, self._op_stack)
+        self.claim_expiration = ClaimExpirationPrefixRow(db, self._op_stack)
+        self.claim_takeover = ClaimTakeoverPrefixRow(db, self._op_stack)
+        self.pending_activation = PendingActivationPrefixRow(db, self._op_stack)
+        self.activated = ActivatedPrefixRow(db, self._op_stack)
+        self.active_amount = ActiveAmountPrefixRow(db, self._op_stack)
+        self.effective_amount = EffectiveAmountPrefixRow(db, self._op_stack)
+        self.repost = RepostPrefixRow(db, self._op_stack)
+        self.reposted_claim = RepostedPrefixRow(db, self._op_stack)
+        self.undo = UndoPrefixRow(db, self._op_stack)
+        self.utxo = UTXOPrefixRow(db, self._op_stack)
+        self.hashX_utxo = HashXUTXOPrefixRow(db, self._op_stack)
+        self.hashX_history = HashXHistoryPrefixRow(db, self._op_stack)
+        self.block_hash = BlockHashPrefixRow(db, self._op_stack)
+        self.tx_count = TxCountPrefixRow(db, self._op_stack)
+        self.tx_hash = TXHashPrefixRow(db, self._op_stack)
+        self.tx_num = TXNumPrefixRow(db, self._op_stack)
+        self.tx = TXPrefixRow(db, self._op_stack)
+        self.header = BlockHeaderPrefixRow(db, self._op_stack)
+        self.touched_or_deleted = TouchedOrDeletedPrefixRow(db, self._op_stack)
+        self.channel_count = ChannelCountPrefixRow(db, self._op_stack)
+        self.db_state = DBStatePrefixRow(db, self._op_stack)
+        self.support_amount = SupportAmountPrefixRow(db, self._op_stack)
 
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:

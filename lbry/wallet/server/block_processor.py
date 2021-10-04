@@ -17,15 +17,11 @@ from lbry.wallet.server.daemon import DaemonError
 from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.crypto.hash import hash160
-from lbry.wallet.server.leveldb import FlushData
 from lbry.wallet.server.mempool import MemPool
-from lbry.wallet.server.db.claimtrie import StagedClaimtrieItem, StagedClaimtrieSupport
-from lbry.wallet.server.db.claimtrie import get_takeover_name_ops, StagedActivation, get_add_effective_amount_ops
-from lbry.wallet.server.db.claimtrie import get_remove_name_ops, get_remove_effective_amount_ops
 from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
-from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, Prefixes, ClaimToTXOValue
+from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, ClaimToTXOValue
 from lbry.wallet.server.udp import StatusServer
-from lbry.wallet.server.db.revertable import RevertableOp, RevertablePut, RevertableDelete, RevertableOpStack
+from lbry.wallet.server.db.revertable import RevertableOpStack
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
 
@@ -153,6 +149,31 @@ class ChainError(Exception):
     """Raised on error processing blocks."""
 
 
+class StagedClaimtrieItem(typing.NamedTuple):
+    name: str
+    normalized_name: str
+    claim_hash: bytes
+    amount: int
+    expiration_height: int
+    tx_num: int
+    position: int
+    root_tx_num: int
+    root_position: int
+    channel_signature_is_valid: bool
+    signing_hash: Optional[bytes]
+    reposted_claim_hash: Optional[bytes]
+
+    @property
+    def is_update(self) -> bool:
+        return (self.tx_num, self.position) != (self.root_tx_num, self.root_position)
+
+    def invalidate_signature(self) -> 'StagedClaimtrieItem':
+        return StagedClaimtrieItem(
+            self.name, self.normalized_name, self.claim_hash, self.amount, self.expiration_height, self.tx_num,
+            self.position, self.root_tx_num, self.root_position, False, None, self.reposted_claim_hash
+        )
+
+
 NAMESPACE = "wallet_server"
 HISTOGRAM_BUCKETS = (
     .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
@@ -257,6 +278,7 @@ class BlockProcessor:
 
         self.pending_reposted = set()
         self.pending_channel_counts = defaultdict(lambda: 0)
+        self.pending_support_amount_change = defaultdict(lambda: 0)
 
         self.pending_channels = {}
         self.amount_cache = {}
@@ -265,6 +287,9 @@ class BlockProcessor:
         self.doesnt_have_valid_signature: Set[bytes] = set()
         self.claim_channels: Dict[bytes, bytes] = {}
         self.hashXs_by_tx: DefaultDict[bytes, List[int]] = defaultdict(list)
+
+        self.pending_transaction_num_mapping: Dict[bytes, int] = {}
+        self.pending_transactions: Dict[int, bytes] = {}
 
     async def claim_producer(self):
         if self.db.db_height <= 1:
@@ -319,7 +344,7 @@ class BlockProcessor:
                         self.logger.warning(
                             "applying extended claim expiration fork on claims accepted by, %i", self.height
                         )
-                        await self.run_in_thread(self.db.apply_expiration_extension_fork)
+                        await self.run_in_thread_with_lock(self.db.apply_expiration_extension_fork)
                 # TODO: we shouldnt wait on the search index updating before advancing to the next block
                 if not self.db.first_sync:
                     await self.db.reload_blocking_filtering_streams()
@@ -362,7 +387,6 @@ class BlockProcessor:
                 assert count > 0, count
                 for _ in range(count):
                     await self.backup_block()
-                    await self.flush()
                     self.logger.info(f'backed up to height {self.height:,d}')
 
                     await self.db._read_claim_txos()  # TODO: don't do this
@@ -392,23 +416,12 @@ class BlockProcessor:
                                 'resetting the prefetcher')
             await self.prefetcher.reset_height(self.height)
 
-    # - Flushing
-    def flush_data(self):
-        """The data for a flush.  The lock must be taken."""
-        assert self.state_lock.locked()
-        return FlushData(self.height, self.tx_count, self.db_op_stack, self.tip)
-
     async def flush(self):
         def flush():
-            self.db.flush_dbs(self.flush_data())
+            self.db.write_db_state()
+            self.db.prefix_db.commit(self.height)
             self.clear_after_advance_or_reorg()
-        await self.run_in_thread_with_lock(flush)
-
-    async def write_state(self):
-        def flush():
-            with self.db.db.write_batch(transaction=True) as batch:
-                self.db.write_db_state(batch)
-
+            self.db.assert_db_state()
         await self.run_in_thread_with_lock(flush)
 
     def _add_claim_or_update(self, height: int, txo: 'Output', tx_hash: bytes, tx_num: int, nout: int,
@@ -456,7 +469,11 @@ class BlockProcessor:
             signing_channel = self.db.get_claim_txo(signing_channel_hash)
 
             if signing_channel:
-                raw_channel_tx = self.db.prefix_db.tx.get(self.db.total_transactions[signing_channel.tx_num]).raw_tx
+                raw_channel_tx = self.db.prefix_db.tx.get(
+                    self.db.prefix_db.tx_hash.get(
+                        signing_channel.tx_num, deserialize_value=False
+                    ), deserialize_value=False
+                )
             channel_pub_key_bytes = None
             try:
                 if not signing_channel:
@@ -503,11 +520,9 @@ class BlockProcessor:
                 root_tx_num, root_idx = previous_claim.root_tx_num, previous_claim.root_position
                 activation = self.db.get_activation(prev_tx_num, prev_idx)
                 claim_name = previous_claim.name
-                self.db_op_stack.extend_ops(
-                    StagedActivation(
-                        ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, normalized_name,
-                        previous_claim.amount
-                    ).get_remove_activate_ops()
+                self.get_remove_activate_ops(
+                    ACTIVATED_CLAIM_TXO_TYPE, claim_hash, prev_tx_num, prev_idx, activation, normalized_name,
+                    previous_claim.amount
                 )
             previous_amount = previous_claim.amount
             self.updated_claims.add(claim_hash)
@@ -523,16 +538,101 @@ class BlockProcessor:
         )
         self.txo_to_claim[(tx_num, nout)] = pending
         self.claim_hash_to_txo[claim_hash] = (tx_num, nout)
-        self.db_op_stack.extend_ops(pending.get_add_claim_utxo_ops())
+        self.get_add_claim_utxo_ops(pending)
+
+    def get_add_claim_utxo_ops(self, pending: StagedClaimtrieItem):
+        # claim tip by claim hash
+        self.db.prefix_db.claim_to_txo.stage_put(
+            (pending.claim_hash,), (pending.tx_num, pending.position, pending.root_tx_num, pending.root_position,
+                                    pending.amount, pending.channel_signature_is_valid, pending.name)
+        )
+        # claim hash by txo
+        self.db.prefix_db.txo_to_claim.stage_put(
+            (pending.tx_num, pending.position), (pending.claim_hash, pending.normalized_name)
+        )
+
+        # claim expiration
+        self.db.prefix_db.claim_expiration.stage_put(
+            (pending.expiration_height, pending.tx_num, pending.position),
+            (pending.claim_hash, pending.normalized_name)
+        )
+
+        # short url resolution
+        for prefix_len in range(10):
+            self.db.prefix_db.claim_short_id.stage_put(
+                (pending.normalized_name, pending.claim_hash.hex()[:prefix_len + 1],
+                 pending.root_tx_num, pending.root_position),
+                (pending.tx_num, pending.position)
+            )
+
+        if pending.signing_hash and pending.channel_signature_is_valid:
+            # channel by stream
+            self.db.prefix_db.claim_to_channel.stage_put(
+                (pending.claim_hash, pending.tx_num, pending.position), (pending.signing_hash,)
+            )
+            # stream by channel
+            self.db.prefix_db.channel_to_claim.stage_put(
+                (pending.signing_hash, pending.normalized_name, pending.tx_num, pending.position),
+                (pending.claim_hash,)
+            )
+
+        if pending.reposted_claim_hash:
+            self.db.prefix_db.repost.stage_put((pending.claim_hash,), (pending.reposted_claim_hash,))
+            self.db.prefix_db.reposted_claim.stage_put(
+                (pending.reposted_claim_hash, pending.tx_num, pending.position), (pending.claim_hash,)
+            )
+
+    def get_remove_claim_utxo_ops(self, pending: StagedClaimtrieItem):
+        # claim tip by claim hash
+        self.db.prefix_db.claim_to_txo.stage_delete(
+            (pending.claim_hash,), (pending.tx_num, pending.position, pending.root_tx_num, pending.root_position,
+                                    pending.amount, pending.channel_signature_is_valid, pending.name)
+        )
+        # claim hash by txo
+        self.db.prefix_db.txo_to_claim.stage_delete(
+            (pending.tx_num, pending.position), (pending.claim_hash, pending.normalized_name)
+        )
+
+        # claim expiration
+        self.db.prefix_db.claim_expiration.stage_delete(
+            (pending.expiration_height, pending.tx_num, pending.position),
+            (pending.claim_hash, pending.normalized_name)
+        )
+
+        # short url resolution
+        for prefix_len in range(10):
+            self.db.prefix_db.claim_short_id.stage_delete(
+                (pending.normalized_name, pending.claim_hash.hex()[:prefix_len + 1],
+                 pending.root_tx_num, pending.root_position),
+                (pending.tx_num, pending.position)
+            )
+
+        if pending.signing_hash and pending.channel_signature_is_valid:
+            # channel by stream
+            self.db.prefix_db.claim_to_channel.stage_delete(
+                (pending.claim_hash, pending.tx_num, pending.position), (pending.signing_hash,)
+            )
+            # stream by channel
+            self.db.prefix_db.channel_to_claim.stage_delete(
+                (pending.signing_hash, pending.normalized_name, pending.tx_num, pending.position),
+                (pending.claim_hash,)
+            )
+
+        if pending.reposted_claim_hash:
+            self.db.prefix_db.repost.stage_delete((pending.claim_hash,), (pending.reposted_claim_hash,))
+            self.db.prefix_db.reposted_claim.stage_delete(
+                (pending.reposted_claim_hash, pending.tx_num, pending.position), (pending.claim_hash,)
+            )
 
     def _add_support(self, height: int, txo: 'Output', tx_num: int, nout: int):
         supported_claim_hash = txo.claim_hash[::-1]
         self.support_txos_by_claim[supported_claim_hash].append((tx_num, nout))
         self.support_txo_to_claim[(tx_num, nout)] = supported_claim_hash, txo.amount
         # print(f"\tsupport claim {supported_claim_hash.hex()} +{txo.amount}")
-        self.db_op_stack.extend_ops(StagedClaimtrieSupport(
-            supported_claim_hash, tx_num, nout, txo.amount
-        ).get_add_support_utxo_ops())
+
+        self.db.prefix_db.claim_to_support.stage_put((supported_claim_hash, tx_num, nout), (txo.amount,))
+        self.db.prefix_db.support_to_claim.stage_put((tx_num, nout), (supported_claim_hash,))
+        self.pending_support_amount_change[supported_claim_hash] += txo.amount
 
     def _add_claim_or_support(self, height: int, tx_hash: bytes, tx_num: int, nout: int, txo: 'Output',
                               spent_claims: typing.Dict[bytes, Tuple[int, int, str]]):
@@ -542,7 +642,7 @@ class BlockProcessor:
             self._add_support(height, txo, tx_num, nout)
 
     def _spend_support_txo(self, height: int, txin: TxInput):
-        txin_num = self.db.transaction_num_mapping[txin.prev_hash]
+        txin_num = self.get_pending_tx_num(txin.prev_hash)
         activation = 0
         if (txin_num, txin.prev_idx) in self.support_txo_to_claim:
             spent_support, support_amount = self.support_txo_to_claim.pop((txin_num, txin.prev_idx))
@@ -561,17 +661,17 @@ class BlockProcessor:
             if 0 < activation < self.height + 1:
                 self.removed_active_support_amount_by_claim[spent_support].append(support_amount)
             if supported_name is not None and activation > 0:
-                self.db_op_stack.extend_ops(StagedActivation(
+                self.get_remove_activate_ops(
                     ACTIVATED_SUPPORT_TXO_TYPE, spent_support, txin_num, txin.prev_idx, activation, supported_name,
                     support_amount
-                ).get_remove_activate_ops())
+                )
         # print(f"\tspent support for {spent_support.hex()} activation:{activation} {support_amount}")
-        self.db_op_stack.extend_ops(StagedClaimtrieSupport(
-            spent_support, txin_num, txin.prev_idx, support_amount
-        ).get_spend_support_txo_ops())
+        self.db.prefix_db.claim_to_support.stage_delete((spent_support, txin_num, txin.prev_idx), (support_amount,))
+        self.db.prefix_db.support_to_claim.stage_delete((txin_num, txin.prev_idx), (spent_support,))
+        self.pending_support_amount_change[spent_support] -= support_amount
 
     def _spend_claim_txo(self, txin: TxInput, spent_claims: Dict[bytes, Tuple[int, int, str]]) -> bool:
-        txin_num = self.db.transaction_num_mapping[txin.prev_hash]
+        txin_num = self.get_pending_tx_num(txin.prev_hash)
         if (txin_num, txin.prev_idx) in self.txo_to_claim:
             spent = self.txo_to_claim[(txin_num, txin.prev_idx)]
         else:
@@ -593,7 +693,7 @@ class BlockProcessor:
             self.pending_channel_counts[spent.signing_hash] -= 1
         spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.normalized_name)
         # print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
-        self.db_op_stack.extend_ops(spent.get_spend_claim_txo_ops())
+        self.get_remove_claim_utxo_ops(spent)
         return True
 
     def _spend_claim_or_support_txo(self, height: int, txin: TxInput, spent_claims):
@@ -633,9 +733,31 @@ class BlockProcessor:
         if normalized_name.startswith('@'):  # abandon a channel, invalidate signatures
             self._invalidate_channel_signatures(claim_hash)
 
+    def _get_invalidate_signature_ops(self, pending: StagedClaimtrieItem):
+        if not pending.signing_hash:
+            return
+        self.db.prefix_db.claim_to_channel.stage_delete(
+            (pending.claim_hash, pending.tx_num, pending.position), (pending.signing_hash,)
+        )
+        if pending.channel_signature_is_valid:
+            self.db.prefix_db.channel_to_claim.stage_delete(
+                (pending.signing_hash, pending.normalized_name, pending.tx_num, pending.position),
+                (pending.claim_hash,)
+            )
+            self.db.prefix_db.claim_to_txo.stage_delete(
+                (pending.claim_hash,),
+                (pending.tx_num, pending.position, pending.root_tx_num, pending.root_position, pending.amount,
+                 pending.channel_signature_is_valid, pending.name)
+            )
+            self.db.prefix_db.claim_to_txo.stage_put(
+                (pending.claim_hash,),
+                (pending.tx_num, pending.position, pending.root_tx_num, pending.root_position, pending.amount,
+                 False, pending.name)
+            )
+
     def _invalidate_channel_signatures(self, claim_hash: bytes):
-        for k, signed_claim_hash in self.db.db.iterator(
-                prefix=Prefixes.channel_to_claim.pack_partial_key(claim_hash)):
+        for (signed_claim_hash, ) in self.db.prefix_db.channel_to_claim.iterate(
+                prefix=(claim_hash, ), include_key=False):
             if signed_claim_hash in self.abandoned_claims or signed_claim_hash in self.expired_claim_hashes:
                 continue
             # there is no longer a signing channel for this claim as of this block
@@ -657,12 +779,12 @@ class BlockProcessor:
                 claim = self._make_pending_claim_txo(signed_claim_hash)
             self.signatures_changed.add(signed_claim_hash)
             self.pending_channel_counts[claim_hash] -= 1
-            self.db_op_stack.extend_ops(claim.get_invalidate_signature_ops())
+            self._get_invalidate_signature_ops(claim)
 
         for staged in list(self.txo_to_claim.values()):
             needs_invalidate = staged.claim_hash not in self.doesnt_have_valid_signature
             if staged.signing_hash == claim_hash and needs_invalidate:
-                self.db_op_stack.extend_ops(staged.get_invalidate_signature_ops())
+                self._get_invalidate_signature_ops(staged)
                 self.txo_to_claim[self.claim_hash_to_txo[staged.claim_hash]] = staged.invalidate_signature()
                 self.signatures_changed.add(staged.claim_hash)
                 self.pending_channel_counts[claim_hash] -= 1
@@ -758,6 +880,30 @@ class BlockProcessor:
         support_amount = self._get_pending_supported_amount(claim_hash, height=height)
         return claim_amount + support_amount
 
+    def get_activate_ops(self, txo_type: int, claim_hash: bytes, tx_num: int, position: int,
+                          activation_height: int, name: str, amount: int):
+        self.db.prefix_db.activated.stage_put(
+            (txo_type, tx_num, position), (activation_height, claim_hash, name)
+        )
+        self.db.prefix_db.pending_activation.stage_put(
+            (activation_height, txo_type, tx_num, position), (claim_hash, name)
+        )
+        self.db.prefix_db.active_amount.stage_put(
+            (claim_hash, txo_type, activation_height, tx_num, position), (amount,)
+        )
+
+    def get_remove_activate_ops(self, txo_type: int, claim_hash: bytes, tx_num: int, position: int,
+                                activation_height: int, name: str, amount: int):
+        self.db.prefix_db.activated.stage_delete(
+            (txo_type, tx_num, position), (activation_height, claim_hash, name)
+        )
+        self.db.prefix_db.pending_activation.stage_delete(
+            (activation_height, txo_type, tx_num, position), (claim_hash, name)
+        )
+        self.db.prefix_db.active_amount.stage_delete(
+            (claim_hash, txo_type, activation_height, tx_num, position), (amount,)
+        )
+
     def _get_takeover_ops(self, height: int):
 
         # cache for controlling claims as of the previous block
@@ -779,7 +925,7 @@ class BlockProcessor:
         future_activations = defaultdict(dict)
 
         def get_delayed_activate_ops(name: str, claim_hash: bytes, is_new_claim: bool, tx_num: int, nout: int,
-                                     amount: int, is_support: bool) -> List['RevertableOp']:
+                                     amount: int, is_support: bool):
             controlling = get_controlling(name)
             nothing_is_controlling = not controlling
             staged_is_controlling = False if not controlling else claim_hash == controlling.claim_hash
@@ -812,10 +958,10 @@ class BlockProcessor:
                 ))
                 if is_support:
                     self.possible_future_support_txos_by_claim_hash[claim_hash].append((tx_num, nout))
-            return StagedActivation(
+            self.get_activate_ops(
                 ACTIVATED_SUPPORT_TXO_TYPE if is_support else ACTIVATED_CLAIM_TXO_TYPE, claim_hash, tx_num, nout,
                 height + delay, name, amount
-            ).get_activate_ops()
+            )
 
         # determine names needing takeover/deletion due to controlling claims being abandoned
         # and add ops to deactivate abandoned claims
@@ -827,11 +973,9 @@ class BlockProcessor:
             activation = self.db.get_activation(staged.tx_num, staged.position)
             if activation > 0:  #  db returns -1 for non-existent txos
                 # removed queued future activation from the db
-                self.db_op_stack.extend_ops(
-                    StagedActivation(
-                        ACTIVATED_CLAIM_TXO_TYPE, staged.claim_hash, staged.tx_num, staged.position,
-                        activation, staged.normalized_name, staged.amount
-                    ).get_remove_activate_ops()
+                self.get_remove_activate_ops(
+                    ACTIVATED_CLAIM_TXO_TYPE, staged.claim_hash, staged.tx_num, staged.position,
+                    activation, staged.normalized_name, staged.amount
                 )
             else:
                 # it hadn't yet been activated
@@ -868,10 +1012,10 @@ class BlockProcessor:
                 prev_activation = self.db.get_activation(prev_txo.tx_num, prev_txo.position)
                 if height < prev_activation or prev_activation < 0:
                     is_delayed = True
-            self.db_op_stack.extend_ops(get_delayed_activate_ops(
+            get_delayed_activate_ops(
                 staged.normalized_name, staged.claim_hash, is_delayed, tx_num, nout, staged.amount,
                 is_support=False
-            ))
+            )
 
         # and the supports
         for (tx_num, nout), (claim_hash, amount) in self.support_txo_to_claim.items():
@@ -889,9 +1033,9 @@ class BlockProcessor:
                     v = supported_claim_info
                 name = v.normalized_name
                 staged_is_new_claim = (v.root_tx_num, v.root_position) == (v.tx_num, v.position)
-            self.db_op_stack.extend_ops(get_delayed_activate_ops(
+            get_delayed_activate_ops(
                 name, claim_hash, staged_is_new_claim, tx_num, nout, amount, is_support=True
-            ))
+            )
 
         # add the activation/delayed-activation ops
         for activated, activated_txos in activated_at_height.items():
@@ -962,7 +1106,9 @@ class BlockProcessor:
             if not has_candidate:
                 # remove name takeover entry, the name is now unclaimed
                 controlling = get_controlling(need_takeover)
-                self.db_op_stack.extend_ops(get_remove_name_ops(need_takeover, controlling.claim_hash, controlling.height))
+                self.db.prefix_db.claim_takeover.stage_delete(
+                    (need_takeover,), (controlling.claim_hash, controlling.height)
+                )
 
         # scan for possible takeovers out of the accumulated activations, of these make sure there
         # aren't any future activations for the taken over names with yet higher amounts, if there are
@@ -973,7 +1119,7 @@ class BlockProcessor:
         # upon the delayed activation of B, we need to detect to activate C and make it take over early instead
 
         claim_exists = {}
-        for activated, activated_claim_txo in self.db.get_future_activated(height):
+        for activated, activated_claim_txo in self.db.get_future_activated(height).items():
             # uses the pending effective amount for the future activation height, not the current height
             future_amount = self._get_pending_claim_amount(
                 activated.normalized_name, activated.claim_hash, activated_claim_txo.height + 1
@@ -1060,32 +1206,32 @@ class BlockProcessor:
                                         break
                         assert None not in (amount, activation)
                     # update the claim that's activating early
-                    self.db_op_stack.extend_ops(
-                        StagedActivation(
-                            ACTIVATED_CLAIM_TXO_TYPE, winning_including_future_activations, tx_num,
-                            position, activation, name, amount
-                        ).get_remove_activate_ops() + \
-                        StagedActivation(
-                            ACTIVATED_CLAIM_TXO_TYPE, winning_including_future_activations, tx_num,
-                            position, height, name, amount
-                        ).get_activate_ops()
+                    self.get_remove_activate_ops(
+                        ACTIVATED_CLAIM_TXO_TYPE, winning_including_future_activations, tx_num,
+                        position, activation, name, amount
+                    )
+                    self.get_activate_ops(
+                        ACTIVATED_CLAIM_TXO_TYPE, winning_including_future_activations, tx_num,
+                        position, height, name, amount
                     )
 
                     for (k, amount) in activate_in_future[name][winning_including_future_activations]:
                         txo = (k.tx_num, k.position)
                         if txo in self.possible_future_support_txos_by_claim_hash[winning_including_future_activations]:
-                            self.db_op_stack.extend_ops(
-                                StagedActivation(
-                                    ACTIVATED_SUPPORT_TXO_TYPE, winning_including_future_activations, k.tx_num,
-                                    k.position, k.height, name, amount
-                                ).get_remove_activate_ops() + \
-                                StagedActivation(
-                                    ACTIVATED_SUPPORT_TXO_TYPE, winning_including_future_activations, k.tx_num,
-                                    k.position, height, name, amount
-                                ).get_activate_ops()
+                            self.get_remove_activate_ops(
+                                ACTIVATED_SUPPORT_TXO_TYPE, winning_including_future_activations, k.tx_num,
+                                k.position, k.height, name, amount
+                            )
+                            self.get_activate_ops(
+                                ACTIVATED_SUPPORT_TXO_TYPE, winning_including_future_activations, k.tx_num,
+                                k.position, height, name, amount
                             )
                     self.taken_over_names.add(name)
-                    self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning_including_future_activations, height, controlling))
+                    if controlling:
+                        self.db.prefix_db.claim_takeover.stage_delete(
+                            (name,), (controlling.claim_hash, controlling.height)
+                        )
+                    self.db.prefix_db.claim_takeover.stage_put((name,), (winning_including_future_activations, height))
                     self.touched_claim_hashes.add(winning_including_future_activations)
                     if controlling and controlling.claim_hash not in self.abandoned_claims:
                         self.touched_claim_hashes.add(controlling.claim_hash)
@@ -1106,20 +1252,20 @@ class BlockProcessor:
                         if previous_pending_activate.height > height:
                             # the claim had a pending activation in the future, move it to now
                             if tx_num < self.tx_count:
-                                self.db_op_stack.extend_ops(
-                                    StagedActivation(
-                                        ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
-                                        position, previous_pending_activate.height, name, amount
-                                    ).get_remove_activate_ops()
-                                )
-                            self.db_op_stack.extend_ops(
-                                StagedActivation(
+                                self.get_remove_activate_ops(
                                     ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
-                                    position, height, name, amount
-                                ).get_activate_ops()
+                                    position, previous_pending_activate.height, name, amount
+                                )
+                            self.get_activate_ops(
+                                ACTIVATED_CLAIM_TXO_TYPE, winning_claim_hash, tx_num,
+                                position, height, name, amount
                             )
                     self.taken_over_names.add(name)
-                    self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning_claim_hash, height, controlling))
+                    if controlling:
+                        self.db.prefix_db.claim_takeover.stage_delete(
+                            (name,), (controlling.claim_hash, controlling.height)
+                        )
+                    self.db.prefix_db.claim_takeover.stage_put((name,), (winning_claim_hash, height))
                     if controlling and controlling.claim_hash not in self.abandoned_claims:
                         self.touched_claim_hashes.add(controlling.claim_hash)
                     self.touched_claim_hashes.add(winning_claim_hash)
@@ -1147,7 +1293,11 @@ class BlockProcessor:
             if (controlling and winning != controlling.claim_hash) or (not controlling and winning):
                 self.taken_over_names.add(name)
                 # print(f"\ttakeover from abandoned support {controlling.claim_hash.hex()} -> {winning.hex()}")
-                self.db_op_stack.extend_ops(get_takeover_name_ops(name, winning, height, controlling))
+                if controlling:
+                    self.db.prefix_db.claim_takeover.stage_delete(
+                        (name,), (controlling.claim_hash, controlling.height)
+                    )
+                self.db.prefix_db.claim_takeover.stage_put((name,), (winning, height))
                 if controlling:
                     self.touched_claim_hashes.add(controlling.claim_hash)
                 self.touched_claim_hashes.add(winning)
@@ -1185,6 +1335,15 @@ class BlockProcessor:
             )
         )
 
+        # update support amount totals
+        for supported_claim, amount in self.pending_support_amount_change.items():
+            existing = self.db.prefix_db.support_amount.get(supported_claim)
+            total = amount
+            if existing is not None:
+                total += existing.amount
+                self.db.prefix_db.support_amount.stage_delete((supported_claim,), existing)
+            self.db.prefix_db.support_amount.stage_put((supported_claim,), (total,))
+
         # use the cumulative changes to update bid ordered resolve
         for removed in self.removed_claim_hashes:
             removed_claim = self.db.get_claim_txo(removed)
@@ -1193,10 +1352,9 @@ class BlockProcessor:
                     removed_claim.normalized_name, removed
                 )
                 if amt:
-                    self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
-                        removed_claim.normalized_name, amt.effective_amount, amt.tx_num,
-                        amt.position, removed
-                    ))
+                    self.db.prefix_db.effective_amount.stage_delete(
+                        (removed_claim.normalized_name, amt.effective_amount, amt.tx_num, amt.position), (removed,)
+                    )
         for touched in self.touched_claim_hashes:
             prev_effective_amount = 0
 
@@ -1208,10 +1366,10 @@ class BlockProcessor:
                     claim_amount_info = self.db.get_url_effective_amount(name, touched)
                     if claim_amount_info:
                         prev_effective_amount = claim_amount_info.effective_amount
-                        self.db_op_stack.extend_ops(get_remove_effective_amount_ops(
-                            name, claim_amount_info.effective_amount, claim_amount_info.tx_num,
-                            claim_amount_info.position, touched
-                        ))
+                        self.db.prefix_db.effective_amount.stage_delete(
+                            (name, claim_amount_info.effective_amount, claim_amount_info.tx_num,
+                             claim_amount_info.position), (touched,)
+                        )
             else:
                 v = self.db.get_claim_txo(touched)
                 if not v:
@@ -1220,10 +1378,8 @@ class BlockProcessor:
                 amt = self.db.get_url_effective_amount(name, touched)
                 if amt:
                     prev_effective_amount = amt.effective_amount
-                    self.db_op_stack.extend_ops(
-                        get_remove_effective_amount_ops(
-                            name, amt.effective_amount, amt.tx_num, amt.position, touched
-                        )
+                    self.db.prefix_db.effective_amount.stage_delete(
+                        (name, prev_effective_amount, amt.tx_num, amt.position), (touched,)
                     )
 
             if (name, touched) in self.activated_claim_amount_by_name_and_hash:
@@ -1242,11 +1398,17 @@ class BlockProcessor:
                         touched.hex(), height, False, prev_effective_amount, support_amount
                     )
             new_effective_amount = self._get_pending_effective_amount(name, touched)
-            self.db_op_stack.extend_ops(
-                get_add_effective_amount_ops(
-                    name, new_effective_amount, tx_num, position, touched
-                )
+            self.db.prefix_db.effective_amount.stage_put(
+                (name, new_effective_amount, tx_num, position), (touched,)
             )
+
+        for channel_hash, count in self.pending_channel_counts.items():
+            if count != 0:
+                channel_count_val = self.db.prefix_db.channel_count.get(channel_hash)
+                channel_count = 0 if not channel_count_val else channel_count_val.count
+                if channel_count_val is not None:
+                    self.db.prefix_db.channel_count.stage_delete((channel_hash,), (channel_count,))
+                self.db.prefix_db.channel_count.stage_put((channel_hash,), (channel_count + count,))
 
         self.touched_claim_hashes.update(
             {k for k in self.pending_reposted if k not in self.removed_claim_hashes}
@@ -1319,9 +1481,8 @@ class BlockProcessor:
             for abandoned_claim_hash, (tx_num, nout, normalized_name) in abandoned_channels.items():
                 # print(f"\tabandon {normalized_name} {abandoned_claim_hash.hex()} {tx_num} {nout}")
                 self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
-
-            self.db.total_transactions.append(tx_hash)
-            self.db.transaction_num_mapping[tx_hash] = tx_count
+            self.pending_transactions[tx_count] = tx_hash
+            self.pending_transaction_num_mapping[tx_hash] = tx_count
             tx_count += 1
 
         # handle expired claims
@@ -1333,43 +1494,53 @@ class BlockProcessor:
         # update effective amount and update sets of touched and deleted claims
         self._get_cumulative_update_ops(height)
 
-        self.db_op_stack.append_op(RevertablePut(*Prefixes.tx_count.pack_item(height, tx_count)))
+        self.db.prefix_db.tx_count.stage_put(key_args=(height,), value_args=(tx_count,))
 
         for hashX, new_history in self.hashXs_by_tx.items():
             if not new_history:
                 continue
-            self.db_op_stack.append_op(
-                RevertablePut(
-                    *Prefixes.hashX_history.pack_item(
-                        hashX, height, new_history
-                    )
-                )
-            )
+            self.db.prefix_db.hashX_history.stage_put(key_args=(hashX, height), value_args=(new_history,))
 
         self.tx_count = tx_count
         self.db.tx_counts.append(self.tx_count)
 
         cached_max_reorg_depth = self.daemon.cached_height() - self.env.reorg_limit
         if height >= cached_max_reorg_depth:
-            self.db_op_stack.append_op(
-                RevertablePut(
-                    *Prefixes.touched_or_deleted.pack_item(
-                        height, self.touched_claim_hashes, self.removed_claim_hashes
-                    )
-                )
-            )
-            self.db_op_stack.append_op(
-                RevertablePut(
-                    *Prefixes.undo.pack_item(height, self.db_op_stack.get_undo_ops())
-                )
+            self.db.prefix_db.touched_or_deleted.stage_put(
+                key_args=(height,), value_args=(self.touched_claim_hashes, self.removed_claim_hashes)
             )
 
         self.height = height
         self.db.headers.append(block.header)
         self.tip = self.coin.header_hash(block.header)
 
+        min_height = self.db.min_undo_height(self.db.db_height)
+        if min_height > 0:  # delete undos for blocks deep enough they can't be reorged
+            undo_to_delete = list(self.db.prefix_db.undo.iterate(start=(0,), stop=(min_height,)))
+            for (k, v) in undo_to_delete:
+                self.db.prefix_db.undo.stage_delete((k,), (v,))
+            touched_or_deleted_to_delete = list(self.db.prefix_db.touched_or_deleted.iterate(
+                start=(0,), stop=(min_height,))
+            )
+            for (k, v) in touched_or_deleted_to_delete:
+                self.db.prefix_db.touched_or_deleted.stage_delete(k, v)
+
+        self.db.fs_height = self.height
+        self.db.fs_tx_count = self.tx_count
+        self.db.hist_flush_count += 1
+        self.db.hist_unflushed_count = 0
+        self.db.utxo_flush_count = self.db.hist_flush_count
+        self.db.db_height = self.height
+        self.db.db_tx_count = self.tx_count
+        self.db.db_tip = self.tip
+        self.db.last_flush_tx_count = self.db.fs_tx_count
+        now = time.time()
+        self.db.wall_time += now - self.db.last_flush
+        self.db.last_flush = now
+
+        self.db.write_db_state()
+
     def clear_after_advance_or_reorg(self):
-        self.db_op_stack.clear()
         self.txo_to_claim.clear()
         self.claim_hash_to_txo.clear()
         self.support_txos_by_claim.clear()
@@ -1399,59 +1570,87 @@ class BlockProcessor:
         self.pending_channel_counts.clear()
         self.updated_claims.clear()
         self.taken_over_names.clear()
+        self.pending_transaction_num_mapping.clear()
+        self.pending_transactions.clear()
+        self.pending_support_amount_change.clear()
 
     async def backup_block(self):
-        # self.db.assert_flushed(self.flush_data())
-        self.logger.info("backup block %i", self.height)
-        # Check and update self.tip
-        undo_ops, touched_and_deleted_bytes = self.db.read_undo_info(self.height)
-        if undo_ops is None:
-            raise ChainError(f'no undo information found for height {self.height:,d}')
-        self.db_op_stack.append_op(RevertableDelete(Prefixes.undo.pack_key(self.height), undo_ops))
-        self.db_op_stack.apply_packed_undo_ops(undo_ops)
-
-        touched_and_deleted = Prefixes.touched_or_deleted.unpack_value(touched_and_deleted_bytes)
+        assert len(self.db.prefix_db._op_stack) == 0
+        touched_and_deleted = self.db.prefix_db.touched_or_deleted.get(self.height)
         self.touched_claims_to_send_es.update(touched_and_deleted.touched_claims)
         self.removed_claims_to_send_es.difference_update(touched_and_deleted.touched_claims)
         self.removed_claims_to_send_es.update(touched_and_deleted.deleted_claims)
 
+        # self.db.assert_flushed(self.flush_data())
+        self.logger.info("backup block %i", self.height)
+        # Check and update self.tip
+
         self.db.headers.pop()
         self.db.tx_counts.pop()
         self.tip = self.coin.header_hash(self.db.headers[-1])
-        while len(self.db.total_transactions) > self.db.tx_counts[-1]:
-            self.db.transaction_num_mapping.pop(self.db.total_transactions.pop())
-            self.tx_count -= 1
+        self.tx_count = self.db.tx_counts[-1]
         self.height -= 1
         # self.touched can include other addresses which is
         # harmless, but remove None.
         self.touched_hashXs.discard(None)
+
+        assert self.height < self.db.db_height
+        assert not self.db.hist_unflushed
+
+        start_time = time.time()
+        tx_delta = self.tx_count - self.db.last_flush_tx_count
+        ###
+        self.db.fs_tx_count = self.tx_count
+        # Truncate header_mc: header count is 1 more than the height.
+        self.db.header_mc.truncate(self.height + 1)
+        ###
+        # Not certain this is needed, but it doesn't hurt
+        self.db.hist_flush_count += 1
+
+        while self.db.fs_height > self.height:
+            self.db.fs_height -= 1
+        self.db.utxo_flush_count = self.db.hist_flush_count
+        self.db.db_height = self.height
+        self.db.db_tx_count = self.tx_count
+        self.db.db_tip = self.tip
+        # Flush state last as it reads the wall time.
+        now = time.time()
+        self.db.wall_time += now - self.db.last_flush
+        self.db.last_flush = now
+        self.db.last_flush_tx_count = self.db.fs_tx_count
+
+        await self.run_in_thread_with_lock(self.db.prefix_db.rollback, self.height + 1)
+        self.clear_after_advance_or_reorg()
+
+        elapsed = self.db.last_flush - start_time
+        self.logger.warning(f'backup flush #{self.db.hist_flush_count:,d} took {elapsed:.1f}s. '
+                            f'Height {self.height:,d} txs: {self.tx_count:,d} ({tx_delta:+,d})')
 
     def add_utxo(self, tx_hash: bytes, tx_num: int, nout: int, txout: 'TxOutput') -> Optional[bytes]:
         hashX = self.coin.hashX_from_script(txout.pk_script)
         if hashX:
             self.touched_hashXs.add(hashX)
             self.utxo_cache[(tx_hash, nout)] = (hashX, txout.value)
-            self.db_op_stack.extend_ops([
-                RevertablePut(
-                    *Prefixes.utxo.pack_item(hashX, tx_num, nout, txout.value)
-                ),
-                RevertablePut(
-                    *Prefixes.hashX_utxo.pack_item(tx_hash[:4], tx_num, nout, hashX)
-                )
-            ])
+            self.db.prefix_db.utxo.stage_put((hashX, tx_num, nout), (txout.value,))
+            self.db.prefix_db.hashX_utxo.stage_put((tx_hash[:4], tx_num, nout), (hashX,))
             return hashX
+
+    def get_pending_tx_num(self, tx_hash: bytes) -> int:
+        if tx_hash in self.pending_transaction_num_mapping:
+            return self.pending_transaction_num_mapping[tx_hash]
+        else:
+            return self.db.prefix_db.tx_num.get(tx_hash).tx_num
 
     def spend_utxo(self, tx_hash: bytes, nout: int):
         hashX, amount = self.utxo_cache.pop((tx_hash, nout), (None, None))
-        txin_num = self.db.transaction_num_mapping[tx_hash]
-        hdb_key = Prefixes.hashX_utxo.pack_key(tx_hash[:4], txin_num, nout)
+        txin_num = self.get_pending_tx_num(tx_hash)
         if not hashX:
-            hashX = self.db.db.get(hdb_key)
-            if not hashX:
+            hashX_value = self.db.prefix_db.hashX_utxo.get(tx_hash[:4], txin_num, nout)
+            if not hashX_value:
                 return
-            udb_key = Prefixes.utxo.pack_key(hashX, txin_num, nout)
-            utxo_value_packed = self.db.db.get(udb_key)
-            if utxo_value_packed is None:
+            hashX = hashX_value.hashX
+            utxo_value = self.db.prefix_db.utxo.get(hashX, txin_num, nout)
+            if not utxo_value:
                 self.logger.warning(
                     "%s:%s is not found in UTXO db for %s", hash_to_hex_str(tx_hash), nout, hash_to_hex_str(hashX)
                 )
@@ -1459,18 +1658,13 @@ class BlockProcessor:
                     f"{hash_to_hex_str(tx_hash)}:{nout} is not found in UTXO db for {hash_to_hex_str(hashX)}"
                 )
             self.touched_hashXs.add(hashX)
-            self.db_op_stack.extend_ops([
-                RevertableDelete(hdb_key, hashX),
-                RevertableDelete(udb_key, utxo_value_packed)
-            ])
+            self.db.prefix_db.hashX_utxo.stage_delete((tx_hash[:4], txin_num, nout), hashX_value)
+            self.db.prefix_db.utxo.stage_delete((hashX, txin_num, nout), utxo_value)
             return hashX
         elif amount is not None:
-            udb_key = Prefixes.utxo.pack_key(hashX, txin_num, nout)
+            self.db.prefix_db.hashX_utxo.stage_delete((tx_hash[:4], txin_num, nout), (hashX,))
+            self.db.prefix_db.utxo.stage_delete((hashX, txin_num, nout), (amount,))
             self.touched_hashXs.add(hashX)
-            self.db_op_stack.extend_ops([
-                RevertableDelete(hdb_key, hashX),
-                RevertableDelete(udb_key, Prefixes.utxo.pack_value(amount))
-            ])
             return hashX
 
     async def _process_prefetched_blocks(self):
@@ -1494,7 +1688,15 @@ class BlockProcessor:
         # Flush everything but with first_sync->False state.
         first_sync = self.db.first_sync
         self.db.first_sync = False
-        await self.write_state()
+
+        def flush():
+            assert len(self.db.prefix_db._op_stack) == 0
+            self.db.write_db_state()
+            self.db.prefix_db.unsafe_commit()
+            self.db.assert_db_state()
+
+        await self.run_in_thread_with_lock(flush)
+
         if first_sync:
             self.logger.info(f'{lbry.__version__} synced to '
                              f'height {self.height:,d}, halting here.')
@@ -1516,7 +1718,6 @@ class BlockProcessor:
         self._caught_up_event = caught_up_event
         try:
             await self.db.open_dbs()
-            self.db_op_stack = self.db.db_op_stack
             self.height = self.db.db_height
             self.tip = self.db.db_tip
             self.tx_count = self.db.db_tx_count

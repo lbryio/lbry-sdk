@@ -115,7 +115,7 @@ class BaseResolveTestCase(CommandTestCase):
         def check_supports(claim_id, lbrycrd_supports):
             for i, (tx_num, position, amount) in enumerate(db.get_supports(bytes.fromhex(claim_id))):
                 support = lbrycrd_supports[i]
-                self.assertEqual(support['txId'], db.total_transactions[tx_num][::-1].hex())
+                self.assertEqual(support['txId'], db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex())
                 self.assertEqual(support['n'], position)
                 self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
                 self.assertEqual(support['validAtHeight'], db.get_activation(tx_num, position, is_support=True))
@@ -127,7 +127,7 @@ class BaseResolveTestCase(CommandTestCase):
             check_supports(c['claimId'], c['supports'])
             claim_hash = bytes.fromhex(c['claimId'])
             self.assertEqual(c['validAtHeight'], db.get_activation(
-                db.transaction_num_mapping[bytes.fromhex(c['txId'])[::-1]], c['n']
+                db.prefix_db.tx_num.get(bytes.fromhex(c['txId'])[::-1]).tx_num, c['n']
             ))
             self.assertEqual(c['effectiveAmount'], db.get_effective_amount(claim_hash))
 
@@ -1451,19 +1451,13 @@ class ResolveAfterReorg(BaseResolveTestCase):
 
     async def assertBlockHash(self, height):
         bp = self.conductor.spv_node.server.bp
-
-        def get_txids():
-            return [
-                bp.db.fs_tx_hash(tx_num)[0][::-1].hex()
-                for tx_num in range(bp.db.tx_counts[height - 1], bp.db.tx_counts[height])
-            ]
-
         block_hash = await self.blockchain.get_block_hash(height)
 
         self.assertEqual(block_hash, (await self.ledger.headers.hash(height)).decode())
         self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
-
-        txids = await asyncio.get_event_loop().run_in_executor(None, get_txids)
+        txids = [
+            tx_hash[::-1].hex() for tx_hash in bp.db.get_block_txs(height)
+        ]
         txs = await bp.db.fs_transactions(txids)
         block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
