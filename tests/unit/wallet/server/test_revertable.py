@@ -1,6 +1,8 @@
 import unittest
+import tempfile
+import shutil
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertableDelete, RevertablePut, OpStackIntegrity
-from lbry.wallet.server.db.prefixes import Prefixes
+from lbry.wallet.server.db.prefixes import ClaimToTXOPrefixRow, HubDB
 
 
 class TestRevertableOpStack(unittest.TestCase):
@@ -25,14 +27,14 @@ class TestRevertableOpStack(unittest.TestCase):
         self.stack.append_op(RevertablePut(key2, value2))
 
     def test_simplify(self):
-        key1 = Prefixes.claim_to_txo.pack_key(b'\x01' * 20)
-        key2 = Prefixes.claim_to_txo.pack_key(b'\x02' * 20)
-        key3 = Prefixes.claim_to_txo.pack_key(b'\x03' * 20)
-        key4 = Prefixes.claim_to_txo.pack_key(b'\x04' * 20)
+        key1 = ClaimToTXOPrefixRow.pack_key(b'\x01' * 20)
+        key2 = ClaimToTXOPrefixRow.pack_key(b'\x02' * 20)
+        key3 = ClaimToTXOPrefixRow.pack_key(b'\x03' * 20)
+        key4 = ClaimToTXOPrefixRow.pack_key(b'\x04' * 20)
 
-        val1 = Prefixes.claim_to_txo.pack_value(1, 0, 1, 0, 1, 0, 'derp')
-        val2 = Prefixes.claim_to_txo.pack_value(1, 0, 1, 0, 1, 0, 'oops')
-        val3 = Prefixes.claim_to_txo.pack_value(1, 0, 1, 0, 1, 0, 'other')
+        val1 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'derp')
+        val2 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'oops')
+        val3 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'other')
 
         # check that we can't delete a non existent value
         with self.assertRaises(OpStackIntegrity):
@@ -101,3 +103,48 @@ class TestRevertableOpStack(unittest.TestCase):
         self.process_stack()
         self.assertDictEqual({key2: val3}, self.fake_db)
 
+
+class TestRevertablePrefixDB(unittest.TestCase):
+    def setUp(self):
+        self.tmp_dir = tempfile.mkdtemp()
+        self.db = HubDB(self.tmp_dir, cache_mb=1, max_open_files=32)
+
+    def tearDown(self) -> None:
+        self.db.close()
+        shutil.rmtree(self.tmp_dir)
+
+    def test_rollback(self):
+        name = 'derp'
+        claim_hash1 = 20 * b'\x00'
+        claim_hash2 = 20 * b'\x01'
+        claim_hash3 = 20 * b'\x02'
+
+        takeover_height = 10000000
+
+        self.assertIsNone(self.db.claim_takeover.get(name))
+        self.db.claim_takeover.stage_put((name,), (claim_hash1, takeover_height))
+        self.db.commit(10000000)
+        self.assertEqual(10000000, self.db.claim_takeover.get(name).height)
+
+        self.db.claim_takeover.stage_delete((name,), (claim_hash1, takeover_height))
+        self.db.claim_takeover.stage_put((name,), (claim_hash2, takeover_height + 1))
+        self.db.claim_takeover.stage_delete((name,), (claim_hash2, takeover_height + 1))
+        self.db.commit(10000001)
+        self.assertIsNone(self.db.claim_takeover.get(name))
+        self.db.claim_takeover.stage_put((name,), (claim_hash3, takeover_height + 2))
+        self.db.commit(10000002)
+        self.assertEqual(10000002, self.db.claim_takeover.get(name).height)
+
+        self.db.claim_takeover.stage_delete((name,), (claim_hash3, takeover_height + 2))
+        self.db.claim_takeover.stage_put((name,), (claim_hash2, takeover_height + 3))
+        self.db.commit(10000003)
+        self.assertEqual(10000003, self.db.claim_takeover.get(name).height)
+
+        self.db.rollback(10000003)
+        self.assertEqual(10000002, self.db.claim_takeover.get(name).height)
+        self.db.rollback(10000002)
+        self.assertIsNone(self.db.claim_takeover.get(name))
+        self.db.rollback(10000001)
+        self.assertEqual(10000000, self.db.claim_takeover.get(name).height)
+        self.db.rollback(10000000)
+        self.assertIsNone(self.db.claim_takeover.get(name))
