@@ -2,7 +2,7 @@ import logging
 import pathlib
 import time
 
-from ..blockchain.test_claim_commands import ClaimTestCase
+from ..claims.test_claim_commands import ClaimTestCase
 from lbry.conf import TranscodeConfig
 from lbry.file_analysis import VideoFileAnalyzer
 

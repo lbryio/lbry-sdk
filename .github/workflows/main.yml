@@ -78,6 +78,7 @@ jobs:
         test:
           - datanetwork
           - blockchain
+          - claims
           - blockchain_legacy_search
           - other
     steps:

@@ -13,7 +13,7 @@ __pycache__
 _trial_temp/
 trending*.log
 
-/tests/integration/blockchain/files
+/tests/integration/claims/files
 /tests/.coverage.*
 
 /lbry/wallet/bin
