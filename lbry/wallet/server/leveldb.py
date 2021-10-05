@@ -996,9 +996,6 @@ class LevelDB:
         """Returns a height from which we should store undo info."""
         return max_height - self.env.reorg_limit + 1
 
-    def read_undo_info(self, height: int):
-        return self.prefix_db.undo.get(height), self.prefix_db.touched_or_deleted.get(height)
-
     def apply_expiration_extension_fork(self):
         # TODO: this can't be reorged
         for k, v in self.prefix_db.claim_expiration.iterate():

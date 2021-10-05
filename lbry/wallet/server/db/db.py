@@ -1,7 +1,7 @@
 import struct
 from typing import Optional
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.revertable import RevertableOpStack
+from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 
 
 class KeyValueStorage:
@@ -101,3 +101,9 @@ class PrefixDB:
     @property
     def closed(self):
         return self._db.closed
+
+    def stage_raw_put(self, key: bytes, value: bytes):
+        self._op_stack.append_op(RevertablePut(key, value))
+
+    def stage_raw_delete(self, key: bytes, value: bytes):
+        self._op_stack.append_op(RevertableDelete(key, value))
