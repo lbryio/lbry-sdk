@@ -866,6 +866,11 @@ class ClaimTakeoverPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.claim_takeover.value
     value_struct = struct.Struct(b'>20sL')
 
+    key_part_lambdas = [
+        lambda: b'',
+        length_encoded_name
+    ]
+
     @classmethod
     def pack_key(cls, name: str):
         return cls.prefix + length_encoded_name(name)
@@ -1412,10 +1417,10 @@ class TouchedOrDeletedPrefixRow(PrefixRow):
         return TouchedOrDeletedClaimKey(*super().unpack_key(key))
 
     @classmethod
-    def pack_value(cls, touched, deleted) -> bytes:
+    def pack_value(cls, touched: typing.Set[bytes], deleted: typing.Set[bytes]) -> bytes:
         assert True if not touched else all(len(item) == 20 for item in touched)
         assert True if not deleted else all(len(item) == 20 for item in deleted)
-        return cls.value_struct.pack(len(touched), len(deleted)) + b''.join(touched) + b''.join(deleted)
+        return cls.value_struct.pack(len(touched), len(deleted)) + b''.join(sorted(touched)) + b''.join(sorted(deleted))
 
     @classmethod
     def unpack_value(cls, data: bytes) -> TouchedOrDeletedClaimValue:
@@ -1565,9 +1570,10 @@ class LevelDBStore(KeyValueStorage):
 
 
 class HubDB(PrefixDB):
-    def __init__(self, path: str, cache_mb: int, max_open_files: int = 512):
+    def __init__(self, path: str, cache_mb: int, max_open_files: int = 512,
+                 unsafe_prefixes: Optional[typing.Set[bytes]] = None):
         db = LevelDBStore(path, cache_mb, max_open_files)
-        super().__init__(db, unsafe_prefixes={DB_PREFIXES.db_state.value})
+        super().__init__(db, unsafe_prefixes=unsafe_prefixes)
         self.claim_to_support = ClaimToSupportPrefixRow(db, self._op_stack)
         self.support_to_claim = SupportToClaimPrefixRow(db, self._op_stack)
         self.claim_to_txo = ClaimToTXOPrefixRow(db, self._op_stack)
