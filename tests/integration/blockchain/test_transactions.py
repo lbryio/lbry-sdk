@@ -19,9 +19,9 @@ class BasicTransactionTests(IntegrationTestCase):
         # to the 10th receiving address for a total of 30 UTXOs on the entire account
         for i in range(10):
             txid = await self.blockchain.send_to_address(addresses[i], 10)
-            await self.wait_for_txid(txid, addresses[i])
+            await self.wait_for_txid(addresses[i])
             txid = await self.blockchain.send_to_address(addresses[9], 10)
-            await self.wait_for_txid(txid, addresses[9])
+            await self.wait_for_txid(addresses[9])
 
         # use batching to reduce issues with send_to_address on cli
         await self.assertBalance(self.account, '200.0')
@@ -174,10 +174,10 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
 
-    def wait_for_txid(self, txid, address):
-        return self.ledger.on_transaction.where(
-            lambda e: e.tx.id == txid and e.address == address
-        )
+    def wait_for_txid(self, address):
+        return asyncio.ensure_future(self.ledger.on_transaction.where(
+            lambda e: e.address == address
+        ))
 
     async def _test_transaction(self, send_amount, address, inputs, change):
         tx = await Transaction.create(
@@ -209,17 +209,26 @@ class BasicTransactionTests(IntegrationTestCase):
         other_address = await other_account.receiving.get_or_create_usable_address()
         self.ledger.coin_selection_strategy = 'sqlite'
         await self.ledger.subscribe_account(self.account)
+        accepted = self.wait_for_txid(address)
 
         txid = await self.blockchain.send_to_address(address, 1.0)
-        await self.wait_for_txid(txid, address)
+        await accepted
+
+        accepted = self.wait_for_txid(address)
         txid = await self.blockchain.send_to_address(address, 1.0)
-        await self.wait_for_txid(txid, address)
+        await accepted
+
+        accepted = self.wait_for_txid(address)
         txid = await self.blockchain.send_to_address(address, 3.0)
-        await self.wait_for_txid(txid, address)
+        await accepted
+
+        accepted = self.wait_for_txid(address)
         txid = await self.blockchain.send_to_address(address, 5.0)
-        await self.wait_for_txid(txid, address)
+        await accepted
+
+        accepted = self.wait_for_txid(address)
         txid = await self.blockchain.send_to_address(address, 10.0)
-        await self.wait_for_txid(txid, address)
+        await accepted
 
         await self.assertBalance(self.account, '20.0')
         await self.assertSpendable([99992600, 99992600, 299992600, 499992600, 999992600])
