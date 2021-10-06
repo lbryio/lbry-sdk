@@ -689,7 +689,7 @@ class BlockProcessor:
         self.db.claim_to_txo.pop(claim_hash)
         if spent.reposted_claim_hash:
             self.pending_reposted.add(spent.reposted_claim_hash)
-        if spent.signing_hash and spent.channel_signature_is_valid:
+        if spent.signing_hash and spent.channel_signature_is_valid and spent.signing_hash not in self.abandoned_claims:
             self.pending_channel_counts[spent.signing_hash] -= 1
         spent_claims[spent.claim_hash] = (spent.tx_num, spent.position, spent.normalized_name)
         # print(f"\tspend lbry://{spent.name}#{spent.claim_hash.hex()}")
@@ -723,9 +723,6 @@ class BlockProcessor:
             name, normalized_name, claim_hash, prev_amount, expiration, tx_num, nout, claim_root_tx_num,
             claim_root_idx, signature_is_valid, prev_signing_hash, reposted_claim_hash
         )
-        if prev_signing_hash and prev_signing_hash in self.pending_channel_counts:
-            self.pending_channel_counts.pop(prev_signing_hash)
-
         for support_txo_to_clear in self.support_txos_by_claim[claim_hash]:
             self.support_txo_to_claim.pop(support_txo_to_clear)
         self.support_txos_by_claim[claim_hash].clear()
