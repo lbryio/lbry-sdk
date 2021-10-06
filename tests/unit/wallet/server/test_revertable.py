@@ -32,9 +32,9 @@ class TestRevertableOpStack(unittest.TestCase):
         key3 = ClaimToTXOPrefixRow.pack_key(b'\x03' * 20)
         key4 = ClaimToTXOPrefixRow.pack_key(b'\x04' * 20)
 
-        val1 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'derp')
-        val2 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'oops')
-        val3 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, 0, 'other')
+        val1 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, False, 'derp')
+        val2 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, False, 'oops')
+        val3 = ClaimToTXOPrefixRow.pack_value(1, 0, 1, 0, 1, False, 'other')
 
         # check that we can't delete a non existent value
         with self.assertRaises(OpStackIntegrity):
