@@ -417,9 +417,14 @@ class BlockProcessor:
             await self.prefetcher.reset_height(self.height)
 
     async def flush(self):
+        save_undo = (self.daemon.cached_height() - self.height) <= self.env.reorg_limit
+
         def flush():
             self.db.write_db_state()
-            self.db.prefix_db.commit(self.height)
+            if save_undo:
+                self.db.prefix_db.commit(self.height)
+            else:
+                self.db.prefix_db.unsafe_commit()
             self.clear_after_advance_or_reorg()
             self.db.assert_db_state()
         await self.run_in_thread_with_lock(flush)

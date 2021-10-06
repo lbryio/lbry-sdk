@@ -1570,10 +1570,10 @@ class LevelDBStore(KeyValueStorage):
 
 
 class HubDB(PrefixDB):
-    def __init__(self, path: str, cache_mb: int, max_open_files: int = 512,
+    def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
                  unsafe_prefixes: Optional[typing.Set[bytes]] = None):
         db = LevelDBStore(path, cache_mb, max_open_files)
-        super().__init__(db, unsafe_prefixes=unsafe_prefixes)
+        super().__init__(db, reorg_limit, unsafe_prefixes=unsafe_prefixes)
         self.claim_to_support = ClaimToSupportPrefixRow(db, self._op_stack)
         self.support_to_claim = SupportToClaimPrefixRow(db, self._op_stack)
         self.claim_to_txo = ClaimToTXOPrefixRow(db, self._op_stack)

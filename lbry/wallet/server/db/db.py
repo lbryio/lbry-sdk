@@ -26,9 +26,10 @@ class KeyValueStorage:
 class PrefixDB:
     UNDO_KEY_STRUCT = struct.Struct(b'>Q')
 
-    def __init__(self, db: KeyValueStorage, unsafe_prefixes=None):
+    def __init__(self, db: KeyValueStorage, max_undo_depth: int = 200, unsafe_prefixes=None):
         self._db = db
         self._op_stack = RevertableOpStack(db.get, unsafe_prefixes=unsafe_prefixes)
+        self._max_undo_depth = max_undo_depth
 
     def unsafe_commit(self):
         """
@@ -52,6 +53,13 @@ class PrefixDB:
         Write changes for a block height to the database and keep undo information so that the changes can be reverted
         """
         undo_ops = self._op_stack.get_undo_ops()
+        delete_undos = []
+        if height > self._max_undo_depth:
+            delete_undos.extend(self._db.iterator(
+                start=DB_PREFIXES.undo.value + self.UNDO_KEY_STRUCT.pack(0),
+                stop=DB_PREFIXES.undo.value + self.UNDO_KEY_STRUCT.pack(height - self._max_undo_depth),
+                include_value=False
+            ))
         try:
             with self._db.write_batch(transaction=True) as batch:
                 batch_put = batch.put
@@ -61,6 +69,8 @@ class PrefixDB:
                         batch_put(staged_change.key, staged_change.value)
                     else:
                         batch_delete(staged_change.key)
+                for undo_to_delete in delete_undos:
+                    batch_delete(undo_to_delete)
                 batch_put(DB_PREFIXES.undo.value + self.UNDO_KEY_STRUCT.pack(height), undo_ops)
         finally:
             self._op_stack.clear()
