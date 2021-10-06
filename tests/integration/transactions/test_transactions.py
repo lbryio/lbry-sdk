@@ -18,10 +18,12 @@ class BasicTransactionTests(IntegrationTestCase):
         # send 10 coins to first 10 receiving addresses and then 10 transactions worth 10 coins each
         # to the 10th receiving address for a total of 30 UTXOs on the entire account
         for i in range(10):
+            notification = asyncio.ensure_future(self.on_address_update(addresses[i]))
             txid = await self.blockchain.send_to_address(addresses[i], 10)
-            await self.wait_for_txid(addresses[i])
+            await notification
+            notification = asyncio.ensure_future(self.on_address_update(addresses[9]))
             txid = await self.blockchain.send_to_address(addresses[9], 10)
-            await self.wait_for_txid(addresses[9])
+            await notification
 
         # use batching to reduce issues with send_to_address on cli
         await self.assertBalance(self.account, '200.0')
@@ -174,11 +176,6 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
 
-    def wait_for_txid(self, address):
-        return asyncio.ensure_future(self.ledger.on_transaction.where(
-            lambda e: e.address == address
-        ))
-
     async def _test_transaction(self, send_amount, address, inputs, change):
         tx = await Transaction.create(
             [], [Output.pay_pubkey_hash(send_amount, self.ledger.address_to_hash160(address))], [self.account],
@@ -203,30 +200,31 @@ class BasicTransactionTests(IntegrationTestCase):
     async def test_sqlite_coin_chooser(self):
         wallet_manager = WalletManager([self.wallet], {self.ledger.get_id(): self.ledger})
         await self.blockchain.generate(300)
+
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         other_account = self.wallet.generate_account(self.ledger)
         other_address = await other_account.receiving.get_or_create_usable_address()
         self.ledger.coin_selection_strategy = 'sqlite'
         await self.ledger.subscribe_account(self.account)
-        accepted = self.wait_for_txid(address)
 
+        accepted = asyncio.ensure_future(self.on_address_update(address))
         txid = await self.blockchain.send_to_address(address, 1.0)
         await accepted
 
-        accepted = self.wait_for_txid(address)
+        accepted = asyncio.ensure_future(self.on_address_update(address))
         txid = await self.blockchain.send_to_address(address, 1.0)
         await accepted
 
-        accepted = self.wait_for_txid(address)
+        accepted = asyncio.ensure_future(self.on_address_update(address))
         txid = await self.blockchain.send_to_address(address, 3.0)
         await accepted
 
-        accepted = self.wait_for_txid(address)
+        accepted = asyncio.ensure_future(self.on_address_update(address))
         txid = await self.blockchain.send_to_address(address, 5.0)
         await accepted
 
-        accepted = self.wait_for_txid(address)
+        accepted = asyncio.ensure_future(self.on_address_update(address))
         txid = await self.blockchain.send_to_address(address, 10.0)
         await accepted
 

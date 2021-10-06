@@ -636,12 +636,14 @@ class SessionManager:
             None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
         )
 
-        if touched or (height_changed and self.mempool_statuses):
+        if touched or new_touched or (height_changed and self.mempool_statuses):
             notified_hashxs = 0
             session_hashxes_to_notify = defaultdict(list)
             to_notify = touched if height_changed else new_touched
 
             for hashX in to_notify:
+                if hashX not in self.hashx_subscriptions_by_session:
+                    continue
                 for session_id in self.hashx_subscriptions_by_session[hashX]:
                     session_hashxes_to_notify[session_id].append(hashX)
                     notified_hashxs += 1
