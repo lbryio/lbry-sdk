@@ -17,13 +17,14 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.account.ensure_address_gap()
 
         address1, address2 = await self.account.receiving.get_addresses(limit=2, only_usable=True)
+        notifications = asyncio.create_task(asyncio.wait(
+            [asyncio.ensure_future(self.on_address_update(address1)),
+             asyncio.ensure_future(self.on_address_update(address2))]
+        ))
         sendtxid1 = await self.blockchain.send_to_address(address1, 5)
         sendtxid2 = await self.blockchain.send_to_address(address2, 5)
         await self.blockchain.generate(1)
-        await asyncio.wait([
-            self.on_transaction_id(sendtxid1),
-            self.on_transaction_id(sendtxid2)
-        ])
+        await notifications
 
         self.assertEqual(d2l(await self.account.get_balance()), '10.0')
 
@@ -44,18 +45,18 @@ class BasicTransactionTest(IntegrationTestCase):
         stream_txo.sign(channel_txo)
         await stream_tx.sign([self.account])
 
+        notifications = asyncio.create_task(asyncio.wait(
+            [asyncio.ensure_future(self.ledger.wait(channel_tx)), asyncio.ensure_future(self.ledger.wait(stream_tx))]
+        ))
+
         await self.broadcast(channel_tx)
         await self.broadcast(stream_tx)
-        await asyncio.wait([  # mempool
-            self.ledger.wait(channel_tx),
-            self.ledger.wait(stream_tx)
-        ])
+        await notifications
+        notifications = asyncio.create_task(asyncio.wait(
+            [asyncio.ensure_future(self.ledger.wait(channel_tx)), asyncio.ensure_future(self.ledger.wait(stream_tx))]
+        ))
         await self.blockchain.generate(1)
-        await asyncio.wait([  # confirmed
-            self.ledger.wait(channel_tx),
-            self.ledger.wait(stream_tx)
-        ])
-
+        await notifications
         self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
         self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.985786')
 
@@ -63,10 +64,12 @@ class BasicTransactionTest(IntegrationTestCase):
         self.assertEqual(response['lbry://@bar/foo'].claim.claim_type, 'stream')
 
         abandon_tx = await Transaction.create([Input.spend(stream_tx.outputs[0])], [], [self.account], self.account)
+        notify = asyncio.create_task(self.ledger.wait(abandon_tx))
         await self.broadcast(abandon_tx)
-        await self.ledger.wait(abandon_tx)
+        await notify
+        notify = asyncio.create_task(self.ledger.wait(abandon_tx))
         await self.blockchain.generate(1)
-        await self.ledger.wait(abandon_tx)
+        await notify
 
         response = await self.ledger.resolve([], ['lbry://@bar/foo'])
         self.assertIn('error', response['lbry://@bar/foo'])
