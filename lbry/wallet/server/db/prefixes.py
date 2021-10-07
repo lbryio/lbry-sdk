@@ -1371,7 +1371,8 @@ class HashXHistoryPrefixRow(PrefixRow):
 
     key_part_lambdas = [
         lambda: b'',
-        struct.Struct(b'>11s').pack
+        struct.Struct(b'>11s').pack,
+        struct.Struct(b'>11sL').pack
     ]
 
     @classmethod
