@@ -35,7 +35,7 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertNoClaimForName(self, name: str):
         lbrycrd_winning = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
-        stream, channel, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(name)
+        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
         self.assertNotIn('claimId', lbrycrd_winning)
         if stream is not None:
             self.assertIsInstance(stream, LookupError)
@@ -55,7 +55,7 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertMatchWinningClaim(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
-        stream, channel, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(name)
+        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
         claim = stream if stream else channel
         claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
             claim_id=claim.claim_hash.hex()
@@ -983,7 +983,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(32 * 10 - 1)
         self.assertEqual(1120, self.conductor.spv_node.server.bp.db.db_height)
         claim_id_B = (await self.stream_create(name, '20.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        claim_B, _, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_B}")
+        claim_B, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_B}")
         self.assertEqual(1121, self.conductor.spv_node.server.bp.db.db_height)
         self.assertEqual(1131, claim_B.activation_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
@@ -1000,7 +1000,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # State: A(10+14) is controlling, B(20) is accepted, C(50) is accepted.
         claim_id_C = (await self.stream_create(name, '50.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
         self.assertEqual(1123, self.conductor.spv_node.server.bp.db.db_height)
-        claim_C, _, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_C}")
+        claim_C, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_C}")
         self.assertEqual(1133, claim_C.activation_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
 
@@ -1018,7 +1018,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # State: A(10+14) is controlling, B(20) is active, C(50) is accepted, D(300) is accepted.
         claim_id_D = (await self.stream_create(name, '300.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
         self.assertEqual(1132, self.conductor.spv_node.server.bp.db.db_height)
-        claim_D, _, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_D}")
+        claim_D, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_D}")
         self.assertEqual(False, claim_D.is_controlling)
         self.assertEqual(801, claim_D.last_takeover_height)
         self.assertEqual(1142, claim_D.activation_height)
@@ -1028,7 +1028,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # State: A(10+14) is active, B(20) is active, C(50) is active, D(300) is controlling
         await self.generate(1)
         self.assertEqual(1133, self.conductor.spv_node.server.bp.db.db_height)
-        claim_D, _, _ = await self.conductor.spv_node.server.bp.db.fs_resolve(f"{name}:{claim_id_D}")
+        claim_D, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_D}")
         self.assertEqual(True, claim_D.is_controlling)
         self.assertEqual(1133, claim_D.last_takeover_height)
         self.assertEqual(1133, claim_D.activation_height)
