@@ -496,6 +496,17 @@ class RPCSession(SessionBase):
             self.abort()
             return False
 
+    async def send_notifications(self, notifications) -> bool:
+        """Send an RPC notification over the network."""
+        message, _ = self.connection.send_batch(notifications)
+        try:
+            await self._send_message(message)
+            return True
+        except asyncio.TimeoutError:
+            self.logger.info("timeout sending address notification to %s", self.peer_address_str(for_log=True))
+            self.abort()
+            return False
+
     def send_batch(self, raise_errors=False):
         """Return a BatchRequest.  Intended to be used like so:
 

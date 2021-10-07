@@ -17,14 +17,15 @@ class BasicTransactionTests(IntegrationTestCase):
 
         # send 10 coins to first 10 receiving addresses and then 10 transactions worth 10 coins each
         # to the 10th receiving address for a total of 30 UTXOs on the entire account
-        sends = list(chain(
-            (self.blockchain.send_to_address(address, 10) for address in addresses[:10]),
-            (self.blockchain.send_to_address(addresses[9], 10) for _ in range(10))
-        ))
+        for i in range(10):
+            notification = asyncio.ensure_future(self.on_address_update(addresses[i]))
+            txid = await self.blockchain.send_to_address(addresses[i], 10)
+            await notification
+            notification = asyncio.ensure_future(self.on_address_update(addresses[9]))
+            txid = await self.blockchain.send_to_address(addresses[9], 10)
+            await notification
+
         # use batching to reduce issues with send_to_address on cli
-        for batch in range(0, len(sends), 10):
-            txids = await asyncio.gather(*sends[batch:batch+10])
-            await asyncio.wait([self.on_transaction_id(txid) for txid in txids])
         await self.assertBalance(self.account, '200.0')
         self.assertEqual(20, await self.account.get_utxo_count())
 
@@ -136,7 +137,7 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
-        original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
+        original_summary = self.conductor.spv_node.server.bp.mempool.transaction_summaries
 
         def random_summary(*args, **kwargs):
             summary = original_summary(*args, **kwargs)
@@ -145,7 +146,7 @@ class BasicTransactionTests(IntegrationTestCase):
                 while summary == ordered:
                     random.shuffle(summary)
             return summary
-        self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
+        self.conductor.spv_node.server.bp.mempool.transaction_summaries = random_summary
         # 10 unconfirmed txs, all from blockchain wallet
         sends = [self.blockchain.send_to_address(address, 10) for _ in range(10)]
         # use batching to reduce issues with send_to_address on cli
@@ -175,11 +176,6 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
 
-    def wait_for_txid(self, txid, address):
-        return self.ledger.on_transaction.where(
-            lambda e: e.tx.id == txid and e.address == address
-        )
-
     async def _test_transaction(self, send_amount, address, inputs, change):
         tx = await Transaction.create(
             [], [Output.pay_pubkey_hash(send_amount, self.ledger.address_to_hash160(address))], [self.account],
@@ -204,6 +200,7 @@ class BasicTransactionTests(IntegrationTestCase):
     async def test_sqlite_coin_chooser(self):
         wallet_manager = WalletManager([self.wallet], {self.ledger.get_id(): self.ledger})
         await self.blockchain.generate(300)
+
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         other_account = self.wallet.generate_account(self.ledger)
@@ -211,14 +208,26 @@ class BasicTransactionTests(IntegrationTestCase):
         self.ledger.coin_selection_strategy = 'sqlite'
         await self.ledger.subscribe_account(self.account)
 
-        txids = []
-        txids.append(await self.blockchain.send_to_address(address, 1.0))
-        txids.append(await self.blockchain.send_to_address(address, 1.0))
-        txids.append(await self.blockchain.send_to_address(address, 3.0))
-        txids.append(await self.blockchain.send_to_address(address, 5.0))
-        txids.append(await self.blockchain.send_to_address(address, 10.0))
+        accepted = asyncio.ensure_future(self.on_address_update(address))
+        txid = await self.blockchain.send_to_address(address, 1.0)
+        await accepted
 
-        await asyncio.wait([self.wait_for_txid(txid, address) for txid in txids], timeout=1)
+        accepted = asyncio.ensure_future(self.on_address_update(address))
+        txid = await self.blockchain.send_to_address(address, 1.0)
+        await accepted
+
+        accepted = asyncio.ensure_future(self.on_address_update(address))
+        txid = await self.blockchain.send_to_address(address, 3.0)
+        await accepted
+
+        accepted = asyncio.ensure_future(self.on_address_update(address))
+        txid = await self.blockchain.send_to_address(address, 5.0)
+        await accepted
+
+        accepted = asyncio.ensure_future(self.on_address_update(address))
+        txid = await self.blockchain.send_to_address(address, 10.0)
+        await accepted
+
         await self.assertBalance(self.account, '20.0')
         await self.assertSpendable([99992600, 99992600, 299992600, 499992600, 999992600])
 

@@ -556,7 +556,7 @@ class Ledger(metaclass=LedgerRegistry):
             log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
-                f"{len(pending_synced_history)} vs {len(remote_history)}"
+                f"{len(pending_synced_history)} vs {len(remote_history)} for {address}"
             synced_history = ""
             for remote_i, i in zip(range(len(remote_history)), sorted(pending_synced_history.keys())):
                 assert i == remote_i, f"{i} vs {remote_i}"
@@ -894,9 +894,21 @@ class Ledger(metaclass=LedgerRegistry):
             hub_server=new_sdk_server is not None
         )
 
-    async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
-        for claim in (await self.claim_search(accounts, claim_id=claim_id, **kwargs))[0]:
-            return claim
+    # async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
+    #     return await self.network.get_claim_by_id(claim_id)
+
+    async def get_claim_by_claim_id(self, claim_id, accounts=None, include_purchase_receipt=False,
+                                    include_is_my_output=False):
+        accounts = accounts or []
+        # return await self.network.get_claim_by_id(claim_id)
+        inflated = await self._inflate_outputs(
+            self.network.get_claim_by_id(claim_id), accounts,
+            include_purchase_receipt=include_purchase_receipt,
+            include_is_my_output=include_is_my_output,
+        )
+        txos = inflated[0]
+        if txos:
+            return txos[0]
 
     async def _report_state(self):
         try:

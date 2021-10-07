@@ -2282,7 +2282,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = wallet.get_accounts_or_all(funding_account_ids)
         txo = None
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, accounts, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
                 raise Exception(f"Could not find claim with claim_id '{claim_id}'.")
@@ -3616,7 +3616,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = old_txo.get_address(account.ledger)
 
         channel = None
-        if channel_id or channel_name:
+        if not clear_channel and (channel_id or channel_name):
             channel = await self.get_channel_or_error(
                 wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         elif old_txo.claim.is_signed and not clear_channel and not replace:
@@ -3646,11 +3646,13 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.stream.update(file_path=file_path, **kwargs)
+        if clear_channel:
+            claim.clear_signature()
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
+            channel if not clear_channel else None
         )
         new_txo = tx.outputs[0]
-
         stream_hash = None
         if not preview:
             old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)
@@ -4148,7 +4150,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
 
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, wallet.accounts)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
                 raise Exception(f"Could not find collection with claim_id '{claim_id}'.")
@@ -4215,7 +4217,7 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error("amount", amount)
-        claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+        claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
             account = wallet.get_account_or_default(account_id)

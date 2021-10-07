@@ -78,7 +78,11 @@ jobs:
         test:
           - datanetwork
           - blockchain
-          - blockchain_legacy_search
+          - claims
+          - takeovers
+          - transactions
+          - claims_legacy_search
+          - takeovers_legacy_search
           - other
     steps:
       - name: Configure sysctl limits

@@ -252,9 +252,10 @@ class ResolveTimeoutError(WalletError):
 
 class ResolveCensoredError(WalletError):
 
-    def __init__(self, url, censor_id):
+    def __init__(self, url, censor_id, censor_row):
         self.url = url
         self.censor_id = censor_id
+        self.censor_row = censor_row
         super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{censor_id}'.")
 
 
