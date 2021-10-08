@@ -180,7 +180,13 @@ class Outputs:
         if blocked is not None:
             blocked.to_message(page, extra_txo_rows)
         for row in extra_txo_rows:
-            cls.encode_txo(page.extra_txos.add(), row)
+            txo_message: 'OutputsMessage' = page.extra_txos.add()
+            if not isinstance(row, Exception):
+                if row.channel_hash:
+                    set_reference(txo_message.claim.channel, row.channel_hash, extra_txo_rows)
+                if row.reposted_claim_hash:
+                    set_reference(txo_message.claim.repost, row.reposted_claim_hash, extra_txo_rows)
+            cls.encode_txo(txo_message, row)
 
         for row in txo_rows:
             # cls.row_to_message(row, page.txos.add(), extra_txo_rows)

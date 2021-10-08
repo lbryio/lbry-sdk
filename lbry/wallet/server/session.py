@@ -1019,7 +1019,7 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.inc()
             if 'channel' in kwargs:
                 channel_url = kwargs.pop('channel')
-                _, channel_claim, _ = await self.db.fs_resolve(channel_url)
+                _, channel_claim, _, _ = await self.db.resolve(channel_url)
                 if not channel_claim or isinstance(channel_claim, (ResolveCensoredError, LookupError, ValueError)):
                     return Outputs.to_base64([], [], 0, None, None)
                 kwargs['channel_id'] = channel_claim.claim_hash.hex()
@@ -1036,12 +1036,11 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    async def claimtrie_resolve(self, *urls):
+    def _claimtrie_resolve(self, *urls):
         rows, extra = [], []
         for url in urls:
             self.session_mgr.urls_to_resolve_count_metric.inc()
-            stream, channel, repost = await self.db.fs_resolve(url)
-            self.session_mgr.resolved_url_count_metric.inc()
+            stream, channel, repost, reposted_channel = self.db._resolve(url)
             if isinstance(channel, ResolveCensoredError):
                 rows.append(channel)
                 extra.append(channel.censor_row)
@@ -1053,6 +1052,8 @@ class LBRYElectrumX(SessionBase):
                 # print("resolved channel", channel.name.decode())
                 if repost:
                     extra.append(repost)
+                if reposted_channel:
+                    extra.append(reposted_channel)
             elif stream:
                 # print("resolved stream", stream.name.decode())
                 rows.append(stream)
@@ -1061,8 +1062,15 @@ class LBRYElectrumX(SessionBase):
                     extra.append(channel)
                 if repost:
                     extra.append(repost)
+                if reposted_channel:
+                    extra.append(reposted_channel)
         # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
+
+    async def claimtrie_resolve(self, *urls):
+        result = await self.loop.run_in_executor(None, self._claimtrie_resolve, *urls)
+        self.session_mgr.resolved_url_count_metric.inc(len(urls))
+        return result
 
     async def get_server_height(self):
         return self.bp.height

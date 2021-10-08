@@ -58,6 +58,13 @@ TXO_STRUCT_pack = TXO_STRUCT.pack
 OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, ResolveCensoredError, LookupError, ValueError]]
 
 
+class ExpandedResolveResult(typing.NamedTuple):
+    stream: OptionalResolveResultOrError
+    channel: OptionalResolveResultOrError
+    repost: OptionalResolveResultOrError
+    reposted_channel: OptionalResolveResultOrError
+
+
 class DBError(Exception):
     """Raised on general DB errors generally indicating corruption."""
 
@@ -228,8 +235,8 @@ class LevelDB:
             signature_valid=None if not channel_hash else signature_valid
         )
 
-    def _resolve(self, name: str, claim_id: Optional[str] = None,
-                 amount_order: Optional[int] = None) -> Optional[ResolveResult]:
+    def _resolve_parsed_url(self, name: str, claim_id: Optional[str] = None,
+                            amount_order: Optional[int] = None) -> Optional[ResolveResult]:
         """
         :param normalized_name: name
         :param claim_id: partial or complete claim id
@@ -296,12 +303,11 @@ class LevelDB:
             return
         return list(sorted(candidates, key=lambda item: item[1]))[0]
 
-    def _fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError,
-                                               OptionalResolveResultOrError]:
+    def _resolve(self, url) -> ExpandedResolveResult:
         try:
             parsed = URL.parse(url)
         except ValueError as e:
-            return e, None, None
+            return ExpandedResolveResult(e, None, None, None)
 
         stream = channel = resolved_channel = resolved_stream = None
         if parsed.has_stream_in_channel:
@@ -312,9 +318,9 @@ class LevelDB:
         elif parsed.has_stream:
             stream = parsed.stream
         if channel:
-            resolved_channel = self._resolve(channel.name, channel.claim_id, channel.amount_order)
+            resolved_channel = self._resolve_parsed_url(channel.name, channel.claim_id, channel.amount_order)
             if not resolved_channel:
-                return None, LookupError(f'Could not find channel in "{url}".'), None
+                return ExpandedResolveResult(None, LookupError(f'Could not find channel in "{url}".'), None, None)
         if stream:
             if resolved_channel:
                 stream_claim = self._resolve_claim_in_channel(resolved_channel.claim_hash, stream.normalized)
@@ -322,13 +328,14 @@ class LevelDB:
                     stream_claim_id, stream_tx_num, stream_tx_pos, effective_amount = stream_claim
                     resolved_stream = self._fs_get_claim_by_hash(stream_claim_id)
             else:
-                resolved_stream = self._resolve(stream.name, stream.claim_id, stream.amount_order)
+                resolved_stream = self._resolve_parsed_url(stream.name, stream.claim_id, stream.amount_order)
                 if not channel and not resolved_channel and resolved_stream and resolved_stream.channel_hash:
                     resolved_channel = self._fs_get_claim_by_hash(resolved_stream.channel_hash)
             if not resolved_stream:
-                return LookupError(f'Could not find claim at "{url}".'), None, None
+                return ExpandedResolveResult(LookupError(f'Could not find claim at "{url}".'), None, None, None)
 
         repost = None
+        reposted_channel = None
         if resolved_stream or resolved_channel:
             claim_hash = resolved_stream.claim_hash if resolved_stream else resolved_channel.claim_hash
             claim = resolved_stream if resolved_stream else resolved_channel
@@ -338,14 +345,17 @@ class LevelDB:
                 reposted_claim_hash) or self.blocked_channels.get(claim.channel_hash)
             if blocker_hash:
                 reason_row = self._fs_get_claim_by_hash(blocker_hash)
-                return None, ResolveCensoredError(url, blocker_hash, censor_row=reason_row), None
+                return ExpandedResolveResult(
+                    None, ResolveCensoredError(url, blocker_hash, censor_row=reason_row), None, None
+                )
             if claim.reposted_claim_hash:
                 repost = self._fs_get_claim_by_hash(claim.reposted_claim_hash)
-        return resolved_stream, resolved_channel, repost
+                if repost and repost.channel_hash and repost.signature_valid:
+                    reposted_channel = self._fs_get_claim_by_hash(repost.channel_hash)
+        return ExpandedResolveResult(resolved_stream, resolved_channel, repost, reposted_channel)
 
-    async def fs_resolve(self, url) -> typing.Tuple[OptionalResolveResultOrError, OptionalResolveResultOrError,
-                                                    OptionalResolveResultOrError]:
-         return await asyncio.get_event_loop().run_in_executor(None, self._fs_resolve, url)
+    async def resolve(self, url) -> ExpandedResolveResult:
+         return await asyncio.get_event_loop().run_in_executor(None, self._resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
         claim = self.claim_to_txo.get(claim_hash)
