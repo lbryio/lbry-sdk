@@ -345,6 +345,11 @@ class BlockProcessor:
                             "applying extended claim expiration fork on claims accepted by, %i", self.height
                         )
                         await self.run_in_thread_with_lock(self.db.apply_expiration_extension_fork)
+                    if self.db.first_sync:
+                        self.db.search_index.clear_caches()
+                        self.touched_claims_to_send_es.clear()
+                        self.removed_claims_to_send_es.clear()
+                        self.activation_info_to_send_es.clear()
                 # TODO: we shouldnt wait on the search index updating before advancing to the next block
                 if not self.db.first_sync:
                     await self.db.reload_blocking_filtering_streams()
