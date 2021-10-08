@@ -1433,7 +1433,11 @@ class StreamCommands(ClaimTestCase):
         self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
 
     async def test_repost(self):
-        await self.channel_create('@goodies', '1.0')
+        tx = await self.channel_create('@goodies', '1.0')
+        goodies_claim_id = self.get_claim_id(tx)
+        tx = await self.channel_create('@spam', '1.0')
+        spam_claim_id = self.get_claim_id(tx)
+
         tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies', tags=['foo', 'gaming'])
         claim_id = self.get_claim_id(tx)
 
@@ -1441,8 +1445,18 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
 
-        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1')
+        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1', channel_name='@spam')
         repost_id = self.get_claim_id(tx)
+
+        # test inflating reposted channels works
+        repost_url = f'newstuff-again:{repost_id}'
+        self.ledger._tx_cache.clear()
+        self.assertEqual(
+            goodies_claim_id,
+            (await self.out(self.daemon.jsonrpc_resolve(repost_url))
+             )[repost_url]['reposted_claim']['signing_channel']['claim_id']
+        )
+
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
         self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
