@@ -55,7 +55,7 @@ class Daemon:
         self.available_rpcs = {}
         self.connector = aiohttp.TCPConnector()
         self._block_hash_cache = LRUCacheWithMetrics(100000)
-        self._block_cache = LRUCacheWithMetrics(2 ** 16, metric_name='block', namespace=NAMESPACE)
+        self._block_cache = LRUCacheWithMetrics(2 ** 13, metric_name='block', namespace=NAMESPACE)
 
     async def close(self):
         if self.connector:
