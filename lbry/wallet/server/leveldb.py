@@ -112,7 +112,7 @@ class LevelDB:
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
-        self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
+        self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 16, metric_name='tx_and_merkle', namespace="wallet_server")
 
         self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
         self.txo_to_claim: DefaultDict[int, Dict[int, bytes]] = defaultdict(dict)
