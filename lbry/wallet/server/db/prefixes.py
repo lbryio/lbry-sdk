@@ -169,6 +169,14 @@ class BlockHashValue(NamedTuple):
         return f"{self.__class__.__name__}(block_hash={self.block_hash.hex()})"
 
 
+class BlockTxsKey(NamedTuple):
+    height: int
+
+
+class BlockTxsValue(NamedTuple):
+    tx_hashes: typing.List[bytes]
+
+
 class TxCountKey(NamedTuple):
     height: int
 
@@ -1540,6 +1548,36 @@ class DBStatePrefixRow(PrefixRow):
         )
 
 
+class BlockTxsPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.block_txs.value
+    key_struct = struct.Struct(b'>L')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, height: int):
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> BlockTxsKey:
+        return BlockTxsKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, tx_hashes: typing.List[bytes]) -> bytes:
+        assert all(len(tx_hash) == 32 for tx_hash in tx_hashes)
+        return b''.join(tx_hashes)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> BlockTxsValue:
+        return BlockTxsValue([data[i*32:(i+1)*32] for i in range(len(data) // 32)])
+
+    @classmethod
+    def pack_item(cls, height, tx_hashes):
+        return cls.pack_key(height), cls.pack_value(tx_hashes)
+
+
 class LevelDBStore(KeyValueStorage):
     def __init__(self, path: str, cache_mb: int, max_open_files: int):
         import plyvel
@@ -1604,6 +1642,7 @@ class HubDB(PrefixDB):
         self.channel_count = ChannelCountPrefixRow(db, self._op_stack)
         self.db_state = DBStatePrefixRow(db, self._op_stack)
         self.support_amount = SupportAmountPrefixRow(db, self._op_stack)
+        self.block_txs = BlockTxsPrefixRow(db, self._op_stack)
 
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:

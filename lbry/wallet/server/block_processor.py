@@ -1440,6 +1440,7 @@ class BlockProcessor:
 
         self.db.prefix_db.block_hash.stage_put(key_args=(height,), value_args=(self.coin.header_hash(block.header),))
         self.db.prefix_db.header.stage_put(key_args=(height,), value_args=(block.header,))
+        self.db.prefix_db.block_txs.stage_put(key_args=(height,), value_args=([tx_hash for tx, tx_hash in txs],))
 
         for tx, tx_hash in txs:
             spent_claims = {}

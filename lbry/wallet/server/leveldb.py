@@ -923,12 +923,7 @@ class LevelDB:
             return None, tx_height
 
     def get_block_txs(self, height: int) -> List[bytes]:
-        return [
-            tx_hash for tx_hash in self.prefix_db.tx_hash.iterate(
-                start=(self.tx_counts[height-1],), stop=(self.tx_counts[height],),
-                deserialize_value=False, include_key=False
-            )
-        ]
+        return self.prefix_db.block_txs.get(height).tx_hashes
 
     def _fs_transactions(self, txids: Iterable[str]):
         tx_counts = self.tx_counts
