@@ -39,3 +39,4 @@ class DB_PREFIXES(enum.Enum):
     db_state = b's'
     channel_count = b'Z'
     support_amount = b'a'
+    block_txs = b'b'
