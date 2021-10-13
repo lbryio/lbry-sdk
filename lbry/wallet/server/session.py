@@ -197,6 +197,8 @@ class SessionManager:
         self.notified_height: typing.Optional[int] = None
         # Cache some idea of room to avoid recounting on each subscription
         self.subs_room = 0
+        self.consumers = 32
+        self.priority_queue = asyncio.PriorityQueue()
 
         self.session_event = Event()
 
@@ -546,7 +548,8 @@ class SessionManager:
             # because we connect to ourself
             await asyncio.wait([
                 self._clear_stale_sessions(),
-                self._manage_servers()
+                self._manage_servers(),
+                self.serve_requests()
             ])
         finally:
             await self._close_servers(list(self.servers.keys()))
@@ -556,6 +559,13 @@ class SessionManager:
                     session.close(force_after=1) for session in self.sessions.values()
                 ])
             await self.stop_other()
+
+    async def serve_requests(self):
+        async def consumer():
+            while True:
+                _, fut = await self.priority_queue.get()
+                await fut
+        await asyncio.gather(*(consumer() for _ in range(self.consumers)))
 
     async def start_other(self):
         pass
@@ -880,6 +890,14 @@ class LBRYElectrumX(SessionBase):
         self.daemon = self.session_mgr.daemon
         self.bp: BlockProcessor = self.session_mgr.bp
         self.db: LevelDB = self.bp.db
+        self.time_since_last_request = time.perf_counter()
+
+    async def schedule_requests(self, requests):
+        for request in requests:
+            current = time.perf_counter()
+            elapsed = current - self.time_since_last_request
+            self.time_since_last_request = current
+            self.session_mgr.priority_queue.put_nowait((elapsed, self._handle_request(request)))
 
     @classmethod
     def protocol_min_max_strings(cls):

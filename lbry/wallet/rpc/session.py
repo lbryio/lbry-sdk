@@ -424,8 +424,7 @@ class RPCSession(SessionBase):
                     self.max_errors = 0
                 self._bump_errors()
             else:
-                for request in requests:
-                    await self._task_group.add(self._handle_request(request))
+                await self.schedule_requests(requests)
 
     async def _handle_request(self, request):
         start = time.perf_counter()
@@ -471,6 +470,10 @@ class RPCSession(SessionBase):
 
     async def handle_request(self, request):
         pass
+
+    async def schedule_requests(self, requests):
+        for request in requests:
+            self._task_group.add(self._handle_request(request))
 
     async def send_request(self, method, args=()):
         """Send an RPC request over the network."""
