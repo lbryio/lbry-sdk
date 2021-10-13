@@ -427,6 +427,8 @@ class RPCSession(SessionBase):
                 self.schedule_requests(requests)
 
     async def _handle_request(self, request):
+        if self.is_closing():
+            return
         start = time.perf_counter()
         try:
             result = await self.handle_request(request)
