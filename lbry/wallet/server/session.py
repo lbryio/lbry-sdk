@@ -2,7 +2,6 @@ import os
 import ssl
 import math
 import time
-import json
 import base64
 import codecs
 import typing
@@ -567,7 +566,7 @@ class SessionManager:
     async def serve_requests(self):
         async def consumer():
             while True:
-                _, fut = await self.priority_queue.get()
+                _, _, fut = await self.priority_queue.get()
                 try:
                     await fut
                 except asyncio.CancelledError:
@@ -896,9 +895,9 @@ class LBRYElectrumX(SessionBase):
     def schedule_requests(self, requests):
         for request in requests:
             current = time.perf_counter()
-            elapsed = current - self.last_request_received_at
+            elapsed = (1 << 65) - current - self.last_request_received_at
             self.last_request_received_at = current
-            self.session_mgr.priority_queue.put_nowait((elapsed, self._handle_request(request)))
+            self.session_mgr.priority_queue.put_nowait((elapsed, id(request), self._handle_request(request)))
 
     @classmethod
     def protocol_min_max_strings(cls):
