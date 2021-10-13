@@ -895,13 +895,13 @@ class LBRYElectrumX(SessionBase):
         self.daemon = self.session_mgr.daemon
         self.bp: BlockProcessor = self.session_mgr.bp
         self.db: LevelDB = self.bp.db
-        self.time_since_last_request = time.perf_counter()
+        self.last_request_received_at = 0
 
     def schedule_requests(self, requests):
         for request in requests:
             current = time.perf_counter()
-            elapsed = current - self.time_since_last_request
-            self.time_since_last_request = current
+            elapsed = current - self.last_request_received_at
+            self.last_request_received_at = current
             self.session_mgr.priority_queue.put_nowait((elapsed, self._handle_request(request)))
 
     @classmethod
