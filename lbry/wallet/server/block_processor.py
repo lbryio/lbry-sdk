@@ -8,9 +8,10 @@ from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 
 import lbry
+from lbry.schema.url import URL
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
-
+from lbry.utils import LRUCache
 from lbry.wallet.transaction import OutputScript, Output, Transaction
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.daemon import DaemonError
@@ -231,6 +232,7 @@ class BlockProcessor:
         self.db_op_stack: Optional[RevertableOpStack] = None
 
         # self.search_cache = {}
+        self.resolve_cache = LRUCache(2**16)
         self.history_cache = {}
         self.status_server = StatusServer()
 
@@ -1581,6 +1583,7 @@ class BlockProcessor:
         self.pending_transaction_num_mapping.clear()
         self.pending_transactions.clear()
         self.pending_support_amount_change.clear()
+        self.resolve_cache.clear()
 
     async def backup_block(self):
         assert len(self.db.prefix_db._op_stack) == 0

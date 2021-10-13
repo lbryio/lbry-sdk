@@ -1036,11 +1036,16 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    def _claimtrie_resolve(self, *urls):
+    async def _cached_resolve_url(self, url):
+        if url not in self.bp.resolve_cache:
+            self.bp.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
+        return self.bp.resolve_cache[url]
+
+    async def claimtrie_resolve(self, *urls):
         rows, extra = [], []
         for url in urls:
             self.session_mgr.urls_to_resolve_count_metric.inc()
-            stream, channel, repost, reposted_channel = self.db._resolve(url)
+            stream, channel, repost, reposted_channel = await self._cached_resolve_url(url)
             if isinstance(channel, ResolveCensoredError):
                 rows.append(channel)
                 extra.append(channel.censor_row)
@@ -1066,11 +1071,6 @@ class LBRYElectrumX(SessionBase):
                     extra.append(reposted_channel)
         # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
         return Outputs.to_base64(rows, extra, 0, None, None)
-
-    async def claimtrie_resolve(self, *urls):
-        result = await self.loop.run_in_executor(None, self._claimtrie_resolve, *urls)
-        self.session_mgr.resolved_url_count_metric.inc(len(urls))
-        return result
 
     async def get_server_height(self):
         return self.bp.height
