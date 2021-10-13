@@ -701,19 +701,19 @@ class LevelDB:
 
         def produce_claims(claims):
             batch = []
-            results = []
+            _results = []
 
             for claim_hash in claims:
                 if claim_hash not in self.claim_to_txo:
                     self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                    return
+                    continue
                 name = self.claim_to_txo[claim_hash].normalized_name
                 if not self.prefix_db.claim_takeover.get(name):
                     self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                    return
+                    continue
                 claim_txo = self.claim_to_txo.get(claim_hash)
                 if not claim_txo:
-                    return
+                    continue
                 activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
                 claim = self._prepare_resolve_result(
                     claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
@@ -725,10 +725,10 @@ class LevelDB:
             batch.sort(key=lambda x: x.tx_hash)
 
             for claim in batch:
-                meta = self._prepare_claim_metadata(claim.claim_hash, claim)
-                if meta:
-                    results.append(meta)
-            return results
+                _meta = self._prepare_claim_metadata(claim.claim_hash, claim)
+                if _meta:
+                    _results.append(_meta)
+            return _results
 
         if claim_hashes:
             results = await loop.run_in_executor(None, produce_claims, claim_hashes)
