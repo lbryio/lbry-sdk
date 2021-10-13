@@ -568,7 +568,12 @@ class SessionManager:
         async def consumer():
             while True:
                 _, fut = await self.priority_queue.get()
-                await fut
+                try:
+                    await fut
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:
+                    log.exception("raised while serving a request. This should never happen.")
         await asyncio.gather(*(consumer() for _ in range(self.consumers)))
 
     async def start_other(self):
@@ -888,7 +893,7 @@ class LBRYElectrumX(SessionBase):
         self.db: LevelDB = self.bp.db
         self.time_since_last_request = time.perf_counter()
 
-    async def schedule_requests(self, requests):
+    def schedule_requests(self, requests):
         for request in requests:
             current = time.perf_counter()
             elapsed = current - self.time_since_last_request
