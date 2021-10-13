@@ -34,6 +34,22 @@ def validate_claim_id(claim_id):
         raise Exception("Claim id is not hex encoded")
 
 
+class DeterministicChannelKeyManager:
+
+    def __init__(self, account):
+        self.account = account
+        self.public_key = account.public_key.child(2)
+        self.private_key = account.private_key.child(2) if account.private_key else None
+
+    def generate_next_key(self):
+        db = self.account.ledger.db
+        i = 0
+        while True:
+            next_key = self.private_key.child(i)
+            if not await db.is_channel_key_used(self.account, next_key.address):
+                return next_key
+
+
 class AddressManager:
 
     name: str
@@ -252,6 +268,7 @@ class Account:
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {am.chain_number: am for am in (self.receiving, self.change)}
         self.channel_keys = channel_keys
+        self.deterministic_channel_keys = DeterministicChannelKeyManager(self)
         ledger.add_account(self)
         wallet.add_account(self)
 
@@ -519,6 +536,11 @@ class Account:
             await self.ledger.release_tx(tx)
 
         return tx
+
+    async def generate_channel_private_key(self):
+        key = self.deterministic_channel_keys.generate_next_key()
+        self.add_channel_private_key(key)
+        return key
 
     def add_channel_private_key(self, private_key):
         public_key_bytes = private_key.get_verifying_key().to_der()

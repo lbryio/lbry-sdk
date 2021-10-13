@@ -174,3 +174,8 @@ class AccountManagement(CommandTestCase):
         bad_address = address[0:20] + '9999999' + address[27:]
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
+
+    async def test_deterministic_channel_keys(self):
+        seed = self.account.seed
+        await self.channel_create('@foo1')
+        self.daemon2 = await self.add_daemon(seed=seed)

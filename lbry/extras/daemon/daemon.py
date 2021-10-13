@@ -2704,12 +2704,13 @@ class Daemon(metaclass=JSONRPCServerType):
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         txo = tx.outputs[0]
-        await txo.generate_channel_private_key()
+        txo.set_channel_private_key(
+            await funding_accounts[0].generate_channel_private_key()
+        )
 
         await tx.sign(funding_accounts)
 
         if not preview:
-            account.add_channel_private_key(txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(

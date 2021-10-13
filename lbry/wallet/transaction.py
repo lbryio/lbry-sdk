@@ -469,13 +469,11 @@ class Output(InputOutput):
         self.channel = None
         self.signable.clear_signature()
 
-    async def generate_channel_private_key(self):
-        self.private_key = await asyncio.get_event_loop().run_in_executor(
-            None, ecdsa.SigningKey.generate, ecdsa.SECP256k1, None, hashlib.sha256
-        )
-        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
+    def set_channel_private_key(self, private_key):
+        self.private_key = private_key
+        self.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
         self.script.generate()
-        return self.private_key
+        return private_key
 
     def is_channel_private_key(self, private_key):
         return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()

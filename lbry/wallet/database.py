@@ -1241,6 +1241,12 @@ class Database(SQLiteMixin):
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
 
+    async def is_channel_key_used(self, account, address):
+        for channel in await self.get_channels(accounts=[account]):
+            if channel.private_key.address == address:
+                return True
+        return False
+
     @staticmethod
     def constrain_purchases(constraints):
         accounts = constraints.pop('accounts', None)
