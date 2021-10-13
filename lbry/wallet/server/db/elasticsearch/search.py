@@ -51,9 +51,7 @@ class SearchIndex:
         self.index = index_prefix + 'claims'
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.claim_cache = LRUCache(2 ** 15)
-        self.short_id_cache = LRUCache(2 ** 17)
         self.search_cache = LRUCache(2 ** 17)
-        self.resolution_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
         self._elastic_port = elastic_port
         self._trending_half_life = half_life
@@ -260,9 +258,7 @@ class SearchIndex:
 
     def clear_caches(self):
         self.search_cache.clear()
-        self.short_id_cache.clear()
         self.claim_cache.clear()
-        self.resolution_cache.clear()
 
     async def cached_search(self, kwargs):
         total_referenced = []
@@ -354,21 +350,6 @@ class SearchIndex:
             for result in expand_result(filter(lambda doc: doc['found'], results["docs"])):
                 self.claim_cache.set(result['claim_id'], result)
 
-    async def full_id_from_short_id(self, name, short_id, channel_id=None):
-        key = '#'.join((channel_id or '', name, short_id))
-        if key not in self.short_id_cache:
-            query = {'name': name, 'claim_id': short_id}
-            if channel_id:
-                query['channel_id'] = channel_id
-                query['order_by'] = ['^channel_join']
-                query['signature_valid'] = True
-            else:
-                query['order_by'] = '^creation_height'
-            result, _, _ = await self.search(**query, limit=1)
-            if len(result) == 1:
-                result = result[0]['claim_id']
-                self.short_id_cache[key] = result
-        return self.short_id_cache.get(key, None)
 
     async def search(self, **kwargs):
         try:
