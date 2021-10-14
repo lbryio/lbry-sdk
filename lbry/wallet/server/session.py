@@ -633,7 +633,7 @@ class SessionManager:
                 self.mempool_statuses.pop(hashX, None)
 
         await asyncio.get_event_loop().run_in_executor(
-            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
+            self.bp._chain_executor, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
         )
 
         if touched or new_touched or (height_changed and self.mempool_statuses):
@@ -775,10 +775,9 @@ class LBRYSessionManager(SessionManager):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.query_executor = None
         self.websocket = None
         # self.metrics = ServerLoadData()
-        self.metrics_loop = None
+        # self.metrics_loop = None
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
@@ -795,12 +794,6 @@ class LBRYSessionManager(SessionManager):
 
     async def start_other(self):
         self.running = True
-        if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
-            self.query_executor = ThreadPoolExecutor(max_workers=1)
-        else:
-            self.query_executor = ProcessPoolExecutor(
-                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4)
-            )
         if self.websocket is not None:
             await self.websocket.start()
 
@@ -808,7 +801,6 @@ class LBRYSessionManager(SessionManager):
         self.running = False
         if self.websocket is not None:
             await self.websocket.stop()
-        self.query_executor.shutdown()
 
 
 class LBRYElectrumX(SessionBase):
@@ -971,24 +963,6 @@ class LBRYElectrumX(SessionBase):
     #     else:
     #         return APICallMetrics(query_name)
 
-    async def run_in_executor(self, query_name, func, kwargs):
-        start = time.perf_counter()
-        try:
-            self.session_mgr.pending_query_metric.inc()
-            result = await asyncio.get_running_loop().run_in_executor(
-                self.session_mgr.query_executor, func, kwargs
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception("dear devs, please handle this exception better")
-            self.session_mgr.db_error_metric.inc()
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
-        else:
-            return base64.b64encode(result).decode()
-        finally:
-            self.session_mgr.pending_query_metric.dec()
-            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     # async def run_and_cache_query(self, query_name, kwargs):
     #     start = time.perf_counter()
