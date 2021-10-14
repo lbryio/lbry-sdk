@@ -23,7 +23,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
 
         txids = await asyncio.get_event_loop().run_in_executor(None, get_txids)
-        txs = await bp.db.fs_transactions(txids)
+        txs = await bp.db.get_transactions_and_merkles(txids)
         block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')

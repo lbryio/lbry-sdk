@@ -1458,7 +1458,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         txids = [
             tx_hash[::-1].hex() for tx_hash in bp.db.get_block_txs(height)
         ]
-        txs = await bp.db.fs_transactions(txids)
+        txs = await bp.db.get_transactions_and_merkles(txids)
         block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')

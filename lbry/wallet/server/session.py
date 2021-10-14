@@ -548,6 +548,10 @@ class SessionManager:
                 self._clear_stale_sessions(),
                 self._manage_servers()
             ])
+        except Exception as err:
+            if not isinstance(err, asyncio.CancelledError):
+                log.exception("hub server died")
+            raise err
         finally:
             await self._close_servers(list(self.servers.keys()))
             log.warning("disconnect %i sessions", len(self.sessions))
@@ -1015,16 +1019,16 @@ class LBRYElectrumX(SessionBase):
             self.bp.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
         return self.bp.resolve_cache[url]
 
-    async def claimtrie_resolve(self, *urls):
+    async def claimtrie_resolve(self, *urls) -> str:
         sorted_urls = tuple(sorted(urls))
         self.session_mgr.urls_to_resolve_count_metric.inc(len(sorted_urls))
-
-        def _cached_resolve():
+        try:
+            if sorted_urls in self.bp.resolve_outputs_cache:
+                return self.bp.resolve_outputs_cache[sorted_urls]
             rows, extra = [], []
-
             for url in urls:
                 if url not in self.bp.resolve_cache:
-                    self.bp.resolve_cache[url] = self.db._resolve(url)
+                    self.bp.resolve_cache[url] = await self._cached_resolve_url(url)
                 stream, channel, repost, reposted_channel = self.bp.resolve_cache[url]
                 if isinstance(channel, ResolveCensoredError):
                     rows.append(channel)
@@ -1049,18 +1053,11 @@ class LBRYElectrumX(SessionBase):
                         extra.append(repost)
                     if reposted_channel:
                         extra.append(reposted_channel)
-            # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
-            self.bp.resolve_outputs_cache[sorted_urls] = serialized_outputs = Outputs.to_base64(
-                rows, extra, 0, None, None
+                await asyncio.sleep(0)
+            self.bp.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
+                None, Outputs.to_base64, rows, extra, 0, None, None
             )
-            return serialized_outputs
-
-        try:
-            if sorted_urls in self.bp.resolve_outputs_cache:
-                return self.bp.resolve_outputs_cache[sorted_urls]
-            else:
-
-                return await self.loop.run_in_executor(None, _cached_resolve)
+            return result
         finally:
             self.session_mgr.resolved_url_count_metric.inc(len(sorted_urls))
 
@@ -1213,9 +1210,11 @@ class LBRYElectrumX(SessionBase):
         address: the address to subscribe to"""
         if len(addresses) > 1000:
             raise RPCError(BAD_REQUEST, f'too many addresses in subscription request: {len(addresses)}')
-        return [
-            await self.hashX_subscribe(self.address_to_hashX(address), address) for address in addresses
-        ]
+        results = []
+        for address in addresses:
+            results.append(await self.hashX_subscribe(self.address_to_hashX(address), address))
+            await asyncio.sleep(0)
+        return results
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
@@ -1464,7 +1463,7 @@ class LBRYElectrumX(SessionBase):
             raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
-        batch_result = await self.db.fs_transactions(tx_hashes)
+        batch_result = await self.db.get_transactions_and_merkles(tx_hashes)
         needed_merkles = {}
 
         for tx_hash in tx_hashes:
