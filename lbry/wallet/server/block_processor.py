@@ -3,6 +3,7 @@ import asyncio
 import typing
 from bisect import bisect_right
 from struct import pack, unpack
+from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional, List, Tuple, Set, DefaultDict, Dict, NamedTuple
 from prometheus_client import Gauge, Histogram
 from collections import defaultdict
@@ -203,6 +204,8 @@ class BlockProcessor:
         self.env = env
         self.db = db
         self.daemon = daemon
+        self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
+        self._sync_reader_executor = ThreadPoolExecutor(1, thread_name_prefix='hub-es-sync')
         self.mempool = MemPool(env.coin, daemon, db, self.state_lock)
         self.shutdown_event = shutdown_event
         self.coin = env.coin
@@ -299,7 +302,11 @@ class BlockProcessor:
 
         for claim_hash in self.removed_claims_to_send_es:
             yield 'delete', claim_hash.hex()
-        async for claim in self.db.claims_producer(self.touched_claims_to_send_es):
+
+        to_update = await asyncio.get_event_loop().run_in_executor(
+            self._sync_reader_executor, self.db.claims_producer, self.touched_claims_to_send_es
+        )
+        for claim in to_update:
             yield 'update', claim
 
     async def run_in_thread_with_lock(self, func, *args):
@@ -310,13 +317,12 @@ class BlockProcessor:
         # consistent and not being updated elsewhere.
         async def run_in_thread_locked():
             async with self.state_lock:
-                return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+                return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread_locked())
 
-    @staticmethod
-    async def run_in_thread(func, *args):
+    async def run_in_thread(self, func, *args):
         async def run_in_thread():
-            return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+            return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread())
 
     async def check_and_advance_blocks(self, raw_blocks):
@@ -1746,5 +1752,6 @@ class BlockProcessor:
             self.status_server.stop()
             # Shut down block processing
             self.logger.info('closing the DB for a clean shutdown...')
+            self._sync_reader_executor.shutdown(wait=True)
+            self._chain_executor.shutdown(wait=True)
             self.db.close()
-            # self.executor.shutdown(wait=True)
