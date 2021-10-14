@@ -236,6 +236,8 @@ class BlockProcessor:
 
         # self.search_cache = {}
         self.resolve_cache = LRUCache(2**16)
+        self.resolve_outputs_cache = LRUCache(2 ** 16)
+
         self.history_cache = {}
         self.status_server = StatusServer()
 
@@ -1590,6 +1592,7 @@ class BlockProcessor:
         self.pending_transactions.clear()
         self.pending_support_amount_change.clear()
         self.resolve_cache.clear()
+        self.resolve_outputs_cache.clear()
 
     async def backup_block(self):
         assert len(self.db.prefix_db._op_stack) == 0
