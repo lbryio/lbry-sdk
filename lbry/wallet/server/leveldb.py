@@ -911,50 +911,49 @@ class LevelDB:
     def get_block_txs(self, height: int) -> List[bytes]:
         return self.prefix_db.block_txs.get(height).tx_hashes
 
-    def _fs_transactions(self, txids: Iterable[str]):
-        tx_counts = self.tx_counts
-        tx_db_get = self.prefix_db.tx.get
-        tx_cache = self._tx_and_merkle_cache
+    async def get_transactions_and_merkles(self, tx_hashes: Iterable[str]):
         tx_infos = {}
-
-        for tx_hash in txids:
-            cached_tx = tx_cache.get(tx_hash)
-            if cached_tx:
-                tx, merkle = cached_tx
-            else:
-                tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = self.prefix_db.tx_num.get(tx_hash_bytes)
-                tx = None
-                tx_height = -1
-                tx_num = None if not tx_num else tx_num.tx_num
-                if tx_num is not None:
-                    fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
-                    tx_height = bisect_right(tx_counts, tx_num)
-                    tx = tx_db_get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
-                if tx_height == -1:
-                    merkle = {
-                        'block_height': -1
-                    }
-                else:
-                    tx_pos = tx_num - tx_counts[tx_height - 1]
-                    branch, root = self.merkle.branch_and_root(
-                        self.get_block_txs(tx_height), tx_pos
-                    )
-                    merkle = {
-                        'block_height': tx_height,
-                        'merkle': [
-                            hash_to_hex_str(hash)
-                            for hash in branch
-                        ],
-                        'pos': tx_pos
-                    }
-                if tx_height + 10 < self.db_height:
-                    tx_cache[tx_hash] = tx, merkle
-            tx_infos[tx_hash] = (None if not tx else tx.hex(), merkle)
+        for tx_hash in tx_hashes:
+            tx_infos[tx_hash] = await asyncio.get_event_loop().run_in_executor(
+                None, self._get_transaction_and_merkle, tx_hash
+            )
+            await asyncio.sleep(0)
         return tx_infos
 
-    async def fs_transactions(self, txids):
-        return await asyncio.get_event_loop().run_in_executor(None, self._fs_transactions, txids)
+    def _get_transaction_and_merkle(self, tx_hash):
+        cached_tx = self._tx_and_merkle_cache.get(tx_hash)
+        if cached_tx:
+            tx, merkle = cached_tx
+        else:
+            tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
+            tx_num = self.prefix_db.tx_num.get(tx_hash_bytes)
+            tx = None
+            tx_height = -1
+            tx_num = None if not tx_num else tx_num.tx_num
+            if tx_num is not None:
+                fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
+                tx_height = bisect_right(self.tx_counts, tx_num)
+                tx = self.prefix_db.tx.get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
+            if tx_height == -1:
+                merkle = {
+                    'block_height': -1
+                }
+            else:
+                tx_pos = tx_num - self.tx_counts[tx_height - 1]
+                branch, root = self.merkle.branch_and_root(
+                    self.get_block_txs(tx_height), tx_pos
+                )
+                merkle = {
+                    'block_height': tx_height,
+                    'merkle': [
+                        hash_to_hex_str(hash)
+                        for hash in branch
+                    ],
+                    'pos': tx_pos
+                }
+            if tx_height + 10 < self.db_height:
+                self._tx_and_merkle_cache[tx_hash] = tx, merkle
+        return (None if not tx else tx.hex(), merkle)
 
     async def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
