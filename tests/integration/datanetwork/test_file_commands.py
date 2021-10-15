@@ -576,7 +576,7 @@ class DiskSpaceManagement(CommandTestCase):
 class TestProactiveDownloaderComponent(CommandTestCase):
     async def assertFileList(self, *txos):
         txos_names = {txo['outputs'][0]['name'] for txo in txos}
-        files = await self.file_list()
+        files = await self.file_list(blobs_remaining=0)
         self.assertEqual(len(txos), len(files))
         file_claim_names = {file['claim_name'] for file in files}
         self.assertSetEqual(txos_names, file_claim_names)
