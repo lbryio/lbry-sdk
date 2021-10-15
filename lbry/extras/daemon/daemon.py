@@ -3061,7 +3061,7 @@ class Daemon(metaclass=JSONRPCServerType):
             (bool) Subscription successful? (False only if channel doesn't exist)
         """
         if download_all and download_latest is not None:
-            raise ConflictingInputValueError("Please set either download_latest or download_all, not both.")
+            raise ConflictingInputValueError("download_latest", "download_all")
         return self.storage.add_subscription(channel_id, download_latest, download_all)
 
     @requires(WALLET_COMPONENT)
