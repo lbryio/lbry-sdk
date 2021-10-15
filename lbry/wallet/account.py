@@ -41,12 +41,19 @@ class DeterministicChannelKeyManager:
         self.public_key = account.public_key.child(2)
         self.private_key = account.private_key.child(2) if account.private_key else None
 
-    def generate_next_key(self):
+    async def generate_next_key(self):
         db = self.account.ledger.db
         i = 0
         while True:
             next_key = self.private_key.child(i)
-            if not await db.is_channel_key_used(self.account, next_key.address):
+            if not await db.is_channel_key_used(self.account.wallet, next_key.address()):
+                return next_key
+            i += 1
+
+    def get_private_key_from_pubkey_hash(self, pubkey_hash):
+        for i in range(100):
+            next_key = self.private_key.child(i)
+            if next_key.address() == pubkey_hash:
                 return next_key
 
 
@@ -538,9 +545,7 @@ class Account:
         return tx
 
     async def generate_channel_private_key(self):
-        key = self.deterministic_channel_keys.generate_next_key()
-        self.add_channel_private_key(key)
-        return key
+        return await self.deterministic_channel_keys.generate_next_key()
 
     def add_channel_private_key(self, private_key):
         public_key_bytes = private_key.get_verifying_key().to_der()
@@ -554,6 +559,7 @@ class Account:
             return await asyncio.get_event_loop().run_in_executor(
                 None, ecdsa.SigningKey.from_pem, private_key_pem, sha256
             )
+        return self.deterministic_channel_keys.get_private_key_from_pubkey_hash(channel_pubkey_hash)
 
     async def maybe_migrate_certificates(self):
         def to_der(private_key_pem):

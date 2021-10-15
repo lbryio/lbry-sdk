@@ -177,5 +177,10 @@ class AccountManagement(CommandTestCase):
 
     async def test_deterministic_channel_keys(self):
         seed = self.account.seed
-        await self.channel_create('@foo1')
+        channel1 = await self.channel_create('@foo1')
+        channel2 = await self.channel_create('@foo2')
+        self.assertNotEqual(
+            channel1['outputs'][0]['value']['public_key'],
+            channel2['outputs'][0]['value']['public_key'],
+        )
         self.daemon2 = await self.add_daemon(seed=seed)

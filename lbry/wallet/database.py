@@ -1241,9 +1241,10 @@ class Database(SQLiteMixin):
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
 
-    async def is_channel_key_used(self, account, address):
-        for channel in await self.get_channels(accounts=[account]):
-            if channel.private_key.address == address:
+    async def is_channel_key_used(self, wallet, address):
+        channels = await self.get_txos(wallet, txo_type=TXO_TYPES['channel'])
+        for channel in channels:
+            if channel.private_key.address() == address:
                 return True
         return False
 

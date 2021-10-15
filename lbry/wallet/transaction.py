@@ -471,12 +471,12 @@ class Output(InputOutput):
 
     def set_channel_private_key(self, private_key):
         self.private_key = private_key
-        self.claim.channel.public_key_bytes = private_key.get_verifying_key().to_der()
+        self.claim.channel.public_key_bytes = private_key.public_key.pubkey_bytes
         self.script.generate()
         return private_key
 
     def is_channel_private_key(self, private_key):
-        return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
+        return self.claim.channel.public_key_bytes == private_key.signing_key.to_der()
 
     @classmethod
     def pay_claim_name_pubkey_hash(
