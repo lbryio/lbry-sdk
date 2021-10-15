@@ -42,6 +42,7 @@ DHT_COMPONENT = "dht"
 HASH_ANNOUNCER_COMPONENT = "hash_announcer"
 FILE_MANAGER_COMPONENT = "file_manager"
 DISK_SPACE_COMPONENT = "disk_space"
+BACKGROUND_DOWNLOADER_COMPONENT = "background_downloader"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
@@ -375,6 +376,63 @@ class FileManagerComponent(Component):
 
     async def stop(self):
         self.file_manager.stop()
+
+
+class BackgroundDownloader(Component):
+    component_name = BACKGROUND_DOWNLOADER_COMPONENT
+    depends_on = [FILE_MANAGER_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.status = {'pending': 0, 'ongoing': 0}
+        self.task: typing.Optional[asyncio.Task] = None
+        self.download_loop_delay_seconds = 60
+
+    @property
+    def component(self) -> 'BackgroundDownloader':
+        return self
+
+    async def get_status(self):
+        self.status['running'] = self.task is not None and not self.task.done()
+        return self.status
+
+    async def loop(self):
+        return
+        db: SQLiteStorage = self.component_manager.get_component(DATABASE_COMPONENT)
+        while True:
+            for channel_id, download_latest, download_all in await db.get_subscriptions():
+                amount = 1_000_000 if download_all else download_latest
+                if not amount:
+                    continue
+                await self.ensure_download(channel_id, amount)
+            await asyncio.sleep(self.download_loop_delay_seconds)
+
+    async def ensure_download(self, channel_id, amount):
+        file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
+        wallet = self.component_manager.get_component(WALLET_COMPONENT)
+        ledger = wallet.ledger
+        claims, _, _, _ = await ledger.claim_search(
+            ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'])
+        page = 0
+        while claims and amount > 0:
+            for claim in claims:
+                if not claim.script.source or claim.has_price:
+                    continue
+                stream = await file_manager.download_from_uri(
+                    claim.permanent_url, None, 60.0, save_file=False, wallet=wallet
+                )
+                amount -= 1
+                if amount == 0:
+                    break
+            page += 1
+            claims, _, _, _ = await ledger.claim_search(
+                ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'], page=page)
+
+    async def start(self):
+        self.task = asyncio.create_task(self.loop())
+
+    async def stop(self):
+        self.task.cancel()
 
 
 class DiskSpaceComponent(Component):
