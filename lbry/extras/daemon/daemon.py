@@ -3031,6 +3031,19 @@ class Daemon(metaclass=JSONRPCServerType):
         return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
     @requires(WALLET_COMPONENT)
+    def jsonrpc_channel_subscription_list(self):
+        """
+        List subscribed channels and modes.
+
+        Usage:
+           channel_subscription_list
+
+        Returns:
+            (list) [(channel_id, download_latest, download_all)]
+        """
+        return self.storage.get_subscriptions()
+
+    @requires(WALLET_COMPONENT)
     def jsonrpc_channel_subscribe(self, channel_id, download_latest=None, download_all=False):
         """
         Subscribe to a channel and optionally start downloading streams proactively.
