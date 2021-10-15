@@ -603,3 +603,18 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         # ignores reposts
         await proactive_downloader.ensure_download(channel_id, 4)
         await self.assertFileList(content1, content2)
+
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        self.assertEqual(0, len(await self.file_list()))
+        await proactive_downloader.stop()
+        await self.daemon.jsonrpc_channel_subscribe(channel_id, 1)
+        await proactive_downloader.start()
+        await proactive_downloader.finished_iteration.wait()
+        await self.assertFileList(content1)
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+
+        await self.daemon.jsonrpc_channel_subscribe(channel_id, download_all=True)
+        await proactive_downloader.stop()
+        await proactive_downloader.start()
+        await proactive_downloader.finished_iteration.wait()
+        await self.assertFileList(content1, content2)
