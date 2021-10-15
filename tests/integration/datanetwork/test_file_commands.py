@@ -618,3 +618,7 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         await proactive_downloader.start()
         await proactive_downloader.finished_iteration.wait()
         await self.assertFileList(content1, content2)
+
+        self.assertEqual([(channel_id, 0, 1)], await self.daemon.jsonrpc_channel_subscription_list())
+        await self.daemon.jsonrpc_channel_unsubscribe(channel_id)
+        self.assertEqual([], await self.daemon.jsonrpc_channel_subscription_list())

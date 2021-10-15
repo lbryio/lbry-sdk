@@ -553,7 +553,7 @@ class SQLiteStorage(SQLiteMixin):
             (channel_id, download_latest or 0, 1 if download_all else 0))
 
     def remove_subscription(self, channel_id):
-        return self.db.execute_fetchall("delete from subscriptions where channel_id=?", (channel_id,))
+        return self.db.execute_fetchall("delete from subscription where channel_id=?", (channel_id,))
 
     def get_subscriptions(self):
         return self.db.execute_fetchall("select channel_id, download_latest, download_all from subscription")
