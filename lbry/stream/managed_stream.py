@@ -246,6 +246,10 @@ class ManagedStream(ManagedDownloadSource):
             handle.write(data)
             handle.flush()
 
+    async def save_blobs(self):
+        async for _ in self._aiter_read_stream(0, connection_id=self.STREAMING_ID):
+            pass
+
     async def _save_file(self, output_path: str):
         log.info("save file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id, self.sd_hash[:6],
                  output_path)

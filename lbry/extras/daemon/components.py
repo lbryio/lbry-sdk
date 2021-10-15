@@ -17,6 +17,7 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob.disk_space_manager import DiskSpaceManager
 from lbry.blob_exchange.server import BlobServer
+from lbry.stream.managed_stream import ManagedStream
 from lbry.stream.stream_manager import StreamManager
 from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
@@ -421,6 +422,8 @@ class BackgroundDownloader(Component):
                 stream = await file_manager.download_from_uri(
                     claim.permanent_url, None, 60.0, save_file=False, wallet=wallet
                 )
+                if isinstance(stream, ManagedStream):
+                    await stream.save_blobs()
                 amount -= 1
                 if amount == 0:
                     break
