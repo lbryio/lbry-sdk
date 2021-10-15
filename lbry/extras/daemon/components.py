@@ -388,6 +388,7 @@ class BackgroundDownloader(Component):
         self.status = {'pending': 0, 'ongoing': 0}
         self.task: typing.Optional[asyncio.Task] = None
         self.download_loop_delay_seconds = 60
+        self.finished_iteration = asyncio.Event()
 
     @property
     def component(self) -> 'BackgroundDownloader':
@@ -398,7 +399,6 @@ class BackgroundDownloader(Component):
         return self.status
 
     async def loop(self):
-        return
         db: SQLiteStorage = self.component_manager.get_component(DATABASE_COMPONENT)
         while True:
             for channel_id, download_latest, download_all in await db.get_subscriptions():
@@ -406,6 +406,8 @@ class BackgroundDownloader(Component):
                 if not amount:
                     continue
                 await self.ensure_download(channel_id, amount)
+            self.finished_iteration.set()
+            self.finished_iteration.clear()
             await asyncio.sleep(self.download_loop_delay_seconds)
 
     async def ensure_download(self, channel_id, amount):
@@ -414,9 +416,10 @@ class BackgroundDownloader(Component):
         ledger = wallet.ledger
         claims, _, _, _ = await ledger.claim_search(
             ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'])
-        page = 0
+        offset = 0
         while claims and amount > 0:
             for claim in claims:
+                offset += 1
                 if not claim.script.source or claim.has_price:
                     continue
                 stream = await file_manager.download_from_uri(
@@ -427,9 +430,8 @@ class BackgroundDownloader(Component):
                 amount -= 1
                 if amount == 0:
                     break
-            page += 1
             claims, _, _, _ = await ledger.claim_search(
-                ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'], page=page)
+                ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'], offset=offset)
 
     async def start(self):
         self.task = asyncio.create_task(self.loop())
