@@ -5,7 +5,7 @@ from binascii import hexlify
 
 from lbry.schema import Claim
 from lbry.testcase import CommandTestCase
-from lbry.extras.daemon.components import TorrentSession
+from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
 from lbry.wallet import Transaction
 
 
@@ -571,3 +571,35 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertTrue(blobs2.issubset(blobs))
         self.assertFalse(blobs3.issubset(blobs))
         self.assertTrue(blobs4.issubset(blobs))
+
+
+class TestProactiveDownloaderComponent(CommandTestCase):
+    async def assertFileList(self, *txos):
+        txos_names = {txo['outputs'][0]['name'] for txo in txos}
+        files = await self.file_list()
+        self.assertEqual(len(txos), len(files))
+        file_claim_names = {file['claim_name'] for file in files}
+        self.assertSetEqual(txos_names, file_claim_names)
+
+    async def test_ensure_download(self):
+        unrelated_claim_id = self.get_claim_id(await self.stream_create('something_else', '0.01'))
+        channel_id = self.get_claim_id(await self.channel_create('@cool'))
+        content1 = await self.stream_create('content1', '0.01', channel_id=channel_id)
+        content2 = await self.stream_create('content2', '0.01', channel_id=channel_id)
+        await self.stream_create('paid', '0.01', channel_id=channel_id, fee_amount=42, fee_currency='USD')
+        await self.stream_repost(unrelated_claim_id, 'repost')
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        self.assertEqual(0, len(await self.file_list()))
+
+        proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
+        await self.assertFileList()
+        await proactive_downloader.ensure_download(channel_id, 1)
+        await self.assertFileList(content1)
+        await proactive_downloader.ensure_download(channel_id, 2)
+        await self.assertFileList(content1, content2)
+        # ignores paid content
+        await proactive_downloader.ensure_download(channel_id, 3)
+        await self.assertFileList(content1, content2)
+        # ignores reposts
+        await proactive_downloader.ensure_download(channel_id, 4)
+        await self.assertFileList(content1, content2)

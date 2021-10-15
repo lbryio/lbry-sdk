@@ -235,6 +235,12 @@ class SQLiteStorage(SQLiteMixin):
             pragma foreign_keys=on;
             pragma journal_mode=WAL;
 
+            create table if not exists subscription (
+                channel_id char(40) primary key not null,
+                download_latest integer not null default 0,
+                download_all integer not null default 0
+            );
+
             create table if not exists blob (
                 blob_hash char(96) primary key not null,
                 blob_length integer not null,
@@ -538,6 +544,19 @@ class SQLiteStorage(SQLiteMixin):
 
     async def delete_torrent(self, bt_infohash: str):
         return await self.db.run(delete_torrent, bt_infohash)
+
+    # # # # # # # # # subscriptions # # # # # # # # #
+
+    def add_subscription(self, channel_id, download_latest=None, download_all=None):
+        return self.db.execute_fetchall(
+            "insert or replace into subscription(channel_id, download_latest, download_all) values (?, ?, ?)",
+            (channel_id, download_latest or 0, 1 if download_all else 0))
+
+    def remove_subscription(self, channel_id):
+        return self.db.execute_fetchall("delete from subscriptions where channel_id=?", (channel_id,))
+
+    def get_subscriptions(self):
+        return self.db.execute_fetchall("select channel_id, download_latest, download_all from subscription")
 
     # # # # # # # # # file stuff # # # # # # # # #
 
