@@ -4964,8 +4964,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --finished                   : (bool) only return finished blobs
             --uri=<uri>                  : (str) filter blobs by stream in a uri
             --stream_hash=<stream_hash>  : (str) filter blobs by stream hash
-            --sd_hash=<sd_hash>          : (str) only return blobs in the stream with matching sd hash. The daemon must
-                                           know about that sd_hash (eg the header blob of the stream was downloaded)
+            --sd_hash=<sd_hash>          : (str) filter blobs in a stream by sd hash, ie the hash of the stream
+                                                 descriptor blob for a stream that has been downloaded
             --page=<page>                : (int) page to return during paginating
             --page_size=<page_size>      : (int) number of items on page during pagination
 
