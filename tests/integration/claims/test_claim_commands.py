@@ -182,6 +182,9 @@ class ClaimSearchCommand(ClaimTestCase):
         claims = [three, two, signed]
         await self.assertFindsClaims(claims, channel_ids=[self.channel_id])
         await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}")
+        await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}", valid_channel_signature=True)
+        await self.assertFindsClaims(claims, channel=f"@abc#{self.channel_id}", has_channel_signature=True, valid_channel_signature=True)
+        await self.assertFindsClaims([], channel=f"@abc#{self.channel_id}", has_channel_signature=True, invalid_channel_signature=True)  # fixme
         await self.assertFindsClaims([], channel=f"@inexistent")
         await self.assertFindsClaims([three, two, signed2, signed], channel_ids=[channel_id2, self.channel_id])
         await self.channel_abandon(claim_id=self.channel_id)
@@ -810,10 +813,15 @@ class TransactionOutputCommands(ClaimTestCase):
         stream_id = self.get_claim_id(await self.stream_create())
         await self.support_create(stream_id, '0.3')
         await self.support_create(stream_id, '0.2')
-        await self.generate(day_blocks)
+        await self.generate(day_blocks // 2)
+        await self.stream_update(stream_id)
+        await self.generate(day_blocks // 2)
         await self.support_create(stream_id, '0.4')
         await self.support_create(stream_id, '0.5')
-        await self.generate(day_blocks)
+        await self.stream_update(stream_id)
+        await self.generate(day_blocks // 2)
+        await self.stream_update(stream_id)
+        await self.generate(day_blocks // 2)
         await self.support_create(stream_id, '0.6')
 
         plot = await self.txo_plot(type='support')
@@ -1425,7 +1433,11 @@ class StreamCommands(ClaimTestCase):
         self.assertTrue(signed['outputs'][0]['is_channel_signature_valid'])
 
     async def test_repost(self):
-        await self.channel_create('@goodies', '1.0')
+        tx = await self.channel_create('@goodies', '1.0')
+        goodies_claim_id = self.get_claim_id(tx)
+        tx = await self.channel_create('@spam', '1.0')
+        spam_claim_id = self.get_claim_id(tx)
+
         tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies', tags=['foo', 'gaming'])
         claim_id = self.get_claim_id(tx)
 
@@ -1433,8 +1445,18 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
 
-        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1')
+        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1', channel_name='@spam')
         repost_id = self.get_claim_id(tx)
+
+        # test inflating reposted channels works
+        repost_url = f'newstuff-again:{repost_id}'
+        self.ledger._tx_cache.clear()
+        self.assertEqual(
+            goodies_claim_id,
+            (await self.out(self.daemon.jsonrpc_resolve(repost_url))
+             )[repost_url]['reposted_claim']['signing_channel']['claim_id']
+        )
+
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
         self.assertEqual((await self.claim_search(reposted_claim_id=claim_id))[0]['claim_id'], repost_id)
@@ -1484,12 +1506,10 @@ class StreamCommands(ClaimTestCase):
         filtering_channel_id = self.get_claim_id(
             await self.channel_create('@filtering', '0.1')
         )
-        self.conductor.spv_node.server.db.sql.filtering_channel_hashes.add(
-            unhexlify(filtering_channel_id)[::-1]
-        )
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_streams))
+        self.conductor.spv_node.server.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_streams))
         await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_streams))
 
         # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
@@ -1531,12 +1551,16 @@ class StreamCommands(ClaimTestCase):
         blocking_channel_id = self.get_claim_id(
             await self.channel_create('@blocking', '0.1')
         )
-        self.conductor.spv_node.server.db.sql.blocking_channel_hashes.add(
-            unhexlify(blocking_channel_id)[::-1]
-        )
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_streams))
+        # test setting from env vars and starting from scratch
+        await self.conductor.spv_node.stop(False)
+        await self.conductor.spv_node.start(self.conductor.blockchain_node,
+                                            extraconf={'BLOCKING_CHANNEL_IDS': blocking_channel_id,
+                                                       'FILTERING_CHANNEL_IDS': filtering_channel_id})
+        await self.daemon.wallet_manager.reset()
+
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_streams))
         await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_streams))
 
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
@@ -1559,9 +1583,9 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual('@bad_channel', result['items'][1]['name'])
 
         # filter channel out
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_channels))
         await self.stream_repost(bad_channel_id, 'filter2', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.filtered_channels))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_channels))
 
         # same claim search as previous now returns 0 results
         result = await self.out(self.daemon.jsonrpc_claim_search(any_tags=['bad-stuff'], order_by=['height']))
@@ -1586,9 +1610,9 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(worse_content_id, result['claim_id'])
 
         # block channel
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_channels))
         await self.stream_repost(bad_channel_id, 'block2', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.sql.blocked_channels))
+        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_channels))
 
         # channel, claim in channel or claim individually no longer resolve
         self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
@@ -1759,6 +1783,16 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(), 4)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=self.account.id), 3)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=account2_id), 1)
+
+        self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(release_time='>=0', order_by=['release_time'])))
+        self.assertEqual(4, len(await self.claim_search(order_by=['release_time'])))
+        self.assertEqual(4, len(await self.claim_search(release_time='<derp', order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(claim_type='stream', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(claim_type='channel', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(release_time='>=123456', order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(release_time='>123456', order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time='<123457', order_by=['release_time'])))
 
     async def test_setting_fee_fields(self):
         tx = await self.out(self.stream_create('paid-stream'))

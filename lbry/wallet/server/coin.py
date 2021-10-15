@@ -14,8 +14,7 @@ from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-from lbry.wallet.server.db.writer import LBRYLevelDB
-from lbry.wallet.server.block_processor import LBRYBlockProcessor
+from lbry.wallet.server.block_processor import BlockProcessor
 
 
 Block = namedtuple("Block", "raw header transactions")
@@ -39,7 +38,7 @@ class Coin:
     SESSIONCLS = LBRYElectrumX
     DESERIALIZER = lib_tx.Deserializer
     DAEMON = Daemon
-    BLOCK_PROCESSOR = LBRYBlockProcessor
+    BLOCK_PROCESSOR = BlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DB = LevelDB
     HEADER_VALUES = [
@@ -215,6 +214,11 @@ class Coin:
         return Block(raw_block, header, txs)
 
     @classmethod
+    def transaction(cls, raw_tx: bytes):
+        """Return a Block namedtuple given a raw block and its height."""
+        return cls.DESERIALIZER(raw_tx).read_tx()
+
+    @classmethod
     def decimal_value(cls, value):
         """Return the number of standard coin units as a Decimal given a
         quantity of smallest units.
@@ -237,10 +241,9 @@ class Coin:
 class LBC(Coin):
     DAEMON = LBCDaemon
     SESSIONCLS = LBRYElectrumX
-    BLOCK_PROCESSOR = LBRYBlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     DESERIALIZER = DeserializerSegWit
-    DB = LBRYLevelDB
+    DB = LevelDB
     NAME = "LBRY"
     SHORTNAME = "LBC"
     NET = "mainnet"
@@ -258,6 +261,18 @@ class LBC(Coin):
     TX_PER_BLOCK = 1
     RPC_PORT = 9245
     REORG_LIMIT = 200
+
+    nOriginalClaimExpirationTime = 262974
+    nExtendedClaimExpirationTime = 2102400
+    nExtendedClaimExpirationForkHeight = 400155
+    nNormalizedNameForkHeight = 539940  # targeting 21 March 2019
+    nMinTakeoverWorkaroundHeight = 496850
+    nMaxTakeoverWorkaroundHeight = 658300  # targeting 30 Oct 2019
+    nWitnessForkHeight = 680770  # targeting 11 Dec 2019
+    nAllClaimsInMerkleForkHeight = 658310  # targeting 30 Oct 2019
+    proportionalDelayFactor = 32
+    maxTakeoverDelay = 4032
+
     PEERS = [
     ]
 
@@ -335,6 +350,18 @@ class LBC(Coin):
         else:
             return sha256(script).digest()[:HASHX_LEN]
 
+    @classmethod
+    def get_expiration_height(cls, last_updated_height: int, extended: bool = False) -> int:
+        if extended:
+            return last_updated_height + cls.nExtendedClaimExpirationTime
+        if last_updated_height < cls.nExtendedClaimExpirationForkHeight:
+            return last_updated_height + cls.nOriginalClaimExpirationTime
+        return last_updated_height + cls.nExtendedClaimExpirationTime
+
+    @classmethod
+    def get_delay_for_name(cls, blocks_of_continuous_ownership: int) -> int:
+        return min(blocks_of_continuous_ownership // cls.proportionalDelayFactor, cls.maxTakeoverDelay)
+
 
 class LBCRegTest(LBC):
     NET = "regtest"
@@ -343,6 +370,15 @@ class LBCRegTest(LBC):
     XPRV_VERBYTES = bytes.fromhex('04358394')
     P2PKH_VERBYTE = bytes.fromhex("6f")
     P2SH_VERBYTES = bytes.fromhex("c4")
+
+    nOriginalClaimExpirationTime = 500
+    nExtendedClaimExpirationTime = 600
+    nExtendedClaimExpirationForkHeight = 800
+    nNormalizedNameForkHeight = 250
+    nMinTakeoverWorkaroundHeight = -1
+    nMaxTakeoverWorkaroundHeight = -1
+    nWitnessForkHeight = 150
+    nAllClaimsInMerkleForkHeight = 350
 
 
 class LBCTestNet(LBCRegTest):

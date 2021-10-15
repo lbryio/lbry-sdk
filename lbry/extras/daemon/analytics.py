@@ -18,6 +18,7 @@ DOWNLOAD_STARTED = 'Download Started'
 DOWNLOAD_ERRORED = 'Download Errored'
 DOWNLOAD_FINISHED = 'Download Finished'
 HEARTBEAT = 'Heartbeat'
+DISK_SPACE = 'Disk Space'
 CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
@@ -166,6 +167,14 @@ class AnalyticsManager:
             self._event(UPNP_SETUP, {
                 'success': success,
                 'status': status,
+            })
+        )
+
+    async def send_disk_space_used(self, storage_used, storage_limit):
+        await self.track(
+            self._event(DISK_SPACE, {
+                'used': storage_used,
+                'limit': storage_limit,
             })
         )
 

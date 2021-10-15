@@ -1,3 +1,4 @@
+import time
 import asyncio
 import struct
 from binascii import unhexlify
@@ -8,8 +9,6 @@ from typing import Optional, List, Iterable, Union
 
 from elasticsearch import AsyncElasticsearch, NotFoundError, ConnectionError
 from elasticsearch.helpers import async_streaming_bulk
-
-from lbry.crypto.base58 import Base58
 from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.schema.result import Outputs, Censor
 from lbry.schema.tags import clean_tags
@@ -19,6 +18,7 @@ from lbry.wallet.server.db.common import CLAIM_TYPES, STREAM_TYPES
 from lbry.wallet.server.db.elasticsearch.constants import INDEX_DEFAULT_SETTINGS, REPLACEMENTS, FIELDS, TEXT_FIELDS, \
     RANGE_FIELDS, ALL_FIELDS
 from lbry.wallet.server.util import class_logger
+from lbry.wallet.server.db.common import ResolveResult
 
 
 class ChannelResolution(str):
@@ -42,7 +42,8 @@ class IndexVersionMismatch(Exception):
 class SearchIndex:
     VERSION = 1
 
-    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200):
+    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200,
+                 half_life=0.4, whale_threshold=10000, whale_half_life=0.99):
         self.search_timeout = search_timeout
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
         self.search_client: Optional[AsyncElasticsearch] = None
@@ -55,6 +56,9 @@ class SearchIndex:
         self.resolution_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
         self._elastic_port = elastic_port
+        self._trending_half_life = half_life
+        self._trending_whale_threshold = whale_threshold
+        self._trending_whale_half_life = whale_half_life
 
     async def get_index_version(self) -> int:
         try:
@@ -91,6 +95,7 @@ class SearchIndex:
         if index_version != self.VERSION:
             self.logger.error("es search index has an incompatible version: %s vs %s", index_version, self.VERSION)
             raise IndexVersionMismatch(index_version, self.VERSION)
+        await self.sync_client.indices.refresh(self.index)
         return acked
 
     def stop(self):
@@ -103,15 +108,28 @@ class SearchIndex:
 
     async def _consume_claim_producer(self, claim_producer):
         count = 0
-        for op, doc in claim_producer:
+        async for op, doc in claim_producer:
             if op == 'delete':
-                yield {'_index': self.index, '_op_type': 'delete', '_id': doc}
+                yield {
+                    '_index': self.index,
+                    '_op_type': 'delete',
+                    '_id': doc
+                }
             else:
-                yield extract_doc(doc, self.index)
+                yield {
+                    'doc': {key: value for key, value in doc.items() if key in ALL_FIELDS},
+                    '_id': doc['claim_id'],
+                    '_index': self.index,
+                    '_op_type': 'update',
+                    'doc_as_upsert': True
+                }
             count += 1
             if count % 100 == 0:
                 self.logger.info("Indexing in progress, %d claims.", count)
-        self.logger.info("Indexing done for %d claims.", count)
+        if count:
+            self.logger.info("Indexing done for %d claims.", count)
+        else:
+            self.logger.debug("Indexing done for %d claims.", count)
 
     async def claim_consumer(self, claim_producer):
         touched = set()
@@ -123,21 +141,97 @@ class SearchIndex:
                 item = item.popitem()[1]
                 touched.add(item['_id'])
         await self.sync_client.indices.refresh(self.index)
-        self.logger.info("Indexing done.")
+        self.logger.debug("Indexing done.")
 
     def update_filter_query(self, censor_type, blockdict, channels=False):
-        blockdict = {key[::-1].hex(): value[::-1].hex() for key, value in blockdict.items()}
+        blockdict = {blocked.hex(): blocker.hex() for blocked, blocker in blockdict.items()}
         if channels:
             update = expand_query(channel_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         else:
             update = expand_query(claim_id__in=list(blockdict.keys()), censor_type=f"<{censor_type}")
         key = 'channel_id' if channels else 'claim_id'
         update['script'] = {
-            "source": f"ctx._source.censor_type={censor_type}; ctx._source.censoring_channel_id=params[ctx._source.{key}]",
+            "source": f"ctx._source.censor_type={censor_type}; "
+                      f"ctx._source.censoring_channel_id=params[ctx._source.{key}];",
             "lang": "painless",
             "params": blockdict
         }
         return update
+
+    async def update_trending_score(self, params):
+        update_trending_score_script = """
+        double softenLBC(double lbc) { Math.pow(lbc, 1.0f / 3.0f) }
+        double inflateUnits(int height) {
+            int renormalizationPeriod = 100000;
+            double doublingRate = 400.0f;
+            Math.pow(2.0, (height % renormalizationPeriod) / doublingRate)
+        }
+        double spikePower(double newAmount) {
+            if (newAmount < 50.0) {
+                0.5
+            } else if (newAmount < 85.0) {
+                newAmount / 100.0
+            } else {
+                0.85
+            }
+        }
+        double spikeMass(double oldAmount, double newAmount) {
+            double softenedChange = softenLBC(Math.abs(newAmount - oldAmount));
+            double changeInSoftened = Math.abs(softenLBC(newAmount) - softenLBC(oldAmount));
+            double power = spikePower(newAmount);
+            if (oldAmount > newAmount) {
+                -1.0 * Math.pow(changeInSoftened, power) * Math.pow(softenedChange, 1.0 - power)
+            } else {
+                Math.pow(changeInSoftened, power) * Math.pow(softenedChange, 1.0 - power)
+            }
+        }
+        for (i in params.src.changes) {
+            double units = inflateUnits(i.height);
+            if (i.added) {
+                if (ctx._source.trending_score == null) {
+                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
+                } else {
+                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
+                }
+            } else {
+                if (ctx._source.trending_score == null) {
+                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
+                } else {
+                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
+                }
+            }
+        }
+        """
+        start = time.perf_counter()
+
+        def producer():
+            for claim_id, claim_updates in params.items():
+                yield {
+                    '_id': claim_id,
+                    '_index': self.index,
+                    '_op_type': 'update',
+                    'script': {
+                        'lang': 'painless',
+                        'source': update_trending_score_script,
+                        'params': {'src': {
+                            'changes': [
+                                {
+                                    'height': p.height,
+                                    'added': p.added,
+                                    'prev_amount': p.prev_amount * 1E-9,
+                                    'new_amount': p.new_amount * 1E-9,
+                                } for p in claim_updates
+                            ]
+                        }}
+                    },
+                }
+        if not params:
+            return
+        async for ok, item in async_streaming_bulk(self.sync_client, producer(), raise_on_error=False):
+            if not ok:
+                self.logger.warning("updating trending failed for an item: %s", item)
+        await self.sync_client.indices.refresh(self.index)
+        self.logger.info("updated trending scores in %ims", int((time.perf_counter() - start) * 1000))
 
     async def apply_filters(self, blocked_streams, blocked_channels, filtered_streams, filtered_channels):
         if filtered_streams:
@@ -170,52 +264,82 @@ class SearchIndex:
         self.claim_cache.clear()
         self.resolution_cache.clear()
 
-    async def session_query(self, query_name, kwargs):
-        offset, total = kwargs.get('offset', 0) if isinstance(kwargs, dict) else 0, 0
+    async def cached_search(self, kwargs):
         total_referenced = []
-        if query_name == 'resolve':
-            total_referenced, response, censor = await self.resolve(*kwargs)
-        else:
-            cache_item = ResultCacheItem.from_cache(str(kwargs), self.search_cache)
-            if cache_item.result is not None:
+        cache_item = ResultCacheItem.from_cache(str(kwargs), self.search_cache)
+        if cache_item.result is not None:
+            return cache_item.result
+        async with cache_item.lock:
+            if cache_item.result:
                 return cache_item.result
-            async with cache_item.lock:
-                if cache_item.result:
-                    return cache_item.result
-                censor = Censor(Censor.SEARCH)
-                if kwargs.get('no_totals'):
-                    response, offset, total = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
-                else:
-                    response, offset, total = await self.search(**kwargs)
-                censor.apply(response)
+            censor = Censor(Censor.SEARCH)
+            if kwargs.get('no_totals'):
+                response, offset, total = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
+            else:
+                response, offset, total = await self.search(**kwargs)
+            censor.apply(response)
+            total_referenced.extend(response)
+
+            if censor.censored:
+                response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
                 total_referenced.extend(response)
-                if censor.censored:
-                    response, _, _ = await self.search(**kwargs, censor_type=Censor.NOT_CENSORED)
-                    total_referenced.extend(response)
-                result = Outputs.to_base64(
-                    response, await self._get_referenced_rows(total_referenced), offset, total, censor
-                )
-                cache_item.result = result
-                return result
-        return Outputs.to_base64(response, await self._get_referenced_rows(total_referenced), offset, total, censor)
-
-    async def resolve(self, *urls):
-        censor = Censor(Censor.RESOLVE)
-        results = [await self.resolve_url(url) for url in urls]
-        # just heat the cache
-        await self.populate_claim_cache(*filter(lambda x: isinstance(x, str), results))
-        results = [self._get_from_cache_or_error(url, result) for url, result in zip(urls, results)]
-
-        censored = [
-            result if not isinstance(result, dict) or not censor.censor(result)
-            else ResolveCensoredError(url, result['censoring_channel_id'])
-            for url, result in zip(urls, results)
-        ]
-        return results, censored, censor
-
-    def _get_from_cache_or_error(self, url: str, resolution: Union[LookupError, StreamResolution, ChannelResolution]):
-        cached = self.claim_cache.get(resolution)
-        return cached or (resolution if isinstance(resolution, LookupError) else resolution.lookup_error(url))
+            response = [
+                ResolveResult(
+                    name=r['claim_name'],
+                    normalized_name=r['normalized_name'],
+                    claim_hash=r['claim_hash'],
+                    tx_num=r['tx_num'],
+                    position=r['tx_nout'],
+                    tx_hash=r['tx_hash'],
+                    height=r['height'],
+                    amount=r['amount'],
+                    short_url=r['short_url'],
+                    is_controlling=r['is_controlling'],
+                    canonical_url=r['canonical_url'],
+                    creation_height=r['creation_height'],
+                    activation_height=r['activation_height'],
+                    expiration_height=r['expiration_height'],
+                    effective_amount=r['effective_amount'],
+                    support_amount=r['support_amount'],
+                    last_takeover_height=r['last_take_over_height'],
+                    claims_in_channel=r['claims_in_channel'],
+                    channel_hash=r['channel_hash'],
+                    reposted_claim_hash=r['reposted_claim_hash'],
+                    reposted=r['reposted'],
+                    signature_valid=r['signature_valid']
+                ) for r in response
+            ]
+            extra = [
+                ResolveResult(
+                    name=r['claim_name'],
+                    normalized_name=r['normalized_name'],
+                    claim_hash=r['claim_hash'],
+                    tx_num=r['tx_num'],
+                    position=r['tx_nout'],
+                    tx_hash=r['tx_hash'],
+                    height=r['height'],
+                    amount=r['amount'],
+                    short_url=r['short_url'],
+                    is_controlling=r['is_controlling'],
+                    canonical_url=r['canonical_url'],
+                    creation_height=r['creation_height'],
+                    activation_height=r['activation_height'],
+                    expiration_height=r['expiration_height'],
+                    effective_amount=r['effective_amount'],
+                    support_amount=r['support_amount'],
+                    last_takeover_height=r['last_take_over_height'],
+                    claims_in_channel=r['claims_in_channel'],
+                    channel_hash=r['channel_hash'],
+                    reposted_claim_hash=r['reposted_claim_hash'],
+                    reposted=r['reposted'],
+                    signature_valid=r['signature_valid']
+                ) for r in await self._get_referenced_rows(total_referenced)
+            ]
+            result = Outputs.to_base64(
+                response, extra, offset, total, censor
+            )
+            cache_item.result = result
+            return result
 
     async def get_many(self, *claim_ids):
         await self.populate_claim_cache(*claim_ids)
@@ -247,15 +371,11 @@ class SearchIndex:
         return self.short_id_cache.get(key, None)
 
     async def search(self, **kwargs):
-        if 'channel' in kwargs:
-            kwargs['channel_id'] = await self.resolve_url(kwargs.pop('channel'))
-            if not kwargs['channel_id'] or not isinstance(kwargs['channel_id'], str):
-                return [], 0, 0
         try:
             return await self.search_ahead(**kwargs)
         except NotFoundError:
             return [], 0, 0
-        return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
+        # return expand_result(result['hits']), 0, result.get('total', {}).get('value', 0)
 
     async def search_ahead(self, **kwargs):
         # 'limit_claims_per_channel' case. Fetch 1000 results, reorder, slice, inflate and return
@@ -335,78 +455,6 @@ class SearchIndex:
                     next_page_hits_maybe_check_later.append((hit_id, hit_channel_id))
         return reordered_hits
 
-    async def resolve_url(self, raw_url):
-        if raw_url not in self.resolution_cache:
-            self.resolution_cache[raw_url] = await self._resolve_url(raw_url)
-        return self.resolution_cache[raw_url]
-
-    async def _resolve_url(self, raw_url):
-        try:
-            url = URL.parse(raw_url)
-        except ValueError as e:
-            return e
-
-        stream = LookupError(f'Could not find claim at "{raw_url}".')
-
-        channel_id = await self.resolve_channel_id(url)
-        if isinstance(channel_id, LookupError):
-            return channel_id
-        stream = (await self.resolve_stream(url, channel_id if isinstance(channel_id, str) else None)) or stream
-        if url.has_stream:
-            return StreamResolution(stream)
-        else:
-            return ChannelResolution(channel_id)
-
-    async def resolve_channel_id(self, url: URL):
-        if not url.has_channel:
-            return
-        if url.channel.is_fullid:
-            return url.channel.claim_id
-        if url.channel.is_shortid:
-            channel_id = await self.full_id_from_short_id(url.channel.name, url.channel.claim_id)
-            if not channel_id:
-                return LookupError(f'Could not find channel in "{url}".')
-            return channel_id
-
-        query = url.channel.to_dict()
-        if set(query) == {'name'}:
-            query['is_controlling'] = True
-        else:
-            query['order_by'] = ['^creation_height']
-        matches, _, _ = await self.search(**query, limit=1)
-        if matches:
-            channel_id = matches[0]['claim_id']
-        else:
-            return LookupError(f'Could not find channel in "{url}".')
-        return channel_id
-
-    async def resolve_stream(self, url: URL, channel_id: str = None):
-        if not url.has_stream:
-            return None
-        if url.has_channel and channel_id is None:
-            return None
-        query = url.stream.to_dict()
-        if url.stream.claim_id is not None:
-            if url.stream.is_fullid:
-                claim_id = url.stream.claim_id
-            else:
-                claim_id = await self.full_id_from_short_id(query['name'], query['claim_id'], channel_id)
-            return claim_id
-
-        if channel_id is not None:
-            if set(query) == {'name'}:
-                # temporarily emulate is_controlling for claims in channel
-                query['order_by'] = ['effective_amount', '^height']
-            else:
-                query['order_by'] = ['^channel_join']
-            query['channel_id'] = channel_id
-            query['signature_valid'] = True
-        elif set(query) == {'name'}:
-            query['is_controlling'] = True
-        matches, _, _ = await self.search(**query, limit=1)
-        if matches:
-            return matches[0]['claim_id']
-
     async def _get_referenced_rows(self, txo_rows: List[dict]):
         txo_rows = [row for row in txo_rows if isinstance(row, dict)]
         referenced_ids = set(filter(None, map(itemgetter('reposted_claim_id'), txo_rows)))
@@ -424,33 +472,6 @@ class SearchIndex:
         return referenced_txos
 
 
-def extract_doc(doc, index):
-    doc['claim_id'] = doc.pop('claim_hash')[::-1].hex()
-    if doc['reposted_claim_hash'] is not None:
-        doc['reposted_claim_id'] = doc.pop('reposted_claim_hash')[::-1].hex()
-    else:
-        doc['reposted_claim_id'] = None
-    channel_hash = doc.pop('channel_hash')
-    doc['channel_id'] = channel_hash[::-1].hex() if channel_hash else channel_hash
-    doc['censoring_channel_id'] = doc.get('censoring_channel_id')
-    txo_hash = doc.pop('txo_hash')
-    doc['tx_id'] = txo_hash[:32][::-1].hex()
-    doc['tx_nout'] = struct.unpack('<I', txo_hash[32:])[0]
-    doc['repost_count'] = doc.pop('reposted')
-    doc['is_controlling'] = bool(doc['is_controlling'])
-    doc['signature'] = (doc.pop('signature') or b'').hex() or None
-    doc['signature_digest'] = (doc.pop('signature_digest') or b'').hex() or None
-    doc['public_key_bytes'] = (doc.pop('public_key_bytes') or b'').hex() or None
-    doc['public_key_id'] = (doc.pop('public_key_hash') or b'').hex() or None
-    doc['is_signature_valid'] = bool(doc['signature_valid'])
-    doc['claim_type'] = doc.get('claim_type', 0) or 0
-    doc['stream_type'] = int(doc.get('stream_type', 0) or 0)
-    doc['has_source'] = bool(doc['has_source'])
-    doc['normalized_name'] = doc.pop('normalized')
-    doc = {key: value for key, value in doc.items() if key in ALL_FIELDS}
-    return {'doc': doc, '_id': doc['claim_id'], '_index': index, '_op_type': 'update', 'doc_as_upsert': True}
-
-
 def expand_query(**kwargs):
     if "amount_order" in kwargs:
         kwargs["limit"] = 1
@@ -462,6 +483,8 @@ def expand_query(**kwargs):
         kwargs.pop('is_controlling')
     query = {'must': [], 'must_not': []}
     collapse = None
+    if 'fee_currency' in kwargs and kwargs['fee_currency'] is not None:
+        kwargs['fee_currency'] = kwargs['fee_currency'].upper()
     for key, value in kwargs.items():
         key = key.replace('claim.', '')
         many = key.endswith('__in') or isinstance(value, list)
@@ -481,7 +504,7 @@ def expand_query(**kwargs):
                 else:
                     value = [CLAIM_TYPES[claim_type] for claim_type in value]
             elif key == 'stream_type':
-                value = STREAM_TYPES[value] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
+                value = [STREAM_TYPES[value]] if isinstance(value, str) else list(map(STREAM_TYPES.get, value))
             if key == '_id':
                 if isinstance(value, Iterable):
                     value = [item[::-1].hex() for item in value]
@@ -489,8 +512,6 @@ def expand_query(**kwargs):
                     value = value[::-1].hex()
             if not many and key in ('_id', 'claim_id') and len(value) < 20:
                 partial_id = True
-            if key == 'public_key_id':
-                value = Base58.decode(value)[1:21].hex()
             if key in ('signature_valid', 'has_source'):
                 continue  # handled later
             if key in TEXT_FIELDS:
@@ -537,13 +558,13 @@ def expand_query(**kwargs):
         elif key == 'limit_claims_per_channel':
             collapse = ('channel_id.keyword', value)
     if kwargs.get('has_channel_signature'):
-        query['must'].append({"exists": {"field": "signature_digest"}})
+        query['must'].append({"exists": {"field": "signature"}})
         if 'signature_valid' in kwargs:
             query['must'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     elif 'signature_valid' in kwargs:
         query.setdefault('should', [])
         query["minimum_should_match"] = 1
-        query['should'].append({"bool": {"must_not": {"exists": {"field": "signature_digest"}}}})
+        query['should'].append({"bool": {"must_not": {"exists": {"field": "signature"}}}})
         query['should'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     if 'has_source' in kwargs:
         query.setdefault('should', [])
@@ -612,7 +633,9 @@ def expand_result(results):
         result['tx_hash'] = unhexlify(result['tx_id'])[::-1]
         result['reposted'] = result.pop('repost_count')
         result['signature_valid'] = result.pop('is_signature_valid')
-        result['normalized'] = result.pop('normalized_name')
+        # result['normalized'] = result.pop('normalized_name')
+        # if result['censoring_channel_hash']:
+        #     result['censoring_channel_hash'] = unhexlify(result['censoring_channel_hash'])[::-1]
         expanded.append(result)
     if inner_hits:
         return expand_result(inner_hits)

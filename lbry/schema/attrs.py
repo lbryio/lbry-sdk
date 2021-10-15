@@ -10,6 +10,7 @@ from google.protobuf.json_format import MessageToDict
 
 from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
+from lbry.error import MissingPublishedFileError, EmptyPublishedFileError
 
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
@@ -139,10 +140,10 @@ class Source(Metadata):
             self.name = os.path.basename(file_path)
             self.media_type, stream_type = guess_media_type(file_path)
             if not os.path.isfile(file_path):
-                raise Exception(f"File does not exist: {file_path}")
+                raise MissingPublishedFileError(file_path)
             self.size = os.path.getsize(file_path)
             if self.size == 0:
-                raise Exception(f"Cannot publish empty file: {file_path}")
+                raise EmptyPublishedFileError(file_path)
             self.file_hash_bytes = calculate_sha384_file_hash(file_path)
             return stream_type
 

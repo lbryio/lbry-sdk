@@ -38,7 +38,7 @@ from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
-    ConflictingInputValueError
+    ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -2045,7 +2045,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_claim_id=<channel_claim_id>  : (str) get file with matching channel claim id(s)
             --channel_name=<channel_name>          : (str) get file with matching channel name
             --claim_name=<claim_name>              : (str) get file with matching claim name
-            --blobs_in_stream<blobs_in_stream>     : (int) get file with matching blobs in stream
+            --blobs_in_stream=<blobs_in_stream>    : (int) get file with matching blobs in stream
             --download_path=<download_path>        : (str) get file with matching download path
             --uploading_to_reflector=<uploading_to_reflector> : (bool) get files currently uploading to reflector
             --is_fully_reflected=<is_fully_reflected>         : (bool) get files that have been uploaded to reflector
@@ -2287,7 +2287,7 @@ class Daemon(metaclass=JSONRPCServerType):
         accounts = wallet.get_accounts_or_all(funding_account_ids)
         txo = None
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(accounts, claim_id, include_purchase_receipt=True)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, accounts, include_purchase_receipt=True)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
                 raise Exception(f"Could not find claim with claim_id '{claim_id}'.")
@@ -2300,11 +2300,7 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: use error from lbry.error
             raise Exception("Missing argument claim_id or url.")
         if not allow_duplicate_purchase and txo.purchase_receipt:
-            # TODO: use error from lbry.error
-            raise Exception(
-                f"You already have a purchase for claim_id '{claim_id}'. "
-                f"Use --allow-duplicate-purchase flag to override."
-            )
+            raise AlreadyPurchasedError(claim_id)
         claim = txo.claim
         if not claim.is_stream or not claim.stream.has_fee:
             # TODO: use error from lbry.error
@@ -3625,7 +3621,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim_address = old_txo.get_address(account.ledger)
 
         channel = None
-        if channel_id or channel_name:
+        if not clear_channel and (channel_id or channel_name):
             channel = await self.get_channel_or_error(
                 wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         elif old_txo.claim.is_signed and not clear_channel and not replace:
@@ -3655,11 +3651,13 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.stream.update(file_path=file_path, **kwargs)
+        if clear_channel:
+            claim.clear_signature()
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
+            channel if not clear_channel else None
         )
         new_txo = tx.outputs[0]
-
         stream_hash = None
         if not preview:
             old_stream = self.file_manager.get_filtered(sd_hash=old_txo.claim.stream.source.sd_hash)
@@ -4157,7 +4155,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
 
         if claim_id:
-            txo = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+            txo = await self.ledger.get_claim_by_claim_id(claim_id, wallet.accounts)
             if not isinstance(txo, Output) or not txo.is_claim:
                 # TODO: use error from lbry.error
                 raise Exception(f"Could not find collection with claim_id '{claim_id}'.")
@@ -4224,7 +4222,7 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
         amount = self.get_dewies_or_error("amount", amount)
-        claim = await self.ledger.get_claim_by_claim_id(wallet.accounts, claim_id)
+        claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
             account = wallet.get_account_or_default(account_id)
@@ -5078,8 +5076,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             server, port = random.choice(self.conf.reflector_servers)
         reflected = await asyncio.gather(*[
-            self.file_manager['stream'].reflect_stream(stream, server, port)
-            for stream in self.file_manager.get_filtered_streams(**kwargs)
+            self.file_manager.source_managers['stream'].reflect_stream(stream, server, port)
+            for stream in self.file_manager.get_filtered(**kwargs)
         ])
         total = []
         for reflected_for_stream in reflected:
@@ -5252,8 +5250,7 @@ class Daemon(metaclass=JSONRPCServerType):
     def valid_stream_name_or_error(name: str):
         try:
             if not name:
-                # TODO: use error from lbry.error
-                raise Exception('Stream name cannot be blank.')
+                raise InputStringIsBlankError('Stream name')
             parsed = URL.parse(name)
             if parsed.has_channel:
                 # TODO: use error from lbry.error
@@ -5343,7 +5340,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if len(channels) == 1:
             if for_signing and not channels[0].has_private_key:
                 # TODO: use error from lbry.error
-                raise Exception(f"Couldn't find private key for {key} '{value}'. ")
+                raise PrivateKeyNotFoundError(key, value)
             return channels[0]
         elif len(channels) > 1:
             # TODO: use error from lbry.error

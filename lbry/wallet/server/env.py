@@ -5,7 +5,7 @@
 # See the file "LICENCE" for information about the copyright
 # and warranty status of this software.
 
-
+import math
 import re
 import resource
 from os import environ
@@ -39,10 +39,14 @@ class Env:
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
         self.db_engine = self.default('DB_ENGINE', 'leveldb')
-        self.trending_algorithms = [
-            trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
-        ]
-        self.max_query_workers = self.integer('MAX_QUERY_WORKERS', None)
+        # self.trending_algorithms = [
+        #     trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
+        # ]
+        self.trending_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_DECAY_RATE', 48)))) + 1
+        self.trending_whale_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_WHALE_DECAY_RATE', 24)))) + 1
+        self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000)) * 1E8
+
+        self.max_query_workers = self.integer('MAX_QUERY_WORKERS', 4)
         self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
         self.track_metrics = self.boolean('TRACK_METRICS', False)
         self.websocket_host = self.default('WEBSOCKET_HOST', self.host)
@@ -57,7 +61,7 @@ class Env:
             self.coin = Coin.lookup_coin_class(coin_name, network)
         self.es_index_prefix = self.default('ES_INDEX_PREFIX', '')
         self.es_mode = self.default('ES_MODE', 'writer')
-        self.cache_MB = self.integer('CACHE_MB', 1200)
+        self.cache_MB = self.integer('CACHE_MB', 4096)
         self.reorg_limit = self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
         self.tcp_port = self.integer('TCP_PORT', None)

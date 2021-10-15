@@ -16,6 +16,9 @@ class DictDataStore:
         self._peer_manager = peer_manager
         self.completed_blobs: typing.Set[str] = set()
 
+    def __len__(self):
+        return self._data_store.__len__()
+
     def removed_expired_peers(self):
         now = self.loop.time()
         keys = list(self._data_store.keys())

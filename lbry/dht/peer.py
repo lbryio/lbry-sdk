@@ -1,7 +1,6 @@
 import typing
 import asyncio
 import logging
-from binascii import hexlify
 from dataclasses import dataclass, field
 from functools import lru_cache
 from lbry.utils import is_valid_public_ipv4 as _is_valid_public_ipv4, LRUCache
@@ -154,7 +153,7 @@ class KademliaPeer:
     def __post_init__(self):
         if self._node_id is not None:
             if not len(self._node_id) == constants.HASH_LENGTH:
-                raise ValueError("invalid node_id: {}".format(hexlify(self._node_id).decode()))
+                raise ValueError("invalid node_id: {}".format(self._node_id.hex()))
         if self.udp_port is not None and not 1024 <= self.udp_port <= 65535:
             raise ValueError(f"invalid udp port: {self.address}:{self.udp_port}")
         if self.tcp_port is not None and not 1024 <= self.tcp_port <= 65535:

@@ -196,11 +196,10 @@ class SPVNode:
         self.session_timeout = 600
         self.rpc_port = '0'  # disabled by default
         self.stopped = False
-        self.index_name = None
+        self.index_name = uuid4().hex
 
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
-        self.index_name = uuid4().hex
         conf = {
             'DESCRIPTION': '',
             'PAYMENT_ADDRESS': '',
@@ -223,7 +222,7 @@ class SPVNode:
         # TODO: don't use os.environ
         os.environ.update(conf)
         self.server = Server(Env(self.coin_class))
-        self.server.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
+        self.server.bp.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
         await self.server.start()
 
     async def stop(self, cleanup=True):

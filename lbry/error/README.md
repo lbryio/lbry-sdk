@@ -35,6 +35,10 @@ Code | Name | Message
 111 | GenericInputValue | The value '{value}' for argument '{argument}' is not valid.
 112 | InputValueIsNone | None or null is not valid value for argument '{argument}'.
 113 | ConflictingInputValue | Only '{first_argument}' or '{second_argument}' is allowed, not both.
+114 | InputStringIsBlank | {argument} cannot be blank.
+115 | EmptyPublishedFile | Cannot publish empty file: {file_path}
+116 | MissingPublishedFile | File does not exist: {file_path}
+117 | InvalidStreamURL | Invalid LBRY stream URL: '{url}' -- When an URL cannot be downloaded, such as '@Channel/' or a collection
 **2xx** | Configuration | Configuration errors.
 201 | ConfigWrite | Cannot write configuration file '{path}'. -- When writing the default config fails on startup, such as due to permission issues.
 202 | ConfigRead | Cannot find provided configuration file '{path}'. -- Can't open the config file user provided via command line args.
@@ -52,6 +56,7 @@ Code | Name | Message
 405 | ChannelKeyNotFound | Channel signing key not found.
 406 | ChannelKeyInvalid | Channel signing key is out of date. -- For example, channel was updated but you don't have the updated key.
 407 | DataDownload | Failed to download blob. *generic*
+408 | PrivateKeyNotFound | Couldn't find private key for {key} '{value}'.
 410 | Resolve | Failed to resolve '{url}'.
 411 | ResolveTimeout | Failed to resolve '{url}' within the timeout.
 411 | ResolveCensored | Resolve of '{url}' was censored by channel with claim id '{censor_id}'.
@@ -59,6 +64,7 @@ Code | Name | Message
 421 | InvalidPassword | Password is invalid.
 422 | IncompatibleWalletServer | '{server}:{port}' has an incompatibly old version.
 423 | TooManyClaimSearchParameters | {key} cant have more than {limit} items.
+424 | AlreadyPurchased | You already have a purchase for claim_id '{claim_id_hex}'. Use --allow-duplicate-purchase flag to override.
 431 | ServerPaymentInvalidAddress | Invalid address from wallet server: '{address}' - skipping payment round.
 432 | ServerPaymentWalletLocked | Cannot spend funds with locked wallet, skipping payment round.
 433 | ServerPaymentFeeAboveMaxAllowed | Daily server fee of {daily_fee} exceeds maximum configured of {max_fee} LBC.

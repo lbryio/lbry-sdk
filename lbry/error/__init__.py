@@ -84,6 +84,37 @@ class ConflictingInputValueError(InputValueError):
         super().__init__(f"Only '{first_argument}' or '{second_argument}' is allowed, not both.")
 
 
+class InputStringIsBlankError(InputValueError):
+
+    def __init__(self, argument):
+        self.argument = argument
+        super().__init__(f"{argument} cannot be blank.")
+
+
+class EmptyPublishedFileError(InputValueError):
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+        super().__init__(f"Cannot publish empty file: {file_path}")
+
+
+class MissingPublishedFileError(InputValueError):
+
+    def __init__(self, file_path):
+        self.file_path = file_path
+        super().__init__(f"File does not exist: {file_path}")
+
+
+class InvalidStreamURLError(InputValueError):
+    """
+    When an URL cannot be downloaded, such as '@Channel/' or a collection
+    """
+
+    def __init__(self, url):
+        self.url = url
+        super().__init__(f"Invalid LBRY stream URL: '{url}'")
+
+
 class ConfigurationError(BaseError):
     """
     Configuration errors.
@@ -207,6 +238,14 @@ class DataDownloadError(WalletError):
         super().__init__("Failed to download blob. *generic*")
 
 
+class PrivateKeyNotFoundError(WalletError):
+
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+        super().__init__(f"Couldn't find private key for {key} '{value}'.")
+
+
 class ResolveError(WalletError):
 
     def __init__(self, url):
@@ -223,9 +262,10 @@ class ResolveTimeoutError(WalletError):
 
 class ResolveCensoredError(WalletError):
 
-    def __init__(self, url, censor_id):
+    def __init__(self, url, censor_id, censor_row):
         self.url = url
         self.censor_id = censor_id
+        self.censor_row = censor_row
         super().__init__(f"Resolve of '{url}' was censored by channel with claim id '{censor_id}'.")
 
 
@@ -256,6 +296,16 @@ class TooManyClaimSearchParametersError(WalletError):
         self.key = key
         self.limit = limit
         super().__init__(f"{key} cant have more than {limit} items.")
+
+
+class AlreadyPurchasedError(WalletError):
+    """
+    allow-duplicate-purchase flag to override.
+    """
+
+    def __init__(self, claim_id_hex):
+        self.claim_id_hex = claim_id_hex
+        super().__init__(f"You already have a purchase for claim_id '{claim_id_hex}'. Use")
 
 
 class ServerPaymentInvalidAddressError(WalletError):

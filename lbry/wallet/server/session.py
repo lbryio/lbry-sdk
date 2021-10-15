@@ -21,18 +21,20 @@ from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
 import lbry
-from lbry.error import TooManyClaimSearchParametersError
+from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
-from lbry.wallet.server.block_processor import LBRYBlockProcessor
-from lbry.wallet.server.db.writer import LBRYLevelDB
+from lbry.schema.result import Outputs
+from lbry.wallet.server.block_processor import BlockProcessor
+from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.rpc.framing import NewlineFramer
+
 import lbry.wallet.server.version as VERSION
 
 from lbry.wallet.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
-    handler_invocation, RPCError, Request, JSONRPC
+    handler_invocation, RPCError, Request, JSONRPC, Notification, Batch
 )
 from lbry.wallet.server import text
 from lbry.wallet.server import util
@@ -175,14 +177,13 @@ class SessionManager:
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
-    def __init__(self, env: 'Env', db: LBRYLevelDB, bp: LBRYBlockProcessor, daemon: 'Daemon', mempool: 'MemPool',
-                 shutdown_event: asyncio.Event):
+    def __init__(self, env: 'Env', db: LevelDB, bp: BlockProcessor, daemon: 'Daemon', shutdown_event: asyncio.Event):
         env.max_send = max(350000, env.max_send)
         self.env = env
         self.db = db
         self.bp = bp
         self.daemon = daemon
-        self.mempool = mempool
+        self.mempool = bp.mempool
         self.shutdown_event = shutdown_event
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.servers: typing.Dict[str, asyncio.AbstractServer] = {}
@@ -263,16 +264,6 @@ class SessionManager:
                 await self._start_external_servers()
                 paused = False
 
-    async def _log_sessions(self):
-        """Periodically log sessions."""
-        log_interval = self.env.log_sessions
-        if log_interval:
-            while True:
-                await sleep(log_interval)
-                data = self._session_data(for_log=True)
-                for line in text.sessions_lines(data):
-                    self.logger.info(line)
-                self.logger.info(json.dumps(self._get_info()))
 
     def _group_map(self):
         group_map = defaultdict(list)
@@ -375,23 +366,6 @@ class SessionManager:
             'uptime': util.formatted_time(time.time() - self.start_time),
             'version': lbry.__version__,
         }
-
-    def _session_data(self, for_log):
-        """Returned to the RPC 'sessions' call."""
-        now = time.time()
-        sessions = sorted(self.sessions.values(), key=lambda s: s.start_time)
-        return [(session.session_id,
-                 session.flags(),
-                 session.peer_address_str(for_log=for_log),
-                 session.client_version,
-                 session.protocol_version_string(),
-                 session.count_pending_items(),
-                 session.txs_sent,
-                 session.sub_count(),
-                 session.recv_count, session.recv_size,
-                 session.send_count, session.send_size,
-                 now - session.start_time)
-                for session in sessions]
 
     def _group_data(self):
         """Returned to the RPC 'groups' call."""
@@ -537,23 +511,19 @@ class SessionManager:
 
         return lines
 
-    async def rpc_sessions(self):
-        """Return statistics about connected sessions."""
-        return self._session_data(for_log=False)
-
-    async def rpc_reorg(self, count):
-        """Force a reorg of the given number of blocks.
-
-        count: number of blocks to reorg
-        """
-        count = non_negative_integer(count)
-        if not self.bp.force_chain_reorg(count):
-            raise RPCError(BAD_REQUEST, 'still catching up with daemon')
-        return f'scheduled a reorg of {count:,d} blocks'
+    # async def rpc_reorg(self, count):
+    #     """Force a reorg of the given number of blocks.
+    #
+    #     count: number of blocks to reorg
+    #     """
+    #     count = non_negative_integer(count)
+    #     if not self.bp.force_chain_reorg(count):
+    #         raise RPCError(BAD_REQUEST, 'still catching up with daemon')
+    #     return f'scheduled a reorg of {count:,d} blocks'
 
     # --- External Interface
 
-    async def serve(self, notifications, server_listening_event):
+    async def serve(self, mempool, server_listening_event):
         """Start the RPC server if enabled.  When the event is triggered,
         start TCP and SSL servers."""
         try:
@@ -567,7 +537,7 @@ class SessionManager:
             if self.env.drop_client is not None:
                 self.logger.info(f'drop clients matching: {self.env.drop_client.pattern}')
             # Start notifications; initialize hsub_results
-            await notifications.start(self.db.db_height, self._notify_sessions)
+            await mempool.start(self.db.db_height, self)
             await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
@@ -576,7 +546,6 @@ class SessionManager:
             # because we connect to ourself
             await asyncio.wait([
                 self._clear_stale_sessions(),
-                self._log_sessions(),
                 self._manage_servers()
             ])
         finally:
@@ -663,19 +632,25 @@ class SessionManager:
             for hashX in touched.intersection(self.mempool_statuses.keys()):
                 self.mempool_statuses.pop(hashX, None)
 
-        touched.intersection_update(self.hashx_subscriptions_by_session.keys())
+        await asyncio.get_event_loop().run_in_executor(
+            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
+        )
 
-        if touched or (height_changed and self.mempool_statuses):
+        if touched or new_touched or (height_changed and self.mempool_statuses):
             notified_hashxs = 0
-            notified_sessions = 0
+            session_hashxes_to_notify = defaultdict(list)
             to_notify = touched if height_changed else new_touched
+
             for hashX in to_notify:
+                if hashX not in self.hashx_subscriptions_by_session:
+                    continue
                 for session_id in self.hashx_subscriptions_by_session[hashX]:
-                    asyncio.create_task(self.sessions[session_id].send_history_notification(hashX))
-                    notified_sessions += 1
-                notified_hashxs += 1
-            if notified_sessions:
-                self.logger.info(f'notified {notified_sessions} sessions/{notified_hashxs:,d} touched addresses')
+                    session_hashxes_to_notify[session_id].append(hashX)
+                    notified_hashxs += 1
+            for session_id, hashXes in session_hashxes_to_notify.items():
+                asyncio.create_task(self.sessions[session_id].send_history_notifications(*hashXes))
+            if session_hashxes_to_notify:
+                self.logger.info(f'notified {len(session_hashxes_to_notify)} sessions/{notified_hashxs:,d} touched addresses')
 
     def add_session(self, session):
         self.sessions[id(session)] = session
@@ -746,16 +721,6 @@ class SessionBase(RPCSession):
     def toggle_logging(self):
         self.log_me = not self.log_me
 
-    def flags(self):
-        """Status flags."""
-        status = self.kind[0]
-        if self.is_closing():
-            status += 'C'
-        if self.log_me:
-            status += 'L'
-        status += str(self._concurrency.max_concurrent)
-        return status
-
     def connection_made(self, transport):
         """Handle an incoming client connection."""
         super().connection_made(transport)
@@ -812,21 +777,21 @@ class LBRYSessionManager(SessionManager):
         super().__init__(*args, **kwargs)
         self.query_executor = None
         self.websocket = None
-        self.metrics = ServerLoadData()
+        # self.metrics = ServerLoadData()
         self.metrics_loop = None
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
 
-    async def process_metrics(self):
-        while self.running:
-            data = self.metrics.to_json_and_reset({
-                'sessions': self.session_count(),
-                'height': self.db.db_height,
-            })
-            if self.websocket is not None:
-                self.websocket.send_message(data)
-            await asyncio.sleep(1)
+    # async def process_metrics(self):
+    #     while self.running:
+    #         data = self.metrics.to_json_and_reset({
+    #             'sessions': self.session_count(),
+    #             'height': self.db.db_height,
+    #         })
+    #         if self.websocket is not None:
+    #             self.websocket.send_message(data)
+    #         await asyncio.sleep(1)
 
     async def start_other(self):
         self.running = True
@@ -838,13 +803,9 @@ class LBRYSessionManager(SessionManager):
             )
         if self.websocket is not None:
             await self.websocket.start()
-        if self.env.track_metrics:
-            self.metrics_loop = asyncio.create_task(self.process_metrics())
 
     async def stop_other(self):
         self.running = False
-        if self.env.track_metrics:
-            self.metrics_loop.cancel()
         if self.websocket is not None:
             await self.websocket.stop()
         self.query_executor.shutdown()
@@ -887,6 +848,8 @@ class LBRYElectrumX(SessionBase):
             'blockchain.transaction.get_height': cls.transaction_get_height,
             'blockchain.claimtrie.search': cls.claimtrie_search,
             'blockchain.claimtrie.resolve': cls.claimtrie_resolve,
+            'blockchain.claimtrie.getclaimbyid': cls.claimtrie_getclaimbyid,
+            # 'blockchain.claimtrie.getclaimsbyids': cls.claimtrie_getclaimsbyids,
             'blockchain.block.get_server_height': cls.get_server_height,
             'mempool.get_fee_histogram': cls.mempool_compact_histogram,
             'blockchain.block.headers': cls.block_headers,
@@ -915,8 +878,8 @@ class LBRYElectrumX(SessionBase):
         self.protocol_tuple = self.PROTOCOL_MIN
         self.protocol_string = None
         self.daemon = self.session_mgr.daemon
-        self.bp: LBRYBlockProcessor = self.session_mgr.bp
-        self.db: LBRYLevelDB = self.bp.db
+        self.bp: BlockProcessor = self.session_mgr.bp
+        self.db: LevelDB = self.bp.db
 
     @classmethod
     def protocol_min_max_strings(cls):
@@ -939,7 +902,7 @@ class LBRYElectrumX(SessionBase):
             'donation_address': env.donation_address,
             'daily_fee': env.daily_fee,
             'hash_function': 'sha256',
-            'trending_algorithm': env.trending_algorithms[0]
+            'trending_algorithm': 'variable_decay'
         })
 
     async def server_features_async(self):
@@ -956,32 +919,57 @@ class LBRYElectrumX(SessionBase):
     def sub_count(self):
         return len(self.hashX_subs)
 
-    async def send_history_notification(self, hashX):
-        start = time.perf_counter()
-        alias = self.hashX_subs[hashX]
-        if len(alias) == 64:
-            method = 'blockchain.scripthash.subscribe'
-        else:
-            method = 'blockchain.address.subscribe'
-        try:
-            self.session_mgr.notifications_in_flight_metric.inc()
-            status = await self.address_status(hashX)
-            self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+    async def send_history_notifications(self, *hashXes: typing.Iterable[bytes]):
+        notifications = []
+        for hashX in hashXes:
+            alias = self.hashX_subs[hashX]
+            if len(alias) == 64:
+                method = 'blockchain.scripthash.subscribe'
+            else:
+                method = 'blockchain.address.subscribe'
             start = time.perf_counter()
-            await self.send_notification(method, (alias, status))
+            db_history = await self.session_mgr.limited_history(hashX)
+            mempool = self.mempool.transaction_summaries(hashX)
+
+            status = ''.join(f'{hash_to_hex_str(tx_hash)}:'
+                             f'{height:d}:'
+                             for tx_hash, height in db_history)
+            status += ''.join(f'{hash_to_hex_str(tx.hash)}:'
+                              f'{-tx.has_unconfirmed_inputs:d}:'
+                              for tx in mempool)
+            if status:
+                status = sha256(status.encode()).hex()
+            else:
+                status = None
+            if mempool:
+                self.session_mgr.mempool_statuses[hashX] = status
+            else:
+                self.session_mgr.mempool_statuses.pop(hashX, None)
+
+            self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+            notifications.append((method, (alias, status)))
+
+        start = time.perf_counter()
+        self.session_mgr.notifications_in_flight_metric.inc()
+        for method, args in notifications:
+            self.NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
+        try:
+            await self.send_notifications(
+                Batch([Notification(method, (alias, status)) for (method, (alias, status)) in notifications])
+            )
             self.session_mgr.notifications_sent_metric.observe(time.perf_counter() - start)
         finally:
             self.session_mgr.notifications_in_flight_metric.dec()
 
-    def get_metrics_or_placeholder_for_api(self, query_name):
-        """ Do not hold on to a reference to the metrics
-            returned by this method past an `await` or
-            you may be working with a stale metrics object.
-        """
-        if self.env.track_metrics:
-            return self.session_mgr.metrics.for_api(query_name)
-        else:
-            return APICallMetrics(query_name)
+    # def get_metrics_or_placeholder_for_api(self, query_name):
+    #     """ Do not hold on to a reference to the metrics
+    #         returned by this method past an `await` or
+    #         you may be working with a stale metrics object.
+    #     """
+    #     if self.env.track_metrics:
+    #         # return self.session_mgr.metrics.for_api(query_name)
+    #     else:
+    #         return APICallMetrics(query_name)
 
     async def run_in_executor(self, query_name, func, kwargs):
         start = time.perf_counter()
@@ -994,55 +982,95 @@ class LBRYElectrumX(SessionBase):
             raise
         except Exception:
             log.exception("dear devs, please handle this exception better")
-            metrics = self.get_metrics_or_placeholder_for_api(query_name)
-            metrics.query_error(start, {})
             self.session_mgr.db_error_metric.inc()
             raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
         else:
-            if self.env.track_metrics:
-                metrics = self.get_metrics_or_placeholder_for_api(query_name)
-                (result, metrics_data) = result
-                metrics.query_response(start, metrics_data)
             return base64.b64encode(result).decode()
         finally:
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    async def run_and_cache_query(self, query_name, kwargs):
-        start = time.perf_counter()
-        if isinstance(kwargs, dict):
-            kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
-        try:
-            self.session_mgr.pending_query_metric.inc()
-            return await self.db.search_index.session_query(query_name, kwargs)
-        except ConnectionTimeout:
-            self.session_mgr.interrupt_count_metric.inc()
-            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
-        finally:
-            self.session_mgr.pending_query_metric.dec()
-            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
+    # async def run_and_cache_query(self, query_name, kwargs):
+    #     start = time.perf_counter()
+    #     if isinstance(kwargs, dict):
+    #         kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
+    #     try:
+    #         self.session_mgr.pending_query_metric.inc()
+    #         return await self.db.search_index.session_query(query_name, kwargs)
+    #     except ConnectionTimeout:
+    #         self.session_mgr.interrupt_count_metric.inc()
+    #         raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
+    #     finally:
+    #         self.session_mgr.pending_query_metric.dec()
+    #         self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def mempool_compact_histogram(self):
         return self.mempool.compact_fee_histogram()
 
     async def claimtrie_search(self, **kwargs):
-        if kwargs:
+        start = time.perf_counter()
+        if 'release_time' in kwargs:
+            release_time = kwargs.pop('release_time')
             try:
-                return await self.run_and_cache_query('search', kwargs)
-            except TooManyClaimSearchParametersError as err:
-                await asyncio.sleep(2)
-                self.logger.warning("Got an invalid query from %s, for %s with more than %d elements.",
-                                    self.peer_address()[0], err.key, err.limit)
-                return RPCError(1, str(err))
+                kwargs['release_time'] = format_release_time(release_time)
+            except ValueError:
+                pass
+        try:
+            self.session_mgr.pending_query_metric.inc()
+            if 'channel' in kwargs:
+                channel_url = kwargs.pop('channel')
+                _, channel_claim, _, _ = await self.db.resolve(channel_url)
+                if not channel_claim or isinstance(channel_claim, (ResolveCensoredError, LookupError, ValueError)):
+                    return Outputs.to_base64([], [], 0, None, None)
+                kwargs['channel_id'] = channel_claim.claim_hash.hex()
+            return await self.db.search_index.cached_search(kwargs)
+        except ConnectionTimeout:
+            self.session_mgr.interrupt_count_metric.inc()
+            raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
+        except TooManyClaimSearchParametersError as err:
+            await asyncio.sleep(2)
+            self.logger.warning("Got an invalid query from %s, for %s with more than %d elements.",
+                                self.peer_address()[0], err.key, err.limit)
+            return RPCError(1, str(err))
+        finally:
+            self.session_mgr.pending_query_metric.dec()
+            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
+
+    def _claimtrie_resolve(self, *urls):
+        rows, extra = [], []
+        for url in urls:
+            self.session_mgr.urls_to_resolve_count_metric.inc()
+            stream, channel, repost, reposted_channel = self.db._resolve(url)
+            if isinstance(channel, ResolveCensoredError):
+                rows.append(channel)
+                extra.append(channel.censor_row)
+            elif isinstance(stream, ResolveCensoredError):
+                rows.append(stream)
+                extra.append(stream.censor_row)
+            elif channel and not stream:
+                rows.append(channel)
+                # print("resolved channel", channel.name.decode())
+                if repost:
+                    extra.append(repost)
+                if reposted_channel:
+                    extra.append(reposted_channel)
+            elif stream:
+                # print("resolved stream", stream.name.decode())
+                rows.append(stream)
+                if channel:
+                    # print("and channel", channel.name.decode())
+                    extra.append(channel)
+                if repost:
+                    extra.append(repost)
+                if reposted_channel:
+                    extra.append(reposted_channel)
+        # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
+        return Outputs.to_base64(rows, extra, 0, None, None)
 
     async def claimtrie_resolve(self, *urls):
-        if urls:
-            count = len(urls)
-            try:
-                self.session_mgr.urls_to_resolve_count_metric.inc(count)
-                return await self.run_and_cache_query('resolve', urls)
-            finally:
-                self.session_mgr.resolved_url_count_metric.inc(count)
+        result = await self.loop.run_in_executor(None, self._claimtrie_resolve, *urls)
+        self.session_mgr.resolved_url_count_metric.inc(len(urls))
+        return result
 
     async def get_server_height(self):
         return self.bp.height
@@ -1056,6 +1084,15 @@ class LBRYElectrumX(SessionBase):
         elif transaction_info and 'hex' in transaction_info:
             return -1
         return None
+
+    async def claimtrie_getclaimbyid(self, claim_id):
+        rows = []
+        extra = []
+        stream = await self.db.fs_getclaimbyid(claim_id)
+        if not stream:
+            stream = LookupError(f"Could not find claim at {claim_id}")
+        rows.append(stream)
+        return Outputs.to_base64(rows, extra, 0, None, None)
 
     def assert_tx_hash(self, value):
         '''Raise an RPCError if the value is not a valid transaction
