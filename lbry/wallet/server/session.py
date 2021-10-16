@@ -2,8 +2,6 @@ import os
 import ssl
 import math
 import time
-import json
-import base64
 import codecs
 import typing
 import asyncio
@@ -15,8 +13,6 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-
 from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
@@ -27,7 +23,6 @@ from lbry.schema.result import Outputs
 from lbry.wallet.server.block_processor import BlockProcessor
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.websocket import AdminWebSocket
-from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.rpc.framing import NewlineFramer
 
 import lbry.wallet.server.version as VERSION
@@ -36,13 +31,11 @@ from lbry.wallet.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
     handler_invocation, RPCError, Request, JSONRPC, Notification, Batch
 )
-from lbry.wallet.server import text
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import sha256, hash_to_hex_str, hex_str_to_hash, HASHX_LEN, Base58Error
 from lbry.wallet.server.daemon import DaemonError
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.env import Env
-    from lbry.wallet.server.mempool import MemPool
     from lbry.wallet.server.daemon import Daemon
 
 BAD_REQUEST = 1
@@ -263,7 +256,6 @@ class SessionManager:
                 self.logger.info('resuming listening for incoming connections')
                 await self._start_external_servers()
                 paused = False
-
 
     def _group_map(self):
         group_map = defaultdict(list)
