@@ -78,6 +78,7 @@ class Env:
         self.anon_logs = self.boolean('ANON_LOGS', False)
         self.log_sessions = self.integer('LOG_SESSIONS', 3600)
         self.allow_lan_udp = self.boolean('ALLOW_LAN_UDP', False)
+        self.cache_all_tx_hashes = self.boolean('CACHE_ALL_TX_HASHES', False)
         self.country = self.default('COUNTRY', 'US')
         # Peer discovery
         self.peer_discovery = self.peer_discovery_enum()
