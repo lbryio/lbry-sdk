@@ -490,9 +490,7 @@ class BlockProcessor:
 
             if signing_channel:
                 raw_channel_tx = self.db.prefix_db.tx.get(
-                    self.db.prefix_db.tx_hash.get(
-                        signing_channel.tx_num, deserialize_value=False
-                    ), deserialize_value=False
+                    self.db.get_tx_hash(signing_channel.tx_num), deserialize_value=False
                 )
             channel_pub_key_bytes = None
             try:
@@ -1501,6 +1499,9 @@ class BlockProcessor:
                 self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
             self.pending_transactions[tx_count] = tx_hash
             self.pending_transaction_num_mapping[tx_hash] = tx_count
+            if self.env.cache_all_tx_hashes:
+                self.db.total_transactions.append(tx_hash)
+                self.db.tx_num_mapping[tx_hash] = tx_count
             tx_count += 1
 
         # handle expired claims
@@ -1608,7 +1609,12 @@ class BlockProcessor:
         self.db.headers.pop()
         self.db.tx_counts.pop()
         self.tip = self.coin.header_hash(self.db.headers[-1])
-        self.tx_count = self.db.tx_counts[-1]
+        if self.env.cache_all_tx_hashes:
+            while len(self.db.total_transactions) > self.db.tx_counts[-1]:
+                self.db.tx_num_mapping.pop(self.db.total_transactions.pop())
+                self.tx_count -= 1
+        else:
+            self.tx_count = self.db.tx_counts[-1]
         self.height -= 1
         # self.touched can include other addresses which is
         # harmless, but remove None.
@@ -1659,7 +1665,7 @@ class BlockProcessor:
         if tx_hash in self.pending_transaction_num_mapping:
             return self.pending_transaction_num_mapping[tx_hash]
         else:
-            return self.db.prefix_db.tx_num.get(tx_hash).tx_num
+            return self.db.get_tx_num(tx_hash)
 
     def spend_utxo(self, tx_hash: bytes, nout: int):
         hashX, amount = self.utxo_cache.pop((tx_hash, nout), (None, None))
