@@ -23,6 +23,7 @@ CLAIM_ACTION = 'Claim Action'  # publish/create/update/abandon
 NEW_CHANNEL = 'New Channel'
 CREDITS_SENT = 'Credits Sent'
 UPNP_SETUP = "UPnP Setup"
+PUBLISH = "Publish"
 
 BLOB_BYTES_UPLOADED = 'Blob Bytes Uploaded'
 
@@ -231,6 +232,9 @@ class AnalyticsManager:
 
     async def _send_heartbeat(self):
         await self.track(self._event(HEARTBEAT))
+
+    async def send_publish(self, success: bool):
+        await self.track(self._event(PUBLISH, {'success': success}))
 
     def _event(self, event, properties: typing.Optional[typing.Dict] = None):
         return {

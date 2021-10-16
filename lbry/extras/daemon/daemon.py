@@ -3196,28 +3196,37 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Transaction}
         """
-        self.valid_stream_name_or_error(name)
-        wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
-        if kwargs.get('account_id'):
-            accounts = [wallet.get_account_or_error(kwargs.get('account_id'))]
-        else:
-            accounts = wallet.accounts
-        claims = await self.ledger.get_claims(
-            wallet=wallet, accounts=accounts, claim_name=name
-        )
-        if len(claims) == 0:
-            if 'bid' not in kwargs:
-                # TODO: use error from lbry.error
-                raise Exception("'bid' is a required argument for new publishes.")
-            return await self.jsonrpc_stream_create(name, **kwargs)
-        elif len(claims) == 1:
-            assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
-            return await self.jsonrpc_stream_update(claims[0].claim_id, replace=True, **kwargs)
-        # TODO: use error from lbry.error
-        raise Exception(
-            f"There are {len(claims)} claims for '{name}', please use 'stream update' command "
-            f"to update a specific stream claim."
-        )
+        success = False
+        try:
+            self.valid_stream_name_or_error(name)
+            wallet = self.wallet_manager.get_wallet_or_default(kwargs.get('wallet_id'))
+            if kwargs.get('account_id'):
+                accounts = [wallet.get_account_or_error(kwargs.get('account_id'))]
+            else:
+                accounts = wallet.accounts
+            claims = await self.ledger.get_claims(
+                wallet=wallet, accounts=accounts, claim_name=name
+            )
+            if len(claims) == 0:
+                if 'bid' not in kwargs:
+                    # TODO: use error from lbry.error
+                    raise Exception("'bid' is a required argument for new publishes.")
+                tx = await self.jsonrpc_stream_create(name, **kwargs)
+                success = tx is not None
+                return tx
+            elif len(claims) == 1:
+                assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
+                tx = await self.jsonrpc_stream_update(claims[0].claim_id, replace=True, **kwargs)
+                success = tx is not None
+                return tx
+            # TODO: use error from lbry.error
+            raise Exception(
+                f"There are {len(claims)} claims for '{name}', please use 'stream update' command "
+                f"to update a specific stream claim."
+            )
+        finally:
+            await self.component_manager.analytics_manager.send_publish(success)
+
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_repost(self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
