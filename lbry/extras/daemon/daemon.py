@@ -3031,59 +3031,6 @@ class Daemon(metaclass=JSONRPCServerType):
         return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_subscription_list(self):
-        """
-        List subscribed channels and modes.
-
-        Usage:
-           channel_subscription_list
-
-        Returns:
-            (list) [(channel_id, download_latest, download_all)]
-        """
-        return self.storage.get_subscriptions()
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_subscribe(self, channel_id, download_latest=None, download_all=False):
-        """
-        Subscribe to a channel and optionally start downloading streams proactively.
-
-        Usage:
-           channel_subscribe (<channel_id> | --channel_id=<channel_id>) [--download_latest=<download_latest>]
-                             [--download_all]
-
-        Options:
-            --channel_id=<channel_id>             : (str) claim id of channel to subscribe.
-            --download_latest=<download_latest>   : (int) amount of newest streams to ensure download.
-            --download_all                        : (bool) download all streams from the channel.
-
-        Returns:
-            (bool) Subscription successful? (False only if channel doesn't exist)
-        """
-        if download_all and download_latest is not None:
-            raise ConflictingInputValueError("download_latest", "download_all")
-        return self.storage.add_subscription(channel_id, download_latest, download_all)
-
-    @requires(WALLET_COMPONENT)
-    def jsonrpc_channel_unsubscribe(self, channel_id):
-        """
-        Subscribe to a channel and optionally start downloading streams proactively.
-
-        Usage:
-           channel_subscribe (<channel_id> | --channel_id=<channel_id>) [--download=<download>]
-
-        Options:
-            --channel_id=<channel_id>     : (str) claim id of channel to subscribe
-            --download=<download>         : (str) which strategy to use for downloads: 'all' for everything.
-                                                  'latest-X' for the latest X streams. None (default) for nothing.
-
-        Returns:
-            (bool) Subscription successful? (False only if channel doesn't exist)
-        """
-        return self.storage.remove_subscription(channel_id)
-
-
-    @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_import(self, channel_data, wallet_id=None):
         """
         Import serialized channel private key (to allow signing new streams to the channel)
