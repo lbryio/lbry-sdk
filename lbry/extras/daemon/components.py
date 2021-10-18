@@ -4,6 +4,8 @@ import asyncio
 import logging
 import binascii
 import typing
+from collections import deque
+
 import base58
 
 from aioupnp import __version__ as aioupnp_version
@@ -385,21 +387,26 @@ class BackgroundDownloader(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.status = {'pending': 0, 'ongoing': 0}
         self.task: typing.Optional[asyncio.Task] = None
         self.download_loop_delay_seconds = 60
         self.finished_iteration = asyncio.Event()
+        self.requested_blobs = deque(maxlen=10)
 
     @property
     def component(self) -> 'BackgroundDownloader':
         return self
 
     async def get_status(self):
-        self.status['running'] = self.task is not None and not self.task.done()
-        return self.status
+        return {'running': self.task is not None and not self.task.done(), 'enqueued': len(self.requested_blobs)}
 
     async def loop(self):
         while True:
+            if self.component_manager.has_component(DHT_COMPONENT):
+                node = self.component_manager.get_component(DHT_COMPONENT)
+                self.requested_blobs = node.protocol.data_store.requested_blobs
+            if self.requested_blobs:
+                blob_hash = self.requested_blobs.pop()
+                await self.download_blobs(blob_hash)
             self.finished_iteration.set()
             self.finished_iteration.clear()
             await asyncio.sleep(self.download_loop_delay_seconds)
