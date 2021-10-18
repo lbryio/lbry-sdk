@@ -1,5 +1,6 @@
 import asyncio
 import typing
+from collections import deque
 
 from lbry.dht import constants
 if typing.TYPE_CHECKING:
@@ -15,6 +16,7 @@ class DictDataStore:
         self.loop = loop
         self._peer_manager = peer_manager
         self.completed_blobs: typing.Set[str] = set()
+        self.requested_blobs: typing.Deque = deque(maxlen=10)
 
     def __len__(self):
         return self._data_store.__len__()

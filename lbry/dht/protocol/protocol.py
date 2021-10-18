@@ -95,6 +95,7 @@ class KademliaRPC:
             for peer in self.protocol.data_store.get_peers_for_blob(key)
             if not rpc_contact.tcp_port or peer.compact_address_tcp() != rpc_contact.compact_address_tcp()
         ]
+        self.protocol.data_store.requested_blobs.append(key.hex())
         # if we don't have k storing peers to return and we have this hash locally, include our contact information
         if len(peers) < constants.K and key.hex() in self.protocol.data_store.completed_blobs:
             peers.append(self.compact_address())
