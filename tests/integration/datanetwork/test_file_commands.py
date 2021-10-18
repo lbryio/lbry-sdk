@@ -616,22 +616,3 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         self.assertEqual(0, len(await self.file_list()))
         await self.daemon.blob_manager.delete_blobs(list(self.daemon.blob_manager.completed_blob_hashes), True)
         self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
-
-        await proactive_downloader.stop()
-        await self.daemon.jsonrpc_channel_subscribe(channel_id, 1)
-        await proactive_downloader.start()
-        await proactive_downloader.finished_iteration.wait()
-        await self.assertBlobs(content1)
-        await self.daemon.jsonrpc_file_delete(delete_all=True)
-
-        await self.daemon.jsonrpc_channel_subscribe(channel_id, download_all=True)
-        await proactive_downloader.stop()
-        await proactive_downloader.start()
-        await proactive_downloader.finished_iteration.wait()
-        await self.assertBlobs(content1, content2)
-
-        self.assertEqual(0, len(await self.file_list()))
-
-        self.assertEqual([(channel_id, 0, 1)], await self.daemon.jsonrpc_channel_subscription_list())
-        await self.daemon.jsonrpc_channel_unsubscribe(channel_id)
-        self.assertEqual([], await self.daemon.jsonrpc_channel_subscription_list())
