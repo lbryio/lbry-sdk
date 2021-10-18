@@ -574,7 +574,7 @@ class DiskSpaceManagement(CommandTestCase):
 
 
 class TestProactiveDownloaderComponent(CommandTestCase):
-    async def assertBlobs(self, *sd_hashes):
+    async def assertBlobs(self, *sd_hashes, no_files=True):
         # checks that we have ony the finished blobs needed for the the referenced streams
         seen = set(sd_hashes)
         for sd_hash in sd_hashes:
@@ -586,39 +586,35 @@ class TestProactiveDownloaderComponent(CommandTestCase):
                 self.assertTrue(self.daemon.blob_manager.get_blob(blob.blob_hash).get_is_verified())
             seen.update(blob.blob_hash for blob in blobs if blob.blob_hash)
         self.assertEqual(seen, self.daemon.blob_manager.completed_blob_hashes)
+        if no_files:
+            self.assertEqual(0, len(await self.file_list()))
 
-    async def test_ensure_download(self):
-        unrelated_claim_id = self.get_claim_id(await self.stream_create('something_else', '0.01'))
-        channel_id = self.get_claim_id(await self.channel_create('@cool'))
-        content1 = await self.stream_create('content1', '0.01', channel_id=channel_id, data=bytes([0] * (2 << 23)))
-        content1 = content1['outputs'][0]['value']['source']['sd_hash']
-        content2 = await self.stream_create('content2', '0.01', channel_id=channel_id, data=bytes([0] * (2 << 23)))
-        content2 = content2['outputs'][0]['value']['source']['sd_hash']
-        await self.stream_create('paid', '0.01', channel_id=channel_id, fee_amount=42, fee_currency='USD')
-        await self.stream_repost(unrelated_claim_id, 'repost')
+    async def clear(self):
         await self.daemon.jsonrpc_file_delete(delete_all=True)
         self.assertEqual(0, len(await self.file_list()))
+        await self.daemon.blob_manager.delete_blobs(list(self.daemon.blob_manager.completed_blob_hashes), True)
         self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
 
+    async def test_ensure_download(self):
+        content1 = await self.stream_create('content1', '0.01', data=bytes([0] * (2 << 23)))
+        content1 = content1['outputs'][0]['value']['source']['sd_hash']
+        content2 = await self.stream_create('content2', '0.01', data=bytes([0] * (2 << 23)))
+        content2 = content2['outputs'][0]['value']['source']['sd_hash']
+
         proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
-        await proactive_downloader.ensure_download(channel_id, 1)
+        await self.clear()
+        await proactive_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
-        await proactive_downloader.ensure_download(channel_id, 2)
+        await proactive_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
-        # ignores paid content
-        await proactive_downloader.ensure_download(channel_id, 3)
-        await self.assertBlobs(content1, content2)
-        # ignores reposts
-        await proactive_downloader.ensure_download(channel_id, 4)
-        await self.assertBlobs(content1, content2)
+        await self.clear()
+        await proactive_downloader.download_blobs(content2)
+        await self.assertBlobs(content2)
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.daemon.storage.get_blobs_for_stream(
             await self.daemon.storage.get_stream_hash_for_sd_hash(content1)
         )
-        await self.daemon.jsonrpc_file_delete(delete_all=True)
-        self.assertEqual(0, len(await self.file_list()))
-        await self.daemon.blob_manager.delete_blobs(list(self.daemon.blob_manager.completed_blob_hashes), True)
-        self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
+        await self.clear()
         await proactive_downloader.download_blobs(blobs[0].blob_hash)
         self.assertEqual({blobs[0].blob_hash}, self.daemon.blob_manager.completed_blob_hashes)

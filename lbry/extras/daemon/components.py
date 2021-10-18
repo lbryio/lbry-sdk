@@ -381,7 +381,7 @@ class FileManagerComponent(Component):
 
 class BackgroundDownloader(Component):
     component_name = BACKGROUND_DOWNLOADER_COMPONENT
-    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT]
+    depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -399,34 +399,10 @@ class BackgroundDownloader(Component):
         return self.status
 
     async def loop(self):
-        db: SQLiteStorage = self.component_manager.get_component(DATABASE_COMPONENT)
         while True:
-            for channel_id, download_latest, download_all in await db.get_subscriptions():
-                amount = 1_000_000 if download_all else download_latest
-                if not amount:
-                    continue
-                await self.ensure_download(channel_id, amount)
             self.finished_iteration.set()
             self.finished_iteration.clear()
             await asyncio.sleep(self.download_loop_delay_seconds)
-
-    async def ensure_download(self, channel_id, amount):
-        wallet = self.component_manager.get_component(WALLET_COMPONENT)
-        ledger = wallet.ledger
-        claims, _, _, _ = await ledger.claim_search(
-            ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'])
-        offset = 0
-        while claims and amount > 0:
-            for claim in claims:
-                offset += 1
-                if not claim.script.source or claim.has_price:
-                    continue
-                await self.download_blobs(claim.claim.stream.source.sd_hash)
-                amount -= 1
-                if amount == 0:
-                    break
-            claims, _, _, _ = await ledger.claim_search(
-                ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'], offset=offset)
 
     async def download_blobs(self, sd_hash):
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
