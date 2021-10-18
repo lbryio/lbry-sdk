@@ -618,3 +618,12 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         await self.clear()
         await proactive_downloader.download_blobs(blobs[0].blob_hash)
         self.assertEqual({blobs[0].blob_hash}, self.daemon.blob_manager.completed_blob_hashes)
+
+        # trigger from requested blobs
+        await self.clear()
+        await proactive_downloader.stop()
+        proactive_downloader.requested_blobs.append(content1)
+        finished = proactive_downloader.finished_iteration.wait()
+        await proactive_downloader.start()
+        await finished
+        await self.assertBlobs(content1)
