@@ -17,7 +17,7 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob.disk_space_manager import DiskSpaceManager
 from lbry.blob_exchange.server import BlobServer
-from lbry.stream.managed_stream import ManagedStream
+from lbry.stream.downloader import StreamDownloader
 from lbry.stream.stream_manager import StreamManager
 from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
@@ -381,7 +381,7 @@ class FileManagerComponent(Component):
 
 class BackgroundDownloader(Component):
     component_name = BACKGROUND_DOWNLOADER_COMPONENT
-    depends_on = [FILE_MANAGER_COMPONENT, DATABASE_COMPONENT, WALLET_COMPONENT]
+    depends_on = [DATABASE_COMPONENT, WALLET_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -411,7 +411,6 @@ class BackgroundDownloader(Component):
             await asyncio.sleep(self.download_loop_delay_seconds)
 
     async def ensure_download(self, channel_id, amount):
-        file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         ledger = wallet.ledger
         claims, _, _, _ = await ledger.claim_search(
@@ -422,16 +421,23 @@ class BackgroundDownloader(Component):
                 offset += 1
                 if not claim.script.source or claim.has_price:
                     continue
-                stream = await file_manager.download_from_uri(
-                    claim.permanent_url, None, 60.0, save_file=False, wallet=wallet
-                )
-                if isinstance(stream, ManagedStream):
-                    await stream.save_blobs()
+                await self.download_blobs(claim.claim.stream.source.sd_hash)
                 amount -= 1
                 if amount == 0:
                     break
             claims, _, _, _ = await ledger.claim_search(
                 ledger.accounts, channel_id=channel_id, order_by=['release_time', '^height'], offset=offset)
+
+    async def download_blobs(self, sd_hash):
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        downloader = StreamDownloader(asyncio.get_running_loop(), self.conf, blob_manager, sd_hash)
+        node = None
+        if self.component_manager.has_component(DHT_COMPONENT):
+            node = self.component_manager.get_component(DHT_COMPONENT)
+        await downloader.start(node)
+        await downloader.load_descriptor()
+        for blob_info in downloader.descriptor.blobs[:-1]:
+            await downloader.download_stream_blob(blob_info)
 
     async def start(self):
         self.task = asyncio.create_task(self.loop())
