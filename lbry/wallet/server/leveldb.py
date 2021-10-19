@@ -106,8 +106,6 @@ class LevelDB:
         self.encoded_headers = LRUCacheWithMetrics(1 << 21, metric_name='encoded_headers', namespace='wallet_server')
         self.last_flush = time.time()
 
-        self.logger.info(f'using {self.env.db_engine} for DB backend')
-
         # Header merkle cache
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
@@ -125,9 +123,7 @@ class LevelDB:
         # Search index
         self.search_index = SearchIndex(
             self.env.es_index_prefix, self.env.database_query_timeout,
-            elastic_host=env.elastic_host, elastic_port=env.elastic_port,
-            half_life=self.env.trending_half_life, whale_threshold=self.env.trending_whale_threshold,
-            whale_half_life=self.env.trending_whale_half_life
+            elastic_host=env.elastic_host, elastic_port=env.elastic_port
         )
 
         self.genesis_bytes = bytes.fromhex(self.coin.GENESIS_HASH)
