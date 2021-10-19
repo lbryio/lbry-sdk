@@ -123,6 +123,9 @@ class TestRevertablePrefixDB(unittest.TestCase):
 
         self.assertIsNone(self.db.claim_takeover.get(name))
         self.db.claim_takeover.stage_put((name,), (claim_hash1, takeover_height))
+        self.assertIsNone(self.db.claim_takeover.get(name))
+        self.assertEqual(10000000, self.db.claim_takeover.get_pending(name).height)
+
         self.db.commit(10000000)
         self.assertEqual(10000000, self.db.claim_takeover.get(name).height)
 
