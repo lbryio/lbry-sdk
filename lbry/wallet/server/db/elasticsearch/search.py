@@ -42,8 +42,7 @@ class IndexVersionMismatch(Exception):
 class SearchIndex:
     VERSION = 1
 
-    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200,
-                 half_life=0.4, whale_threshold=10000, whale_half_life=0.99):
+    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200):
         self.search_timeout = search_timeout
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
         self.search_client: Optional[AsyncElasticsearch] = None
@@ -54,9 +53,6 @@ class SearchIndex:
         self.search_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
         self._elastic_port = elastic_port
-        self._trending_half_life = half_life
-        self._trending_whale_threshold = whale_threshold
-        self._trending_whale_half_life = whale_half_life
 
     async def get_index_version(self) -> int:
         try:
