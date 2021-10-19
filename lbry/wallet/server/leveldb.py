@@ -113,9 +113,12 @@ class LevelDB:
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
         self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 16, metric_name='tx_and_merkle', namespace="wallet_server")
+
+        # these are only used if the cache_all_tx_hashes setting is on
         self.total_transactions: List[bytes] = []
         self.tx_num_mapping: Dict[bytes, int] = {}
 
+        # these are only used if the cache_all_claim_txos setting is on
         self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
         self.txo_to_claim: DefaultDict[int, Dict[int, bytes]] = defaultdict(dict)
 
@@ -210,7 +213,7 @@ class LevelDB:
 
         expiration_height = self.coin.get_expiration_height(height)
         support_amount = self.get_support_amount(claim_hash)
-        claim_amount = self.claim_to_txo[claim_hash].amount
+        claim_amount = self.get_cached_claim_txo(claim_hash).amount
 
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
@@ -219,7 +222,7 @@ class LevelDB:
         canonical_url = short_url
         claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
-            channel_vals = self.claim_to_txo.get(channel_hash)
+            channel_vals = self.get_cached_claim_txo(channel_hash)
             if channel_vals:
                 channel_short_url = self.get_short_claim_id_url(
                     channel_vals.name, channel_vals.normalized_name, channel_hash, channel_vals.root_tx_num,
@@ -271,11 +274,13 @@ class LevelDB:
                 )
             # resolve by partial/complete claim id
             for key, claim_txo in self.prefix_db.claim_short_id.iterate(prefix=(normalized_name, claim_id[:10])):
-                claim_hash = self.txo_to_claim[claim_txo.tx_num][claim_txo.position]
-                non_normalized_name = self.claim_to_txo.get(claim_hash).name
-                signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
+                full_claim_hash = self.get_cached_claim_hash(claim_txo.tx_num, claim_txo.position)
+                c = self.get_cached_claim_txo(full_claim_hash)
+
+                non_normalized_name = c.name
+                signature_is_valid = c.channel_signature_is_valid
                 return self._prepare_resolve_result(
-                    claim_txo.tx_num, claim_txo.position, claim_hash, non_normalized_name, key.root_tx_num,
+                    claim_txo.tx_num, claim_txo.position, full_claim_hash, non_normalized_name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
                     signature_is_valid
                 )
@@ -285,7 +290,7 @@ class LevelDB:
         for idx, (key, claim_val) in enumerate(self.prefix_db.effective_amount.iterate(prefix=(normalized_name,))):
             if amount_order > idx + 1:
                 continue
-            claim_txo = self.claim_to_txo.get(claim_val.claim_hash)
+            claim_txo = self.get_cached_claim_txo(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
                 key.tx_num, key.position, claim_val.claim_hash, key.normalized_name, claim_txo.root_tx_num,
@@ -360,7 +365,7 @@ class LevelDB:
          return await asyncio.get_event_loop().run_in_executor(None, self._resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
-        claim = self.claim_to_txo.get(claim_hash)
+        claim = self.get_cached_claim_txo(claim_hash)
         if claim:
             activation = self.get_activation(claim.tx_num, claim.position)
             return self._prepare_resolve_result(
@@ -525,7 +530,7 @@ class LevelDB:
         reposted_claim = None
         reposted_metadata = None
         if reposted_claim_hash:
-            reposted_claim = self.claim_to_txo.get(reposted_claim_hash)
+            reposted_claim = self.get_cached_claim_txo(reposted_claim_hash)
             if not reposted_claim:
                 return
             reposted_metadata = self.get_claim_metadata(
@@ -677,11 +682,21 @@ class LevelDB:
 
     async def all_claims_producer(self, batch_size=500_000):
         batch = []
-        for claim_hash, claim_txo in self.claim_to_txo.items():
+        if self.env.cache_all_claim_txos:
+            claim_iterator = self.claim_to_txo.items()
+        else:
+            claim_iterator = map(lambda item: (item[0].claim_hash, item[1]), self.prefix_db.claim_to_txo.iterate())
+
+        for claim_hash, claim_txo in claim_iterator:
             # TODO: fix the couple of claim txos that dont have controlling names
             if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
                 continue
-            claim = self._fs_get_claim_by_hash(claim_hash)
+            activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
+            claim = self._prepare_resolve_result(
+                claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
+                claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+            )
+
             if claim:
                 batch.append(claim)
             if len(batch) == batch_size:
@@ -703,16 +718,14 @@ class LevelDB:
         results = []
 
         for claim_hash in claim_hashes:
-            if claim_hash not in self.claim_to_txo:
-                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                continue
-            name = self.claim_to_txo[claim_hash].normalized_name
-            if not self.prefix_db.claim_takeover.get(name):
-                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                continue
-            claim_txo = self.claim_to_txo.get(claim_hash)
+            claim_txo = self.get_cached_claim_txo(claim_hash)
             if not claim_txo:
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
                 continue
+            if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+                continue
+
             activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
             claim = self._prepare_resolve_result(
                 claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
@@ -763,7 +776,6 @@ class LevelDB:
                 f"{self.db_tx_count} vs {self.tx_counts[-1]} ({len(self.tx_counts)} counts)"
         else:
             assert self.db_tx_count == 0
-
 
     async def _read_claim_txos(self):
         def read_claim_txos():
@@ -853,7 +865,8 @@ class LevelDB:
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
         await self._read_headers()
-        await self._read_claim_txos()
+        if self.env.cache_all_claim_txos:
+            await self._read_claim_txos()
         if self.env.cache_all_tx_hashes:
             await self._read_tx_hashes()
 
@@ -872,6 +885,22 @@ class LevelDB:
         if self.env.cache_all_tx_hashes:
             return self.tx_num_mapping[tx_hash]
         return self.prefix_db.tx_num.get(tx_hash).tx_num
+
+    def get_cached_claim_txo(self, claim_hash: bytes) -> Optional[ClaimToTXOValue]:
+        if self.env.cache_all_claim_txos:
+            return self.claim_to_txo.get(claim_hash)
+        return self.prefix_db.claim_to_txo.get_pending(claim_hash)
+
+    def get_cached_claim_hash(self, tx_num: int, position: int) -> Optional[bytes]:
+        if self.env.cache_all_claim_txos:
+            if tx_num not in self.txo_to_claim:
+                return
+            return self.txo_to_claim[tx_num].get(position, None)
+        v = self.prefix_db.txo_to_claim.get_pending(tx_num, position)
+        return None if not v else v.claim_hash
+
+    def get_cached_claim_exists(self, tx_num: int, position: int) -> bool:
+        return self.get_cached_claim_hash(tx_num, position) is not None
 
     # Header merkle cache
 
@@ -960,7 +989,10 @@ class LevelDB:
             tx_height = -1
             tx_num = None if not tx_num else tx_num.tx_num
             if tx_num is not None:
-                fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
+                if self.env.cache_all_claim_txos:
+                    fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
+                else:
+                    fill_cache = False
                 tx_height = bisect_right(self.tx_counts, tx_num)
                 tx = self.prefix_db.tx.get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
             if tx_height == -1:

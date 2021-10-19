@@ -85,6 +85,18 @@ class PrefixRow(metaclass=PrefixRowType):
         if v:
             return v if not deserialize_value else self.unpack_value(v)
 
+    def get_pending(self, *key_args, fill_cache=True, deserialize_value=True):
+        packed_key = self.pack_key(*key_args)
+        last_op = self._op_stack.get_last_op_for_key(packed_key)
+        if last_op:
+            if last_op.is_put:
+                return last_op.value if not deserialize_value else self.unpack_value(last_op.value)
+            else:  # it's a delete
+                return
+        v = self._db.get(packed_key, fill_cache=fill_cache)
+        if v:
+            return v if not deserialize_value else self.unpack_value(v)
+
     def stage_put(self, key_args=(), value_args=()):
         self._op_stack.append_op(RevertablePut(self.pack_key(*key_args), self.pack_value(*value_args)))
 

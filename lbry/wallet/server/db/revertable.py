@@ -169,3 +169,7 @@ class RevertableOpStack:
         while packed:
             op, packed = RevertableOp.unpack(packed)
             self.append_op(op)
+
+    def get_last_op_for_key(self, key: bytes) -> Optional[RevertableOp]:
+        if key in self._items and self._items[key]:
+            return self._items[key][-1]
