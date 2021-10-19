@@ -18,14 +18,18 @@ services:
       - "wallet_server:/database"
     environment:
       - DAEMON_URL=http://lbry:lbry@127.0.0.1:9245
+      - MAX_QUERY_WORKERS=4
+      - CACHE_MB=1024
+      - CACHE_ALL_TX_HASHES=
+      - CACHE_ALL_CLAIM_TXOS=
+      - MAX_SEND=1000000000000000000
+      - MAX_RECEIVE=1000000000000000000
+      - MAX_SESSIONS=100000
+      - HOST=0.0.0.0
       - TCP_PORT=50001
       - PROMETHEUS_PORT=2112
-      - QUERY_TIMEOUT_MS=3000  # how long search queries allowed to run before cancelling, in milliseconds
-      - TRENDING_ALGORITHMS=variable_decay
-      - MAX_SEND=10000000000000  # deprecated. leave it high until its removed
-      - MAX_SUBS=1000000000000  # deprecated. leave it high until its removed
       - FILTERING_CHANNEL_IDS=770bd7ecba84fd2f7607fb15aedd2b172c2e153f 95e5db68a3101df19763f3a5182e4b12ba393ee8
-      - BLOCKING_CHANNEL_IDS=dd687b357950f6f271999971f43c785e8067c3a9 06871aa438032244202840ec59a469b303257cad b4a2528f436eca1bf3bf3e10ff3f98c57bd6c4c6 e4e230b131082f6b10c8f7994bbb83f29e8e6fb9
+      - BLOCKING_CHANNEL_IDS=dd687b357950f6f271999971f43c785e8067c3a9 06871aa438032244202840ec59a469b303257cad b4a2528f436eca1bf3bf3e10ff3f98c57bd6c4c6
   es01:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.11.0
     container_name: es01

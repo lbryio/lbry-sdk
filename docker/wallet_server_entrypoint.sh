@@ -6,7 +6,7 @@ set -euo pipefail
 
 SNAPSHOT_URL="${SNAPSHOT_URL:-}" #off by default. latest snapshot at https://lbry.com/snapshot/wallet
 
-if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/claims.db ]]; then
+if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/lbry-leveldb ]]; then
   files="$(ls)"
   echo "Downloading wallet snapshot from $SNAPSHOT_URL"
   wget --no-verbose --trust-server-names --content-disposition "$SNAPSHOT_URL"
@@ -20,6 +20,6 @@ if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/claims.db ]]; then
   rm "$filename"
 fi
 
-/home/lbry/.local/bin/lbry-hub-elastic-sync /database/claims.db
+/home/lbry/.local/bin/lbry-hub-elastic-sync
 echo 'starting server'
 /home/lbry/.local/bin/lbry-hub "$@"
