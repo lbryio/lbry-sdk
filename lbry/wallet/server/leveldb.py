@@ -846,7 +846,7 @@ class LevelDB:
 
         self.prefix_db = HubDB(
             os.path.join(self.env.db_dir, 'lbry-leveldb'), cache_mb=self.env.cache_MB,
-            reorg_limit=self.env.reorg_limit, max_open_files=512
+            reorg_limit=self.env.reorg_limit, max_open_files=self.env.db_max_open_files
         )
         self.logger.info(f'opened db: lbry-leveldb')
 
