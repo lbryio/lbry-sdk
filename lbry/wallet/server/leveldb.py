@@ -713,6 +713,23 @@ class LevelDB:
                 yield meta
         batch.clear()
 
+    def claim_producer(self, claim_hash: bytes) -> Optional[Dict]:
+        claim_txo = self.get_cached_claim_txo(claim_hash)
+        if not claim_txo:
+            self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+            return
+        if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
+            self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+            return
+        activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
+        claim = self._prepare_resolve_result(
+            claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
+            claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+        )
+        if not claim:
+            return
+        return self._prepare_claim_metadata(claim.claim_hash, claim)
+
     def claims_producer(self, claim_hashes: Set[bytes]):
         batch = []
         results = []
