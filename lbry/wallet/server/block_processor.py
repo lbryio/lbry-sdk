@@ -404,7 +404,8 @@ class BlockProcessor:
                     await self.backup_block()
                     self.logger.info(f'backed up to height {self.height:,d}')
 
-                    await self.db._read_claim_txos()  # TODO: don't do this
+                    if self.env.cache_all_claim_txos:
+                        await self.db._read_claim_txos()  # TODO: don't do this
                     for touched in self.touched_claims_to_send_es:
                         if not self.db.get_claim_txo(touched):
                             self.removed_claims_to_send_es.add(touched)
@@ -545,10 +546,11 @@ class BlockProcessor:
             previous_amount = previous_claim.amount
             self.updated_claims.add(claim_hash)
 
-        self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
-            tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
-        )
-        self.db.txo_to_claim[tx_num][nout] = claim_hash
+        if self.env.cache_all_claim_txos:
+            self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
+                tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
+            )
+            self.db.txo_to_claim[tx_num][nout] = claim_hash
 
         pending = StagedClaimtrieItem(
             claim_name, normalized_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout,
@@ -693,7 +695,7 @@ class BlockProcessor:
         if (txin_num, txin.prev_idx) in self.txo_to_claim:
             spent = self.txo_to_claim[(txin_num, txin.prev_idx)]
         else:
-            if txin_num not in self.db.txo_to_claim or txin.prev_idx not in self.db.txo_to_claim[txin_num]:
+            if not self.db.get_cached_claim_exists(txin_num, txin.prev_idx):
                 # txo is not a claim
                 return False
             spent_claim_hash_and_name = self.db.get_claim_from_txo(
@@ -701,10 +703,12 @@ class BlockProcessor:
             )
             assert spent_claim_hash_and_name is not None
             spent = self._make_pending_claim_txo(spent_claim_hash_and_name.claim_hash)
-        claim_hash = self.db.txo_to_claim[txin_num].pop(txin.prev_idx)
-        if not self.db.txo_to_claim[txin_num]:
-            self.db.txo_to_claim.pop(txin_num)
-        self.db.claim_to_txo.pop(claim_hash)
+
+        if self.env.cache_all_claim_txos:
+            claim_hash = self.db.txo_to_claim[txin_num].pop(txin.prev_idx)
+            if not self.db.txo_to_claim[txin_num]:
+                self.db.txo_to_claim.pop(txin_num)
+            self.db.claim_to_txo.pop(claim_hash)
         if spent.reposted_claim_hash:
             self.pending_reposted.add(spent.reposted_claim_hash)
         if spent.signing_hash and spent.channel_signature_is_valid and spent.signing_hash not in self.abandoned_claims:
@@ -1022,8 +1026,8 @@ class BlockProcessor:
         # prepare to activate or delay activation of the pending claims being added this block
         for (tx_num, nout), staged in self.txo_to_claim.items():
             is_delayed = not staged.is_update
-            if staged.claim_hash in self.db.claim_to_txo:
-                prev_txo = self.db.claim_to_txo[staged.claim_hash]
+            prev_txo = self.db.get_cached_claim_txo(staged.claim_hash)
+            if prev_txo:
                 prev_activation = self.db.get_activation(prev_txo.tx_num, prev_txo.position)
                 if height < prev_activation or prev_activation < 0:
                     is_delayed = True
