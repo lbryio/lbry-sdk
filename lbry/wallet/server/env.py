@@ -30,7 +30,6 @@ class Env:
 
     def __init__(self, coin=None):
         self.logger = class_logger(__name__, self.__class__.__name__)
-        self.allow_root = self.boolean('ALLOW_ROOT', False)
         self.host = self.default('HOST', 'localhost')
         self.rpc_host = self.default('RPC_HOST', 'localhost')
         self.elastic_host = self.default('ELASTIC_HOST', 'localhost')
@@ -38,17 +37,8 @@ class Env:
         self.loop_policy = self.set_event_loop_policy()
         self.obsolete(['UTXO_MB', 'HIST_MB', 'NETWORK'])
         self.db_dir = self.required('DB_DIRECTORY')
-        self.db_engine = self.default('DB_ENGINE', 'leveldb')
-        # self.trending_algorithms = [
-        #     trending for trending in set(self.default('TRENDING_ALGORITHMS', 'zscore').split(' ')) if trending
-        # ]
-        self.trending_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_DECAY_RATE', 48)))) + 1
-        self.trending_whale_half_life = math.log2(0.1 ** (1 / (3 + self.integer('TRENDING_WHALE_DECAY_RATE', 24)))) + 1
-        self.trending_whale_threshold = float(self.integer('TRENDING_WHALE_THRESHOLD', 10000)) * 1E8
 
         self.max_query_workers = self.integer('MAX_QUERY_WORKERS', 4)
-        self.individual_tag_indexes = self.boolean('INDIVIDUAL_TAG_INDEXES', True)
-        self.track_metrics = self.boolean('TRACK_METRICS', False)
         self.websocket_host = self.default('WEBSOCKET_HOST', self.host)
         self.websocket_port = self.integer('WEBSOCKET_PORT', None)
         self.daemon_url = self.required('DAEMON_URL')
@@ -85,18 +75,17 @@ class Env:
         self.peer_discovery = self.peer_discovery_enum()
         self.peer_announce = self.boolean('PEER_ANNOUNCE', True)
         self.peer_hubs = self.extract_peer_hubs()
-        self.force_proxy = self.boolean('FORCE_PROXY', False)
-        self.tor_proxy_host = self.default('TOR_PROXY_HOST', 'localhost')
-        self.tor_proxy_port = self.integer('TOR_PROXY_PORT', None)
+        # self.tor_proxy_host = self.default('TOR_PROXY_HOST', 'localhost')
+        # self.tor_proxy_port = self.integer('TOR_PROXY_PORT', None)
         # The electrum client takes the empty string as unspecified
         self.payment_address = self.default('PAYMENT_ADDRESS', '')
         self.donation_address = self.default('DONATION_ADDRESS', '')
         # Server limits to help prevent DoS
         self.max_send = self.integer('MAX_SEND', 1000000)
         self.max_receive = self.integer('MAX_RECEIVE', 1000000)
-        self.max_subs = self.integer('MAX_SUBS', 250000)
+        # self.max_subs = self.integer('MAX_SUBS', 250000)
         self.max_sessions = self.sane_max_sessions()
-        self.max_session_subs = self.integer('MAX_SESSION_SUBS', 50000)
+        # self.max_session_subs = self.integer('MAX_SESSION_SUBS', 50000)
         self.session_timeout = self.integer('SESSION_TIMEOUT', 600)
         self.drop_client = self.custom("DROP_CLIENT", None, re.compile)
         self.description = self.default('DESCRIPTION', '')
