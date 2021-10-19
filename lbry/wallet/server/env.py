@@ -51,7 +51,7 @@ class Env:
             self.coin = Coin.lookup_coin_class(coin_name, network)
         self.es_index_prefix = self.default('ES_INDEX_PREFIX', '')
         self.es_mode = self.default('ES_MODE', 'writer')
-        self.cache_MB = self.integer('CACHE_MB', 4096)
+        self.cache_MB = self.integer('CACHE_MB', 1024)
         self.reorg_limit = self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
         self.tcp_port = self.integer('TCP_PORT', None)
@@ -97,7 +97,7 @@ class Env:
         self.identities = [identity
                            for identity in (clearnet_identity, tor_identity)
                            if identity is not None]
-        self.database_query_timeout = float(self.integer('QUERY_TIMEOUT_MS', 3000)) / 1000.0
+        self.database_query_timeout = float(self.integer('QUERY_TIMEOUT_MS', 10000)) / 1000.0
 
     @classmethod
     def default(cls, envvar, default):
