@@ -226,6 +226,9 @@ def get_argument_parser():
 def ensure_directory_exists(path: str):
     if not os.path.isdir(path):
         pathlib.Path(path).mkdir(parents=True, exist_ok=True)
+    use_effective_ids = os.access in os.supports_effective_ids
+    if not os.access(path, os.W_OK, effective_ids=use_effective_ids):
+        raise PermissionError(f"The following directory is not writable: {path}")
 
 
 LOG_MODULES = 'lbry', 'aioupnp'
