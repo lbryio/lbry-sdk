@@ -47,8 +47,8 @@ async def get_recent_claims(blocks: int, index_name='claims', db=None):
             else:
                 logging.warning("could not sync claim %s", touched.hex())
             if cnt % 10000 == 0:
-                print(f"{cnt} claims sent")
-        print("sent %i claims, deleted %i" % (len(touched_claims), len(deleted_claims)))
+                logging.info("%i claims sent to ES", cnt)
+        logging.info("finished sending %i claims to ES, deleted %i", cnt, len(touched_claims), len(deleted_claims))
     finally:
         if need_open:
             db.close()
@@ -60,6 +60,7 @@ async def get_all_claims(index_name='claims', db=None):
     db = db or LevelDB(env)
     if need_open:
         await db.open_dbs()
+    logging.info("Fetching claims to send ES from leveldb")
     try:
         cnt = 0
         async for claim in db.all_claims_producer():
@@ -72,7 +73,7 @@ async def get_all_claims(index_name='claims', db=None):
             }
             cnt += 1
             if cnt % 10000 == 0:
-                print(f"{cnt} claims sent")
+                logging.info("sent %i claims to ES", cnt)
     finally:
         if need_open:
             db.close()
