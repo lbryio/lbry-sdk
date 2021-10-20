@@ -289,9 +289,11 @@ class Env:
 
     @classmethod
     def contribute_to_arg_parser(cls, parser):
-        parser.add_argument('--db_dir', type=str, help='path of the directory containing lbry-leveldb')
+        parser.add_argument('--db_dir', type=str, help='path of the directory containing lbry-leveldb',
+                            default=cls.default('DB_DIRECTORY', None))
         parser.add_argument('--daemon_url',
-                            help='URL for rpc from lbrycrd, <rpcuser>:<rpcpassword>@<lbrycrd rpc ip><lbrycrd rpc port>')
+                            help='URL for rpc from lbrycrd, <rpcuser>:<rpcpassword>@<lbrycrd rpc ip><lbrycrd rpc port>',
+                            default=cls.default('DAEMON_URL', None))
         parser.add_argument('--db_max_open_files', type=int, default=512,
                             help='number of files leveldb can have open at a time')
         parser.add_argument('--host', type=str, default=cls.default('HOST', 'localhost'),

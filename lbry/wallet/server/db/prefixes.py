@@ -534,6 +534,7 @@ class DBState(typing.NamedTuple):
     hist_flush_count: int
     comp_flush_count: int
     comp_cursor: int
+    es_sync_height: int
 
 
 class ActiveAmountPrefixRow(PrefixRow):
@@ -1521,7 +1522,7 @@ class SupportAmountPrefixRow(PrefixRow):
 
 class DBStatePrefixRow(PrefixRow):
     prefix = DB_PREFIXES.db_state.value
-    value_struct = struct.Struct(b'>32sLL32sLLBBlll')
+    value_struct = struct.Struct(b'>32sLL32sLLBBlllL')
     key_struct = struct.Struct(b'')
 
     key_part_lambdas = [
@@ -1539,15 +1540,19 @@ class DBStatePrefixRow(PrefixRow):
     @classmethod
     def pack_value(cls, genesis: bytes, height: int, tx_count: int, tip: bytes, utxo_flush_count: int, wall_time: int,
                    first_sync: bool, db_version: int, hist_flush_count: int, comp_flush_count: int,
-                   comp_cursor: int) -> bytes:
+                   comp_cursor: int, es_sync_height: int) -> bytes:
         return super().pack_value(
             genesis, height, tx_count, tip, utxo_flush_count,
             wall_time, 1 if first_sync else 0, db_version, hist_flush_count,
-            comp_flush_count, comp_cursor
+            comp_flush_count, comp_cursor, es_sync_height
         )
 
     @classmethod
     def unpack_value(cls, data: bytes) -> DBState:
+        if len(data) == 94:
+            # TODO: delete this after making a new snapshot - 10/20/21
+            # migrate in the es_sync_height if it doesnt exist
+            data += data[32:36]
         return DBState(*super().unpack_value(data))
 
     @classmethod
