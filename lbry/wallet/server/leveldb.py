@@ -498,18 +498,8 @@ class LevelDB:
             script.parse()
             return Claim.from_bytes(script.values['claim'])
         except:
-            self.logger.error(
-                "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
-                (raw or b'').hex()
-            )
+            self.logger.error("claim parsing for ES failed with tx: %s", tx_hash[::-1].hex())
             return
-
-    def _prepare_claim_for_sync(self, claim_hash: bytes):
-        claim = self._fs_get_claim_by_hash(claim_hash)
-        if not claim:
-            print("wat")
-            return
-        return self._prepare_claim_metadata(claim_hash, claim)
 
     def _prepare_claim_metadata(self, claim_hash: bytes, claim: ResolveResult):
         metadata = self.get_claim_metadata(claim.tx_hash, claim.position)
@@ -552,19 +542,10 @@ class LevelDB:
                 ).outputs[reposted_claim.position]
                 reposted_script = OutputScript(reposted_claim_txo.pk_script)
                 reposted_script.parse()
-            except:
-                self.logger.error(
-                    "repost tx parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
-                    raw_reposted_claim_tx.hex()
-                )
-                return
-            try:
                 reposted_metadata = Claim.from_bytes(reposted_script.values['claim'])
             except:
-                self.logger.error(
-                    "reposted claim parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
-                    raw_reposted_claim_tx.hex()
-                )
+                self.logger.error("failed to parse reposted claim in tx %s that was reposted by %s",
+                                  reposted_tx_hash[::-1].hex(), claim_hash.hex())
                 return
         if reposted_metadata:
             if reposted_metadata.is_stream:
