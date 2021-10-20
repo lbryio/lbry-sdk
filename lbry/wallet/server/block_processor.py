@@ -367,6 +367,7 @@ class BlockProcessor:
                     await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
                                                                  self.db.filtered_streams, self.db.filtered_channels)
                     await self.db.search_index.update_trending_score(self.activation_info_to_send_es)
+                    await self._es_caught_up()
                 self.db.search_index.clear_caches()
                 self.touched_claims_to_send_es.clear()
                 self.removed_claims_to_send_es.clear()
@@ -1620,6 +1621,7 @@ class BlockProcessor:
         else:
             self.tx_count = self.db.tx_counts[-1]
         self.height -= 1
+
         # self.touched can include other addresses which is
         # harmless, but remove None.
         self.touched_hashXs.discard(None)
@@ -1649,8 +1651,15 @@ class BlockProcessor:
         self.db.last_flush = now
         self.db.last_flush_tx_count = self.db.fs_tx_count
 
-        await self.run_in_thread_with_lock(self.db.prefix_db.rollback, self.height + 1)
+        def rollback():
+            self.db.prefix_db.rollback(self.height + 1)
+            self.db.es_sync_height = self.height
+            self.db.write_db_state()
+            self.db.prefix_db.unsafe_commit()
+
+        await self.run_in_thread_with_lock(rollback)
         self.clear_after_advance_or_reorg()
+        self.db.assert_db_state()
 
         elapsed = self.db.last_flush - start_time
         self.logger.warning(f'backup flush #{self.db.hist_flush_count:,d} took {elapsed:.1f}s. '
@@ -1712,6 +1721,17 @@ class BlockProcessor:
             except Exception:
                 self.logger.exception("error while processing txs")
                 raise
+
+    async def _es_caught_up(self):
+        self.db.es_sync_height = self.height
+
+        def flush():
+            assert len(self.db.prefix_db._op_stack) == 0
+            self.db.write_db_state()
+            self.db.prefix_db.unsafe_commit()
+            self.db.assert_db_state()
+
+        await self.run_in_thread_with_lock(flush)
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')
