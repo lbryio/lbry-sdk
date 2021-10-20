@@ -419,7 +419,7 @@ class BackgroundDownloader(Component):
         if self.component_manager.has_component(DHT_COMPONENT):
             node = self.component_manager.get_component(DHT_COMPONENT)
         try:
-            await downloader.start(node)
+            await downloader.start(node, save_stream=False)
         except ValueError:
             return
         for blob_info in downloader.descriptor.blobs[:-1]:
