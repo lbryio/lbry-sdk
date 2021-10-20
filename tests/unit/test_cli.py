@@ -206,7 +206,7 @@ class DaemonDocsTests(TestCase):
             self.fail("\n" + "\n".join(failures))
 
 
-class DirectoryTests(FakeFSTestCase):
+class EnsureDirectoryExistsTests(FakeFSTestCase):
 
     def setUp(self):
         self.setUpPyfakefs()
