@@ -4,6 +4,7 @@ import os
 from binascii import hexlify
 
 from lbry.schema import Claim
+from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
 from lbry.wallet import Transaction
@@ -574,19 +575,24 @@ class DiskSpaceManagement(CommandTestCase):
 
 
 class TestProactiveDownloaderComponent(CommandTestCase):
+    async def get_blobs_from_sd_blob(self, sd_blob):
+        descriptor = await StreamDescriptor.from_stream_descriptor_blob(
+            asyncio.get_running_loop(), self.daemon.blob_manager.blob_dir, sd_blob
+        )
+        return descriptor.blobs
+
     async def assertBlobs(self, *sd_hashes, no_files=True):
         # checks that we have ony the finished blobs needed for the the referenced streams
         seen = set(sd_hashes)
         for sd_hash in sd_hashes:
-            self.assertTrue(self.daemon.blob_manager.get_blob(sd_hash).get_is_verified())
-            blobs = await self.daemon.storage.get_blobs_for_stream(
-                await self.daemon.storage.get_stream_hash_for_sd_hash(sd_hash)
-            )
+            sd_blob = self.daemon.blob_manager.get_blob(sd_hash)
+            self.assertTrue(sd_blob.get_is_verified())
+            blobs = await self.get_blobs_from_sd_blob(sd_blob)
             for blob in blobs[:-1]:
                 self.assertTrue(self.daemon.blob_manager.get_blob(blob.blob_hash).get_is_verified())
             seen.update(blob.blob_hash for blob in blobs if blob.blob_hash)
-        self.assertEqual(seen, self.daemon.blob_manager.completed_blob_hashes)
         if no_files:
+            self.assertEqual(seen, self.daemon.blob_manager.completed_blob_hashes)
             self.assertEqual(0, len(await self.file_list()))
 
     async def clear(self):
@@ -596,25 +602,28 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
 
     async def test_ensure_download(self):
-        content1 = await self.stream_create('content1', '0.01', data=bytes([0] * (2 << 23)))
+        content1 = await self.stream_create('content1', '0.01', data=bytes([0] * (2 << 24)))
         content1 = content1['outputs'][0]['value']['source']['sd_hash']
         content2 = await self.stream_create('content2', '0.01', data=bytes([0] * (2 << 23)))
         content2 = content2['outputs'][0]['value']['source']['sd_hash']
+        self.assertEqual('48', (await self.status())['disk_space']['space_used'])
 
         proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
         await self.clear()
+        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         await proactive_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
+        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         await proactive_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
+        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         await self.clear()
         await proactive_downloader.download_blobs(content2)
         await self.assertBlobs(content2)
+        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
-        blobs = await self.daemon.storage.get_blobs_for_stream(
-            await self.daemon.storage.get_stream_hash_for_sd_hash(content1)
-        )
+        blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))
         await self.clear()
         await proactive_downloader.download_blobs(blobs[0].blob_hash)
         self.assertEqual({blobs[0].blob_hash}, self.daemon.blob_manager.completed_blob_hashes)
@@ -627,3 +636,15 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         await proactive_downloader.start()
         await finished
         await self.assertBlobs(content1)
+        await self.clear()
+        # test that disk space manager doesn't delete orphan network blobs
+        await proactive_downloader.download_blobs(content1)
+        await self.daemon.storage.db.execute_fetchall("update blob set added_on=0")  # so it is preferred for cleaning
+        await self.daemon.jsonrpc_get("content2", save_file=False)
+        while (await self.file_list())[0]['status'] == 'running':
+            await asyncio.sleep(0.5)
+        await self.assertBlobs(content1, no_files=False)
+
+        self.daemon.conf.blob_storage_limit = 1
+        await self.blob_clean()
+        await self.assertBlobs(content1, no_files=False)

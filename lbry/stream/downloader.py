@@ -83,7 +83,7 @@ class StreamDownloader:
         )
         log.info("loaded stream manifest %s", self.sd_hash)
 
-    async def start(self, node: typing.Optional['Node'] = None, connection_id: int = 0):
+    async def start(self, node: typing.Optional['Node'] = None, connection_id: int = 0, save_stream=True):
         # set up peer accumulation
         self.node = node or self.node  # fixme: this shouldnt be set here!
         if self.node:
@@ -102,7 +102,7 @@ class StreamDownloader:
         self.search_queue.put_nowait(self.descriptor.blobs[0].blob_hash)
         log.info("added head blob to peer search for stream %s", self.sd_hash)
 
-        if not await self.blob_manager.storage.stream_exists(self.sd_hash):
+        if not await self.blob_manager.storage.stream_exists(self.sd_hash) and save_stream:
             await self.blob_manager.storage.store_stream(
                 self.blob_manager.get_blob(self.sd_hash, length=self.descriptor.length), self.descriptor
             )
