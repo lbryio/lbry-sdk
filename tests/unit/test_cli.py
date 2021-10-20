@@ -211,19 +211,8 @@ class DirectoryTests(FakeFSTestCase):
     def setUp(self):
         self.setUpPyfakefs()
 
-    def test_when_dir_does_not_exist_then_it_is_created(self):
-        dir_path = "dir"
-        ensure_directory_exists(dir_path)
-        self.assertTrue(os.path.exists(dir_path))
-
     def test_when_parent_dir_does_not_exist_then_dir_is_created_with_parent(self):
         dir_path = os.path.join("parent_dir", "dir")
-        ensure_directory_exists(dir_path)
-        self.assertTrue(os.path.exists(dir_path))
-
-    def test_when_dir_exists_then_it_still_exists(self):
-        dir_path = "dir"
-        pathlib.Path(dir_path).mkdir()
         ensure_directory_exists(dir_path)
         self.assertTrue(os.path.exists(dir_path))
 
@@ -241,7 +230,7 @@ class DirectoryTests(FakeFSTestCase):
         except (FileExistsError, PermissionError) as err:
             self.fail(f"{type(err).__name__} was raised")
 
-    def test_when_file_exists_at_path_then_raise(self):
+    def test_when_non_dir_file_exists_at_path_then_raise(self):
         file_path = "file.extension"
         self.fs.create_file(file_path)
         with self.assertRaises(FileExistsError):
