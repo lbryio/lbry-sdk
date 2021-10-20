@@ -437,19 +437,28 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
 
-    async def get_stored_blobs(self, is_mine: bool):
+    async def get_stored_blobs(self, is_mine: bool, orphans=False):
         is_mine = 1 if is_mine else 0
-        return await self.db.execute_fetchall(
-            "select blob_hash, blob_length, added_on from blob where is_mine=? order by added_on asc",
+        sd_blobs = await self.db.execute_fetchall(
+            "select blob.blob_hash, blob.blob_length, blob.added_on "
+            "from blob join stream on blob.blob_hash=stream.sd_hash join file using (stream_hash) "
+            "where blob.is_mine=? order by blob.added_on asc",
             (is_mine,)
         )
+        normal_blobs = await self.db.execute_fetchall(
+            "select blob.blob_hash, blob.blob_length, blob.added_on "
+            "from blob join stream_blob using (blob_hash) cross join stream using (stream_hash)"
+            "cross join file using (stream_hash) where blob.is_mine=? order by blob.added_on asc",
+            (is_mine,)
+        )
+        return normal_blobs + sd_blobs
 
     async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None):
         if is_mine is None:
-            sql, args = "select coalesce(sum(blob_length), 0) from blob", ()
+            sql = "select coalesce(sum(blob_length), 0) from blob join stream_blob using (blob_hash)"
         else:
-            is_mine = 1 if is_mine else 0
-            sql, args = "select coalesce(sum(blob_length), 0) from blob where is_mine=?", (is_mine,)
+            sql = "select coalesce(sum(blob_length), 0) from blob join stream_blob using (blob_hash) where is_mine=?"
+        args = (1 if is_mine else 0,) if is_mine is not None else ()
         return (await self.db.execute_fetchone(sql, args))[0]
 
     async def update_blob_ownership(self, sd_hash, is_mine: bool):
