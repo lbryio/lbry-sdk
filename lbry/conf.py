@@ -634,6 +634,7 @@ class Config(CLIConfig):
 
     # blob announcement and download
     save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
+    network_storage_limit = Integer("Disk space in MB to be allocated for helping the P2P network. 0 = disable", 0)
     blob_storage_limit = Integer("Disk space in MB to be allocated for blob storage. 0 = no limit", 0)
     blob_lru_cache_size = Integer(
         "LRU cache size for decrypted downloaded blobs used to minimize re-downloading the same blobs when "
