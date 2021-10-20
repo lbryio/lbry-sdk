@@ -33,7 +33,7 @@ from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
 from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, HubDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
-from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
+from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue, DBStatePrefixRow
 from lbry.wallet.transaction import OutputScript
 from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
@@ -86,6 +86,8 @@ class LevelDB:
         self.hist_flush_count = 0
         self.hist_comp_flush_count = -1
         self.hist_comp_cursor = -1
+
+        self.es_sync_height = 0
 
         # blocking/filtering dicts
         blocking_channels = self.env.default('BLOCKING_CHANNEL_IDS', '').split(' ')
@@ -827,7 +829,8 @@ class LevelDB:
 
         self.prefix_db = HubDB(
             os.path.join(self.env.db_dir, 'lbry-leveldb'), cache_mb=self.env.cache_MB,
-            reorg_limit=self.env.reorg_limit, max_open_files=self.env.db_max_open_files
+            reorg_limit=self.env.reorg_limit, max_open_files=self.env.db_max_open_files,
+            unsafe_prefixes={DBStatePrefixRow.prefix}
         )
         self.logger.info(f'opened db: lbry-leveldb')
 
@@ -1059,7 +1062,8 @@ class LevelDB:
         self.prefix_db.db_state.stage_put((), (
                 self.genesis_bytes, self.db_height, self.db_tx_count, self.db_tip,
                 self.utxo_flush_count, int(self.wall_time), self.first_sync, self.db_version,
-                self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor
+                self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor,
+                self.es_sync_height
             )
         )
 
@@ -1101,11 +1105,12 @@ class LevelDB:
 
     def assert_db_state(self):
         state = self.prefix_db.db_state.get()
-        assert self.db_version == state.db_version
-        assert self.db_height == state.height
-        assert self.db_tx_count == state.tx_count
-        assert self.db_tip == state.tip
-        assert self.first_sync == state.first_sync
+        assert self.db_version == state.db_version, f"{self.db_version} != {state.db_version}"
+        assert self.db_height == state.height, f"{self.db_height} != {state.height}"
+        assert self.db_tx_count == state.tx_count, f"{self.db_tx_count} != {state.tx_count}"
+        assert self.db_tip == state.tip, f"{self.db_tip} != {state.tip}"
+        assert self.first_sync == state.first_sync, f"{self.first_sync} != {state.first_sync}"
+        assert self.es_sync_height == state.es_sync_height, f"{self.es_sync_height} != {state.es_sync_height}"
 
     async def all_utxos(self, hashX):
         """Return all UTXOs for an address sorted in no particular order."""

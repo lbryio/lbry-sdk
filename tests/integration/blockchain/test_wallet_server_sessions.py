@@ -5,7 +5,7 @@ import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
-from lbry.wallet.server.db.elasticsearch.sync import run_sync, make_es_index
+from lbry.wallet.server.db.elasticsearch.sync import make_es_index_and_run_sync
 from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
@@ -95,16 +95,17 @@ class TestESSync(CommandTestCase):
         await self.generate(1)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
         db = self.conductor.spv_node.server.db
+        env = self.conductor.spv_node.server.env
+
         await db.search_index.delete_index()
         db.search_index.clear_caches()
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
         await db.search_index.stop()
-        self.assertTrue(await make_es_index(db.search_index))
 
         async def resync():
             await db.search_index.start()
             db.search_index.clear_caches()
-            await run_sync(index_name=db.search_index.index, db=db)
+            await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
             self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
@@ -114,9 +115,12 @@ class TestESSync(CommandTestCase):
         # this time we will test a migration from unversioned to v1
         await db.search_index.sync_client.indices.delete_template(db.search_index.index)
         await db.search_index.stop()
-        self.assertTrue(await make_es_index(db.search_index))
+
+        await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
         await db.search_index.start()
+
         await resync()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
 
 class TestHubDiscovery(CommandTestCase):

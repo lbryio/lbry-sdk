@@ -10,9 +10,6 @@ def get_argument_parser():
         prog="lbry-hub"
     )
     Env.contribute_to_arg_parser(parser)
-    sub = parser.add_subparsers(metavar='COMMAND')
-    start = sub.add_parser('start', help='Start LBRY Network interface.')
-
     return parser
 
 
