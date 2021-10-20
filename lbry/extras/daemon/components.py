@@ -391,6 +391,7 @@ class BackgroundDownloader(Component):
         self.download_loop_delay_seconds = 60
         self.finished_iteration = asyncio.Event()
         self.requested_blobs = deque(maxlen=10)
+        self.ongoing_download: typing.Optional[asyncio.Task] = None
 
     @property
     def component(self) -> 'BackgroundDownloader':
@@ -404,10 +405,10 @@ class BackgroundDownloader(Component):
             if self.component_manager.has_component(DHT_COMPONENT):
                 node = self.component_manager.get_component(DHT_COMPONENT)
                 self.requested_blobs = node.protocol.data_store.requested_blobs
-            if self.requested_blobs:
+            if self.requested_blobs and (not self.ongoing_download or self.ongoing_download.done()):
                 blob_hash = self.requested_blobs.pop()
-                await self.download_blobs(blob_hash)
-            self.finished_iteration.set()
+                self.ongoing_download = asyncio.create_task(self.download_blobs(blob_hash))
+                self.ongoing_download.add_done_callback(lambda _: self.finished_iteration.set())
             self.finished_iteration.clear()
             await asyncio.sleep(self.download_loop_delay_seconds)
 
@@ -428,6 +429,8 @@ class BackgroundDownloader(Component):
         self.task = asyncio.create_task(self.loop())
 
     async def stop(self):
+        if self.ongoing_download and not self.ongoing_download.done():
+            self.ongoing_download.cancel()
         self.task.cancel()
 
 
