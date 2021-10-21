@@ -1397,47 +1397,32 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
             ))[0][0]['trending_score']
 
         claim_id1 = (await self.stream_create('derp', '1.0'))['outputs'][0]['claim_id']
-        claim_id2 = (await self.stream_create('derp', '1.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        claim_id3 = (await self.stream_create('derp', '1.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        claim_id4 = (await self.stream_create('derp', '1.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        claim_id5 = (await self.stream_create('derp', '1.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-
-        COIN = 1E9
+        COIN = 1E8
 
         height = 99000
-
         self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height, True, 1 * COIN, 1_000_000 * COIN
-        )
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id2, height, True, 1 * COIN, 100_000 * COIN
-        )
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id2, height + 1, False, 100_001 * COIN, 100_000 * COIN
-        )
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id3, height, True, 1 * COIN, 1_000 * COIN
-        )
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id4, height, True, 1 * COIN, 10 * COIN
+            claim_id1, height, 0, 10 * COIN
         )
         await self.generate(1)
-
-        self.assertEqual(3.1711298570548195e+76, await get_trending_score(claim_id1))
-        self.assertEqual(-1.369652719234026e+74, await get_trending_score(claim_id2))
-        self.assertEqual(2.925275298842502e+75, await get_trending_score(claim_id3))
-        self.assertEqual(5.193711055804491e+74, await get_trending_score(claim_id4))
-        self.assertEqual(0.6690521635580086, await get_trending_score(claim_id5))
-
+        self.assertEqual(172.64252836433135, await get_trending_score(claim_id1))
         self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id5, height + 100, True, 2 * COIN, 10 * COIN
+            claim_id1, height + 1, 10 * COIN, 100 * COIN
         )
         await self.generate(1)
-        self.assertEqual(5.664516565750028e+74, await get_trending_score(claim_id5))
-
+        self.assertEqual(173.45931832928875, await get_trending_score(claim_id1))
+        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
+            claim_id1, height + 100, 100 * COIN, 1000000 * COIN
+        )
+        await self.generate(1)
+        self.assertEqual(176.65517070393514, await get_trending_score(claim_id1))
+        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
+            claim_id1, height + 200, 1000000 * COIN, 1 * COIN
+        )
+        await self.generate(1)
+        self.assertEqual(-174.951347102643, await get_trending_score(claim_id1))
         search_results = (await self.conductor.spv_node.server.bp.db.search_index.search(claim_name="derp"))[0]
-        self.assertEqual(5, len(search_results))
-        self.assertListEqual([claim_id1, claim_id3, claim_id4, claim_id2, claim_id5], [c['claim_id'] for c in search_results])
+        self.assertEqual(1, len(search_results))
+        self.assertListEqual([claim_id1], [c['claim_id'] for c in search_results])
 
 
 class ResolveAfterReorg(BaseResolveTestCase):
