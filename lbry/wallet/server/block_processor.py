@@ -30,7 +30,6 @@ if typing.TYPE_CHECKING:
 
 class TrendingNotification(NamedTuple):
     height: int
-    added: bool
     prev_amount: int
     new_amount: int
 
@@ -1322,9 +1321,9 @@ class BlockProcessor:
                     self.touched_claim_hashes.add(controlling.claim_hash)
                 self.touched_claim_hashes.add(winning)
 
-    def _add_claim_activation_change_notification(self, claim_id: str, height: int, added: bool, prev_amount: int,
+    def _add_claim_activation_change_notification(self, claim_id: str, height: int, prev_amount: int,
                                                   new_amount: int):
-        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, added, prev_amount, new_amount))
+        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, prev_amount, new_amount))
 
     def _get_cumulative_update_ops(self, height: int):
         # update the last takeover height for names with takeovers
@@ -1402,24 +1401,12 @@ class BlockProcessor:
                         (name, prev_effective_amount, amt.tx_num, amt.position), (touched,)
                     )
 
-            if (name, touched) in self.activated_claim_amount_by_name_and_hash:
-                self._add_claim_activation_change_notification(
-                    touched.hex(), height, True, prev_effective_amount,
-                    self.activated_claim_amount_by_name_and_hash[(name, touched)]
-                )
-            if touched in self.activated_support_amount_by_claim:
-                for support_amount in self.activated_support_amount_by_claim[touched]:
-                    self._add_claim_activation_change_notification(
-                        touched.hex(), height, True, prev_effective_amount, support_amount
-                    )
-            if touched in self.removed_active_support_amount_by_claim:
-                for support_amount in self.removed_active_support_amount_by_claim[touched]:
-                    self._add_claim_activation_change_notification(
-                        touched.hex(), height, False, prev_effective_amount, support_amount
-                    )
             new_effective_amount = self._get_pending_effective_amount(name, touched)
             self.db.prefix_db.effective_amount.stage_put(
                 (name, new_effective_amount, tx_num, position), (touched,)
+            )
+            self._add_claim_activation_change_notification(
+                touched.hex(), height, prev_effective_amount, new_effective_amount
             )
 
         for channel_hash, count in self.pending_channel_counts.items():
