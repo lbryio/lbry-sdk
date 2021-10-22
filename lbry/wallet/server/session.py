@@ -2,8 +2,6 @@ import os
 import ssl
 import math
 import time
-import json
-import base64
 import codecs
 import typing
 import asyncio
@@ -15,8 +13,6 @@ from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
-
 from elasticsearch import ConnectionTimeout
 from prometheus_client import Counter, Info, Histogram, Gauge
 
@@ -27,7 +23,6 @@ from lbry.schema.result import Outputs
 from lbry.wallet.server.block_processor import BlockProcessor
 from lbry.wallet.server.leveldb import LevelDB
 from lbry.wallet.server.websocket import AdminWebSocket
-from lbry.wallet.server.metrics import ServerLoadData, APICallMetrics
 from lbry.wallet.rpc.framing import NewlineFramer
 
 import lbry.wallet.server.version as VERSION
@@ -36,13 +31,11 @@ from lbry.wallet.rpc import (
     RPCSession, JSONRPCAutoDetect, JSONRPCConnection,
     handler_invocation, RPCError, Request, JSONRPC, Notification, Batch
 )
-from lbry.wallet.server import text
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import sha256, hash_to_hex_str, hex_str_to_hash, HASHX_LEN, Base58Error
 from lbry.wallet.server.daemon import DaemonError
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.env import Env
-    from lbry.wallet.server.mempool import MemPool
     from lbry.wallet.server.daemon import Daemon
 
 BAD_REQUEST = 1
@@ -263,7 +256,6 @@ class SessionManager:
                 self.logger.info('resuming listening for incoming connections')
                 await self._start_external_servers()
                 paused = False
-
 
     def _group_map(self):
         group_map = defaultdict(list)
@@ -548,6 +540,10 @@ class SessionManager:
                 self._clear_stale_sessions(),
                 self._manage_servers()
             ])
+        except Exception as err:
+            if not isinstance(err, asyncio.CancelledError):
+                log.exception("hub server died")
+            raise err
         finally:
             await self._close_servers(list(self.servers.keys()))
             log.warning("disconnect %i sessions", len(self.sessions))
@@ -633,7 +629,7 @@ class SessionManager:
                 self.mempool_statuses.pop(hashX, None)
 
         await asyncio.get_event_loop().run_in_executor(
-            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
+            self.bp._chain_executor, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
         )
 
         if touched or new_touched or (height_changed and self.mempool_statuses):
@@ -775,10 +771,9 @@ class LBRYSessionManager(SessionManager):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.query_executor = None
         self.websocket = None
         # self.metrics = ServerLoadData()
-        self.metrics_loop = None
+        # self.metrics_loop = None
         self.running = False
         if self.env.websocket_host is not None and self.env.websocket_port is not None:
             self.websocket = AdminWebSocket(self)
@@ -795,12 +790,6 @@ class LBRYSessionManager(SessionManager):
 
     async def start_other(self):
         self.running = True
-        if self.env.max_query_workers is not None and self.env.max_query_workers == 0:
-            self.query_executor = ThreadPoolExecutor(max_workers=1)
-        else:
-            self.query_executor = ProcessPoolExecutor(
-                max_workers=self.env.max_query_workers or max(os.cpu_count(), 4)
-            )
         if self.websocket is not None:
             await self.websocket.start()
 
@@ -808,7 +797,6 @@ class LBRYSessionManager(SessionManager):
         self.running = False
         if self.websocket is not None:
             await self.websocket.stop()
-        self.query_executor.shutdown()
 
 
 class LBRYElectrumX(SessionBase):
@@ -971,24 +959,6 @@ class LBRYElectrumX(SessionBase):
     #     else:
     #         return APICallMetrics(query_name)
 
-    async def run_in_executor(self, query_name, func, kwargs):
-        start = time.perf_counter()
-        try:
-            self.session_mgr.pending_query_metric.inc()
-            result = await asyncio.get_running_loop().run_in_executor(
-                self.session_mgr.query_executor, func, kwargs
-            )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            log.exception("dear devs, please handle this exception better")
-            self.session_mgr.db_error_metric.inc()
-            raise RPCError(JSONRPC.INTERNAL_ERROR, 'unknown server error')
-        else:
-            return base64.b64encode(result).decode()
-        finally:
-            self.session_mgr.pending_query_metric.dec()
-            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     # async def run_and_cache_query(self, query_name, kwargs):
     #     start = time.perf_counter()
@@ -1036,41 +1006,52 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.pending_query_metric.dec()
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
-    def _claimtrie_resolve(self, *urls):
-        rows, extra = [], []
-        for url in urls:
-            self.session_mgr.urls_to_resolve_count_metric.inc()
-            stream, channel, repost, reposted_channel = self.db._resolve(url)
-            if isinstance(channel, ResolveCensoredError):
-                rows.append(channel)
-                extra.append(channel.censor_row)
-            elif isinstance(stream, ResolveCensoredError):
-                rows.append(stream)
-                extra.append(stream.censor_row)
-            elif channel and not stream:
-                rows.append(channel)
-                # print("resolved channel", channel.name.decode())
-                if repost:
-                    extra.append(repost)
-                if reposted_channel:
-                    extra.append(reposted_channel)
-            elif stream:
-                # print("resolved stream", stream.name.decode())
-                rows.append(stream)
-                if channel:
-                    # print("and channel", channel.name.decode())
-                    extra.append(channel)
-                if repost:
-                    extra.append(repost)
-                if reposted_channel:
-                    extra.append(reposted_channel)
-        # print("claimtrie resolve %i rows %i extrat" % (len(rows), len(extra)))
-        return Outputs.to_base64(rows, extra, 0, None, None)
+    async def _cached_resolve_url(self, url):
+        if url not in self.bp.resolve_cache:
+            self.bp.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
+        return self.bp.resolve_cache[url]
 
-    async def claimtrie_resolve(self, *urls):
-        result = await self.loop.run_in_executor(None, self._claimtrie_resolve, *urls)
-        self.session_mgr.resolved_url_count_metric.inc(len(urls))
-        return result
+    async def claimtrie_resolve(self, *urls) -> str:
+        sorted_urls = tuple(sorted(urls))
+        self.session_mgr.urls_to_resolve_count_metric.inc(len(sorted_urls))
+        try:
+            if sorted_urls in self.bp.resolve_outputs_cache:
+                return self.bp.resolve_outputs_cache[sorted_urls]
+            rows, extra = [], []
+            for url in urls:
+                if url not in self.bp.resolve_cache:
+                    self.bp.resolve_cache[url] = await self._cached_resolve_url(url)
+                stream, channel, repost, reposted_channel = self.bp.resolve_cache[url]
+                if isinstance(channel, ResolveCensoredError):
+                    rows.append(channel)
+                    extra.append(channel.censor_row)
+                elif isinstance(stream, ResolveCensoredError):
+                    rows.append(stream)
+                    extra.append(stream.censor_row)
+                elif channel and not stream:
+                    rows.append(channel)
+                    # print("resolved channel", channel.name.decode())
+                    if repost:
+                        extra.append(repost)
+                    if reposted_channel:
+                        extra.append(reposted_channel)
+                elif stream:
+                    # print("resolved stream", stream.name.decode())
+                    rows.append(stream)
+                    if channel:
+                        # print("and channel", channel.name.decode())
+                        extra.append(channel)
+                    if repost:
+                        extra.append(repost)
+                    if reposted_channel:
+                        extra.append(reposted_channel)
+                await asyncio.sleep(0)
+            self.bp.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
+                None, Outputs.to_base64, rows, extra, 0, None, None
+            )
+            return result
+        finally:
+            self.session_mgr.resolved_url_count_metric.inc(len(sorted_urls))
 
     async def get_server_height(self):
         return self.bp.height
@@ -1221,9 +1202,11 @@ class LBRYElectrumX(SessionBase):
         address: the address to subscribe to"""
         if len(addresses) > 1000:
             raise RPCError(BAD_REQUEST, f'too many addresses in subscription request: {len(addresses)}')
-        return [
-            await self.hashX_subscribe(self.address_to_hashX(address), address) for address in addresses
-        ]
+        results = []
+        for address in addresses:
+            results.append(await self.hashX_subscribe(self.address_to_hashX(address), address))
+            await asyncio.sleep(0)
+        return results
 
     async def address_unsubscribe(self, address):
         """Unsubscribe an address.
@@ -1472,7 +1455,7 @@ class LBRYElectrumX(SessionBase):
             raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
         for tx_hash in tx_hashes:
             assert_tx_hash(tx_hash)
-        batch_result = await self.db.fs_transactions(tx_hashes)
+        batch_result = await self.db.get_transactions_and_merkles(tx_hashes)
         needed_merkles = {}
 
         for tx_hash in tx_hashes:

@@ -33,7 +33,7 @@ from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES
 from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, HubDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
-from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue
+from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue, DBStatePrefixRow
 from lbry.wallet.transaction import OutputScript
 from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
@@ -87,6 +87,8 @@ class LevelDB:
         self.hist_comp_flush_count = -1
         self.hist_comp_cursor = -1
 
+        self.es_sync_height = 0
+
         # blocking/filtering dicts
         blocking_channels = self.env.default('BLOCKING_CHANNEL_IDS', '').split(' ')
         filtering_channels = self.env.default('FILTERING_CHANNEL_IDS', '').split(' ')
@@ -106,23 +108,24 @@ class LevelDB:
         self.encoded_headers = LRUCacheWithMetrics(1 << 21, metric_name='encoded_headers', namespace='wallet_server')
         self.last_flush = time.time()
 
-        self.logger.info(f'using {self.env.db_engine} for DB backend')
-
         # Header merkle cache
         self.merkle = Merkle()
         self.header_mc = MerkleCache(self.merkle, self.fs_block_hashes)
 
-        self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 17, metric_name='tx_and_merkle', namespace="wallet_server")
+        self._tx_and_merkle_cache = LRUCacheWithMetrics(2 ** 16, metric_name='tx_and_merkle', namespace="wallet_server")
 
+        # these are only used if the cache_all_tx_hashes setting is on
+        self.total_transactions: List[bytes] = []
+        self.tx_num_mapping: Dict[bytes, int] = {}
+
+        # these are only used if the cache_all_claim_txos setting is on
         self.claim_to_txo: Dict[bytes, ClaimToTXOValue] = {}
         self.txo_to_claim: DefaultDict[int, Dict[int, bytes]] = defaultdict(dict)
 
         # Search index
         self.search_index = SearchIndex(
             self.env.es_index_prefix, self.env.database_query_timeout,
-            elastic_host=env.elastic_host, elastic_port=env.elastic_port,
-            half_life=self.env.trending_half_life, whale_threshold=self.env.trending_whale_threshold,
-            whale_half_life=self.env.trending_whale_half_life
+            elastic_host=env.elastic_host, elastic_port=env.elastic_port
         )
 
         self.genesis_bytes = bytes.fromhex(self.coin.GENESIS_HASH)
@@ -201,14 +204,14 @@ class LevelDB:
             normalized_name = name
         controlling_claim = self.get_controlling_claim(normalized_name)
 
-        tx_hash = self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
+        tx_hash = self.get_tx_hash(tx_num)
         height = bisect_right(self.tx_counts, tx_num)
         created_height = bisect_right(self.tx_counts, root_tx_num)
         last_take_over_height = controlling_claim.height
 
         expiration_height = self.coin.get_expiration_height(height)
         support_amount = self.get_support_amount(claim_hash)
-        claim_amount = self.claim_to_txo[claim_hash].amount
+        claim_amount = self.get_cached_claim_txo(claim_hash).amount
 
         effective_amount = support_amount + claim_amount
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
@@ -217,7 +220,7 @@ class LevelDB:
         canonical_url = short_url
         claims_in_channel = self.get_claims_in_channel_count(claim_hash)
         if channel_hash:
-            channel_vals = self.claim_to_txo.get(channel_hash)
+            channel_vals = self.get_cached_claim_txo(channel_hash)
             if channel_vals:
                 channel_short_url = self.get_short_claim_id_url(
                     channel_vals.name, channel_vals.normalized_name, channel_hash, channel_vals.root_tx_num,
@@ -269,11 +272,13 @@ class LevelDB:
                 )
             # resolve by partial/complete claim id
             for key, claim_txo in self.prefix_db.claim_short_id.iterate(prefix=(normalized_name, claim_id[:10])):
-                claim_hash = self.txo_to_claim[claim_txo.tx_num][claim_txo.position]
-                non_normalized_name = self.claim_to_txo.get(claim_hash).name
-                signature_is_valid = self.claim_to_txo.get(claim_hash).channel_signature_is_valid
+                full_claim_hash = self.get_cached_claim_hash(claim_txo.tx_num, claim_txo.position)
+                c = self.get_cached_claim_txo(full_claim_hash)
+
+                non_normalized_name = c.name
+                signature_is_valid = c.channel_signature_is_valid
                 return self._prepare_resolve_result(
-                    claim_txo.tx_num, claim_txo.position, claim_hash, non_normalized_name, key.root_tx_num,
+                    claim_txo.tx_num, claim_txo.position, full_claim_hash, non_normalized_name, key.root_tx_num,
                     key.root_position, self.get_activation(claim_txo.tx_num, claim_txo.position),
                     signature_is_valid
                 )
@@ -283,7 +288,7 @@ class LevelDB:
         for idx, (key, claim_val) in enumerate(self.prefix_db.effective_amount.iterate(prefix=(normalized_name,))):
             if amount_order > idx + 1:
                 continue
-            claim_txo = self.claim_to_txo.get(claim_val.claim_hash)
+            claim_txo = self.get_cached_claim_txo(claim_val.claim_hash)
             activation = self.get_activation(key.tx_num, key.position)
             return self._prepare_resolve_result(
                 key.tx_num, key.position, claim_val.claim_hash, key.normalized_name, claim_txo.root_tx_num,
@@ -358,7 +363,7 @@ class LevelDB:
          return await asyncio.get_event_loop().run_in_executor(None, self._resolve, url)
 
     def _fs_get_claim_by_hash(self, claim_hash):
-        claim = self.claim_to_txo.get(claim_hash)
+        claim = self.get_cached_claim_txo(claim_hash)
         if claim:
             activation = self.get_activation(claim.tx_num, claim.position)
             return self._prepare_resolve_result(
@@ -462,7 +467,7 @@ class LevelDB:
     def get_expired_by_height(self, height: int) -> Dict[bytes, Tuple[int, int, str, TxInput]]:
         expired = {}
         for k, v in self.prefix_db.claim_expiration.iterate(prefix=(height,)):
-            tx_hash = self.prefix_db.tx_hash.get(k.tx_num, deserialize_value=False)
+            tx_hash = self.get_tx_hash(k.tx_num)
             tx = self.coin.transaction(self.prefix_db.tx.get(tx_hash, deserialize_value=False))
             # treat it like a claim spend so it will delete/abandon properly
             # the _spend_claim function this result is fed to expects a txi, so make a mock one
@@ -495,18 +500,8 @@ class LevelDB:
             script.parse()
             return Claim.from_bytes(script.values['claim'])
         except:
-            self.logger.error(
-                "tx parsing for ES went boom %s %s", tx_hash[::-1].hex(),
-                (raw or b'').hex()
-            )
+            self.logger.error("claim parsing for ES failed with tx: %s", tx_hash[::-1].hex())
             return
-
-    def _prepare_claim_for_sync(self, claim_hash: bytes):
-        claim = self._fs_get_claim_by_hash(claim_hash)
-        if not claim:
-            print("wat")
-            return
-        return self._prepare_claim_metadata(claim_hash, claim)
 
     def _prepare_claim_metadata(self, claim_hash: bytes, claim: ResolveResult):
         metadata = self.get_claim_metadata(claim.tx_hash, claim.position)
@@ -523,11 +518,11 @@ class LevelDB:
         reposted_claim = None
         reposted_metadata = None
         if reposted_claim_hash:
-            reposted_claim = self.claim_to_txo.get(reposted_claim_hash)
+            reposted_claim = self.get_cached_claim_txo(reposted_claim_hash)
             if not reposted_claim:
                 return
             reposted_metadata = self.get_claim_metadata(
-                self.prefix_db.tx_hash.get(reposted_claim.tx_num, deserialize_value=False), reposted_claim.position
+                self.get_tx_hash(reposted_claim.tx_num), reposted_claim.position
             )
             if not reposted_metadata:
                 return
@@ -541,7 +536,7 @@ class LevelDB:
         reposted_fee_currency = None
         reposted_duration = None
         if reposted_claim:
-            reposted_tx_hash = self.prefix_db.tx_hash.get(reposted_claim.tx_num, deserialize_value=False)
+            reposted_tx_hash = self.get_tx_hash(reposted_claim.tx_num)
             raw_reposted_claim_tx = self.prefix_db.tx.get(reposted_tx_hash, deserialize_value=False)
             try:
                 reposted_claim_txo = self.coin.transaction(
@@ -549,19 +544,10 @@ class LevelDB:
                 ).outputs[reposted_claim.position]
                 reposted_script = OutputScript(reposted_claim_txo.pk_script)
                 reposted_script.parse()
-            except:
-                self.logger.error(
-                    "repost tx parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
-                    raw_reposted_claim_tx.hex()
-                )
-                return
-            try:
                 reposted_metadata = Claim.from_bytes(reposted_script.values['claim'])
             except:
-                self.logger.error(
-                    "reposted claim parsing for ES went boom %s %s", reposted_tx_hash[::-1].hex(),
-                    raw_reposted_claim_tx.hex()
-                )
+                self.logger.error("failed to parse reposted claim in tx %s that was reposted by %s",
+                                  reposted_tx_hash[::-1].hex(), claim_hash.hex())
                 return
         if reposted_metadata:
             if reposted_metadata.is_stream:
@@ -675,11 +661,21 @@ class LevelDB:
 
     async def all_claims_producer(self, batch_size=500_000):
         batch = []
-        for claim_hash, claim_txo in self.claim_to_txo.items():
+        if self.env.cache_all_claim_txos:
+            claim_iterator = self.claim_to_txo.items()
+        else:
+            claim_iterator = map(lambda item: (item[0].claim_hash, item[1]), self.prefix_db.claim_to_txo.iterate())
+
+        for claim_hash, claim_txo in claim_iterator:
             # TODO: fix the couple of claim txos that dont have controlling names
             if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
                 continue
-            claim = self._fs_get_claim_by_hash(claim_hash)
+            activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
+            claim = self._prepare_resolve_result(
+                claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
+                claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+            )
+
             if claim:
                 batch.append(claim)
             if len(batch) == batch_size:
@@ -696,23 +692,36 @@ class LevelDB:
                 yield meta
         batch.clear()
 
-    async def claims_producer(self, claim_hashes: Set[bytes]):
+    def claim_producer(self, claim_hash: bytes) -> Optional[Dict]:
+        claim_txo = self.get_cached_claim_txo(claim_hash)
+        if not claim_txo:
+            self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+            return
+        if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
+            self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+            return
+        activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
+        claim = self._prepare_resolve_result(
+            claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
+            claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+        )
+        if not claim:
+            return
+        return self._prepare_claim_metadata(claim.claim_hash, claim)
+
+    def claims_producer(self, claim_hashes: Set[bytes]):
         batch = []
         results = []
 
-        loop = asyncio.get_event_loop()
-
-        def produce_claim(claim_hash):
-            if claim_hash not in self.claim_to_txo:
-                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                return
-            name = self.claim_to_txo[claim_hash].normalized_name
-            if not self.prefix_db.claim_takeover.get(name):
-                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
-                return
-            claim_txo = self.claim_to_txo.get(claim_hash)
+        for claim_hash in claim_hashes:
+            claim_txo = self.get_cached_claim_txo(claim_hash)
             if not claim_txo:
-                return
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+                continue
+            if not self.prefix_db.claim_takeover.get(claim_txo.normalized_name):
+                self.logger.warning("can't sync non existent claim to ES: %s", claim_hash.hex())
+                continue
+
             activation = self.get_activation(claim_txo.tx_num, claim_txo.position)
             claim = self._prepare_resolve_result(
                 claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
@@ -721,25 +730,13 @@ class LevelDB:
             if claim:
                 batch.append(claim)
 
-        def get_metadata(claim):
-            meta = self._prepare_claim_metadata(claim.claim_hash, claim)
-            if meta:
-                results.append(meta)
-
-        if claim_hashes:
-            await asyncio.wait(
-                [loop.run_in_executor(None, produce_claim, claim_hash) for claim_hash in claim_hashes]
-            )
         batch.sort(key=lambda x: x.tx_hash)
 
-        if batch:
-            await asyncio.wait(
-                [loop.run_in_executor(None, get_metadata, claim) for claim in batch]
-            )
-        for meta in results:
-            yield meta
-
-        batch.clear()
+        for claim in batch:
+            _meta = self._prepare_claim_metadata(claim.claim_hash, claim)
+            if _meta:
+                results.append(_meta)
+        return results
 
     def get_activated_at_height(self, height: int) -> DefaultDict[PendingActivationValue, List[PendingActivationKey]]:
         activated = defaultdict(list)
@@ -776,7 +773,6 @@ class LevelDB:
         else:
             assert self.db_tx_count == 0
 
-
     async def _read_claim_txos(self):
         def read_claim_txos():
             set_claim_to_txo = self.claim_to_txo.__setitem__
@@ -807,6 +803,21 @@ class LevelDB:
         assert len(headers) - 1 == self.db_height, f"{len(headers)} vs {self.db_height}"
         self.headers = headers
 
+    async def _read_tx_hashes(self):
+        def _read_tx_hashes():
+            return list(self.prefix_db.tx_hash.iterate(include_key=False, fill_cache=False, deserialize_value=False))
+
+        self.logger.info("loading tx hashes")
+        self.total_transactions.clear()
+        self.tx_num_mapping.clear()
+        start = time.perf_counter()
+        self.total_transactions.extend(await asyncio.get_event_loop().run_in_executor(None, _read_tx_hashes))
+        self.tx_num_mapping = {
+            tx_hash: tx_num for tx_num, tx_hash in enumerate(self.total_transactions)
+        }
+        ts = time.perf_counter() - start
+        self.logger.info("loaded %i tx hashes in %ss", len(self.total_transactions), round(ts, 4))
+
     def estimate_timestamp(self, height: int) -> int:
         if height < len(self.headers):
             return struct.unpack('<I', self.headers[height][100:104])[0]
@@ -818,7 +829,8 @@ class LevelDB:
 
         self.prefix_db = HubDB(
             os.path.join(self.env.db_dir, 'lbry-leveldb'), cache_mb=self.env.cache_MB,
-            reorg_limit=self.env.reorg_limit, max_open_files=512
+            reorg_limit=self.env.reorg_limit, max_open_files=self.env.db_max_open_files,
+            unsafe_prefixes={DBStatePrefixRow.prefix}
         )
         self.logger.info(f'opened db: lbry-leveldb')
 
@@ -850,13 +862,42 @@ class LevelDB:
         # Read TX counts (requires meta directory)
         await self._read_tx_counts()
         await self._read_headers()
-        await self._read_claim_txos()
+        if self.env.cache_all_claim_txos:
+            await self._read_claim_txos()
+        if self.env.cache_all_tx_hashes:
+            await self._read_tx_hashes()
 
         # start search index
         await self.search_index.start()
 
     def close(self):
         self.prefix_db.close()
+
+    def get_tx_hash(self, tx_num: int) -> bytes:
+        if self.env.cache_all_tx_hashes:
+            return self.total_transactions[tx_num]
+        return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
+
+    def get_tx_num(self, tx_hash: bytes) -> int:
+        if self.env.cache_all_tx_hashes:
+            return self.tx_num_mapping[tx_hash]
+        return self.prefix_db.tx_num.get(tx_hash).tx_num
+
+    def get_cached_claim_txo(self, claim_hash: bytes) -> Optional[ClaimToTXOValue]:
+        if self.env.cache_all_claim_txos:
+            return self.claim_to_txo.get(claim_hash)
+        return self.prefix_db.claim_to_txo.get_pending(claim_hash)
+
+    def get_cached_claim_hash(self, tx_num: int, position: int) -> Optional[bytes]:
+        if self.env.cache_all_claim_txos:
+            if tx_num not in self.txo_to_claim:
+                return
+            return self.txo_to_claim[tx_num].get(position, None)
+        v = self.prefix_db.txo_to_claim.get_pending(tx_num, position)
+        return None if not v else v.claim_hash
+
+    def get_cached_claim_exists(self, tx_num: int, position: int) -> bool:
+        return self.get_cached_claim_hash(tx_num, position) is not None
 
     # Header merkle cache
 
@@ -914,7 +955,7 @@ class LevelDB:
         if tx_height > self.db_height:
             return None, tx_height
         try:
-            return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False), tx_height
+            return self.get_tx_hash(tx_num), tx_height
         except IndexError:
             self.logger.exception(
                 "Failed to access a cached transaction, known bug #3142 "
@@ -923,57 +964,54 @@ class LevelDB:
             return None, tx_height
 
     def get_block_txs(self, height: int) -> List[bytes]:
-        return [
-            tx_hash for tx_hash in self.prefix_db.tx_hash.iterate(
-                start=(self.tx_counts[height-1],), stop=(self.tx_counts[height],),
-                deserialize_value=False, include_key=False
-            )
-        ]
+        return self.prefix_db.block_txs.get(height).tx_hashes
 
-    def _fs_transactions(self, txids: Iterable[str]):
-        tx_counts = self.tx_counts
-        tx_db_get = self.prefix_db.tx.get
-        tx_cache = self._tx_and_merkle_cache
+    async def get_transactions_and_merkles(self, tx_hashes: Iterable[str]):
         tx_infos = {}
-
-        for tx_hash in txids:
-            cached_tx = tx_cache.get(tx_hash)
-            if cached_tx:
-                tx, merkle = cached_tx
-            else:
-                tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
-                tx_num = self.prefix_db.tx_num.get(tx_hash_bytes)
-                tx = None
-                tx_height = -1
-                tx_num = None if not tx_num else tx_num.tx_num
-                if tx_num is not None:
-                    fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
-                    tx_height = bisect_right(tx_counts, tx_num)
-                    tx = tx_db_get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
-                if tx_height == -1:
-                    merkle = {
-                        'block_height': -1
-                    }
-                else:
-                    tx_pos = tx_num - tx_counts[tx_height - 1]
-                    branch, root = self.merkle.branch_and_root(
-                        self.get_block_txs(tx_height), tx_pos
-                    )
-                    merkle = {
-                        'block_height': tx_height,
-                        'merkle': [
-                            hash_to_hex_str(hash)
-                            for hash in branch
-                        ],
-                        'pos': tx_pos
-                    }
-                if tx_height + 10 < self.db_height:
-                    tx_cache[tx_hash] = tx, merkle
-            tx_infos[tx_hash] = (None if not tx else tx.hex(), merkle)
+        for tx_hash in tx_hashes:
+            tx_infos[tx_hash] = await asyncio.get_event_loop().run_in_executor(
+                None, self._get_transaction_and_merkle, tx_hash
+            )
+            await asyncio.sleep(0)
         return tx_infos
 
-    async def fs_transactions(self, txids):
-        return await asyncio.get_event_loop().run_in_executor(None, self._fs_transactions, txids)
+    def _get_transaction_and_merkle(self, tx_hash):
+        cached_tx = self._tx_and_merkle_cache.get(tx_hash)
+        if cached_tx:
+            tx, merkle = cached_tx
+        else:
+            tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
+            tx_num = self.prefix_db.tx_num.get(tx_hash_bytes)
+            tx = None
+            tx_height = -1
+            tx_num = None if not tx_num else tx_num.tx_num
+            if tx_num is not None:
+                if self.env.cache_all_claim_txos:
+                    fill_cache = tx_num in self.txo_to_claim and len(self.txo_to_claim[tx_num]) > 0
+                else:
+                    fill_cache = False
+                tx_height = bisect_right(self.tx_counts, tx_num)
+                tx = self.prefix_db.tx.get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
+            if tx_height == -1:
+                merkle = {
+                    'block_height': -1
+                }
+            else:
+                tx_pos = tx_num - self.tx_counts[tx_height - 1]
+                branch, root = self.merkle.branch_and_root(
+                    self.get_block_txs(tx_height), tx_pos
+                )
+                merkle = {
+                    'block_height': tx_height,
+                    'merkle': [
+                        hash_to_hex_str(hash)
+                        for hash in branch
+                    ],
+                    'pos': tx_pos
+                }
+            if tx_height + 10 < self.db_height:
+                self._tx_and_merkle_cache[tx_hash] = tx, merkle
+        return (None if not tx else tx.hex(), merkle)
 
     async def fs_block_hashes(self, height, count):
         if height + count > len(self.headers):
@@ -984,13 +1022,13 @@ class LevelDB:
         txs = []
         txs_extend = txs.extend
         for hist in self.prefix_db.hashX_history.iterate(prefix=(hashX,), include_key=False):
-            txs_extend([
-                (self.prefix_db.tx_hash.get(tx_num, deserialize_value=False), bisect_right(self.tx_counts, tx_num))
-                for tx_num in hist
-            ])
+            txs_extend(hist)
             if len(txs) >= limit:
                 break
-        return txs
+        return [
+            (self.get_tx_hash(tx_num), bisect_right(self.tx_counts, tx_num))
+            for tx_num in txs
+        ]
 
     async def limited_history(self, hashX, *, limit=1000):
         """Return an unpruned, sorted list of (tx_hash, height) tuples of
@@ -1024,7 +1062,8 @@ class LevelDB:
         self.prefix_db.db_state.stage_put((), (
                 self.genesis_bytes, self.db_height, self.db_tx_count, self.db_tip,
                 self.utxo_flush_count, int(self.wall_time), self.first_sync, self.db_version,
-                self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor
+                self.hist_flush_count, self.hist_comp_flush_count, self.hist_comp_cursor,
+                self.es_sync_height
             )
         )
 
@@ -1066,11 +1105,12 @@ class LevelDB:
 
     def assert_db_state(self):
         state = self.prefix_db.db_state.get()
-        assert self.db_version == state.db_version
-        assert self.db_height == state.height
-        assert self.db_tx_count == state.tx_count
-        assert self.db_tip == state.tip
-        assert self.first_sync == state.first_sync
+        assert self.db_version == state.db_version, f"{self.db_version} != {state.db_version}"
+        assert self.db_height == state.height, f"{self.db_height} != {state.height}"
+        assert self.db_tx_count == state.tx_count, f"{self.db_tx_count} != {state.tx_count}"
+        assert self.db_tip == state.tip, f"{self.db_tip} != {state.tip}"
+        assert self.first_sync == state.first_sync, f"{self.first_sync} != {state.first_sync}"
+        assert self.es_sync_height == state.es_sync_height, f"{self.es_sync_height} != {state.es_sync_height}"
 
     async def all_utxos(self, hashX):
         """Return all UTXOs for an address sorted in no particular order."""

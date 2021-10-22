@@ -83,11 +83,26 @@ class OpStackIntegrity(Exception):
 
 class RevertableOpStack:
     def __init__(self, get_fn: Callable[[bytes], Optional[bytes]], unsafe_prefixes=None):
+        """
+        This represents a sequence of revertable puts and deletes to a key-value database that checks for integrity
+        violations when applying the puts and deletes. The integrity checks assure that keys that do not exist
+        are not deleted, and that when keys are deleted the current value is correctly known so that the delete
+        may be undone. When putting values, the integrity checks assure that existing values are not overwritten
+        without first being deleted. Updates are performed by applying a delete op for the old value and a put op
+        for the new value.
+
+        :param get_fn: getter function from an object implementing `KeyValueStorage`
+        :param unsafe_prefixes: optional set of prefixes to ignore integrity errors for, violations are still logged
+        """
         self._get = get_fn
         self._items = defaultdict(list)
         self._unsafe_prefixes = unsafe_prefixes or set()
 
     def append_op(self, op: RevertableOp):
+        """
+        Apply a put or delete op, checking that it introduces no integrity errors
+        """
+
         inverted = op.invert()
         if self._items[op.key] and inverted == self._items[op.key][-1]:
             self._items[op.key].pop()  # if the new op is the inverse of the last op, we can safely null both
@@ -106,19 +121,22 @@ class RevertableOpStack:
             elif op.is_delete and has_stored_val and stored_val != op.value and not will_delete_existing_stored:
                 # there is a value and we're not deleting it in this op
                 # check that a delete for the stored value is in the stack
-                raise OpStackIntegrity(f"delete {op}")
+                raise OpStackIntegrity(f"db op tries to delete with incorrect existing value {op}")
             elif op.is_delete and not has_stored_val:
                 raise OpStackIntegrity(f"db op tries to delete nonexistent key: {op}")
             elif op.is_delete and stored_val != op.value:
                 raise OpStackIntegrity(f"db op tries to delete with incorrect value: {op}")
         except OpStackIntegrity as err:
             if op.key[:1] in self._unsafe_prefixes:
-                log.error(f"skipping over integrity error: {err}")
+                log.debug(f"skipping over integrity error: {err}")
             else:
                 raise err
         self._items[op.key].append(op)
 
     def extend_ops(self, ops: Iterable[RevertableOp]):
+        """
+        Apply a sequence of put or delete ops, checking that they introduce no integrity errors
+        """
         for op in ops:
             self.append_op(op)
 
@@ -139,9 +157,19 @@ class RevertableOpStack:
                 yield op
 
     def get_undo_ops(self) -> bytes:
+        """
+        Get the serialized bytes to undo all of the changes made by the pending ops
+        """
         return b''.join(op.invert().pack() for op in reversed(self))
 
     def apply_packed_undo_ops(self, packed: bytes):
+        """
+        Unpack and apply a sequence of undo ops from serialized undo bytes
+        """
         while packed:
             op, packed = RevertableOp.unpack(packed)
             self.append_op(op)
+
+    def get_last_op_for_key(self, key: bytes) -> Optional[RevertableOp]:
+        if key in self._items and self._items[key]:
+            return self._items[key][-1]

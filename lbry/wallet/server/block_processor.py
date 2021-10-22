@@ -3,14 +3,16 @@ import asyncio
 import typing
 from bisect import bisect_right
 from struct import pack, unpack
+from concurrent.futures.thread import ThreadPoolExecutor
 from typing import Optional, List, Tuple, Set, DefaultDict, Dict, NamedTuple
 from prometheus_client import Gauge, Histogram
 from collections import defaultdict
 
 import lbry
+from lbry.schema.url import URL
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
-
+from lbry.utils import LRUCache
 from lbry.wallet.transaction import OutputScript, Output, Transaction
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.daemon import DaemonError
@@ -28,7 +30,6 @@ if typing.TYPE_CHECKING:
 
 class TrendingNotification(NamedTuple):
     height: int
-    added: bool
     prev_amount: int
     new_amount: int
 
@@ -202,6 +203,8 @@ class BlockProcessor:
         self.env = env
         self.db = db
         self.daemon = daemon
+        self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
+        self._sync_reader_executor = ThreadPoolExecutor(1, thread_name_prefix='hub-es-sync')
         self.mempool = MemPool(env.coin, daemon, db, self.state_lock)
         self.shutdown_event = shutdown_event
         self.coin = env.coin
@@ -231,6 +234,9 @@ class BlockProcessor:
         self.db_op_stack: Optional[RevertableOpStack] = None
 
         # self.search_cache = {}
+        self.resolve_cache = LRUCache(2**16)
+        self.resolve_outputs_cache = LRUCache(2 ** 16)
+
         self.history_cache = {}
         self.status_server = StatusServer()
 
@@ -297,7 +303,11 @@ class BlockProcessor:
 
         for claim_hash in self.removed_claims_to_send_es:
             yield 'delete', claim_hash.hex()
-        async for claim in self.db.claims_producer(self.touched_claims_to_send_es):
+
+        to_update = await asyncio.get_event_loop().run_in_executor(
+            self._sync_reader_executor, self.db.claims_producer, self.touched_claims_to_send_es
+        )
+        for claim in to_update:
             yield 'update', claim
 
     async def run_in_thread_with_lock(self, func, *args):
@@ -308,13 +318,12 @@ class BlockProcessor:
         # consistent and not being updated elsewhere.
         async def run_in_thread_locked():
             async with self.state_lock:
-                return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+                return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread_locked())
 
-    @staticmethod
-    async def run_in_thread(func, *args):
+    async def run_in_thread(self, func, *args):
         async def run_in_thread():
-            return await asyncio.get_event_loop().run_in_executor(None, func, *args)
+            return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread())
 
     async def check_and_advance_blocks(self, raw_blocks):
@@ -357,6 +366,7 @@ class BlockProcessor:
                     await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
                                                                  self.db.filtered_streams, self.db.filtered_channels)
                     await self.db.search_index.update_trending_score(self.activation_info_to_send_es)
+                    await self._es_caught_up()
                 self.db.search_index.clear_caches()
                 self.touched_claims_to_send_es.clear()
                 self.removed_claims_to_send_es.clear()
@@ -394,7 +404,8 @@ class BlockProcessor:
                     await self.backup_block()
                     self.logger.info(f'backed up to height {self.height:,d}')
 
-                    await self.db._read_claim_txos()  # TODO: don't do this
+                    if self.env.cache_all_claim_txos:
+                        await self.db._read_claim_txos()  # TODO: don't do this
                     for touched in self.touched_claims_to_send_es:
                         if not self.db.get_claim_txo(touched):
                             self.removed_claims_to_send_es.add(touched)
@@ -480,9 +491,7 @@ class BlockProcessor:
 
             if signing_channel:
                 raw_channel_tx = self.db.prefix_db.tx.get(
-                    self.db.prefix_db.tx_hash.get(
-                        signing_channel.tx_num, deserialize_value=False
-                    ), deserialize_value=False
+                    self.db.get_tx_hash(signing_channel.tx_num), deserialize_value=False
                 )
             channel_pub_key_bytes = None
             try:
@@ -537,10 +546,11 @@ class BlockProcessor:
             previous_amount = previous_claim.amount
             self.updated_claims.add(claim_hash)
 
-        self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
-            tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
-        )
-        self.db.txo_to_claim[tx_num][nout] = claim_hash
+        if self.env.cache_all_claim_txos:
+            self.db.claim_to_txo[claim_hash] = ClaimToTXOValue(
+                tx_num, nout, root_tx_num, root_idx, txo.amount, channel_signature_is_valid, claim_name
+            )
+            self.db.txo_to_claim[tx_num][nout] = claim_hash
 
         pending = StagedClaimtrieItem(
             claim_name, normalized_name, claim_hash, txo.amount, self.coin.get_expiration_height(height), tx_num, nout,
@@ -685,7 +695,7 @@ class BlockProcessor:
         if (txin_num, txin.prev_idx) in self.txo_to_claim:
             spent = self.txo_to_claim[(txin_num, txin.prev_idx)]
         else:
-            if txin_num not in self.db.txo_to_claim or txin.prev_idx not in self.db.txo_to_claim[txin_num]:
+            if not self.db.get_cached_claim_exists(txin_num, txin.prev_idx):
                 # txo is not a claim
                 return False
             spent_claim_hash_and_name = self.db.get_claim_from_txo(
@@ -693,10 +703,12 @@ class BlockProcessor:
             )
             assert spent_claim_hash_and_name is not None
             spent = self._make_pending_claim_txo(spent_claim_hash_and_name.claim_hash)
-        claim_hash = self.db.txo_to_claim[txin_num].pop(txin.prev_idx)
-        if not self.db.txo_to_claim[txin_num]:
-            self.db.txo_to_claim.pop(txin_num)
-        self.db.claim_to_txo.pop(claim_hash)
+
+        if self.env.cache_all_claim_txos:
+            claim_hash = self.db.txo_to_claim[txin_num].pop(txin.prev_idx)
+            if not self.db.txo_to_claim[txin_num]:
+                self.db.txo_to_claim.pop(txin_num)
+            self.db.claim_to_txo.pop(claim_hash)
         if spent.reposted_claim_hash:
             self.pending_reposted.add(spent.reposted_claim_hash)
         if spent.signing_hash and spent.channel_signature_is_valid and spent.signing_hash not in self.abandoned_claims:
@@ -1014,8 +1026,8 @@ class BlockProcessor:
         # prepare to activate or delay activation of the pending claims being added this block
         for (tx_num, nout), staged in self.txo_to_claim.items():
             is_delayed = not staged.is_update
-            if staged.claim_hash in self.db.claim_to_txo:
-                prev_txo = self.db.claim_to_txo[staged.claim_hash]
+            prev_txo = self.db.get_cached_claim_txo(staged.claim_hash)
+            if prev_txo:
                 prev_activation = self.db.get_activation(prev_txo.tx_num, prev_txo.position)
                 if height < prev_activation or prev_activation < 0:
                     is_delayed = True
@@ -1309,9 +1321,9 @@ class BlockProcessor:
                     self.touched_claim_hashes.add(controlling.claim_hash)
                 self.touched_claim_hashes.add(winning)
 
-    def _add_claim_activation_change_notification(self, claim_id: str, height: int, added: bool, prev_amount: int,
+    def _add_claim_activation_change_notification(self, claim_id: str, height: int, prev_amount: int,
                                                   new_amount: int):
-        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, added, prev_amount, new_amount))
+        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, prev_amount, new_amount))
 
     def _get_cumulative_update_ops(self, height: int):
         # update the last takeover height for names with takeovers
@@ -1389,24 +1401,12 @@ class BlockProcessor:
                         (name, prev_effective_amount, amt.tx_num, amt.position), (touched,)
                     )
 
-            if (name, touched) in self.activated_claim_amount_by_name_and_hash:
-                self._add_claim_activation_change_notification(
-                    touched.hex(), height, True, prev_effective_amount,
-                    self.activated_claim_amount_by_name_and_hash[(name, touched)]
-                )
-            if touched in self.activated_support_amount_by_claim:
-                for support_amount in self.activated_support_amount_by_claim[touched]:
-                    self._add_claim_activation_change_notification(
-                        touched.hex(), height, True, prev_effective_amount, support_amount
-                    )
-            if touched in self.removed_active_support_amount_by_claim:
-                for support_amount in self.removed_active_support_amount_by_claim[touched]:
-                    self._add_claim_activation_change_notification(
-                        touched.hex(), height, False, prev_effective_amount, support_amount
-                    )
             new_effective_amount = self._get_pending_effective_amount(name, touched)
             self.db.prefix_db.effective_amount.stage_put(
                 (name, new_effective_amount, tx_num, position), (touched,)
+            )
+            self._add_claim_activation_change_notification(
+                touched.hex(), height, prev_effective_amount, new_effective_amount
             )
 
         for channel_hash, count in self.pending_channel_counts.items():
@@ -1440,6 +1440,7 @@ class BlockProcessor:
 
         self.db.prefix_db.block_hash.stage_put(key_args=(height,), value_args=(self.coin.header_hash(block.header),))
         self.db.prefix_db.header.stage_put(key_args=(height,), value_args=(block.header,))
+        self.db.prefix_db.block_txs.stage_put(key_args=(height,), value_args=([tx_hash for tx, tx_hash in txs],))
 
         for tx, tx_hash in txs:
             spent_claims = {}
@@ -1490,6 +1491,9 @@ class BlockProcessor:
                 self._abandon_claim(abandoned_claim_hash, tx_num, nout, normalized_name)
             self.pending_transactions[tx_count] = tx_hash
             self.pending_transaction_num_mapping[tx_hash] = tx_count
+            if self.env.cache_all_tx_hashes:
+                self.db.total_transactions.append(tx_hash)
+                self.db.tx_num_mapping[tx_hash] = tx_count
             tx_count += 1
 
         # handle expired claims
@@ -1580,6 +1584,8 @@ class BlockProcessor:
         self.pending_transaction_num_mapping.clear()
         self.pending_transactions.clear()
         self.pending_support_amount_change.clear()
+        self.resolve_cache.clear()
+        self.resolve_outputs_cache.clear()
 
     async def backup_block(self):
         assert len(self.db.prefix_db._op_stack) == 0
@@ -1595,8 +1601,14 @@ class BlockProcessor:
         self.db.headers.pop()
         self.db.tx_counts.pop()
         self.tip = self.coin.header_hash(self.db.headers[-1])
-        self.tx_count = self.db.tx_counts[-1]
+        if self.env.cache_all_tx_hashes:
+            while len(self.db.total_transactions) > self.db.tx_counts[-1]:
+                self.db.tx_num_mapping.pop(self.db.total_transactions.pop())
+                self.tx_count -= 1
+        else:
+            self.tx_count = self.db.tx_counts[-1]
         self.height -= 1
+
         # self.touched can include other addresses which is
         # harmless, but remove None.
         self.touched_hashXs.discard(None)
@@ -1626,8 +1638,15 @@ class BlockProcessor:
         self.db.last_flush = now
         self.db.last_flush_tx_count = self.db.fs_tx_count
 
-        await self.run_in_thread_with_lock(self.db.prefix_db.rollback, self.height + 1)
+        def rollback():
+            self.db.prefix_db.rollback(self.height + 1)
+            self.db.es_sync_height = self.height
+            self.db.write_db_state()
+            self.db.prefix_db.unsafe_commit()
+
+        await self.run_in_thread_with_lock(rollback)
         self.clear_after_advance_or_reorg()
+        self.db.assert_db_state()
 
         elapsed = self.db.last_flush - start_time
         self.logger.warning(f'backup flush #{self.db.hist_flush_count:,d} took {elapsed:.1f}s. '
@@ -1646,7 +1665,7 @@ class BlockProcessor:
         if tx_hash in self.pending_transaction_num_mapping:
             return self.pending_transaction_num_mapping[tx_hash]
         else:
-            return self.db.prefix_db.tx_num.get(tx_hash).tx_num
+            return self.db.get_tx_num(tx_hash)
 
     def spend_utxo(self, tx_hash: bytes, nout: int):
         hashX, amount = self.utxo_cache.pop((tx_hash, nout), (None, None))
@@ -1689,6 +1708,17 @@ class BlockProcessor:
             except Exception:
                 self.logger.exception("error while processing txs")
                 raise
+
+    async def _es_caught_up(self):
+        self.db.es_sync_height = self.height
+
+        def flush():
+            assert len(self.db.prefix_db._op_stack) == 0
+            self.db.write_db_state()
+            self.db.prefix_db.unsafe_commit()
+            self.db.assert_db_state()
+
+        await self.run_in_thread_with_lock(flush)
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')
@@ -1742,5 +1772,6 @@ class BlockProcessor:
             self.status_server.stop()
             # Shut down block processing
             self.logger.info('closing the DB for a clean shutdown...')
+            self._sync_reader_executor.shutdown(wait=True)
+            self._chain_executor.shutdown(wait=True)
             self.db.close()
-            # self.executor.shutdown(wait=True)

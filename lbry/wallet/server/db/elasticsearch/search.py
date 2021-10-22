@@ -42,8 +42,7 @@ class IndexVersionMismatch(Exception):
 class SearchIndex:
     VERSION = 1
 
-    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200,
-                 half_life=0.4, whale_threshold=10000, whale_half_life=0.99):
+    def __init__(self, index_prefix: str, search_timeout=3.0, elastic_host='localhost', elastic_port=9200):
         self.search_timeout = search_timeout
         self.sync_timeout = 600  # wont hit that 99% of the time, but can hit on a fresh import
         self.search_client: Optional[AsyncElasticsearch] = None
@@ -51,14 +50,9 @@ class SearchIndex:
         self.index = index_prefix + 'claims'
         self.logger = class_logger(__name__, self.__class__.__name__)
         self.claim_cache = LRUCache(2 ** 15)
-        self.short_id_cache = LRUCache(2 ** 17)
         self.search_cache = LRUCache(2 ** 17)
-        self.resolution_cache = LRUCache(2 ** 17)
         self._elastic_host = elastic_host
         self._elastic_port = elastic_port
-        self._trending_half_life = half_life
-        self._trending_whale_threshold = whale_threshold
-        self._trending_whale_half_life = whale_half_life
 
     async def get_index_version(self) -> int:
         try:
@@ -160,21 +154,102 @@ class SearchIndex:
 
     async def update_trending_score(self, params):
         update_trending_score_script = """
-        double softenLBC(double lbc) { Math.pow(lbc, 1.0f / 3.0f) }
-        double inflateUnits(int height) {
-            int renormalizationPeriod = 100000;
-            double doublingRate = 400.0f;
-            Math.pow(2.0, (height % renormalizationPeriod) / doublingRate)
+        double softenLBC(double lbc) { return (Math.pow(lbc, 1.0 / 3.0)); }
+
+        double logsumexp(double x, double y)
+        {
+            double top;
+            if(x > y)
+                top = x;
+            else
+                top = y;
+            double result = top + Math.log(Math.exp(x-top) + Math.exp(y-top));
+            return(result);
         }
+
+        double logdiffexp(double big, double small)
+        {
+            return big + Math.log(1.0 - Math.exp(small - big));
+        }
+
+        double squash(double x)
+        {
+            if(x < 0.0)
+                return -Math.log(1.0 - x);
+            else
+                return Math.log(x + 1.0);
+        }
+
+        double unsquash(double x)
+        {
+            if(x < 0.0)
+                return 1.0 - Math.exp(-x);
+            else
+                return Math.exp(x) - 1.0;
+        }
+
+        double log_to_squash(double x)
+        {
+            return logsumexp(x, 0.0);
+        }
+
+        double squash_to_log(double x)
+        {
+            //assert x > 0.0;
+            return logdiffexp(x, 0.0);
+        }
+
+        double squashed_add(double x, double y)
+        {
+            // squash(unsquash(x) + unsquash(y)) but avoiding overflow.
+            // Cases where the signs are the same
+            if (x < 0.0 && y < 0.0)
+                return -logsumexp(-x, logdiffexp(-y, 0.0));
+            if (x >= 0.0 && y >= 0.0)
+                return logsumexp(x, logdiffexp(y, 0.0));
+            // Where the signs differ
+            if (x >= 0.0 && y < 0.0)
+                if (Math.abs(x) >= Math.abs(y))
+                    return logsumexp(0.0, logdiffexp(x, -y));
+                else
+                    return -logsumexp(0.0, logdiffexp(-y, x));
+            if (x < 0.0 && y >= 0.0)
+            {
+                // Addition is commutative, hooray for new math
+                return squashed_add(y, x);
+            }
+            return 0.0;
+        }
+
+        double squashed_multiply(double x, double y)
+        {
+            // squash(unsquash(x)*unsquash(y)) but avoiding overflow.
+            int sign;
+            if(x*y >= 0.0)
+                sign = 1;
+            else
+                sign = -1;
+            return sign*logsumexp(squash_to_log(Math.abs(x))
+                            + squash_to_log(Math.abs(y)), 0.0);
+        }
+
+        // Squashed inflated units
+        double inflateUnits(int height) {
+            double timescale = 576.0; // Half life of 400 = e-folding time of a day
+                                      // by coincidence, so may as well go with it
+            return log_to_squash(height / timescale);
+        }
+
         double spikePower(double newAmount) {
             if (newAmount < 50.0) {
-                0.5
+                return(0.5);
             } else if (newAmount < 85.0) {
-                newAmount / 100.0
+                return(newAmount / 100.0);
             } else {
-                0.85
+                return(0.85);
             }
         }
+
         double spikeMass(double oldAmount, double newAmount) {
             double softenedChange = softenLBC(Math.abs(newAmount - oldAmount));
             double changeInSoftened = Math.abs(softenLBC(newAmount) - softenLBC(oldAmount));
@@ -187,19 +262,11 @@ class SearchIndex:
         }
         for (i in params.src.changes) {
             double units = inflateUnits(i.height);
-            if (i.added) {
-                if (ctx._source.trending_score == null) {
-                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
-                } else {
-                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount + i.new_amount));
-                }
-            } else {
-                if (ctx._source.trending_score == null) {
-                    ctx._source.trending_score = (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
-                } else {
-                    ctx._source.trending_score += (units * spikeMass(i.prev_amount, i.prev_amount - i.new_amount));
-                }
+            if (ctx._source.trending_score == null) {
+                ctx._source.trending_score = 0.0;
             }
+            double bigSpike = squashed_multiply(units, squash(spikeMass(i.prev_amount, i.new_amount)));
+            ctx._source.trending_score = squashed_add(ctx._source.trending_score, bigSpike);
         }
         """
         start = time.perf_counter()
@@ -217,9 +284,8 @@ class SearchIndex:
                             'changes': [
                                 {
                                     'height': p.height,
-                                    'added': p.added,
-                                    'prev_amount': p.prev_amount * 1E-9,
-                                    'new_amount': p.new_amount * 1E-9,
+                                    'prev_amount': p.prev_amount / 1E8,
+                                    'new_amount': p.new_amount / 1E8,
                                 } for p in claim_updates
                             ]
                         }}
@@ -260,9 +326,7 @@ class SearchIndex:
 
     def clear_caches(self):
         self.search_cache.clear()
-        self.short_id_cache.clear()
         self.claim_cache.clear()
-        self.resolution_cache.clear()
 
     async def cached_search(self, kwargs):
         total_referenced = []
@@ -354,21 +418,6 @@ class SearchIndex:
             for result in expand_result(filter(lambda doc: doc['found'], results["docs"])):
                 self.claim_cache.set(result['claim_id'], result)
 
-    async def full_id_from_short_id(self, name, short_id, channel_id=None):
-        key = '#'.join((channel_id or '', name, short_id))
-        if key not in self.short_id_cache:
-            query = {'name': name, 'claim_id': short_id}
-            if channel_id:
-                query['channel_id'] = channel_id
-                query['order_by'] = ['^channel_join']
-                query['signature_valid'] = True
-            else:
-                query['order_by'] = '^creation_height'
-            result, _, _ = await self.search(**query, limit=1)
-            if len(result) == 1:
-                result = result[0]['claim_id']
-                self.short_id_cache[key] = result
-        return self.short_id_cache.get(key, None)
 
     async def search(self, **kwargs):
         try:

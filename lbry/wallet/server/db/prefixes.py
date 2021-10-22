@@ -85,6 +85,18 @@ class PrefixRow(metaclass=PrefixRowType):
         if v:
             return v if not deserialize_value else self.unpack_value(v)
 
+    def get_pending(self, *key_args, fill_cache=True, deserialize_value=True):
+        packed_key = self.pack_key(*key_args)
+        last_op = self._op_stack.get_last_op_for_key(packed_key)
+        if last_op:
+            if last_op.is_put:
+                return last_op.value if not deserialize_value else self.unpack_value(last_op.value)
+            else:  # it's a delete
+                return
+        v = self._db.get(packed_key, fill_cache=fill_cache)
+        if v:
+            return v if not deserialize_value else self.unpack_value(v)
+
     def stage_put(self, key_args=(), value_args=()):
         self._op_stack.append_op(RevertablePut(self.pack_key(*key_args), self.pack_value(*value_args)))
 
@@ -167,6 +179,14 @@ class BlockHashValue(NamedTuple):
 
     def __str__(self):
         return f"{self.__class__.__name__}(block_hash={self.block_hash.hex()})"
+
+
+class BlockTxsKey(NamedTuple):
+    height: int
+
+
+class BlockTxsValue(NamedTuple):
+    tx_hashes: typing.List[bytes]
 
 
 class TxCountKey(NamedTuple):
@@ -514,6 +534,7 @@ class DBState(typing.NamedTuple):
     hist_flush_count: int
     comp_flush_count: int
     comp_cursor: int
+    es_sync_height: int
 
 
 class ActiveAmountPrefixRow(PrefixRow):
@@ -1501,7 +1522,7 @@ class SupportAmountPrefixRow(PrefixRow):
 
 class DBStatePrefixRow(PrefixRow):
     prefix = DB_PREFIXES.db_state.value
-    value_struct = struct.Struct(b'>32sLL32sLLBBlll')
+    value_struct = struct.Struct(b'>32sLL32sLLBBlllL')
     key_struct = struct.Struct(b'')
 
     key_part_lambdas = [
@@ -1519,15 +1540,19 @@ class DBStatePrefixRow(PrefixRow):
     @classmethod
     def pack_value(cls, genesis: bytes, height: int, tx_count: int, tip: bytes, utxo_flush_count: int, wall_time: int,
                    first_sync: bool, db_version: int, hist_flush_count: int, comp_flush_count: int,
-                   comp_cursor: int) -> bytes:
+                   comp_cursor: int, es_sync_height: int) -> bytes:
         return super().pack_value(
             genesis, height, tx_count, tip, utxo_flush_count,
             wall_time, 1 if first_sync else 0, db_version, hist_flush_count,
-            comp_flush_count, comp_cursor
+            comp_flush_count, comp_cursor, es_sync_height
         )
 
     @classmethod
     def unpack_value(cls, data: bytes) -> DBState:
+        if len(data) == 94:
+            # TODO: delete this after making a new snapshot - 10/20/21
+            # migrate in the es_sync_height if it doesnt exist
+            data += data[32:36]
         return DBState(*super().unpack_value(data))
 
     @classmethod
@@ -1538,6 +1563,36 @@ class DBStatePrefixRow(PrefixRow):
             genesis, height, tx_count, tip, utxo_flush_count, wall_time, first_sync, db_version, hist_flush_count,
             comp_flush_count, comp_cursor
         )
+
+
+class BlockTxsPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.block_txs.value
+    key_struct = struct.Struct(b'>L')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, height: int):
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> BlockTxsKey:
+        return BlockTxsKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, tx_hashes: typing.List[bytes]) -> bytes:
+        assert all(len(tx_hash) == 32 for tx_hash in tx_hashes)
+        return b''.join(tx_hashes)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> BlockTxsValue:
+        return BlockTxsValue([data[i*32:(i+1)*32] for i in range(len(data) // 32)])
+
+    @classmethod
+    def pack_item(cls, height, tx_hashes):
+        return cls.pack_key(height), cls.pack_value(tx_hashes)
 
 
 class LevelDBStore(KeyValueStorage):
@@ -1604,6 +1659,7 @@ class HubDB(PrefixDB):
         self.channel_count = ChannelCountPrefixRow(db, self._op_stack)
         self.db_state = DBStatePrefixRow(db, self._op_stack)
         self.support_amount = SupportAmountPrefixRow(db, self._op_stack)
+        self.block_txs = BlockTxsPrefixRow(db, self._op_stack)
 
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:
