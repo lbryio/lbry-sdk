@@ -15,11 +15,11 @@ class DiskSpaceManager:
         self.task = None
         self.analytics = analytics
 
-    async def get_space_used_bytes(self):
-        return await self.db.get_stored_blob_disk_usage()
+    async def get_space_used_bytes(self, is_network_blob=False):
+        return await self.db.get_stored_blob_disk_usage(is_orphan_blob=is_network_blob)
 
-    async def get_space_used_mb(self):
-        return int(await self.get_space_used_bytes()/1024.0/1024.0)
+    async def get_space_used_mb(self, is_network_blob=False):
+        return int(await self.get_space_used_bytes(is_network_blob)/1024.0/1024.0)
 
     async def clean(self):
         space_used_bytes = await self.get_space_used_bytes()

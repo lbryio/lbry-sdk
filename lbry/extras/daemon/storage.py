@@ -453,11 +453,14 @@ class SQLiteStorage(SQLiteMixin):
         )
         return normal_blobs + sd_blobs
 
-    async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None):
-        if is_mine is None:
-            sql = "select coalesce(sum(blob_length), 0) from blob join stream_blob using (blob_hash)"
+    async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None, is_orphan_blob: bool = False):
+        sql = "select coalesce(sum(blob_length), 0) "
+        if is_orphan_blob:
+            sql += "from blob left join stream_blob using (blob_hash) where stream_blob.stream_hash is null"
         else:
-            sql = "select coalesce(sum(blob_length), 0) from blob join stream_blob using (blob_hash) where is_mine=?"
+            sql += "from blob join stream_blob using (blob_hash)"
+        if is_mine is not None:
+            sql += f'{(" and " if is_orphan_blob else " where ")} is_mine=?'
         args = (1 if is_mine else 0,) if is_mine is not None else ()
         return (await self.db.execute_fetchone(sql, args))[0]
 

@@ -602,25 +602,29 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
 
     async def test_ensure_download(self):
-        content1 = await self.stream_create('content1', '0.01', data=bytes([0] * (2 << 24)))
+        content1 = await self.stream_create('content1', '0.01', data=bytes([0] * 32 * 1024 * 1024))
         content1 = content1['outputs'][0]['value']['source']['sd_hash']
-        content2 = await self.stream_create('content2', '0.01', data=bytes([0] * (2 << 23)))
+        content2 = await self.stream_create('content2', '0.01', data=bytes([0] * 16 * 1024 * 1024))
         content2 = content2['outputs'][0]['value']['source']['sd_hash']
         self.assertEqual('48', (await self.status())['disk_space']['space_used'])
 
         proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
         await self.clear()
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('0', (await self.status())['disk_space']['network_seeding_space_used'])
         await proactive_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('32', (await self.status())['disk_space']['network_seeding_space_used'])
         await proactive_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('48', (await self.status())['disk_space']['network_seeding_space_used'])
         await self.clear()
         await proactive_downloader.download_blobs(content2)
         await self.assertBlobs(content2)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
+        self.assertEqual('16', (await self.status())['disk_space']['network_seeding_space_used'])
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))
