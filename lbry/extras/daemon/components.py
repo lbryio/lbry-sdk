@@ -450,9 +450,10 @@ class DiskSpaceComponent(Component):
         if self.disk_space_manager:
             return {
                 'space_used': str(await self.disk_space_manager.get_space_used_mb()),
+                'network_seeding_space_used': str(await self.disk_space_manager.get_space_used_mb(True)),
                 'running': self.disk_space_manager.running,
             }
-        return {'space_used': '0', 'running': False}
+        return {'space_used': '0', 'network_seeding_space_used': '0', 'running': False}
 
     async def start(self):
         db = self.component_manager.get_component(DATABASE_COMPONENT)
