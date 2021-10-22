@@ -439,6 +439,14 @@ class SQLiteStorage(SQLiteMixin):
 
     async def get_stored_blobs(self, is_mine: bool, orphans=False):
         is_mine = 1 if is_mine else 0
+        if orphans:
+            return await self.db.execute_fetchall(
+                "select blob.blob_hash, blob.blob_length, blob.added_on "
+                "from blob left join stream_blob using (blob_hash) "
+                "where stream_blob.stream_hash is null and blob.is_mine=? order by blob.added_on asc",
+                (is_mine,)
+            )
+
         sd_blobs = await self.db.execute_fetchall(
             "select blob.blob_hash, blob.blob_length, blob.added_on "
             "from blob join stream on blob.blob_hash=stream.sd_hash join file using (stream_hash) "

@@ -383,7 +383,7 @@ class FileManagerComponent(Component):
 
 class BackgroundDownloader(Component):
     component_name = BACKGROUND_DOWNLOADER_COMPONENT
-    depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT]
+    depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT, DISK_SPACE_COMPONENT]
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
@@ -413,6 +413,12 @@ class BackgroundDownloader(Component):
             await asyncio.sleep(self.download_loop_delay_seconds)
 
     async def download_blobs(self, sd_hash):
+        if self.conf.network_storage_limit <= 0:
+            return
+        space_manager: DiskSpaceManager = self.component_manager.get_component(DISK_SPACE_COMPONENT)
+        if (await space_manager.get_space_used_mb(True)) >= self.conf.network_storage_limit:
+            log.info("Allocated space for proactive downloader is full. Background download aborted.")
+            return
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         downloader = StreamDownloader(asyncio.get_running_loop(), self.conf, blob_manager, sd_hash)
         node = None
