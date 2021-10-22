@@ -26,12 +26,14 @@ class TestComponentManager(AsyncioTestCase):
                 components.WalletComponent
             ],
             [
-                components.BackgroundDownloader,
                 components.DiskSpaceComponent,
                 components.FileManagerComponent,
                 components.HashAnnouncerComponent,
                 components.PeerProtocolServerComponent,
                 components.WalletServerPaymentsComponent
+            ],
+            [
+                components.BackgroundDownloader,
             ]
         ]
         self.component_manager = ComponentManager(Config())
