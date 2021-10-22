@@ -170,11 +170,12 @@ class AnalyticsManager:
             })
         )
 
-    async def send_disk_space_used(self, storage_used, storage_limit):
+    async def send_disk_space_used(self, storage_used, storage_limit, is_from_network_quota):
         await self.track(
             self._event(DISK_SPACE, {
                 'used': storage_used,
                 'limit': storage_limit,
+                'from_network_quota': is_from_network_quota
             })
         )
 
