@@ -380,6 +380,11 @@ class SQLiteStorage(SQLiteMixin):
             "select status from blob where blob_hash=?", blob_hash
         )
 
+    def set_announce(self, *blob_hashes):
+        return self.db.execute_fetchall(
+            "update blob set should_announce=1 where blob_hash in (?, ?)", blob_hashes
+        )
+
     def update_last_announced_blobs(self, blob_hashes: typing.List[str]):
         def _update_last_announced_blobs(transaction: sqlite3.Connection):
             last_announced = self.time_getter()
