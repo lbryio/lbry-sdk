@@ -32,8 +32,9 @@ class DiskSpaceManager:
         else:
             storage_limit = self.config.blob_storage_limit*1024*1024 if self.config.blob_storage_limit else None
         if self.analytics:
-            # todo: add metrics for network case
-            asyncio.create_task(self.analytics.send_disk_space_used(space_used_bytes, storage_limit))
+            asyncio.create_task(
+                self.analytics.send_disk_space_used(space_used_bytes, storage_limit, from_network_storage)
+            )
         if not storage_limit:
             return 0
         delete = []
