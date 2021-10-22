@@ -15,14 +15,15 @@ async def get_recent_claims(env, index_name='claims', db=None):
     db = db or LevelDB(env)
     try:
         if need_open:
-            await db.open_dbs()
-        db_state = db.prefix_db.db_state.get()
-        if db_state.es_sync_height == db_state.height:
+            db.open_db()
+        if db.es_sync_height == db.db_height or db.db_height <= 0:
             return
+        if need_open:
+            await db.initialize_caches()
         cnt = 0
         touched_claims = set()
         deleted_claims = set()
-        for height in range(db_state.es_sync_height, db_state.height + 1):
+        for height in range(db.es_sync_height, db.db_height + 1):
             touched_or_deleted = db.prefix_db.touched_or_deleted.get(height)
             touched_claims.update(touched_or_deleted.touched_claims)
             deleted_claims.update(touched_or_deleted.deleted_claims)
@@ -65,7 +66,8 @@ async def get_all_claims(env, index_name='claims', db=None):
     need_open = db is None
     db = db or LevelDB(env)
     if need_open:
-        await db.open_dbs()
+        db.open_db()
+        await db.initialize_caches()
     logging.info("Fetching claims to send ES from leveldb")
     try:
         cnt = 0

@@ -823,7 +823,7 @@ class LevelDB:
             return struct.unpack('<I', self.headers[height][100:104])[0]
         return int(160.6855883050695 * height)
 
-    async def open_dbs(self):
+    def open_db(self):
         if self.prefix_db and not self.prefix_db.closed:
             return
 
@@ -856,19 +856,15 @@ class LevelDB:
             self.logger.error(msg)
             raise RuntimeError(msg)
         self.logger.info(f'flush count: {self.hist_flush_count:,d}')
-
         self.utxo_flush_count = self.hist_flush_count
 
-        # Read TX counts (requires meta directory)
+    async def initialize_caches(self):
         await self._read_tx_counts()
         await self._read_headers()
         if self.env.cache_all_claim_txos:
             await self._read_claim_txos()
         if self.env.cache_all_tx_hashes:
             await self._read_tx_hashes()
-
-        # start search index
-        await self.search_index.start()
 
     def close(self):
         self.prefix_db.close()
@@ -1082,6 +1078,7 @@ class LevelDB:
             self.hist_comp_flush_count = -1
             self.hist_comp_cursor = -1
             self.hist_db_version = max(self.DB_VERSIONS)
+            self.es_sync_height = 0
         else:
             self.db_version = state.db_version
             if self.db_version not in self.DB_VERSIONS:
@@ -1102,6 +1099,7 @@ class LevelDB:
             self.hist_comp_flush_count = state.comp_flush_count
             self.hist_comp_cursor = state.comp_cursor
             self.hist_db_version = state.db_version
+            self.es_sync_height = state.es_sync_height
 
     def assert_db_state(self):
         state = self.prefix_db.db_state.get()
