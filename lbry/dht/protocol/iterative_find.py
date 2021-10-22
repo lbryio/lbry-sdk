@@ -346,7 +346,6 @@ class IterativeValueFinder(IterativeFinder):
                   already_known + len(parsed.found_compact_addresses))
         if len(self.discovered_peers[peer]) != already_known + len(parsed.found_compact_addresses):
             log.warning("misbehaving peer %s:%i returned duplicate peers for blob", peer.address, peer.udp_port)
-            parsed.found_compact_addresses.clear()
         elif len(parsed.found_compact_addresses) >= constants.K and self.peer_pages[peer] < parsed.pages:
             # the peer returned a full page and indicates it has more
             self.peer_pages[peer] += 1
