@@ -609,6 +609,7 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         self.assertEqual('48', (await self.status())['disk_space']['space_used'])
 
         proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
+        self.daemon.conf.network_storage_limit = 100
         await self.clear()
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('0', (await self.status())['disk_space']['network_seeding_space_used'])
@@ -652,3 +653,14 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         self.daemon.conf.blob_storage_limit = 1
         await self.blob_clean()
         await self.assertBlobs(content1, no_files=False)
+
+        # downloading above limit triggers cleanup
+        self.daemon.conf.network_storage_limit = 6
+        with self.assertLogs() as log:
+            await proactive_downloader.download_blobs(content2)
+            self.assertIn('Allocated space for proactive downloader is full.', log.output[0])
+        await self.assertBlobs(content1, no_files=False)
+        self.assertEqual('32', (await self.status())['disk_space']['network_seeding_space_used'])
+        await self.blob_clean()
+        self.assertLessEqual(int((await self.status())['disk_space']['network_seeding_space_used']),
+                             self.daemon.conf.network_storage_limit)
