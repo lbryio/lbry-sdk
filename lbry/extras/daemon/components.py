@@ -421,6 +421,7 @@ class BackgroundDownloader(Component):
             return
         blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         downloader = StreamDownloader(asyncio.get_running_loop(), self.conf, blob_manager, sd_hash)
+        storage = blob_manager.storage
         node = None
         if self.component_manager.has_component(DHT_COMPONENT):
             node = self.component_manager.get_component(DHT_COMPONENT)
@@ -430,6 +431,7 @@ class BackgroundDownloader(Component):
             return
         for blob_info in downloader.descriptor.blobs[:-1]:
             await downloader.download_stream_blob(blob_info)
+        await storage.set_announce(sd_hash, downloader.descriptor.blobs[0].blob_hash)
 
     async def start(self):
         self.task = asyncio.create_task(self.loop())
