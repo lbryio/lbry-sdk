@@ -7,7 +7,6 @@ import pathlib
 from io import StringIO
 from unittest import TestCase
 from unittest.mock import patch
-from pyfakefs.fake_filesystem_unittest import TestCase as FakeFSTestCase
 from types import SimpleNamespace
 from contextlib import asynccontextmanager
 
@@ -206,32 +205,34 @@ class DaemonDocsTests(TestCase):
             self.fail("\n" + "\n".join(failures))
 
 
-class EnsureDirectoryExistsTests(FakeFSTestCase):
-
-    def setUp(self):
-        self.setUpPyfakefs()
+class EnsureDirectoryExistsTests(TestCase):
 
     def test_when_parent_dir_does_not_exist_then_dir_is_created_with_parent(self):
-        dir_path = os.path.join("parent_dir", "dir")
-        ensure_directory_exists(dir_path)
-        self.assertTrue(os.path.exists(dir_path))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dir_path = os.path.join(temp_dir, "parent_dir", "dir")
+            ensure_directory_exists(dir_path)
+            self.assertTrue(os.path.exists(dir_path))
 
     def test_when_non_writable_dir_exists_then_raise(self):
-        dir_path = "dir"
-        pathlib.Path(dir_path).mkdir(mode=0o555)  # creates a non-writable, readable and executable dir
-        with self.assertRaises(PermissionError):
-            ensure_directory_exists(dir_path)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dir_path = os.path.join(temp_dir, "dir")
+            pathlib.Path(dir_path).mkdir(mode=0o555)  # creates a non-writable, readable and executable dir
+            with self.assertRaises(PermissionError):
+                ensure_directory_exists(dir_path)
 
     def test_when_dir_exists_and_writable_then_no_raise(self):
-        dir_path = "dir"
-        pathlib.Path(dir_path).mkdir(mode=0o777)  # creates a writable, readable and executable dir
-        try:
-            ensure_directory_exists(dir_path)
-        except (FileExistsError, PermissionError) as err:
-            self.fail(f"{type(err).__name__} was raised")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dir_path = os.path.join(temp_dir, "dir")
+            pathlib.Path(dir_path).mkdir(mode=0o777)  # creates a writable, readable and executable dir
+            try:
+                ensure_directory_exists(dir_path)
+            except (FileExistsError, PermissionError) as err:
+                self.fail(f"{type(err).__name__} was raised")
 
     def test_when_non_dir_file_exists_at_path_then_raise(self):
-        file_path = "file.extension"
-        self.fs.create_file(file_path)
-        with self.assertRaises(FileExistsError):
-            ensure_directory_exists(file_path)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file_path = os.path.join(temp_dir, "file.extension")
+            with open(file_path, 'x'):
+                pass
+            with self.assertRaises(FileExistsError):
+                ensure_directory_exists(file_path)
