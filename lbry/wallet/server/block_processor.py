@@ -749,6 +749,8 @@ class BlockProcessor:
             self.support_txo_to_claim.pop(support_txo_to_clear)
         self.support_txos_by_claim[claim_hash].clear()
         self.support_txos_by_claim.pop(claim_hash)
+        if claim_hash.hex() in self.activation_info_to_send_es:
+            self.activation_info_to_send_es.pop(claim_hash.hex())
         if normalized_name.startswith('@'):  # abandon a channel, invalidate signatures
             self._invalidate_channel_signatures(claim_hash)
 
@@ -1423,8 +1425,8 @@ class BlockProcessor:
         self.touched_claim_hashes.update(
             {k for k, v in self.pending_channel_counts.items() if v != 0 and k not in self.removed_claim_hashes}
         )
-        self.touched_claims_to_send_es.difference_update(self.removed_claim_hashes)
         self.touched_claims_to_send_es.update(self.touched_claim_hashes)
+        self.touched_claims_to_send_es.difference_update(self.removed_claim_hashes)
         self.removed_claims_to_send_es.update(self.removed_claim_hashes)
 
     def advance_block(self, block):
