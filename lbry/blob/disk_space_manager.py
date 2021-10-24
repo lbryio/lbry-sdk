@@ -15,8 +15,12 @@ class DiskSpaceManager:
         self.task = None
         self.analytics = analytics
 
+    async def get_free_space_bytes(self, is_network_blob=False):
+        limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
+        return max(0, limit_mb*1024*1024 - (await self.get_space_used_mb(is_network_blob)))
+
     async def get_space_used_bytes(self, is_network_blob=False):
-        return await self.db.get_stored_blob_disk_usage(is_orphan_blob=is_network_blob)
+        return await self.db.get_stored_blob_disk_usage(is_network_blob=is_network_blob)
 
     async def get_space_used_mb(self, is_network_blob=False):
         return int(await self.get_space_used_bytes(is_network_blob)/1024.0/1024.0)
@@ -25,15 +29,13 @@ class DiskSpaceManager:
         await self._clean(False)
         await self._clean(True)
 
-    async def _clean(self, from_network_storage=False):
-        space_used_bytes = await self.get_space_used_bytes(from_network_storage)
-        if from_network_storage:
-            storage_limit = self.config.network_storage_limit*1024*1024 if self.config.network_storage_limit else None
-        else:
-            storage_limit = self.config.blob_storage_limit*1024*1024 if self.config.blob_storage_limit else None
+    async def _clean(self, is_network_blob=False):
+        space_used_bytes = await self.get_space_used_bytes(is_network_blob)
+        storage_limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
+        storage_limit = storage_limit_mb*1024*1024 if storage_limit_mb else None
         if self.analytics:
             asyncio.create_task(
-                self.analytics.send_disk_space_used(space_used_bytes, storage_limit, from_network_storage)
+                self.analytics.send_disk_space_used(space_used_bytes, storage_limit, is_network_blob)
             )
         if not storage_limit:
             return 0
@@ -41,7 +43,7 @@ class DiskSpaceManager:
         available = storage_limit - space_used_bytes
         if available > 0:
             return 0
-        for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False, orphans=from_network_storage):
+        for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False, is_network_blob=is_network_blob):
             delete.append(blob_hash)
             available += file_size
             if available > 0:

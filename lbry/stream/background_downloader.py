@@ -4,7 +4,7 @@ from lbry.stream.downloader import StreamDownloader
 
 
 class BackgroundDownloader:
-    def __init__(self, conf, storage, blob_manager, dht_node):
+    def __init__(self, conf, storage, blob_manager, dht_node=None):
         self.storage = storage
         self.blob_manager = blob_manager
         self.node = dht_node

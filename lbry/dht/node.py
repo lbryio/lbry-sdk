@@ -31,6 +31,11 @@ class Node:
         self._refresh_task: asyncio.Task = None
         self._storage = storage
 
+    @property
+    def last_requested_blob_hash(self):
+        if len(self.protocol.data_store.requested_blobs) > 0:
+            return self.protocol.data_store.requested_blobs[-1]
+
     async def refresh_node(self, force_once=False):
         while True:
             # remove peers with expired blob announcements from the datastore
