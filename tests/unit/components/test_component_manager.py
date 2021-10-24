@@ -33,7 +33,7 @@ class TestComponentManager(AsyncioTestCase):
                 components.WalletServerPaymentsComponent
             ],
             [
-                components.BackgroundDownloader,
+                components.BackgroundDownloaderComponent,
             ]
         ]
         self.component_manager = ComponentManager(Config())

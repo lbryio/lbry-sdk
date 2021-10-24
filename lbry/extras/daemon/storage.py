@@ -442,9 +442,9 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_blob_hashes(self):
         return self.run_and_return_list("select blob_hash from blob")
 
-    async def get_stored_blobs(self, is_mine: bool, orphans=False):
+    async def get_stored_blobs(self, is_mine: bool, is_network_blob=False):
         is_mine = 1 if is_mine else 0
-        if orphans:
+        if is_network_blob:
             return await self.db.execute_fetchall(
                 "select blob.blob_hash, blob.blob_length, blob.added_on "
                 "from blob left join stream_blob using (blob_hash) "
@@ -466,14 +466,14 @@ class SQLiteStorage(SQLiteMixin):
         )
         return normal_blobs + sd_blobs
 
-    async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None, is_orphan_blob: bool = False):
+    async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None, is_network_blob: bool = False):
         sql = "select coalesce(sum(blob_length), 0) "
-        if is_orphan_blob:
+        if is_network_blob:
             sql += "from blob left join stream_blob using (blob_hash) where stream_blob.stream_hash is null"
         else:
             sql += "from blob join stream_blob using (blob_hash)"
         if is_mine is not None:
-            sql += f'{(" and " if is_orphan_blob else " where ")} is_mine=?'
+            sql += f'{(" and " if is_network_blob else " where ")} is_mine=?'
         args = (1 if is_mine else 0,) if is_mine is not None else ()
         return (await self.db.execute_fetchone(sql, args))[0]
 
