@@ -4,7 +4,6 @@ import asyncio
 import logging
 import binascii
 import typing
-from collections import deque
 
 import base58
 
@@ -19,7 +18,7 @@ from lbry.dht.blob_announcer import BlobAnnouncer
 from lbry.blob.blob_manager import BlobManager
 from lbry.blob.disk_space_manager import DiskSpaceManager
 from lbry.blob_exchange.server import BlobServer
-from lbry.stream.downloader import StreamDownloader
+from lbry.stream.background_downloader import BackgroundDownloader
 from lbry.stream.stream_manager import StreamManager
 from lbry.file.file_manager import FileManager
 from lbry.extras.daemon.component import Component
@@ -381,7 +380,7 @@ class FileManagerComponent(Component):
         self.file_manager.stop()
 
 
-class BackgroundDownloader(Component):
+class BackgroundDownloaderComponent(Component):
     component_name = BACKGROUND_DOWNLOADER_COMPONENT
     depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT, DISK_SPACE_COMPONENT]
 
@@ -389,57 +388,46 @@ class BackgroundDownloader(Component):
         super().__init__(component_manager)
         self.task: typing.Optional[asyncio.Task] = None
         self.download_loop_delay_seconds = 60
-        self.finished_iteration = asyncio.Event()
-        self.requested_blobs = deque(maxlen=10)
         self.ongoing_download: typing.Optional[asyncio.Task] = None
+        self.space_manager: typing.Optional[DiskSpaceManager] = None
+        self.background_downloader: typing.Optional[BackgroundDownloader] = None
+        self.dht_node: typing.Optional[Node] = None
 
     @property
-    def component(self) -> 'BackgroundDownloader':
+    def is_busy(self):
+        return bool(self.ongoing_download and not self.ongoing_download.done())
+
+    @property
+    def component(self) -> 'BackgroundDownloaderComponent':
         return self
 
     async def get_status(self):
-        return {'running': self.task is not None and not self.task.done(), 'enqueued': len(self.requested_blobs)}
+        return {'running': self.task is not None and not self.task.done(),
+                'ongoing_download': self.is_busy}
 
     async def loop(self):
         while True:
-            if self.component_manager.has_component(DHT_COMPONENT):
-                node = self.component_manager.get_component(DHT_COMPONENT)
-                self.requested_blobs = node.protocol.data_store.requested_blobs
-            if self.requested_blobs and (not self.ongoing_download or self.ongoing_download.done()):
-                blob_hash = self.requested_blobs.pop()
-                self.ongoing_download = asyncio.create_task(self.download_blobs(blob_hash))
-                self.ongoing_download.add_done_callback(lambda _: self.finished_iteration.set())
-            self.finished_iteration.clear()
+            if not self.is_busy and await self.space_manager.get_free_space_bytes(True) > 0:
+                blob_hash = self.dht_node.last_requested_blob_hash
+                if blob_hash:
+                    self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash))
             await asyncio.sleep(self.download_loop_delay_seconds)
 
-    async def download_blobs(self, sd_hash):
-        if self.conf.network_storage_limit <= 0:
-            return
-        space_manager: DiskSpaceManager = self.component_manager.get_component(DISK_SPACE_COMPONENT)
-        if (await space_manager.get_space_used_mb(True)) >= self.conf.network_storage_limit:
-            log.info("Allocated space for proactive downloader is full. Background download aborted.")
-            return
-        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
-        downloader = StreamDownloader(asyncio.get_running_loop(), self.conf, blob_manager, sd_hash)
-        storage = blob_manager.storage
-        node = None
-        if self.component_manager.has_component(DHT_COMPONENT):
-            node = self.component_manager.get_component(DHT_COMPONENT)
-        try:
-            await downloader.start(node, save_stream=False)
-        except ValueError:
-            return
-        for blob_info in downloader.descriptor.blobs[:-1]:
-            await downloader.download_stream_blob(blob_info)
-        await storage.set_announce(sd_hash, downloader.descriptor.blobs[0].blob_hash)
-
     async def start(self):
+        self.space_manager: DiskSpaceManager = self.component_manager.get_component(DISK_SPACE_COMPONENT)
+        if not self.component_manager.has_component(DHT_COMPONENT):
+            return
+        self.dht_node = self.component_manager.get_component(DHT_COMPONENT)
+        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        storage = self.component_manager.get_component(DATABASE_COMPONENT)
+        self.background_downloader = BackgroundDownloader(self.conf, storage, blob_manager, self.dht_node)
         self.task = asyncio.create_task(self.loop())
 
     async def stop(self):
         if self.ongoing_download and not self.ongoing_download.done():
             self.ongoing_download.cancel()
-        self.task.cancel()
+        if self.task:
+            self.task.cancel()
 
 
 class DiskSpaceComponent(Component):

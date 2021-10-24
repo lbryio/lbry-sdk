@@ -4,6 +4,7 @@ import os
 from binascii import hexlify
 
 from lbry.schema import Claim
+from lbry.stream.background_downloader import BackgroundDownloader
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
@@ -611,8 +612,7 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         content2 = content2['outputs'][0]['value']['source']['sd_hash']
         self.assertEqual('48', (await self.status())['disk_space']['space_used'])
 
-        proactive_downloader = self.daemon.component_manager.get_component(BACKGROUND_DOWNLOADER_COMPONENT)
-        self.daemon.conf.network_storage_limit = 100
+        proactive_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
         await self.clear()
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('0', (await self.status())['disk_space']['network_seeding_space_used'])
@@ -636,34 +636,14 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         await proactive_downloader.download_blobs(blobs[0].blob_hash)
         self.assertEqual({blobs[0].blob_hash}, self.daemon.blob_manager.completed_blob_hashes)
 
-        # trigger from requested blobs
-        await self.clear()
-        await proactive_downloader.stop()
-        proactive_downloader.requested_blobs.append(content1)
-        finished = proactive_downloader.finished_iteration.wait()
-        await proactive_downloader.start()
-        await finished
-        await self.assertBlobs(content1)
-        await self.clear()
         # test that disk space manager doesn't delete orphan network blobs
         await proactive_downloader.download_blobs(content1)
         await self.daemon.storage.db.execute_fetchall("update blob set added_on=0")  # so it is preferred for cleaning
         await self.daemon.jsonrpc_get("content2", save_file=False)
-        while (await self.file_list())[0]['status'] == 'running':
+        while (await self.file_list())[0]['status'] != 'stopped':
             await asyncio.sleep(0.5)
         await self.assertBlobs(content1, no_files=False)
 
         self.daemon.conf.blob_storage_limit = 1
         await self.blob_clean()
         await self.assertBlobs(content1, no_files=False)
-
-        # downloading above limit triggers cleanup
-        self.daemon.conf.network_storage_limit = 6
-        with self.assertLogs() as log:
-            await proactive_downloader.download_blobs(content2)
-            self.assertIn('Allocated space for proactive downloader is full.', log.output[0])
-        await self.assertBlobs(content1, no_files=False)
-        self.assertEqual('32', (await self.status())['disk_space']['network_seeding_space_used'])
-        await self.blob_clean()
-        self.assertLessEqual(int((await self.status())['disk_space']['network_seeding_space_used']),
-                             self.daemon.conf.network_storage_limit)
