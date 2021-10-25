@@ -10,7 +10,7 @@ from .wallet import Wallet, WalletStorage, TimestampedPreferences, ENCRYPT_ON_DI
 from .manager import WalletManager
 from .network import Network
 from .ledger import Ledger, RegTestLedger, TestNetLedger, BlockHeightEvent
-from .account import Account, AddressManager, SingleKey, HierarchicalDeterministic
+from .account import Account, AddressManager, SingleKey, HierarchicalDeterministic, DeterministicChannelKeyManager
 from .transaction import Transaction, Output, Input
 from .script import OutputScript, InputScript
 from .database import SQLiteMixin, Database

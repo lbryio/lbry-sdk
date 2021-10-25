@@ -177,10 +177,36 @@ class AccountManagement(CommandTestCase):
 
     async def test_deterministic_channel_keys(self):
         seed = self.account.seed
-        channel1 = await self.channel_create('@foo1')
-        channel2 = await self.channel_create('@foo2')
+
+        # create two channels and make sure they have different keys
+        channel1a = await self.channel_create('@foo1')
+        channel2a = await self.channel_create('@foo2')
         self.assertNotEqual(
-            channel1['outputs'][0]['value']['public_key'],
-            channel2['outputs'][0]['value']['public_key'],
+            channel1a['outputs'][0]['value']['public_key'],
+            channel2a['outputs'][0]['value']['public_key'],
         )
+
+        # start another daemon from the same seed
         self.daemon2 = await self.add_daemon(seed=seed)
+        channel2b, channel1b = (await self.daemon2.jsonrpc_channel_list())['items']
+
+        # both daemons end up with the same channel signing keys automagically
+        self.assertTrue(channel1b.has_private_key)
+        self.assertEqual(
+            channel1a['outputs'][0]['value']['public_key_id'],
+            channel1b.private_key.public_key.address
+        )
+        self.assertTrue(channel2b.has_private_key)
+        self.assertEqual(
+            channel2a['outputs'][0]['value']['public_key_id'],
+            channel2b.private_key.public_key.address
+        )
+
+        # create third channel while both daemons running, second daemon should pick it up
+        channel3a = await self.channel_create('@foo3')
+        channel3b, = (await self.daemon2.jsonrpc_channel_list(name='@foo3'))['items']
+        self.assertTrue(channel3b.has_private_key)
+        self.assertEqual(
+            channel3a['outputs'][0]['value']['public_key_id'],
+            channel3b.private_key.public_key.address
+        )

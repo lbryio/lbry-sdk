@@ -40,21 +40,30 @@ class DeterministicChannelKeyManager:
         self.account = account
         self.public_key = account.public_key.child(2)
         self.private_key = account.private_key.child(2) if account.private_key else None
+        self.last_known = 0
+        self.cache = {}
+
+    def maybe_generate_deterministic_key_for_channel(self, txo):
+        next_key = self.private_key.child(self.last_known)
+        if txo.claim.channel.public_key_bytes == next_key.public_key.pubkey_bytes:
+            self.cache[next_key.address()] = next_key
+            self.last_known += 1
+
+    async def ensure_cache_primed(self):
+        await self.generate_next_key()
 
     async def generate_next_key(self):
         db = self.account.ledger.db
-        i = 0
         while True:
-            next_key = self.private_key.child(i)
-            if not await db.is_channel_key_used(self.account.wallet, next_key.address()):
+            next_key = self.private_key.child(self.last_known)
+            key_address = next_key.address()
+            self.cache[key_address] = next_key
+            if not await db.is_channel_key_used(self.account.wallet, key_address):
                 return next_key
-            i += 1
+            self.last_known += 1
 
     def get_private_key_from_pubkey_hash(self, pubkey_hash):
-        for i in range(100):
-            next_key = self.private_key.child(i)
-            if next_key.address() == pubkey_hash:
-                return next_key
+        return self.cache.get(pubkey_hash)
 
 
 class AddressManager:

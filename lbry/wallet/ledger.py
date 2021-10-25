@@ -550,6 +550,7 @@ class Ledger(metaclass=LedgerRegistry):
             )
             remote_history_txids = {txid for txid, _ in remote_history}
             async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
+                self.maybe_has_channel_key(tx)
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 if len(pending_synced_history) % 100 == 0:
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
@@ -616,6 +617,12 @@ class Ledger(metaclass=LedgerRegistry):
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
         return tx
+
+    def maybe_has_channel_key(self, tx):
+        for txo in tx._outputs:
+            if txo.can_decode_claim and txo.claim.is_channel:
+                for account in self.accounts:
+                    account.deterministic_channel_keys.maybe_generate_deterministic_key_for_channel(txo)
 
     async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...], cached=False):
         batches = [[]]
