@@ -15,9 +15,9 @@ class DiskSpaceManager:
         self.task = None
         self.analytics = analytics
 
-    async def get_free_space_bytes(self, is_network_blob=False):
+    async def get_free_space_mb(self, is_network_blob=False):
         limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
-        return max(0, limit_mb*1024*1024 - (await self.get_space_used_mb(is_network_blob)))
+        return max(0, limit_mb - (await self.get_space_used_mb(is_network_blob)))
 
     async def get_space_used_bytes(self, is_network_blob=False):
         return await self.db.get_stored_blob_disk_usage(is_network_blob=is_network_blob)

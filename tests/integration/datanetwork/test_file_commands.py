@@ -629,6 +629,8 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         await self.assertBlobs(content2)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('16', (await self.status())['disk_space']['network_seeding_space_used'])
+        self.daemon.conf.network_storage_limit = 100
+        self.assertEqual(84, (await self.status())['background_downloader']['available_free_space'])
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))
