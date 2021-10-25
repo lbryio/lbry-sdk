@@ -403,11 +403,12 @@ class BackgroundDownloaderComponent(Component):
 
     async def get_status(self):
         return {'running': self.task is not None and not self.task.done(),
+                'available_free_space': await self.space_manager.get_free_space_mb(True),
                 'ongoing_download': self.is_busy}
 
     async def loop(self):
         while True:
-            if not self.is_busy and await self.space_manager.get_free_space_bytes(True) > 0:
+            if not self.is_busy and await self.space_manager.get_free_space_mb(True) > 10:
                 blob_hash = self.dht_node.last_requested_blob_hash
                 if blob_hash:
                     self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash))
