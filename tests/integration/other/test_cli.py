@@ -1,4 +1,6 @@
 import contextlib
+import os
+import tempfile
 from io import StringIO
 from lbry.testcase import AsyncioTestCase
 
@@ -37,3 +39,9 @@ class CLIIntegrationTest(AsyncioTestCase):
             cli.main(["--api", "localhost:5299", "status"])
         actual_output = actual_output.getvalue()
         self.assertIn("is_running", actual_output)
+
+    def test_when_download_dir_non_writable_on_start_then_daemon_dies_with_helpful_msg(self):
+        with tempfile.TemporaryDirectory() as download_dir:
+            os.chmod(download_dir, mode=0o555)  # makes download dir non-writable, readable and executable
+            with self.assertRaisesRegex(PermissionError, f"The following directory is not writable: {download_dir}"):
+                cli.main(["start", "--download-dir", download_dir])
