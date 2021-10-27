@@ -458,13 +458,13 @@ class SQLiteStorage(SQLiteMixin):
             "where blob.is_mine=? order by blob.added_on asc",
             (is_mine,)
         )
-        normal_blobs = await self.db.execute_fetchall(
+        stream_blobs = await self.db.execute_fetchall(
             "select blob.blob_hash, blob.blob_length, blob.added_on "
             "from blob join stream_blob using (blob_hash) cross join stream using (stream_hash)"
             "cross join file using (stream_hash) where blob.is_mine=? order by blob.added_on asc",
             (is_mine,)
         )
-        return normal_blobs + sd_blobs
+        return stream_blobs + sd_blobs
 
     async def get_stored_blob_disk_usage(self, is_mine: Optional[bool] = None, is_network_blob: bool = False):
         sql = "select coalesce(sum(blob_length), 0) "

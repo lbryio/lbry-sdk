@@ -575,7 +575,7 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertTrue(blobs4.issubset(blobs))
 
 
-class TestProactiveDownloaderComponent(CommandTestCase):
+class TestBackgroundDownloaderComponent(CommandTestCase):
     async def get_blobs_from_sd_blob(self, sd_blob):
         descriptor = await StreamDescriptor.from_stream_descriptor_blob(
             asyncio.get_running_loop(), self.daemon.blob_manager.blob_dir, sd_blob
@@ -612,20 +612,20 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         content2 = content2['outputs'][0]['value']['source']['sd_hash']
         self.assertEqual('48', (await self.status())['disk_space']['space_used'])
 
-        proactive_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
+        background_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
         await self.clear()
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('0', (await self.status())['disk_space']['network_seeding_space_used'])
-        await proactive_downloader.download_blobs(content1)
+        await background_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('32', (await self.status())['disk_space']['network_seeding_space_used'])
-        await proactive_downloader.download_blobs(content2)
+        await background_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('48', (await self.status())['disk_space']['network_seeding_space_used'])
         await self.clear()
-        await proactive_downloader.download_blobs(content2)
+        await background_downloader.download_blobs(content2)
         await self.assertBlobs(content2)
         self.assertEqual('0', (await self.status())['disk_space']['space_used'])
         self.assertEqual('16', (await self.status())['disk_space']['network_seeding_space_used'])
@@ -635,11 +635,11 @@ class TestProactiveDownloaderComponent(CommandTestCase):
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))
         await self.clear()
-        await proactive_downloader.download_blobs(blobs[0].blob_hash)
+        await background_downloader.download_blobs(blobs[0].blob_hash)
         self.assertEqual({blobs[0].blob_hash}, self.daemon.blob_manager.completed_blob_hashes)
 
         # test that disk space manager doesn't delete orphan network blobs
-        await proactive_downloader.download_blobs(content1)
+        await background_downloader.download_blobs(content1)
         await self.daemon.storage.db.execute_fetchall("update blob set added_on=0")  # so it is preferred for cleaning
         await self.daemon.jsonrpc_get("content2", save_file=False)
         while (await self.file_list())[0]['status'] != 'stopped':
