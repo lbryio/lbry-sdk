@@ -29,6 +29,7 @@ class MemPoolTx:
     out_pairs = attr.ib()
     fee = attr.ib()
     size = attr.ib()
+    raw_tx = attr.ib()
 
 
 @attr.s(slots=True)
@@ -230,7 +231,7 @@ class MemPool:
             txout_pairs = tuple((to_hashX(txout.pk_script), txout.value)
                                 for txout in tx.outputs)
             tx_map[hash] = MemPoolTx(txin_pairs, None, txout_pairs,
-                                     0, tx_size)
+                                     0, tx_size, raw_tx)
 
         # Determine all prevouts not in the mempool, and fetch the
         # UTXO information from the database.  Failed prevout lookups

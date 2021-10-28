@@ -1461,9 +1461,14 @@ class LBRYElectrumX(SessionBase):
         for tx_hash in tx_hashes:
             if tx_hash in batch_result and batch_result[tx_hash][0]:
                 continue
-            tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
-            raw_tx = tx_info['hex']
-            block_hash = tx_info.get('blockhash')
+            tx_hash_bytes = bytes.fromhex(tx_hash)[::-1]
+            mempool_tx = self.mempool.txs.get(tx_hash_bytes, None)
+            if mempool_tx:
+                raw_tx, block_hash = mempool_tx.raw_tx.hex(), None
+            else:
+                tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
+                raw_tx = tx_info['hex']
+                block_hash = tx_info.get('blockhash')
             if block_hash:
                 block = await self.daemon.deserialised_block(block_hash)
                 height = block['height']

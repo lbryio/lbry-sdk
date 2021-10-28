@@ -56,7 +56,7 @@ async def get_recent_claims(env, index_name='claims', db=None):
         db.prefix_db.unsafe_commit()
         db.assert_db_state()
 
-        logging.info("finished sending %i claims to ES, deleted %i", cnt, len(touched_claims), len(deleted_claims))
+        logging.info("finished sending %i claims to ES, deleted %i", cnt, len(deleted_claims))
     finally:
         if need_open:
             db.close()
