@@ -537,7 +537,7 @@ class DiskSpaceManagement(CommandTestCase):
     async def test_file_management(self):
         status = await self.status()
         self.assertIn('disk_space', status)
-        self.assertEqual('0', status['disk_space']['space_used'])
+        self.assertEqual(0, status['disk_space']['total_used_mb'])
         self.assertEqual(True, status['disk_space']['running'])
         sd_hash1, blobs1 = await self.get_referenced_blobs(
             await self.stream_create('foo1', '0.01', data=('0' * 2 * 1024 * 1024).encode())
@@ -556,18 +556,22 @@ class DiskSpaceManagement(CommandTestCase):
         await self.daemon.storage.update_blob_ownership(sd_hash3, False)
         await self.daemon.storage.update_blob_ownership(sd_hash4, False)
 
-        self.assertEqual('10', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(7, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(10, (await self.status())['disk_space']['total_used_mb'])
         self.assertEqual(blobs1 | blobs2 | blobs3 | blobs4, set(await self.blob_list()))
 
         await self.blob_clean()
 
-        self.assertEqual('10', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(10, (await self.status())['disk_space']['total_used_mb'])
+        self.assertEqual(3, (await self.status())['disk_space']['published_blobs_storage_used_mb'])
         self.assertEqual(blobs1 | blobs2 | blobs3 | blobs4, set(await self.blob_list()))
 
         self.daemon.conf.blob_storage_limit = 6
         await self.blob_clean()
 
-        self.assertEqual('5', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(5, (await self.status())['disk_space']['total_used_mb'])
+        self.assertEqual(2, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(3, (await self.status())['disk_space']['published_blobs_storage_used_mb'])
         blobs = set(await self.blob_list())
         self.assertFalse(blobs1.issubset(blobs))
         self.assertTrue(blobs2.issubset(blobs))
@@ -610,27 +614,27 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         content1 = content1['outputs'][0]['value']['source']['sd_hash']
         content2 = await self.stream_create('content2', '0.01', data=bytes([0] * 16 * 1024 * 1024))
         content2 = content2['outputs'][0]['value']['source']['sd_hash']
-        self.assertEqual('48', (await self.status())['disk_space']['space_used'])
+        self.assertEqual(48, (await self.status())['disk_space']['published_blobs_storage_used_mb'])
+        self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
 
         background_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
         await self.clear()
-        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
-        self.assertEqual('0', (await self.status())['disk_space']['network_seeding_space_used'])
+        self.assertEqual(0, (await self.status())['disk_space']['total_used_mb'])
         await background_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
-        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
-        self.assertEqual('32', (await self.status())['disk_space']['network_seeding_space_used'])
+        self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(32, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
         await background_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
-        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
-        self.assertEqual('48', (await self.status())['disk_space']['network_seeding_space_used'])
+        self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(48, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
         await self.clear()
         await background_downloader.download_blobs(content2)
         await self.assertBlobs(content2)
-        self.assertEqual('0', (await self.status())['disk_space']['space_used'])
-        self.assertEqual('16', (await self.status())['disk_space']['network_seeding_space_used'])
+        self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(16, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
         self.daemon.conf.network_storage_limit = 100
-        self.assertEqual(84, (await self.status())['background_downloader']['available_free_space'])
+        self.assertEqual(84, (await self.status())['background_downloader']['available_free_space_mb'])
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))

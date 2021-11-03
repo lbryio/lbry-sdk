@@ -17,20 +17,27 @@ class DiskSpaceManager:
 
     async def get_free_space_mb(self, is_network_blob=False):
         limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
-        return max(0, limit_mb - (await self.get_space_used_mb(is_network_blob)))
+        space_used_mb = await self.get_space_used_mb()
+        space_used_mb = space_used_mb['network_storage'] if is_network_blob else space_used_mb['content_storage']
+        return max(0, limit_mb - space_used_mb)
 
-    async def get_space_used_bytes(self, is_network_blob=False):
-        return await self.db.get_stored_blob_disk_usage(is_network_blob=is_network_blob)
+    async def get_space_used_bytes(self):
+        return await self.db.get_stored_blob_disk_usage()
 
-    async def get_space_used_mb(self, is_network_blob=False):
-        return int(await self.get_space_used_bytes(is_network_blob)/1024.0/1024.0)
+    async def get_space_used_mb(self):
+        space_used_bytes = await self.get_space_used_bytes()
+        return {key: int(value/1024.0/1024.0) for key, value in space_used_bytes.items()}
 
     async def clean(self):
         await self._clean(False)
         await self._clean(True)
 
     async def _clean(self, is_network_blob=False):
-        space_used_bytes = await self.get_space_used_bytes(is_network_blob)
+        space_used_bytes = await self.get_space_used_bytes()
+        if is_network_blob:
+            space_used_bytes = space_used_bytes['network_storage']
+        else:
+            space_used_bytes = space_used_bytes['content_storage'] + space_used_bytes['private_storage']
         storage_limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
         storage_limit = storage_limit_mb*1024*1024 if storage_limit_mb else None
         if self.analytics:
