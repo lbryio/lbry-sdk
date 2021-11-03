@@ -18,4 +18,5 @@ class BackgroundDownloader:
             return
         for blob_info in downloader.descriptor.blobs[:-1]:
             await downloader.download_stream_blob(blob_info)
-        await self.storage.set_announce(sd_hash, downloader.descriptor.blobs[0].blob_hash)
+        # for now, announcing is unnecessary because the blobs we have were announced to us, se they will be queried
+        # await self.storage.set_announce(sd_hash, downloader.descriptor.blobs[0].blob_hash)
