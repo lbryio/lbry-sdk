@@ -32,9 +32,8 @@ class Node:
         self._storage = storage
 
     @property
-    def last_requested_blob_hash(self):
-        if len(self.protocol.data_store.requested_blobs) > 0:
-            return self.protocol.data_store.requested_blobs[-1]
+    def stored_blob_hashes(self):
+        return self.protocol.data_store.keys()
 
     async def refresh_node(self, force_once=False):
         while True:
