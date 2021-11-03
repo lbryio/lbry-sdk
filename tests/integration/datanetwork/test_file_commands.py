@@ -589,13 +589,10 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
     async def assertBlobs(self, *sd_hashes, no_files=True):
         # checks that we have ony the finished blobs needed for the the referenced streams
         seen = set(sd_hashes)
-        to_announce = await self.daemon.storage.get_blobs_to_announce()
         for sd_hash in sd_hashes:
-            self.assertIn(sd_hash, to_announce)
             sd_blob = self.daemon.blob_manager.get_blob(sd_hash)
             self.assertTrue(sd_blob.get_is_verified())
             blobs = await self.get_blobs_from_sd_blob(sd_blob)
-            self.assertIn(blobs[0].blob_hash, to_announce)
             for blob in blobs[:-1]:
                 self.assertTrue(self.daemon.blob_manager.get_blob(blob.blob_hash).get_is_verified())
             seen.update(blob.blob_hash for blob in blobs if blob.blob_hash)
@@ -609,7 +606,7 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         await self.daemon.blob_manager.delete_blobs(list(self.daemon.blob_manager.completed_blob_hashes), True)
         self.assertEqual(0, len((await self.daemon.jsonrpc_blob_list())['items']))
 
-    async def test_ensure_download(self):
+    async def test_download(self):
         content1 = await self.stream_create('content1', '0.01', data=bytes([0] * 32 * 1024 * 1024))
         content1 = content1['outputs'][0]['value']['source']['sd_hash']
         content2 = await self.stream_create('content2', '0.01', data=bytes([0] * 16 * 1024 * 1024))

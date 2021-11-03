@@ -390,6 +390,7 @@ class BackgroundDownloaderComponent(Component):
         self.download_loop_delay_seconds = 60
         self.ongoing_download: typing.Optional[asyncio.Task] = None
         self.space_manager: typing.Optional[DiskSpaceManager] = None
+        self.blob_manager: typing.Optional[BlobManager] = None
         self.background_downloader: typing.Optional[BackgroundDownloader] = None
         self.dht_node: typing.Optional[Node] = None
 
@@ -409,7 +410,8 @@ class BackgroundDownloaderComponent(Component):
     async def loop(self):
         while True:
             if not self.is_busy and await self.space_manager.get_free_space_mb(True) > 10:
-                blob_hash = self.dht_node.last_requested_blob_hash
+                blob_hash = next((key.hex() for key in self.dht_node.stored_blob_hashes if
+                                 key.hex() not in self.blob_manager.completed_blob_hashes), None)
                 if blob_hash:
                     self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash))
             await asyncio.sleep(self.download_loop_delay_seconds)
@@ -419,9 +421,9 @@ class BackgroundDownloaderComponent(Component):
         if not self.component_manager.has_component(DHT_COMPONENT):
             return
         self.dht_node = self.component_manager.get_component(DHT_COMPONENT)
-        blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
+        self.blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
-        self.background_downloader = BackgroundDownloader(self.conf, storage, blob_manager, self.dht_node)
+        self.background_downloader = BackgroundDownloader(self.conf, storage, self.blob_manager, self.dht_node)
         self.task = asyncio.create_task(self.loop())
 
     async def stop(self):

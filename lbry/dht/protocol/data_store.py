@@ -16,7 +16,9 @@ class DictDataStore:
         self.loop = loop
         self._peer_manager = peer_manager
         self.completed_blobs: typing.Set[str] = set()
-        self.requested_blobs: typing.Deque = deque(maxlen=10)
+
+    def keys(self):
+        return self._data_store.keys()
 
     def __len__(self):
         return self._data_store.__len__()
