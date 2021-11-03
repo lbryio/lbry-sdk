@@ -337,6 +337,7 @@ class SQLiteStorage(SQLiteMixin):
                 tcp_port integer,
                 unique (address, udp_port)
             );
+            create index if not exists blob_data on blob(blob_hash, blob_length, is_mine);
     """
 
     def __init__(self, conf: Config, path, loop=None, time_getter: typing.Optional[typing.Callable[[], float]] = None):
