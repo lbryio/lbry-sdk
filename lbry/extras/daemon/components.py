@@ -403,7 +403,7 @@ class BackgroundDownloaderComponent(Component):
 
     async def get_status(self):
         return {'running': self.task is not None and not self.task.done(),
-                'available_free_space': await self.space_manager.get_free_space_mb(True),
+                'available_free_space_mb': await self.space_manager.get_free_space_mb(True),
                 'ongoing_download': self.is_busy}
 
     async def loop(self):
@@ -445,9 +445,12 @@ class DiskSpaceComponent(Component):
 
     async def get_status(self):
         if self.disk_space_manager:
+            space_used = await self.disk_space_manager.get_space_used_mb()
             return {
-                'space_used': str(await self.disk_space_manager.get_space_used_mb()),
-                'network_seeding_space_used': str(await self.disk_space_manager.get_space_used_mb(True)),
+                'total_used_mb': space_used['total'],
+                'published_blobs_storage_used_mb': space_used['private_storage'],
+                'content_blobs_storage_used_mb': space_used['content_storage'],
+                'seed_blobs_storage_used_mb': space_used['network_storage'],
                 'running': self.disk_space_manager.running,
             }
         return {'space_used': '0', 'network_seeding_space_used': '0', 'running': False}
