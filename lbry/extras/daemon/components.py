@@ -393,6 +393,7 @@ class BackgroundDownloaderComponent(Component):
         self.blob_manager: typing.Optional[BlobManager] = None
         self.background_downloader: typing.Optional[BackgroundDownloader] = None
         self.dht_node: typing.Optional[Node] = None
+        self.space_available: typing.Optional[int] = None
 
     @property
     def is_busy(self):
@@ -404,12 +405,13 @@ class BackgroundDownloaderComponent(Component):
 
     async def get_status(self):
         return {'running': self.task is not None and not self.task.done(),
-                'available_free_space_mb': await self.space_manager.get_free_space_mb(True),
+                'available_free_space_mb': self.space_available,
                 'ongoing_download': self.is_busy}
 
     async def loop(self):
         while True:
-            if not self.is_busy and await self.space_manager.get_free_space_mb(True) > 10:
+            self.space_available = await self.space_manager.get_free_space_mb(True)
+            if not self.is_busy and self.space_available > 10:
                 blob_hash = next((key.hex() for key in self.dht_node.stored_blob_hashes if
                                  key.hex() not in self.blob_manager.completed_blob_hashes), None)
                 if blob_hash:
@@ -447,7 +449,7 @@ class DiskSpaceComponent(Component):
 
     async def get_status(self):
         if self.disk_space_manager:
-            space_used = await self.disk_space_manager.get_space_used_mb()
+            space_used = await self.disk_space_manager.get_space_used_mb(cached=True)
             return {
                 'total_used_mb': space_used['total'],
                 'published_blobs_storage_used_mb': space_used['private_storage'],
