@@ -555,6 +555,7 @@ class DiskSpaceManagement(CommandTestCase):
         await self.daemon.storage.update_blob_ownership(sd_hash1, False)
         await self.daemon.storage.update_blob_ownership(sd_hash3, False)
         await self.daemon.storage.update_blob_ownership(sd_hash4, False)
+        await self.blob_clean()  # just to refresh caches, has no effect
 
         self.assertEqual(7, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(10, (await self.status())['disk_space']['total_used_mb'])
@@ -563,6 +564,7 @@ class DiskSpaceManagement(CommandTestCase):
         await self.blob_clean()
 
         self.assertEqual(10, (await self.status())['disk_space']['total_used_mb'])
+        self.assertEqual(7, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(3, (await self.status())['disk_space']['published_blobs_storage_used_mb'])
         self.assertEqual(blobs1 | blobs2 | blobs3 | blobs4, set(await self.blob_list()))
 
