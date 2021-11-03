@@ -14,9 +14,9 @@ class BackgroundDownloader:
         downloader = StreamDownloader(asyncio.get_running_loop(), self.conf, self.blob_manager, sd_hash)
         try:
             await downloader.start(self.node, save_stream=False)
+            for blob_info in downloader.descriptor.blobs[:-1]:
+                await downloader.download_stream_blob(blob_info)
         except ValueError:
             return
-        for blob_info in downloader.descriptor.blobs[:-1]:
-            await downloader.download_stream_blob(blob_info)
-        # for now, announcing is unnecessary because the blobs we have were announced to us, se they will be queried
-        # await self.storage.set_announce(sd_hash, downloader.descriptor.blobs[0].blob_hash)
+        finally:
+            downloader.stop()
