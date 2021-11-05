@@ -618,22 +618,24 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
 
         background_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
         await self.clear()
+        await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['total_used_mb'])
         await background_downloader.download_blobs(content1)
         await self.assertBlobs(content1)
+        await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(32, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
         await background_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
+        await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(48, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
         await self.clear()
         await background_downloader.download_blobs(content2)
         await self.assertBlobs(content2)
+        await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(16, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
-        self.daemon.conf.network_storage_limit = 100
-        self.assertEqual(84, (await self.status())['background_downloader']['available_free_space_mb'])
 
         # tests that an attempt to download something that isn't a sd blob will download the single blob and stop
         blobs = await self.get_blobs_from_sd_blob(self.reflector.blob_manager.get_blob(content1))
