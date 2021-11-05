@@ -1,6 +1,5 @@
 import asyncio
 import typing
-from collections import deque
 
 from lbry.dht import constants
 if typing.TYPE_CHECKING:
