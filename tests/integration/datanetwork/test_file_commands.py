@@ -322,10 +322,11 @@ class FileCommands(CommandTestCase):
         tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
         file_info = (await self.file_list())[0]
-        await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        blobs = await self.server_storage.get_blobs_for_stream(
-            await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
+        blobs = await self.daemon.storage.get_blobs_for_stream(
+            await self.daemon.storage.get_stream_hash_for_sd_hash(sd_hash)
         )
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        self.assertEqual(5, len(blobs))
         all_except_sd_and_head = [
             blob.blob_hash for blob in blobs[1:-1]
         ]
@@ -342,10 +343,11 @@ class FileCommands(CommandTestCase):
     async def test_incomplete_downloads_retry(self):
         tx = await self.stream_create('foo', '0.01', data=b'deadbeef' * 1000000)
         sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
-        await self.daemon.jsonrpc_file_delete(claim_name='foo')
-        blobs = await self.server_storage.get_blobs_for_stream(
-            await self.server_storage.get_stream_hash_for_sd_hash(sd_hash)
+        blobs = await self.daemon.storage.get_blobs_for_stream(
+            await self.daemon.storage.get_stream_hash_for_sd_hash(sd_hash)
         )
+        self.assertEqual(5, len(blobs))
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
         all_except_sd_and_head = [
             blob.blob_hash for blob in blobs[1:-1]
         ]
