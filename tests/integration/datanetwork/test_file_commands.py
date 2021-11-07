@@ -365,7 +365,6 @@ class FileCommands(CommandTestCase):
         self.assertNotIn('error', resp)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual('running', (await self.file_list())[0]['status'])
-        await self.daemon.jsonrpc_file_set_status('stop', claim_name='foo')
 
         # recover blobs
         for blob_hash in all_except_sd_and_head:
@@ -374,7 +373,6 @@ class FileCommands(CommandTestCase):
             self.server_blob_manager.blobs.clear()
             await self.server_blob_manager.blob_completed(self.server_blob_manager.get_blob(blob_hash))
 
-        await self.daemon.jsonrpc_file_set_status('start', claim_name='foo')
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)
         file_info = (await self.file_list())[0]
         self.assertEqual(file_info['blobs_completed'], file_info['blobs_in_stream'])
