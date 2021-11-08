@@ -26,7 +26,10 @@ class Server:
         self.prometheus_server: typing.Optional[PrometheusServer] = None
 
         self.session_mgr = LBRYSessionManager(
-            env, db, bp, daemon, self.shutdown_event
+            env, db, bp.mempool, bp.history_cache, bp.resolve_cache, bp.resolve_outputs_cache, daemon,
+            self.shutdown_event,
+            on_available_callback=bp.status_server.set_available,
+            on_unavailable_callback=bp.status_server.set_unavailable
         )
         self._indexer_task = None
 
