@@ -1,6 +1,7 @@
 import asyncio
 import json
 import hashlib
+import sys
 from bisect import bisect_right
 from binascii import hexlify, unhexlify
 from collections import defaultdict
@@ -23,7 +24,7 @@ class BaseResolveTestCase(CommandTestCase):
     def assertMatchESClaim(self, claim_from_es, claim_from_db):
         self.assertEqual(claim_from_es['claim_hash'][::-1].hex(), claim_from_db.claim_hash.hex())
         self.assertEqual(claim_from_es['claim_id'], claim_from_db.claim_hash.hex())
-        self.assertEqual(claim_from_es['activation_height'], claim_from_db.activation_height)
+        self.assertEqual(claim_from_es['activation_height'], claim_from_db.activation_height, f"es height: {claim_from_es['activation_height']}, rocksdb height: {claim_from_db.activation_height}")
         self.assertEqual(claim_from_es['last_take_over_height'], claim_from_db.last_takeover_height)
         self.assertEqual(claim_from_es['tx_id'], claim_from_db.tx_hash[::-1].hex())
         self.assertEqual(claim_from_es['tx_nout'], claim_from_db.position)
@@ -31,125 +32,151 @@ class BaseResolveTestCase(CommandTestCase):
         self.assertEqual(claim_from_es['effective_amount'], claim_from_db.effective_amount)
 
     def assertMatchDBClaim(self, expected, claim):
-        self.assertEqual(expected['claimId'], claim.claim_hash.hex())
-        self.assertEqual(expected['validAtHeight'], claim.activation_height)
-        self.assertEqual(expected['lastTakeoverHeight'], claim.last_takeover_height)
-        self.assertEqual(expected['txId'], claim.tx_hash[::-1].hex())
+        self.assertEqual(expected['claimid'], claim.claim_hash.hex())
+        self.assertEqual(expected['validatheight'], claim.activation_height)
+        self.assertEqual(expected['lasttakeoverheight'], claim.last_takeover_height)
+        self.assertEqual(expected['txid'], claim.tx_hash[::-1].hex())
         self.assertEqual(expected['n'], claim.position)
         self.assertEqual(expected['amount'], claim.amount)
-        self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
+        self.assertEqual(expected['effectiveamount'], claim.effective_amount)
 
     async def assertResolvesToClaimId(self, name, claim_id):
         other = await self.resolve(name)
         if claim_id is None:
             self.assertIn('error', other)
             self.assertEqual(other['error']['name'], 'NOT_FOUND')
-            claims_from_es = (await self.conductor.spv_node.server.bp.db.search_index.search(name=name))[0]
+            claims_from_es = (await self.conductor.spv_node.server.session_manager.search_index.search(name=name))[0]
             claims_from_es = [c['claim_hash'][::-1].hex() for c in claims_from_es]
             self.assertNotIn(claim_id, claims_from_es)
         else:
-            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
+            claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(claim_id=claim_id)
             self.assertEqual(claim_id, other['claim_id'])
             self.assertEqual(claim_id, claim_from_es[0][0]['claim_hash'][::-1].hex())
 
     async def assertNoClaimForName(self, name: str):
-        lbrycrd_winning = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
-        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
-        self.assertNotIn('claimId', lbrycrd_winning)
+        lbrycrd_winning = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name))
+        stream, channel, _, _ = await self.conductor.spv_node.server.db.resolve(name)
+        if 'claims' in lbrycrd_winning and lbrycrd_winning['claims'] is not None:
+            self.assertEqual(len(lbrycrd_winning['claims']), 0)
         if stream is not None:
             self.assertIsInstance(stream, LookupError)
         else:
             self.assertIsInstance(channel, LookupError)
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(name=name)
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(name=name)
         self.assertListEqual([], claim_from_es[0])
 
-    async def assertNoClaim(self, claim_id: str):
-        self.assertDictEqual(
-            {}, json.loads(await self.blockchain._cli_cmnd('getclaimbyid', claim_id))
-        )
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
+    async def assertNoClaim(self, name: str, claim_id: str):
+        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsfornamebyid', name, '["' + claim_id + '"]'))
+        if 'claims' in expected and expected['claims'] is not None:
+            # ensure that if we do have the matching claim that it is not active
+            self.assertEqual(expected['claims'][0]['effectiveamount'], 0)
+
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(claim_id=claim_id)
         self.assertListEqual([], claim_from_es[0])
-        claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
+        claim = await self.conductor.spv_node.server.db.fs_getclaimbyid(claim_id)
         self.assertIsNone(claim)
 
     async def assertMatchWinningClaim(self, name):
-        expected = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))
-        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
+        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsfornamebybid', name, "[0]"))
+        stream, channel, _, _ = await self.conductor.spv_node.server.db.resolve(name)
         claim = stream if stream else channel
-        await self._assertMatchClaim(expected, claim)
+        expected['claims'][0]['lasttakeoverheight'] = expected['lasttakeoverheight']
+        await self._assertMatchClaim(expected['claims'][0], claim)
         return claim
 
     async def _assertMatchClaim(self, expected, claim):
         self.assertMatchDBClaim(expected, claim)
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(
             claim_id=claim.claim_hash.hex()
         )
         self.assertEqual(len(claim_from_es[0]), 1)
         self.assertMatchESClaim(claim_from_es[0][0], claim)
-        self._check_supports(claim.claim_hash.hex(), expected['supports'], claim_from_es[0][0]['support_amount'])
+        self._check_supports(claim.claim_hash.hex(), expected.get('supports', []),
+                             claim_from_es[0][0]['support_amount'])
 
-    async def assertMatchClaim(self, claim_id, is_active_in_lbrycrd=True):
-        expected = json.loads(await self.blockchain._cli_cmnd('getclaimbyid', claim_id))
-        claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
-        if is_active_in_lbrycrd:
-            if not expected:
-                self.assertIsNone(claim)
-                return
-            self.assertMatchDBClaim(expected, claim)
-        else:
-            self.assertDictEqual({}, expected)
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+    async def assertMatchClaim(self, name, claim_id, is_active_in_lbrycrd=True):
+        claim = await self.conductor.spv_node.server.db.fs_getclaimbyid(claim_id)
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(
             claim_id=claim.claim_hash.hex()
         )
         self.assertEqual(len(claim_from_es[0]), 1)
         self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim.claim_hash.hex())
         self.assertMatchESClaim(claim_from_es[0][0], claim)
-        self._check_supports(
-            claim.claim_hash.hex(), expected.get('supports', []), claim_from_es[0][0]['support_amount'],
-            is_active_in_lbrycrd
-        )
+
+        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsfornamebyid', name, '["' + claim_id + '"]'))
+        if is_active_in_lbrycrd:
+            if not expected:
+                self.assertIsNone(claim)
+                return
+            expected['claims'][0]['lasttakeoverheight'] = expected['lasttakeoverheight']
+            self.assertMatchDBClaim(expected['claims'][0], claim)
+            self._check_supports(claim.claim_hash.hex(), expected['claims'][0].get('supports', []),
+                                 claim_from_es[0][0]['support_amount'])
+        else:
+            if 'claims' in expected and expected['claims'] is not None:
+                # ensure that if we do have the matching claim that it is not active
+                self.assertEqual(expected['claims'][0]['effectiveamount'], 0)
         return claim
 
     async def assertMatchClaimIsWinning(self, name, claim_id):
         self.assertEqual(claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
         await self.assertMatchClaimsForName(name)
 
-    def _check_supports(self, claim_id, lbrycrd_supports, es_support_amount, is_active_in_lbrycrd=True):
-        total_amount = 0
-        db = self.conductor.spv_node.server.bp.db
+    def _check_supports(self, claim_id, lbrycrd_supports, es_support_amount):
+        total_lbrycrd_amount = 0.0
+        total_es_amount = 0.0
+        active_es_amount = 0.0
+        db = self.conductor.spv_node.server.db
+        es_supports = db.get_supports(bytes.fromhex(claim_id))
 
-        for i, (tx_num, position, amount) in enumerate(db.get_supports(bytes.fromhex(claim_id))):
-            total_amount += amount
-            if is_active_in_lbrycrd:
-                support = lbrycrd_supports[i]
-                self.assertEqual(support['txId'], db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex())
-                self.assertEqual(support['n'], position)
-                self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
-                self.assertEqual(support['validAtHeight'], db.get_activation(tx_num, position, is_support=True))
-        self.assertEqual(total_amount, es_support_amount, f"lbrycrd support amount: {total_amount} vs es: {es_support_amount}")
+        # we're only concerned about active supports here, and they should match
+        self.assertTrue(len(es_supports) >= len(lbrycrd_supports))
+
+        for i, (tx_num, position, amount) in enumerate(es_supports):
+            total_es_amount += amount
+            valid_height = db.get_activation(tx_num, position, is_support=True)
+            if valid_height > db.db_height:
+                continue
+            active_es_amount += amount
+            txid = db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex()
+            support = next(filter(lambda s: s['txid'] == txid and s['n'] == position, lbrycrd_supports))
+            total_lbrycrd_amount += support['amount']
+            self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
+            self.assertEqual(support['validatheight'], valid_height)
+
+        self.assertEqual(total_es_amount, es_support_amount)
+        self.assertEqual(active_es_amount, total_lbrycrd_amount)
 
     async def assertMatchClaimsForName(self, name):
-        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name))
-
-        db = self.conductor.spv_node.server.bp.db
-        # self.assertEqual(len(expected['claims']), len(db_claims.claims))
-        # self.assertEqual(expected['lastTakeoverHeight'], db_claims.lastTakeoverHeight)
-        last_takeover = json.loads(await self.blockchain._cli_cmnd('getvalueforname', name))['lastTakeoverHeight']
+        expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name, "", "true"))
+        db = self.conductor.spv_node.server.db
 
         for c in expected['claims']:
-            c['lastTakeoverHeight'] = last_takeover
-            claim_id = c['claimId']
+            c['lasttakeoverheight'] = expected['lasttakeoverheight']
+            claim_id = c['claimid']
             claim_hash = bytes.fromhex(claim_id)
             claim = db._fs_get_claim_by_hash(claim_hash)
             self.assertMatchDBClaim(c, claim)
 
-            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
-                claim_id=c['claimId']
+            claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(
+                claim_id=claim_id
             )
             self.assertEqual(len(claim_from_es[0]), 1)
-            self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), c['claimId'])
+            self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim_id)
             self.assertMatchESClaim(claim_from_es[0][0], claim)
-            self._check_supports(c['claimId'], c['supports'], claim_from_es[0][0]['support_amount'])
+            self._check_supports(claim_id, c.get('supports', []),
+                                 claim_from_es[0][0]['support_amount'])
+
+    async def assertNameState(self, height: int, name: str, winning_claim_id: str, last_takeover_height: int,
+                               non_winning_claims: List[ClaimStateValue]):
+        self.assertEqual(height, self.conductor.spv_node.server.db.db_height)
+        await self.assertMatchClaimIsWinning(name, winning_claim_id)
+        for non_winning in non_winning_claims:
+            claim = await self.assertMatchClaim(
+                name, non_winning.claim_id, is_active_in_lbrycrd=non_winning.active_in_lbrycrd
+            )
+            self.assertEqual(non_winning.activation_height, claim.activation_height)
+            self.assertEqual(last_takeover_height, claim.last_takeover_height)
 
 
 class ResolveCommand(BaseResolveTestCase):
@@ -261,19 +288,20 @@ class ResolveCommand(BaseResolveTestCase):
         tx_details = await self.blockchain.get_raw_transaction(claim['txid'])
         self.assertEqual(claim['confirmations'], json.loads(tx_details)['confirmations'])
 
+        # FIXME :  claimname/updateclaim is gone. #3480 wip, unblock #3479"
         # resolve handles invalid data
-        await self.blockchain_claim_name("gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
-        await self.generate(1)
-        response = await self.out(self.daemon.jsonrpc_resolve("lbry://gibberish"))
-        self.assertSetEqual({'lbry://gibberish'}, set(response))
-        claim = response['lbry://gibberish']
-        self.assertEqual(claim['name'], 'gibberish')
-        self.assertNotIn('value', claim)
+        # await self.blockchain_claim_name("gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
+        # await self.generate(1)
+        # response = await self.out(self.daemon.jsonrpc_resolve("lbry://gibberish"))
+        # self.assertSetEqual({'lbry://gibberish'}, set(response))
+        # claim = response['lbry://gibberish']
+        # self.assertEqual(claim['name'], 'gibberish')
+        # self.assertNotIn('value', claim)
 
         # resolve retries
         await self.conductor.spv_node.stop()
         resolve_task = asyncio.create_task(self.resolve('foo'))
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         self.assertIsNotNone((await resolve_task)['claim_id'])
 
     async def test_winning_by_effective_amount(self):
@@ -443,16 +471,16 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual(one, claim6['name'])
 
     async def test_resolve_old_claim(self):
-        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
+        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0', blocking=True)
         await self.confirm_tx(channel.id)
         address = channel.outputs[0].get_address(self.account.ledger)
         claim = generate_signed_legacy(address, channel.outputs[0])
         tx = await Transaction.claim_create('example', claim.SerializeToString(), 1, address, [self.account], self.account)
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         response = await self.resolve('@olds/example')
+        self.assertTrue('is_channel_signature_valid' in response, str(response))
         self.assertTrue(response['is_channel_signature_valid'])
 
         claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
@@ -460,8 +488,7 @@ class ResolveCommand(BaseResolveTestCase):
             'bad_example', claim.SerializeToString(), 1, address, [self.account], self.account
         )
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         response = await self.resolve('bad_example')
         self.assertFalse(response['is_channel_signature_valid'])
@@ -606,6 +633,12 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertDictEqual(await self.resolve('@other/signed4'),
                              await self.resolve('signed4'))
 
+        self.assertEqual(2, len(await self.claim_search(channel_ids=[channel_id2])))
+
+        await self.channel_update(channel_id2)
+        await make_claim('third_signed', '0.01', channel_id=channel_id2)
+        self.assertEqual(3, len(await self.claim_search(channel_ids=[channel_id2])))
+
     async def _test_activation_delay(self):
         name = 'derp'
         # initially claim the name
@@ -643,10 +676,10 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
 
     async def assertNameState(self, height: int, name: str, winning_claim_id: str, last_takeover_height: int,
                                non_winning_claims: List[ClaimStateValue]):
-        self.assertEqual(height, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(height, self.conductor.spv_node.server.db.db_height)
         await self.assertMatchClaimIsWinning(name, winning_claim_id)
         for non_winning in non_winning_claims:
-            claim = await self.assertMatchClaim(
+            claim = await self.assertMatchClaim(name,
                 non_winning.claim_id, is_active_in_lbrycrd=non_winning.active_in_lbrycrd
             )
             self.assertEqual(non_winning.activation_height, claim.activation_height)
@@ -961,7 +994,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         )
         greater_than_or_equal_to_zero = [
             claim['claim_id'] for claim in (
-                await self.conductor.spv_node.server.bp.db.search_index.search(
+                await self.conductor.spv_node.server.session_manager.search_index.search(
                     channel_id=channel_id, fee_amount=">=0"
                 ))[0]
         ]
@@ -969,7 +1002,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertSetEqual(set(greater_than_or_equal_to_zero), {stream_with_no_fee, stream_with_fee})
         greater_than_zero = [
             claim['claim_id'] for claim in (
-                await self.conductor.spv_node.server.bp.db.search_index.search(
+                await self.conductor.spv_node.server.session_manager.search_index.search(
                     channel_id=channel_id, fee_amount=">0"
                 ))[0]
         ]
@@ -977,7 +1010,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertSetEqual(set(greater_than_zero), {stream_with_fee})
         equal_to_zero = [
             claim['claim_id'] for claim in (
-                await self.conductor.spv_node.server.bp.db.search_index.search(
+                await self.conductor.spv_node.server.session_manager.search_index.search(
                     channel_id=channel_id, fee_amount="<=0"
                 ))[0]
         ]
@@ -992,10 +1025,10 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         name = 'test'
         await self.generate(494)
         address = (await self.account.receiving.get_addresses(True))[0]
-        await self.blockchain.send_to_address(address, 400.0)
+        await self.send_to_address_and_wait(address, 400.0)
         await self.account.ledger.on_address.first
         await self.generate(100)
-        self.assertEqual(800, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(800, self.conductor.spv_node.server.db.db_height)
 
         # Block 801: Claim A for 10 LBC is accepted.
         # It is the first claim, so it immediately becomes active and controlling.
@@ -1007,10 +1040,10 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # Its activation height is 1121 + min(4032, floor((1121-801) / 32)) = 1121 + 10 = 1131.
         # State: A(10) is controlling, B(20) is accepted.
         await self.generate(32 * 10 - 1)
-        self.assertEqual(1120, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(1120, self.conductor.spv_node.server.db.db_height)
         claim_id_B = (await self.stream_create(name, '20.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        claim_B, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_B}")
-        self.assertEqual(1121, self.conductor.spv_node.server.bp.db.db_height)
+        claim_B, _, _, _ = await self.conductor.spv_node.server.db.resolve(f"{name}:{claim_id_B}")
+        self.assertEqual(1121, self.conductor.spv_node.server.db.db_height)
         self.assertEqual(1131, claim_B.activation_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
 
@@ -1018,33 +1051,33 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # Since it is a support for the controlling claim, it activates immediately.
         # State: A(10+14) is controlling, B(20) is accepted.
         await self.support_create(claim_id_A, bid='14.0')
-        self.assertEqual(1122, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(1122, self.conductor.spv_node.server.db.db_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
 
         # Block 1123: Claim C for 50 LBC is accepted.
         # The activation height is 1123 + min(4032, floor((1123-801) / 32)) = 1123 + 10 = 1133.
         # State: A(10+14) is controlling, B(20) is accepted, C(50) is accepted.
         claim_id_C = (await self.stream_create(name, '50.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        self.assertEqual(1123, self.conductor.spv_node.server.bp.db.db_height)
-        claim_C, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_C}")
+        self.assertEqual(1123, self.conductor.spv_node.server.db.db_height)
+        claim_C, _, _, _ = await self.conductor.spv_node.server.db.resolve(f"{name}:{claim_id_C}")
         self.assertEqual(1133, claim_C.activation_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
 
         await self.generate(7)
-        self.assertEqual(1130, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(1130, self.conductor.spv_node.server.db.db_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
         await self.generate(1)
 
         # Block 1131: Claim B activates. It has 20 LBC, while claim A has 24 LBC (10 original + 14 from support X). There is no takeover, and claim A remains controlling.
         # State: A(10+14) is controlling, B(20) is active, C(50) is accepted.
-        self.assertEqual(1131, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(1131, self.conductor.spv_node.server.db.db_height)
         await self.assertMatchClaimIsWinning(name, claim_id_A)
 
         # Block 1132: Claim D for 300 LBC is accepted. The activation height is 1132 + min(4032, floor((1132-801) / 32)) = 1132 + 10 = 1142.
         # State: A(10+14) is controlling, B(20) is active, C(50) is accepted, D(300) is accepted.
         claim_id_D = (await self.stream_create(name, '300.0', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        self.assertEqual(1132, self.conductor.spv_node.server.bp.db.db_height)
-        claim_D, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_D}")
+        self.assertEqual(1132, self.conductor.spv_node.server.db.db_height)
+        claim_D, _, _, _ = await self.conductor.spv_node.server.db.resolve(f"{name}:{claim_id_D}")
         self.assertEqual(False, claim_D.is_controlling)
         self.assertEqual(801, claim_D.last_takeover_height)
         self.assertEqual(1142, claim_D.activation_height)
@@ -1053,8 +1086,8 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # Block 1133: Claim C activates. It has 50 LBC, while claim A has 24 LBC, so a takeover is initiated. The takeover height for this name is set to 1133, and therefore the activation delay for all the claims becomes min(4032, floor((1133-1133) / 32)) = 0. All the claims become active. The totals for each claim are recalculated, and claim D becomes controlling because it has the highest total.
         # State: A(10+14) is active, B(20) is active, C(50) is active, D(300) is controlling
         await self.generate(1)
-        self.assertEqual(1133, self.conductor.spv_node.server.bp.db.db_height)
-        claim_D, _, _, _ = await self.conductor.spv_node.server.bp.db.resolve(f"{name}:{claim_id_D}")
+        self.assertEqual(1133, self.conductor.spv_node.server.db.db_height)
+        claim_D, _, _, _ = await self.conductor.spv_node.server.db.resolve(f"{name}:{claim_id_D}")
         self.assertEqual(True, claim_D.is_controlling)
         self.assertEqual(1133, claim_D.last_takeover_height)
         self.assertEqual(1133, claim_D.activation_height)
@@ -1327,15 +1360,15 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(8)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
         # abandon the support that causes the winning claim to have the highest staked
-        tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id)
+        tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id, blocking=True)
         await self.generate(1)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
-        # await self.assertMatchClaim(second_claim_id)
-
+        await self.assertNameState(538, name, first_claim_id, last_takeover_height=207, non_winning_claims=[
+            ClaimStateValue(second_claim_id, activation_height=539, active_in_lbrycrd=False)
+        ])
         await self.generate(1)
-
-        await self.assertMatchClaim(first_claim_id)
-        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.assertNameState(539, name, second_claim_id, last_takeover_height=539, non_winning_claims=[
+            ClaimStateValue(first_claim_id, activation_height=207, active_in_lbrycrd=True)
+        ])
 
     async def test_remove_controlling_support(self):
         name = 'derp'
@@ -1405,14 +1438,14 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(32)
 
         second_claim_id = (await self.stream_create(name, '0.01', allow_duplicate_name=True))['outputs'][0]['claim_id']
-        await self.assertNoClaim(second_claim_id)
+        await self.assertNoClaim(name, second_claim_id)
         self.assertEqual(
-            len((await self.conductor.spv_node.server.bp.db.search_index.search(claim_name=name))[0]), 1
+            len((await self.conductor.spv_node.server.session_manager.search_index.search(claim_name=name))[0]), 1
         )
         await self.generate(1)
-        await self.assertMatchClaim(second_claim_id)
+        await self.assertMatchClaim(name, second_claim_id)
         self.assertEqual(
-            len((await self.conductor.spv_node.server.bp.db.search_index.search(claim_name=name))[0]), 2
+            len((await self.conductor.spv_node.server.session_manager.search_index.search(claim_name=name))[0]), 2
         )
 
     async def test_abandon_controlling_same_block_as_new_claim(self):
@@ -1428,35 +1461,47 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
 
     async def test_trending(self):
         async def get_trending_score(claim_id):
-            return (await self.conductor.spv_node.server.bp.db.search_index.search(
+            return (await self.conductor.spv_node.server.session_manager.search_index.search(
                 claim_id=claim_id
             ))[0][0]['trending_score']
 
         claim_id1 = (await self.stream_create('derp', '1.0'))['outputs'][0]['claim_id']
-        COIN = 1E8
+        COIN = int(1E8)
 
-        height = 99000
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height, 0, 10 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 207)
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (208, bytes.fromhex(claim_id1)), (0, 10 * COIN)
         )
         await self.generate(1)
-        self.assertEqual(172.64252836433135, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 1, 10 * COIN, 100 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 208)
+
+        self.assertEqual(1.7090807854206793, await get_trending_score(claim_id1))
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (209, bytes.fromhex(claim_id1)), (10 * COIN, 100 * COIN)
         )
         await self.generate(1)
-        self.assertEqual(173.45931832928875, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 100, 100 * COIN, 1000000 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 209)
+        self.assertEqual(2.2437974397778886, await get_trending_score(claim_id1))
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (309, bytes.fromhex(claim_id1)), (100 * COIN, 1000000 * COIN)
         )
-        await self.generate(1)
-        self.assertEqual(176.65517070393514, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 200, 1000000 * COIN, 1 * COIN
+        await self.generate(100)
+        self.assertEqual(self.conductor.spv_node.writer.height, 309)
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
+
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (409, bytes.fromhex(claim_id1)), (1000000 * COIN, 1 * COIN)
         )
+
+        await self.generate(99)
+        self.assertEqual(self.conductor.spv_node.writer.height, 408)
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
+
         await self.generate(1)
-        self.assertEqual(-174.951347102643, await get_trending_score(claim_id1))
-        search_results = (await self.conductor.spv_node.server.bp.db.search_index.search(claim_name="derp"))[0]
+        self.assertEqual(self.conductor.spv_node.writer.height, 409)
+
+        self.assertEqual(-3.4256156592205627, await get_trending_score(claim_id1))
+        search_results = (await self.conductor.spv_node.server.session_manager.search_index.search(claim_name="derp"))[0]
         self.assertEqual(1, len(search_results))
         self.assertListEqual([claim_id1], [c['claim_id'] for c in search_results])
 
@@ -1465,22 +1510,31 @@ class ResolveAfterReorg(BaseResolveTestCase):
     async def reorg(self, start):
         blocks = self.ledger.headers.height - start
         self.blockchain.block_expected = start - 1
+
+
+        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
+        self.conductor.spv_node.server.synchronized.clear()
+
         # go back to start
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode())
         # go to previous + 1
-        await self.generate(blocks + 2)
+        await self.blockchain.generate(blocks + 2)
+
+        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
+        await self.conductor.spv_node.server.synchronized.wait()
+        # await asyncio.wait_for(self.on_header(self.blockchain.block_expected), 30.0)
 
     async def assertBlockHash(self, height):
-        bp = self.conductor.spv_node.server.bp
+        reader_db = self.conductor.spv_node.server.db
         block_hash = await self.blockchain.get_block_hash(height)
 
         self.assertEqual(block_hash, (await self.ledger.headers.hash(height)).decode())
-        self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
+        self.assertEqual(block_hash, (await reader_db.fs_block_hashes(height, 1))[0][::-1].hex())
         txids = [
-            tx_hash[::-1].hex() for tx_hash in bp.db.get_block_txs(height)
+            tx_hash[::-1].hex() for tx_hash in reader_db.get_block_txs(height)
         ]
-        txs = await bp.db.get_transactions_and_merkles(txids)
-        block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
+        txs = await reader_db.get_transactions_and_merkles(txids)
+        block_txs = (await self.conductor.spv_node.server.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')
 
@@ -1491,9 +1545,18 @@ class ResolveAfterReorg(BaseResolveTestCase):
         channel_id = self.get_claim_id(
             await self.channel_create(channel_name, '0.01')
         )
-        self.assertEqual(channel_id, (await self.assertMatchWinningClaim(channel_name)).claim_hash.hex())
+
+        await self.assertNameState(
+            height=207, name='@abc', winning_claim_id=channel_id, last_takeover_height=207,
+            non_winning_claims=[]
+        )
+
         await self.reorg(206)
-        self.assertEqual(channel_id, (await self.assertMatchWinningClaim(channel_name)).claim_hash.hex())
+
+        await self.assertNameState(
+            height=208, name='@abc', winning_claim_id=channel_id, last_takeover_height=207,
+            non_winning_claims=[]
+        )
 
         # await self.assertNoClaimForName(channel_name)
         # self.assertNotIn('error', await self.resolve(channel_name))
@@ -1502,16 +1565,29 @@ class ResolveAfterReorg(BaseResolveTestCase):
         stream_id = self.get_claim_id(
             await self.stream_create(stream_name, '0.01', channel_id=channel_id)
         )
-        self.assertEqual(stream_id, (await self.assertMatchWinningClaim(stream_name)).claim_hash.hex())
+
+        await self.assertNameState(
+            height=209, name=stream_name, winning_claim_id=stream_id, last_takeover_height=209,
+            non_winning_claims=[]
+        )
         await self.reorg(206)
-        self.assertEqual(stream_id, (await self.assertMatchWinningClaim(stream_name)).claim_hash.hex())
+        await self.assertNameState(
+            height=210, name=stream_name, winning_claim_id=stream_id, last_takeover_height=209,
+            non_winning_claims=[]
+        )
 
         await self.support_create(stream_id, '0.01')
-        self.assertNotIn('error', await self.resolve(stream_name))
-        self.assertEqual(stream_id, (await self.assertMatchWinningClaim(stream_name)).claim_hash.hex())
+
+        await self.assertNameState(
+            height=211, name=stream_name, winning_claim_id=stream_id, last_takeover_height=209,
+            non_winning_claims=[]
+        )
         await self.reorg(206)
         # self.assertNotIn('error', await self.resolve(stream_name))
-        self.assertEqual(stream_id, (await self.assertMatchWinningClaim(stream_name)).claim_hash.hex())
+        await self.assertNameState(
+            height=212, name=stream_name, winning_claim_id=stream_id, last_takeover_height=209,
+            non_winning_claims=[]
+        )
 
         await self.stream_abandon(stream_id)
         self.assertNotIn('error', await self.resolve(channel_name))
@@ -1553,7 +1629,6 @@ class ResolveAfterReorg(BaseResolveTestCase):
         await self.ledger.wait(broadcast_tx)
         await self.support_create(still_valid.outputs[0].claim_id, '0.01')
 
-        # await self.generate(1)
         await self.ledger.wait(broadcast_tx, self.blockchain.block_expected)
         self.assertEqual(self.ledger.headers.height, 208)
         await self.assertBlockHash(208)
@@ -1570,7 +1645,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
 
         # wait for the client to catch up and verify the reorg
@@ -1603,7 +1678,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         await self.blockchain.generate(1)
 
         # wait for the client to catch up
-        await asyncio.wait_for(self.on_header(210), 1.0)
+        await asyncio.wait_for(self.on_header(210), 3.0)
 
         # verify the claim is in the new block and that it is returned by claim_search
         republished = await self.resolve('hovercraft')
@@ -1649,11 +1724,11 @@ class ResolveAfterReorg(BaseResolveTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
 
         # wait for the client to catch up and verify the reorg
-        await asyncio.wait_for(self.on_header(209), 3.0)
+        await asyncio.wait_for(self.on_header(209), 30.0)
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         await self.assertBlockHash(209)
