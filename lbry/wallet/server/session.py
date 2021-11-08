@@ -695,7 +695,7 @@ class SessionBase(RPCSession):
     request_handlers: typing.Dict[str, typing.Callable] = {}
     version = '0.5.7'
 
-    def __init__(self, session_manager: 'LBRYSessionManager', db: 'LevelDB', mempool: 'MemPool', kind: str):
+    def __init__(self, session_manager: 'LBRYSessionManager', db: 'HubDB', mempool: 'MemPool', kind: str):
         connection = JSONRPCConnection(JSONRPCAutoDetect)
         self.env = session_manager.env
         super().__init__(connection=connection)
@@ -881,7 +881,7 @@ class LBRYElectrumX(SessionBase):
         self.protocol_tuple = self.PROTOCOL_MIN
         self.protocol_string = None
         self.daemon = self.session_manager.daemon
-        self.db: LevelDB = self.session_manager.db
+        self.db: HubDB = self.session_manager.db
 
     @classmethod
     def protocol_min_max_strings(cls):
