@@ -170,13 +170,16 @@ class SessionManager:
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
-    def __init__(self, env: 'Env', db: LevelDB, bp: BlockProcessor, daemon: 'Daemon', shutdown_event: asyncio.Event):
+    def __init__(self, env: 'Env', db: LevelDB, mempool, history_cache, resolve_cache, resolve_outputs_cache,
+                 daemon: 'Daemon', shutdown_event: asyncio.Event,
+                 on_available_callback: typing.Callable[[], None], on_unavailable_callback: typing.Callable[[], None]):
         env.max_send = max(350000, env.max_send)
         self.env = env
         self.db = db
-        self.bp = bp
+        self.on_available_callback = on_available_callback
+        self.on_unavailable_callback = on_unavailable_callback
         self.daemon = daemon
-        self.mempool = bp.mempool
+        self.mempool = mempool
         self.shutdown_event = shutdown_event
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.servers: typing.Dict[str, asyncio.AbstractServer] = {}
@@ -186,7 +189,9 @@ class SessionManager:
         self.cur_group = SessionGroup(0)
         self.txs_sent = 0
         self.start_time = time.time()
-        self.history_cache = self.bp.history_cache
+        self.history_cache = history_cache
+        self.resolve_cache = resolve_cache
+        self.resolve_outputs_cache = resolve_outputs_cache
         self.notified_height: typing.Optional[int] = None
         # Cache some idea of room to avoid recounting on each subscription
         self.subs_room = 0
@@ -243,7 +248,7 @@ class SessionManager:
             await self.session_event.wait()
             self.session_event.clear()
             if not paused and len(self.sessions) >= max_sessions:
-                self.bp.status_server.set_unavailable()
+                self.on_unavailable_callback()
                 self.logger.info(f'maximum sessions {max_sessions:,d} '
                                  f'reached, stopping new connections until '
                                  f'count drops to {low_watermark:,d}')
@@ -252,7 +257,7 @@ class SessionManager:
             # Start listening for incoming connections if paused and
             # session count has fallen
             if paused and len(self.sessions) <= low_watermark:
-                self.bp.status_server.set_available()
+                self.on_available_callback()
                 self.logger.info('resuming listening for incoming connections')
                 await self._start_external_servers()
                 paused = False
@@ -533,7 +538,7 @@ class SessionManager:
             await self.start_other()
             await self._start_external_servers()
             server_listening_event.set()
-            self.bp.status_server.set_available()
+            self.on_available_callback()
             # Peer discovery should start after the external servers
             # because we connect to ourself
             await asyncio.wait([
@@ -628,8 +633,9 @@ class SessionManager:
             for hashX in touched.intersection(self.mempool_statuses.keys()):
                 self.mempool_statuses.pop(hashX, None)
 
+        # self.bp._chain_executor
         await asyncio.get_event_loop().run_in_executor(
-            self.bp._chain_executor, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
+            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
         )
 
         if touched or new_touched or (height_changed and self.mempool_statuses):
@@ -866,8 +872,7 @@ class LBRYElectrumX(SessionBase):
         self.protocol_tuple = self.PROTOCOL_MIN
         self.protocol_string = None
         self.daemon = self.session_mgr.daemon
-        self.bp: BlockProcessor = self.session_mgr.bp
-        self.db: LevelDB = self.bp.db
+        self.db: LevelDB = self.session_mgr.db
 
     @classmethod
     def protocol_min_max_strings(cls):
@@ -1008,21 +1013,21 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
 
     async def _cached_resolve_url(self, url):
-        if url not in self.bp.resolve_cache:
-            self.bp.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
-        return self.bp.resolve_cache[url]
+        if url not in self.session_mgr.resolve_cache:
+            self.session_mgr.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
+        return self.session_mgr.resolve_cache[url]
 
     async def claimtrie_resolve(self, *urls) -> str:
         sorted_urls = tuple(sorted(urls))
         self.session_mgr.urls_to_resolve_count_metric.inc(len(sorted_urls))
         try:
-            if sorted_urls in self.bp.resolve_outputs_cache:
-                return self.bp.resolve_outputs_cache[sorted_urls]
+            if sorted_urls in self.session_mgr.resolve_outputs_cache:
+                return self.session_mgr.resolve_outputs_cache[sorted_urls]
             rows, extra = [], []
             for url in urls:
-                if url not in self.bp.resolve_cache:
-                    self.bp.resolve_cache[url] = await self._cached_resolve_url(url)
-                stream, channel, repost, reposted_channel = self.bp.resolve_cache[url]
+                if url not in self.session_mgr.resolve_cache:
+                    self.session_mgr.resolve_cache[url] = await self._cached_resolve_url(url)
+                stream, channel, repost, reposted_channel = self.session_mgr.resolve_cache[url]
                 if isinstance(channel, ResolveCensoredError):
                     rows.append(channel)
                     extra.append(channel.censor_row)
@@ -1047,7 +1052,7 @@ class LBRYElectrumX(SessionBase):
                     if reposted_channel:
                         extra.append(reposted_channel)
                 await asyncio.sleep(0)
-            self.bp.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
+            self.session_mgr.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
                 None, Outputs.to_base64, rows, extra, 0, None, None
             )
             return result
@@ -1055,7 +1060,7 @@ class LBRYElectrumX(SessionBase):
             self.session_mgr.resolved_url_count_metric.inc(len(sorted_urls))
 
     async def get_server_height(self):
-        return self.bp.height
+        return self.db.db_height
 
     async def transaction_get_height(self, tx_hash):
         self.assert_tx_hash(tx_hash)

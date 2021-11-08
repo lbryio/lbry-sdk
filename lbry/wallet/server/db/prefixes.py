@@ -4,7 +4,7 @@ import array
 import base64
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.db import KeyValueStorage, PrefixDB
+from lbry.wallet.server.db.db import RocksDBStore, PrefixDB
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
 
@@ -38,7 +38,7 @@ class PrefixRow(metaclass=PrefixRowType):
     value_struct: struct.Struct
     key_part_lambdas = []
 
-    def __init__(self, db: KeyValueStorage, op_stack: RevertableOpStack):
+    def __init__(self, db: RocksDBStore, op_stack: RevertableOpStack):
         self._db = db
         self._op_stack = op_stack
 
@@ -1595,40 +1595,10 @@ class BlockTxsPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(tx_hashes)
 
 
-class LevelDBStore(KeyValueStorage):
-    def __init__(self, path: str, cache_mb: int, max_open_files: int):
-        import plyvel
-        self.db = plyvel.DB(
-            path, create_if_missing=True, max_open_files=max_open_files,
-            lru_cache_size=cache_mb * 1024 * 1024, write_buffer_size=64 * 1024 * 1024,
-            max_file_size=1024 * 1024 * 64, bloom_filter_bits=32
-        )
-
-    def get(self, key: bytes, fill_cache: bool = True) -> Optional[bytes]:
-        return self.db.get(key, fill_cache=fill_cache)
-
-    def iterator(self, reverse=False, start=None, stop=None, include_start=True, include_stop=False, prefix=None,
-                 include_key=True, include_value=True, fill_cache=True):
-        return self.db.iterator(
-            reverse=reverse, start=start, stop=stop, include_start=include_start, include_stop=include_stop,
-            prefix=prefix, include_key=include_key, include_value=include_value, fill_cache=fill_cache
-        )
-
-    def write_batch(self, transaction: bool = False, sync: bool = False):
-        return self.db.write_batch(transaction=transaction, sync=sync)
-
-    def close(self):
-        return self.db.close()
-
-    @property
-    def closed(self) -> bool:
-        return self.db.closed
-
-
 class HubDB(PrefixDB):
     def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
-                 unsafe_prefixes: Optional[typing.Set[bytes]] = None):
-        db = LevelDBStore(path, cache_mb, max_open_files)
+                 secondary_path: str = '', unsafe_prefixes: Optional[typing.Set[bytes]] = None):
+        db = RocksDBStore(path, cache_mb, max_open_files, secondary_path=secondary_path)
         super().__init__(db, reorg_limit, unsafe_prefixes=unsafe_prefixes)
         self.claim_to_support = ClaimToSupportPrefixRow(db, self._op_stack)
         self.support_to_claim = SupportToClaimPrefixRow(db, self._op_stack)
