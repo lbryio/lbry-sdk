@@ -419,6 +419,9 @@ class BlockchainNode:
         self.block_expected += blocks
         return self._cli_cmnd('generate', str(blocks))
 
+    def wallet_passphrase(self, passphrase, timeout):
+                return self._cli_cmnd('walletpassphrase', passphrase, str(timeout))
+
     def invalidate_block(self, blockhash):
         return self._cli_cmnd('invalidateblock', blockhash)
 
