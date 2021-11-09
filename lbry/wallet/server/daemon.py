@@ -250,14 +250,14 @@ class Daemon:
     async def deserialised_block(self, hex_hash):
         """Return the deserialised block with the given hex hash."""
         if hex_hash not in self._block_cache:
-            block = await self._send_single('getblock', (hex_hash, True))
+            block = await self._send_single('getblock', (hex_hash, 1))
             self._block_cache[hex_hash] = block
             return block
         return self._block_cache[hex_hash]
 
     async def raw_blocks(self, hex_hashes):
         """Return the raw binary blocks with the given hex hashes."""
-        params_iterable = ((h, False) for h in hex_hashes)
+        params_iterable = ((h, 0) for h in hex_hashes)
         blocks = await self._send_vector('getblock', params_iterable)
         # Convert hex string to bytes
         return [hex_to_bytes(block) for block in blocks]
