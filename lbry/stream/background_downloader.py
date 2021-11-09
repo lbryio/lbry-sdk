@@ -1,6 +1,10 @@
 import asyncio
+import logging
 
 from lbry.stream.downloader import StreamDownloader
+
+
+log = logging.getLogger(__name__)
 
 
 class BackgroundDownloader:
@@ -18,5 +22,9 @@ class BackgroundDownloader:
                 await downloader.download_stream_blob(blob_info)
         except ValueError:
             return
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            log.error("Unexpected download error on background downloader")
         finally:
             downloader.stop()
