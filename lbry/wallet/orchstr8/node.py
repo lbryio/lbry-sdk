@@ -419,6 +419,10 @@ class BlockchainNode:
         self.block_expected += blocks
         return self._cli_cmnd('generate', str(blocks))
 
+    def generate_to_address(self, blocks, addr):
+        self.block_expected += blocks
+        return self._cli_cmnd('generatetoaddress', str(blocks), addr)
+
     def wallet_passphrase(self, passphrase, timeout):
                 return self._cli_cmnd('walletpassphrase', passphrase, str(timeout))
 
