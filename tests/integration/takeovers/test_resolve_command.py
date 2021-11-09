@@ -273,7 +273,7 @@ class ResolveCommand(BaseResolveTestCase):
         # resolve retries
         await self.conductor.spv_node.stop()
         resolve_task = asyncio.create_task(self.resolve('foo'))
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         self.assertIsNotNone((await resolve_task)['claim_id'])
 
     async def test_winning_by_effective_amount(self):

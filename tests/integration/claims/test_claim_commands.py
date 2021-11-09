@@ -1555,7 +1555,7 @@ class StreamCommands(ClaimTestCase):
         )
         # test setting from env vars and starting from scratch
         await self.conductor.spv_node.stop(False)
-        await self.conductor.spv_node.start(self.conductor.blockchain_node,
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node,
                                             extraconf={'BLOCKING_CHANNEL_IDS': blocking_channel_id,
                                                        'FILTERING_CHANNEL_IDS': filtering_channel_id})
         await self.daemon.wallet_manager.reset()
