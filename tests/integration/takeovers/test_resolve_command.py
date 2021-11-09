@@ -153,11 +153,17 @@ class ResolveCommand(BaseResolveTestCase):
         await self.assertResolvesToClaimId(
             f'@abc#{colliding_claim_ids[0][:1]}', first_claim
         )
+        collision_depth = 0
+        for c1, c2 in zip(colliding_claim_ids[0], colliding_claim_ids[1]):
+            if c1 == c2:
+                collision_depth += 1
+            else:
+                break
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:2]}', colliding_claim_ids[0])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:7]}', colliding_claim_ids[0])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0][:17]}', colliding_claim_ids[0])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[0]}', colliding_claim_ids[0])
-        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:3]}', colliding_claim_ids[1])
+        await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:collision_depth + 1]}', colliding_claim_ids[1])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:7]}', colliding_claim_ids[1])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:17]}', colliding_claim_ids[1])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1]}', colliding_claim_ids[1])
