@@ -18,7 +18,7 @@ from lbry.wallet import WalletManager, Wallet, Ledger, Account, Transaction
 from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode, HubNode
+from lbry.wallet.orchstr8.node import LBCWalletNode, WalletNode, HubNode
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
@@ -222,7 +222,7 @@ class IntegrationTestCase(AsyncioTestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conductor: Optional[Conductor] = None
-        self.blockchain: Optional[BlockchainNode] = None
+        self.blockchain: Optional[LBCWalletNode] = None
         self.hub: Optional[HubNode] = None
         self.wallet_node: Optional[WalletNode] = None
         self.manager: Optional[WalletManager] = None
@@ -232,15 +232,17 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.conductor = Conductor(seed=self.SEED)
-        await self.conductor.start_blockchain()
-        self.addCleanup(self.conductor.stop_blockchain)
+        await self.conductor.start_lbcd()
+        self.addCleanup(self.conductor.stop_lbcd)
+        await self.conductor.start_lbcwallet()
+        self.addCleanup(self.conductor.stop_lbcwallet)
         await self.conductor.start_spv()
         self.addCleanup(self.conductor.stop_spv)
         await self.conductor.start_wallet()
         self.addCleanup(self.conductor.stop_wallet)
         await self.conductor.start_hub()
         self.addCleanup(self.conductor.stop_hub)
-        self.blockchain = self.conductor.blockchain_node
+        self.blockchain = self.conductor.lbcwallet_node
         self.hub = self.conductor.hub_node
         self.wallet_node = self.conductor.wallet_node
         self.manager = self.wallet_node.manager

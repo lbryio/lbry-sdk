@@ -135,7 +135,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.conductor.spv_node.stop()
         self.assertFalse(self.ledger.network.is_connected)
         await asyncio.sleep(0.2)  # let it retry and fail once
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
@@ -165,8 +165,10 @@ class UDPServerFailDiscoveryTest(AsyncioTestCase):
     async def test_wallet_connects_despite_lack_of_udp(self):
         conductor = Conductor()
         conductor.spv_node.udp_port = '0'
-        await conductor.start_blockchain()
-        self.addCleanup(conductor.stop_blockchain)
+        await conductor.start_lbcd()
+        self.addCleanup(conductor.stop_lbcd)
+        await conductor.start_lbcwallet()
+        self.addCleanup(conductor.stop_lbcwallet)
         await conductor.start_spv()
         self.addCleanup(conductor.stop_spv)
         self.assertFalse(conductor.spv_node.server.bp.status_server.is_running)

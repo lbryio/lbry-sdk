@@ -48,7 +48,7 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(status['wallet']['servers'][0]['port'], 50002)
         await self.conductor.spv_node.stop(True)
         self.conductor.spv_node.port = 54320
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         status = await self.daemon.jsonrpc_status()
         self.assertEqual(len(status['wallet']['servers']), 0)
         self.daemon.jsonrpc_settings_set('lbryum_servers', ['localhost:54320'])
