@@ -353,12 +353,13 @@ class CommandTestCase(IntegrationTestCase):
         self.skip_libtorrent = True
 
     async def asyncSetUp(self):
-        await super().asyncSetUp()
 
         logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
+
+        await super().asyncSetUp()
 
         self.daemon = await self.add_daemon(self.wallet_node)
 
