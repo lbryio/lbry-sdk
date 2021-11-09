@@ -434,8 +434,8 @@ class BlockchainNode:
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')
 
-    def get_new_address(self, address_type):
-        return self._cli_cmnd('getnewaddress', "", address_type)
+    def get_new_address(self, account):
+        return self._cli_cmnd('getnewaddress', account)
 
     async def get_balance(self):
         return await self._cli_cmnd('getbalance')
