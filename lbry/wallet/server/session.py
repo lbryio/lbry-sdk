@@ -1472,7 +1472,7 @@ class LBRYElectrumX(SessionBase):
             if mempool_tx:
                 raw_tx, block_hash = mempool_tx.raw_tx.hex(), None
             else:
-                tx_info = await self.daemon_request('getrawtransaction', tx_hash, True)
+                tx_info = await self.daemon_request('getrawtransaction', tx_hash, 1)
                 raw_tx = tx_info['hex']
                 block_hash = tx_info.get('blockhash')
             if block_hash:
@@ -1509,7 +1509,7 @@ class LBRYElectrumX(SessionBase):
         if verbose not in (True, False):
             raise RPCError(BAD_REQUEST, f'"verbose" must be a boolean')
 
-        return await self.daemon_request('getrawtransaction', tx_hash, verbose)
+        return await self.daemon_request('getrawtransaction', tx_hash, int(verbose))
 
     def _get_merkle_branch(self, tx_hashes, tx_pos):
         """Return a merkle branch to a transaction.
