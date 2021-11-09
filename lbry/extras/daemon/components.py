@@ -386,7 +386,7 @@ class BackgroundDownloaderComponent(Component):
 
     def __init__(self, component_manager):
         super().__init__(component_manager)
-        self.task: typing.Optional[asyncio.Task] = None
+        self.background_task: typing.Optional[asyncio.Task] = None
         self.download_loop_delay_seconds = 60
         self.ongoing_download: typing.Optional[asyncio.Task] = None
         self.space_manager: typing.Optional[DiskSpaceManager] = None
@@ -404,11 +404,11 @@ class BackgroundDownloaderComponent(Component):
         return self
 
     async def get_status(self):
-        return {'running': self.task is not None and not self.task.done(),
+        return {'running': self.background_task is not None and not self.background_task.done(),
                 'available_free_space_mb': self.space_available,
                 'ongoing_download': self.is_busy}
 
-    async def loop(self):
+    async def download_blobs_in_background(self):
         while True:
             self.space_available = await self.space_manager.get_free_space_mb(True)
             if not self.is_busy and self.space_available > 10:
@@ -426,13 +426,13 @@ class BackgroundDownloaderComponent(Component):
         self.blob_manager = self.component_manager.get_component(BLOB_COMPONENT)
         storage = self.component_manager.get_component(DATABASE_COMPONENT)
         self.background_downloader = BackgroundDownloader(self.conf, storage, self.blob_manager, self.dht_node)
-        self.task = asyncio.create_task(self.loop())
+        self.background_task = asyncio.create_task(self.download_blobs_in_background())
 
     async def stop(self):
         if self.ongoing_download and not self.ongoing_download.done():
             self.ongoing_download.cancel()
-        if self.task:
-            self.task.cancel()
+        if self.background_task:
+            self.background_task.cancel()
 
 
 class DiskSpaceComponent(Component):
