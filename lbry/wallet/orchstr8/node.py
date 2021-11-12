@@ -583,7 +583,6 @@ class LBCWalletNode:
         await self.protocol.stopped.wait()
         self.transport.close()
         self.running.clear()
-        os.remove(os.path.join(self.data_path, 'regtest', 'mempool.dat'))
         self.restart_ready.set()
         await self.running.wait()
 
