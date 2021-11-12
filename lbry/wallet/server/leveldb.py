@@ -213,7 +213,7 @@ class LevelDB:
         support_amount = self.get_support_amount(claim_hash)
         claim_amount = self.get_cached_claim_txo(claim_hash).amount
 
-        effective_amount = support_amount + claim_amount
+        effective_amount = self.get_effective_amount(claim_hash)
         channel_hash = self.get_channel_for_claim(claim_hash, tx_num, position)
         reposted_claim_hash = self.get_repost(claim_hash)
         short_url = self.get_short_claim_id_url(name, normalized_name, claim_hash, root_tx_num, root_position)
