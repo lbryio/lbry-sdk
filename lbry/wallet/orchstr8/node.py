@@ -479,7 +479,9 @@ class LBCWalletNode:
 
     @property
     def rpc_url(self):
-        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.lbcwallet_rpcport}/'
+        # FIXME: somehow the hub/sdk doesn't learn the blocks through the Walet RPC port, why?
+        # return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.lbcwallet_rpcport}/'
+        return f'http://{self.rpcuser}:{self.rpcpassword}@{self.hostname}:{self.lbcd_rpcport}/'
 
     def is_expected_block(self, e: BlockHeightEvent):
         return self.block_expected == e.height
