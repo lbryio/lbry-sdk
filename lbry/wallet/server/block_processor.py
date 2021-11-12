@@ -1407,9 +1407,13 @@ class BlockProcessor:
             self.db.prefix_db.effective_amount.stage_put(
                 (name, new_effective_amount, tx_num, position), (touched,)
             )
-            self._add_claim_activation_change_notification(
-                touched.hex(), height, prev_effective_amount, new_effective_amount
-            )
+            if touched in self.claim_hash_to_txo or touched in self.removed_claim_hashes \
+                    or touched in self.pending_support_amount_change:
+                # exclude sending notifications for claims/supports that activated but
+                # weren't added/spent in this block
+                self._add_claim_activation_change_notification(
+                    touched.hex(), height, prev_effective_amount, new_effective_amount
+                )
 
         for channel_hash, count in self.pending_channel_counts.items():
             if count != 0:
