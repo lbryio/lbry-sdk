@@ -68,7 +68,14 @@ class BaseResolveTestCase(CommandTestCase):
         self.assertEqual(expected['txId'], claim.tx_hash[::-1].hex())
         self.assertEqual(expected['n'], claim.position)
         self.assertEqual(expected['amount'], claim.amount)
-        self.assertEqual(expected['effectiveAmount'], claim.effective_amount)
+        self.assertEqual(expected['effectiveAmount'], claim.effective_amount, claim.claim_hash.hex())
+        self.assertEqual(claim_from_es[0][0]['activation_height'], claim.activation_height)
+        self.assertEqual(claim_from_es[0][0]['last_take_over_height'], claim.last_takeover_height)
+        self.assertEqual(claim_from_es[0][0]['tx_id'], claim.tx_hash[::-1].hex())
+        self.assertEqual(claim_from_es[0][0]['tx_nout'], claim.position)
+        self.assertEqual(claim_from_es[0][0]['amount'], claim.amount)
+        self.assertEqual(claim_from_es[0][0]['effective_amount'], claim.effective_amount)
+
         return claim
 
     async def assertMatchClaim(self, claim_id, is_active_in_lbrycrd=True):
@@ -126,10 +133,20 @@ class BaseResolveTestCase(CommandTestCase):
         for c in expected['claims']:
             check_supports(c['claimId'], c['supports'])
             claim_hash = bytes.fromhex(c['claimId'])
+            effective_amount = db.get_effective_amount(claim_hash)
+            claim = db._fs_get_claim_by_hash(claim_hash)
+
             self.assertEqual(c['validAtHeight'], db.get_activation(
                 db.prefix_db.tx_num.get(bytes.fromhex(c['txId'])[::-1]).tx_num, c['n']
             ))
-            self.assertEqual(c['effectiveAmount'], db.get_effective_amount(claim_hash))
+            self.assertEqual(c['effectiveAmount'], effective_amount)
+            self.assertEqual(effective_amount, claim.effective_amount)
+            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+                claim_id=c['claimId']
+            )
+            self.assertEqual(len(claim_from_es[0]), 1)
+            self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), c['claimId'])
+            self.assertEqual(claim_from_es[0][0]['effective_amount'], effective_amount)
 
 
 class ResolveCommand(BaseResolveTestCase):
@@ -1176,10 +1193,12 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertNotEqual(first_claim_id, second_claim_id)
         # takeover should not have happened yet
         await self.assertMatchClaimIsWinning(name, first_claim_id)
-        await self.generate(8)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        for _ in range(8):
+            await self.generate(1)
+            await self.assertMatchClaimIsWinning(name, first_claim_id)
         # prevent the takeover by adding a support one block before the takeover happens
         await self.support_create(first_claim_id, bid='1.0')
+        await self.assertMatchClaimIsWinning(name, first_claim_id)
         # one more block until activation
         await self.generate(1)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
