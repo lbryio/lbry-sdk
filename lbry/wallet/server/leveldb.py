@@ -679,7 +679,7 @@ class LevelDB:
             if claim:
                 batch.append(claim)
             if len(batch) == batch_size:
-                batch.sort(key=lambda x: x.tx_hash)
+                batch.sort(key=lambda x: x.tx_hash)  # sort is to improve read-ahead hits
                 for claim in batch:
                     meta = self._prepare_claim_metadata(claim.claim_hash, claim)
                     if meta:
