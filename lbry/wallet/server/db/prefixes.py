@@ -1470,7 +1470,7 @@ class ChannelCountPrefixRow(PrefixRow):
     ]
 
     @classmethod
-    def pack_key(cls, channel_hash: int):
+    def pack_key(cls, channel_hash: bytes):
         return super().pack_key(channel_hash)
 
     @classmethod
@@ -1558,10 +1558,10 @@ class DBStatePrefixRow(PrefixRow):
     @classmethod
     def pack_item(cls, genesis: bytes, height: int, tx_count: int, tip: bytes, utxo_flush_count: int, wall_time: int,
                   first_sync: bool, db_version: int, hist_flush_count: int, comp_flush_count: int,
-                  comp_cursor: int):
+                  comp_cursor: int, es_sync_height: int):
         return cls.pack_key(), cls.pack_value(
             genesis, height, tx_count, tip, utxo_flush_count, wall_time, first_sync, db_version, hist_flush_count,
-            comp_flush_count, comp_cursor
+            comp_flush_count, comp_cursor, es_sync_height
         )
 
 
