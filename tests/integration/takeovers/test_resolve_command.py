@@ -119,19 +119,27 @@ class BaseResolveTestCase(CommandTestCase):
 
         db = self.conductor.spv_node.server.bp.db
 
-        def check_supports(claim_id, lbrycrd_supports):
+        def check_supports(claim_id, lbrycrd_supports, es_support_amount):
+            total_amount = 0
             for i, (tx_num, position, amount) in enumerate(db.get_supports(bytes.fromhex(claim_id))):
+                total_amount += amount
                 support = lbrycrd_supports[i]
                 self.assertEqual(support['txId'], db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex())
                 self.assertEqual(support['n'], position)
                 self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
                 self.assertEqual(support['validAtHeight'], db.get_activation(tx_num, position, is_support=True))
+            self.assertEqual(total_amount, es_support_amount)
 
         # self.assertEqual(len(expected['claims']), len(db_claims.claims))
         # self.assertEqual(expected['lastTakeoverHeight'], db_claims.lastTakeoverHeight)
 
         for c in expected['claims']:
-            check_supports(c['claimId'], c['supports'])
+            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+                claim_id=c['claimId']
+            )
+            self.assertEqual(len(claim_from_es[0]), 1)
+            self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), c['claimId'])
+            check_supports(c['claimId'], c['supports'], claim_from_es[0][0]['support_amount'])
             claim_hash = bytes.fromhex(c['claimId'])
             effective_amount = db.get_effective_amount(claim_hash)
             claim = db._fs_get_claim_by_hash(claim_hash)
@@ -141,11 +149,7 @@ class BaseResolveTestCase(CommandTestCase):
             ))
             self.assertEqual(c['effectiveAmount'], effective_amount)
             self.assertEqual(effective_amount, claim.effective_amount)
-            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
-                claim_id=c['claimId']
-            )
-            self.assertEqual(len(claim_from_es[0]), 1)
-            self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), c['claimId'])
+
             self.assertEqual(claim_from_es[0][0]['effective_amount'], effective_amount)
 
 
