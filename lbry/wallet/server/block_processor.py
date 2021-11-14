@@ -1351,6 +1351,8 @@ class BlockProcessor:
                 set(self.removed_active_support_amount_by_claim.keys())
             ).union(
                 set(self.activated_support_amount_by_claim.keys())
+            ).union(
+                set(self.pending_support_amount_change.keys())
             ).difference(
                 self.removed_claim_hashes
             )
