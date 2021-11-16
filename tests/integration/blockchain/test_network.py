@@ -33,7 +33,7 @@ class NetworkTests(IntegrationTestCase):
             'donation_address': '',
             'daily_fee': '0',
             'server_version': lbry.__version__,
-            'trending_algorithm': 'variable_decay',
+            'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
         # await self.conductor.spv_node.stop()
         payment_address, donation_address = await self.account.get_addresses(limit=2)
@@ -58,7 +58,7 @@ class NetworkTests(IntegrationTestCase):
             'donation_address': donation_address,
             'daily_fee': '42',
             'server_version': lbry.__version__,
-            'trending_algorithm': 'variable_decay',
+            'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
 
 
