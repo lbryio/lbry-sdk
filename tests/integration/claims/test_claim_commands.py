@@ -12,6 +12,7 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
+from lbry.wallet.server.db.common import STREAM_TYPES
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.util import satoshis_to_coins as lbc
 from lbry.crypto.hash import sha256
@@ -227,6 +228,7 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal], has_source=True)
         await self.assertFindsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
         await self.assertListsClaims([channel_repost, no_source_repost, normal_repost, normal, no_source, channel])
+        await self.assertFindsClaims([normal_repost, normal], stream_types=list(STREAM_TYPES.keys()))
 
     async def test_pagination(self):
         await self.create_channel()
