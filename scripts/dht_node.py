@@ -1,6 +1,8 @@
 import asyncio
 import argparse
 import logging
+import csv
+from io import StringIO
 from typing import Optional
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge
@@ -24,8 +26,9 @@ PEERS = Gauge(
 
 
 class SimpleMetrics:
-    def __init__(self, port):
+    def __init__(self, port, node):
         self.prometheus_port = port
+        self.dht_node: Node = node
 
     async def handle_metrics_get_request(self, request: web.Request):
         try:
@@ -37,9 +40,20 @@ class SimpleMetrics:
             log.exception('could not generate prometheus data')
             raise
 
+    async def handle_peers_csv(self, request: web.Request):
+        out = StringIO()
+        writer = csv.DictWriter(out, fieldnames=["ip", "port", "dht_id"])
+        writer.writeheader()
+        for peer in self.dht_node.protocol.routing_table.get_peers():
+            log.warning(peer.address, peer.udp_port, peer.node_id)
+            writer.writerow({"ip": peer.address, "port": peer.udp_port, "dht_id": peer.node_id.hex()})
+
+        return web.Response(text=out.getvalue())
+
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
+        prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
@@ -47,9 +61,6 @@ class SimpleMetrics:
 
 
 async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional[str], prometheus_port: int):
-    if prometheus_port > 0:
-        metrics = SimpleMetrics(prometheus_port)
-        await metrics.start()
     loop = asyncio.get_event_loop()
     conf = Config()
     storage = SQLiteStorage(conf, db_file_path, loop, loop.time)
@@ -63,6 +74,9 @@ async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional
         loop, PeerManager(loop), generate_id(), port, port, 3333, None,
         storage=storage
     )
+    if prometheus_port > 0:
+        metrics = SimpleMetrics(prometheus_port, node)
+        await metrics.start()
     node.start(host, nodes)
     while True:
         await asyncio.sleep(10)
