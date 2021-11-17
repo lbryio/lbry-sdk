@@ -45,15 +45,22 @@ class SimpleMetrics:
         writer = csv.DictWriter(out, fieldnames=["ip", "port", "dht_id"])
         writer.writeheader()
         for peer in self.dht_node.protocol.routing_table.get_peers():
-            log.warning(peer.address, peer.udp_port, peer.node_id)
             writer.writerow({"ip": peer.address, "port": peer.udp_port, "dht_id": peer.node_id.hex()})
+        return web.Response(text=out.getvalue(), content_type='text/csv')
 
-        return web.Response(text=out.getvalue())
+    async def handle_blobs_csv(self, request: web.Request):
+        out = StringIO()
+        writer = csv.DictWriter(out, fieldnames=["blob_hash"])
+        writer.writeheader()
+        for blob in self.dht_node.protocol.data_store.keys():
+            writer.writerow({"blob_hash": blob.hex()})
+        return web.Response(text=out.getvalue(), content_type='text/csv')
 
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
+        prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
@@ -96,6 +103,6 @@ if __name__ == '__main__':
     parser.add_argument("--bootstrap_node", default=None, type=str,
                         help="Node to connect for bootstraping this node. Leave unset to use the default ones. "
                              "Format: host:port Example: lbrynet1.lbry.com:4444")
-    parser.add_argument("--prometheus_port", default=0, type=int, help="Port for Prometheus metrics. 0 to disable. Default: 0")
+    parser.add_argument("--metrics_port", default=0, type=int, help="Port for Prometheus and raw CSV metrics. 0 to disable. Default: 0")
     args = parser.parse_args()
     asyncio.run(main(args.host, args.port, args.db_file, args.bootstrap_node, args.prometheus_port))
