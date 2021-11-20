@@ -132,18 +132,18 @@ class AsyncioTestCase(unittest.TestCase):
 
             with outcome.testPartExecutor(self):
                 self.setUp()
-                self.addTimeout()
+                self.add_timeout()
                 self.loop.run_until_complete(self.asyncSetUp())
             if outcome.success:
                 outcome.expecting_failure = expecting_failure
                 with outcome.testPartExecutor(self, isTest=True):
                     maybe_coroutine = testMethod()
                     if asyncio.iscoroutine(maybe_coroutine):
-                        self.addTimeout()
+                        self.add_timeout()
                         self.loop.run_until_complete(maybe_coroutine)
                 outcome.expecting_failure = False
                 with outcome.testPartExecutor(self):
-                    self.addTimeout()
+                    self.add_timeout()
                     self.loop.run_until_complete(self.asyncTearDown())
                     self.tearDown()
 
@@ -191,7 +191,7 @@ class AsyncioTestCase(unittest.TestCase):
             with outcome.testPartExecutor(self):
                 maybe_coroutine = function(*args, **kwargs)
                 if asyncio.iscoroutine(maybe_coroutine):
-                    self.addTimeout()
+                    self.add_timeout()
                     self.loop.run_until_complete(maybe_coroutine)
 
     def cancel(self):
@@ -200,7 +200,7 @@ class AsyncioTestCase(unittest.TestCase):
                 task.print_stack()
                 task.cancel()
 
-    def addTimeout(self):
+    def add_timeout(self):
         if self.TIMEOUT:
             self.loop.call_later(self.TIMEOUT, self.cancel)
 
