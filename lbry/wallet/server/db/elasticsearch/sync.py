@@ -11,6 +11,7 @@ from lbry.wallet.server.db.elasticsearch.constants import ALL_FIELDS
 
 
 async def get_recent_claims(env, index_name='claims', db=None):
+    log = logging.getLogger()
     need_open = db is None
     db = db or LevelDB(env)
     try:
@@ -20,6 +21,7 @@ async def get_recent_claims(env, index_name='claims', db=None):
             return
         if need_open:
             await db.initialize_caches()
+        log.info(f"catching up ES ({db.es_sync_height}) to leveldb height: {db.db_height}")
         cnt = 0
         touched_claims = set()
         deleted_claims = set()
