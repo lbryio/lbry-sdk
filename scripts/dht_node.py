@@ -105,4 +105,4 @@ if __name__ == '__main__':
                              "Format: host:port Example: lbrynet1.lbry.com:4444")
     parser.add_argument("--metrics_port", default=0, type=int, help="Port for Prometheus and raw CSV metrics. 0 to disable. Default: 0")
     args = parser.parse_args()
-    asyncio.run(main(args.host, args.port, args.db_file, args.bootstrap_node, args.prometheus_port))
+    asyncio.run(main(args.host, args.port, args.db_file, args.bootstrap_node, args.metrics_port))
