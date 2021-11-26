@@ -40,22 +40,17 @@ def checkrecord(record, expected_winner, expected_claim):
 
 
 async def checkcontrolling(daemon: Daemon, db: SQLDB):
-    records, claim_ids, names, futs = [], [], [], []
+    records, names, futs = [], [], []
     for record in db.get_claims('claimtrie.claim_hash as is_controlling, claim.*', is_controlling=True):
         records.append(record)
         claim_id = hex_reverted(record['claim_hash'])
-        claim_ids.append((claim_id,))
-        names.append((record['normalized'],))
+        names.append((record['normalized'], (claim_id,), "", True))  # last parameter is IncludeValues
         if len(names) > 50000:
-            futs.append(daemon._send_vector('getvalueforname', names[:]))
-            futs.append(daemon._send_vector('getclaimbyid', claim_ids[:]))
+            futs.append(daemon._send_vector('getclaimsfornamebyid', names))
             names.clear()
-            claim_ids.clear()
     if names:
-        futs.append(daemon._send_vector('getvalueforname', names[:]))
-        futs.append(daemon._send_vector('getclaimbyid', claim_ids[:]))
+        futs.append(daemon._send_vector('getclaimsfornamebyid', names))
         names.clear()
-        claim_ids.clear()
 
     while futs:
         winners, claims = futs.pop(0), futs.pop(0)

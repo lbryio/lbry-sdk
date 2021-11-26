@@ -58,15 +58,15 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(status['wallet']['servers'][0]['port'], 54320)
 
     async def test_sending_to_scripthash_address(self):
-        self.assertEqual(await self.blockchain.get_balance(), '95.99973580')
+        bal = await self.blockchain.get_balance()
         await self.assertBalance(self.account, '10.0')
         p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
         tx = await self.account_send('2.0', p2sh_address1)
         self.assertEqual(tx['outputs'][0]['address'], p2sh_address1)
-        self.assertEqual(await self.blockchain.get_balance(), '98.99973580')  # +1 lbc for confirm block
+        self.assertEqual(await self.blockchain.get_balance(), str(float(bal)+3))  # +1 lbc for confirm block
         await self.assertBalance(self.account, '7.999877')
         await self.wallet_send('3.0', p2sh_address1)
-        self.assertEqual(await self.blockchain.get_balance(), '102.99973580')  # +1 lbc for confirm block
+        self.assertEqual(await self.blockchain.get_balance(), str(float(bal)+7))  # +1 lbc for confirm block
         await self.assertBalance(self.account, '4.999754')
 
     async def test_balance_caching(self):
