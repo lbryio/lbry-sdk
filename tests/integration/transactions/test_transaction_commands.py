@@ -71,7 +71,7 @@ class TestSegwit(CommandTestCase):
         tx = await self.blockchain.create_raw_transaction([
                 {"txid": p2sh_txid1, "vout": 0},
                 {"txid": bech32_txid1, "vout": 0},
-            ], [{p2sh_address3: '1.9'}]
+            ], {p2sh_address3: 1.9}
         )
         tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
         p2sh_txid3 = await self.blockchain.send_raw_transaction(tx)
@@ -82,7 +82,7 @@ class TestSegwit(CommandTestCase):
         tx = await self.blockchain.create_raw_transaction([
             {"txid": p2sh_txid2, "vout": 0},
             {"txid": bech32_txid2, "vout": 0},
-        ], [{bech32_address3: '1.9'}]
+        ], {bech32_address3: 1.9}
         )
         tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
         bech32_txid3 = await self.blockchain.send_raw_transaction(tx)
@@ -94,7 +94,7 @@ class TestSegwit(CommandTestCase):
         tx = await self.blockchain.create_raw_transaction([
                 {"txid": p2sh_txid3, "vout": 0},
                 {"txid": bech32_txid3, "vout": 0},
-            ], [{address: '3.5'}]
+            ], {address: 3.5}
         )
         tx = await self.blockchain.sign_raw_transaction_with_wallet(tx)
         txid = await self.blockchain.send_raw_transaction(tx)
