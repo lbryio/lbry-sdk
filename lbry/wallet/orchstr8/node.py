@@ -75,9 +75,9 @@ class Conductor:
             await self.lbcd_node.running.wait()
             self.lbcd_started = True
 
-    async def stop_lbcd(self):
+    async def stop_lbcd(self, cleanup=True):
         if self.lbcd_started:
-            await self.lbcd_node.stop(cleanup=True)
+            await self.lbcd_node.stop(cleanup)
             self.lbcd_started = False
 
     async def start_hub(self):
@@ -86,9 +86,9 @@ class Conductor:
             await self.lbcwallet_node.running.wait()
             self.hub_started = True
 
-    async def stop_hub(self):
+    async def stop_hub(self, cleanup=True):
         if self.hub_started:
-            await self.hub_node.stop(cleanup=True)
+            await self.hub_node.stop(cleanup)
             self.hub_started = False
 
     async def start_spv(self):
@@ -96,9 +96,9 @@ class Conductor:
             await self.spv_node.start(self.lbcwallet_node)
             self.spv_started = True
 
-    async def stop_spv(self):
+    async def stop_spv(self, cleanup=True):
         if self.spv_started:
-            await self.spv_node.stop(cleanup=True)
+            await self.spv_node.stop(cleanup)
             self.spv_started = False
 
     async def start_wallet(self):
@@ -106,25 +106,26 @@ class Conductor:
             await self.wallet_node.start(self.spv_node)
             self.wallet_started = True
 
-    async def stop_wallet(self):
+    async def stop_wallet(self, cleanup=True):
         if self.wallet_started:
-            await self.wallet_node.stop(cleanup=True)
+            await self.wallet_node.stop(cleanup)
             self.wallet_started = False
 
-    async def start_lbcwallet(self):
+    async def start_lbcwallet(self, clean=True):
         if not self.lbcwallet_started:
             asyncio.create_task(self.lbcwallet_node.start())
             await self.lbcwallet_node.running.wait()
-            mining_addr = await self.lbcwallet_node.get_new_address('default')
-            self.lbcwallet_node.mining_addr = mining_addr
-            await self.lbcwallet_node.generate(200)
+            if clean:
+                mining_addr = await self.lbcwallet_node.get_new_address()
+                self.lbcwallet_node.mining_addr = mining_addr
+                await self.lbcwallet_node.generate(200)
             # unlock the wallet for the next 1 hour
             await self.lbcwallet_node.wallet_passphrase("password", 3600)
             self.lbcwallet_started = True
 
-    async def stop_lbcwallet(self):
+    async def stop_lbcwallet(self, cleanup=True):
         if self.lbcwallet_started:
-            await self.lbcwallet_node.stop(cleanup=True)
+            await self.lbcwallet_node.stop(cleanup)
             self.lbcwallet_started = False
 
     async def start(self):
@@ -146,6 +147,11 @@ class Conductor:
             except Exception as e:
                 log.exception('Exception raised while stopping services:', exc_info=e)
 
+    async def clear_mempool(self):
+        await self.stop_lbcwallet(cleanup=False)
+        await self.stop_lbcd(cleanup=False)
+        await self.start_lbcd()
+        await self.start_lbcwallet(clean=False)
 
 class WalletNode:
 
@@ -166,10 +172,11 @@ class WalletNode:
 
     async def start(self, spv_node: 'SPVNode', seed=None, connect=True, config=None):
         wallets_dir = os.path.join(self.data_path, 'wallets')
-        os.mkdir(wallets_dir)
         wallet_file_name = os.path.join(wallets_dir, 'my_wallet.json')
-        with open(wallet_file_name, 'w') as wallet_file:
-            wallet_file.write('{"version": 1, "accounts": []}\n')
+        if not os.path.isdir(wallets_dir):
+            os.mkdir(wallets_dir)
+            with open(wallet_file_name, 'w') as wallet_file:
+                wallet_file.write('{"version": 1, "accounts": []}\n')
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
@@ -273,6 +280,7 @@ class LBCDProcess(asyncio.SubprocessProtocol):
         b'keypool keep',
         b'keypool reserve',
         b'keypool return',
+        b'Block submitted',
     ]
 
     def __init__(self):
@@ -326,9 +334,6 @@ class WalletProcess(asyncio.SubprocessProtocol):
 
 class LBCDNode:
 
-    P2SH_SEGWIT_ADDRESS = "p2sh-segwit"
-    BECH32_ADDRESS = "bech32"
-
     def __init__(self, url, daemon, cli):
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
@@ -344,9 +349,7 @@ class LBCDNode:
         self.rpcport = 29245
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
-        self.stopped = False
-        self.restart_ready = asyncio.Event()
-        self.restart_ready.set()
+        self.stopped = True
         self.running = asyncio.Event()
 
     @property
@@ -411,11 +414,10 @@ class LBCDNode:
             '--txindex', f'--rpcuser={self.rpcuser}', f'--rpcpass={self.rpcpassword}'
         ]
         self.log.info(' '.join(command))
-        while not self.stopped:
+        while self.stopped:
             if self.running.is_set():
                 await asyncio.sleep(1)
                 continue
-            await self.restart_ready.wait()
             try:
                 self.transport, self.protocol = await loop.subprocess_exec(
                     LBCDProcess, *command
@@ -423,6 +425,7 @@ class LBCDNode:
                 await self.protocol.ready.wait()
                 assert not self.protocol.stopped.is_set()
                 self.running.set()
+                self.stopped = False
             except asyncio.CancelledError:
                 self.running.clear()
                 raise
@@ -437,24 +440,20 @@ class LBCDNode:
             await self.protocol.stopped.wait()
             self.transport.close()
         finally:
+            self.log.info("Done shutting down " + self.daemon_bin)
             if cleanup:
                 self.cleanup()
-
-    async def clear_mempool(self):
-        self.restart_ready.clear()
-        self.transport.terminate()
-        await self.protocol.stopped.wait()
-        self.transport.close()
-        self.running.clear()
-        os.remove(os.path.join(self.data_path, 'regtest', 'mempool.dat'))
-        self.restart_ready.set()
-        await self.running.wait()
+            self.running.clear()
 
     def cleanup(self):
+        assert self.stopped
         shutil.rmtree(self.data_path, ignore_errors=True)
 
 
 class LBCWalletNode:
+    P2SH_SEGWIT_ADDRESS = "p2sh-segwit"
+    BECH32_ADDRESS = "bech32"
+
     def __init__(self, url, lbcwallet, cli):
         self.latest_release_url = url
         self.project_dir = os.path.dirname(os.path.dirname(__file__))
@@ -470,9 +469,7 @@ class LBCWalletNode:
         self.rpcuser = 'rpcuser'
         self.rpcpassword = 'rpcpassword'
         self.data_path = tempfile.mkdtemp()
-        self.stopped = False
-        self.restart_ready = asyncio.Event()
-        self.restart_ready.set()
+        self.stopped = True
         self.running = asyncio.Event()
         self.block_expected = 0
         self.mining_addr = ''
@@ -544,11 +541,10 @@ class LBCWalletNode:
             f'--username={self.rpcuser}', f'--password={self.rpcpassword}'
         ]
         self.log.info(' '.join(command))
-        while not self.stopped:
+        while self.stopped:
             if self.running.is_set():
                 await asyncio.sleep(1)
                 continue
-            await self.restart_ready.wait()
             try:
                 self.transport, self.protocol = await loop.subprocess_exec(
                     WalletProcess, *command
@@ -557,6 +553,7 @@ class LBCWalletNode:
                 await self.protocol.ready.wait()
                 assert not self.protocol.stopped.is_set()
                 self.running.set()
+                self.stopped = False
             except asyncio.CancelledError:
                 self.running.clear()
                 raise
@@ -565,6 +562,7 @@ class LBCWalletNode:
                 log.exception('failed to start lbcwallet', exc_info=e)
 
     def cleanup(self):
+        assert self.stopped
         shutil.rmtree(self.data_path, ignore_errors=True)
 
     async def stop(self, cleanup=True):
@@ -574,18 +572,10 @@ class LBCWalletNode:
             await self.protocol.stopped.wait()
             self.transport.close()
         finally:
+            self.log.info("Done shutting down " + self.lbcwallet_bin)
             if cleanup:
                 self.cleanup()
-
-    async def clear_mempool(self):
-        self.restart_ready.clear()
-        self.transport.terminate()
-        await self.protocol.stopped.wait()
-        self.transport.close()
-        self.running.clear()
-        self.restart_ready.set()
-        await self.running.wait()
-
+            self.running.clear()
 
     async def _cli_cmnd(self, *args):
         cmnd_args = [
@@ -631,8 +621,8 @@ class LBCWalletNode:
     def get_raw_change_address(self):
         return self._cli_cmnd('getrawchangeaddress')
 
-    def get_new_address(self, account):
-        return self._cli_cmnd('getnewaddress', account)
+    def get_new_address(self, address_type='legacy'):
+        return self._cli_cmnd('getnewaddress', "", address_type)
 
     async def get_balance(self):
         return await self._cli_cmnd('getbalance')
@@ -647,7 +637,10 @@ class LBCWalletNode:
         return self._cli_cmnd('createrawtransaction', json.dumps(inputs), json.dumps(outputs))
 
     async def sign_raw_transaction_with_wallet(self, tx):
-        return json.loads(await self._cli_cmnd('signrawtransactionwithwallet', tx))['hex'].encode()
+        # the "withwallet" portion should only come into play if we are doing segwit.
+        # and "withwallet" doesn't exist on lbcd yet.
+        result = await self._cli_cmnd('signrawtransaction', tx)
+        return json.loads(result)['hex'].encode()
 
     def decode_raw_transaction(self, tx):
         return self._cli_cmnd('decoderawtransaction', hexlify(tx.raw).decode())
@@ -697,8 +690,6 @@ class HubNode:
         self.hostname = 'localhost'
         self.rpcport = 50051  # avoid conflict with default rpc port
         self.stopped = False
-        self.restart_ready = asyncio.Event()
-        self.restart_ready.set()
         self.running = asyncio.Event()
 
     @property
@@ -755,7 +746,6 @@ class HubNode:
             if self.running.is_set():
                 await asyncio.sleep(1)
                 continue
-            await self.restart_ready.wait()
             try:
                 if not self.debug:
                     self.transport, self.protocol = await loop.subprocess_exec(
