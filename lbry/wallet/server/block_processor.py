@@ -1524,10 +1524,11 @@ class BlockProcessor:
         self.db.tx_counts.append(self.tx_count)
 
         cached_max_reorg_depth = self.daemon.cached_height() - self.env.reorg_limit
-        if height >= cached_max_reorg_depth:
-            self.db.prefix_db.touched_or_deleted.stage_put(
-                key_args=(height,), value_args=(self.touched_claim_hashes, self.removed_claim_hashes)
-            )
+
+        # if height >= cached_max_reorg_depth:
+        self.db.prefix_db.touched_or_deleted.stage_put(
+            key_args=(height,), value_args=(self.touched_claim_hashes, self.removed_claim_hashes)
+        )
 
         self.height = height
         self.db.headers.append(block.header)
@@ -1556,7 +1557,6 @@ class BlockProcessor:
         now = time.time()
         self.db.wall_time += now - self.db.last_flush
         self.db.last_flush = now
-
         self.db.write_db_state()
 
     def clear_after_advance_or_reorg(self):
