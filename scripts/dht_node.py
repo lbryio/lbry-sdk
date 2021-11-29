@@ -56,11 +56,20 @@ class SimpleMetrics:
             writer.writerow({"blob_hash": blob.hex()})
         return web.Response(text=out.getvalue(), content_type='text/csv')
 
+    async def estimate_peers(self, request: web.Request):
+        amount = 2000
+        peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
+        close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
+        print(self.dht_node.protocol.node_id.hex())
+        print([cid.node_id.hex() for cid in close_ids])
+        return web.json_response({"total": len(peers), "close": len(close_ids)})
+
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
         prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
+        prom_app.router.add_get('/estimate', self.estimate_peers)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
