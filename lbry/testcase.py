@@ -201,7 +201,8 @@ class AsyncioTestCase(unittest.TestCase):
                 task.cancel()
 
     def add_timeout(self):
-        self.loop.call_later(self.TIMEOUT, self.cancel)
+        if self.TIMEOUT:
+            self.loop.call_later(self.TIMEOUT, self.cancel)
 
 
 class AdvanceTimeTestCase(AsyncioTestCase):
