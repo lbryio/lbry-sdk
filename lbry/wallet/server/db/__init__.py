@@ -40,3 +40,6 @@ class DB_PREFIXES(enum.Enum):
     channel_count = b'Z'
     support_amount = b'a'
     block_txs = b'b'
+    trending_notifications = b'c'
+    mempool_tx = b'd'
+    touched_hashX = b'e'

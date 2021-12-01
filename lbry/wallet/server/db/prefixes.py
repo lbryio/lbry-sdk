@@ -5,6 +5,7 @@ import base64
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.db import RocksDBStore, PrefixDB
+from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
 
@@ -230,7 +231,7 @@ class TxValue(NamedTuple):
     raw_tx: bytes
 
     def __str__(self):
-        return f"{self.__class__.__name__}(raw_tx={base64.b64encode(self.raw_tx)})"
+        return f"{self.__class__.__name__}(raw_tx={base64.b64encode(self.raw_tx).decode()})"
 
 
 class BlockHeaderKey(NamedTuple):
@@ -1595,6 +1596,124 @@ class BlockTxsPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(tx_hashes)
 
 
+class MempoolTxKey(TxKey):
+    pass
+
+
+class MempoolTxValue(TxValue):
+    pass
+
+
+class MempoolTXPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.mempool_tx.value
+    key_struct = struct.Struct(b'>32s')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>32s').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, tx_hash: bytes) -> bytes:
+        return super().pack_key(tx_hash)
+
+    @classmethod
+    def unpack_key(cls, tx_hash: bytes) -> MempoolTxKey:
+        return MempoolTxKey(*super().unpack_key(tx_hash))
+
+    @classmethod
+    def pack_value(cls, tx: bytes) -> bytes:
+        return tx
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> MempoolTxValue:
+        return MempoolTxValue(data)
+
+    @classmethod
+    def pack_item(cls, tx_hash: bytes, raw_tx: bytes):
+        return cls.pack_key(tx_hash), cls.pack_value(raw_tx)
+
+
+class TrendingNotificationKey(typing.NamedTuple):
+    height: int
+    claim_hash: bytes
+
+
+class TrendingNotificationValue(typing.NamedTuple):
+    previous_amount: int
+    new_amount: int
+
+
+class TrendingNotificationPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.trending_notifications.value
+    key_struct = struct.Struct(b'>L20s')
+    value_struct = struct.Struct(b'>QQ')
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack,
+        struct.Struct(b'>L20s').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, height: int, claim_hash: bytes):
+        return super().pack_key(height, claim_hash)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TrendingNotificationKey:
+        return TrendingNotificationKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, previous_amount: int, new_amount: int) -> bytes:
+        return super().pack_value(previous_amount, new_amount)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TrendingNotificationValue:
+        return TrendingNotificationValue(*super().unpack_value(data))
+
+    @classmethod
+    def pack_item(cls, height, claim_hash, previous_amount, new_amount):
+        return cls.pack_key(height, claim_hash), cls.pack_value(previous_amount, new_amount)
+
+
+class TouchedHashXKey(NamedTuple):
+    height: int
+
+
+class TouchedHashXValue(NamedTuple):
+    touched_hashXs: typing.List[bytes]
+
+
+class TouchedHashXPrefixRow(PrefixRow):
+    prefix = DB_PREFIXES.touched_hashX.value
+    key_struct = struct.Struct(b'>L')
+
+    key_part_lambdas = [
+        lambda: b'',
+        struct.Struct(b'>L').pack
+    ]
+
+    @classmethod
+    def pack_key(cls, height: int):
+        return super().pack_key(height)
+
+    @classmethod
+    def unpack_key(cls, key: bytes) -> TouchedHashXKey:
+        return TouchedHashXKey(*super().unpack_key(key))
+
+    @classmethod
+    def pack_value(cls, touched: typing.List[bytes]) -> bytes:
+        assert all(map(lambda item: len(item) == 11, touched))
+        return b''.join(touched)
+
+    @classmethod
+    def unpack_value(cls, data: bytes) -> TouchedHashXValue:
+        return TouchedHashXValue([data[idx*11:(idx*11)+11] for idx in range(len(data) // 11)])
+
+    @classmethod
+    def pack_item(cls, height: int, touched: typing.List[bytes]):
+        return cls.pack_key(height), cls.pack_value(touched)
+
+
 class HubDB(PrefixDB):
     def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
                  secondary_path: str = '', unsafe_prefixes: Optional[typing.Set[bytes]] = None):
@@ -1630,6 +1749,9 @@ class HubDB(PrefixDB):
         self.db_state = DBStatePrefixRow(db, self._op_stack)
         self.support_amount = SupportAmountPrefixRow(db, self._op_stack)
         self.block_txs = BlockTxsPrefixRow(db, self._op_stack)
+        self.mempool_tx = MempoolTXPrefixRow(db, self._op_stack)
+        self.trending_notification = TrendingNotificationPrefixRow(db, self._op_stack)
+        self.touched_hashX = TouchedHashXPrefixRow(db, self._op_stack)
 
 
 def auto_decode_item(key: bytes, value: bytes) -> Union[Tuple[NamedTuple, NamedTuple], Tuple[bytes, bytes]]:
