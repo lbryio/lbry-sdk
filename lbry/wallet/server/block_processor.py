@@ -20,18 +20,13 @@ from lbry.wallet.server.hash import hash_to_hex_str, HASHX_LEN
 from lbry.wallet.server.util import chunks, class_logger
 from lbry.crypto.hash import hash160
 from lbry.wallet.server.mempool import MemPool
+from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED_CLAIM_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, ClaimToTXOValue
 from lbry.wallet.server.udp import StatusServer
 from lbry.wallet.server.db.revertable import RevertableOpStack
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.leveldb import LevelDB
-
-
-class TrendingNotification(NamedTuple):
-    height: int
-    prev_amount: int
-    new_amount: int
 
 
 class Prefetcher:
@@ -325,6 +320,22 @@ class BlockProcessor:
         async def run_in_thread():
             return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread())
+
+    async def check_mempool(self):
+        if self.db.prefix_db.closed:
+            return
+        current_mempool = {
+            k.tx_hash: v.raw_tx for (k, v) in self.db.prefix_db.mempool_tx.iterate()
+        }
+        for hh in await self.daemon.mempool_hashes():
+            tx_hash = bytes.fromhex(hh)[::-1]
+            if tx_hash in current_mempool:
+                current_mempool.pop(tx_hash)
+            else:
+                raw_tx = bytes.fromhex(await self.daemon.getrawtransaction(hh))
+                self.db.prefix_db.mempool_tx.stage_put((tx_hash,), (raw_tx,))
+        for tx_hash, raw_tx in current_mempool.items():
+            self.db.prefix_db.mempool_tx.stage_delete((tx_hash,), (raw_tx,))
 
     async def check_and_advance_blocks(self, raw_blocks):
         """Process the list of raw blocks passed.  Detects and handles
@@ -1413,8 +1424,8 @@ class BlockProcessor:
                     or touched in self.pending_support_amount_change:
                 # exclude sending notifications for claims/supports that activated but
                 # weren't added/spent in this block
-                self._add_claim_activation_change_notification(
-                    touched.hex(), height, prev_effective_amount, new_effective_amount
+                self.db.prefix_db.trending_notification.stage_put(
+                    (height, touched), (prev_effective_amount, new_effective_amount)
                 )
 
         for channel_hash, count in self.pending_channel_counts.items():
@@ -1453,6 +1464,12 @@ class BlockProcessor:
         for tx, tx_hash in txs:
             spent_claims = {}
             txos = Transaction(tx.raw).outputs
+
+            # clean up mempool, delete txs that were already in mempool/staged to be added
+            # leave txs in mempool that werent in the block
+            mempool_tx = self.db.prefix_db.mempool_tx.get_pending(tx_hash)
+            if mempool_tx:
+                self.db.prefix_db.mempool_tx.stage_delete((tx_hash,), mempool_tx)
 
             self.db.prefix_db.tx.stage_put(key_args=(tx_hash,), value_args=(tx.raw,))
             self.db.prefix_db.tx_num.stage_put(key_args=(tx_hash,), value_args=(tx_count,))
@@ -1512,6 +1529,8 @@ class BlockProcessor:
 
         # update effective amount and update sets of touched and deleted claims
         self._get_cumulative_update_ops(height)
+
+        self.db.prefix_db.touched_hashX.stage_put((height,), (list(sorted(self.touched_hashXs)),))
 
         self.db.prefix_db.tx_count.stage_put(key_args=(height,), value_args=(tx_count,))
 
@@ -1594,6 +1613,7 @@ class BlockProcessor:
         self.pending_support_amount_change.clear()
         self.resolve_cache.clear()
         self.resolve_outputs_cache.clear()
+        self.touched_hashXs.clear()
 
     async def backup_block(self):
         assert len(self.db.prefix_db._op_stack) == 0
