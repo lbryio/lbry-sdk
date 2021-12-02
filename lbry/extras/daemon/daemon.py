@@ -211,6 +211,16 @@ def fix_kwargs_for_hub(**kwargs):
                 operator, value = value[:operator_length], value[operator_length:]
             value = [str(value if key != 'fee_amount' else Decimal(value)*1000)]
             kwargs[key] = {"op": opcodes[operator], "value": value}
+        elif key == 'order_by':  # TODO: remove this after removing support for old trending args from the api
+            value = value if isinstance(value, list) else [value]
+            new_value = []
+            for new_v in value:
+                migrated = new_v if new_v not in (
+                    'trending_mixed', 'trending_local', 'trending_global', 'trending_group'
+                ) else 'trending_score'
+                if migrated not in new_value:
+                    new_value.append(migrated)
+            kwargs[key] = new_value
     return kwargs
 
 
@@ -2412,7 +2422,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--amount=<amount>] [--effective_amount=<effective_amount>]
                          [--support_amount=<support_amount>] [--trending_group=<trending_group>]
                          [--trending_mixed=<trending_mixed>] [--trending_local=<trending_local>]
-                         [--trending_global=<trending_global]
+                         [--trending_global=<trending_global] [--trending_score=<trending_score]
                          [--reposted_claim_id=<reposted_claim_id>] [--reposted=<reposted>]
                          [--claim_type=<claim_type>] [--stream_types=<stream_types>...] [--media_types=<media_types>...]
                          [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>]
@@ -2480,25 +2490,11 @@ class Daemon(metaclass=JSONRPCServerType):
                                                      all tips and supports received), this amount is
                                                      blank until claim has reached activation height
                                                      (supports equality constraints)
-            --trending_group=<trending_group>: (int) group numbers 1 through 4 representing the
-                                                    trending groups of the content: 4 means
-                                                    content is trending globally and independently,
-                                                    3 means content is not trending globally but is
-                                                    trending independently (locally), 2 means it is
-                                                    trending globally but not independently and 1
-                                                    means it's not trending globally or locally
-                                                    (supports equality constraints)
-            --trending_mixed=<trending_mixed>: (int) trending amount taken from the global or local
-                                                    value depending on the trending group:
-                                                    4 - global value, 3 - local value, 2 - global
-                                                    value, 1 - local value (supports equality
-                                                    constraints)
-            --trending_local=<trending_local>: (int) trending value calculated relative only to
-                                                    the individual contents past history (supports
-                                                    equality constraints)
-            --trending_global=<trending_global>: (int) trending value calculated relative to all
-                                                    trending content globally (supports
-                                                    equality constraints)
+            --trending_score=<trending_score>: (int) limit by trending score (supports equality constraints)
+            --trending_group=<trending_group>: (int) DEPRECATED - instead please use trending_score
+            --trending_mixed=<trending_mixed>: (int) DEPRECATED - instead please use trending_score
+            --trending_local=<trending_local>: (int) DEPRECATED - instead please use trending_score
+            --trending_global=<trending_global>: (int) DEPRECATED - instead please use trending_score
             --reposted_claim_id=<reposted_claim_id>: (str) all reposts of the specified original claim id
             --reposted=<reposted>           : (int) claims reposted this many times (supports
                                                     equality constraints)
@@ -2566,6 +2562,17 @@ class Daemon(metaclass=JSONRPCServerType):
                 kwargs['signature_valid'] = 0
             if 'has_no_source' in kwargs:
                 kwargs['has_source'] = not kwargs.pop('has_no_source')
+            if 'order_by' in kwargs:  # TODO: remove this after removing support for old trending args from the api
+                value = kwargs.pop('order_by')
+                value = value if isinstance(value, list) else [value]
+                new_value = []
+                for new_v in value:
+                    migrated = new_v if new_v not in (
+                        'trending_mixed', 'trending_local', 'trending_global', 'trending_group'
+                    ) else 'trending_score'
+                    if migrated not in new_value:
+                        new_value.append(migrated)
+                kwargs['order_by'] = new_value
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})
