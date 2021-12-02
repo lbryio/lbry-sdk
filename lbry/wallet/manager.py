@@ -194,6 +194,8 @@ class WalletManager:
             'data_path': config.wallet_dir,
             'tx_cache_size': config.transaction_cache_size
         }
+        if 'LBRY_FEE_PER_NAME_CHAR' in os.environ:
+            ledger_config['fee_per_name_char'] = int(os.environ.get('LBRY_FEE_PER_NAME_CHAR'))
 
         wallets_directory = os.path.join(config.wallet_dir, 'wallets')
         if not os.path.exists(wallets_directory):

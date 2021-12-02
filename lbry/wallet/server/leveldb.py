@@ -565,7 +565,7 @@ class LevelDB:
             reposted_has_source = False if not reposted_metadata.is_stream else reposted_metadata.stream.has_source
             reposted_claim_type = CLAIM_TYPES[reposted_metadata.claim_type]
             reposted_stream_type = STREAM_TYPES[guess_stream_type(reposted_metadata.stream.source.media_type)] \
-                if reposted_metadata.is_stream else 0
+                if reposted_has_source else 0
             reposted_media_type = reposted_metadata.stream.source.media_type if reposted_metadata.is_stream else 0
             if not reposted_metadata.is_stream or not reposted_metadata.stream.has_fee:
                 reposted_fee_amount = 0
@@ -626,7 +626,8 @@ class LevelDB:
             'has_source': reposted_has_source if metadata.is_repost else (
                 False if not metadata.is_stream else metadata.stream.has_source),
             'stream_type': STREAM_TYPES[guess_stream_type(metadata.stream.source.media_type)]
-                if metadata.is_stream else reposted_stream_type if metadata.is_repost else 0,
+                if metadata.is_stream and metadata.stream.has_source
+                else reposted_stream_type if metadata.is_repost else 0,
             'media_type': metadata.stream.source.media_type
                 if metadata.is_stream else reposted_media_type if metadata.is_repost else None,
             'fee_amount': fee_amount if not metadata.is_repost else reposted_fee_amount,
