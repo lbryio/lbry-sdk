@@ -42,7 +42,7 @@ FIELDS = {
     'tx_id', 'tx_nout', 'tx_position',
     'short_url', 'canonical_url',
     'is_controlling', 'last_take_over_height',
-    'public_key_bytes', 'public_key_id', 'claims_in_channel', 'channel_join_height',
+    'public_key_bytes', 'public_key_id', 'claims_in_channel',
     'channel_id', 'signature', 'signature_digest', 'is_signature_valid',
     'amount', 'effective_amount', 'support_amount',
     'fee_amount', 'fee_currency',
@@ -64,7 +64,7 @@ TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',
     'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
-    'tx_position', 'channel_join', 'repost_count', 'limit_claims_per_channel',
+    'tx_position', 'repost_count', 'limit_claims_per_channel',
     'amount', 'effective_amount', 'support_amount',
     'trending_score', 'censor_type', 'tx_num'
 }
