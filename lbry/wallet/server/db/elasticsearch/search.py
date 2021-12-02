@@ -574,6 +574,15 @@ def expand_query(**kwargs):
                 if key == 'fee_amount':
                     value = str(Decimal(value)*1000)
                 query['must'].append({"range": {key: {ops[operator]: value}}})
+            elif key in RANGE_FIELDS and isinstance(value, list) and all(v[0] in ops for v in value):
+                range_constraints = []
+                for v in value:
+                    operator_length = 2 if v[:2] in ops else 1
+                    operator, stripped_op_v = v[:operator_length], v[operator_length:]
+                    if key == 'fee_amount':
+                        stripped_op_v = str(Decimal(stripped_op_v)*1000)
+                    range_constraints.append((operator, stripped_op_v))
+                query['must'].append({"range": {key: {ops[operator]: v for operator, v in range_constraints}}})
             elif many:
                 query['must'].append({"terms": {key: value}})
             else:

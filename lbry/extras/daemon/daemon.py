@@ -205,12 +205,15 @@ def fix_kwargs_for_hub(**kwargs):
         elif key == "not_channel_ids":
             kwargs["channel_id"] = {"invert": True, "value": kwargs.pop("not_channel_ids")}
         elif key in MY_RANGE_FIELDS:
-            operator = '='
-            if isinstance(value, str) and value[0] in opcodes:
-                operator_length = 2 if value[:2] in opcodes else 1
-                operator, value = value[:operator_length], value[operator_length:]
-            value = [str(value if key != 'fee_amount' else Decimal(value)*1000)]
-            kwargs[key] = {"op": opcodes[operator], "value": value}
+            constraints = []
+            for v in value if isinstance(value, list) else [value]:
+                operator = '='
+                if isinstance(v, str) and v[0] in opcodes:
+                    operator_length = 2 if v[:2] in opcodes else 1
+                    operator, v = v[:operator_length], v[operator_length:]
+                v = [str(v if key != 'fee_amount' else Decimal(v)*1000)]
+                constraints.append({"op": opcodes[operator], "value": v})
+            kwargs[key] = constraints
         elif key == 'order_by':  # TODO: remove this after removing support for old trending args from the api
             value = value if isinstance(value, list) else [value]
             new_value = []
@@ -2407,6 +2410,9 @@ class Daemon(metaclass=JSONRPCServerType):
         Arguments marked with "supports equality constraints" allow prepending the
         value with an equality constraint such as '>', '>=', '<' and '<='
         eg. --height=">400000" would limit results to only claims above 400k block height.
+
+        They also support multiple constraints passed as a list of the args described above.
+        eg. --release_time=[">1000000", "<2000000"]
 
         Usage:
             claim_search [<name> | --name=<name>] [--text=<text>] [--txid=<txid>] [--nout=<nout>]
