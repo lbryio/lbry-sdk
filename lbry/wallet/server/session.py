@@ -981,8 +981,9 @@ class LBRYElectrumX(SessionBase):
         start = time.perf_counter()
         if 'release_time' in kwargs:
             release_time = kwargs.pop('release_time')
+            release_times = release_time if isinstance(release_time, list) else [release_time]
             try:
-                kwargs['release_time'] = format_release_time(release_time)
+                kwargs['release_time'] = [format_release_time(release_time) for release_time in release_times]
             except ValueError:
                 pass
         try:

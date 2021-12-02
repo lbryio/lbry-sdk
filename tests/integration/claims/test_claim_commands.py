@@ -1796,6 +1796,12 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, len(await self.claim_search(release_time='>123456', order_by=['release_time'])))
         self.assertEqual(2, len(await self.claim_search(release_time='<123457', order_by=['release_time'])))
 
+        self.assertEqual(2, len(await self.claim_search(release_time=['<123457'], order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time=['>0', '<123457'], order_by=['release_time'])))
+        self.assertEqual(
+            2, len(await self.claim_search(release_time=['>=123097', '<123457'], order_by=['release_time']))
+        )
+
     async def test_setting_fee_fields(self):
         tx = await self.out(self.stream_create('paid-stream'))
         txo = tx['outputs'][0]
