@@ -5149,10 +5149,12 @@ class Daemon(metaclass=JSONRPCServerType):
                     ]
                 },
                 "node_id": (str) the local dht node id
+                "prefix_neighbors_count": (int) the amount of peers sharing the same byte prefix of the local node id
             }
         """
         result = {
-            'buckets': {}
+            'buckets': {},
+            'prefix_neighbors_count': 0
         }
 
         for i, _ in enumerate(self.dht_node.protocol.routing_table.buckets):
@@ -5165,6 +5167,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     "node_id": hexlify(peer.node_id).decode(),
                 }
                 result['buckets'][i].append(host)
+                result['prefix_neighbors_count'] += 1 if peer.node_id[0] == self.dht_node.protocol.node_id[0] else 0
 
         result['node_id'] = hexlify(self.dht_node.protocol.node_id).decode()
         return result
