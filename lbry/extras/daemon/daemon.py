@@ -211,7 +211,7 @@ def fix_kwargs_for_hub(**kwargs):
                 if isinstance(val, str) and val[0] in opcodes:
                     operator_length = 2 if val[:2] in opcodes else 1
                     operator, val = val[:operator_length], val[operator_length:]
-                val = [str(val if key != 'fee_amount' else Decimal(val)*1000)]
+                val = [int(val if key != 'fee_amount' else Decimal(val)*1000)]
                 constraints.append({"op": opcodes[operator], "value": val})
             kwargs[key] = constraints
         elif key == 'order_by':  # TODO: remove this after removing support for old trending args from the api
