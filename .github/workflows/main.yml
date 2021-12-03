@@ -94,7 +94,7 @@ jobs:
       - name: Runs Elasticsearch
         uses: elastic/elastic-github-actions/elasticsearch@master
         with:
-          stack-version: 7.6.0
+          stack-version: 7.12.1
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
