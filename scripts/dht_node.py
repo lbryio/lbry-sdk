@@ -56,26 +56,30 @@ class SimpleMetrics:
             writer.writerow({"blob_hash": blob.hex()})
         return web.Response(text=out.getvalue(), content_type='text/csv')
 
-    async def estimate_peers(self, request: web.Request):
-        amount = 2000
+    async def active_estimation(self, request: web.Request):
+        # - "crawls" the network for peers close to our node id (not a full aggressive crawler yet)
+        # given everything is random, the odds of a peer having the same X prefix bits matching ours is roughly 1/(2^X)
+        # we use that to estimate the network size, see issue #3463 for related papers and details
+        amount = 20_000
         peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
         close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
-        print(self.dht_node.protocol.node_id.hex())
-        print([cid.node_id.hex() for cid in close_ids])
         return web.json_response({"total": len(peers), "close": len(close_ids)})
 
-    async def peers_in_routing_table(self, request: web.Request):
+    async def passive_estimation(self, request: web.Request):
+        # same method as above but instead we use the routing table and assume our implementation was able to add
+        # all the reachable close peers, which should be usable for seed nodes since they are super popular
         total_peers = self.dht_node.protocol.routing_table.get_peers()
         close_ids = [peer for peer in total_peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
-        return web.json_response({"total": len(total_peers), "close": len(close_ids), 'estimated_network_size': len(close_ids) * 256})
+        return web.json_response(
+            {"total": len(total_peers), "close": len(close_ids), 'estimated_network_size': len(close_ids) * 256})
 
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
         prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
-        prom_app.router.add_get('/estimate', self.estimate_peers)
-        prom_app.router.add_get('/count', self.peers_in_routing_table)
+        prom_app.router.add_get('/active_estimation', self.active_estimation)
+        prom_app.router.add_get('/passive_estimation', self.passive_estimation)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
