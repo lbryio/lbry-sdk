@@ -64,12 +64,18 @@ class SimpleMetrics:
         print([cid.node_id.hex() for cid in close_ids])
         return web.json_response({"total": len(peers), "close": len(close_ids)})
 
+    async def peers_in_routing_table(self, request: web.Request):
+        total_peers = self.dht_node.protocol.routing_table.get_peers()
+        close_ids = [peer for peer in total_peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
+        return web.json_response({"total": len(total_peers), "close": len(close_ids), 'estimated_network_size': len(close_ids) * 256})
+
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
         prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
         prom_app.router.add_get('/estimate', self.estimate_peers)
+        prom_app.router.add_get('/count', self.peers_in_routing_table)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
