@@ -206,13 +206,13 @@ def fix_kwargs_for_hub(**kwargs):
             kwargs["channel_id"] = {"invert": True, "value": kwargs.pop("not_channel_ids")}
         elif key in MY_RANGE_FIELDS:
             constraints = []
-            for v in value if isinstance(value, list) else [value]:
+            for val in value if isinstance(value, list) else [value]:
                 operator = '='
-                if isinstance(v, str) and v[0] in opcodes:
-                    operator_length = 2 if v[:2] in opcodes else 1
-                    operator, v = v[:operator_length], v[operator_length:]
-                v = [str(v if key != 'fee_amount' else Decimal(v)*1000)]
-                constraints.append({"op": opcodes[operator], "value": v})
+                if isinstance(val, str) and val[0] in opcodes:
+                    operator_length = 2 if val[:2] in opcodes else 1
+                    operator, val = val[:operator_length], val[operator_length:]
+                val = [str(val if key != 'fee_amount' else Decimal(val)*1000)]
+                constraints.append({"op": opcodes[operator], "value": val})
             kwargs[key] = constraints
         elif key == 'order_by':  # TODO: remove this after removing support for old trending args from the api
             value = value if isinstance(value, list) else [value]
