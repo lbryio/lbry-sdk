@@ -63,15 +63,20 @@ class SimpleMetrics:
         amount = 20_000
         peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
         close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
-        return web.json_response({"total": len(peers), "close": len(close_ids)})
+        return web.json_response(
+            {"total_peers_found_during_estimation": len(peers),
+             "peers_with_the_same_byte_prefix": len(close_ids),
+             'estimated_network_size': len(close_ids) * 256})
 
     async def passive_estimation(self, _):
         # same method as above but instead we use the routing table and assume our implementation was able to add
         # all the reachable close peers, which should be usable for seed nodes since they are super popular
-        total_peers = self.dht_node.protocol.routing_table.get_peers()
-        close_ids = [peer for peer in total_peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
+        peers = self.dht_node.protocol.routing_table.get_peers()
+        close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
         return web.json_response(
-            {"total": len(total_peers), "close": len(close_ids), 'estimated_network_size': len(close_ids) * 256})
+            {"total_peers_found_during_estimation": len(peers),
+             "peers_with_the_same_byte_prefix": len(close_ids),
+             'estimated_network_size': len(close_ids) * 256})
 
     async def start(self):
         prom_app = web.Application()
