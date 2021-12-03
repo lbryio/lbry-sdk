@@ -110,6 +110,8 @@ jobs:
           key: tox-integration-${{ matrix.test }}-${{ hashFiles('setup.py') }}
           restore-keys: txo-integration-${{ matrix.test }}-
       - run: pip install tox coverage coveralls
+      - if: matrix.test == 'claims'
+        run: rm -rf .tox
       - run: tox -e ${{ matrix.test }}
       - name: submit coverage report
         env:
