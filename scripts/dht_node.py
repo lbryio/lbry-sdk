@@ -29,6 +29,7 @@ class SimpleMetrics:
     def __init__(self, port, node):
         self.prometheus_port = port
         self.dht_node: Node = node
+        self.active_estimation_semaphore = asyncio.Semaphore(1)
 
     async def handle_metrics_get_request(self, _):
         try:
@@ -61,7 +62,8 @@ class SimpleMetrics:
         # given everything is random, the odds of a peer having the same X prefix bits matching ours is roughly 1/(2^X)
         # we use that to estimate the network size, see issue #3463 for related papers and details
         amount = 20_000
-        peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
+        with self.active_estimation_semaphore:  # this is resource intensive, limit concurrency to 1
+            peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
         close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
         return web.json_response(
             {"total_peers_found_during_estimation": len(peers),
