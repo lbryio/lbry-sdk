@@ -195,7 +195,7 @@ class IterativeFinder:
                 continue
             self._schedule_probe(peer)
             added += 1
-        log.debug("running %d probes", len(self.running_probes))
+        log.debug("running %d probes for key %s", len(self.running_probes), self.key.hex()[:8])
         if not added and not self.running_probes:
             log.debug("search for %s exhausted", self.key.hex()[:8])
             self.search_exhausted()
@@ -270,7 +270,8 @@ class IterativeNodeFinder(IterativeFinder):
         self.yielded_peers: typing.Set['KademliaPeer'] = set()
 
     async def send_probe(self, peer: 'KademliaPeer') -> FindNodeResponse:
-        log.debug("probing %s:%d %s", peer.address, peer.udp_port, peer.node_id.hex()[:8] if peer.node_id else '')
+        log.debug("probe %s:%d (%s) for NODE %s",
+                  peer.address, peer.udp_port, peer.node_id.hex()[:8] if peer.node_id else '', self.key.hex()[:8])
         response = await self.protocol.get_rpc_peer(peer).find_node(self.key)
         return FindNodeResponse(self.key, response)
 
@@ -325,6 +326,8 @@ class IterativeValueFinder(IterativeFinder):
         self.discovered_peers: typing.Dict['KademliaPeer', typing.Set['KademliaPeer']] = defaultdict(set)
 
     async def send_probe(self, peer: 'KademliaPeer') -> FindValueResponse:
+        log.debug("probe %s:%d (%s) for VALUE %s",
+                  peer.address, peer.udp_port, peer.node_id.hex()[:8], self.key.hex()[:8])
         page = self.peer_pages[peer]
         response = await self.protocol.get_rpc_peer(peer).find_value(self.key, page=page)
         parsed = FindValueResponse(self.key, response)
