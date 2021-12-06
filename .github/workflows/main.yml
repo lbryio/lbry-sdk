@@ -94,7 +94,7 @@ jobs:
       - name: Runs Elasticsearch
         uses: elastic/elastic-github-actions/elasticsearch@master
         with:
-          stack-version: 7.6.0
+          stack-version: 7.12.1
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
@@ -110,6 +110,8 @@ jobs:
           key: tox-integration-${{ matrix.test }}-${{ hashFiles('setup.py') }}
           restore-keys: txo-integration-${{ matrix.test }}-
       - run: pip install tox coverage coveralls
+      - if: matrix.test == 'claims'
+        run: rm -rf .tox
       - run: tox -e ${{ matrix.test }}
       - name: submit coverage report
         env:
