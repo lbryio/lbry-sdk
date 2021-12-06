@@ -2,6 +2,7 @@ import asyncio
 import argparse
 import logging
 import csv
+import os.path
 from io import StringIO
 from typing import Optional
 from aiohttp import web
@@ -96,6 +97,16 @@ class SimpleMetrics:
 async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional[str], prometheus_port: int):
     loop = asyncio.get_event_loop()
     conf = Config()
+    if not db_file_path.startswith(':memory:'):
+        node_id_file_path = db_file_path + 'node_id'
+        if os.path.exists(node_id_file_path):
+            with open(node_id_file_path, 'rb') as node_id_file:
+                node_id = node_id_file.read()
+        else:
+            with open(node_id_file_path, 'wb') as node_id_file:
+                node_id = generate_id()
+                node_id_file.write(node_id)
+
     storage = SQLiteStorage(conf, db_file_path, loop, loop.time)
     if bootstrap_node:
         nodes = bootstrap_node.split(':')
@@ -104,13 +115,14 @@ async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional
         nodes = conf.known_dht_nodes
     await storage.open()
     node = Node(
-        loop, PeerManager(loop), generate_id(), port, port, 3333, None,
+        loop, PeerManager(loop), node_id, port, port, 3333, None,
         storage=storage
     )
     if prometheus_port > 0:
         metrics = SimpleMetrics(prometheus_port, node)
         await metrics.start()
     node.start(host, nodes)
+    log.info("Peer with id %s started", node_id.hex())
     while True:
         await asyncio.sleep(10)
         PEERS.labels('main').set(len(node.protocol.routing_table.get_peers()))
