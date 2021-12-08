@@ -214,6 +214,9 @@ class ClaimSearchCommand(ClaimTestCase):
         await self.assertFindsClaims([three, two], claim_ids=[self.get_claim_id(three), self.get_claim_id(two)])
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three))
         await self.assertFindsClaims([three], claim_id=self.get_claim_id(three), text='*')
+        # resolve by sd hash
+        two_sd_hash = two['outputs'][0]['value']['source']['sd_hash']
+        await self.assertFindsClaims([two], sd_hash=two_sd_hash)
 
     async def test_source_filter(self):
         channel = await self.channel_create('@abc')
