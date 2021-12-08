@@ -559,7 +559,7 @@ def expand_query(**kwargs):
                     value = [item[::-1].hex() for item in value]
                 else:
                     value = value[::-1].hex()
-            if not many and key in ('_id', 'claim_id') and len(value) < 20:
+            if not many and key in ('_id', 'claim_id', 'sd_hash') and len(value) < 20:
                 partial_id = True
             if key in ('signature_valid', 'has_source'):
                 continue  # handled later
@@ -567,7 +567,7 @@ def expand_query(**kwargs):
                 key += '.keyword'
             ops = {'<=': 'lte', '>=': 'gte', '<': 'lt', '>': 'gt'}
             if partial_id:
-                query['must'].append({"prefix": {"claim_id": value}})
+                query['must'].append({"prefix": {key: value}})
             elif key in RANGE_FIELDS and isinstance(value, str) and value[0] in ops:
                 operator_length = 2 if value[:2] in ops else 1
                 operator, value = value[:operator_length], value[operator_length:]
