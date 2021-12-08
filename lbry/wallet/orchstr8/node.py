@@ -586,9 +586,11 @@ class LBCWalletNode:
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
         process = await asyncio.create_subprocess_exec(
-            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        out, _ = await process.communicate()
+        out, err = await process.communicate()
+        if err:
+            log.warning(err)
         result = out.decode().strip()
         self.log.info(result)
         if result.startswith('error code'):
