@@ -27,6 +27,19 @@ INDEX_DEFAULT_SETTINGS = {
                     "max_chars": 10
                 }
             },
+            "sd_hash": {
+                "fields": {
+                    "keyword": {
+                        "ignore_above": 96,
+                        "type": "keyword"
+                    }
+                },
+                "type": "text",
+                "index_prefixes": {
+                    "min_chars": 1,
+                    "max_chars": 2
+                }
+            },
             "height": {"type": "integer"},
             "claim_type": {"type": "byte"},
             "censor_type": {"type": "byte"},
@@ -52,14 +65,14 @@ FIELDS = {
     'timestamp', 'creation_timestamp',
     'duration', 'release_time',
     'tags', 'languages', 'has_source', 'reposted_claim_type',
-    'reposted_claim_id', 'repost_count',
+    'reposted_claim_id', 'repost_count', 'sd_hash',
     'trending_score', 'tx_num'
 }
 
 TEXT_FIELDS = {'author', 'canonical_url', 'channel_id', 'description', 'claim_id', 'censoring_channel_id',
                'media_type', 'normalized_name', 'public_key_bytes', 'public_key_id', 'short_url', 'signature',
                'claim_name', 'signature_digest', 'title', 'tx_id', 'fee_currency', 'reposted_claim_id',
-               'tags'}
+               'tags', 'sd_hash'}
 
 RANGE_FIELDS = {
     'height', 'creation_height', 'activation_height', 'expiration_height',

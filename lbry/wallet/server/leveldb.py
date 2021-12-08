@@ -625,6 +625,7 @@ class LevelDB:
             'claim_type': CLAIM_TYPES[metadata.claim_type],
             'has_source': reposted_has_source if metadata.is_repost else (
                 False if not metadata.is_stream else metadata.stream.has_source),
+            'sd_hash': metadata.stream.source.sd_hash if metadata.is_stream and metadata.stream.has_source else None,
             'stream_type': STREAM_TYPES[guess_stream_type(metadata.stream.source.media_type)]
                 if metadata.is_stream and metadata.stream.has_source
                 else reposted_stream_type if metadata.is_repost else 0,
