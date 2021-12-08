@@ -37,7 +37,7 @@ INDEX_DEFAULT_SETTINGS = {
                 "type": "text",
                 "index_prefixes": {
                     "min_chars": 1,
-                    "max_chars": 2
+                    "max_chars": 4
                 }
             },
             "height": {"type": "integer"},
