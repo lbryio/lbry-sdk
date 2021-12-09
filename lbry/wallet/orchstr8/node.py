@@ -589,7 +589,7 @@ class LBCWalletNode:
             *cmnd_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         out, err = await process.communicate()
-        if err:
+        if err and b'creating a default config file' not in err:
             log.warning(err)
         result = out.decode().strip()
         self.log.info(result)
