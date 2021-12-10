@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
-          python-version: '3.7'
+          python-version: '3.9'
       - name: extract pip cache
         uses: actions/cache@v2
         with:
@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
-          python-version: '3.7'
+          python-version: '3.9'
       - name: set pip cache dir
         id: pip-cache
         run: echo "::set-output name=dir::$(pip cache dir)"
@@ -98,7 +98,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
-          python-version: '3.7'
+          python-version: '3.9'
       - if: matrix.test == 'other'
         run: |
           sudo apt-get update
@@ -148,7 +148,7 @@ jobs:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
         with:
-          python-version: '3.7'
+          python-version: '3.9'
       - id: os-name
         uses: ASzc/change-string-case-action@v1
         with:
@@ -162,14 +162,19 @@ jobs:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
-      - run: pip install pyinstaller==4.4
+      - run: pip install pyinstaller==4.5.1
       - run: pip install -e .
       - if: startsWith(github.ref, 'refs/tags/v')
         run: python docker/set_build.py
-      - if: startsWith(runner.os, 'linux') || startsWith(runner.os, 'mac')
+      - if: startsWith(runner.os, 'linux')
         name: Build & Run (Unix)
         run: |
           pyinstaller --onefile --name lbrynet lbry/extras/cli.py
+          dist/lbrynet --version
+      - if: startsWith(runner.os, 'mac')
+        name: Build & Run (macOS)
+        run: |
+          pyinstaller --onefile --target-arch universal2 --name lbrynet lbry/extras/cli.py
           dist/lbrynet --version
       - if: startsWith(runner.os, 'windows')
         name: Build & Run (Windows)
