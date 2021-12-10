@@ -29,7 +29,7 @@ class PeerManager:
         self._loop = loop
         self._rpc_failures: typing.Dict[
             typing.Tuple[str, int], typing.Tuple[typing.Optional[float], typing.Optional[float]]
-        ] = {}
+        ] = LRUCache(2048)
         self._last_replied: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
         self._last_sent: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
         self._last_requested: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
