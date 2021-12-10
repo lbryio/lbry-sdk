@@ -8,6 +8,8 @@ import random
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
 
+from prometheus_client import Gauge
+
 from lbry.dht import constants
 from lbry.dht.serialization.bencoding import DecodeError
 from lbry.dht.serialization.datagram import decode_datagram, ErrorDatagram, ResponseDatagram, RequestDatagram
@@ -30,6 +32,11 @@ OLD_PROTOCOL_ERRORS = {
 
 
 class KademliaRPC:
+    stored_blobs_metric = Gauge(
+        "stored_blobs", "Number of blobs announced by other peers", namespace="dht_node",
+        labelnames=("scope",),
+    )
+
     def __init__(self, protocol: 'KademliaProtocol', loop: asyncio.AbstractEventLoop, peer_port: int = 3333):
         self.protocol = protocol
         self.loop = loop
@@ -61,6 +68,7 @@ class KademliaRPC:
         self.protocol.data_store.add_peer_to_blob(
             rpc_contact, blob_hash
         )
+        self.stored_blobs_metric.labels("global").set(len(self.protocol.data_store))
         return b'OK'
 
     def find_node(self, rpc_contact: 'KademliaPeer', key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
