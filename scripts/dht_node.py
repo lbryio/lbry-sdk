@@ -6,7 +6,7 @@ import os.path
 from io import StringIO
 from typing import Optional
 from aiohttp import web
-from prometheus_client import generate_latest as prom_generate_latest, Gauge
+from prometheus_client import generate_latest as prom_generate_latest
 
 from lbry.dht.constants import generate_id
 from lbry.dht.node import Node
@@ -16,18 +16,6 @@ from lbry.conf import Config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-4s %(name)s:%(lineno)d: %(message)s")
 log = logging.getLogger(__name__)
-BLOBS_STORED = Gauge(
-    "blobs_stored", "Number of blob info received", namespace="dht_node",
-    labelnames=("method",)
-)
-PEERS = Gauge(
-    "known_peers", "Number of peers on routing table", namespace="dht_node",
-    labelnames=("method",)
-)
-ESTIMATED_SIZE = Gauge(
-    "passively_estimated_network_size", "Estimated network size from routing table", namespace="dht_node",
-    labelnames=("method",)
-)
 
 
 class SimpleMetrics:
@@ -129,11 +117,6 @@ async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional
     log.info("Peer with id %s started", node_id.hex())
     while True:
         await asyncio.sleep(10)
-        PEERS.labels('main').set(len(node.protocol.routing_table.get_peers()))
-        peers = node.protocol.routing_table.get_peers()
-        close_ids = [peer for peer in peers if peer.node_id[0] == node.protocol.node_id[0]]
-        ESTIMATED_SIZE.labels('main').set(len(close_ids) * 256)
-        BLOBS_STORED.labels('main').set(len(node.protocol.data_store.get_storing_contacts()))
         log.info("Known peers: %d. Storing contact information for %d blobs from %d peers.",
                  len(node.protocol.routing_table.get_peers()), len(node.protocol.data_store),
                  len(node.protocol.data_store.get_storing_contacts()))

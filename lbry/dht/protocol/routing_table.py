@@ -4,6 +4,8 @@ import logging
 import typing
 import itertools
 
+from prometheus_client import Gauge
+
 from lbry.dht import constants
 from lbry.dht.protocol.distance import Distance
 if typing.TYPE_CHECKING:
@@ -13,8 +15,13 @@ log = logging.getLogger(__name__)
 
 
 class KBucket:
-    """ Description - later
     """
+    Kademlia K-bucket implementation.
+    """
+    peers_in_routing_table_metric = Gauge(
+        "peers_in_routing_table", "Number of peers on routing table", namespace="dht_node",
+        labelnames=("scope",)
+    )
 
     def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int, node_id: bytes):
         """
@@ -58,6 +65,7 @@ class KBucket:
                     return True
         if len(self.peers) < constants.K:
             self.peers.append(peer)
+            self.peers_in_routing_table_metric.labels("global").inc()
             return True
         else:
             return False
@@ -124,6 +132,7 @@ class KBucket:
 
     def remove_peer(self, peer: 'KademliaPeer') -> None:
         self.peers.remove(peer)
+        self.peers_in_routing_table_metric.labels("global").dec()
 
     def key_in_range(self, key: bytes) -> bool:
         """ Tests whether the specified key (i.e. node ID) is in the range
@@ -162,6 +171,10 @@ class TreeRoutingTable:
     ping RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
     """
+    buckets_in_routing_table_metric = Gauge(
+        "buckets_in_routing_table", "Number of buckets on routing table", namespace="dht_node",
+        labelnames=("scope",)
+    )
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
                  split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
@@ -279,6 +292,7 @@ class TreeRoutingTable:
         # ...and remove them from the old bucket
         for contact in new_bucket.peers:
             old_bucket.remove_peer(contact)
+        self.buckets_in_routing_table_metric.labels("global").set(len(self.buckets))
 
     def join_buckets(self):
         if len(self.buckets) == 1:
@@ -302,6 +316,7 @@ class TreeRoutingTable:
         elif can_go_higher:
             self.buckets[bucket_index_to_pop + 1].range_min = bucket.range_min
         self.buckets.remove(bucket)
+        self.buckets_in_routing_table_metric.labels("global").set(len(self.buckets))
         return self.join_buckets()
 
     def contact_in_routing_table(self, address_tuple: typing.Tuple[str, int]) -> bool:
