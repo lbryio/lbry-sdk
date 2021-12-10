@@ -126,6 +126,10 @@ class PubKey(_KeyBase):
             self.pubkey_bytes
         )
 
+    def verify(self, signature, data):
+        """ Produce a signature for piece of data by double hashing it and signing the hash. """
+        return self.verifying_key.verify(signature, data, hasher=double_sha256)
+
 
 class PrivateKey(_KeyBase):
     """A BIP32 private key."""

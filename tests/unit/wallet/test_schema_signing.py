@@ -2,9 +2,12 @@ from binascii import unhexlify
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
+from lbry.wallet.bip32 import PrivateKey
+from lbry.wallet.mnemonic import Mnemonic
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from lbry.schema.claim import Claim
 from lbry.crypto.hash import sha256
+
 
 def get_output(amount=CENT, pubkey_hash=NULL_HASH32):
     return Transaction() \
@@ -22,7 +25,9 @@ def get_tx():
 
 async def get_channel(claim_name='@foo'):
     channel_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
-    await channel_txo.generate_channel_private_key()
+    channel_txo.set_channel_private_key(PrivateKey.from_seed(
+        Ledger, Mnemonic.mnemonic_to_seed(Mnemonic().make_seed(), '')
+    ))
     get_tx().add_outputs([channel_txo])
     return channel_txo
 
@@ -112,6 +117,37 @@ class TestValidatingOldSignatures(AsyncioTestCase):
             'headers': Headers(':memory:')
         })
 
+        self.assertTrue(stream.is_signed_by(channel, ledger))
+
+    def test_claim_signed_using_ecdsa_validates_with_coincurve(self):
+        channel_tx = Transaction(unhexlify(
+            "0100000001b91d829283c0d80cb8113d5f36b6da3dfe9df3e783f158bfb3fd1b2b178d7fc9010000006b48"
+            "3045022100f4e2b4ee38388c3d3a62f4b12fdd413f6f140168e85884bbeb33a3f2d3159ef502201721200f"
+            "4a4f3b87484d4f47c9054e31cd3ba451dd3886a7f9f854893e7c8cf90121023f9e906e0c120f3bf74feb40"
+            "f01ddeafbeb1856d91938c3bef25bed06767247cffffffff0200e1f5050000000081b505406368616e4c5d"
+            "00125a0a583056301006072a8648ce3d020106052b8104000a03420004d7fa13fd8e57f3a0b878eaaf3d17"
+            "9144d25ddbe4a3e4440a661f51b4134c6a13c9c98678ff8411932e60fd97d7baf03ea67ebcc21097230cfb"
+            "2241348aadb55e6d7576a9149c6d700f89c77f0e8c650ba05656f8f2392782d388acf47c95350000000019"
+            "76a914d9502233e0e1fc76e13e36c546f704c3124d5eaa88ac00000000"
+        ))
+        channel = channel_tx.outputs[0]
+
+        stream_tx = Transaction(unhexlify(
+            "010000000116a1d90763f2e3a2348c7fb438a23f232b15e3ffe3f058c3b2ab52c8bed8dcb5010000006b48"
+            "30450221008f38561b3a16944c63b4f4f1562f1efe1b2060f31d249e234003ee5e3461756f02205773c99e"
+            "83c968728e4f2433a13871c6ad23f6c10368ac52fa62a09f3f7ef5fd012102597f39845b98e2415b777aa0"
+            "3849d346d287af7970deb05f11214b3418ae9d82ffffffff0200e1f50500000000fd0c01b505636c61696d"
+            "4ce8012e6e40fa5fee1b915af3b55131dcbcebee34ab9148292b084ce3741f2e0db49783f3d854ac885f2b"
+            "6304a76ef7048046e338dd414ba4c64e8468651768ffaaf550c8560637ac8c477ea481ac2a9264097240f4"
+            "ab0a90010a8d010a3056bf5dbae43f77a63d075b0f2ae9c7c3e3098db93779c7f9840da0f4db9c2f8c8454"
+            "f4edd1373e2b64ee2e68350d916e120b746d706c69647879363171180322186170706c69636174696f6e2f"
+            "6f637465742d73747265616d3230f293f5acf4310562d4a41f6620167fe6d83761a98d36738908ce5c8776"
+            "1642710e55352a396276a42eda92ff5856f46f6d7576a91434bd3dc4c45cc0635eb2ad5da658727e5442ca"
+            "0f88ace82f902f000000001976a91427b27c89eaebf68d063c107241584c07e5a6ccc688ac00000000"
+        ))
+        stream = stream_tx.outputs[0]
+
+        ledger = Ledger({'db': Database(':memory:'), 'headers': Headers(':memory:')})
         self.assertTrue(stream.is_signed_by(channel, ledger))
 
 

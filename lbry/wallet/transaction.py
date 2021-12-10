@@ -28,6 +28,7 @@ from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
+from .bip32 import PubKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account

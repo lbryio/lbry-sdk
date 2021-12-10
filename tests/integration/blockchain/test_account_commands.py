@@ -1,5 +1,9 @@
+from binascii import unhexlify
+
 from lbry.testcase import CommandTestCase
 from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.account import DeterministicChannelKeyManager
+from lbry.wallet.transaction import Transaction
 
 
 def extract(d, keys):
@@ -175,8 +179,17 @@ class AccountManagement(CommandTestCase):
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
 
+    async def test_backwards_compatibility(self):
+        pk = {
+            'mpAt7RQJUWe3RWPyyYQ9cinQoPH9HomPdh':
+                '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIMrKg13+6mj5zdqN2wCx24GgYD8PUiYVzGewgOvu24SfoA'
+                'cGBSuBBAAK\noUQDQgAE1/oT/Y5X86C4eOqvPReRRNJd2+Sj5EQKZh9RtBNMahPJyYZ4/4QRky5g\n/ZfXuvA+'
+                'pn68whCXIwz7IkE0iq21Xg==\n-----END EC PRIVATE KEY-----\n'
+        }
+
     async def test_deterministic_channel_keys(self):
         seed = self.account.seed
+        keys = self.account.deterministic_channel_keys
 
         # create two channels and make sure they have different keys
         channel1a = await self.channel_create('@foo1')
@@ -202,11 +215,41 @@ class AccountManagement(CommandTestCase):
             channel2b.private_key.public_key.address
         )
 
+        # repeatedly calling next channel key returns the same key when not used
+        current_known = keys.last_known
+        next_key = await keys.generate_next_key()
+        self.assertEqual(current_known, keys.last_known)
+        self.assertEqual(next_key.address(), (await keys.generate_next_key()).address())
+        # again, should be idempotent
+        next_key = await keys.generate_next_key()
+        self.assertEqual(current_known, keys.last_known)
+        self.assertEqual(next_key.address(), (await keys.generate_next_key()).address())
+
         # create third channel while both daemons running, second daemon should pick it up
         channel3a = await self.channel_create('@foo3')
+        self.assertEqual(current_known+1, keys.last_known)
+        self.assertNotEqual(next_key.address(), (await keys.generate_next_key()).address())
         channel3b, = (await self.daemon2.jsonrpc_channel_list(name='@foo3'))['items']
         self.assertTrue(channel3b.has_private_key)
         self.assertEqual(
             channel3a['outputs'][0]['value']['public_key_id'],
             channel3b.private_key.public_key.address
         )
+
+        # channel key cache re-populated after simulated restart
+
+        # reset cache
+        self.account.deterministic_channel_keys = DeterministicChannelKeyManager(self.account)
+        channel3c, channel2c, channel1c = (await self.daemon.jsonrpc_channel_list())['items']
+        self.assertFalse(channel1c.has_private_key)
+        self.assertFalse(channel2c.has_private_key)
+        self.assertFalse(channel3c.has_private_key)
+
+        # repopulate cache
+        await self.account.deterministic_channel_keys.ensure_cache_primed()
+        self.assertEqual(self.account.deterministic_channel_keys.last_known, keys.last_known)
+        channel3c, channel2c, channel1c = (await self.daemon.jsonrpc_channel_list())['items']
+        self.assertTrue(channel1c.has_private_key)
+        self.assertTrue(channel2c.has_private_key)
+        self.assertTrue(channel3c.has_private_key)
+

@@ -470,6 +470,7 @@ class Ledger(metaclass=LedgerRegistry):
         for address_manager in account.address_managers.values():
             await self.subscribe_addresses(address_manager, await address_manager.get_addresses())
         await account.ensure_address_gap()
+        await account.deterministic_channel_keys.ensure_cache_primed()
 
     async def unsubscribe_account(self, account: Account):
         for address in await account.get_addresses():

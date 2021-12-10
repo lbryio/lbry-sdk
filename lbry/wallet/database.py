@@ -1244,7 +1244,7 @@ class Database(SQLiteMixin):
     async def is_channel_key_used(self, wallet, address):
         channels = await self.get_txos(wallet, txo_type=TXO_TYPES['channel'])
         for channel in channels:
-            if channel.private_key.address() == address:
+            if channel.private_key is not None and channel.private_key.address() == address:
                 return True
         return False
 
