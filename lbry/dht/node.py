@@ -2,6 +2,9 @@ import logging
 import asyncio
 import typing
 import socket
+
+from prometheus_client import Gauge
+
 from lbry.utils import resolve_host
 from lbry.dht import constants
 from lbry.dht.peer import make_kademlia_peer
@@ -17,6 +20,10 @@ log = logging.getLogger(__name__)
 
 
 class Node:
+    storing_peers_metric = Gauge(
+        "storing_peers", "Number of peers storing blobs announced to this node", namespace="dht_node",
+        labelnames=("scope",),
+    )
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
                  split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX,
@@ -44,7 +51,9 @@ class Node:
             # add all peers in the routing table
             total_peers.extend(self.protocol.routing_table.get_peers())
             # add all the peers who have announced blobs to us
-            total_peers.extend(self.protocol.data_store.get_storing_contacts())
+            storing_peers = self.protocol.data_store.get_storing_contacts()
+            self.storing_peers_metric.labels("global").set(len(storing_peers))
+            total_peers.extend(storing_peers)
 
             # get ids falling in the midpoint of each bucket that hasn't been recently updated
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
