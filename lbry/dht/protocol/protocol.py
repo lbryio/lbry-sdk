@@ -276,6 +276,14 @@ class KademliaProtocol(DatagramProtocol):
         "request_success", "Number of successful requests", namespace="dht_node",
         labelnames=("method",),
     )
+    request_flight_metric = Gauge(
+        "request_flight", "Number of ongoing requests", namespace="dht_node",
+        labelnames=("method",),
+    )
+    request_error_metric = Counter(
+        "request_error", "Number of errors returned from request to other peers", namespace="dht_node",
+        labelnames=("method",),
+    )
     HISTOGRAM_BUCKETS = (
         .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 3.0, 3.5, 4.0, 4.50, 5.0, 5.50, 6.0, float('inf')
     )
@@ -606,6 +614,7 @@ class KademliaProtocol(DatagramProtocol):
         response_fut = self.sent_messages[request.rpc_id][1]
         try:
             self.request_sent_metric.labels(method=request.method).inc()
+            self.request_flight_metric.labels(method=request.method).inc()
             start = time.perf_counter()
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
             self.response_time_metric.labels(method=request.method).observe(time.perf_counter() - start)
@@ -617,10 +626,13 @@ class KademliaProtocol(DatagramProtocol):
                 response_fut.cancel()
             raise
         except (asyncio.TimeoutError, RemoteException):
+            self.request_error_metric.labels(method=request.method).inc()
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
                 self.remove_peer(peer)
             raise
+        finally:
+            self.request_flight_metric.labels(method=request.method).dec()
 
     def send_response(self, peer: 'KademliaPeer', response: ResponseDatagram):
         self._send(peer, response)
