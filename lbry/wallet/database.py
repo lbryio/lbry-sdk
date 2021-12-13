@@ -3,13 +3,14 @@ import logging
 import asyncio
 import sqlite3
 import platform
-import ecdsa
 from binascii import hexlify
 from collections import defaultdict
 from dataclasses import dataclass
 from contextvars import ContextVar
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 from datetime import date
+
+import ecdsa
 from prometheus_client import Gauge, Counter, Histogram
 from lbry.utils import LockWithMetrics
 
