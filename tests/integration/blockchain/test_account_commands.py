@@ -168,14 +168,6 @@ class AccountManagement(CommandTestCase):
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
 
-    async def test_backwards_compatibility(self):
-        pk = {
-            'mpAt7RQJUWe3RWPyyYQ9cinQoPH9HomPdh':
-                '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIMrKg13+6mj5zdqN2wCx24GgYD8PUiYVzGewgOvu24SfoA'
-                'cGBSuBBAAK\noUQDQgAE1/oT/Y5X86C4eOqvPReRRNJd2+Sj5EQKZh9RtBNMahPJyYZ4/4QRky5g\n/ZfXuvA+'
-                'pn68whCXIwz7IkE0iq21Xg==\n-----END EC PRIVATE KEY-----\n'
-        }
-
     async def test_deterministic_channel_keys(self):
         seed = self.account.seed
         keys = self.account.deterministic_channel_keys
