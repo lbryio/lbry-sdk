@@ -4,7 +4,7 @@ import logging
 import typing
 import itertools
 
-from prometheus_client import Gauge
+from prometheus_client import Gauge, Counter
 
 from lbry.dht import constants
 from lbry.dht.protocol.distance import Distance
@@ -21,6 +21,10 @@ class KBucket:
     peer_in_routing_table_metric = Gauge(
         "peers_in_routing_table", "Number of peers on routing table", namespace="dht_node",
         labelnames=("scope",)
+    )
+    peer_with_x_byte_colliding_metric = Counter(
+        "peer_x_byte_colliding", "Number of peers with at least X bytes colliding with this node id",
+        namespace="dht_node", labelnames=("amount",)
     )
 
     def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int, node_id: bytes):
@@ -66,6 +70,9 @@ class KBucket:
         if len(self.peers) < constants.K:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
+            if self._node_id[0] == peer.node_id[0]:
+                amount = 2 if self._node_id[1] == peer.node_id[1] else 1
+                self.peer_with_x_byte_colliding_metric.labels(amount=amount).inc()
             return True
         else:
             return False
