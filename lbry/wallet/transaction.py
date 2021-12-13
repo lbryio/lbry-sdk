@@ -2,7 +2,6 @@ import struct
 import hashlib
 import logging
 import typing
-import asyncio
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
 
@@ -28,7 +27,6 @@ from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
-from .bip32 import PubKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account
@@ -470,14 +468,14 @@ class Output(InputOutput):
         self.channel = None
         self.signable.clear_signature()
 
-    def set_channel_private_key(self, private_key):
+    def set_channel_private_key(self, private_key: ecdsa.SigningKey):
         self.private_key = private_key
-        self.claim.channel.public_key_bytes = private_key.public_key.pubkey_bytes
+        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
         self.script.generate()
-        return private_key
+        return self.private_key
 
-    def is_channel_private_key(self, private_key):
-        return self.claim.channel.public_key_bytes == private_key.signing_key.to_der()
+    def is_channel_private_key(self, private_key: ecdsa.SigningKey):
+        return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
 
     @classmethod
     def pay_claim_name_pubkey_hash(

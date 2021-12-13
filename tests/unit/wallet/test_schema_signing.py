@@ -1,5 +1,7 @@
 from binascii import unhexlify
 
+import ecdsa
+
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
 from lbry.wallet.bip32 import PrivateKey
@@ -24,10 +26,11 @@ def get_tx():
 
 
 async def get_channel(claim_name='@foo'):
+    seed = Mnemonic.mnemonic_to_seed(Mnemonic().make_seed(), '')
+    bip32_key = PrivateKey.from_seed(Ledger, seed)
+    signing_key = ecdsa.SigningKey.from_secret_exponent(bip32_key.secret_exponent(), ecdsa.SECP256k1)
     channel_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
-    channel_txo.set_channel_private_key(PrivateKey.from_seed(
-        Ledger, Mnemonic.mnemonic_to_seed(Mnemonic().make_seed(), '')
-    ))
+    channel_txo.set_channel_private_key(signing_key)
     get_tx().add_outputs([channel_txo])
     return channel_txo
 

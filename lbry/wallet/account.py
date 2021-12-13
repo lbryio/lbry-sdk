@@ -44,25 +44,36 @@ class DeterministicChannelKeyManager:
         self.cache = {}
 
     def maybe_generate_deterministic_key_for_channel(self, txo):
+        if self.private_key is None:
+            return
         next_key = self.private_key.child(self.last_known)
-        if txo.claim.channel.public_key_bytes == next_key.public_key.pubkey_bytes:
-            self.cache[next_key.address()] = next_key
+        signing_key = ecdsa.SigningKey.from_secret_exponent(
+            next_key.secret_exponent(), ecdsa.SECP256k1
+        )
+        public_key_bytes = signing_key.get_verifying_key().to_der()
+        if txo.claim.channel.public_key_bytes == public_key_bytes:
+            self.cache[self.account.ledger.public_key_to_address(public_key_bytes)] = signing_key
             self.last_known += 1
 
     async def ensure_cache_primed(self):
-        await self.generate_next_key()
+        if self.private_key is not None:
+            await self.generate_next_key()
 
-    async def generate_next_key(self):
+    async def generate_next_key(self) -> ecdsa.SigningKey:
         db = self.account.ledger.db
         while True:
             next_key = self.private_key.child(self.last_known)
-            key_address = next_key.address()
-            self.cache[key_address] = next_key
-            if not await db.is_channel_key_used(self.account.wallet, key_address):
-                return next_key
+            signing_key = ecdsa.SigningKey.from_secret_exponent(
+                next_key.secret_exponent(), ecdsa.SECP256k1
+            )
+            public_key_bytes = signing_key.get_verifying_key().to_der()
+            key_address = self.account.ledger.public_key_to_address(public_key_bytes)
+            self.cache[key_address] = signing_key
+            if not await db.is_channel_key_used(self.account.wallet, signing_key):
+                return signing_key
             self.last_known += 1
 
-    def get_private_key_from_pubkey_hash(self, pubkey_hash):
+    def get_private_key_from_pubkey_hash(self, pubkey_hash) -> ecdsa.SigningKey:
         return self.cache.get(pubkey_hash)
 
 
@@ -561,7 +572,7 @@ class Account:
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
 
-    async def get_channel_private_key(self, public_key_bytes):
+    async def get_channel_private_key(self, public_key_bytes) -> ecdsa.SigningKey:
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
         if private_key_pem:

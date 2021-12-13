@@ -63,17 +63,6 @@ class AccountManagement(CommandTestCase):
         accounts = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
         self.assertEqual(accounts['items'][0]['name'], 'recreated account')
 
-    async def test_wallet_migration(self):
-        # null certificates should get deleted
-        await self.channel_create('@foo1')
-        await self.channel_create('@foo2')
-        await self.channel_create('@foo3')
-        keys = list(self.account.channel_keys.keys())
-        self.account.channel_keys[keys[0]] = None
-        self.account.channel_keys[keys[1]] = "some invalid junk"
-        await self.account.maybe_migrate_certificates()
-        self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])
-
     async def assertFindsClaims(self, claim_names, awaitable):
         self.assertEqual(claim_names, [txo.claim_name for txo in (await awaitable)['items']])
 
@@ -207,33 +196,33 @@ class AccountManagement(CommandTestCase):
         self.assertTrue(channel1b.has_private_key)
         self.assertEqual(
             channel1a['outputs'][0]['value']['public_key_id'],
-            channel1b.private_key.public_key.address
+            self.ledger.public_key_to_address(channel1b.private_key.verifying_key.to_der())
         )
         self.assertTrue(channel2b.has_private_key)
         self.assertEqual(
             channel2a['outputs'][0]['value']['public_key_id'],
-            channel2b.private_key.public_key.address
+            self.ledger.public_key_to_address(channel2b.private_key.verifying_key.to_der())
         )
 
         # repeatedly calling next channel key returns the same key when not used
         current_known = keys.last_known
         next_key = await keys.generate_next_key()
         self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.address(), (await keys.generate_next_key()).address())
+        self.assertEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
         # again, should be idempotent
         next_key = await keys.generate_next_key()
         self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.address(), (await keys.generate_next_key()).address())
+        self.assertEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
 
         # create third channel while both daemons running, second daemon should pick it up
         channel3a = await self.channel_create('@foo3')
         self.assertEqual(current_known+1, keys.last_known)
-        self.assertNotEqual(next_key.address(), (await keys.generate_next_key()).address())
+        self.assertNotEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
         channel3b, = (await self.daemon2.jsonrpc_channel_list(name='@foo3'))['items']
         self.assertTrue(channel3b.has_private_key)
         self.assertEqual(
             channel3a['outputs'][0]['value']['public_key_id'],
-            channel3b.private_key.public_key.address
+            self.ledger.public_key_to_address(channel3b.private_key.verifying_key.to_der())
         )
 
         # channel key cache re-populated after simulated restart

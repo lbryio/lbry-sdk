@@ -2859,7 +2859,9 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo = tx.outputs[0]
 
         if new_signing_key:
-            await new_txo.generate_channel_private_key()
+            new_txo.set_channel_private_key(
+                await funding_accounts[0].generate_channel_private_key()
+            )
         else:
             new_txo.private_key = old_txo.private_key
 
@@ -2868,7 +2870,6 @@ class Daemon(metaclass=JSONRPCServerType):
         await tx.sign(funding_accounts)
 
         if not preview:
-            account.add_channel_private_key(new_txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(

@@ -3,6 +3,7 @@ import logging
 import asyncio
 import sqlite3
 import platform
+import ecdsa
 from binascii import hexlify
 from collections import defaultdict
 from dataclasses import dataclass
@@ -1241,10 +1242,11 @@ class Database(SQLiteMixin):
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
 
-    async def is_channel_key_used(self, wallet, address):
+    async def is_channel_key_used(self, wallet, key: ecdsa.SigningKey):
         channels = await self.get_txos(wallet, txo_type=TXO_TYPES['channel'])
+        other_key_string = key.to_string()
         for channel in channels:
-            if channel.private_key is not None and channel.private_key.address() == address:
+            if channel.private_key is not None and channel.private_key.to_string() == other_key_string:
                 return True
         return False
 
