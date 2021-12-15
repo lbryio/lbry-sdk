@@ -22,8 +22,8 @@ class KBucket:
         "peers_in_routing_table", "Number of peers on routing table", namespace="dht_node",
         labelnames=("scope",)
     )
-    peer_with_x_byte_colliding_metric = Counter(
-        "peer_x_byte_colliding", "Number of peers with at least X bytes colliding with this node id",
+    peer_with_x_bit_colliding_metric = Counter(
+        "peer_x_bit_colliding", "Number of peers with at least X bits colliding with this node id",
         namespace="dht_node", labelnames=("amount",)
     )
 
@@ -70,9 +70,9 @@ class KBucket:
         if len(self.peers) < constants.K:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
-            if self._node_id[0] == peer.node_id[0]:
-                amount = 2 if self._node_id[1] == peer.node_id[1] else 1
-                self.peer_with_x_byte_colliding_metric.labels(amount=amount).inc()
+            if peer.node_id[0] == self._node_id[0]:
+                bits_colliding = 8 - (peer.node_id[1] ^ self._node_id[1]).bit_length()
+                self.peer_with_x_bit_colliding_metric.labels(amount=(bits_colliding + 8)).inc()
             return True
         else:
             return False
