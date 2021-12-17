@@ -29,10 +29,9 @@ class TransactionCommandsTestCase(CommandTestCase):
         self.assertFalse(result['success'])
 
     async def test_utxo_release(self):
-        sendtxid = await self.blockchain.send_to_address(
-            await self.account.receiving.get_or_create_usable_address(), 1
+        await self.send_to_address_and_wait(
+            await self.account.receiving.get_or_create_usable_address(), 1, 1
         )
-        await self.confirm_tx(sendtxid)
         await self.assertBalance(self.account, '11.0')
         await self.ledger.reserve_outputs(await self.account.get_utxos())
         await self.assertBalance(self.account, '0.0')
