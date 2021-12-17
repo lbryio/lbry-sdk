@@ -21,9 +21,8 @@ class BasicTransactionTest(IntegrationTestCase):
             [asyncio.ensure_future(self.on_address_update(address1)),
              asyncio.ensure_future(self.on_address_update(address2))]
         ))
-        sendtxid1 = await self.blockchain.send_to_address(address1, 5)
-        sendtxid2 = await self.blockchain.send_to_address(address2, 5)
-        await self.blockchain.generate(1)
+        await self.send_to_address_and_wait(address1, 5)
+        await self.send_to_address_and_wait(address2, 5, 1)
         await notifications
 
         self.assertEqual(d2l(await self.account.get_balance()), '10.0')
