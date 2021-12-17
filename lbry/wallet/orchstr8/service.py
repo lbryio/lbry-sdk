@@ -87,11 +87,14 @@ class ConductorService:
         if not address:
             raise ValueError("No address was provided.")
         amount = data.get('amount', 1)
-        txid = await self.stack.lbcwallet_node.send_to_address(address, amount)
         if self.stack.wallet_started:
-            await self.stack.wallet_node.ledger.on_transaction.where(
-                lambda e: e.tx.id == txid and e.address == address
+            watcher = self.stack.wallet_node.ledger.on_transaction.where(
+                lambda e: e.address == address  # and e.tx.id == txid -- might stall; see send_to_address_and_wait
             )
+            txid = await self.stack.lbcwallet_node.send_to_address(address, amount)
+            await watcher
+        else:
+            txid = await self.stack.lbcwallet_node.send_to_address(address, amount)
         return json_response({
             'address': address,
             'amount': amount,
