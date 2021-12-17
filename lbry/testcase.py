@@ -385,9 +385,7 @@ class CommandTestCase(IntegrationTestCase):
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        sendtxid = await self.blockchain.send_to_address(address, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(5)
+        await self.send_to_address_and_wait(address, 10, 6)
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
