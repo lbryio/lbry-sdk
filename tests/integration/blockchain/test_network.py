@@ -101,12 +101,7 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.network.client.transport.close()
         self.assertFalse(self.ledger.network.is_connected)
         await self.ledger.resolve([], 'derp')
-        sendtxid = await self.blockchain.send_to_address(address1, 1.1337)
-        # await self.ledger.resolve([], 'derp')
-        # self.assertTrue(self.ledger.network.is_connected)
-        await asyncio.wait_for(self.on_transaction_id(sendtxid), 10.0)  # mempool
-        await self.blockchain.generate(1)
-        await self.on_transaction_id(sendtxid)  # confirmed
+        sendtxid = await self.send_to_address_and_wait(address1, 1.1337, 1)
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
         await self.assertBalance(self.account, '1.1337')

@@ -272,10 +272,28 @@ class IntegrationTestCase(AsyncioTestCase):
             )
         return True
 
-    def on_transaction_id(self, txid, ledger=None):
-        return (ledger or self.ledger).on_transaction.where(
-            lambda e: e.tx.id == txid
+    async def send_to_address_and_wait(self, address, amount, blocks_to_generate=0, ledger=None):
+        tx_watch = []
+        txid = None
+        done = False
+        watcher = (ledger or self.ledger).on_transaction.where(
+            lambda e: e.tx.id == txid or tx_watch.append(e.tx.id) or done
         )
+
+        txid = await self.blockchain.send_to_address(address, amount)
+        done = txid in tx_watch
+        await watcher
+
+        await self.generate_and_wait(blocks_to_generate, [txid], ledger)
+        return txid
+
+    async def generate_and_wait(self, blocks_to_generate, txids, ledger=None):
+        if blocks_to_generate > 0:
+            watcher = (ledger or self.ledger).on_transaction.where(
+                lambda e: (e.tx.id in txids and txids.remove(e.tx.id)) or len(txids) <= 0  # relies on remove returning None
+            )
+            await self.blockchain.generate(blocks_to_generate)
+            await watcher
 
     def on_address_update(self, address):
         return self.ledger.on_transaction.where(
@@ -466,9 +484,8 @@ class CommandTestCase(IntegrationTestCase):
 
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
-        await self.on_transaction_id(txid, ledger)
-        on_tx = self.on_transaction_id(txid, ledger)
-        await asyncio.wait([self.generate(1), on_tx], timeout=5)
+        # actually, if it's in the mempool or in the block we're fine
+        await self.generate_and_wait(1, [txid], ledger=ledger)
         return txid
 
     async def on_transaction_dict(self, tx):

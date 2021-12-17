@@ -23,7 +23,7 @@ class WalletCommands(CommandTestCase):
     async def test_wallet_syncing_status(self):
         address = await self.daemon.jsonrpc_address_unused()
         self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
-        await self.blockchain.send_to_address(address, 1)
+        await self.send_to_address_and_wait(address, 1)
         await self.ledger._update_tasks.started.wait()
         self.assertTrue(self.daemon.jsonrpc_wallet_status()['is_syncing'])
         await self.ledger._update_tasks.done.wait()
@@ -73,9 +73,7 @@ class WalletCommands(CommandTestCase):
     async def test_balance_caching(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
-        sendtxid = await self.blockchain.send_to_address(address2, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(1)
+        await self.send_to_address_and_wait(address2, 10, 1)
 
         wallet_balance = self.daemon.jsonrpc_wallet_balance
         ledger = self.ledger
@@ -123,8 +121,7 @@ class WalletCommands(CommandTestCase):
         wallet2 = await self.daemon.jsonrpc_wallet_create('foo', create_account=True)
         account3 = wallet2.default_account
         address3 = await self.daemon.jsonrpc_address_unused(account3.id, wallet2.id)
-        await self.confirm_tx(await self.blockchain.send_to_address(address3, 1))
-        await self.generate(1)
+        await self.send_to_address_and_wait(address3, 1, 1)
 
         account_balance = self.daemon.jsonrpc_account_balance
         wallet_balance = self.daemon.jsonrpc_wallet_balance
@@ -238,8 +235,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
                  "carbon smart garage balance margin twelve"
         )
         address = (await self.daemon2.wallet_manager.default_account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        sendtxid = await self.blockchain.send_to_address(address, 1)
-        await self.confirm_tx(sendtxid, self.daemon2.ledger)
+        await self.send_to_address_and_wait(address, 1, 1, ledger=self.daemon2.ledger)
 
     def assertWalletEncrypted(self, wallet_path, encrypted):
         with open(wallet_path) as opened:
