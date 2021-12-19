@@ -6,8 +6,6 @@ from typing import List, Iterable, Optional, Tuple
 
 from coincurve import PublicKey as cPublicKey
 from coincurve.ecdsa import deserialize_compact, cdata_to_der
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import load_der_public_key
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
@@ -27,7 +25,7 @@ from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
-from .bip32 import PrivateKey, PublicKey
+from .bip32 import PrivateKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account
