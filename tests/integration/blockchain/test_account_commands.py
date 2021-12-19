@@ -1,7 +1,8 @@
 from binascii import unhexlify
 
 from lbry.testcase import CommandTestCase
-from lbry.wallet.dewies import dewies_to_lbc
+from lbry.schema.claim import Claim
+from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.wallet.account import DeterministicChannelKeyManager
 from lbry.wallet.transaction import Transaction
 
@@ -62,6 +63,32 @@ class AccountManagement(CommandTestCase):
         # list specific account
         accounts = await self.daemon.jsonrpc_account_list(account_id, include_claims=True)
         self.assertEqual(accounts['items'][0]['name'], 'recreated account')
+
+    async def test_wallet_migration(self):
+        old_id, new_id, valid_key = (
+            'mi9E8KqFfW5ngktU22pN2jpgsdf81ZbsGY',
+            'mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8',
+            '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
+            '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
+            '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
+            'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
+        )
+        # null certificates should get deleted
+        self.account.channel_keys = {
+            new_id: 'not valid key',
+            'foo': 'bar',
+        }
+        await self.account.maybe_migrate_certificates()
+        self.assertEqual(self.account.channel_keys, {})
+        self.account.channel_keys = {
+            new_id: 'not valid key',
+            'foo': 'bar',
+            'invalid address': valid_key,
+        }
+        await self.account.maybe_migrate_certificates()
+        self.assertEqual(self.account.channel_keys, {
+            new_id: valid_key
+        })
 
     async def assertFindsClaims(self, claim_names, awaitable):
         self.assertEqual(claim_names, [txo.claim_name for txo in (await awaitable)['items']])
@@ -168,6 +195,51 @@ class AccountManagement(CommandTestCase):
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
 
+    async def create_nondeterministic_channel(self, name, pubkey_bytes):
+        claim_address = await self.account.receiving.get_or_create_usable_address()
+        claim = Claim()
+        claim.channel.public_key_bytes = pubkey_bytes
+        tx = await Transaction.claim_create(
+            name, claim, lbc_to_dewies('1.0'),
+            claim_address, [self.account], self.account
+        )
+        await tx.sign([self.account])
+
+        async def command():
+            await self.daemon.broadcast_or_release(tx, False)
+            return tx
+
+        return await self.confirm_and_render(command(), True)
+
+    async def test_hybrid_channel_keys(self):
+        # non-deterministic channel
+        self.account.channel_keys = {
+            'mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8':
+                '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
+                '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
+                '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
+                'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
+        }
+        channel1 = await self.create_nondeterministic_channel('@foo1', unhexlify(
+            '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
+            '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
+            'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
+        ))
+
+        # deterministic channel
+        channel2 = await self.channel_create('@foo2')
+
+        stream1 = await self.stream_create('stream-in-channel1', '0.01', channel_id=self.get_claim_id(channel1))
+        stream2 = await self.stream_create('stream-in-channel2', '0.01', channel_id=self.get_claim_id(channel2))
+
+        resolved_stream1 = await self.resolve('@foo1/stream-in-channel1')
+        self.assertEqual('stream-in-channel1', resolved_stream1['name'])
+        self.assertTrue(resolved_stream1['is_channel_signature_valid'])
+
+        resolved_stream2 = await self.resolve('@foo2/stream-in-channel2')
+        self.assertEqual('stream-in-channel2', resolved_stream2['name'])
+        self.assertTrue(resolved_stream2['is_channel_signature_valid'])
+
     async def test_deterministic_channel_keys(self):
         seed = self.account.seed
         keys = self.account.deterministic_channel_keys
@@ -188,33 +260,33 @@ class AccountManagement(CommandTestCase):
         self.assertTrue(channel1b.has_private_key)
         self.assertEqual(
             channel1a['outputs'][0]['value']['public_key_id'],
-            self.ledger.public_key_to_address(channel1b.private_key.verifying_key.to_der())
+            channel1b.private_key.address
         )
         self.assertTrue(channel2b.has_private_key)
         self.assertEqual(
             channel2a['outputs'][0]['value']['public_key_id'],
-            self.ledger.public_key_to_address(channel2b.private_key.verifying_key.to_der())
+            channel2b.private_key.address
         )
 
         # repeatedly calling next channel key returns the same key when not used
         current_known = keys.last_known
         next_key = await keys.generate_next_key()
         self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
+        self.assertEqual(next_key.address, (await keys.generate_next_key()).address)
         # again, should be idempotent
         next_key = await keys.generate_next_key()
         self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
+        self.assertEqual(next_key.address, (await keys.generate_next_key()).address)
 
         # create third channel while both daemons running, second daemon should pick it up
         channel3a = await self.channel_create('@foo3')
         self.assertEqual(current_known+1, keys.last_known)
-        self.assertNotEqual(next_key.to_string(), (await keys.generate_next_key()).to_string())
+        self.assertNotEqual(next_key.address, (await keys.generate_next_key()).address)
         channel3b, = (await self.daemon2.jsonrpc_channel_list(name='@foo3'))['items']
         self.assertTrue(channel3b.has_private_key)
         self.assertEqual(
             channel3a['outputs'][0]['value']['public_key_id'],
-            self.ledger.public_key_to_address(channel3b.private_key.verifying_key.to_der())
+            channel3b.private_key.address
         )
 
         # channel key cache re-populated after simulated restart

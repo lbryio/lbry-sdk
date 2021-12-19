@@ -1,10 +1,8 @@
 from binascii import unhexlify
 
-import ecdsa
-
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
-from lbry.wallet.bip32 import PrivateKey
+from lbry.wallet.bip32 import PrivateKey, KeyPath
 from lbry.wallet.mnemonic import Mnemonic
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from lbry.schema.claim import Claim
@@ -27,10 +25,10 @@ def get_tx():
 
 async def get_channel(claim_name='@foo'):
     seed = Mnemonic.mnemonic_to_seed(Mnemonic().make_seed(), '')
-    bip32_key = PrivateKey.from_seed(Ledger, seed)
-    signing_key = ecdsa.SigningKey.from_secret_exponent(bip32_key.secret_exponent(), ecdsa.SECP256k1)
+    key = PrivateKey.from_seed(Ledger, seed)
+    channel_key = key.child(KeyPath.CHANNEL).child(0)
     channel_txo = Output.pay_claim_name_pubkey_hash(CENT, claim_name, Claim(), b'abc')
-    channel_txo.set_channel_private_key(signing_key)
+    channel_txo.set_channel_private_key(channel_key)
     get_tx().add_outputs([channel_txo])
     return channel_txo
 
@@ -160,13 +158,10 @@ class TestValidateSignContent(AsyncioTestCase):
         some_content = "MEANINGLESS CONTENT AEE3353320".encode()
         timestamp_str = "1630564175"
         channel = await get_channel()
-        stream = get_stream()
         signature = channel.sign_data(some_content, timestamp_str)
-        stream.signable.signature = unhexlify(signature.encode())
-        encoded_signature = stream.get_encoded_signature()
         pieces = [timestamp_str.encode(), channel.claim_hash, some_content]
         self.assertTrue(Output.is_signature_valid(
-            encoded_signature,
+            unhexlify(signature.encode()),
             sha256(b''.join(pieces)),
             channel.claim.channel.public_key_bytes
         ))

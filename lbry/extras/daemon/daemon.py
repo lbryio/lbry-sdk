@@ -17,7 +17,6 @@ from binascii import hexlify, unhexlify
 from traceback import format_exc
 from functools import wraps, partial
 
-import ecdsa
 import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
@@ -29,6 +28,7 @@ from lbry.wallet import (
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
+from lbry.wallet.bip32 import PrivateKey
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -3041,7 +3041,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel.claim_id,
             'holding_address': address,
             'holding_public_key': public_key.extended_key_string(),
-            'signing_private_key': channel.private_key.to_pem().decode()
+            'signing_private_key': channel.private_key.signing_key.to_pem().decode()
         }
         return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
@@ -3064,15 +3064,14 @@ class Daemon(metaclass=JSONRPCServerType):
 
         decoded = base58.b58decode(channel_data)
         data = json.loads(decoded)
-        channel_private_key = ecdsa.SigningKey.from_pem(
-            data['signing_private_key'], hashfunc=hashlib.sha256
+        channel_private_key = PrivateKey.from_pem(
+            self.ledger, data['signing_private_key']
         )
-        public_key_der = channel_private_key.get_verifying_key().to_der()
 
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
         channels, _, _, _ = await self.ledger.claim_search(
-            wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
+            wallet.accounts, public_key_id=channel_private_key.address
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:
             holding_address = channels[0].get_address(self.ledger)

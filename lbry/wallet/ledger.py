@@ -26,7 +26,7 @@ from .transaction import Transaction, Output
 from .header import Headers, UnvalidatedHeaders
 from .checkpoints import HASHES
 from .constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
-from .bip32 import PubKey, PrivateKey
+from .bip32 import PublicKey, PrivateKey
 from .coinselection import CoinSelector
 
 log = logging.getLogger(__name__)
@@ -226,7 +226,7 @@ class Ledger(metaclass=LedgerRegistry):
             return account.get_private_key(address_info['chain'], address_info['pubkey'].n)
         return None
 
-    async def get_public_key_for_address(self, wallet, address) -> Optional[PubKey]:
+    async def get_public_key_for_address(self, wallet, address) -> Optional[PublicKey]:
         match = await self._get_account_and_address_info_for_address(wallet, address)
         if match:
             _, address_info = match
