@@ -1,5 +1,6 @@
 import asyncio
 import json
+from binascii import unhexlify
 
 from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
@@ -282,8 +283,19 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         )
 
         # Channel Certificate
-        channel = await daemon2.jsonrpc_channel_create('@foo', '0.1')
-        await self.confirm_tx(channel.id, self.daemon2.ledger)
+        # non-deterministic channel
+        self.daemon2.wallet_manager.default_account.channel_keys['mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8'] = (
+            '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
+            '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
+            '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
+            'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
+        )
+        channel = await self.create_nondeterministic_channel('@foo', '0.1', unhexlify(
+            '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
+            '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
+            'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
+        ), self.daemon2)
+        await self.confirm_tx(channel['txid'], self.daemon2.ledger)
 
         # both daemons will have the channel but only one has the cert so far
         self.assertItemCount(await daemon.jsonrpc_channel_list(), 1)

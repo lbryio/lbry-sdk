@@ -1,10 +1,8 @@
 from binascii import unhexlify
 
 from lbry.testcase import CommandTestCase
-from lbry.schema.claim import Claim
-from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
+from lbry.wallet.dewies import dewies_to_lbc
 from lbry.wallet.account import DeterministicChannelKeyManager
-from lbry.wallet.transaction import Transaction
 
 
 def extract(d, keys):
@@ -195,22 +193,6 @@ class AccountManagement(CommandTestCase):
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
 
-    async def create_nondeterministic_channel(self, name, pubkey_bytes):
-        claim_address = await self.account.receiving.get_or_create_usable_address()
-        claim = Claim()
-        claim.channel.public_key_bytes = pubkey_bytes
-        tx = await Transaction.claim_create(
-            name, claim, lbc_to_dewies('1.0'),
-            claim_address, [self.account], self.account
-        )
-        await tx.sign([self.account])
-
-        async def command():
-            await self.daemon.broadcast_or_release(tx, False)
-            return tx
-
-        return await self.confirm_and_render(command(), True)
-
     async def test_hybrid_channel_keys(self):
         # non-deterministic channel
         self.account.channel_keys = {
@@ -220,17 +202,18 @@ class AccountManagement(CommandTestCase):
                 '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
                 'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
         }
-        channel1 = await self.create_nondeterministic_channel('@foo1', unhexlify(
+        channel1 = await self.create_nondeterministic_channel('@foo1', '1.0', unhexlify(
             '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
             '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
             'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
         ))
+        await self.confirm_tx(channel1['txid'])
 
         # deterministic channel
         channel2 = await self.channel_create('@foo2')
 
-        stream1 = await self.stream_create('stream-in-channel1', '0.01', channel_id=self.get_claim_id(channel1))
-        stream2 = await self.stream_create('stream-in-channel2', '0.01', channel_id=self.get_claim_id(channel2))
+        await self.stream_create('stream-in-channel1', '0.01', channel_id=self.get_claim_id(channel1))
+        await self.stream_create('stream-in-channel2', '0.01', channel_id=self.get_claim_id(channel2))
 
         resolved_stream1 = await self.resolve('@foo1/stream-in-channel1')
         self.assertEqual('stream-in-channel1', resolved_stream1['name'])
