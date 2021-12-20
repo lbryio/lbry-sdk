@@ -103,7 +103,7 @@ class AccountManagement(CommandTestCase):
         second_account = await self.daemon.jsonrpc_account_create('second account')
 
         tx = await self.daemon.jsonrpc_account_send(
-            '0.05', await self.daemon.jsonrpc_address_unused(account_id=second_account.id)
+            '0.05', await self.daemon.jsonrpc_address_unused(account_id=second_account.id), blocking=True
         )
         await self.confirm_tx(tx.id)
         await self.assertOutputAmount(['0.05', '9.949876'], utxo_list())
