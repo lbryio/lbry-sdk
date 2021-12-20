@@ -73,7 +73,8 @@ class WalletCommands(CommandTestCase):
     async def test_balance_caching(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
-        await self.send_to_address_and_wait(address2, 10, 1)
+        await self.send_to_address_and_wait(address2, 10, 2)
+        await self.ledger.tasks_are_done()  # don't mess with the query count while we need it
 
         wallet_balance = self.daemon.jsonrpc_wallet_balance
         ledger = self.ledger
@@ -88,14 +89,16 @@ class WalletCommands(CommandTestCase):
         self.assertIsNone(ledger._balance_cache.get(self.account.id))
 
         query_count += 2
-        self.assertEqual(await wallet_balance(), expected)
+        balance = await wallet_balance()
         self.assertEqual(self.ledger.db.db.query_count, query_count)
+        self.assertEqual(balance, expected)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
         # calling again uses cache
-        self.assertEqual(await wallet_balance(), expected)
+        balance = await wallet_balance()
         self.assertEqual(self.ledger.db.db.query_count, query_count)
+        self.assertEqual(balance, expected)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
@@ -151,7 +154,7 @@ class WalletCommands(CommandTestCase):
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
 
         # send lbc to someone else
-        tx = await self.daemon.jsonrpc_account_send('1.0', address2)
+        tx = await self.daemon.jsonrpc_account_send('1.0', address2, blocking=True)
         await self.confirm_tx(tx.id)
         self.assertEqual(await account_balance(), {
             'total': '8.97741',
@@ -184,7 +187,7 @@ class WalletCommands(CommandTestCase):
         })
 
         # tip claimed
-        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0)
+        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0, blocking=True)
         await self.confirm_tx(tx.id)
         self.assertEqual(await account_balance(), {
             'total': '9.277303',
@@ -290,7 +293,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
             '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
             'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
-        ), self.daemon2)
+        ), self.daemon2, blocking=True)
         await self.confirm_tx(channel['txid'], self.daemon2.ledger)
 
         # both daemons will have the channel but only one has the cert so far

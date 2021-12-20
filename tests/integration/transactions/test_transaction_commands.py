@@ -8,7 +8,7 @@ class TransactionCommandsTestCase(CommandTestCase):
     async def test_transaction_show(self):
         # local tx
         result = await self.out(self.daemon.jsonrpc_account_send(
-            '5.0', await self.daemon.jsonrpc_address_unused(self.account.id)
+            '5.0', await self.daemon.jsonrpc_address_unused(self.account.id), blocking=True
         ))
         await self.confirm_tx(result['txid'])
         tx = await self.daemon.jsonrpc_transaction_show(result['txid'])

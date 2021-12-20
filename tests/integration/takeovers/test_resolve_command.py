@@ -1,6 +1,7 @@
 import asyncio
 import json
 import hashlib
+import sys
 from bisect import bisect_right
 from binascii import hexlify, unhexlify
 from collections import defaultdict
@@ -91,7 +92,7 @@ class BaseResolveTestCase(CommandTestCase):
         self.assertEqual(len(claim_from_es[0]), 1)
         self.assertMatchESClaim(claim_from_es[0][0], claim)
         self._check_supports(claim.claim_hash.hex(), expected.get('supports', []),
-                             claim_from_es[0][0]['support_amount'], expected['effectiveamount'] > 0)
+                             claim_from_es[0][0]['support_amount'])
 
     async def assertMatchClaim(self, name, claim_id, is_active_in_lbrycrd=True):
         claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
@@ -110,7 +111,7 @@ class BaseResolveTestCase(CommandTestCase):
             expected['claims'][0]['lasttakeoverheight'] = expected['lasttakeoverheight']
             self.assertMatchDBClaim(expected['claims'][0], claim)
             self._check_supports(claim.claim_hash.hex(), expected['claims'][0].get('supports', []),
-                                 claim_from_es[0][0]['support_amount'], is_active_in_lbrycrd)
+                                 claim_from_es[0][0]['support_amount'])
         else:
             if 'claims' in expected and expected['claims'] is not None:
                 # ensure that if we do have the matching claim that it is not active
@@ -121,19 +122,30 @@ class BaseResolveTestCase(CommandTestCase):
         self.assertEqual(claim_id, (await self.assertMatchWinningClaim(name)).claim_hash.hex())
         await self.assertMatchClaimsForName(name)
 
-    def _check_supports(self, claim_id, lbrycrd_supports, es_support_amount, is_active_in_lbrycrd=True):
-        total_amount = 0
+    def _check_supports(self, claim_id, lbrycrd_supports, es_support_amount):
+        total_lbrycrd_amount = 0.0
+        total_es_amount = 0.0
+        active_es_amount = 0.0
         db = self.conductor.spv_node.server.bp.db
+        es_supports = db.get_supports(bytes.fromhex(claim_id))
 
-        for i, (tx_num, position, amount) in enumerate(db.get_supports(bytes.fromhex(claim_id))):
-            total_amount += amount
-            if is_active_in_lbrycrd:
-                support = lbrycrd_supports[i]
-                self.assertEqual(support['txid'], db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex())
-                self.assertEqual(support['n'], position)
-                self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
-                self.assertEqual(support['validatheight'], db.get_activation(tx_num, position, is_support=True))
-        self.assertEqual(total_amount, es_support_amount, f"lbrycrd support amount: {total_amount} vs es: {es_support_amount}")
+        # we're only concerned about active supports here, and they should match
+        self.assertTrue(len(es_supports) >= len(lbrycrd_supports))
+
+        for i, (tx_num, position, amount) in enumerate(es_supports):
+            total_es_amount += amount
+            valid_height = db.get_activation(tx_num, position, is_support=True)
+            if valid_height > db.db_height:
+                continue
+            active_es_amount += amount
+            txid = db.prefix_db.tx_hash.get(tx_num, deserialize_value=False)[::-1].hex()
+            support = next(filter(lambda s: s['txid'] == txid and s['n'] == position, lbrycrd_supports))
+            total_lbrycrd_amount += support['amount']
+            self.assertEqual(support['height'], bisect_right(db.tx_counts, tx_num))
+            self.assertEqual(support['validatheight'], valid_height)
+
+        self.assertEqual(total_es_amount, es_support_amount)
+        self.assertEqual(active_es_amount, total_lbrycrd_amount)
 
     async def assertMatchClaimsForName(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name, "", "true"))
@@ -153,7 +165,7 @@ class BaseResolveTestCase(CommandTestCase):
             self.assertEqual(claim_from_es[0][0]['claim_hash'][::-1].hex(), claim_id)
             self.assertMatchESClaim(claim_from_es[0][0], claim)
             self._check_supports(claim_id, c.get('supports', []),
-                                 claim_from_es[0][0]['support_amount'], c['effectiveamount'] > 0)
+                                 claim_from_es[0][0]['support_amount'])
 
 
 class ResolveCommand(BaseResolveTestCase):
@@ -447,16 +459,16 @@ class ResolveCommand(BaseResolveTestCase):
         self.assertEqual(one, claim6['name'])
 
     async def test_resolve_old_claim(self):
-        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0')
+        channel = await self.daemon.jsonrpc_channel_create('@olds', '1.0', blocking=True)
         await self.confirm_tx(channel.id)
         address = channel.outputs[0].get_address(self.account.ledger)
         claim = generate_signed_legacy(address, channel.outputs[0])
         tx = await Transaction.claim_create('example', claim.SerializeToString(), 1, address, [self.account], self.account)
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         response = await self.resolve('@olds/example')
+        self.assertTrue('is_channel_signature_valid' in response, str(response))
         self.assertTrue(response['is_channel_signature_valid'])
 
         claim.publisherSignature.signature = bytes(reversed(claim.publisherSignature.signature))
@@ -464,8 +476,7 @@ class ResolveCommand(BaseResolveTestCase):
             'bad_example', claim.SerializeToString(), 1, address, [self.account], self.account
         )
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         response = await self.resolve('bad_example')
         self.assertFalse(response['is_channel_signature_valid'])
