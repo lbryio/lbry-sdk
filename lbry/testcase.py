@@ -265,6 +265,13 @@ class IntegrationTestCase(AsyncioTestCase):
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)
 
+    async def broadcast_and_confirm(self, tx, ledger=None):
+        ledger = ledger or self.ledger
+        notifications = asyncio.create_task(ledger.wait(tx))
+        await ledger.broadcast(tx)
+        await notifications
+        await self.generate_and_wait(1, [tx.id], ledger)
+
     async def on_header(self, height):
         if self.ledger.headers.height < height:
             await self.ledger.on_header.where(
@@ -277,7 +284,7 @@ class IntegrationTestCase(AsyncioTestCase):
         txid = None
         done = False
         watcher = (ledger or self.ledger).on_transaction.where(
-            lambda e: e.tx.id == txid or tx_watch.append(e.tx.id) or done
+            lambda e: e.tx.id == txid or done or tx_watch.append(e.tx.id)
         )
 
         txid = await self.blockchain.send_to_address(address, amount)
@@ -290,7 +297,7 @@ class IntegrationTestCase(AsyncioTestCase):
     async def generate_and_wait(self, blocks_to_generate, txids, ledger=None):
         if blocks_to_generate > 0:
             watcher = (ledger or self.ledger).on_transaction.where(
-                lambda e: (e.tx.id in txids and txids.remove(e.tx.id)) or len(txids) <= 0  # relies on remove returning None
+                lambda e: ((e.tx.id in txids and txids.remove(e.tx.id)), len(txids) <= 0)[-1]  # multi-statement lambda
             )
             await self.blockchain.generate(blocks_to_generate)
             await watcher

@@ -80,7 +80,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # After some soul searching Chris decides that his story needs more
         # heart and a better ending. He takes down the story and begins the rewrite.
-        abandon = await self.out(self.daemon.jsonrpc_stream_abandon(claim_id, blocking=False))
+        abandon = await self.out(self.daemon.jsonrpc_stream_abandon(claim_id, blocking=True))
         self.assertEqual(abandon['inputs'][0]['claim_id'], claim_id)
         await self.confirm_tx(abandon['txid'])
 
@@ -103,7 +103,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # 1 LBC to which Chris readily obliges
         ramsey_account_id = (await self.out(self.daemon.jsonrpc_account_create("Ramsey")))['id']
         ramsey_address = await self.daemon.jsonrpc_address_unused(ramsey_account_id)
-        result = await self.out(self.daemon.jsonrpc_account_send('1.0', ramsey_address))
+        result = await self.out(self.daemon.jsonrpc_account_send('1.0', ramsey_address, blocking=True))
         self.assertIn("txid", result)
         await self.confirm_tx(result['txid'])
 
@@ -133,7 +133,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # And voila, and bravo and encore! His Best Friend Ramsey read the story and immediately knew this was a hit
         # Now to keep this claim winning on the lbry blockchain he immediately supports the claim
         tx = await self.out(self.daemon.jsonrpc_support_create(
-            claim_id2, '0.2', account_id=ramsey_account_id
+            claim_id2, '0.2', account_id=ramsey_account_id, blocking=True
         ))
         await self.confirm_tx(tx['txid'])
 
@@ -147,7 +147,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         # Now he also wanted to support the original creator of the Award Winning Novel
         # So he quickly decides to send a tip to him
         tx = await self.out(
-            self.daemon.jsonrpc_support_create(claim_id2, '0.3', tip=True, account_id=ramsey_account_id)
+            self.daemon.jsonrpc_support_create(claim_id2, '0.3', tip=True, account_id=ramsey_account_id, blocking=True)
         )
         await self.confirm_tx(tx['txid'])
 
@@ -158,7 +158,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
         await self.generate(5)
 
         # Seeing the ravishing success of his novel Chris adds support to his claim too
-        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id2, '0.4'))
+        tx = await self.out(self.daemon.jsonrpc_support_create(claim_id2, '0.4', blocking=True))
         await self.confirm_tx(tx['txid'])
 
         # And check if his support showed up
@@ -183,7 +183,7 @@ class EpicAdventuresOfChris45(CommandTestCase):
 
         # But sadly Ramsey wasn't so pleased. It was hard for him to tell Chris...
         # Chris, though a bit heartbroken, abandoned the claim for now, but instantly started working on new hit lyrics
-        abandon = await self.out(self.daemon.jsonrpc_stream_abandon(txid=tx['txid'], nout=0, blocking=False))
+        abandon = await self.out(self.daemon.jsonrpc_stream_abandon(txid=tx['txid'], nout=0, blocking=True))
         self.assertTrue(abandon['inputs'][0]['txid'], tx['txid'])
         await self.confirm_tx(abandon['txid'])
 

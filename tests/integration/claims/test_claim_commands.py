@@ -494,8 +494,7 @@ class ClaimSearchCommand(ClaimTestCase):
         tx = await Transaction.claim_create(
             'unknown', b'{"sources":{"lbry_sd_hash":""}}', 1, address, [self.account], self.account)
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         octet = await self.stream_create()
         video = await self.stream_create('chrome', file_path=self.video_file_name)
@@ -1226,7 +1225,7 @@ class ChannelCommands(CommandTestCase):
         data_to_sign = "CAFEBABE"
         # claim new name
         await self.channel_create('@someotherchan')
-        channel_tx = await self.daemon.jsonrpc_channel_create('@signer', '0.1')
+        channel_tx = await self.daemon.jsonrpc_channel_create('@signer', '0.1', blocking=True)
         await self.confirm_tx(channel_tx.id)
         channel = channel_tx.outputs[0]
         signature1 = await self.out(self.daemon.jsonrpc_channel_sign(channel_name='@signer', hexdata=data_to_sign))
@@ -1373,7 +1372,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual('8.989893', (await self.daemon.jsonrpc_account_balance())['available'])
 
         result = await self.out(self.daemon.jsonrpc_account_send(
-            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id), blocking=True
         ))
         await self.confirm_tx(result['txid'])
 
@@ -2172,7 +2171,7 @@ class SupportCommands(CommandTestCase):
         tip = await self.out(
             self.daemon.jsonrpc_support_create(
                 claim_id, '1.0', True, account_id=account2.id, wallet_id='wallet2',
-                funding_account_ids=[account2.id])
+                funding_account_ids=[account2.id], blocking=True)
         )
         await self.confirm_tx(tip['txid'])
 
@@ -2204,7 +2203,7 @@ class SupportCommands(CommandTestCase):
         support = await self.out(
             self.daemon.jsonrpc_support_create(
                 claim_id, '2.0', False, account_id=account2.id, wallet_id='wallet2',
-                funding_account_ids=[account2.id])
+                funding_account_ids=[account2.id], blocking=True)
         )
         await self.confirm_tx(support['txid'])
 

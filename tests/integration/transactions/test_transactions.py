@@ -1,6 +1,7 @@
 import asyncio
 import random
 
+import lbry.wallet.rpc.jsonrpc
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.testcase import IntegrationTestCase
 from lbry.wallet.util import satoshis_to_coins, coins_to_satoshis
@@ -199,7 +200,7 @@ class BasicTransactionTests(IntegrationTestCase):
         other_account = self.wallet.generate_account(self.ledger)
         other_address = await other_account.receiving.get_or_create_usable_address()
         self.ledger.coin_selection_strategy = 'sqlite'
-        await self.ledger.subscribe_account(self.account)
+        await self.ledger.subscribe_account(other_account)
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
         _ = await self.send_to_address_and_wait(address, 1.0)
@@ -259,6 +260,8 @@ class BasicTransactionTests(IntegrationTestCase):
         async def broadcast(tx):
             try:
                 return await real_broadcast(tx)
+            except lbry.wallet.rpc.jsonrpc.RPCError:
+                pass
             finally:
                 e.set()
 

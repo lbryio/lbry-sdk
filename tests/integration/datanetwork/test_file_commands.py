@@ -37,8 +37,7 @@ class FileCommands(CommandTestCase):
                 tx_to_update.outputs[0], claim, 1, address, [self.account], self.account
             )
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
         self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
         self.client_session._session.add_dht_node(('localhost', 4040))
         self.client_session.wait_start = False  # fixme: this is super slow on tests
@@ -512,8 +511,7 @@ class FileCommands(CommandTestCase):
         tx.outputs[0].claim.stream.fee.address_bytes = b''
         tx.outputs[0].script.generate()
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
     async def __raw_value_update_no_fee_amount(self, tx, claim_address):
         tx = await self.daemon.jsonrpc_stream_update(
@@ -523,8 +521,7 @@ class FileCommands(CommandTestCase):
         tx.outputs[0].claim.stream.fee.message.ClearField('amount')
         tx.outputs[0].script.generate()
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
 
 class DiskSpaceManagement(CommandTestCase):

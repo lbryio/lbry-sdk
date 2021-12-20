@@ -365,6 +365,10 @@ class Ledger(metaclass=LedgerRegistry):
         await self.db.close()
         await self.headers.close()
 
+    async def tasks_are_done(self):
+        await self._update_tasks.done.wait()
+        await self._other_tasks.done.wait()
+
     @property
     def local_height_including_downloaded_height(self):
         return max(self.headers.height, self._download_height)
