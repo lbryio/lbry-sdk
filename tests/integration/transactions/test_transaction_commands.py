@@ -50,10 +50,10 @@ class TestSegwit(CommandTestCase):
         bech32_address3 = await self.blockchain.get_new_address(self.blockchain.BECH32_ADDRESS)
 
         # fund specific addresses for later use
-        p2sh_txid1 = await self.send_to_address_and_wait(p2sh_address1, '1.0')
-        p2sh_txid2 = await self.send_to_address_and_wait(p2sh_address2, '1.0')
-        bech32_txid1 = await self.send_to_address_and_wait(bech32_address1, '1.0')
-        bech32_txid2 = await self.send_to_address_and_wait(bech32_address2, '1.0')
+        p2sh_txid1 = await self.blockchain.send_to_address(p2sh_address1, '1.0')
+        p2sh_txid2 = await self.blockchain.send_to_address(p2sh_address2, '1.0')
+        bech32_txid1 = await self.blockchain.send_to_address(bech32_address1, '1.0')
+        bech32_txid2 = await self.blockchain.send_to_address(bech32_address2, '1.0')
         await self.generate(1)
 
         # P2SH & BECH32 can pay to P2SH address
