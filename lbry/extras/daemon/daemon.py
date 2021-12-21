@@ -2440,7 +2440,7 @@ class Daemon(metaclass=JSONRPCServerType):
                          [--not_locations=<not_locations>...]
                          [--order_by=<order_by>...] [--no_totals] [--page=<page>] [--page_size=<page_size>]
                          [--wallet_id=<wallet_id>] [--include_purchase_receipt] [--include_is_my_output]
-                         [--remove_duplicates] [--has_source | --has_no_source] [--sd_hash]
+                         [--remove_duplicates] [--has_source | --has_no_source] [--sd_hash=<sd_hash>]
                          [--new_sdk_server=<new_sdk_server>]
 
         Options:
@@ -2538,7 +2538,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --remove_duplicates             : (bool) removes duplicated content from search by picking either the
                                                      original claim or the oldest matching repost
             --has_source                    : (bool) find claims containing a source field
-            --sd_hash                       : (str)  find claims where the source stream descriptor hash matches
+            --sd_hash=<sd_hash>             : (str)  find claims where the source stream descriptor hash matches
                                                      (partially or completely) the given hexadecimal string
             --has_no_source                 : (bool) find claims not containing a source field
            --new_sdk_server=<new_sdk_server> : (str) URL of the new SDK server (EXPERIMENTAL)
