@@ -24,6 +24,10 @@ class Node:
         "storing_peers", "Number of peers storing blobs announced to this node", namespace="dht_node",
         labelnames=("scope",),
     )
+    stored_blob_with_x_bytes_colliding = Gauge(
+        "stored_blobs_x_bytes_colliding", "Number of blobs with at least X bytes colliding with this node id prefix",
+        namespace="dht_node", labelnames=("amount",)
+    )
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
                  split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX,
@@ -54,6 +58,15 @@ class Node:
             storing_peers = self.protocol.data_store.get_storing_contacts()
             self.storing_peers_metric.labels("global").set(len(storing_peers))
             total_peers.extend(storing_peers)
+
+            counts = {0: 0, 1: 0, 2: 0}
+            node_id = self.protocol.node_id
+            for blob_hash in self.protocol.data_store.keys():
+                bytes_colliding = 0 if blob_hash[0] != node_id[0] else 2 if blob_hash[1] == node_id[1] else 1
+                counts[bytes_colliding] += 1
+            self.stored_blob_with_x_bytes_colliding.labels(amount=0).set(counts[0])
+            self.stored_blob_with_x_bytes_colliding.labels(amount=1).set(counts[1])
+            self.stored_blob_with_x_bytes_colliding.labels(amount=2).set(counts[2])
 
             # get ids falling in the midpoint of each bucket that hasn't been recently updated
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
