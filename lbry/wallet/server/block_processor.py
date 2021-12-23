@@ -507,7 +507,7 @@ class BlockProcessor:
                     channel_pub_key_bytes = channel_meta.channel.public_key_bytes
                 if channel_pub_key_bytes:
                     channel_signature_is_valid = Output.is_signature_valid(
-                        txo.get_encoded_signature(), txo.get_signature_digest(self.ledger), channel_pub_key_bytes
+                        txo.signable.signature, txo.get_signature_digest(self.ledger), channel_pub_key_bytes
                     )
                     if channel_signature_is_valid:
                         self.pending_channel_counts[signing_channel_hash] += 1

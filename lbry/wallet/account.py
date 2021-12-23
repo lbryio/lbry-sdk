@@ -9,11 +9,10 @@ from hashlib import sha256
 from string import hexdigits
 from typing import Type, Dict, Tuple, Optional, Any, List
 
-import ecdsa
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 
-from .bip32 import PrivateKey, PubKey, from_extended_key_string
+from .bip32 import PrivateKey, PublicKey, KeyPath, from_extended_key_string
 from .mnemonic import Mnemonic
 from .constants import COIN, TXO_TYPES
 from .transaction import Transaction, Input, Output
@@ -32,6 +31,44 @@ def validate_claim_id(claim_id):
         claim_id = claim_id.decode('utf-8')
     if set(claim_id).difference(hexdigits):
         raise Exception("Claim id is not hex encoded")
+
+
+class DeterministicChannelKeyManager:
+
+    def __init__(self, account: 'Account'):
+        self.account = account
+        self.last_known = 0
+        self.cache = {}
+        self.private_key: Optional[PrivateKey] = None
+        if account.private_key is not None:
+            self.private_key = account.private_key.child(KeyPath.CHANNEL)
+
+    def maybe_generate_deterministic_key_for_channel(self, txo):
+        if self.private_key is None:
+            return
+        next_private_key = self.private_key.child(self.last_known)
+        public_key = next_private_key.public_key
+        public_key_bytes = public_key.pubkey_bytes
+        if txo.claim.channel.public_key_bytes == public_key_bytes:
+            self.cache[public_key.address] = next_private_key
+            self.last_known += 1
+
+    async def ensure_cache_primed(self):
+        if self.private_key is not None:
+            await self.generate_next_key()
+
+    async def generate_next_key(self) -> PrivateKey:
+        db = self.account.ledger.db
+        while True:
+            next_private_key = self.private_key.child(self.last_known)
+            public_key = next_private_key.public_key
+            self.cache[public_key.address] = next_private_key
+            if not await db.is_channel_key_used(self.account, public_key):
+                return next_private_key
+            self.last_known += 1
+
+    def get_private_key_from_pubkey_hash(self, pubkey_hash) -> PrivateKey:
+        return self.cache.get(pubkey_hash)
 
 
 class AddressManager:
@@ -79,7 +116,7 @@ class AddressManager:
     def get_private_key(self, index: int) -> PrivateKey:
         raise NotImplementedError
 
-    def get_public_key(self, index: int) -> PubKey:
+    def get_public_key(self, index: int) -> PublicKey:
         raise NotImplementedError
 
     async def get_max_gap(self):
@@ -119,8 +156,8 @@ class HierarchicalDeterministic(AddressManager):
     @classmethod
     def from_dict(cls, account: 'Account', d: dict) -> Tuple[AddressManager, AddressManager]:
         return (
-            cls(account, 0, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 1})),
-            cls(account, 1, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 1}))
+            cls(account, KeyPath.RECEIVE, **d.get('receiving', {'gap': 20, 'maximum_uses_per_address': 1})),
+            cls(account, KeyPath.CHANGE, **d.get('change', {'gap': 6, 'maximum_uses_per_address': 1}))
         )
 
     def merge(self, d: dict):
@@ -133,7 +170,7 @@ class HierarchicalDeterministic(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key.child(self.chain_number).child(index)
 
-    def get_public_key(self, index: int) -> PubKey:
+    def get_public_key(self, index: int) -> PublicKey:
         return self.account.public_key.child(self.chain_number).child(index)
 
     async def get_max_gap(self) -> int:
@@ -193,7 +230,7 @@ class SingleKey(AddressManager):
     @classmethod
     def from_dict(cls, account: 'Account', d: dict) \
             -> Tuple[AddressManager, AddressManager]:
-        same_address_manager = cls(account, account.public_key, 0)
+        same_address_manager = cls(account, account.public_key, KeyPath.RECEIVE)
         return same_address_manager, same_address_manager
 
     def to_dict_instance(self):
@@ -202,7 +239,7 @@ class SingleKey(AddressManager):
     def get_private_key(self, index: int) -> PrivateKey:
         return self.account.private_key
 
-    def get_public_key(self, index: int) -> PubKey:
+    def get_public_key(self, index: int) -> PublicKey:
         return self.account.public_key
 
     async def get_max_gap(self) -> int:
@@ -224,9 +261,6 @@ class SingleKey(AddressManager):
 
 class Account:
 
-    mnemonic_class = Mnemonic
-    private_key_class = PrivateKey
-    public_key_class = PubKey
     address_generators: Dict[str, Type[AddressManager]] = {
         SingleKey.name: SingleKey,
         HierarchicalDeterministic.name: HierarchicalDeterministic,
@@ -234,7 +268,7 @@ class Account:
 
     def __init__(self, ledger: 'Ledger', wallet: 'Wallet', name: str,
                  seed: str, private_key_string: str, encrypted: bool,
-                 private_key: Optional[PrivateKey], public_key: PubKey,
+                 private_key: Optional[PrivateKey], public_key: PublicKey,
                  address_generator: dict, modified_on: float, channel_keys: dict) -> None:
         self.ledger = ledger
         self.wallet = wallet
@@ -245,13 +279,14 @@ class Account:
         self.private_key_string = private_key_string
         self.init_vectors: Dict[str, bytes] = {}
         self.encrypted = encrypted
-        self.private_key = private_key
-        self.public_key = public_key
+        self.private_key: Optional[PrivateKey] = private_key
+        self.public_key: PublicKey = public_key
         generator_name = address_generator.get('name', HierarchicalDeterministic.name)
         self.address_generator = self.address_generators[generator_name]
         self.receiving, self.change = self.address_generator.from_dict(self, address_generator)
         self.address_managers = {am.chain_number: am for am in (self.receiving, self.change)}
         self.channel_keys = channel_keys
+        self.deterministic_channel_keys = DeterministicChannelKeyManager(self)
         ledger.add_account(self)
         wallet.add_account(self)
 
@@ -266,19 +301,19 @@ class Account:
                  name: str = None, address_generator: dict = None):
         return cls.from_dict(ledger, wallet, {
             'name': name,
-            'seed': cls.mnemonic_class().make_seed(),
+            'seed': Mnemonic().make_seed(),
             'address_generator': address_generator or {}
         })
 
     @classmethod
     def get_private_key_from_seed(cls, ledger: 'Ledger', seed: str, password: str):
-        return cls.private_key_class.from_seed(
-            ledger, cls.mnemonic_class.mnemonic_to_seed(seed, password or 'lbryum')
+        return PrivateKey.from_seed(
+            ledger, Mnemonic.mnemonic_to_seed(seed, password or 'lbryum')
         )
 
     @classmethod
     def keys_from_dict(cls, ledger: 'Ledger', d: dict) \
-            -> Tuple[str, Optional[PrivateKey], PubKey]:
+            -> Tuple[str, Optional[PrivateKey], PublicKey]:
         seed = d.get('seed', '')
         private_key_string = d.get('private_key', '')
         private_key = None
@@ -449,7 +484,7 @@ class Account:
         assert not self.encrypted, "Cannot get private key on encrypted wallet account."
         return self.address_managers[chain].get_private_key(index)
 
-    def get_public_key(self, chain: int, index: int) -> PubKey:
+    def get_public_key(self, chain: int, index: int) -> PublicKey:
         return self.address_managers[chain].get_public_key(index)
 
     def get_balance(self, confirmations=0, include_claims=False, read_only=False, **constraints):
@@ -520,33 +555,30 @@ class Account:
 
         return tx
 
-    def add_channel_private_key(self, private_key):
-        public_key_bytes = private_key.get_verifying_key().to_der()
-        channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
-        self.channel_keys[channel_pubkey_hash] = private_key.to_pem().decode()
+    async def generate_channel_private_key(self):
+        return await self.deterministic_channel_keys.generate_next_key()
 
-    async def get_channel_private_key(self, public_key_bytes):
+    def add_channel_private_key(self, private_key: PrivateKey):
+        self.channel_keys[private_key.address] = private_key.to_pem().decode()
+
+    async def get_channel_private_key(self, public_key_bytes) -> PrivateKey:
         channel_pubkey_hash = self.ledger.public_key_to_address(public_key_bytes)
         private_key_pem = self.channel_keys.get(channel_pubkey_hash)
         if private_key_pem:
-            return await asyncio.get_event_loop().run_in_executor(
-                None, ecdsa.SigningKey.from_pem, private_key_pem, sha256
-            )
+            return PrivateKey.from_pem(self.ledger, private_key_pem)
+        return self.deterministic_channel_keys.get_private_key_from_pubkey_hash(channel_pubkey_hash)
 
     async def maybe_migrate_certificates(self):
-        def to_der(private_key_pem):
-            return ecdsa.SigningKey.from_pem(private_key_pem, hashfunc=sha256).get_verifying_key().to_der()
-
         if not self.channel_keys:
             return
         channel_keys = {}
         for private_key_pem in self.channel_keys.values():
             if not isinstance(private_key_pem, str):
                 continue
-            if "-----BEGIN EC PRIVATE KEY-----" not in private_key_pem:
+            if not private_key_pem.startswith("-----BEGIN"):
                 continue
-            public_key_der = await asyncio.get_event_loop().run_in_executor(None, to_der, private_key_pem)
-            channel_keys[self.ledger.public_key_to_address(public_key_der)] = private_key_pem
+            private_key = PrivateKey.from_pem(self.ledger, private_key_pem)
+            channel_keys[private_key.address] = private_key_pem
         if self.channel_keys != channel_keys:
             self.channel_keys = channel_keys
             self.wallet.save()

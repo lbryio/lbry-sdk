@@ -9,10 +9,11 @@ from dataclasses import dataclass
 from contextvars import ContextVar
 from typing import Tuple, List, Union, Callable, Any, Awaitable, Iterable, Dict, Optional
 from datetime import date
+
 from prometheus_client import Gauge, Counter, Histogram
 from lbry.utils import LockWithMetrics
 
-from .bip32 import PubKey
+from .bip32 import PublicKey
 from .transaction import Transaction, Output, OutputScript, TXRefImmutable, Input
 from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day
@@ -975,7 +976,9 @@ class Database(SQLiteMixin):
             sql.append("LEFT JOIN txi ON (txi.position=0 AND txi.txid=txo.txid)")
         return await self.db.execute_fetchall(*query(' '.join(sql), **constraints), read_only=read_only)
 
-    async def get_txos(self, wallet=None, no_tx=False, no_channel_info=False, read_only=False, **constraints):
+    async def get_txos(
+        self, wallet=None, no_tx=False, no_channel_info=False, read_only=False, **constraints
+    ) -> List[Output]:
         include_is_spent = constraints.get('include_is_spent', False)
         include_is_my_input = constraints.get('include_is_my_input', False)
         include_is_my_output = constraints.pop('include_is_my_output', False)
@@ -1201,7 +1204,7 @@ class Database(SQLiteMixin):
         addresses = await self.select_addresses(', '.join(cols), read_only=read_only, **constraints)
         if 'pubkey' in cols:
             for address in addresses:
-                address['pubkey'] = PubKey(
+                address['pubkey'] = PublicKey(
                     self.ledger, address.pop('pubkey'), address.pop('chain_code'),
                     address.pop('n'), address.pop('depth')
                 )
@@ -1240,6 +1243,18 @@ class Database(SQLiteMixin):
 
     async def set_address_history(self, address, history):
         await self._set_address_history(address, history)
+
+    async def is_channel_key_used(self, account, key: PublicKey):
+        channels = await self.get_txos(
+            accounts=[account], txo_type=TXO_TYPES['channel'],
+            no_tx=True, no_channel_info=True
+        )
+        other_key_bytes = key.pubkey_bytes
+        for channel in channels:
+            claim = channel.can_decode_claim
+            if claim and claim.channel.public_key_bytes == other_key_bytes:
+                return True
+        return False
 
     @staticmethod
     def constrain_purchases(constraints):

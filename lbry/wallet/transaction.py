@@ -1,14 +1,11 @@
 import struct
-import hashlib
 import logging
 import typing
-import asyncio
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
 
-import ecdsa
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import load_der_public_key
+from coincurve import PublicKey as cPublicKey
+from coincurve.ecdsa import deserialize_compact, cdata_to_der
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
@@ -28,6 +25,7 @@ from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
+from .bip32 import PrivateKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account
@@ -222,7 +220,8 @@ class Output(InputOutput):
                  is_my_output: Optional[bool] = None, is_my_input: Optional[bool] = None,
                  sent_supports: Optional[int] = None, sent_tips: Optional[int] = None,
                  received_tips: Optional[int] = None,
-                 channel: Optional['Output'] = None, private_key: Optional[str] = None
+                 channel: Optional['Output'] = None,
+                 private_key: Optional[PrivateKey] = None
                  ) -> None:
         super().__init__(tx_ref, position)
         self.amount = amount
@@ -235,7 +234,7 @@ class Output(InputOutput):
         self.sent_tips = sent_tips
         self.received_tips = received_tips
         self.channel = channel
-        self.private_key = private_key
+        self.private_key: PrivateKey = private_key
         self.purchase: 'Output' = None  # txo containing purchase metadata
         self.purchased_claim: 'Output' = None  # resolved claim pointed to by purchase
         self.purchase_receipt: 'Output' = None  # txo representing purchase receipt for this claim
@@ -425,25 +424,24 @@ class Output(InputOutput):
             ]
         return sha256(b''.join(pieces))
 
-    def get_encoded_signature(self):
-        signature = hexlify(self.signable.signature)
-        r = int(signature[:int(len(signature)/2)], 16)
-        s = int(signature[int(len(signature)/2):], 16)
-        return ecdsa.util.sigencode_der(r, s, len(signature)*4)
-
     @staticmethod
-    def is_signature_valid(encoded_signature, signature_digest, public_key_bytes):
-        try:
-            public_key = load_der_public_key(public_key_bytes, default_backend())
-            public_key.verify(encoded_signature, signature_digest, ec.ECDSA(Prehashed(hashes.SHA256())))
-            return True
-        except (ValueError, InvalidSignature):
-            pass
-        return False
+    def is_signature_valid(signature, digest, public_key_bytes):
+        signature = cdata_to_der(deserialize_compact(signature))
+        public_key = cPublicKey(public_key_bytes)
+        is_valid = public_key.verify(signature, digest, None)
+        if not is_valid: # try old way
+            # ytsync signed claims don't seem to validate with coincurve
+            try:
+                pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes)
+                pk.verify(signature, digest, ec.ECDSA(Prehashed(hashes.SHA256())))
+                return True
+            except (ValueError, InvalidSignature):
+                pass
+        return is_valid
 
     def is_signed_by(self, channel: 'Output', ledger=None):
         return self.is_signature_valid(
-            self.get_encoded_signature(),
+            self.signable.signature,
             self.get_signature_digest(ledger),
             channel.claim.channel.public_key_bytes
         )
@@ -456,29 +454,27 @@ class Output(InputOutput):
             self.signable.signing_channel_hash,
             self.signable.to_message_bytes()
         ]))
-        self.signable.signature = channel.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        self.signable.signature = channel.private_key.sign_compact(digest)
         self.script.generate()
 
-    def sign_data(self, data:bytes, timestamp:str) -> str:
+    def sign_data(self, data: bytes, timestamp: str) -> str:
         pieces = [timestamp.encode(), self.claim_hash, data]
         digest = sha256(b''.join(pieces))
-        signature = self.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
+        signature = self.private_key.sign_compact(digest)
         return hexlify(signature).decode()
 
     def clear_signature(self):
         self.channel = None
         self.signable.clear_signature()
 
-    async def generate_channel_private_key(self):
-        self.private_key = await asyncio.get_event_loop().run_in_executor(
-            None, ecdsa.SigningKey.generate, ecdsa.SECP256k1, None, hashlib.sha256
-        )
-        self.claim.channel.public_key_bytes = self.private_key.get_verifying_key().to_der()
+    def set_channel_private_key(self, private_key: PrivateKey):
+        self.private_key = private_key
+        self.claim.channel.public_key_bytes = private_key.public_key.pubkey_bytes
         self.script.generate()
         return self.private_key
 
-    def is_channel_private_key(self, private_key):
-        return self.claim.channel.public_key_bytes == private_key.get_verifying_key().to_der()
+    def is_channel_private_key(self, private_key: PrivateKey):
+        return self.claim.channel.public_key_bytes == private_key.public_key.pubkey_bytes
 
     @classmethod
     def pay_claim_name_pubkey_hash(
