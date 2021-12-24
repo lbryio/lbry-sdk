@@ -52,15 +52,16 @@ class SimpleMetrics:
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
-        prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
-        prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
+        if self.dht_node:
+            prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
+            prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
         await prom_site.start()
 
 
-async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional[str], prometheus_port: int):
+async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional[str], prometheus_port: int, export: bool):
     loop = asyncio.get_event_loop()
     conf = Config()
     if not db_file_path.startswith(':memory:'):
@@ -85,7 +86,7 @@ async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional
         storage=storage
     )
     if prometheus_port > 0:
-        metrics = SimpleMetrics(prometheus_port, node)
+        metrics = SimpleMetrics(prometheus_port, node if export else None)
         await metrics.start()
     node.start(host, nodes)
     log.info("Peer with id %s started", node_id.hex())
@@ -105,6 +106,7 @@ if __name__ == '__main__':
     parser.add_argument("--bootstrap_node", default=None, type=str,
                         help="Node to connect for bootstraping this node. Leave unset to use the default ones. "
                              "Format: host:port Example: lbrynet1.lbry.com:4444")
-    parser.add_argument("--metrics_port", default=0, type=int, help="Port for Prometheus and raw CSV metrics. 0 to disable. Default: 0")
+    parser.add_argument("--metrics_port", default=0, type=int, help="Port for Prometheus metrics. 0 to disable. Default: 0")
+    parser.add_argument("--enable_csv_export", action='store_true', help="Enable CSV endpoints on metrics server.")
     args = parser.parse_args()
-    asyncio.run(main(args.host, args.port, args.db_file, args.bootstrap_node, args.metrics_port))
+    asyncio.run(main(args.host, args.port, args.db_file, args.bootstrap_node, args.metrics_port, args.enable_csv_export))
