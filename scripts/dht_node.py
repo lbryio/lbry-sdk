@@ -22,7 +22,6 @@ class SimpleMetrics:
     def __init__(self, port, node):
         self.prometheus_port = port
         self.dht_node: Node = node
-        self.active_estimation_semaphore = asyncio.Semaphore(1)
 
     async def handle_metrics_get_request(self, _):
         try:
@@ -50,36 +49,11 @@ class SimpleMetrics:
             writer.writerow({"blob_hash": blob.hex()})
         return web.Response(text=out.getvalue(), content_type='text/csv')
 
-    async def active_estimation(self, _):
-        # - "crawls" the network for peers close to our node id (not a full aggressive crawler yet)
-        # given everything is random, the odds of a peer having the same X prefix bits matching ours is roughly 1/(2^X)
-        # we use that to estimate the network size, see issue #3463 for related papers and details
-        amount = 20_000
-        async with self.active_estimation_semaphore:  # this is resource intensive, limit concurrency to 1
-            peers = await self.dht_node.peer_search(self.dht_node.protocol.node_id, count=amount, max_results=amount)
-        close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
-        return web.json_response(
-            {"total_peers_found_during_estimation": len(peers),
-             "peers_with_the_same_byte_prefix": len(close_ids),
-             'estimated_network_size': len(close_ids) * 256})
-
-    async def passive_estimation(self, _):
-        # same method as above but instead we use the routing table and assume our implementation was able to add
-        # all the reachable close peers, which should be usable for seed nodes since they are super popular
-        peers = self.dht_node.protocol.routing_table.get_peers()
-        close_ids = [peer for peer in peers if peer.node_id[0] == self.dht_node.protocol.node_id[0]]
-        return web.json_response(
-            {"total_peers_found_during_estimation": len(peers),
-             "peers_with_the_same_byte_prefix": len(close_ids),
-             'estimated_network_size': len(close_ids) * 256})
-
     async def start(self):
         prom_app = web.Application()
         prom_app.router.add_get('/metrics', self.handle_metrics_get_request)
         prom_app.router.add_get('/peers.csv', self.handle_peers_csv)
         prom_app.router.add_get('/blobs.csv', self.handle_blobs_csv)
-        prom_app.router.add_get('/active_estimation', self.active_estimation)
-        prom_app.router.add_get('/passive_estimation', self.passive_estimation)
         metrics_runner = web.AppRunner(prom_app)
         await metrics_runner.setup()
         prom_site = web.TCPSite(metrics_runner, "0.0.0.0", self.prometheus_port)
