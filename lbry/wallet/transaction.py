@@ -4,13 +4,6 @@ import typing
 from binascii import hexlify, unhexlify
 from typing import List, Iterable, Optional, Tuple
 
-from coincurve import PublicKey as cPublicKey
-from coincurve.ecdsa import deserialize_compact, cdata_to_der
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-from cryptography.exceptions import InvalidSignature
-
 from lbry.error import InsufficientFundsError
 from lbry.crypto.hash import hash160, sha256
 from lbry.crypto.base58 import Base58
@@ -25,7 +18,7 @@ from .constants import COIN, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
-from .bip32 import PrivateKey
+from .bip32 import PrivateKey, PublicKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account
@@ -426,18 +419,9 @@ class Output(InputOutput):
 
     @staticmethod
     def is_signature_valid(signature, digest, public_key_bytes):
-        signature = cdata_to_der(deserialize_compact(signature))
-        public_key = cPublicKey(public_key_bytes)
-        is_valid = public_key.verify(signature, digest, None)
-        if not is_valid: # try old way
-            # ytsync signed claims don't seem to validate with coincurve
-            try:
-                pk = ec.EllipticCurvePublicKey.from_encoded_point(ec.SECP256K1(), public_key_bytes)
-                pk.verify(signature, digest, ec.ECDSA(Prehashed(hashes.SHA256())))
-                return True
-            except (ValueError, InvalidSignature):
-                pass
-        return is_valid
+        return PublicKey\
+            .from_compressed(public_key_bytes)\
+            .verify(signature, digest)
 
     def is_signed_by(self, channel: 'Output', ledger=None):
         return self.is_signature_valid(
