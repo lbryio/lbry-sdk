@@ -1505,6 +1505,11 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(resolved['@reposting-goodies/repost-on-channel'], search)
         self.assertEqual(resolved['newstuff-again']['reposted_claim']['name'], 'newstuff')
 
+        await self.stream_update(repost_id, bid='0.42')
+        searched_repost = (await self.claim_search(claim_id=repost_id))[0]
+        self.assertEqual(searched_repost['amount'], '0.42')
+        self.assertEqual(searched_repost['signing_channel']['claim_id'], spam_claim_id)
+
     async def test_filtering_channels_for_removing_content(self):
         await self.channel_create('@some_channel', '0.1')
         await self.stream_create('good_content', '0.1', channel_name='@some_channel', tags=['good'])
