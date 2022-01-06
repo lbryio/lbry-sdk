@@ -20,8 +20,7 @@ import lbry
 from lbry.error import ResolveCensoredError, TooManyClaimSearchParametersError
 from lbry.build_info import BUILD, COMMIT_HASH, DOCKER_TAG
 from lbry.schema.result import Outputs
-from lbry.wallet.server.block_processor import BlockProcessor
-from lbry.wallet.server.leveldb import LevelDB
+from lbry.wallet.server.db.db import HubDB
 from lbry.wallet.server.websocket import AdminWebSocket
 from lbry.wallet.rpc.framing import NewlineFramer
 
@@ -34,9 +33,12 @@ from lbry.wallet.rpc import (
 from lbry.wallet.server import util
 from lbry.wallet.server.hash import sha256, hash_to_hex_str, hex_str_to_hash, HASHX_LEN, Base58Error
 from lbry.wallet.server.daemon import DaemonError
+from lbry.wallet.server.db.elasticsearch import SearchIndex
+
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.env import Env
     from lbry.wallet.server.daemon import Daemon
+    from lbry.wallet.server.mempool import MemPool
 
 BAD_REQUEST = 1
 DAEMON_ERROR = 2
@@ -170,7 +172,7 @@ class SessionManager:
         namespace=NAMESPACE, buckets=HISTOGRAM_BUCKETS
     )
 
-    def __init__(self, env: 'Env', db: LevelDB, mempool, history_cache, resolve_cache, resolve_outputs_cache,
+    def __init__(self, env: 'Env', db: HubDB, mempool: 'MemPool', history_cache, resolve_cache, resolve_outputs_cache,
                  daemon: 'Daemon', shutdown_event: asyncio.Event,
                  on_available_callback: typing.Callable[[], None], on_unavailable_callback: typing.Callable[[], None]):
         env.max_send = max(350000, env.max_send)
@@ -183,7 +185,7 @@ class SessionManager:
         self.shutdown_event = shutdown_event
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.servers: typing.Dict[str, asyncio.AbstractServer] = {}
-        self.sessions: typing.Dict[int, 'SessionBase'] = {}
+        self.sessions: typing.Dict[int, 'LBRYElectrumX'] = {}
         self.hashx_subscriptions_by_session: typing.DefaultDict[str, typing.Set[int]] = defaultdict(set)
         self.mempool_statuses = {}
         self.cur_group = SessionGroup(0)
@@ -198,8 +200,15 @@ class SessionManager:
 
         self.session_event = Event()
 
+        # Search index
+        self.search_index = SearchIndex(
+            self.env.es_index_prefix, self.env.database_query_timeout,
+            elastic_host=env.elastic_host, elastic_port=env.elastic_port
+        )
+
     async def _start_server(self, kind, *args, **kw_args):
         loop = asyncio.get_event_loop()
+
         if kind == 'RPC':
             protocol_class = LocalRPC
         else:
@@ -578,7 +587,7 @@ class SessionManager:
     async def raw_header(self, height):
         """Return the binary header at the given height."""
         try:
-            return self.db.raw_header(height)
+            return await self.db.raw_header(height)
         except IndexError:
             raise RPCError(BAD_REQUEST, f'height {height:,d} '
                                         'out of range') from None
@@ -686,12 +695,12 @@ class SessionBase(RPCSession):
     request_handlers: typing.Dict[str, typing.Callable] = {}
     version = '0.5.7'
 
-    def __init__(self, session_mgr, db, mempool, kind):
+    def __init__(self, session_manager: 'LBRYSessionManager', db: 'LevelDB', mempool: 'MemPool', kind: str):
         connection = JSONRPCConnection(JSONRPCAutoDetect)
-        self.env = session_mgr.env
+        self.env = session_manager.env
         super().__init__(connection=connection)
         self.logger = util.class_logger(__name__, self.__class__.__name__)
-        self.session_mgr = session_mgr
+        self.session_manager = session_manager
         self.db = db
         self.mempool = mempool
         self.kind = kind  # 'RPC', 'TCP' etc.
@@ -699,7 +708,7 @@ class SessionBase(RPCSession):
         self.anon_logs = self.env.anon_logs
         self.txs_sent = 0
         self.log_me = False
-        self.daemon_request = self.session_mgr.daemon_request
+        self.daemon_request = self.session_manager.daemon_request
         # Hijack the connection so we can log messages
         self._receive_message_orig = self.connection.receive_message
         self.connection.receive_message = self.receive_message
@@ -729,17 +738,17 @@ class SessionBase(RPCSession):
         self.session_id = next(self.session_counter)
         context = {'conn_id': f'{self.session_id}'}
         self.logger = util.ConnectionLogger(self.logger, context)
-        self.group = self.session_mgr.add_session(self)
-        self.session_mgr.session_count_metric.labels(version=self.client_version).inc()
+        self.group = self.session_manager.add_session(self)
+        self.session_manager.session_count_metric.labels(version=self.client_version).inc()
         peer_addr_str = self.peer_address_str()
         self.logger.info(f'{self.kind} {peer_addr_str}, '
-                         f'{self.session_mgr.session_count():,d} total')
+                         f'{self.session_manager.session_count():,d} total')
 
     def connection_lost(self, exc):
         """Handle client disconnection."""
         super().connection_lost(exc)
-        self.session_mgr.remove_session(self)
-        self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
+        self.session_manager.remove_session(self)
+        self.session_manager.session_count_metric.labels(version=self.client_version).dec()
         msg = ''
         if not self._can_send.is_set():
             msg += ' whilst paused'
@@ -763,7 +772,7 @@ class SessionBase(RPCSession):
         """Handle an incoming request.  ElectrumX doesn't receive
         notifications from client sessions.
         """
-        self.session_mgr.request_count_metric.labels(method=request.method, version=self.client_version).inc()
+        self.session_manager.request_count_metric.labels(method=request.method, version=self.client_version).inc()
         if isinstance(request, Request):
             handler = self.request_handlers.get(request.method)
             handler = partial(handler, self)
@@ -811,7 +820,7 @@ class LBRYElectrumX(SessionBase):
     PROTOCOL_MIN = VERSION.PROTOCOL_MIN
     PROTOCOL_MAX = VERSION.PROTOCOL_MAX
     max_errors = math.inf  # don't disconnect people for errors! let them happen...
-    session_mgr: LBRYSessionManager
+    session_manager: LBRYSessionManager
     version = lbry.__version__
     cached_server_features = {}
 
@@ -822,17 +831,17 @@ class LBRYElectrumX(SessionBase):
             'blockchain.block.get_header': cls.block_get_header,
             'blockchain.estimatefee': cls.estimatefee,
             'blockchain.relayfee': cls.relayfee,
-            'blockchain.scripthash.get_balance': cls.scripthash_get_balance,
+            # 'blockchain.scripthash.get_balance': cls.scripthash_get_balance,
             'blockchain.scripthash.get_history': cls.scripthash_get_history,
             'blockchain.scripthash.get_mempool': cls.scripthash_get_mempool,
-            'blockchain.scripthash.listunspent': cls.scripthash_listunspent,
+            # 'blockchain.scripthash.listunspent': cls.scripthash_listunspent,
             'blockchain.scripthash.subscribe': cls.scripthash_subscribe,
             'blockchain.transaction.broadcast': cls.transaction_broadcast,
             'blockchain.transaction.get': cls.transaction_get,
             'blockchain.transaction.get_batch': cls.transaction_get_batch,
             'blockchain.transaction.info': cls.transaction_info,
             'blockchain.transaction.get_merkle': cls.transaction_merkle,
-            'server.add_peer': cls.add_peer,
+            # 'server.add_peer': cls.add_peer,
             'server.banner': cls.banner,
             'server.payment_address': cls.payment_address,
             'server.donation_address': cls.donation_address,
@@ -849,10 +858,10 @@ class LBRYElectrumX(SessionBase):
             'blockchain.block.headers': cls.block_headers,
             'server.ping': cls.ping,
             'blockchain.headers.subscribe': cls.headers_subscribe_False,
-            'blockchain.address.get_balance': cls.address_get_balance,
+            # 'blockchain.address.get_balance': cls.address_get_balance,
             'blockchain.address.get_history': cls.address_get_history,
             'blockchain.address.get_mempool': cls.address_get_mempool,
-            'blockchain.address.listunspent': cls.address_listunspent,
+            # 'blockchain.address.listunspent': cls.address_listunspent,
             'blockchain.address.subscribe': cls.address_subscribe,
             'blockchain.address.unsubscribe': cls.address_unsubscribe,
         })
@@ -871,8 +880,8 @@ class LBRYElectrumX(SessionBase):
         self.sv_seen = False
         self.protocol_tuple = self.PROTOCOL_MIN
         self.protocol_string = None
-        self.daemon = self.session_mgr.daemon
-        self.db: LevelDB = self.session_mgr.db
+        self.daemon = self.session_manager.daemon
+        self.db: LevelDB = self.session_manager.db
 
     @classmethod
     def protocol_min_max_strings(cls):
@@ -921,7 +930,7 @@ class LBRYElectrumX(SessionBase):
             else:
                 method = 'blockchain.address.subscribe'
             start = time.perf_counter()
-            db_history = await self.session_mgr.limited_history(hashX)
+            db_history = await self.session_manager.limited_history(hashX)
             mempool = self.mempool.transaction_summaries(hashX)
 
             status = ''.join(f'{hash_to_hex_str(tx_hash)}:'
@@ -935,24 +944,25 @@ class LBRYElectrumX(SessionBase):
             else:
                 status = None
             if mempool:
-                self.session_mgr.mempool_statuses[hashX] = status
+                self.session_manager.mempool_statuses[hashX] = status
             else:
-                self.session_mgr.mempool_statuses.pop(hashX, None)
+                self.session_manager.mempool_statuses.pop(hashX, None)
 
-            self.session_mgr.address_history_metric.observe(time.perf_counter() - start)
+            self.session_manager.address_history_metric.observe(time.perf_counter() - start)
             notifications.append((method, (alias, status)))
+            print(f"notify {alias} {method}")
 
         start = time.perf_counter()
-        self.session_mgr.notifications_in_flight_metric.inc()
+        self.session_manager.notifications_in_flight_metric.inc()
         for method, args in notifications:
             self.NOTIFICATION_COUNT.labels(method=method, version=self.client_version).inc()
         try:
             await self.send_notifications(
                 Batch([Notification(method, (alias, status)) for (method, (alias, status)) in notifications])
             )
-            self.session_mgr.notifications_sent_metric.observe(time.perf_counter() - start)
+            self.session_manager.notifications_sent_metric.observe(time.perf_counter() - start)
         finally:
-            self.session_mgr.notifications_in_flight_metric.dec()
+            self.session_manager.notifications_in_flight_metric.dec()
 
     # def get_metrics_or_placeholder_for_api(self, query_name):
     #     """ Do not hold on to a reference to the metrics
@@ -960,7 +970,7 @@ class LBRYElectrumX(SessionBase):
     #         you may be working with a stale metrics object.
     #     """
     #     if self.env.track_metrics:
-    #         # return self.session_mgr.metrics.for_api(query_name)
+    #         # return self.session_manager.metrics.for_api(query_name)
     #     else:
     #         return APICallMetrics(query_name)
 
@@ -970,17 +980,17 @@ class LBRYElectrumX(SessionBase):
     #     if isinstance(kwargs, dict):
     #         kwargs['release_time'] = format_release_time(kwargs.get('release_time'))
     #     try:
-    #         self.session_mgr.pending_query_metric.inc()
+    #         self.session_manager.pending_query_metric.inc()
     #         return await self.db.search_index.session_query(query_name, kwargs)
     #     except ConnectionTimeout:
-    #         self.session_mgr.interrupt_count_metric.inc()
+    #         self.session_manager.interrupt_count_metric.inc()
     #         raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
     #     finally:
-    #         self.session_mgr.pending_query_metric.dec()
-    #         self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
+    #         self.session_manager.pending_query_metric.dec()
+    #         self.session_manager.executor_time_metric.observe(time.perf_counter() - start)
 
     async def mempool_compact_histogram(self):
-        return self.mempool.compact_fee_histogram()
+        return [] #self.mempool.compact_fee_histogram()
 
     async def claimtrie_search(self, **kwargs):
         start = time.perf_counter()
@@ -992,16 +1002,16 @@ class LBRYElectrumX(SessionBase):
             except ValueError:
                 pass
         try:
-            self.session_mgr.pending_query_metric.inc()
+            self.session_manager.pending_query_metric.inc()
             if 'channel' in kwargs:
                 channel_url = kwargs.pop('channel')
                 _, channel_claim, _, _ = await self.db.resolve(channel_url)
                 if not channel_claim or isinstance(channel_claim, (ResolveCensoredError, LookupError, ValueError)):
                     return Outputs.to_base64([], [], 0, None, None)
                 kwargs['channel_id'] = channel_claim.claim_hash.hex()
-            return await self.db.search_index.cached_search(kwargs)
+            return await self.session_manager.search_index.cached_search(kwargs)
         except ConnectionTimeout:
-            self.session_mgr.interrupt_count_metric.inc()
+            self.session_manager.interrupt_count_metric.inc()
             raise RPCError(JSONRPC.QUERY_TIMEOUT, 'query timed out')
         except TooManyClaimSearchParametersError as err:
             await asyncio.sleep(2)
@@ -1009,25 +1019,25 @@ class LBRYElectrumX(SessionBase):
                                 self.peer_address()[0], err.key, err.limit)
             return RPCError(1, str(err))
         finally:
-            self.session_mgr.pending_query_metric.dec()
-            self.session_mgr.executor_time_metric.observe(time.perf_counter() - start)
+            self.session_manager.pending_query_metric.dec()
+            self.session_manager.executor_time_metric.observe(time.perf_counter() - start)
 
     async def _cached_resolve_url(self, url):
-        if url not in self.session_mgr.resolve_cache:
-            self.session_mgr.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
-        return self.session_mgr.resolve_cache[url]
+        if url not in self.session_manager.resolve_cache:
+            self.session_manager.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
+        return self.session_manager.resolve_cache[url]
 
     async def claimtrie_resolve(self, *urls) -> str:
         sorted_urls = tuple(sorted(urls))
-        self.session_mgr.urls_to_resolve_count_metric.inc(len(sorted_urls))
+        self.session_manager.urls_to_resolve_count_metric.inc(len(sorted_urls))
         try:
-            if sorted_urls in self.session_mgr.resolve_outputs_cache:
-                return self.session_mgr.resolve_outputs_cache[sorted_urls]
+            if sorted_urls in self.session_manager.resolve_outputs_cache:
+                return self.session_manager.resolve_outputs_cache[sorted_urls]
             rows, extra = [], []
             for url in urls:
-                if url not in self.session_mgr.resolve_cache:
-                    self.session_mgr.resolve_cache[url] = await self._cached_resolve_url(url)
-                stream, channel, repost, reposted_channel = self.session_mgr.resolve_cache[url]
+                if url not in self.session_manager.resolve_cache:
+                    self.session_manager.resolve_cache[url] = await self._cached_resolve_url(url)
+                stream, channel, repost, reposted_channel = self.session_manager.resolve_cache[url]
                 if isinstance(channel, ResolveCensoredError):
                     rows.append(channel)
                     extra.append(channel.censor_row)
@@ -1052,12 +1062,12 @@ class LBRYElectrumX(SessionBase):
                     if reposted_channel:
                         extra.append(reposted_channel)
                 await asyncio.sleep(0)
-            self.session_mgr.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
+            self.session_manager.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
                 None, Outputs.to_base64, rows, extra, 0, None, None
             )
             return result
         finally:
-            self.session_mgr.resolved_url_count_metric.inc(len(sorted_urls))
+            self.session_manager.resolved_url_count_metric.inc(len(sorted_urls))
 
     async def get_server_height(self):
         return self.db.db_height
@@ -1093,7 +1103,7 @@ class LBRYElectrumX(SessionBase):
 
     async def subscribe_headers_result(self):
         """The result of a header subscription or notification."""
-        return self.session_mgr.hsub_results[self.subscribe_headers_raw]
+        return self.session_manager.hsub_results[self.subscribe_headers_raw]
 
     async def _headers_subscribe(self, raw):
         """Subscribe to get headers of new blocks."""
@@ -1130,7 +1140,7 @@ class LBRYElectrumX(SessionBase):
         # Note history is ordered and mempool unordered in electrum-server
         # For mempool, height is -1 if it has unconfirmed inputs, otherwise 0
 
-        db_history = await self.session_mgr.limited_history(hashX)
+        db_history = await self.session_manager.limited_history(hashX)
         mempool = self.mempool.transaction_summaries(hashX)
 
         status = ''.join(f'{hash_to_hex_str(tx_hash)}:'
@@ -1145,32 +1155,32 @@ class LBRYElectrumX(SessionBase):
             status = None
 
         if mempool:
-            self.session_mgr.mempool_statuses[hashX] = status
+            self.session_manager.mempool_statuses[hashX] = status
         else:
-            self.session_mgr.mempool_statuses.pop(hashX, None)
+            self.session_manager.mempool_statuses.pop(hashX, None)
         return status
 
-    async def hashX_listunspent(self, hashX):
-        """Return the list of UTXOs of a script hash, including mempool
-        effects."""
-        utxos = await self.db.all_utxos(hashX)
-        utxos = sorted(utxos)
-        utxos.extend(await self.mempool.unordered_UTXOs(hashX))
-        spends = await self.mempool.potential_spends(hashX)
-
-        return [{'tx_hash': hash_to_hex_str(utxo.tx_hash),
-                 'tx_pos': utxo.tx_pos,
-                 'height': utxo.height, 'value': utxo.value}
-                for utxo in utxos
-                if (utxo.tx_hash, utxo.tx_pos) not in spends]
+    # async def hashX_listunspent(self, hashX):
+    #     """Return the list of UTXOs of a script hash, including mempool
+    #     effects."""
+    #     utxos = await self.db.all_utxos(hashX)
+    #     utxos = sorted(utxos)
+    #     utxos.extend(await self.mempool.unordered_UTXOs(hashX))
+    #     spends = await self.mempool.potential_spends(hashX)
+    #
+    #     return [{'tx_hash': hash_to_hex_str(utxo.tx_hash),
+    #              'tx_pos': utxo.tx_pos,
+    #              'height': utxo.height, 'value': utxo.value}
+    #             for utxo in utxos
+    #             if (utxo.tx_hash, utxo.tx_pos) not in spends]
 
     async def hashX_subscribe(self, hashX, alias):
         self.hashX_subs[hashX] = alias
-        self.session_mgr.hashx_subscriptions_by_session[hashX].add(id(self))
+        self.session_manager.hashx_subscriptions_by_session[hashX].add(id(self))
         return await self.address_status(hashX)
 
     async def hashX_unsubscribe(self, hashX, alias):
-        sessions = self.session_mgr.hashx_subscriptions_by_session[hashX]
+        sessions = self.session_manager.hashx_subscriptions_by_session[hashX]
         sessions.remove(id(self))
         if not sessions:
             self.hashX_subs.pop(hashX, None)
@@ -1182,10 +1192,10 @@ class LBRYElectrumX(SessionBase):
             pass
         raise RPCError(BAD_REQUEST, f'{address} is not a valid address')
 
-    async def address_get_balance(self, address):
-        """Return the confirmed and unconfirmed balance of an address."""
-        hashX = self.address_to_hashX(address)
-        return await self.get_balance(hashX)
+    # async def address_get_balance(self, address):
+    #     """Return the confirmed and unconfirmed balance of an address."""
+    #     hashX = self.address_to_hashX(address)
+    #     return await self.get_balance(hashX)
 
     async def address_get_history(self, address):
         """Return the confirmed and unconfirmed history of an address."""
@@ -1197,10 +1207,10 @@ class LBRYElectrumX(SessionBase):
         hashX = self.address_to_hashX(address)
         return self.unconfirmed_history(hashX)
 
-    async def address_listunspent(self, address):
-        """Return the list of UTXOs of an address."""
-        hashX = self.address_to_hashX(address)
-        return await self.hashX_listunspent(hashX)
+    # async def address_listunspent(self, address):
+    #     """Return the list of UTXOs of an address."""
+    #     hashX = self.address_to_hashX(address)
+    #     return await self.hashX_listunspent(hashX)
 
     async def address_subscribe(self, *addresses):
         """Subscribe to an address.
@@ -1221,16 +1231,16 @@ class LBRYElectrumX(SessionBase):
         hashX = self.address_to_hashX(address)
         return await self.hashX_unsubscribe(hashX, address)
 
-    async def get_balance(self, hashX):
-        utxos = await self.db.all_utxos(hashX)
-        confirmed = sum(utxo.value for utxo in utxos)
-        unconfirmed = await self.mempool.balance_delta(hashX)
-        return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
+    # async def get_balance(self, hashX):
+    #     utxos = await self.db.all_utxos(hashX)
+    #     confirmed = sum(utxo.value for utxo in utxos)
+    #     unconfirmed = await self.mempool.balance_delta(hashX)
+    #     return {'confirmed': confirmed, 'unconfirmed': unconfirmed}
 
-    async def scripthash_get_balance(self, scripthash):
-        """Return the confirmed and unconfirmed balance of a scripthash."""
-        hashX = scripthash_to_hashX(scripthash)
-        return await self.get_balance(hashX)
+    # async def scripthash_get_balance(self, scripthash):
+    #     """Return the confirmed and unconfirmed balance of a scripthash."""
+    #     hashX = scripthash_to_hashX(scripthash)
+    #     return await self.get_balance(hashX)
 
     def unconfirmed_history(self, hashX):
         # Note unconfirmed history is unordered in electrum-server
@@ -1242,7 +1252,7 @@ class LBRYElectrumX(SessionBase):
 
     async def confirmed_and_unconfirmed_history(self, hashX):
         # Note history is ordered but unconfirmed is unordered in e-s
-        history = await self.session_mgr.limited_history(hashX)
+        history = await self.session_manager.limited_history(hashX)
         conf = [{'tx_hash': hash_to_hex_str(tx_hash), 'height': height}
                 for tx_hash, height in history]
         return conf + self.unconfirmed_history(hashX)
@@ -1257,10 +1267,10 @@ class LBRYElectrumX(SessionBase):
         hashX = scripthash_to_hashX(scripthash)
         return self.unconfirmed_history(hashX)
 
-    async def scripthash_listunspent(self, scripthash):
-        """Return the list of UTXOs of a scripthash."""
-        hashX = scripthash_to_hashX(scripthash)
-        return await self.hashX_listunspent(hashX)
+    # async def scripthash_listunspent(self, scripthash):
+    #     """Return the list of UTXOs of a scripthash."""
+    #     hashX = scripthash_to_hashX(scripthash)
+    #     return await self.hashX_listunspent(hashX)
 
     async def scripthash_subscribe(self, scripthash):
         """Subscribe to a script hash.
@@ -1295,7 +1305,7 @@ class LBRYElectrumX(SessionBase):
 
         max_size = self.MAX_CHUNK_SIZE
         count = min(count, max_size)
-        headers, count = self.db.read_headers(start_height, count)
+        headers, count = await self.db.read_headers(start_height, count)
 
         if b64:
             headers = self.db.encode_headers(start_height, count, headers)
@@ -1318,7 +1328,7 @@ class LBRYElectrumX(SessionBase):
         index = non_negative_integer(index)
         size = self.coin.CHUNK_SIZE
         start_height = index * size
-        headers, _ = self.db.read_headers(start_height, size)
+        headers, _ = await self.db.read_headers(start_height, size)
         return headers.hex()
 
     async def block_get_header(self, height):
@@ -1326,7 +1336,7 @@ class LBRYElectrumX(SessionBase):
 
         height: the header's height"""
         height = non_negative_integer(height)
-        return await self.session_mgr.electrum_header(height)
+        return await self.session_manager.electrum_header(height)
 
     def is_tor(self):
         """Try to detect if the connection is to a tor hidden service we are
@@ -1416,10 +1426,10 @@ class LBRYElectrumX(SessionBase):
                 self.close_after_send = True
                 raise RPCError(BAD_REQUEST, f'unsupported client: {client_name}')
             if self.client_version != client_name[:17]:
-                self.session_mgr.session_count_metric.labels(version=self.client_version).dec()
+                self.session_manager.session_count_metric.labels(version=self.client_version).dec()
                 self.client_version = client_name[:17]
-                self.session_mgr.session_count_metric.labels(version=self.client_version).inc()
-        self.session_mgr.client_version_metric.labels(version=self.client_version).inc()
+                self.session_manager.session_count_metric.labels(version=self.client_version).inc()
+        self.session_manager.client_version_metric.labels(version=self.client_version).inc()
 
         # Find the highest common protocol version.  Disconnect if
         # that protocol version in unsupported.
@@ -1440,9 +1450,10 @@ class LBRYElectrumX(SessionBase):
         raw_tx: the raw transaction as a hexadecimal string"""
         # This returns errors as JSON RPC errors, as is natural
         try:
-            hex_hash = await self.session_mgr.broadcast_transaction(raw_tx)
+            hex_hash = await self.session_manager.broadcast_transaction(raw_tx)
             self.txs_sent += 1
-            self.mempool.wakeup.set()
+            # self.mempool.wakeup.set()
+            # await asyncio.sleep(0.5)
             self.logger.info(f'sent tx: {hex_hash}')
             return hex_hash
         except DaemonError as e:
@@ -1456,7 +1467,7 @@ class LBRYElectrumX(SessionBase):
         return (await self.transaction_get_batch(tx_hash))[tx_hash]
 
     async def transaction_get_batch(self, *tx_hashes):
-        self.session_mgr.tx_request_count_metric.inc(len(tx_hashes))
+        self.session_manager.tx_request_count_metric.inc(len(tx_hashes))
         if len(tx_hashes) > 100:
             raise RPCError(BAD_REQUEST, f'too many tx hashes in request: {len(tx_hashes)}')
         for tx_hash in tx_hashes:
@@ -1495,8 +1506,11 @@ class LBRYElectrumX(SessionBase):
                     'block_height': block_height
                 }
                 await asyncio.sleep(0)  # heavy call, give other tasks a chance
+        print("return tx batch")
+        for tx_hash, (_, info) in batch_result.items():
+            print(tx_hash, info['block_height'])
 
-        self.session_mgr.tx_replied_count_metric.inc(len(tx_hashes))
+        self.session_manager.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
 
     async def transaction_get(self, tx_hash, verbose=False):
