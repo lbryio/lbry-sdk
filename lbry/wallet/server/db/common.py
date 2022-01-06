@@ -1,4 +1,6 @@
 import typing
+from typing import Optional
+from lbry.error import ResolveCensoredError
 
 CLAIM_TYPES = {
     'stream': 1,
@@ -451,3 +453,25 @@ class TrendingNotification(typing.NamedTuple):
     height: int
     prev_amount: int
     new_amount: int
+
+
+class UTXO(typing.NamedTuple):
+    tx_num: int
+    tx_pos: int
+    tx_hash: bytes
+    height: int
+    value: int
+
+
+OptionalResolveResultOrError = Optional[typing.Union[ResolveResult, ResolveCensoredError, LookupError, ValueError]]
+
+
+class ExpandedResolveResult(typing.NamedTuple):
+    stream: OptionalResolveResultOrError
+    channel: OptionalResolveResultOrError
+    repost: OptionalResolveResultOrError
+    reposted_channel: OptionalResolveResultOrError
+
+
+class DBError(Exception):
+    """Raised on general DB errors generally indicating corruption."""
