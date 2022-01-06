@@ -341,7 +341,7 @@ class BlockProcessor:
         def flush():
             self.db.write_db_state()
             if save_undo:
-                self.db.prefix_db.commit(self.height)
+                self.db.prefix_db.commit(self.height, self.tip)
             else:
                 self.db.prefix_db.unsafe_commit()
             self.clear_after_advance_or_reorg()
@@ -1559,7 +1559,7 @@ class BlockProcessor:
         self.db.last_flush_tx_count = self.db.fs_tx_count
 
         def rollback():
-            self.db.prefix_db.rollback(self.height + 1)
+            self.db.prefix_db.rollback(self.height + 1, reverted_block_hash)
             self.db.es_sync_height = self.height
             self.db.write_db_state()
             self.db.prefix_db.unsafe_commit()
