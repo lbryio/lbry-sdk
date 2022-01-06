@@ -13,7 +13,6 @@ from lbry.wallet.server.hash import Base58, hash160, double_sha256, hash_to_hex_
 from lbry.wallet.server.daemon import Daemon, LBCDaemon
 from lbry.wallet.server.script import ScriptPubKey, OpCodes
 from lbry.wallet.server.session import LBRYElectrumX, LBRYSessionManager
-from lbry.wallet.server.block_processor import BlockProcessor
 
 
 Block = namedtuple("Block", "raw header transactions")
@@ -37,7 +36,6 @@ class Coin:
     SESSIONCLS = LBRYElectrumX
     DESERIALIZER = lib_tx.Deserializer
     DAEMON = Daemon
-    BLOCK_PROCESSOR = BlockProcessor
     SESSION_MANAGER = LBRYSessionManager
     HEADER_VALUES = [
         'version', 'prev_block_hash', 'merkle_root', 'timestamp', 'bits', 'nonce'

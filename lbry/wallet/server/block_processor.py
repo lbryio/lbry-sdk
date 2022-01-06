@@ -92,7 +92,6 @@ class BlockProcessor:
         )
         self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
         self._sync_reader_executor = ThreadPoolExecutor(1, thread_name_prefix='hub-es-sync')
-        self.mempool = MemPool(env.coin, daemon, db, self.state_lock)
         self.shutdown_event = asyncio.Event()
         self.coin = env.coin
         if env.coin.NET == 'mainnet':
@@ -118,14 +117,13 @@ class BlockProcessor:
         self.utxo_cache: Dict[Tuple[bytes, int], Tuple[bytes, int]] = {}
 
         # Claimtrie cache
-        self.db_op_stack: Optional[RevertableOpStack] = None
+        self.db_op_stack: Optional['RevertableOpStack'] = None
 
         # self.search_cache = {}
         self.resolve_cache = LRUCache(2**16)
         self.resolve_outputs_cache = LRUCache(2 ** 16)
 
         self.history_cache = {}
-        self.status_server = StatusServer()
 
         #################################
         # attributes used for calculating stake activations and takeovers per block
@@ -162,7 +160,6 @@ class BlockProcessor:
 
         self.removed_claims_to_send_es = set()  # cumulative changes across blocks to send ES
         self.touched_claims_to_send_es = set()
-        self.activation_info_to_send_es: DefaultDict[str, List[TrendingNotification]] = defaultdict(list)
 
         self.removed_claim_hashes: Set[bytes] = set()  # per block changes
         self.touched_claim_hashes: Set[bytes] = set()
@@ -251,29 +248,12 @@ class BlockProcessor:
                     await self.run_in_thread(self.advance_block, block)
                     await self.flush()
 
-                    self.logger.info("advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
+                    self.logger.warning("writer advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     if self.height == self.coin.nExtendedClaimExpirationForkHeight:
                         self.logger.warning(
                             "applying extended claim expiration fork on claims accepted by, %i", self.height
                         )
                         await self.run_in_thread_with_lock(self.db.apply_expiration_extension_fork)
-                    if self.db.first_sync:
-                        self.db.search_index.clear_caches()
-                        self.touched_claims_to_send_es.clear()
-                        self.removed_claims_to_send_es.clear()
-                        self.activation_info_to_send_es.clear()
-                # TODO: we shouldnt wait on the search index updating before advancing to the next block
-                if not self.db.first_sync:
-                    await self.db.reload_blocking_filtering_streams()
-                    await self.db.search_index.claim_consumer(self.claim_producer())
-                    await self.db.search_index.apply_filters(self.db.blocked_streams, self.db.blocked_channels,
-                                                                 self.db.filtered_streams, self.db.filtered_channels)
-                    await self.db.search_index.update_trending_score(self.activation_info_to_send_es)
-                    await self._es_caught_up()
-                self.db.search_index.clear_caches()
-                self.touched_claims_to_send_es.clear()
-                self.removed_claims_to_send_es.clear()
-                self.activation_info_to_send_es.clear()
                 # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
@@ -281,12 +261,9 @@ class BlockProcessor:
             processed_time = time.perf_counter() - total_start
             self.block_count_metric.set(self.height)
             self.block_update_time_metric.observe(processed_time)
-            self.status_server.set_height(self.db.fs_height, self.db.db_tip)
             if not self.db.first_sync:
                 s = '' if len(blocks) == 1 else 's'
                 self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
-            if self._caught_up_event.is_set():
-                await self.mempool.on_block(self.touched_hashXs, self.height)
             self.touched_hashXs.clear()
         elif hprevs[0] != chain[0]:
             min_start_height = max(self.height - self.coin.REORG_LIMIT, 0)
@@ -309,15 +286,6 @@ class BlockProcessor:
 
                     if self.env.cache_all_claim_txos:
                         await self.db._read_claim_txos()  # TODO: don't do this
-                    for touched in self.touched_claims_to_send_es:
-                        if not self.db.get_claim_txo(touched):
-                            self.removed_claims_to_send_es.add(touched)
-                    self.touched_claims_to_send_es.difference_update(self.removed_claims_to_send_es)
-                    await self.db.search_index.claim_consumer(self.claim_producer())
-                    self.db.search_index.clear_caches()
-                    self.touched_claims_to_send_es.clear()
-                    self.removed_claims_to_send_es.clear()
-                    self.activation_info_to_send_es.clear()
                 await self.prefetcher.reset_height(self.height)
                 self.reorg_count_metric.inc()
             except:
@@ -652,8 +620,6 @@ class BlockProcessor:
             self.support_txo_to_claim.pop(support_txo_to_clear)
         self.support_txos_by_claim[claim_hash].clear()
         self.support_txos_by_claim.pop(claim_hash)
-        if claim_hash.hex() in self.activation_info_to_send_es:
-            self.activation_info_to_send_es.pop(claim_hash.hex())
         if normalized_name.startswith('@'):  # abandon a channel, invalidate signatures
             self._invalidate_channel_signatures(claim_hash)
 
@@ -1226,10 +1192,6 @@ class BlockProcessor:
                     self.touched_claim_hashes.add(controlling.claim_hash)
                 self.touched_claim_hashes.add(winning)
 
-    def _add_claim_activation_change_notification(self, claim_id: str, height: int, prev_amount: int,
-                                                  new_amount: int):
-        self.activation_info_to_send_es[claim_id].append(TrendingNotification(height, prev_amount, new_amount))
-
     def _get_cumulative_update_ops(self, height: int):
         # update the last takeover height for names with takeovers
         for name in self.taken_over_names:
@@ -1493,7 +1455,6 @@ class BlockProcessor:
         self.utxo_cache.clear()
         self.hashXs_by_tx.clear()
         self.history_cache.clear()
-        self.mempool.notified_mempool_txs.clear()
         self.removed_claim_hashes.clear()
         self.touched_claim_hashes.clear()
         self.pending_reposted.clear()
@@ -1518,8 +1479,8 @@ class BlockProcessor:
         self.logger.info("backup block %i", self.height)
         # Check and update self.tip
 
-        self.db.headers.pop()
         self.db.tx_counts.pop()
+        reverted_block_hash = self.coin.header_hash(self.db.headers.pop())
         self.tip = self.coin.header_hash(self.db.headers[-1])
         if self.env.cache_all_tx_hashes:
             while len(self.db.total_transactions) > self.db.tx_counts[-1]:
@@ -1613,21 +1574,32 @@ class BlockProcessor:
             self.touched_hashXs.add(hashX)
             return hashX
 
-    async def _process_prefetched_blocks(self):
+    async def process_blocks_and_mempool_forever(self):
         """Loop forever processing blocks as they arrive."""
         while True:
             if self.height == self.daemon.cached_height():
                 if not self._caught_up_event.is_set():
                     await self._first_caught_up()
                     self._caught_up_event.set()
-            await self.blocks_event.wait()
+            try:
+                await asyncio.wait_for(self.blocks_event.wait(), 0.25)
+            except asyncio.TimeoutError:
+                pass
             self.blocks_event.clear()
             blocks = self.prefetcher.get_prefetched_blocks()
-            try:
-                await self.check_and_advance_blocks(blocks)
-            except Exception:
-                self.logger.exception("error while processing txs")
-                raise
+            if not blocks:
+                try:
+                    await self.check_mempool()
+                    self.db.prefix_db.unsafe_commit()
+                except Exception:
+                    self.logger.exception("error while updating mempool txs")
+                    raise
+            else:
+                try:
+                    await self.check_and_advance_blocks(blocks)
+                except Exception:
+                    self.logger.exception("error while processing txs")
+                    raise
 
     async def _es_caught_up(self):
         self.db.es_sync_height = self.height
@@ -1659,6 +1631,13 @@ class BlockProcessor:
                              f'height {self.height:,d}, halting here.')
             self.shutdown_event.set()
 
+    async def open(self):
+        self.db.open_db()
+        self.height = self.db.db_height
+        self.tip = self.db.db_tip
+        self.tx_count = self.db.db_tx_count
+        await self.db.initialize_caches()
+
     async def fetch_and_process_blocks(self, caught_up_event):
         """Fetch, process and index blocks from the daemon.
 
@@ -1674,16 +1653,9 @@ class BlockProcessor:
 
         self._caught_up_event = caught_up_event
         try:
-            self.db.open_db()
-            self.height = self.db.db_height
-            self.tip = self.db.db_tip
-            self.tx_count = self.db.db_tx_count
-            self.status_server.set_height(self.db.fs_height, self.db.db_tip)
-            await self.db.initialize_caches()
-            await self.db.search_index.start()
             await asyncio.wait([
                 self.prefetcher.main_loop(self.height),
-                self._process_prefetched_blocks()
+                self.process_blocks_and_mempool_forever()
             ])
         except asyncio.CancelledError:
             raise
@@ -1691,9 +1663,47 @@ class BlockProcessor:
             self.logger.exception("Block processing failed!")
             raise
         finally:
-            self.status_server.stop()
             # Shut down block processing
             self.logger.info('closing the DB for a clean shutdown...')
             self._sync_reader_executor.shutdown(wait=True)
             self._chain_executor.shutdown(wait=True)
             self.db.close()
+
+    async def start(self):
+        env = self.env
+        min_str, max_str = env.coin.SESSIONCLS.protocol_min_max_strings()
+        self.logger.info(f'software version: {lbry.__version__}')
+        self.logger.info(f'supported protocol versions: {min_str}-{max_str}')
+        self.logger.info(f'event loop policy: {env.loop_policy}')
+        self.logger.info(f'reorg limit is {env.reorg_limit:,d} blocks')
+
+        await self.daemon.height()
+
+        def _start_cancellable(run, *args):
+            _flag = asyncio.Event()
+            self.cancellable_tasks.append(asyncio.ensure_future(run(*args, _flag)))
+            return _flag.wait()
+
+        await _start_cancellable(self.fetch_and_process_blocks)
+
+    async def stop(self):
+        for task in reversed(self.cancellable_tasks):
+            task.cancel()
+        await asyncio.wait(self.cancellable_tasks)
+        self.shutdown_event.set()
+        await self.daemon.close()
+
+    def run(self):
+        loop = asyncio.get_event_loop()
+
+        def __exit():
+            raise SystemExit()
+        try:
+            loop.add_signal_handler(signal.SIGINT, __exit)
+            loop.add_signal_handler(signal.SIGTERM, __exit)
+            loop.run_until_complete(self.start())
+            loop.run_until_complete(self.shutdown_event.wait())
+        except (SystemExit, KeyboardInterrupt):
+            pass
+        finally:
+            loop.run_until_complete(self.stop())
