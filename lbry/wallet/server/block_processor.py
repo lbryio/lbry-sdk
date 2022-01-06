@@ -1582,7 +1582,7 @@ class BlockProcessor:
                     await self._first_caught_up()
                     self._caught_up_event.set()
             try:
-                await asyncio.wait_for(self.blocks_event.wait(), 0.25)
+                await asyncio.wait_for(self.blocks_event.wait(), 0.1)
             except asyncio.TimeoutError:
                 pass
             self.blocks_event.clear()
