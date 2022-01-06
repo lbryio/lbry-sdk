@@ -1407,16 +1407,6 @@ class BlockProcessor:
         self.db.headers.append(block.header)
         self.tip = self.coin.header_hash(block.header)
 
-        min_height = self.db.min_undo_height(self.db.db_height)
-        if min_height > 0:  # delete undos for blocks deep enough they can't be reorged
-            undo_to_delete = list(self.db.prefix_db.undo.iterate(start=(0,), stop=(min_height,)))
-            for (k, v) in undo_to_delete:
-                self.db.prefix_db.undo.stage_delete((k,), (v,))
-            touched_or_deleted_to_delete = list(self.db.prefix_db.touched_or_deleted.iterate(
-                start=(0,), stop=(min_height,))
-            )
-            for (k, v) in touched_or_deleted_to_delete:
-                self.db.prefix_db.touched_or_deleted.stage_delete(k, v)
 
         self.db.fs_height = self.height
         self.db.fs_tx_count = self.tx_count
