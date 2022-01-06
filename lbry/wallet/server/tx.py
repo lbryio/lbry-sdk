@@ -98,7 +98,7 @@ class Deserializer:
     TX_HASH_FN = staticmethod(double_sha256)
 
     def __init__(self, binary, start=0):
-        assert isinstance(binary, bytes)
+        assert isinstance(binary, bytes), f"type {type(binary)} is not 'bytes'"
         self.binary = binary
         self.binary_length = len(binary)
         self.cursor = start
