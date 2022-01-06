@@ -25,7 +25,7 @@ class DB_PREFIXES(enum.Enum):
     reposted_claim = b'W'
 
     undo = b'M'
-    claim_diff = b'Y'
+    touched_or_deleted = b'Y'
 
     tx = b'B'
     block_hash = b'C'

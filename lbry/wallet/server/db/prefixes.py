@@ -4,7 +4,7 @@ import array
 import base64
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.db import RocksDBStore, PrefixDB
+from lbry.wallet.server.db.interface import RocksDBStore, PrefixDB
 from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
@@ -206,14 +206,14 @@ class TxHashValue(NamedTuple):
     tx_hash: bytes
 
     def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash[::-1].hex()})"
 
 
 class TxNumKey(NamedTuple):
     tx_hash: bytes
 
     def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash[::-1].hex()})"
 
 
 class TxNumValue(NamedTuple):
@@ -224,7 +224,7 @@ class TxKey(NamedTuple):
     tx_hash: bytes
 
     def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash[::-1].hex()})"
 
 
 class TxValue(NamedTuple):
@@ -1423,7 +1423,7 @@ class HashXHistoryPrefixRow(PrefixRow):
 
 
 class TouchedOrDeletedPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.claim_diff.value
+    prefix = DB_PREFIXES.touched_or_deleted.value
     key_struct = struct.Struct(b'>L')
     value_struct = struct.Struct(b'>LL')
     key_part_lambdas = [
@@ -1681,6 +1681,9 @@ class TouchedHashXKey(NamedTuple):
 
 class TouchedHashXValue(NamedTuple):
     touched_hashXs: typing.List[bytes]
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(touched_hashXs=[{', '.join(map(lambda x: x.hex(), self.touched_hashXs))}])"
 
 
 class TouchedHashXPrefixRow(PrefixRow):

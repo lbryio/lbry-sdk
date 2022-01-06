@@ -7,7 +7,7 @@ from lbry.error import ResolveCensoredError
 from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
 from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
 if TYPE_CHECKING:
-    from lbry.wallet.server.leveldb import ResolveResult
+    from lbry.wallet.server.db.common import ResolveResult
 
 INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
 NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
