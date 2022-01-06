@@ -1104,24 +1104,28 @@ class RepostedPrefixRow(PrefixRow):
         return cls.pack_key(reposted_claim_hash, tx_num, position), cls.pack_value(claim_hash)
 
 
+class UndoKey(NamedTuple):
+    height: int
+    block_hash: bytes
+
+
 class UndoPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.undo.value
-    key_struct = struct.Struct(b'>Q')
+    key_struct = struct.Struct(b'>Q32s')
 
     key_part_lambdas = [
         lambda: b'',
-        struct.Struct(b'>Q').pack
+        struct.Struct(b'>Q').pack,
+        struct.Struct(b'>Q32s').pack
     ]
 
     @classmethod
-    def pack_key(cls, height: int):
-        return super().pack_key(height)
+    def pack_key(cls, height: int, block_hash: bytes):
+        return super().pack_key(height, block_hash)
 
     @classmethod
-    def unpack_key(cls, key: bytes) -> int:
-        assert key[:1] == cls.prefix
-        height, = cls.key_struct.unpack(key[1:])
-        return height
+    def unpack_key(cls, key: bytes) -> UndoKey:
+        return UndoKey(*super().unpack_key(key))
 
     @classmethod
     def pack_value(cls, undo_ops: bytes) -> bytes:
@@ -1132,8 +1136,8 @@ class UndoPrefixRow(PrefixRow):
         return data
 
     @classmethod
-    def pack_item(cls, height: int, undo_ops: bytes):
-        return cls.pack_key(height), cls.pack_value(undo_ops)
+    def pack_item(cls, height: int, block_hash: bytes, undo_ops: bytes):
+        return cls.pack_key(height, block_hash), cls.pack_value(undo_ops)
 
 
 class BlockHashPrefixRow(PrefixRow):
