@@ -8,10 +8,11 @@ from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
 ALLOW_LOCALHOST = False
+CACHE_SIZE = 2048
 log = logging.getLogger(__name__)
 
 
-@lru_cache(1024)
+@lru_cache(CACHE_SIZE)
 def make_kademlia_peer(node_id: typing.Optional[bytes], address: typing.Optional[str],
                        udp_port: typing.Optional[int] = None,
                        tcp_port: typing.Optional[int] = None,
@@ -29,13 +30,13 @@ class PeerManager:
         self._loop = loop
         self._rpc_failures: typing.Dict[
             typing.Tuple[str, int], typing.Tuple[typing.Optional[float], typing.Optional[float]]
-        ] = LRUCache(2048)
-        self._last_replied: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
-        self._last_sent: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
-        self._last_requested: typing.Dict[typing.Tuple[str, int], float] = LRUCache(2048)
-        self._node_id_mapping: typing.Dict[typing.Tuple[str, int], bytes] = LRUCache(2048)
-        self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = LRUCache(2048)
-        self._node_tokens: typing.Dict[bytes, (float, bytes)] = LRUCache(2048)
+        ] = LRUCache(CACHE_SIZE)
+        self._last_replied: typing.Dict[typing.Tuple[str, int], float] = LRUCache(CACHE_SIZE)
+        self._last_sent: typing.Dict[typing.Tuple[str, int], float] = LRUCache(CACHE_SIZE)
+        self._last_requested: typing.Dict[typing.Tuple[str, int], float] = LRUCache(CACHE_SIZE)
+        self._node_id_mapping: typing.Dict[typing.Tuple[str, int], bytes] = LRUCache(CACHE_SIZE)
+        self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = LRUCache(CACHE_SIZE)
+        self._node_tokens: typing.Dict[bytes, (float, bytes)] = LRUCache(CACHE_SIZE)
 
     def reset(self):
         for statistic in (self._rpc_failures, self._last_replied, self._last_sent, self._last_requested):
