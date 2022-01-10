@@ -1239,6 +1239,8 @@ class ChannelCommands(CommandTestCase):
         signature2 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=data_to_sign))
         self.assertTrue(verify(channel, unhexlify(data_to_sign), signature1))
         self.assertTrue(verify(channel, unhexlify(data_to_sign), signature2))
+        signature3 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=99))
+        self.assertTrue(verify(channel, unhexlify('99'), signature3))
 
     async def test_channel_export_import_before_sending_channel(self):
         # export

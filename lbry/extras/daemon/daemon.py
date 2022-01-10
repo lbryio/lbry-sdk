@@ -2907,14 +2907,13 @@ class Daemon(metaclass=JSONRPCServerType):
                 "signing_ts":   (str) The timestamp used to sign the comment,
             }
         """
-        hexdata = str(hexdata)
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         signing_channel = await self.get_channel_or_error(
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
         timestamp = str(int(time.time()))
-        signature = signing_channel.sign_data(unhexlify(hexdata), timestamp)
+        signature = signing_channel.sign_data(unhexlify(str(hexdata)), timestamp)
         return {
             'signature': signature,
             'signing_ts': timestamp
