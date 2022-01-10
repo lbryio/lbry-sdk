@@ -2914,7 +2914,7 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
         timestamp = str(int(time.time()))
-        signature = signing_channel.sign_data(unhexlify(hexdata), timestamp)
+        signature = signing_channel.sign_data(unhexlify(str(hexdata)), timestamp)
         return {
             'signature': signature,
             'signing_ts': timestamp
