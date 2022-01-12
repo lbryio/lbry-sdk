@@ -11,7 +11,7 @@ from lbry.wallet.dewies import dict_values_to_lbc
 class WalletCommands(CommandTestCase):
 
     async def test_wallet_create_and_add_subscribe(self):
-        session = next(iter(self.conductor.spv_node.server.session_mgr.sessions.values()))
+        session = next(iter(self.conductor.spv_node.server.session_manager.sessions.values()))
         self.assertEqual(len(session.hashX_subs), 27)
         wallet = await self.daemon.jsonrpc_wallet_create('foo', create_account=True, single_key=True)
         self.assertEqual(len(session.hashX_subs), 28)

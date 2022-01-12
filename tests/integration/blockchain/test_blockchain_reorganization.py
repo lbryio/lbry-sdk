@@ -36,7 +36,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertEqual(self.ledger.headers.height, height)
         await self.assertBlockHash(height)
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
-        await self.blockchain.generate(2)
+        await self.generate(2)
         await self.ledger.on_header.where(lambda e: e.height == 207)
         self.assertEqual(self.ledger.headers.height, 207)
         await self.assertBlockHash(206)
@@ -45,14 +45,14 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # invalidate current block, move forward 3
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
-        await self.blockchain.generate(3)
+        await self.generate(3)
         await self.ledger.on_header.where(lambda e: e.height == 208)
         self.assertEqual(self.ledger.headers.height, 208)
         await self.assertBlockHash(206)
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         self.assertEqual(2, bp.reorg_count_metric._samples()[0][2])
-        await self.blockchain.generate(3)
+        await self.generate(3)
         await self.ledger.on_header.where(lambda e: e.height == 211)
         await self.assertBlockHash(209)
         await self.assertBlockHash(210)
@@ -61,7 +61,7 @@ class BlockchainReorganizationTests(CommandTestCase):
             'still-valid', '1.0', file_path=self.create_upload_file(data=b'hi!')
         )
         await self.ledger.wait(still_valid)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.on_header.where(lambda e: e.height == 212)
         claim_id = still_valid.outputs[0].claim_id
         c1 = (await self.resolve(f'still-valid#{claim_id}'))['claim_id']
@@ -70,7 +70,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertTrue(c1 == c2 == c3)
 
         abandon_tx = await self.daemon.jsonrpc_stream_abandon(claim_id=claim_id)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.on_header.where(lambda e: e.height == 213)
         c1 = await self.resolve(f'still-valid#{still_valid.outputs[0].claim_id}')
         c2 = await self.daemon.jsonrpc_resolve([f'still-valid#{claim_id[:2]}'])
@@ -113,7 +113,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
         await self.blockchain.clear_mempool()
-        await self.blockchain.generate(2)
+        await self.generate(2)
 
         # wait for the client to catch up and verify the reorg
         await asyncio.wait_for(self.on_header(209), 3.0)
@@ -142,7 +142,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         # broadcast the claim in a different block
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
         self.assertEqual(broadcast_tx.id, new_txid)
-        await self.blockchain.generate(1)
+        await self.generate(1)
 
         # wait for the client to catch up
         await asyncio.wait_for(self.on_header(210), 1.0)
@@ -192,7 +192,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
         await self.blockchain.clear_mempool()
-        await self.blockchain.generate(2)
+        await self.generate(2)
 
         # wait for the client to catch up and verify the reorg
         await asyncio.wait_for(self.on_header(209), 3.0)
@@ -221,7 +221,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         # broadcast the claim in a different block
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
         self.assertEqual(broadcast_tx.id, new_txid)
-        await self.blockchain.generate(1)
+        await self.generate(1)
 
         # wait for the client to catch up
         await asyncio.wait_for(self.on_header(210), 1.0)

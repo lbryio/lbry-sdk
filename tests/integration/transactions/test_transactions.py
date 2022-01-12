@@ -9,9 +9,8 @@ from lbry.wallet.manager import WalletManager
 
 
 class BasicTransactionTests(IntegrationTestCase):
-
     async def test_variety_of_transactions_and_longish_history(self):
-        await self.blockchain.generate(300)
+        await self.generate(300)
         await self.assertBalance(self.account, '0.0')
         addresses = await self.account.receiving.get_addresses()
 
@@ -57,7 +56,7 @@ class BasicTransactionTests(IntegrationTestCase):
             for tx in await self.ledger.db.get_transactions(txid__in=[tx.id for tx in txs])
         ]))
 
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await asyncio.wait([self.ledger.wait(tx) for tx in txs])
         await self.assertBalance(self.account, '199.99876')
 
@@ -74,7 +73,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)
 
         self.assertEqual(2, await self.account.get_utxo_count())  # 199 + change
@@ -92,7 +91,7 @@ class BasicTransactionTests(IntegrationTestCase):
             self.blockchain.send_to_address(address, 1.1) for address in addresses[:5]
         ))
         await asyncio.wait([self.on_transaction_id(txid) for txid in txids])  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await asyncio.wait([self.on_transaction_id(txid) for txid in txids])  # confirmed
         await self.assertBalance(account1, '5.5')
         await self.assertBalance(account2, '0.0')
@@ -107,7 +106,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
         await self.assertBalance(account1, '3.499802')
@@ -121,7 +120,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
         tx = (await account1.get_transactions(include_is_my_input=True, include_is_my_output=True))[1]
@@ -133,11 +132,11 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertTrue(tx.outputs[1].is_internal_transfer)
 
     async def test_history_edge_cases(self):
-        await self.blockchain.generate(300)
+        await self.generate(300)
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
-        original_summary = self.conductor.spv_node.server.bp.mempool.transaction_summaries
+        original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
 
         def random_summary(*args, **kwargs):
             summary = original_summary(*args, **kwargs)
@@ -146,7 +145,7 @@ class BasicTransactionTests(IntegrationTestCase):
                 while summary == ordered:
                     random.shuffle(summary)
             return summary
-        self.conductor.spv_node.server.bp.mempool.transaction_summaries = random_summary
+        self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
         # 10 unconfirmed txs, all from blockchain wallet
         sends = [self.blockchain.send_to_address(address, 10) for _ in range(10)]
         # use batching to reduce issues with send_to_address on cli
@@ -199,7 +198,7 @@ class BasicTransactionTests(IntegrationTestCase):
 
     async def test_sqlite_coin_chooser(self):
         wallet_manager = WalletManager([self.wallet], {self.ledger.get_id(): self.ledger})
-        await self.blockchain.generate(300)
+        await self.generate(300)
 
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()

@@ -285,6 +285,17 @@ class IntegrationTestCase(AsyncioTestCase):
             lambda e: e.tx.id == tx.id and e.address == address
         )
 
+    async def generate(self, blocks):
+        """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
+        print("generate", blocks)
+        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
+        self.conductor.spv_node.server.synchronized.clear()
+        await self.blockchain.generate(blocks)
+        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
+        print("wait for synchronized")
+        await self.conductor.spv_node.server.synchronized.wait()
+        print("finished waiting for synchronized")
+
 
 class FakeExchangeRateManager(ExchangeRateManager):
 
@@ -456,8 +467,7 @@ class CommandTestCase(IntegrationTestCase):
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
         await self.on_transaction_id(txid, ledger)
-        await self.generate(1)
-        await self.on_transaction_id(txid, ledger)
+        await asyncio.wait([self.generate(1), self.on_transaction_id(txid, ledger)], timeout=5)
         return txid
 
     async def on_transaction_dict(self, tx):
@@ -471,12 +481,6 @@ class CommandTestCase(IntegrationTestCase):
         for txo in tx['outputs']:
             addresses.add(txo['address'])
         return list(addresses)
-
-    async def generate(self, blocks):
-        """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
-        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
-        await self.blockchain.generate(blocks)
-        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
 
     async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)

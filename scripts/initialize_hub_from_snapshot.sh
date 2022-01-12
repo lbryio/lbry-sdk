@@ -1,12 +1,12 @@
 #!/bin/bash
 
-SNAPSHOT_HEIGHT="1049658"
+SNAPSHOT_HEIGHT="1072108"
 
 HUB_VOLUME_PATH="/var/lib/docker/volumes/${USER}_wallet_server"
 ES_VOLUME_PATH="/var/lib/docker/volumes/${USER}_es01"
 
-SNAPSHOT_TAR_NAME="wallet_server_snapshot_${SNAPSHOT_HEIGHT}.tar"
-ES_SNAPSHOT_TAR_NAME="es_snapshot_${SNAPSHOT_HEIGHT}.tar"
+SNAPSHOT_TAR_NAME="wallet_server_snapshot_${SNAPSHOT_HEIGHT}.tar.gz"
+ES_SNAPSHOT_TAR_NAME="es_snapshot_${SNAPSHOT_HEIGHT}.tar.gz"
 
 SNAPSHOT_URL="https://snapshots.lbry.com/hub/${SNAPSHOT_TAR_NAME}"
 ES_SNAPSHOT_URL="https://snapshots.lbry.com/hub/${ES_SNAPSHOT_TAR_NAME}"
