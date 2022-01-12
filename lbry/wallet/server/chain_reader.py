@@ -123,6 +123,7 @@ class BlockchainReaderServer(BlockchainReader):
         self.es_notification_client = ElasticNotifierClientProtocol(self.es_notifications)
         self.synchronized = asyncio.Event()
         self._es_height = None
+        self._es_block_hash = None
 
     def clear_caches(self):
         self.history_cache.clear()
@@ -166,9 +167,9 @@ class BlockchainReaderServer(BlockchainReader):
         synchronized.set()
         try:
             while True:
-                self._es_height = await self.es_notifications.get()
+                self._es_height, self._es_block_hash = await self.es_notifications.get()
                 self.clear_search_cache()
-                if self._es_height == self.db.db_height:
+                if self.last_state and self._es_block_hash == self.last_state.tip:
                     self.synchronized.set()
                     self.log.warning("es and reader are in sync")
                 else:

@@ -60,9 +60,9 @@ class ElasticWriter(BlockchainReader):
         async with server:
             await server.serve_forever()
 
-    def notify_es_notification_listeners(self, height: int):
+    def notify_es_notification_listeners(self, height: int, block_hash: bytes):
         for p in self._listeners:
-            p.send_height(height)
+            p.send_height(height, block_hash)
             self.log.warning("notify listener %i", height)
 
     def _read_es_height(self):
@@ -270,7 +270,7 @@ class ElasticWriter(BlockchainReader):
             self._trending.clear()
             self._advanced = False
             self.synchronized.set()
-            self.notify_es_notification_listeners(self._last_wrote_height)
+            self.notify_es_notification_listeners(self._last_wrote_height, self.db.db_tip)
 
     @property
     def last_synced_height(self) -> int:
