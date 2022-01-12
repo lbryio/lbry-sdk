@@ -16,7 +16,7 @@ class NetworkTests(IntegrationTestCase):
 
     async def test_remote_height_updated_automagically(self):
         initial_height = self.ledger.network.remote_height
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.network.on_header.first
         self.assertEqual(self.ledger.network.remote_height, initial_height + 1)
 
@@ -85,8 +85,8 @@ class ReconnectTests(IntegrationTestCase):
     async def test_direct_sync(self):
         await self.ledger.stop()
         initial_height = self.ledger.local_height_including_downloaded_height
-        await self.blockchain.generate(100)
-        while self.conductor.spv_node.server.session_mgr.notified_height < initial_height + 99:  # off by 1
+        await self.generate(100)
+        while self.conductor.spv_node.server.session_manager.notified_height < initial_height + 99:  # off by 1
             await asyncio.sleep(0.1)
         self.assertEqual(initial_height, self.ledger.local_height_including_downloaded_height)
         await self.ledger.headers.open()
@@ -105,7 +105,7 @@ class ReconnectTests(IntegrationTestCase):
         # await self.ledger.resolve([], 'derp')
         # self.assertTrue(self.ledger.network.is_connected)
         await asyncio.wait_for(self.on_transaction_id(sendtxid), 10.0)  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.on_transaction_id(sendtxid)  # confirmed
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
@@ -123,7 +123,7 @@ class ReconnectTests(IntegrationTestCase):
             await self.ledger.network.get_transaction(sendtxid)
         # * goes to pick some water outside... * time passes by and another donation comes in
         sendtxid = await self.blockchain.send_to_address(address1, 42)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         # (this is just so the test doesn't hang forever if it doesn't reconnect)
         if not self.ledger.network.is_connected:
             await asyncio.wait_for(self.ledger.network.on_connected.first, timeout=10.0)
@@ -169,7 +169,7 @@ class UDPServerFailDiscoveryTest(AsyncioTestCase):
         self.addCleanup(conductor.stop_blockchain)
         await conductor.start_spv()
         self.addCleanup(conductor.stop_spv)
-        self.assertFalse(conductor.spv_node.server.bp.status_server.is_running)
+        self.assertFalse(conductor.spv_node.server.reader.status_server.is_running)
         await asyncio.wait_for(conductor.start_wallet(), timeout=5)
         self.addCleanup(conductor.stop_wallet)
         self.assertTrue(conductor.wallet_node.ledger.network.is_connected)

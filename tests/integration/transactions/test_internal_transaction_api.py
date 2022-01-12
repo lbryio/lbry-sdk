@@ -23,7 +23,7 @@ class BasicTransactionTest(IntegrationTestCase):
         ))
         sendtxid1 = await self.blockchain.send_to_address(address1, 5)
         sendtxid2 = await self.blockchain.send_to_address(address2, 5)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await notifications
 
         self.assertEqual(d2l(await self.account.get_balance()), '10.0')
@@ -57,7 +57,7 @@ class BasicTransactionTest(IntegrationTestCase):
         notifications = asyncio.create_task(asyncio.wait(
             [asyncio.ensure_future(self.ledger.wait(channel_tx)), asyncio.ensure_future(self.ledger.wait(stream_tx))]
         ))
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await notifications
         self.assertEqual(d2l(await self.account.get_balance()), '7.985786')
         self.assertEqual(d2l(await self.account.get_balance(include_claims=True)), '9.985786')
@@ -70,7 +70,7 @@ class BasicTransactionTest(IntegrationTestCase):
         await self.broadcast(abandon_tx)
         await notify
         notify = asyncio.create_task(self.ledger.wait(abandon_tx))
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await notify
 
         response = await self.ledger.resolve([], ['lbry://@bar/foo'])

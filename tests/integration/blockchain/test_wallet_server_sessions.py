@@ -25,13 +25,13 @@ class TestSessions(IntegrationTestCase):
         )
         await session.create_connection()
         await session.send_request('server.banner', ())
-        self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 1)
+        self.assertEqual(len(self.conductor.spv_node.server.session_manager.sessions), 1)
         self.assertFalse(session.is_closing())
         await asyncio.sleep(1.1)
         with self.assertRaises(asyncio.TimeoutError):
             await session.send_request('server.banner', ())
         self.assertTrue(session.is_closing())
-        self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
+        self.assertEqual(len(self.conductor.spv_node.server.session_manager.sessions), 0)
 
     async def test_proper_version(self):
         info = await self.ledger.network.get_server_features()
@@ -186,7 +186,7 @@ class TestHubDiscovery(CommandTestCase):
             self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', kp_final_node.port)
         )
 
-        kp_final_node.server.session_mgr._notify_peer('127.0.0.1:9988')
+        kp_final_node.server.session_manager._notify_peer('127.0.0.1:9988')
         await self.daemon.ledger.network.on_hub.first
         await asyncio.sleep(0.5)  # wait for above event to be processed by other listeners
         self.assertEqual(

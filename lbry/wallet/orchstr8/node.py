@@ -16,11 +16,13 @@ import urllib.request
 from uuid import uuid4
 
 import lbry
-from lbry.wallet.server.server import Server
 from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
+from lbry.wallet.server.block_processor import BlockProcessor
+from lbry.wallet.server.chain_reader import BlockchainReaderServer
+from lbry.wallet.server.db.elasticsearch.sync import ElasticWriter
 
 log = logging.getLogger(__name__)
 
@@ -189,49 +191,48 @@ class SPVNode:
         self.coin_class = coin_class
         self.controller = None
         self.data_path = None
-        self.server = None
+        self.server: Optional[BlockchainReaderServer] = None
+        self.writer: Optional[BlockProcessor] = None
+        self.es_writer: Optional[ElasticWriter] = None
         self.hostname = 'localhost'
         self.port = 50001 + node_number  # avoid conflict with default daemon
         self.udp_port = self.port
         self.session_timeout = 600
-        self.rpc_port = '0'  # disabled by default
         self.stopped = False
         self.index_name = uuid4().hex
 
     async def start(self, blockchain_node: 'BlockchainNode', extraconf=None):
         self.data_path = tempfile.mkdtemp()
         conf = {
-            'DESCRIPTION': '',
-            'PAYMENT_ADDRESS': '',
-            'DAILY_FEE': '0',
-            'DB_DIRECTORY': self.data_path,
-            'DAEMON_URL': blockchain_node.rpc_url,
-            'REORG_LIMIT': '100',
-            'HOST': self.hostname,
-            'TCP_PORT': str(self.port),
-            'UDP_PORT': str(self.udp_port),
-            'SESSION_TIMEOUT': str(self.session_timeout),
-            'MAX_QUERY_WORKERS': '0',
-            'INDIVIDUAL_TAG_INDEXES': '',
-            'RPC_PORT': self.rpc_port,
-            'ES_INDEX_PREFIX': self.index_name,
-            'ES_MODE': 'writer',
+            'description': '',
+            'payment_address': '',
+            'daily_fee': '0',
+            'db_dir': self.data_path,
+            'daemon_url': blockchain_node.rpc_url,
+            'reorg_limit': 100,
+            'host': self.hostname,
+            'tcp_port': self.port,
+            'udp_port': self.udp_port,
+            'session_timeout': self.session_timeout,
+            'max_query_workers': 0,
+            'es_index_prefix': self.index_name,
         }
         if extraconf:
             conf.update(extraconf)
-        # TODO: don't use os.environ
-        os.environ.update(conf)
-        self.server = Server(Env(self.coin_class))
-        self.server.bp.mempool.refresh_secs = self.server.bp.prefetcher.polling_delay = 0.5
-        await self.server.start()
+        self.writer = BlockProcessor(Env(self.coin_class, es_mode='writer', **conf))
+        self.server = BlockchainReaderServer(Env(self.coin_class, es_mode='reader', **conf))
+        self.es_writer = ElasticWriter(Env(self.coin_class, es_mode='reader', **conf))
+        await self.writer.open()
+        await self.writer.start()
+        await asyncio.wait([self.server.start(), self.es_writer.start()])
 
     async def stop(self, cleanup=True):
         if self.stopped:
             return
         try:
-            await self.server.db.search_index.delete_index()
-            await self.server.db.search_index.stop()
+            await self.es_writer.stop(delete_index=True)
             await self.server.stop()
+            await self.writer.stop()
             self.stopped = True
         finally:
             cleanup and self.cleanup()
