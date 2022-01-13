@@ -1,4 +1,6 @@
 import os
+import filetype
+import logging
 
 types_map = {
     # http://www.iana.org/assignments/media-types
@@ -166,10 +168,41 @@ types_map = {
     '.wmv': ('video/x-ms-wmv', 'video')
 }
 
+# maps detected extensions to the possible analogs
+# i.e. .cbz file is actually a .zip
+synonyms_map = {
+    '.zip': ['.cbz'],
+    '.rar': ['.cbr'],
+    '.ar': ['.a']
+}
+
+log = logging.getLogger(__name__)
+
 
 def guess_media_type(path):
     _, ext = os.path.splitext(path)
     extension = ext.strip().lower()
+
+    # try detecting real file format if path points to a readable file
+    try:
+        kind = filetype.guess(path)
+        if kind:
+            realext = f".{kind.extension}"
+
+            # override extension parsed from file...
+            if extension != realext:
+                if extension:
+                    log.warning(f"file extension does not match it's contents {path}, identified as {realext}")
+                else:
+                    log.debug(f"file {path} does not have extension, identified by contents as {realext}")
+
+                # don't do anything if extension is in synonyms
+                if not extension in synonyms_map[realext]:
+                    extension = realext
+
+    except OSError as error:
+        pass
+
     if extension[1:]:
         if extension in types_map:
             return types_map[extension]
