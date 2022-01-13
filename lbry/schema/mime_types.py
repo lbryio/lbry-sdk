@@ -197,7 +197,7 @@ def guess_media_type(path):
                     log.debug(f"file {path} does not have extension, identified by contents as {realext}")
 
                 # don't do anything if extension is in synonyms
-                if not extension in synonyms_map[realext]:
+                if not extension in synonyms_map.get(realext, []):
                     extension = realext
 
     except OSError as error:
