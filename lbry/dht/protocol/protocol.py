@@ -3,10 +3,13 @@ import socket
 import functools
 import hashlib
 import asyncio
+import time
 import typing
 import random
 from asyncio.protocols import DatagramProtocol
 from asyncio.transports import DatagramTransport
+
+from prometheus_client import Gauge, Counter, Histogram
 
 from lbry.dht import constants
 from lbry.dht.serialization.bencoding import DecodeError
@@ -30,6 +33,11 @@ OLD_PROTOCOL_ERRORS = {
 
 
 class KademliaRPC:
+    stored_blob_metric = Gauge(
+        "stored_blobs", "Number of blobs announced by other peers", namespace="dht_node",
+        labelnames=("scope",),
+    )
+
     def __init__(self, protocol: 'KademliaProtocol', loop: asyncio.AbstractEventLoop, peer_port: int = 3333):
         self.protocol = protocol
         self.loop = loop
@@ -61,6 +69,7 @@ class KademliaRPC:
         self.protocol.data_store.add_peer_to_blob(
             rpc_contact, blob_hash
         )
+        self.stored_blob_metric.labels("global").set(len(self.protocol.data_store))
         return b'OK'
 
     def find_node(self, rpc_contact: 'KademliaPeer', key: bytes) -> typing.List[typing.Tuple[bytes, str, int]]:
@@ -259,6 +268,30 @@ class PingQueue:
 
 
 class KademliaProtocol(DatagramProtocol):
+    request_sent_metric = Counter(
+        "request_sent", "Number of requests send from DHT RPC protocol", namespace="dht_node",
+        labelnames=("method",),
+    )
+    request_success_metric = Counter(
+        "request_success", "Number of successful requests", namespace="dht_node",
+        labelnames=("method",),
+    )
+    request_error_metric = Counter(
+        "request_error", "Number of errors returned from request to other peers", namespace="dht_node",
+        labelnames=("method",),
+    )
+    HISTOGRAM_BUCKETS = (
+        .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 3.0, 3.5, 4.0, 4.50, 5.0, 5.50, 6.0, float('inf')
+    )
+    response_time_metric = Histogram(
+        "response_time", "Response times of DHT RPC requests", namespace="dht_node", buckets=HISTOGRAM_BUCKETS,
+        labelnames=("method",)
+    )
+    received_request_metric = Counter(
+        "received_request", "Number of received DHT RPC requests", namespace="dht_node",
+        labelnames=("method",),
+    )
+
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int, rpc_timeout: float = constants.RPC_TIMEOUT,
                  split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
@@ -447,6 +480,7 @@ class KademliaProtocol(DatagramProtocol):
 
     def handle_request_datagram(self, address: typing.Tuple[str, int], request_datagram: RequestDatagram):
         # This is an RPC method request
+        self.received_request_metric.labels(method=request_datagram.method).inc()
         self.peer_manager.report_last_requested(address[0], address[1])
         try:
             peer = self.routing_table.get_peer(request_datagram.node_id)
@@ -575,14 +609,19 @@ class KademliaProtocol(DatagramProtocol):
         self._send(peer, request)
         response_fut = self.sent_messages[request.rpc_id][1]
         try:
+            self.request_sent_metric.labels(method=request.method).inc()
+            start = time.perf_counter()
             response = await asyncio.wait_for(response_fut, self.rpc_timeout)
+            self.response_time_metric.labels(method=request.method).observe(time.perf_counter() - start)
             self.peer_manager.report_last_replied(peer.address, peer.udp_port)
+            self.request_success_metric.labels(method=request.method).inc()
             return response
         except asyncio.CancelledError:
             if not response_fut.done():
                 response_fut.cancel()
             raise
         except (asyncio.TimeoutError, RemoteException):
+            self.request_error_metric.labels(method=request.method).inc()
             self.peer_manager.report_failure(peer.address, peer.udp_port)
             if self.peer_manager.peer_is_good(peer) is False:
                 self.remove_peer(peer)

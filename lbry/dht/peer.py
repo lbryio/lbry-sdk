@@ -3,6 +3,9 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from functools import lru_cache
+
+from prometheus_client import Gauge
+
 from lbry.utils import is_valid_public_ipv4 as _is_valid_public_ipv4, LRUCache
 from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
@@ -26,6 +29,10 @@ def is_valid_public_ipv4(address, allow_localhost: bool = False):
 
 
 class PeerManager:
+    peer_manager_keys_metric = Gauge(
+        "peer_manager_keys", "Number of keys tracked by PeerManager dicts (sum)", namespace="dht_node",
+        labelnames=("scope",)
+    )
     def __init__(self, loop: asyncio.AbstractEventLoop):
         self._loop = loop
         self._rpc_failures: typing.Dict[
@@ -37,6 +44,11 @@ class PeerManager:
         self._node_id_mapping: typing.Dict[typing.Tuple[str, int], bytes] = LRUCache(CACHE_SIZE)
         self._node_id_reverse_mapping: typing.Dict[bytes, typing.Tuple[str, int]] = LRUCache(CACHE_SIZE)
         self._node_tokens: typing.Dict[bytes, (float, bytes)] = LRUCache(CACHE_SIZE)
+
+    def count_cache_keys(self):
+        return len(self._rpc_failures) + len(self._last_replied) + len(self._last_sent) + len(
+            self._last_requested) + len(self._node_id_mapping) + len(self._node_id_reverse_mapping) + len(
+            self._node_tokens)
 
     def reset(self):
         for statistic in (self._rpc_failures, self._last_replied, self._last_sent, self._last_requested):
@@ -86,6 +98,7 @@ class PeerManager:
             self._node_id_mapping.pop(self._node_id_reverse_mapping.pop(node_id))
         self._node_id_mapping[(address, udp_port)] = node_id
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
+        self.peer_manager_keys_metric.labels("global").set(self.count_cache_keys())
 
     def prune(self):  # TODO: periodically call this
         now = self._loop.time()
