@@ -3,7 +3,7 @@ __lbcctl__ = 'lbcctl'
 __lbcwallet__ = 'lbcwallet'
 __lbcd_url__ = (
     'https://github.com/lbryio/lbcd/releases/download/' +
-    'v0.22.100-beta-rc7/lbcd_0.22.100-beta-rc7_TARGET_PLATFORM.tar.gz'
+    'v0.22.200-beta/lbcd_0.22.200-beta_TARGET_PLATFORM.tar.gz'
 )
 __lbcwallet_url__ = (
     'https://github.com/lbryio/lbcwallet/releases/download/' +
