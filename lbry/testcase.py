@@ -19,7 +19,7 @@ from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.dewies import lbc_to_dewies
 from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.orchstr8.node import BlockchainNode, LBCWalletNode, WalletNode, HubNode
+from lbry.wallet.orchstr8.node import LBCWalletNode, WalletNode, HubNode
 from lbry.schema.claim import Claim
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
