@@ -91,7 +91,6 @@ class BlockProcessor:
             max_open_files=env.db_max_open_files
         )
         self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
-        self._sync_reader_executor = ThreadPoolExecutor(1, thread_name_prefix='hub-es-sync')
         self.shutdown_event = asyncio.Event()
         self.coin = env.coin
         if env.coin.NET == 'mainnet':
@@ -180,19 +179,6 @@ class BlockProcessor:
 
         self.pending_transaction_num_mapping: Dict[bytes, int] = {}
         self.pending_transactions: Dict[int, bytes] = {}
-
-    async def claim_producer(self):
-        if self.db.db_height <= 1:
-            return
-
-        for claim_hash in self.removed_claims_to_send_es:
-            yield 'delete', claim_hash.hex()
-
-        to_update = await asyncio.get_event_loop().run_in_executor(
-            self._sync_reader_executor, self.db.claims_producer, self.touched_claims_to_send_es
-        )
-        for claim in to_update:
-            yield 'update', claim
 
     async def run_in_thread_with_lock(self, func, *args):
         # Run in a thread to prevent blocking.  Shielded so that
@@ -1655,7 +1641,6 @@ class BlockProcessor:
         finally:
             # Shut down block processing
             self.logger.info('closing the DB for a clean shutdown...')
-            self._sync_reader_executor.shutdown(wait=True)
             self._chain_executor.shutdown(wait=True)
             self.db.close()
 

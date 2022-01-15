@@ -15,7 +15,7 @@ from lbry.prometheus import PrometheusServer
 
 
 class BlockchainReader:
-    def __init__(self, env, secondary_name: str):
+    def __init__(self, env, secondary_name: str, thread_workers: int = 1, thread_prefix: str = 'blockchain-reader'):
         self.env = env
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
         self.shutdown_event = asyncio.Event()
@@ -27,6 +27,8 @@ class BlockchainReader:
         )
         self.last_state: typing.Optional[DBState] = None
         self._refresh_interval = 0.1
+        self._lock = asyncio.Lock()
+        self._executor = ThreadPoolExecutor(thread_workers, thread_name_prefix=thread_prefix)
 
     def _detect_changes(self):
         try:
@@ -72,13 +74,16 @@ class BlockchainReader:
             # print("reader rewound to ", self.last_state.height)
 
     async def poll_for_changes(self):
-        await asyncio.get_event_loop().run_in_executor(None, self._detect_changes)
+        await asyncio.get_event_loop().run_in_executor(self._executor, self._detect_changes)
 
     async def refresh_blocks_forever(self, synchronized: asyncio.Event):
         self.log.warning("start refresh blocks forever")
         while True:
             try:
-                await self.poll_for_changes()
+                async with self._lock:
+                    await self.poll_for_changes()
+            except asyncio.CancelledError:
+                raise
             except:
                 self.log.exception("boom")
                 raise
@@ -102,7 +107,7 @@ class BlockchainReader:
 
 class BlockchainReaderServer(BlockchainReader):
     def __init__(self, env):
-        super().__init__(env, 'lbry-reader')
+        super().__init__(env, 'lbry-reader', thread_workers=1, thread_prefix='hub-worker')
         self.history_cache = {}
         self.resolve_outputs_cache = {}
         self.resolve_cache = {}
@@ -209,21 +214,21 @@ class BlockchainReaderServer(BlockchainReader):
 
     async def stop(self):
         self.status_server.stop()
-        for task in reversed(self.cancellable_tasks):
-            task.cancel()
-        await asyncio.wait(self.cancellable_tasks)
+        async with self._lock:
+            for task in reversed(self.cancellable_tasks):
+                task.cancel()
+            await asyncio.wait(self.cancellable_tasks)
         self.session_manager.search_index.stop()
         self.db.close()
         if self.prometheus_server:
             await self.prometheus_server.stop()
             self.prometheus_server = None
-        self.shutdown_event.set()
         await self.daemon.close()
+        self._executor.shutdown(wait=True)
+        self.shutdown_event.set()
 
     def run(self):
         loop = asyncio.get_event_loop()
-        executor = ThreadPoolExecutor(self.env.max_query_workers, thread_name_prefix='hub-worker')
-        loop.set_default_executor(executor)
 
         def __exit():
             raise SystemExit()

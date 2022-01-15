@@ -27,7 +27,7 @@ class ElasticWriter(BlockchainReader):
     VERSION = 1
 
     def __init__(self, env):
-        super().__init__(env, 'lbry-elastic-writer')
+        super().__init__(env, 'lbry-elastic-writer', thread_workers=1, thread_prefix='lbry-elastic-writer')
         # self._refresh_interval = 0.1
         self._task = None
         self.index = self.env.es_index_prefix + 'claims'
@@ -72,7 +72,7 @@ class ElasticWriter(BlockchainReader):
         self._last_wrote_block_hash = info.get('block_hash', None)
 
     async def read_es_height(self):
-        await asyncio.get_event_loop().run_in_executor(None, self._read_es_height)
+        await asyncio.get_event_loop().run_in_executor(self._executor, self._read_es_height)
 
     def write_es_height(self, height: int, block_hash: str):
         with open(self._es_info_path, 'w') as f:
@@ -294,13 +294,15 @@ class ElasticWriter(BlockchainReader):
         await _start_cancellable(self.refresh_blocks_forever)
 
     async def stop(self, delete_index=False):
-        while self.cancellable_tasks:
-            t = self.cancellable_tasks.pop()
-            if not t.done():
-                t.cancel()
+        async with self._lock:
+            while self.cancellable_tasks:
+                t = self.cancellable_tasks.pop()
+                if not t.done():
+                    t.cancel()
         if delete_index:
             await self.delete_index()
         await self.stop_index()
+        self._executor.shutdown(wait=True)
 
     def run(self):
         loop = asyncio.get_event_loop()
