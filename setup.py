@@ -7,11 +7,9 @@ BASE = os.path.dirname(__file__)
 with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
 
-
-ROCKSDB = []
-if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-    ROCKSDB.append('lbry-rocksdb==0.8.1')
-
+PLYVEL = []
+if sys.platform.startswith('linux'):
+    PLYVEL.append('plyvel==1.3.0')
 
 setup(
     name=__name__,
@@ -59,7 +57,7 @@ setup(
         'pylru==1.1.0',
         'elasticsearch==7.10.1',
         'grpcio==1.38.0'
-    ] + ROCKSDB,
+    ] + PLYVEL,
     extras_require={
         'torrent': ['lbry-libtorrent'],
         'lint': ['pylint==2.10.0'],
