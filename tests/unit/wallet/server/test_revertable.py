@@ -151,3 +151,61 @@ class TestRevertablePrefixDB(unittest.TestCase):
         self.assertEqual(10000000, self.db.claim_takeover.get(name).height)
         self.db.rollback(10000000, b'\x00' * 32)
         self.assertIsNone(self.db.claim_takeover.get(name))
+
+    def test_hub_db_iterator(self):
+        name = 'derp'
+        claim_hash0 = 20 * b'\x00'
+        claim_hash1 = 20 * b'\x01'
+        claim_hash2 = 20 * b'\x02'
+        claim_hash3 = 20 * b'\x03'
+        overflow_value = 0xffffffff
+        self.db.claim_expiration.stage_put((99, 999, 0), (claim_hash0, name))
+        self.db.claim_expiration.stage_put((100, 1000, 0), (claim_hash1, name))
+        self.db.claim_expiration.stage_put((100, 1001, 0), (claim_hash2, name))
+        self.db.claim_expiration.stage_put((101, 1002, 0), (claim_hash3, name))
+        self.db.claim_expiration.stage_put((overflow_value - 1, 1003, 0), (claim_hash3, name))
+        self.db.claim_expiration.stage_put((overflow_value, 1004, 0), (claim_hash3, name))
+        self.db.tx_num.stage_put((b'\x00' * 32,), (101,))
+        self.db.claim_takeover.stage_put((name,), (claim_hash3, 101))
+        self.db.db_state.stage_put((), (b'n?\xcf\x12\x99\xd4\xec]y\xc3\xa4\xc9\x1dbJJ\xcf\x9e.\x17=\x95\xa1\xa0POgvihuV', 0, 1, b'VuhivgOP\xa0\xa1\x95=\x17.\x9e\xcfJJb\x1d\xc9\xa4\xc3y]\xec\xd4\x99\x12\xcf?n', 1, 0, 1, 7, 1, -1, -1, 0))
+        self.db.unsafe_commit()
+
+        state = self.db.db_state.get()
+        self.assertEqual(b'n?\xcf\x12\x99\xd4\xec]y\xc3\xa4\xc9\x1dbJJ\xcf\x9e.\x17=\x95\xa1\xa0POgvihuV', state.genesis)
+
+        self.assertListEqual(
+            [], list(self.db.claim_expiration.iterate(prefix=(98,)))
+        )
+        self.assertListEqual(
+            list(self.db.claim_expiration.iterate(start=(98,), stop=(99,))),
+            list(self.db.claim_expiration.iterate(prefix=(98,)))
+        )
+        self.assertListEqual(
+            list(self.db.claim_expiration.iterate(start=(99,), stop=(100,))),
+            list(self.db.claim_expiration.iterate(prefix=(99,)))
+        )
+        self.assertListEqual(
+            [
+                ((99, 999, 0), (claim_hash0, name)),
+            ], list(self.db.claim_expiration.iterate(prefix=(99,)))
+        )
+        self.assertListEqual(
+            [
+                ((100, 1000, 0), (claim_hash1, name)),
+                ((100, 1001, 0), (claim_hash2, name))
+            ], list(self.db.claim_expiration.iterate(prefix=(100,)))
+        )
+        self.assertListEqual(
+            list(self.db.claim_expiration.iterate(start=(100,), stop=(101,))),
+            list(self.db.claim_expiration.iterate(prefix=(100,)))
+        )
+        self.assertListEqual(
+            [
+                ((overflow_value - 1, 1003, 0), (claim_hash3, name))
+            ], list(self.db.claim_expiration.iterate(prefix=(overflow_value - 1,)))
+        )
+        self.assertListEqual(
+            [
+                ((overflow_value, 1004, 0), (claim_hash3, name))
+            ], list(self.db.claim_expiration.iterate(prefix=(overflow_value,)))
+        )

@@ -4,10 +4,12 @@ import array
 import base64
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.interface import RocksDBStore, PrefixDB
+from lbry.wallet.server.db.interface import PrefixDB
 from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
+if typing.TYPE_CHECKING:
+    import rocksdb
 
 ACTIVATED_CLAIM_TXO_TYPE = 1
 ACTIVATED_SUPPORT_TXO_TYPE = 2
@@ -39,21 +41,32 @@ class PrefixRow(metaclass=PrefixRowType):
     value_struct: struct.Struct
     key_part_lambdas = []
 
-    def __init__(self, db: RocksDBStore, op_stack: RevertableOpStack):
+    def __init__(self, db: 'rocksdb.DB', op_stack: RevertableOpStack):
         self._db = db
         self._op_stack = op_stack
+        self._column_family = self._db.get_column_family(self.prefix)
+        if not self._column_family.is_valid:
+            raise RuntimeError('column family is not valid')
 
-    def iterate(self, prefix=None, start=None, stop=None,
-                reverse: bool = False, include_key: bool = True, include_value: bool = True,
-                fill_cache: bool = True, deserialize_key: bool = True, deserialize_value: bool = True):
+    def iterate(self, prefix=None, start=None, stop=None, reverse: bool = False, include_key: bool = True,
+                include_value: bool = True, fill_cache: bool = True, deserialize_key: bool = True,
+                deserialize_value: bool = True):
         if not prefix and not start and not stop:
             prefix = ()
         if prefix is not None:
             prefix = self.pack_partial_key(*prefix)
-        if start is not None:
-            start = self.pack_partial_key(*start)
-        if stop is not None:
-            stop = self.pack_partial_key(*stop)
+            if stop is None:
+                try:
+                   stop = (int.from_bytes(prefix, byteorder='big') + 1).to_bytes(len(prefix), byteorder='big')
+                except OverflowError:
+                    stop = (int.from_bytes(prefix, byteorder='big') + 1).to_bytes(len(prefix) + 1, byteorder='big')
+            else:
+                stop = self.pack_partial_key(*stop)
+        else:
+            if start is not None:
+                start = self.pack_partial_key(*start)
+            if stop is not None:
+                stop = self.pack_partial_key(*stop)
 
         if deserialize_key:
             key_getter = lambda k: self.unpack_key(k)
@@ -64,25 +77,27 @@ class PrefixRow(metaclass=PrefixRowType):
         else:
             value_getter = lambda v: v
 
+        it = self._db.iterator(
+            start or prefix, self._column_family, iterate_lower_bound=None,
+            iterate_upper_bound=stop, reverse=reverse, include_key=include_key,
+            include_value=include_value, fill_cache=fill_cache, prefix_same_as_start=True
+        )
+
         if include_key and include_value:
-            for k, v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse,
-                                          fill_cache=fill_cache):
-                yield key_getter(k), value_getter(v)
+            for k, v in it:
+                yield key_getter(k[1]), value_getter(v)
         elif include_key:
-            for k in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_value=False,
-                                       fill_cache=fill_cache):
-                yield key_getter(k)
+            for k in it:
+                yield key_getter(k[1])
         elif include_value:
-            for v in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False,
-                                       fill_cache=fill_cache):
+            for v in it:
                 yield value_getter(v)
         else:
-            for _ in self._db.iterator(prefix=prefix, start=start, stop=stop, reverse=reverse, include_key=False,
-                                       include_value=False, fill_cache=fill_cache):
+            for _ in it:
                 yield None
 
     def get(self, *key_args, fill_cache=True, deserialize_value=True):
-        v = self._db.get(self.pack_key(*key_args), fill_cache=fill_cache)
+        v = self._db.get((self._column_family, self.pack_key(*key_args)), fill_cache=fill_cache)
         if v:
             return v if not deserialize_value else self.unpack_value(v)
 
@@ -94,7 +109,7 @@ class PrefixRow(metaclass=PrefixRowType):
                 return last_op.value if not deserialize_value else self.unpack_value(last_op.value)
             else:  # it's a delete
                 return
-        v = self._db.get(packed_key, fill_cache=fill_cache)
+        v = self._db.get((self._column_family, packed_key), fill_cache=fill_cache)
         if v:
             return v if not deserialize_value else self.unpack_value(v)
 
@@ -118,7 +133,7 @@ class PrefixRow(metaclass=PrefixRowType):
 
     @classmethod
     def unpack_key(cls, key: bytes):
-        assert key[:1] == cls.prefix
+        assert key[:1] == cls.prefix, f"prefix should be {cls.prefix}, got {key[:1]}"
         return cls.key_struct.unpack(key[1:])
 
     @classmethod
@@ -1571,7 +1586,7 @@ class DBStatePrefixRow(PrefixRow):
 
 
 class BlockTxsPrefixRow(PrefixRow):
-    prefix = DB_PREFIXES.block_txs.value
+    prefix = DB_PREFIXES.block_tx.value
     key_struct = struct.Struct(b'>L')
     key_part_lambdas = [
         lambda: b'',
@@ -1600,12 +1615,18 @@ class BlockTxsPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(tx_hashes)
 
 
-class MempoolTxKey(TxKey):
-    pass
+class MempoolTxKey(NamedTuple):
+    tx_hash: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(tx_hash={self.tx_hash[::-1].hex()})"
 
 
-class MempoolTxValue(TxValue):
-    pass
+class MempoolTxValue(NamedTuple):
+    raw_tx: bytes
+
+    def __str__(self):
+        return f"{self.__class__.__name__}(raw_tx={base64.b64encode(self.raw_tx).decode()})"
 
 
 class MempoolTXPrefixRow(PrefixRow):
@@ -1724,8 +1745,9 @@ class TouchedHashXPrefixRow(PrefixRow):
 class HubDB(PrefixDB):
     def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
                  secondary_path: str = '', unsafe_prefixes: Optional[typing.Set[bytes]] = None):
-        db = RocksDBStore(path, cache_mb, max_open_files, secondary_path=secondary_path)
-        super().__init__(db, reorg_limit, unsafe_prefixes=unsafe_prefixes)
+        super().__init__(path, max_open_files=max_open_files, secondary_path=secondary_path,
+                         max_undo_depth=reorg_limit, unsafe_prefixes=unsafe_prefixes)
+        db = self._db
         self.claim_to_support = ClaimToSupportPrefixRow(db, self._op_stack)
         self.support_to_claim = SupportToClaimPrefixRow(db, self._op_stack)
         self.claim_to_txo = ClaimToTXOPrefixRow(db, self._op_stack)
