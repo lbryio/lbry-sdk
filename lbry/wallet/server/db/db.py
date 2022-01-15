@@ -394,7 +394,9 @@ class HubDB:
     def get_claims_for_name(self, name):
         claims = []
         prefix = self.prefix_db.claim_short_id.pack_partial_key(name) + bytes([1])
-        for _k, _v in self.prefix_db.iterator(prefix=prefix):
+        stop = self.prefix_db.claim_short_id.pack_partial_key(name) + int(2).to_bytes(1, byteorder='big')
+        cf = self.prefix_db.column_families[self.prefix_db.claim_short_id.prefix]
+        for _v in self.prefix_db.iterator(column_family=cf, start=prefix, iterate_upper_bound=stop, include_key=False):
             v = self.prefix_db.claim_short_id.unpack_value(_v)
             claim_hash = self.get_claim_from_txo(v.tx_num, v.position).claim_hash
             if claim_hash not in claims:
@@ -459,7 +461,9 @@ class HubDB:
     def get_claim_txos_for_name(self, name: str):
         txos = {}
         prefix = self.prefix_db.claim_short_id.pack_partial_key(name) + int(1).to_bytes(1, byteorder='big')
-        for k, v in self.prefix_db.iterator(prefix=prefix):
+        stop = self.prefix_db.claim_short_id.pack_partial_key(name) + int(2).to_bytes(1, byteorder='big')
+        cf = self.prefix_db.column_families[self.prefix_db.claim_short_id.prefix]
+        for v in self.prefix_db.iterator(column_family=cf, start=prefix, iterate_upper_bound=stop, include_key=False):
             tx_num, nout = self.prefix_db.claim_short_id.unpack_value(v)
             txos[self.get_claim_from_txo(tx_num, nout).claim_hash] = tx_num, nout
         return txos
