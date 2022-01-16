@@ -125,7 +125,8 @@ class RevertableOpStack:
             elif op.is_delete and not has_stored_val:
                 raise OpStackIntegrity(f"db op tries to delete nonexistent key: {op}")
             elif op.is_delete and stored_val != op.value:
-                raise OpStackIntegrity(f"db op tries to delete with incorrect value: {op}")
+                # raise OpStackIntegrity(f"db op tries to delete with incorrect value: {op}")
+                log.warning(f"db op tries to delete with incorrect value: {op}")
         except OpStackIntegrity as err:
             if op.key[:1] in self._unsafe_prefixes:
                 log.debug(f"skipping over integrity error: {err}")

@@ -27,8 +27,9 @@ async def get_recent_claims(env, index_name='claims', db=None):
         deleted_claims = set()
         for height in range(db.es_sync_height, db.db_height + 1):
             touched_or_deleted = db.prefix_db.touched_or_deleted.get(height)
-            touched_claims.update(touched_or_deleted.touched_claims)
-            deleted_claims.update(touched_or_deleted.deleted_claims)
+            if touched_or_deleted != None:
+                touched_claims.update(touched_or_deleted.touched_claims)
+                deleted_claims.update(touched_or_deleted.deleted_claims)
             touched_claims.difference_update(deleted_claims)
 
         for deleted in deleted_claims:

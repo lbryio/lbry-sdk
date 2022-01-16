@@ -869,7 +869,8 @@ class LevelDB:
             await self._read_tx_hashes()
 
     def close(self):
-        self.prefix_db.close()
+        if self.prefix_db:
+            self.prefix_db.close()
 
     def get_tx_hash(self, tx_num: int) -> bytes:
         if self.env.cache_all_tx_hashes:

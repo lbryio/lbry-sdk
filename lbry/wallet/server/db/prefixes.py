@@ -1615,7 +1615,7 @@ class LevelDBStore(KeyValueStorage):
         )
 
     def write_batch(self, transaction: bool = False, sync: bool = False):
-        return self.db.write_batch(transaction=transaction, sync=sync)
+        return self.db.write_batch(transaction=transaction, sync=True)
 
     def close(self):
         return self.db.close()
