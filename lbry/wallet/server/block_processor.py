@@ -86,11 +86,11 @@ class BlockProcessor:
         self.env = env
         self.state_lock = asyncio.Lock()
         self.daemon = env.coin.DAEMON(env.coin, env.daemon_url)
+        self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
         self.db = HubDB(
             env.coin, env.db_dir, env.cache_MB, env.reorg_limit, env.cache_all_claim_txos, env.cache_all_tx_hashes,
-            max_open_files=env.db_max_open_files
+            max_open_files=env.db_max_open_files, executor=self._chain_executor
         )
-        self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
         self.shutdown_event = asyncio.Event()
         self.coin = env.coin
         if env.coin.NET == 'mainnet':

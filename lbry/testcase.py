@@ -464,7 +464,8 @@ class CommandTestCase(IntegrationTestCase):
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
         await self.on_transaction_id(txid, ledger)
-        await asyncio.wait([self.generate(1), self.on_transaction_id(txid, ledger)], timeout=5)
+        on_tx = self.on_transaction_id(txid, ledger)
+        await asyncio.wait([self.generate(1), on_tx], timeout=5)
         return txid
 
     async def on_transaction_dict(self, tx):
