@@ -20,15 +20,15 @@ class BlockchainReader:
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
         self.shutdown_event = asyncio.Event()
         self.cancellable_tasks = []
+        self._executor = ThreadPoolExecutor(thread_workers, thread_name_prefix=thread_prefix)
 
         self.db = HubDB(
             env.coin, env.db_dir, env.cache_MB, env.reorg_limit, env.cache_all_claim_txos, env.cache_all_tx_hashes,
-            secondary_name=secondary_name, max_open_files=-1
+            secondary_name=secondary_name, max_open_files=-1, executor=self._executor
         )
         self.last_state: typing.Optional[DBState] = None
         self._refresh_interval = 0.1
         self._lock = asyncio.Lock()
-        self._executor = ThreadPoolExecutor(thread_workers, thread_name_prefix=thread_prefix)
 
     def _detect_changes(self):
         try:
@@ -241,7 +241,6 @@ class BlockchainReaderServer(BlockchainReader):
             pass
         finally:
             loop.run_until_complete(self.stop())
-            executor.shutdown(True)
 
     async def start_prometheus(self):
         if not self.prometheus_server and self.env.prometheus_port:
