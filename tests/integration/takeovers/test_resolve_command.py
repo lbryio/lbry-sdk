@@ -1604,7 +1604,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         await self.blockchain.generate(2)
 
         # wait for the client to catch up and verify the reorg
-        await asyncio.wait_for(self.on_header(209), 30.0)
+        await asyncio.wait_for(self.on_header(209), 3.0)
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         await self.assertBlockHash(209)
@@ -1633,7 +1633,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         await self.blockchain.generate(1)
 
         # wait for the client to catch up
-        await asyncio.wait_for(self.on_header(210), 30.0)
+        await asyncio.wait_for(self.on_header(210), 3.0)
 
         # verify the claim is in the new block and that it is returned by claim_search
         republished = await self.resolve('hovercraft')
@@ -1712,7 +1712,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         await self.blockchain.generate(1)
 
         # wait for the client to catch up
-        await asyncio.wait_for(self.on_header(210), 10.0)
+        await asyncio.wait_for(self.on_header(210), 1.0)
 
         # verify the claim is in the new block and that it is returned by claim_search
         republished = await self.resolve('hovercraft')

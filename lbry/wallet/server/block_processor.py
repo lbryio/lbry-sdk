@@ -234,7 +234,7 @@ class BlockProcessor:
                     await self.run_in_thread(self.advance_block, block)
                     await self.flush()
 
-                    self.logger.warning("writer advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
+                    self.logger.info("writer advanced to %i in %0.3fs", self.height, time.perf_counter() - start)
                     if self.height == self.coin.nExtendedClaimExpirationForkHeight:
                         self.logger.warning(
                             "applying extended claim expiration fork on claims accepted by, %i", self.height

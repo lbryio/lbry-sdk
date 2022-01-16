@@ -55,7 +55,7 @@ class ElasticWriter(BlockchainReader):
         server = await asyncio.get_event_loop().create_server(
             lambda: ElasticNotifierProtocol(self._listeners), '127.0.0.1', self.env.elastic_notifier_port
         )
-        self.log.warning("ES notifier server listening on TCP localhost:%i", self.env.elastic_notifier_port)
+        self.log.info("ES notifier server listening on TCP localhost:%i", self.env.elastic_notifier_port)
         synchronized.set()
         async with server:
             await server.serve_forever()
@@ -63,7 +63,7 @@ class ElasticWriter(BlockchainReader):
     def notify_es_notification_listeners(self, height: int, block_hash: bytes):
         for p in self._listeners:
             p.send_height(height, block_hash)
-            self.log.warning("notify listener %i", height)
+            self.log.info("notify listener %i", height)
 
     def _read_es_height(self):
         with open(self._es_info_path, 'r') as f:
@@ -174,7 +174,6 @@ class ElasticWriter(BlockchainReader):
         for touched in self._touched_claims:
             claim = self.db.claim_producer(touched)
             if claim:
-                self.log.warning("send es %s %i", claim['claim_id'], claim['activation_height'])
                 yield {
                     'doc': {key: value for key, value in claim.items() if key in ALL_FIELDS},
                     '_id': claim['claim_id'],
@@ -183,7 +182,6 @@ class ElasticWriter(BlockchainReader):
                     'doc_as_upsert': True
                 }
         for claim_hash, notifications in self._trending.items():
-            self.log.warning("send es trending for %s", claim_hash.hex())
             yield {
                 '_id': claim_hash.hex(),
                 '_index': self.index,
@@ -218,7 +216,7 @@ class ElasticWriter(BlockchainReader):
             for to_del in touched_or_deleted.deleted_claims:
                 if to_del in self._trending:
                     self._trending.pop(to_del)
-        self.log.warning("advanced to %i, %i touched %i to delete (%i %i)", height, len(touched_or_deleted.touched_claims), len(touched_or_deleted.deleted_claims),
+        self.log.info("advanced to %i, %i touched %i to delete (%i %i)", height, len(touched_or_deleted.touched_claims), len(touched_or_deleted.deleted_claims),
                          len(self._touched_claims), len(self._deleted_claims))
         self._advanced = True
 
@@ -263,7 +261,7 @@ class ElasticWriter(BlockchainReader):
                         success += 1
                 await self.sync_client.indices.refresh(self.index)
             self.write_es_height(self.db.db_height, self.db.db_tip[::-1].hex())
-            self.log.warning("Indexing block %i done. %i/%i successful", self._last_wrote_height, success, cnt)
+            self.log.info("Indexing block %i done. %i/%i successful", self._last_wrote_height, success, cnt)
             self._touched_claims.clear()
             self._deleted_claims.clear()
             self._removed_during_undo.clear()

@@ -17,15 +17,15 @@ class ElasticNotifierProtocol(asyncio.Protocol):
     def connection_made(self, transport):
         self.transport = transport
         self._listeners.append(self)
-        log.warning("got es notifier connection")
+        log.info("got es notifier connection")
 
     def connection_lost(self, exc) -> None:
         self._listeners.remove(self)
         self.transport = None
 
     def send_height(self, height: int, block_hash: bytes):
-        log.warning("notify es update '%s'", height)
-        self.transport.write(struct.pack(b'>Q32s', height, block_hash) + b'\n')
+        log.info("notify es update '%s'", height)
+        self.transport.write(struct.pack(b'>Q32s', height, block_hash))
 
 
 class ElasticNotifierClientProtocol(asyncio.Protocol):
@@ -41,11 +41,15 @@ class ElasticNotifierClientProtocol(asyncio.Protocol):
 
     def connection_made(self, transport):
         self.transport = transport
-        log.warning("connected to es notifier")
+        log.info("connected to es notifier")
 
     def connection_lost(self, exc) -> None:
         self.transport = None
 
     def data_received(self, data: bytes) -> None:
-        height, block_hash = struct.unpack(b'>Q32s', data.rstrip(b'\n'))
+        try:
+            height, block_hash = struct.unpack(b'>Q32s', data)
+        except:
+            log.exception("failed to decode %s", (data or b'').hex())
+            raise
         self.notifications.put_nowait((height, block_hash))

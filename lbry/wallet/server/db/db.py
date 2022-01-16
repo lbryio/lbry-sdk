@@ -731,7 +731,6 @@ class HubDB:
         return results
 
     async def _read_tx_counts(self):
-        print("read tx counts")
         if self.tx_counts is not None:
             return
         # tx_counts[N] has the cumulative number of txs at the end of
@@ -957,11 +956,7 @@ class HubDB:
             return None, tx_height
 
     def get_block_txs(self, height: int) -> List[bytes]:
-        try:
-            return self.prefix_db.block_txs.get(height).tx_hashes
-        except:
-            print("failed", height)
-            raise
+        return self.prefix_db.block_txs.get(height).tx_hashes
 
     async def get_transactions_and_merkles(self, tx_hashes: Iterable[str]):
         tx_infos = {}
@@ -988,8 +983,6 @@ class HubDB:
                 else:
                     fill_cache = False
                 tx_height = bisect_right(self.tx_counts, tx_num)
-                if tx_height == 737:
-                    print("wat")
                 tx = self.prefix_db.tx.get(tx_hash_bytes, fill_cache=fill_cache, deserialize_value=False)
             if tx_height == -1:
                 merkle = {
