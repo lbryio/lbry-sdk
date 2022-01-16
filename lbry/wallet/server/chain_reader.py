@@ -57,7 +57,7 @@ class BlockchainReader:
         self.db.read_db_state()
         if not self.last_state or self.last_state.height < state.height:
             for height in range(last_height + 1, state.height + 1):
-                self.log.warning("advancing to %i", height)
+                self.log.info("advancing to %i", height)
                 self.advance(height)
             self.clear_caches()
             self.last_state = state
@@ -77,7 +77,7 @@ class BlockchainReader:
         await asyncio.get_event_loop().run_in_executor(self._executor, self._detect_changes)
 
     async def refresh_blocks_forever(self, synchronized: asyncio.Event):
-        self.log.warning("start refresh blocks forever")
+        self.log.info("start refresh blocks forever")
         while True:
             try:
                 async with self._lock:
@@ -158,7 +158,7 @@ class BlockchainReaderServer(BlockchainReader):
         if self.notifications_to_send:
             for (touched, height) in self.notifications_to_send:
                 await self.mempool.on_block(touched, height)
-                self.log.warning("reader advanced to %i", height)
+                self.log.info("reader advanced to %i", height)
                 if self._es_height == self.db.db_height:
                     self.synchronized.set()
                 # print("reader notified")
@@ -176,9 +176,9 @@ class BlockchainReaderServer(BlockchainReader):
                 self.clear_search_cache()
                 if self.last_state and self._es_block_hash == self.last_state.tip:
                     self.synchronized.set()
-                    self.log.warning("es and reader are in sync")
+                    self.log.info("es and reader are in sync")
                 else:
-                    self.log.warning("es and reader are not yet in sync %s vs %s", self._es_height, self.db.db_height)
+                    self.log.info("es and reader are not yet in sync %s vs %s", self._es_height, self.db.db_height)
         finally:
             self.es_notification_client.close()
 

@@ -287,14 +287,11 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def generate(self, blocks):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
-        print("generate", blocks)
         prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
         self.conductor.spv_node.server.synchronized.clear()
         await self.blockchain.generate(blocks)
         await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
-        print("wait for synchronized")
         await self.conductor.spv_node.server.synchronized.wait()
-        print("finished waiting for synchronized")
 
 
 class FakeExchangeRateManager(ExchangeRateManager):

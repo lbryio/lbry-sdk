@@ -207,7 +207,7 @@ class MemPool:
                 for session in self.session_manager.sessions.values() if session.subscribe_headers
             ]
             if header_tasks:
-                self.logger.warning(f'notify {len(header_tasks)} sessions of new header')
+                self.logger.info(f'notify {len(header_tasks)} sessions of new header')
                 asyncio.create_task(asyncio.wait(header_tasks))
             for hashX in touched.intersection(self.session_manager.mempool_statuses.keys()):
                 self.session_manager.mempool_statuses.pop(hashX, None)
@@ -230,4 +230,4 @@ class MemPool:
             for session_id, hashXes in session_hashxes_to_notify.items():
                 asyncio.create_task(self.session_manager.sessions[session_id].send_history_notifications(*hashXes))
             if session_hashxes_to_notify:
-                self.logger.warning(f'notified {len(session_hashxes_to_notify)} sessions/{notified_hashxs:,d} touched addresses')
+                self.logger.info(f'notified {len(session_hashxes_to_notify)} sessions/{notified_hashxs:,d} touched addresses')

@@ -950,7 +950,6 @@ class LBRYElectrumX(SessionBase):
 
             self.session_manager.address_history_metric.observe(time.perf_counter() - start)
             notifications.append((method, (alias, status)))
-            print(f"notify {alias} {method}")
 
         start = time.perf_counter()
         self.session_manager.notifications_in_flight_metric.inc()
@@ -1506,10 +1505,6 @@ class LBRYElectrumX(SessionBase):
                     'block_height': block_height
                 }
                 await asyncio.sleep(0)  # heavy call, give other tasks a chance
-        print("return tx batch")
-        for tx_hash, (_, info) in batch_result.items():
-            print(tx_hash, info['block_height'])
-
         self.session_manager.tx_replied_count_metric.inc(len(tx_hashes))
         return batch_result
 
