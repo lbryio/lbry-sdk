@@ -93,6 +93,10 @@ class PublicKey(_KeyBase):
             self.verifying_key = self._verifying_key_from_pubkey(pubkey)
 
     @classmethod
+    def from_compressed(cls, public_key_bytes, ledger=None) -> 'PublicKey':
+        return cls(ledger, public_key_bytes, bytes((0,)*32), 0, 0)
+
+    @classmethod
     def _verifying_key_from_pubkey(cls, pubkey):
         """ Converts a 33-byte compressed pubkey into an coincurve.PublicKey object. """
         if not isinstance(pubkey, (bytes, bytearray)):
@@ -137,9 +141,35 @@ class PublicKey(_KeyBase):
             self.pubkey_bytes
         )
 
-    def verify(self, signature, data):
-        """ Produce a signature for piece of data by double hashing it and signing the hash. """
-        return self.verifying_key.verify(signature, data, hasher=double_sha256)
+    def verify(self, signature, digest) -> bool:
+        """ Verify that a signature is valid for a 32 byte digest. """
+
+        if len(signature) != 64:
+            raise ValueError('Signature must be 64 bytes long.')
+
+        if len(digest) != 32:
+            raise ValueError('Digest must be 32 bytes long.')
+
+        key = self.verifying_key
+
+        raw_signature = libsecp256k1_ffi.new('secp256k1_ecdsa_signature *')
+
+        parsed = libsecp256k1.secp256k1_ecdsa_signature_parse_compact(
+            key.context.ctx, raw_signature, signature
+        )
+        assert parsed == 1
+
+        normalized_signature = libsecp256k1_ffi.new('secp256k1_ecdsa_signature *')
+
+        libsecp256k1.secp256k1_ecdsa_signature_normalize(
+            key.context.ctx, normalized_signature, raw_signature
+        )
+
+        verified = libsecp256k1.secp256k1_ecdsa_verify(
+            key.context.ctx, normalized_signature, digest, key.public_key
+        )
+
+        return bool(verified)
 
 
 class PrivateKey(_KeyBase):
