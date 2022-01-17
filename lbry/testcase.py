@@ -355,7 +355,7 @@ class ExchangeRateManagerComponent(Component):
 
 class CommandTestCase(IntegrationTestCase):
 
-    VERBOSITY = logging.INFO
+    VERBOSITY = logging.WARN
     blob_lru_cache_size = 0
 
     def __init__(self, *args, **kwargs):
