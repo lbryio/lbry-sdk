@@ -141,11 +141,14 @@ class PublicKey(_KeyBase):
             self.pubkey_bytes
         )
 
-    def verify(self, signature, data) -> bool:
-        """ Verify that a signature is valid for data. """
+    def verify(self, signature, digest) -> bool:
+        """ Verify that a signature is valid for a 32 byte digest. """
 
         if len(signature) != 64:
-            raise Exception('invalid signature length')
+            raise ValueError('Signature must be 64 bytes long.')
+
+        if len(digest) != 32:
+            raise ValueError('Digest must be 32 bytes long.')
 
         key = self.verifying_key
 
@@ -163,7 +166,7 @@ class PublicKey(_KeyBase):
         )
 
         verified = libsecp256k1.secp256k1_ecdsa_verify(
-            key.context.ctx, normalized_signature, data, key.public_key
+            key.context.ctx, normalized_signature, digest, key.public_key
         )
 
         return bool(verified)
