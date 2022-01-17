@@ -55,7 +55,7 @@ class BlockchainReader:
                     self.unwind()
                     last_height -= 1
         self.db.read_db_state()
-        if not self.last_state or self.last_state.height < state.height:
+        if not self.last_state or last_height < state.height:
             for height in range(last_height + 1, state.height + 1):
                 self.log.info("advancing to %i", height)
                 self.advance(height)
