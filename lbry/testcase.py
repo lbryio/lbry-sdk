@@ -535,7 +535,7 @@ class CommandTestCase(IntegrationTestCase):
             return self.sout(tx)
         return tx
 
-    async def create_nondeterministic_channel(self, name, price, pubkey_bytes, daemon=None):
+    async def create_nondeterministic_channel(self, name, price, pubkey_bytes, daemon=None, blocking=False):
         account = (daemon or self.daemon).wallet_manager.default_account
         claim_address = await account.receiving.get_or_create_usable_address()
         claim = Claim()
@@ -545,7 +545,7 @@ class CommandTestCase(IntegrationTestCase):
             claim_address, [self.account], self.account
         )
         await tx.sign([self.account])
-        await (daemon or self.daemon).broadcast_or_release(tx, False)
+        await (daemon or self.daemon).broadcast_or_release(tx, blocking)
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
