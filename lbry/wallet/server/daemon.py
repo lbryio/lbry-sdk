@@ -53,7 +53,7 @@ class Daemon:
         self.max_retry = max_retry
         self._height = None
         self.available_rpcs = {}
-        self.connector = aiohttp.TCPConnector()
+        self.connector = aiohttp.TCPConnector(ssl=False)
         self._block_hash_cache = LRUCacheWithMetrics(100000)
         self._block_cache = LRUCacheWithMetrics(2 ** 13, metric_name='block', namespace=NAMESPACE)
 
