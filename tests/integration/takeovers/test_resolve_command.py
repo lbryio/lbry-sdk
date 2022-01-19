@@ -1433,29 +1433,41 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
             ))[0][0]['trending_score']
 
         claim_id1 = (await self.stream_create('derp', '1.0'))['outputs'][0]['claim_id']
-        COIN = 1E8
+        COIN = int(1E8)
 
-        height = 99000
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height, 0, 10 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 207)
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (208, bytes.fromhex(claim_id1)), (0, 10 * COIN)
         )
         await self.generate(1)
-        self.assertEqual(172.64252836433135, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 1, 10 * COIN, 100 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 208)
+
+        self.assertEqual(1.7090807854206793, await get_trending_score(claim_id1))
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (209, bytes.fromhex(claim_id1)), (10 * COIN, 100 * COIN)
         )
         await self.generate(1)
-        self.assertEqual(173.45931832928875, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 100, 100 * COIN, 1000000 * COIN
+        self.assertEqual(self.conductor.spv_node.writer.height, 209)
+        self.assertEqual(2.2437974397778886, await get_trending_score(claim_id1))
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (309, bytes.fromhex(claim_id1)), (100 * COIN, 1000000 * COIN)
         )
-        await self.generate(1)
-        self.assertEqual(176.65517070393514, await get_trending_score(claim_id1))
-        self.conductor.spv_node.server.bp._add_claim_activation_change_notification(
-            claim_id1, height + 200, 1000000 * COIN, 1 * COIN
+        await self.generate(100)
+        self.assertEqual(self.conductor.spv_node.writer.height, 309)
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
+
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+            (409, bytes.fromhex(claim_id1)), (1000000 * COIN, 1 * COIN)
         )
+
+        await self.generate(99)
+        self.assertEqual(self.conductor.spv_node.writer.height, 408)
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
+
         await self.generate(1)
-        self.assertEqual(-174.951347102643, await get_trending_score(claim_id1))
+        self.assertEqual(self.conductor.spv_node.writer.height, 409)
+
+        self.assertEqual(-3.4256156592205627, await get_trending_score(claim_id1))
         search_results = (await self.conductor.spv_node.server.session_manager.search_index.search(claim_name="derp"))[0]
         self.assertEqual(1, len(search_results))
         self.assertListEqual([claim_id1], [c['claim_id'] for c in search_results])
