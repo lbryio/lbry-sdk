@@ -804,7 +804,7 @@ class HubDB:
         return int(160.6855883050695 * height)
 
     def open_db(self):
-        if self.prefix_db and not self.prefix_db.closed:
+        if self.prefix_db:
             return
         secondary_path = '' if not self._secondary_name else os.path.join(
             self._db_dir, self._secondary_name
@@ -857,6 +857,7 @@ class HubDB:
 
     def close(self):
         self.prefix_db.close()
+        self.prefix_db = None
 
     def get_tx_hash(self, tx_num: int) -> bytes:
         if self._cache_all_tx_hashes:

@@ -125,8 +125,7 @@ class PrefixDB:
         )
 
     def close(self):
-        if not self._db.is_closed:
-            self._db.close()
+        self._db.close()
 
     def try_catch_up_with_primary(self):
         self._db.try_catch_up_with_primary()
