@@ -36,7 +36,8 @@ class Env:
                  allow_lan_udp=None, cache_all_tx_hashes=None, cache_all_claim_txos=None, country=None,
                  payment_address=None, donation_address=None, max_send=None, max_receive=None, max_sessions=None,
                  session_timeout=None, drop_client=None, description=None, daily_fee=None,
-                 database_query_timeout=None, db_max_open_files=512, elastic_notifier_port=None):
+                 database_query_timeout=None, db_max_open_files=512, elastic_notifier_port=None,
+                 blocking_channel_ids=None, filtering_channel_ids=None):
         self.logger = class_logger(__name__, self.__class__.__name__)
 
         self.db_dir = db_dir if db_dir is not None else self.required('DB_DIRECTORY')
@@ -117,6 +118,10 @@ class Env:
                            if identity is not None]
         self.database_query_timeout = database_query_timeout if database_query_timeout is not None else \
             (float(self.integer('QUERY_TIMEOUT_MS', 10000)) / 1000.0)
+
+        # Filtering / Blocking
+        self.blocking_channel_ids = (blocking_channel_ids if blocking_channel_ids is not None else self.default('BLOCKING_CHANNEL_IDS', '')).split(' ')
+        self.filtering_channel_ids = (filtering_channel_ids if filtering_channel_ids is not None else self.default('FILTERING_CHANNEL_IDS', '')).split(' ')
 
     @classmethod
     def default(cls, envvar, default):

@@ -89,7 +89,8 @@ class BlockProcessor:
         self._chain_executor = ThreadPoolExecutor(1, thread_name_prefix='block-processor')
         self.db = HubDB(
             env.coin, env.db_dir, env.cache_MB, env.reorg_limit, env.cache_all_claim_txos, env.cache_all_tx_hashes,
-            max_open_files=env.db_max_open_files, executor=self._chain_executor
+            max_open_files=env.db_max_open_files, blocking_channel_ids=env.blocking_channel_ids,
+            filtering_channel_ids=env.filtering_channel_ids, executor=self._chain_executor
         )
         self.shutdown_event = asyncio.Event()
         self.coin = env.coin
