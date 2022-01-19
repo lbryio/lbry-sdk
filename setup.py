@@ -10,7 +10,7 @@ with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
 
 ROCKSDB = []
 if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-    ROCKSDB.append('lbry-rocksdb==0.8.1')
+    ROCKSDB.append('lbry-rocksdb==0.8.2')
 
 
 setup(

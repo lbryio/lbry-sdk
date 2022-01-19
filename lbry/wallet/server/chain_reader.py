@@ -41,14 +41,14 @@ class BlockchainReader:
             return
         # if state and self.last_state and self.db.headers and self.last_state.tip == self.db.coin.header_hash(self.db.headers[-1]):
         #     return
-        if self.last_state and self.last_state.height > state.height:  # FIXME: derp
-            self.log.debug("reorg detected, waiting until the writer has flushed the new blocks to advance")
+        if self.last_state and self.last_state.height > state.height:
+            self.log.warning("reorg detected, waiting until the writer has flushed the new blocks to advance")
             return
         last_height = 0 if not self.last_state else self.last_state.height
         if self.last_state:
             while True:
                 if self.db.headers[-1] == self.db.prefix_db.header.get(last_height, deserialize_value=False):
-                    self.log.debug("connects to block %i", last_height)
+                    self.log.info("connects to block %i", last_height)
                     break
                 else:
                     self.log.warning("disconnect block %i", last_height)
@@ -62,22 +62,10 @@ class BlockchainReader:
             self.clear_caches()
             self.last_state = state
 
-        # elif self.last_state and self.last_state.height > state.height:
-        #     last_height = self.last_state.height
-        #     for height in range(last_height, state.height, -1):
-        #         self.log.warning("unwind %i", height)
-        #         self.unwind()
-        #     self.clear_caches()
-        #     self.last_state = state
-        #     self.log.warning("unwound to %i", self.last_state.height)
-
-            # print("reader rewound to ", self.last_state.height)
-
     async def poll_for_changes(self):
         await asyncio.get_event_loop().run_in_executor(self._executor, self._detect_changes)
 
     async def refresh_blocks_forever(self, synchronized: asyncio.Event):
-        self.log.info("start refresh blocks forever")
         while True:
             try:
                 async with self._lock:
@@ -85,7 +73,7 @@ class BlockchainReader:
             except asyncio.CancelledError:
                 raise
             except:
-                self.log.exception("boom")
+                self.log.exception("blockchain reader main loop encountered an unexpected error")
                 raise
             await asyncio.sleep(self._refresh_interval)
             synchronized.set()
@@ -161,7 +149,6 @@ class BlockchainReaderServer(BlockchainReader):
                 self.log.info("reader advanced to %i", height)
                 if self._es_height == self.db.db_height:
                     self.synchronized.set()
-                # print("reader notified")
         await self.mempool.refresh_hashes(self.db.db_height)
         self.notifications_to_send.clear()
 
