@@ -259,8 +259,12 @@ class BasicTransactionTests(IntegrationTestCase):
         async def broadcast(tx):
             try:
                 return await real_broadcast(tx)
-            except lbry.wallet.rpc.jsonrpc.RPCError:
-                pass
+            except lbry.wallet.rpc.jsonrpc.RPCError as err:
+                # this is expected in tests where we try to double spend.
+                if 'the transaction was rejected by network rules.' in str(err):
+                    pass
+                else:
+                    raise err
             finally:
                 e.set()
 
