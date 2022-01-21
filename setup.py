@@ -30,9 +30,10 @@ setup(
     entry_points={
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
-            'lbry-hub=lbry.wallet.server.cli:main',
-            'orchstr8=lbry.wallet.orchstr8.cli:main',
-            'lbry-hub-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync'
+            'lbry-hub-writer=lbry.wallet.server.cli:run_writer_forever',
+            'lbry-hub-server=lbry.wallet.server.cli:run_server_forever',
+            'lbry-hub-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync',
+            'orchstr8=lbry.wallet.orchstr8.cli:main'
         ],
     },
     install_requires=[

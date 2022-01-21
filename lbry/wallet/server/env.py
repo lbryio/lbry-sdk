@@ -30,7 +30,7 @@ class Env:
 
     def __init__(self, coin=None, db_dir=None, daemon_url=None, host=None, rpc_host=None, elastic_host=None,
                  elastic_port=None, loop_policy=None, max_query_workers=None, websocket_host=None, websocket_port=None,
-                 chain=None, es_index_prefix=None, es_mode=None, cache_MB=None, reorg_limit=None, tcp_port=None,
+                 chain=None, es_index_prefix=None, cache_MB=None, reorg_limit=None, tcp_port=None,
                  udp_port=None, ssl_port=None, ssl_certfile=None, ssl_keyfile=None, rpc_port=None,
                  prometheus_port=None, max_subscriptions=None, banner_file=None, anon_logs=None, log_sessions=None,
                  allow_lan_udp=None, cache_all_tx_hashes=None, cache_all_claim_txos=None, country=None,
@@ -69,7 +69,6 @@ class Env:
             else:
                 self.coin = LBCRegTest
         self.es_index_prefix = es_index_prefix if es_index_prefix is not None else self.default('ES_INDEX_PREFIX', '')
-        self.es_mode = es_mode if es_mode is not None else self.default('ES_MODE', 'writer')
         self.cache_MB = cache_MB if cache_MB is not None else self.integer('CACHE_MB', 1024)
         self.reorg_limit = reorg_limit if reorg_limit is not None else self.integer('REORG_LIMIT', self.coin.REORG_LIMIT)
         # Server stuff
@@ -329,8 +328,6 @@ class Env:
                             help='elasticsearch host')
         parser.add_argument('--elastic_port', default=cls.integer('ELASTIC_PORT', 9200), type=int,
                             help='elasticsearch port')
-        parser.add_argument('--es_mode', default=cls.default('ES_MODE', 'writer'), type=str,
-                            choices=['reader', 'writer'])
         parser.add_argument('--es_index_prefix', default=cls.default('ES_INDEX_PREFIX', ''), type=str)
         parser.add_argument('--loop_policy', default=cls.default('EVENT_LOOP_POLICY', 'default'), type=str,
                             choices=['default', 'uvloop'])
@@ -378,7 +375,7 @@ class Env:
             host=args.host, rpc_host=args.rpc_host, elastic_host=args.elastic_host, elastic_port=args.elastic_port,
             loop_policy=args.loop_policy, max_query_workers=args.max_query_workers, websocket_host=args.websocket_host,
             websocket_port=args.websocket_port, chain=args.chain, es_index_prefix=args.es_index_prefix,
-            es_mode=args.es_mode, cache_MB=args.cache_MB, reorg_limit=args.reorg_limit, tcp_port=args.tcp_port,
+            cache_MB=args.cache_MB, reorg_limit=args.reorg_limit, tcp_port=args.tcp_port,
             udp_port=args.udp_port, ssl_port=args.ssl_port, ssl_certfile=args.ssl_certfile,
             ssl_keyfile=args.ssl_keyfile, rpc_port=args.rpc_port, prometheus_port=args.prometheus_port,
             max_subscriptions=args.max_subscriptions, banner_file=args.banner_file, anon_logs=args.anon_logs,

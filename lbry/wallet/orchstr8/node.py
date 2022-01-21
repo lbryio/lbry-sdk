@@ -219,9 +219,10 @@ class SPVNode:
         }
         if extraconf:
             conf.update(extraconf)
-        self.writer = BlockProcessor(Env(self.coin_class, es_mode='writer', **conf))
-        self.server = BlockchainReaderServer(Env(self.coin_class, es_mode='reader', **conf))
-        self.es_writer = ElasticWriter(Env(self.coin_class, es_mode='reader', **conf))
+        env = Env(self.coin_class, **conf)
+        self.writer = BlockProcessor(env)
+        self.server = BlockchainReaderServer(env)
+        self.es_writer = ElasticWriter(env)
         await self.writer.open()
         await self.writer.start()
         await asyncio.wait([self.server.start(), self.es_writer.start()])
