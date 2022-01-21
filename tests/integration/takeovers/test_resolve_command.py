@@ -73,10 +73,8 @@ class BaseResolveTestCase(CommandTestCase):
             # ensure that if we do have the matching claim that it is not active
             self.assertEqual(expected['claims'][0]['effectiveamount'], 0)
 
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
-        self.assertListEqual([], claim_from_es[0])
         claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(claim_id=claim_id)
-        self.assertIsNone(claim)
+        self.assertListEqual([], claim_from_es[0])
 
     async def assertMatchWinningClaim(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimsfornamebybid', name, "[0]"))
