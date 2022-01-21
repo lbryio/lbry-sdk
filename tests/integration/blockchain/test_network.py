@@ -101,12 +101,7 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.network.client.transport.close()
         self.assertFalse(self.ledger.network.is_connected)
         await self.ledger.resolve([], 'derp')
-        sendtxid = await self.blockchain.send_to_address(address1, 1.1337)
-        # await self.ledger.resolve([], 'derp')
-        # self.assertTrue(self.ledger.network.is_connected)
-        await asyncio.wait_for(self.on_transaction_id(sendtxid), 10.0)  # mempool
-        await self.blockchain.generate(1)
-        await self.on_transaction_id(sendtxid)  # confirmed
+        sendtxid = await self.send_to_address_and_wait(address1, 1.1337, 1)
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
         await self.assertBalance(self.account, '1.1337')
@@ -135,7 +130,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.conductor.spv_node.stop()
         self.assertFalse(self.ledger.network.is_connected)
         await asyncio.sleep(0.2)  # let it retry and fail once
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
@@ -165,8 +160,10 @@ class UDPServerFailDiscoveryTest(AsyncioTestCase):
     async def test_wallet_connects_despite_lack_of_udp(self):
         conductor = Conductor()
         conductor.spv_node.udp_port = '0'
-        await conductor.start_blockchain()
-        self.addCleanup(conductor.stop_blockchain)
+        await conductor.start_lbcd()
+        self.addCleanup(conductor.stop_lbcd)
+        await conductor.start_lbcwallet()
+        self.addCleanup(conductor.stop_lbcwallet)
         await conductor.start_spv()
         self.addCleanup(conductor.stop_spv)
         self.assertFalse(conductor.spv_node.server.reader.status_server.is_running)

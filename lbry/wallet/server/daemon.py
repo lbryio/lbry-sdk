@@ -53,7 +53,7 @@ class Daemon:
         self.max_retry = max_retry
         self._height = None
         self.available_rpcs = {}
-        self.connector = aiohttp.TCPConnector()
+        self.connector = aiohttp.TCPConnector(ssl=False)
         self._block_hash_cache = LRUCacheWithMetrics(100000)
         self._block_cache = LRUCacheWithMetrics(2 ** 13, metric_name='block', namespace=NAMESPACE)
 
@@ -250,14 +250,14 @@ class Daemon:
     async def deserialised_block(self, hex_hash):
         """Return the deserialised block with the given hex hash."""
         if hex_hash not in self._block_cache:
-            block = await self._send_single('getblock', (hex_hash, True))
+            block = await self._send_single('getblock', (hex_hash, 1))
             self._block_cache[hex_hash] = block
             return block
         return self._block_cache[hex_hash]
 
     async def raw_blocks(self, hex_hashes):
         """Return the raw binary blocks with the given hex hashes."""
-        params_iterable = ((h, False) for h in hex_hashes)
+        params_iterable = ((h, 0) for h in hex_hashes)
         blocks = await self._send_vector('getblock', params_iterable)
         # Convert hex string to bytes
         return [hex_to_bytes(block) for block in blocks]
@@ -335,41 +335,6 @@ class LBCDaemon(Daemon):
         return await super().getrawtransaction(hex_hash=hex_hash, verbose=verbose)
 
     @handles_errors
-    async def getclaimbyid(self, claim_id):
-        '''Given a claim id, retrieves claim information.'''
-        return await self._send_single('getclaimbyid', (claim_id,))
-
-    @handles_errors
-    async def getclaimsbyids(self, claim_ids):
-        '''Given a list of claim ids, batches calls to retrieve claim information.'''
-        return await self._send_vector('getclaimbyid', ((claim_id,) for claim_id in claim_ids))
-
-    @handles_errors
     async def getclaimsforname(self, name):
         '''Given a name, retrieves all claims matching that name.'''
         return await self._send_single('getclaimsforname', (name,))
-
-    @handles_errors
-    async def getclaimsfortx(self, txid):
-        '''Given a txid, returns the claims it make.'''
-        return await self._send_single('getclaimsfortx', (txid,)) or []
-
-    @handles_errors
-    async def getnameproof(self, name, block_hash=None):
-        '''Given a name and optional block_hash, returns a name proof and winner, if any.'''
-        return await self._send_single('getnameproof', (name, block_hash,) if block_hash else (name,))
-
-    @handles_errors
-    async def getvalueforname(self, name):
-        '''Given a name, returns the winning claim value.'''
-        return await self._send_single('getvalueforname', (name,))
-
-    @handles_errors
-    async def getnamesintrie(self):
-        '''Given a name, returns the winning claim value.'''
-        return await self._send_single('getnamesintrie')
-
-    @handles_errors
-    async def claimname(self, name, hexvalue, amount):
-        '''Claim a name, used for functional tests only.'''
-        return await self._send_single('claimname', (name, hexvalue, float(amount)))

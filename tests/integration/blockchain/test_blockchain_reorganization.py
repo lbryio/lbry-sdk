@@ -113,7 +113,7 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
         await asyncio.wait_for(self.on_header(209), 3.0)
 
@@ -190,7 +190,7 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
 
         # wait for the client to catch up and verify the reorg

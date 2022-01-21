@@ -1,8 +1,13 @@
-__node_daemon__ = 'lbrycrdd'
-__node_cli__ = 'lbrycrd-cli'
-__node_bin__ = ''
-__node_url__ = (
-    'https://github.com/lbryio/lbrycrd/releases/download/v0.17.4.6/lbrycrd-linux-1746.zip'
+__lbcd__ = 'lbcd'
+__lbcctl__ = 'lbcctl'
+__lbcwallet__ = 'lbcwallet'
+__lbcd_url__ = (
+    'https://github.com/lbryio/lbcd/releases/download/' +
+    'v0.22.200-beta/lbcd_0.22.200-beta_TARGET_PLATFORM.tar.gz'
+)
+__lbcwallet_url__ = (
+    'https://github.com/lbryio/lbcwallet/releases/download/' +
+    'v0.13.100-alpha-rc2/lbcwallet_0.13.100-alpha-rc2_TARGET_PLATFORM.tar.gz'
 )
 __spvserver__ = 'lbry.wallet.server.coin.LBCRegTest'
 
