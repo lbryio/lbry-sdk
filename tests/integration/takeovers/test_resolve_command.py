@@ -1329,9 +1329,8 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # abandon the support that causes the winning claim to have the highest staked
         tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id)
         await self.generate(1)
+        await self.assertMatchClaim(second_claim_id, is_active_in_lbrycrd=False)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
-        # await self.assertMatchClaim(second_claim_id)
-
         await self.generate(1)
 
         await self.assertMatchClaim(first_claim_id)
@@ -1483,7 +1482,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         self.conductor.spv_node.server.synchronized.clear()
 
         # go back to start
-        print('invalidate block', await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode()))
+        await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode())
         # go to previous + 1
         await self.blockchain.generate(blocks + 2)
 
