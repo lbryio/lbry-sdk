@@ -1594,16 +1594,6 @@ class BlockProcessor:
         finally:
             self._ready_to_stop.set()
 
-    async def _es_caught_up(self):
-        self.db.es_sync_height = self.height
-
-        def flush():
-            assert len(self.db.prefix_db._op_stack) == 0
-            self.db.write_db_state()
-            self.db.prefix_db.unsafe_commit()
-            self.db.assert_db_state()
-
-        await self.run_in_thread_with_lock(flush)
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')
