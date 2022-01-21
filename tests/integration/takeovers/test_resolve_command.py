@@ -71,7 +71,7 @@ class BaseResolveTestCase(CommandTestCase):
             # ensure that if we do have the matching claim that it is not active
             self.assertEqual(expected['claims'][0]['effectiveamount'], 0)
 
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(claim_id=claim_id)
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(claim_id=claim_id)
         self.assertListEqual([], claim_from_es[0])
         claim = await self.conductor.spv_node.server.db.fs_getclaimbyid(claim_id)
         self.assertIsNone(claim)
