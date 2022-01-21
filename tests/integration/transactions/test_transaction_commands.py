@@ -41,6 +41,7 @@ class TransactionCommandsTestCase(CommandTestCase):
 
 class TestSegwit(CommandTestCase):
 
+    @unittest.SkipTest
     async def test_segwit(self):
         p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
         p2sh_address2 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
