@@ -95,8 +95,8 @@ class BaseResolveTestCase(CommandTestCase):
                              claim_from_es[0][0]['support_amount'])
 
     async def assertMatchClaim(self, name, claim_id, is_active_in_lbrycrd=True):
-        claim = await self.conductor.spv_node.server.bp.db.fs_getclaimbyid(claim_id)
-        claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+        claim = await self.conductor.spv_node.server.db.fs_getclaimbyid(claim_id)
+        claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(
             claim_id=claim.claim_hash.hex()
         )
         self.assertEqual(len(claim_from_es[0]), 1)
@@ -158,7 +158,7 @@ class BaseResolveTestCase(CommandTestCase):
             claim = db._fs_get_claim_by_hash(claim_hash)
             self.assertMatchDBClaim(c, claim)
 
-            claim_from_es = await self.conductor.spv_node.server.bp.db.search_index.search(
+            claim_from_es = await self.conductor.spv_node.server.session_manager.search_index.search(
                 claim_id=claim_id
             )
             self.assertEqual(len(claim_from_es[0]), 1)
@@ -173,7 +173,7 @@ class BaseResolveTestCase(CommandTestCase):
         await self.assertMatchClaimIsWinning(name, winning_claim_id)
         for non_winning in non_winning_claims:
             claim = await self.assertMatchClaim(
-                non_winning.claim_id, is_active_in_lbrycrd=non_winning.active_in_lbrycrd
+                name, non_winning.claim_id, is_active_in_lbrycrd=non_winning.active_in_lbrycrd
             )
             self.assertEqual(non_winning.activation_height, claim.activation_height)
             self.assertEqual(last_takeover_height, claim.last_takeover_height)
@@ -1355,7 +1355,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         # abandon the support that causes the winning claim to have the highest staked
         tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id)
         await self.generate(1)
-        await self.assertMatchClaim(second_claim_id, is_active_in_lbrycrd=False)
+        await self.assertMatchClaim(name, second_claim_id, is_active_in_lbrycrd=False)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
         await self.generate(1)
 
