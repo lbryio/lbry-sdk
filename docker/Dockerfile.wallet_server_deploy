@@ -15,18 +15,8 @@ RUN apt-get update && \
       tar unzip \
       build-essential \
       automake libtool \
-      pkg-config \
-      librocksdb-dev
-#      python3.7 \
-#      python3-dev \
-#      python3-pip \
-#      python3-wheel \
-#      python3-cffi \
-#      python3-setuptools && \
-#    update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 1 && \
-#    rm -rf /var/lib/apt/lists/*
+      pkg-config
 
-RUN pip install lbry-rocksdb
 RUN pip install uvloop
 RUN groupadd -g 999 $user && useradd -m -u 999 -g $user $user
 RUN mkdir -p $db_dir
