@@ -365,6 +365,13 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertEqual(daemon2.jsonrpc_wallet_status(),
                          {'is_locked': False, 'is_encrypted': True, 'is_syncing': False})
 
+    async def test_locking_unlocking_does_not_break_deterministic_channels(self):
+        self.assertTrue(self.daemon.jsonrpc_wallet_encrypt("password"))
+        self.assertTrue(self.daemon.jsonrpc_wallet_lock())
+        self.account.deterministic_channel_keys._private_key = None
+        self.assertTrue(self.daemon.jsonrpc_wallet_unlock("password"))
+        await self.channel_create()
+
     async def test_sync_with_encryption_and_password_change(self):
         daemon, daemon2 = self.daemon, self.daemon2
         wallet, wallet2 = daemon.wallet_manager.default_wallet, daemon2.wallet_manager.default_wallet
