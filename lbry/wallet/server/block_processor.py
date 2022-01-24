@@ -1634,6 +1634,8 @@ class BlockProcessor:
         could be lost.
         """
 
+        await self.open()
+
         self._caught_up_event = caught_up_event
         try:
             await asyncio.wait([

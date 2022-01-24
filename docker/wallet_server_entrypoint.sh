@@ -20,6 +20,14 @@ if [[ -n "$SNAPSHOT_URL" ]] && [[ ! -f /database/lbry-leveldb ]]; then
   rm "$filename"
 fi
 
-/home/lbry/.local/bin/lbry-hub-elastic-sync
-echo 'starting server'
-/home/lbry/.local/bin/lbry-hub "$@"
+if [ -z "$HUB_COMMAND" ]; then
+  echo "HUB_COMMAND env variable must be writer, reader, or es_sync"
+  exit 1
+fi
+
+case "$HUB_COMMAND" in
+  writer ) /home/lbry/.local/bin/lbry-hub-writer "$@" ;;
+  reader ) /home/lbry/.local/bin/lbry-hub-server "$@" ;;
+  es_sync ) /home/lbry/.local/bin/lbry-hub-elastic-sync ;;
+  * ) "HUB_COMMAND env variable must be writer, reader, or es_sync" && exit 1 ;;
+esac
