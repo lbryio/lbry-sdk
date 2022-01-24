@@ -2,7 +2,7 @@ import asyncio
 import typing
 import logging
 
-from prometheus_client import Counter
+from prometheus_client import Counter, Gauge
 
 if typing.TYPE_CHECKING:
     from lbry.dht.node import Node
@@ -15,6 +15,10 @@ class BlobAnnouncer:
     announcements_sent_metric = Counter(
         "announcements_sent", "Number of announcements sent and their respective status.", namespace="dht_node",
         labelnames=("peers", "error"),
+    )
+    announcement_queue_size_metric = Gauge(
+        "announcement_queue_size", "Number of hashes waiting to be announced.", namespace="dht_node",
+        labelnames=("scope",)
     )
 
     def __init__(self, loop: asyncio.AbstractEventLoop, node: 'Node', storage: 'SQLiteStorage'):
@@ -48,6 +52,7 @@ class BlobAnnouncer:
                 log.warning("No peers in DHT, announce round skipped")
                 continue
             self.announce_queue.extend(await self.storage.get_blobs_to_announce())
+            self.announcement_queue_size_metric.labels(scope="global").set(len(self.announce_queue))
             log.debug("announcer task wake up, %d blobs to announce", len(self.announce_queue))
             while len(self.announce_queue) > 0:
                 log.info("%i blobs to announce", len(self.announce_queue))
