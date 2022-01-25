@@ -20,8 +20,9 @@ class BlockchainReader:
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
         self.shutdown_event = asyncio.Event()
         self.cancellable_tasks = []
+        self._thread_workers = thread_workers
+        self._thread_prefix = thread_prefix
         self._executor = ThreadPoolExecutor(thread_workers, thread_name_prefix=thread_prefix)
-
         self.db = HubDB(
             env.coin, env.db_dir, env.cache_MB, env.reorg_limit, env.cache_all_claim_txos, env.cache_all_tx_hashes,
             secondary_name=secondary_name, max_open_files=-1, blocking_channel_ids=env.blocking_channel_ids,
@@ -92,6 +93,11 @@ class BlockchainReader:
     def unwind(self):
         self.db.tx_counts.pop()
         self.db.headers.pop()
+
+    async def start(self):
+        if not self._executor:
+            self._executor = ThreadPoolExecutor(self._thread_workers, thread_name_prefix=self._thread_prefix)
+            self.db._executor = self._executor
 
 
 class BlockchainReaderServer(BlockchainReader):
@@ -173,6 +179,7 @@ class BlockchainReaderServer(BlockchainReader):
             self.es_notification_client.close()
 
     async def start(self):
+        await super().start()
         env = self.env
         min_str, max_str = env.coin.SESSIONCLS.protocol_min_max_strings()
         self.log.info(f'software version: {lbry.__version__}')
@@ -192,7 +199,7 @@ class BlockchainReaderServer(BlockchainReader):
         self.last_state = self.db.read_db_state()
 
         await self.start_prometheus()
-        if self.env.udp_port:
+        if self.env.udp_port and int(self.env.udp_port):
             await self.status_server.start(
                 0, bytes.fromhex(self.env.coin.GENESIS_HASH)[::-1], self.env.country,
                 self.env.host, self.env.udp_port, self.env.allow_lan_udp
@@ -215,6 +222,7 @@ class BlockchainReaderServer(BlockchainReader):
             self.prometheus_server = None
         await self.daemon.close()
         self._executor.shutdown(wait=True)
+        self._executor = None
         self.shutdown_event.set()
 
     def run(self):

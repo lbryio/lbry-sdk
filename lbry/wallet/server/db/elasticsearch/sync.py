@@ -122,8 +122,9 @@ class ElasticWriter(BlockchainReader):
             await self.sync_client.close()
         self.sync_client = None
 
-    def delete_index(self):
-        return self.sync_client.indices.delete(self.index, ignore_unavailable=True)
+    async def delete_index(self):
+        if self.sync_client:
+            return await self.sync_client.indices.delete(self.index, ignore_unavailable=True)
 
     def update_filter_query(self, censor_type, blockdict, channels=False):
         blockdict = {blocked.hex(): blocker.hex() for blocked, blocker in blockdict.items()}
@@ -275,8 +276,7 @@ class ElasticWriter(BlockchainReader):
         return self._last_wrote_height
 
     async def start(self):
-        env = self.env
-        min_str, max_str = env.coin.SESSIONCLS.protocol_min_max_strings()
+        await super().start()
 
         def _start_cancellable(run, *args):
             _flag = asyncio.Event()
@@ -301,6 +301,7 @@ class ElasticWriter(BlockchainReader):
             await self.delete_index()
         await self.stop_index()
         self._executor.shutdown(wait=True)
+        self._executor = None
 
     def run(self):
         loop = asyncio.get_event_loop()
