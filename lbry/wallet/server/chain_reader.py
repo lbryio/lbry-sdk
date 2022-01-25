@@ -143,6 +143,8 @@ class BlockchainReaderServer(BlockchainReader):
 
     async def poll_for_changes(self):
         await super().poll_for_changes()
+        if self.db.fs_height <= 0:
+            return
         self.status_server.set_height(self.db.fs_height, self.db.db_tip)
         if self.notifications_to_send:
             for (touched, height) in self.notifications_to_send:

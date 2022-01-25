@@ -209,3 +209,30 @@ class TestRevertablePrefixDB(unittest.TestCase):
                 ((overflow_value, 1004, 0), (claim_hash3, name))
             ], list(self.db.claim_expiration.iterate(prefix=(overflow_value,)))
         )
+
+    def test_hub_db_iterator_start_stop(self):
+        tx_num = 101
+        for x in range(255):
+            claim_hash = 20 * chr(x).encode()
+            self.db.active_amount.stage_put((claim_hash, 1, 200, tx_num, 1), (100000,))
+            self.db.active_amount.stage_put((claim_hash, 1, 201, tx_num + 1, 1), (200000,))
+            self.db.active_amount.stage_put((claim_hash, 1, 202, tx_num + 2, 1), (300000,))
+            tx_num += 3
+        self.db.unsafe_commit()
+
+        def get_active_amount_as_of_height(claim_hash: bytes, height: int) -> int:
+            print(f"\t\tget_active_amount_as_of_height {claim_hash.hex()} @ {height}")
+            for v in self.db.active_amount.iterate(
+                    start=(claim_hash, 1, 0), stop=(claim_hash, 1, height + 1),
+                    include_key=False, reverse=True):
+                return v.amount
+            return 0
+
+        for x in range(255):
+            claim_hash = 20 * chr(x).encode()
+            self.assertEqual(300000, get_active_amount_as_of_height(claim_hash, 300))
+            self.assertEqual(300000, get_active_amount_as_of_height(claim_hash, 203))
+            self.assertEqual(300000, get_active_amount_as_of_height(claim_hash, 202))
+            self.assertEqual(200000, get_active_amount_as_of_height(claim_hash, 201))
+            self.assertEqual(100000, get_active_amount_as_of_height(claim_hash, 200))
+            self.assertEqual(0, get_active_amount_as_of_height(claim_hash, 199))
