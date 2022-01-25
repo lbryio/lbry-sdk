@@ -1353,14 +1353,15 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(8)
         await self.assertMatchClaimIsWinning(name, first_claim_id)
         # abandon the support that causes the winning claim to have the highest staked
-        tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id)
+        tx = await self.daemon.jsonrpc_txo_spend(type='support', txid=controlling_support_tx.id, blocking=True)
         await self.generate(1)
-        await self.assertMatchClaim(name, second_claim_id, is_active_in_lbrycrd=False)
-        await self.assertMatchClaimIsWinning(name, first_claim_id)
+        await self.assertNameState(538, name, first_claim_id, last_takeover_height=207, non_winning_claims=[
+            ClaimStateValue(second_claim_id, activation_height=539, active_in_lbrycrd=False)
+        ])
         await self.generate(1)
-
-        await self.assertMatchClaim(name, first_claim_id)
-        await self.assertMatchClaimIsWinning(name, second_claim_id)
+        await self.assertNameState(539, name, second_claim_id, last_takeover_height=539, non_winning_claims=[
+            ClaimStateValue(first_claim_id, activation_height=207, active_in_lbrycrd=True)
+        ])
 
     async def test_remove_controlling_support(self):
         name = 'derp'

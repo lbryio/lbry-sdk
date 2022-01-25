@@ -116,7 +116,7 @@ class PrefixDB:
     def iterator(self, start: bytes, column_family: 'rocksdb.ColumnFamilyHandle' = None,
                  iterate_lower_bound: bytes = None, iterate_upper_bound: bytes = None,
                  reverse: bool = False, include_key: bool = True, include_value: bool = True,
-                 fill_cache: bool = True, prefix_same_as_start: bool = True, auto_prefix_mode: bool = True):
+                 fill_cache: bool = True, prefix_same_as_start: bool = False, auto_prefix_mode: bool = False):
         return self._db.iterator(
             start=start, column_family=column_family, iterate_lower_bound=iterate_lower_bound,
             iterate_upper_bound=iterate_upper_bound, reverse=reverse, include_key=include_key,
