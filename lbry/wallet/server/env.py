@@ -37,7 +37,7 @@ class Env:
                  payment_address=None, donation_address=None, max_send=None, max_receive=None, max_sessions=None,
                  session_timeout=None, drop_client=None, description=None, daily_fee=None,
                  database_query_timeout=None, db_max_open_files=512, elastic_notifier_port=None,
-                 blocking_channel_ids=None, filtering_channel_ids=None):
+                 blocking_channel_ids=None, filtering_channel_ids=None, peer_hubs=None, peer_announce=None):
         self.logger = class_logger(__name__, self.__class__.__name__)
 
         self.db_dir = db_dir if db_dir is not None else self.required('DB_DIRECTORY')
@@ -91,8 +91,11 @@ class Env:
         self.country = country if country is not None else self.default('COUNTRY', 'US')
         # Peer discovery
         self.peer_discovery = self.peer_discovery_enum()
-        self.peer_announce = self.boolean('PEER_ANNOUNCE', True)
-        self.peer_hubs = self.extract_peer_hubs()
+        self.peer_announce = peer_announce if peer_announce is not None else self.boolean('PEER_ANNOUNCE', True)
+        if peer_hubs is not None:
+            self.peer_hubs = [p.strip("") for p in peer_hubs.split(",")]
+        else:
+            self.peer_hubs = self.extract_peer_hubs()
         # self.tor_proxy_host = self.default('TOR_PROXY_HOST', 'localhost')
         # self.tor_proxy_port = self.integer('TOR_PROXY_PORT', None)
         # The electrum client takes the empty string as unspecified

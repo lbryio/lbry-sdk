@@ -5,7 +5,6 @@ import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
-from lbry.wallet.server.db.elasticsearch.sync import make_es_index_and_run_sync
 from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
@@ -127,19 +126,19 @@ class TestHubDiscovery(CommandTestCase):
 
     async def test_hub_discovery(self):
         us_final_node = SPVNode(self.conductor.spv_module, node_number=2)
-        await us_final_node.start(self.blockchain, extraconf={"COUNTRY": "US"})
+        await us_final_node.start(self.blockchain, extraconf={"country": "US"})
         self.addCleanup(us_final_node.stop)
         final_node_host = f"{us_final_node.hostname}:{us_final_node.port}"
 
         kp_final_node = SPVNode(self.conductor.spv_module, node_number=3)
-        await kp_final_node.start(self.blockchain, extraconf={"COUNTRY": "KP"})
+        await kp_final_node.start(self.blockchain, extraconf={"country": "KP"})
         self.addCleanup(kp_final_node.stop)
         kp_final_node_host = f"{kp_final_node.hostname}:{kp_final_node.port}"
 
         relay_node = SPVNode(self.conductor.spv_module, node_number=4)
         await relay_node.start(self.blockchain, extraconf={
-            "COUNTRY": "FR",
-            "PEER_HUBS": ",".join([kp_final_node_host, final_node_host])
+            "country": "FR",
+            "peer_hubs": ",".join([kp_final_node_host, final_node_host])
         })
         relay_node_host = f"{relay_node.hostname}:{relay_node.port}"
         self.addCleanup(relay_node.stop)
