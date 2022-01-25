@@ -288,6 +288,7 @@ class ResolveCommand(BaseResolveTestCase):
         tx_details = await self.blockchain.get_raw_transaction(claim['txid'])
         self.assertEqual(claim['confirmations'], json.loads(tx_details)['confirmations'])
 
+        # FIXME :  claimname/updateclaim is gone. #3480 wip, unblock #3479"
         # resolve handles invalid data
         # await self.blockchain_claim_name("gibberish", hexlify(b"{'invalid':'json'}").decode(), "0.1")
         # await self.generate(1)
