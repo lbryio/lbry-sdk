@@ -142,6 +142,8 @@ class IterativeFinder:
         return not self.closest_peer or self.distance.is_closer(peer.node_id, self.closest_peer.node_id)
 
     def _add_active(self, peer):
+        if self.peer_manager.peer_is_good(peer) is False:
+            return
         if peer not in self.active and peer.node_id and peer.node_id != self.protocol.node_id:
             self.active.add(peer)
             if self._is_closer(peer):
@@ -192,6 +194,9 @@ class IterativeFinder:
             if peer.node_id == self.protocol.node_id:
                 continue
             if origin_address == (self.protocol.external_ip, self.protocol.udp_port):
+                continue
+            if self.peer_manager.peer_is_good(peer) is False:
+                self.active.discard(peer)
                 continue
             self._schedule_probe(peer)
             added += 1
