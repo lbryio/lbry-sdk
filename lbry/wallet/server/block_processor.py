@@ -100,6 +100,7 @@ class BlockProcessor:
             self.ledger = TestNetLedger
         else:
             self.ledger = RegTestLedger
+        self.wait_for_blocks_duration = 0.1
 
         self._caught_up_event: Optional[asyncio.Event] = None
         self.height = 0
@@ -200,29 +201,34 @@ class BlockProcessor:
             return await asyncio.get_event_loop().run_in_executor(self._chain_executor, func, *args)
         return await asyncio.shield(run_in_thread())
 
-    async def check_mempool(self):
+    async def refresh_mempool(self):
         def fetch_mempool(mempool_prefix):
             return {
                 k.tx_hash: v.raw_tx for (k, v) in mempool_prefix.iterate()
             }
 
-        def update_mempool(mempool_prefix, to_put, to_delete):
+        def update_mempool(unsafe_commit, mempool_prefix, to_put, to_delete):
             for tx_hash, raw_tx in to_put:
                 mempool_prefix.stage_put((tx_hash,), (raw_tx,))
             for tx_hash, raw_tx in to_delete.items():
                 mempool_prefix.stage_delete((tx_hash,), (raw_tx,))
+            unsafe_commit()
 
-        current_mempool = await self.run_in_thread_with_lock(fetch_mempool, self.db.prefix_db.mempool_tx)
-
-        _to_put = []
-        for hh in await self.daemon.mempool_hashes():
-            tx_hash = bytes.fromhex(hh)[::-1]
-            if tx_hash in current_mempool:
-                current_mempool.pop(tx_hash)
-            else:
-                _to_put.append((tx_hash, bytes.fromhex(await self.daemon.getrawtransaction(hh))))
-
-        await self.run_in_thread_with_lock(update_mempool, self.db.prefix_db.mempool_tx, _to_put, current_mempool)
+        async with self.state_lock:
+            current_mempool = await self.run_in_thread(fetch_mempool, self.db.prefix_db.mempool_tx)
+            _to_put = []
+            for hh in await self.daemon.mempool_hashes():
+                tx_hash = bytes.fromhex(hh)[::-1]
+                if tx_hash in current_mempool:
+                    current_mempool.pop(tx_hash)
+                else:
+                    _to_put.append((tx_hash, bytes.fromhex(await self.daemon.getrawtransaction(hh))))
+            if current_mempool:
+                if bytes.fromhex(await self.daemon.getbestblockhash())[::-1] != self.coin.header_hash(self.db.headers[-1]):
+                    return
+            await self.run_in_thread(
+                update_mempool, self.db.prefix_db.unsafe_commit, self.db.prefix_db.mempool_tx, _to_put, current_mempool
+            )
 
     async def check_and_advance_blocks(self, raw_blocks):
         """Process the list of raw blocks passed.  Detects and handles
@@ -1571,7 +1577,7 @@ class BlockProcessor:
                         await self._first_caught_up()
                         self._caught_up_event.set()
                 try:
-                    await asyncio.wait_for(self.blocks_event.wait(), 0.1)
+                    await asyncio.wait_for(self.blocks_event.wait(), self.wait_for_blocks_duration)
                 except asyncio.TimeoutError:
                     pass
                 self.blocks_event.clear()
@@ -1580,8 +1586,7 @@ class BlockProcessor:
                     break
                 if not blocks:
                     try:
-                        await self.check_mempool()
-                        await self.run_in_thread_with_lock(self.db.prefix_db.unsafe_commit)
+                        await self.refresh_mempool()
                     except Exception:
                         self.logger.exception("error while updating mempool txs")
                         raise
@@ -1593,7 +1598,6 @@ class BlockProcessor:
                         raise
         finally:
             self._ready_to_stop.set()
-
 
     async def _first_caught_up(self):
         self.logger.info(f'caught up to height {self.height}')

@@ -921,6 +921,20 @@ class LBRYElectrumX(SessionBase):
     def sub_count(self):
         return len(self.hashX_subs)
 
+    async def get_hashX_status(self, hashX: bytes):
+        mempool_history = self.mempool.transaction_summaries(hashX)
+        history = ''.join(f'{hash_to_hex_str(tx_hash)}:'
+                          f'{height:d}:'
+                          for tx_hash, height in await self.session_manager.limited_history(hashX))
+        history += ''.join(f'{hash_to_hex_str(tx.hash)}:'
+                           f'{-tx.has_unconfirmed_inputs:d}:'
+                           for tx in mempool_history)
+        if history:
+            status = sha256(history.encode()).hex()
+        else:
+            status = None
+        return history, status, len(mempool_history) > 0
+
     async def send_history_notifications(self, *hashXes: typing.Iterable[bytes]):
         notifications = []
         for hashX in hashXes:
@@ -930,20 +944,8 @@ class LBRYElectrumX(SessionBase):
             else:
                 method = 'blockchain.address.subscribe'
             start = time.perf_counter()
-            db_history = await self.session_manager.limited_history(hashX)
-            mempool = self.mempool.transaction_summaries(hashX)
-
-            status = ''.join(f'{hash_to_hex_str(tx_hash)}:'
-                             f'{height:d}:'
-                             for tx_hash, height in db_history)
-            status += ''.join(f'{hash_to_hex_str(tx.hash)}:'
-                              f'{-tx.has_unconfirmed_inputs:d}:'
-                              for tx in mempool)
-            if status:
-                status = sha256(status.encode()).hex()
-            else:
-                status = None
-            if mempool:
+            history, status, mempool_status = await self.get_hashX_status(hashX)
+            if mempool_status:
                 self.session_manager.mempool_statuses[hashX] = status
             else:
                 self.session_manager.mempool_statuses.pop(hashX, None)
@@ -1138,22 +1140,8 @@ class LBRYElectrumX(SessionBase):
         """
         # Note history is ordered and mempool unordered in electrum-server
         # For mempool, height is -1 if it has unconfirmed inputs, otherwise 0
-
-        db_history = await self.session_manager.limited_history(hashX)
-        mempool = self.mempool.transaction_summaries(hashX)
-
-        status = ''.join(f'{hash_to_hex_str(tx_hash)}:'
-                         f'{height:d}:'
-                         for tx_hash, height in db_history)
-        status += ''.join(f'{hash_to_hex_str(tx.hash)}:'
-                          f'{-tx.has_unconfirmed_inputs:d}:'
-                          for tx in mempool)
-        if status:
-            status = sha256(status.encode()).hex()
-        else:
-            status = None
-
-        if mempool:
+        _, status, has_mempool_history = await self.get_hashX_status(hashX)
+        if has_mempool_history:
             self.session_manager.mempool_statuses[hashX] = status
         else:
             self.session_manager.mempool_statuses.pop(hashX, None)

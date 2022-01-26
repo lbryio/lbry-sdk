@@ -24,7 +24,7 @@ from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES, ExpandedResolveResult, DBError, UTXO
 from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, HubDB as Prefixes
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
-from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue, DBStatePrefixRow
+from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue, DBStatePrefixRow, MempoolTXPrefixRow
 from lbry.wallet.transaction import OutputScript
 from lbry.schema.claim import Claim, guess_stream_type
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger
@@ -815,7 +815,7 @@ class HubDB:
         self.prefix_db = Prefixes(
             db_path, cache_mb=self._cache_MB,
             reorg_limit=self._reorg_limit, max_open_files=self._db_max_open_files,
-            unsafe_prefixes={DBStatePrefixRow.prefix}, secondary_path=secondary_path
+            unsafe_prefixes={DBStatePrefixRow.prefix, MempoolTXPrefixRow.prefix}, secondary_path=secondary_path
         )
 
         if secondary_path != '':

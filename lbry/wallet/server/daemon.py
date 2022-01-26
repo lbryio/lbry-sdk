@@ -338,3 +338,8 @@ class LBCDaemon(Daemon):
     async def getclaimsforname(self, name):
         '''Given a name, retrieves all claims matching that name.'''
         return await self._send_single('getclaimsforname', (name,))
+
+    @handles_errors
+    async def getbestblockhash(self):
+        '''Given a name, retrieves all claims matching that name.'''
+        return await self._send_single('getbestblockhash')

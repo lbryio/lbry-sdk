@@ -60,14 +60,12 @@ class MemPool:
         self.mempool_process_time_metric = mempool_process_time_metric
         self.session_manager: typing.Optional['LBRYSessionManager'] = None
 
-    async def refresh_hashes(self, height: int):
-        start = time.perf_counter()
-        new_touched = await self._process_mempool()
-        await self.on_mempool(set(self.touched_hashXs), new_touched, height)
-        duration = time.perf_counter() - start
-        self.mempool_process_time_metric.observe(duration)
+    def refresh(self) -> typing.Set[bytes]:  # returns list of new touched hashXs
+        prefix_db = self._db.prefix_db
+        new_mempool = {k.tx_hash: v.raw_tx for k, v in prefix_db.mempool_tx.iterate()}
+        self.raw_mempool.clear()
+        self.raw_mempool.update(new_mempool)
 
-    async def _process_mempool(self) -> typing.Set[bytes]:  # returns list of new touched hashXs
         # Re-sync with the new set of hashes
 
         # hashXs = self.hashXs  # hashX: [tx_hash, ...]
@@ -122,15 +120,15 @@ class MemPool:
                 elif prev_hash in tx_map:  # this set of changes
                     utxo = tx_map[prev_hash].out_pairs[prev_index]
                 else:  # get it from the db
-                    prev_tx_num = self._db.prefix_db.tx_num.get(prev_hash)
+                    prev_tx_num = prefix_db.tx_num.get(prev_hash)
                     if not prev_tx_num:
                         continue
                     prev_tx_num = prev_tx_num.tx_num
-                    hashX_val = self._db.prefix_db.hashX_utxo.get(tx_hash[:4], prev_tx_num, prev_index)
+                    hashX_val = prefix_db.hashX_utxo.get(tx_hash[:4], prev_tx_num, prev_index)
                     if not hashX_val:
                         continue
                     hashX = hashX_val.hashX
-                    utxo_value = self._db.prefix_db.utxo.get(hashX, prev_tx_num, prev_index)
+                    utxo_value = prefix_db.utxo.get(hashX, prev_tx_num, prev_index)
                     utxo = (hashX, utxo_value.amount)
                     # if not prev_raw:
                     #     print("derp", prev_hash[::-1].hex())
