@@ -77,11 +77,8 @@ class PrefixRow(metaclass=PrefixRowType):
         else:
             value_getter = lambda v: v
 
-        lower_bound = None if not (start or prefix) else (
-                int.from_bytes(start or prefix, byteorder='big') - 1
-        ).to_bytes(len(start or prefix), byteorder='big')
         it = self._db.iterator(
-            start or prefix, self._column_family, iterate_lower_bound=lower_bound,
+            start or prefix, self._column_family, iterate_lower_bound=(start or prefix),
             iterate_upper_bound=stop, reverse=reverse, include_key=include_key,
             include_value=include_value, fill_cache=fill_cache, prefix_same_as_start=False
         )

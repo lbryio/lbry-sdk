@@ -221,7 +221,6 @@ class TestRevertablePrefixDB(unittest.TestCase):
         self.db.unsafe_commit()
 
         def get_active_amount_as_of_height(claim_hash: bytes, height: int) -> int:
-            print(f"\t\tget_active_amount_as_of_height {claim_hash.hex()} @ {height}")
             for v in self.db.active_amount.iterate(
                     start=(claim_hash, 1, 0), stop=(claim_hash, 1, height + 1),
                     include_key=False, reverse=True):
