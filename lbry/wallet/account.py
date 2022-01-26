@@ -39,9 +39,14 @@ class DeterministicChannelKeyManager:
         self.account = account
         self.last_known = 0
         self.cache = {}
-        self.private_key: Optional[PrivateKey] = None
-        if account.private_key is not None:
-            self.private_key = account.private_key.child(KeyPath.CHANNEL)
+        self._private_key: Optional[PrivateKey] = None
+
+    @property
+    def private_key(self):
+        if self._private_key is None:
+            if self.account.private_key is not None:
+                self._private_key = self.account.private_key.child(KeyPath.CHANNEL)
+        return self._private_key
 
     def maybe_generate_deterministic_key_for_channel(self, txo):
         if self.private_key is None:
