@@ -187,18 +187,18 @@ def guess_media_type(path):
     try:
         kind = filetype.guess(path)
         if kind:
-            realext = f".{kind.extension}"
+            real_extension = f".{kind.extension}"
 
             # override extension parsed from file...
-            if extension != realext:
+            if extension != real_extension:
                 if extension:
-                    log.warning(f"file extension does not match it's contents {path}, identified as {realext}")
+                    log.warning(f"file extension does not match it's contents: {path}, identified as {real_extension}")
                 else:
-                    log.debug(f"file {path} does not have extension, identified by contents as {realext}")
+                    log.debug(f"file {path} does not have extension, identified by it's contents as {real_extension}")
 
                 # don't do anything if extension is in synonyms
-                if not extension in synonyms_map.get(realext, []):
-                    extension = realext
+                if extension not in synonyms_map.get(real_extension, []):
+                    extension = real_extension
 
     except OSError as error:
         pass
