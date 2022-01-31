@@ -14,7 +14,7 @@ import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
 from lbry.utils import LRUCache
-from lbry.wallet.transaction import OutputScript, Output, Transaction
+from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.hash import hash_to_hex_str
 from lbry.wallet.server.util import class_logger
@@ -23,6 +23,7 @@ from lbry.wallet.server.db.prefixes import ACTIVATED_SUPPORT_TXO_TYPE, ACTIVATED
 from lbry.wallet.server.db.prefixes import PendingActivationKey, PendingActivationValue, ClaimToTXOValue
 from lbry.wallet.server.prefetcher import Prefetcher
 from lbry.wallet.server.db.db import HubDB
+from lbry.wallet.transaction import OutputScript, Output, Transaction
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.db.revertable import RevertableOpStack
@@ -217,12 +218,21 @@ class BlockProcessor:
         async with self.state_lock:
             current_mempool = await self.run_in_thread(fetch_mempool, self.db.prefix_db.mempool_tx)
             _to_put = []
-            for hh in await self.daemon.mempool_hashes():
+            try:
+                mempool_hashes = await self.daemon.mempool_hashes()
+            except (TypeError, RPCError):
+                self.logger.warning("failed to get mempool tx hashes, reorg underway?")
+                return
+            for hh in mempool_hashes:
                 tx_hash = bytes.fromhex(hh)[::-1]
                 if tx_hash in current_mempool:
                     current_mempool.pop(tx_hash)
                 else:
-                    _to_put.append((tx_hash, bytes.fromhex(await self.daemon.getrawtransaction(hh))))
+                    try:
+                        _to_put.append((tx_hash, bytes.fromhex(await self.daemon.getrawtransaction(hh))))
+                    except (TypeError, RPCError):
+                        self.logger.warning("failed to get a mempool tx, reorg underway?")
+                        return
             if current_mempool:
                 if bytes.fromhex(await self.daemon.getbestblockhash())[::-1] != self.coin.header_hash(self.db.headers[-1]):
                     return
