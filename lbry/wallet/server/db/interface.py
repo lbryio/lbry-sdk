@@ -1,5 +1,6 @@
 import struct
 import typing
+import os
 
 import rocksdb
 from typing import Optional
@@ -15,15 +16,17 @@ class PrefixDB:
     PARTIAL_UNDO_KEY_STRUCT = struct.Struct(b'>Q')
 
     def __init__(self, path, max_open_files=64, secondary_path='', max_undo_depth: int = 200, unsafe_prefixes=None):
+        db_exists = os.path.exists(path)
         column_family_options = {
                 prefix.value: rocksdb.ColumnFamilyOptions() for prefix in DB_PREFIXES
-        } if secondary_path else {}
+        } if secondary_path or db_exists else {}
         self.column_families: typing.Dict[bytes, 'rocksdb.ColumnFamilyHandle'] = {}
-        self._db = rocksdb.DB(
-            path, rocksdb.Options(
+        options = rocksdb.Options(
                 create_if_missing=True, use_fsync=True, target_file_size_base=33554432,
                 max_open_files=max_open_files if not secondary_path else -1
-            ), secondary_name=secondary_path, column_families=column_family_options
+            )
+        self._db = rocksdb.DB(
+            path, options, secondary_name='', column_families=column_family_options
         )
         for prefix in DB_PREFIXES:
             cf = self._db.get_column_family(prefix.value)
