@@ -56,7 +56,8 @@ setup(
         'attrs==18.2.0',
         'pylru==1.1.0',
         'elasticsearch==7.10.1',
-        'grpcio==1.38.0'
+        'grpcio==1.38.0',
+        'filetype==1.0.9'
     ] + PLYVEL,
     extras_require={
         'torrent': ['lbry-libtorrent'],
