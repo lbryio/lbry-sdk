@@ -4,7 +4,7 @@ import array
 import base64
 from typing import Union, Tuple, NamedTuple, Optional
 from lbry.wallet.server.db import DB_PREFIXES
-from lbry.wallet.server.db.interface import PrefixDB
+from lbry.wallet.server.db.interface import BasePrefixDB
 from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
@@ -1742,7 +1742,7 @@ class TouchedHashXPrefixRow(PrefixRow):
         return cls.pack_key(height), cls.pack_value(touched)
 
 
-class HubDB(PrefixDB):
+class PrefixDB(BasePrefixDB):
     def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
                  secondary_path: str = '', unsafe_prefixes: Optional[typing.Set[bytes]] = None):
         super().__init__(path, max_open_files=max_open_files, secondary_path=secondary_path,

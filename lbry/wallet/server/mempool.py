@@ -17,7 +17,7 @@ from lbry.wallet.server.util import class_logger
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.server.session import LBRYSessionManager
-    from wallet.server.db.db import LevelDB
+    from wallet.server.db.db import HubDB
 
 
 @attr.s(slots=True)
@@ -49,7 +49,7 @@ mempool_process_time_metric = Histogram(
 
 
 class MemPool:
-    def __init__(self, coin, db: 'LevelDB', refresh_secs=1.0):
+    def __init__(self, coin, db: 'HubDB', refresh_secs=1.0):
         self.coin = coin
         self._db = db
         self.logger = class_logger(__name__, self.__class__.__name__)

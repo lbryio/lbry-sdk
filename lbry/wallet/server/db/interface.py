@@ -7,7 +7,7 @@ from lbry.wallet.server.db import DB_PREFIXES
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 
 
-class PrefixDB:
+class BasePrefixDB:
     """
     Base class for a revertable rocksdb database (a rocksdb db where each set of applied changes can be undone)
     """

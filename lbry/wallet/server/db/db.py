@@ -22,7 +22,7 @@ from lbry.wallet.server.hash import hash_to_hex_str
 from lbry.wallet.server.tx import TxInput
 from lbry.wallet.server.merkle import Merkle, MerkleCache
 from lbry.wallet.server.db.common import ResolveResult, STREAM_TYPES, CLAIM_TYPES, ExpandedResolveResult, DBError, UTXO
-from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, HubDB as Prefixes
+from lbry.wallet.server.db.prefixes import PendingActivationValue, ClaimTakeoverValue, ClaimToTXOValue, PrefixDB
 from lbry.wallet.server.db.prefixes import ACTIVATED_CLAIM_TXO_TYPE, ACTIVATED_SUPPORT_TXO_TYPE
 from lbry.wallet.server.db.prefixes import PendingActivationKey, TXOToClaimValue, DBStatePrefixRow, MempoolTXPrefixRow
 from lbry.wallet.transaction import OutputScript
@@ -59,7 +59,7 @@ class HubDB:
         if secondary_name:
             assert max_open_files == -1, 'max open files must be -1 for secondary readers'
         self._db_max_open_files = max_open_files
-        self.prefix_db: typing.Optional[Prefixes] = None
+        self.prefix_db: typing.Optional[PrefixDB] = None
 
         self.hist_unflushed = defaultdict(partial(array.array, 'I'))
         self.hist_unflushed_count = 0
@@ -812,7 +812,7 @@ class HubDB:
             self._db_dir, self._secondary_name
         )
         db_path = os.path.join(self._db_dir, 'lbry-rocksdb')
-        self.prefix_db = Prefixes(
+        self.prefix_db = PrefixDB(
             db_path, cache_mb=self._cache_MB,
             reorg_limit=self._reorg_limit, max_open_files=self._db_max_open_files,
             unsafe_prefixes={DBStatePrefixRow.prefix, MempoolTXPrefixRow.prefix}, secondary_path=secondary_path

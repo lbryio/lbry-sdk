@@ -2,7 +2,7 @@ import unittest
 import tempfile
 import shutil
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertableDelete, RevertablePut, OpStackIntegrity
-from lbry.wallet.server.db.prefixes import ClaimToTXOPrefixRow, HubDB
+from lbry.wallet.server.db.prefixes import ClaimToTXOPrefixRow, PrefixDB
 
 
 class TestRevertableOpStack(unittest.TestCase):
@@ -107,7 +107,7 @@ class TestRevertableOpStack(unittest.TestCase):
 class TestRevertablePrefixDB(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
-        self.db = HubDB(self.tmp_dir, cache_mb=1, max_open_files=32)
+        self.db = PrefixDB(self.tmp_dir, cache_mb=1, max_open_files=32)
 
     def tearDown(self) -> None:
         self.db.close()
