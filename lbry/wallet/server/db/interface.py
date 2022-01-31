@@ -17,12 +17,12 @@ class PrefixDB:
     def __init__(self, path, max_open_files=64, secondary_path='', max_undo_depth: int = 200, unsafe_prefixes=None):
         column_family_options = {
                 prefix.value: rocksdb.ColumnFamilyOptions() for prefix in DB_PREFIXES
-        } if secondary_path else {}
+        }
         self.column_families: typing.Dict[bytes, 'rocksdb.ColumnFamilyHandle'] = {}
         self._db = rocksdb.DB(
             path, rocksdb.Options(
-                create_if_missing=True, use_fsync=True, target_file_size_base=33554432,
-                max_open_files=max_open_files if not secondary_path else -1
+                create_if_missing=True, use_fsync=False, target_file_size_base=33554432,
+                max_open_files=max_open_files if not secondary_path else -1, create_missing_column_families=True
             ), secondary_name=secondary_path, column_families=column_family_options
         )
         for prefix in DB_PREFIXES:
