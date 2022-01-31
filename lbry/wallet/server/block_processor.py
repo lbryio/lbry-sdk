@@ -121,12 +121,6 @@ class BlockProcessor:
         # Claimtrie cache
         self.db_op_stack: Optional['RevertableOpStack'] = None
 
-        # self.search_cache = {}
-        self.resolve_cache = LRUCache(2**16)
-        self.resolve_outputs_cache = LRUCache(2 ** 16)
-
-        self.history_cache = {}
-
         #################################
         # attributes used for calculating stake activations and takeovers per block
         #################################
@@ -1458,7 +1452,6 @@ class BlockProcessor:
         self.claim_channels.clear()
         self.utxo_cache.clear()
         self.hashXs_by_tx.clear()
-        self.history_cache.clear()
         self.removed_claim_hashes.clear()
         self.touched_claim_hashes.clear()
         self.pending_reposted.clear()
@@ -1468,8 +1461,6 @@ class BlockProcessor:
         self.pending_transaction_num_mapping.clear()
         self.pending_transactions.clear()
         self.pending_support_amount_change.clear()
-        self.resolve_cache.clear()
-        self.resolve_outputs_cache.clear()
         self.touched_hashXs.clear()
 
     async def backup_block(self):
