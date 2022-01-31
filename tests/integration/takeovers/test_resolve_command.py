@@ -55,7 +55,7 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertNoClaimForName(self, name: str):
         lbrycrd_winning = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name))
-        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
+        stream, channel, _, _ = await self.conductor.spv_node.server.db.resolve(name)
         if 'claims' in lbrycrd_winning and lbrycrd_winning['claims'] is not None:
             self.assertEqual(len(lbrycrd_winning['claims']), 0)
         if stream is not None:
@@ -78,7 +78,7 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertMatchWinningClaim(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimsfornamebybid', name, "[0]"))
-        stream, channel, _, _ = await self.conductor.spv_node.server.bp.db.resolve(name)
+        stream, channel, _, _ = await self.conductor.spv_node.server.db.resolve(name)
         claim = stream if stream else channel
         expected['claims'][0]['lasttakeoverheight'] = expected['lasttakeoverheight']
         await self._assertMatchClaim(expected['claims'][0], claim)
@@ -126,7 +126,7 @@ class BaseResolveTestCase(CommandTestCase):
         total_lbrycrd_amount = 0.0
         total_es_amount = 0.0
         active_es_amount = 0.0
-        db = self.conductor.spv_node.server.bp.db
+        db = self.conductor.spv_node.server.db
         es_supports = db.get_supports(bytes.fromhex(claim_id))
 
         # we're only concerned about active supports here, and they should match
@@ -149,7 +149,7 @@ class BaseResolveTestCase(CommandTestCase):
 
     async def assertMatchClaimsForName(self, name):
         expected = json.loads(await self.blockchain._cli_cmnd('getclaimsforname', name, "", "true"))
-        db = self.conductor.spv_node.server.bp.db
+        db = self.conductor.spv_node.server.db
 
         for c in expected['claims']:
             c['lasttakeoverheight'] = expected['lasttakeoverheight']
@@ -670,7 +670,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
 
     async def assertNameState(self, height: int, name: str, winning_claim_id: str, last_takeover_height: int,
                                non_winning_claims: List[ClaimStateValue]):
-        self.assertEqual(height, self.conductor.spv_node.server.bp.db.db_height)
+        self.assertEqual(height, self.conductor.spv_node.server.db.db_height)
         await self.assertMatchClaimIsWinning(name, winning_claim_id)
         for non_winning in non_winning_claims:
             claim = await self.assertMatchClaim(name,
