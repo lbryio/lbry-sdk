@@ -622,47 +622,6 @@ class SessionManager:
             self.logger.info(f'notify {len(notify_tasks)} sessions of new peers')
             asyncio.create_task(asyncio.wait(notify_tasks))
 
-    async def _notify_sessions(self, height, touched, new_touched):
-        """Notify sessions about height changes and touched addresses."""
-        height_changed = height != self.notified_height
-        if height_changed:
-            await self._refresh_hsub_results(height)
-
-        if not self.sessions:
-            return
-
-        if height_changed:
-            header_tasks = [
-                session.send_notification('blockchain.headers.subscribe', (self.hsub_results[session.subscribe_headers_raw], ))
-                for session in self.sessions.values() if session.subscribe_headers
-            ]
-            if header_tasks:
-                self.logger.info(f'notify {len(header_tasks)} sessions of new header')
-                asyncio.create_task(asyncio.wait(header_tasks))
-            for hashX in touched.intersection(self.mempool_statuses.keys()):
-                self.mempool_statuses.pop(hashX, None)
-
-        # self.bp._chain_executor
-        await asyncio.get_event_loop().run_in_executor(
-            None, touched.intersection_update, self.hashx_subscriptions_by_session.keys()
-        )
-
-        if touched or new_touched or (height_changed and self.mempool_statuses):
-            notified_hashxs = 0
-            session_hashxes_to_notify = defaultdict(list)
-            to_notify = touched if height_changed else new_touched
-
-            for hashX in to_notify:
-                if hashX not in self.hashx_subscriptions_by_session:
-                    continue
-                for session_id in self.hashx_subscriptions_by_session[hashX]:
-                    session_hashxes_to_notify[session_id].append(hashX)
-                    notified_hashxs += 1
-            for session_id, hashXes in session_hashxes_to_notify.items():
-                asyncio.create_task(self.sessions[session_id].send_history_notifications(*hashXes))
-            if session_hashxes_to_notify:
-                self.logger.info(f'notified {len(session_hashxes_to_notify)} sessions/{notified_hashxs:,d} touched addresses')
-
     def add_session(self, session):
         self.sessions[id(session)] = session
         self.session_event.set()

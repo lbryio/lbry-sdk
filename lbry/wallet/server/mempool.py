@@ -181,7 +181,7 @@ class MemPool:
         return 0
 
     async def start(self, height, session_manager: 'LBRYSessionManager'):
-        self.notify_sessions = session_manager._notify_sessions
+        self.session_manager = session_manager
         await self._notify_sessions(height, set(), set())
 
     async def on_mempool(self, touched, new_touched, height):

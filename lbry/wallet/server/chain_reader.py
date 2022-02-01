@@ -107,7 +107,7 @@ class BlockchainReaderServer(BlockchainReader):
         self.resolve_outputs_cache = {}
         self.resolve_cache = {}
         self.notifications_to_send = []
-        self.mempool_notifications = []
+        self.mempool_notifications = set()
         self.status_server = StatusServer()
         self.daemon = env.coin.DAEMON(env.coin, env.daemon_url)  # only needed for broadcasting txs
         self.prometheus_server: typing.Optional[PrometheusServer] = None
@@ -143,7 +143,7 @@ class BlockchainReaderServer(BlockchainReader):
 
     def _detect_changes(self):
         super()._detect_changes()
-        self.mempool_notifications.append((self.db.fs_height, self.mempool.refresh()))
+        self.mempool_notifications.update(self.mempool.refresh())
 
     async def poll_for_changes(self):
         await super().poll_for_changes()
@@ -157,8 +157,9 @@ class BlockchainReaderServer(BlockchainReader):
                 if self._es_height == self.db.db_height:
                     self.synchronized.set()
         if self.mempool_notifications:
-            for (height, touched) in self.mempool_notifications:
-                await self.mempool.on_mempool(set(self.mempool.touched_hashXs), touched, height)
+            await self.mempool.on_mempool(
+                set(self.mempool.touched_hashXs), self.mempool_notifications, self.db.db_height
+            )
         self.mempool_notifications.clear()
         self.notifications_to_send.clear()
 
