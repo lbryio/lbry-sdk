@@ -92,10 +92,11 @@ class SearchIndex:
         await self.sync_client.indices.refresh(self.index)
         return acked
 
-    def stop(self):
-        clients = [self.sync_client, self.search_client]
+    async def stop(self):
+        clients = [c for c in (self.sync_client, self.search_client) if c is not None]
         self.sync_client, self.search_client = None, None
-        return asyncio.ensure_future(asyncio.gather(*(client.close() for client in clients)))
+        if clients:
+            await asyncio.gather(*(client.close() for client in clients))
 
     def delete_index(self):
         return self.sync_client.indices.delete(self.index, ignore_unavailable=True)

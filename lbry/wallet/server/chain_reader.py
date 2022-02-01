@@ -218,7 +218,7 @@ class BlockchainReaderServer(BlockchainReader):
                 t = self.cancellable_tasks.pop()
                 if not t.done():
                     t.cancel()
-        self.session_manager.search_index.stop()
+        await self.session_manager.search_index.stop()
         self.db.close()
         if self.prometheus_server:
             await self.prometheus_server.stop()
