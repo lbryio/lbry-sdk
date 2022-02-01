@@ -261,6 +261,11 @@ class ElasticWriter(BlockchainReader):
                     else:
                         success += 1
                 await self.sync_client.indices.refresh(self.index)
+                await self.db.reload_blocking_filtering_streams()
+                await self.apply_filters(
+                    self.db.blocked_streams, self.db.blocked_channels, self.db.filtered_streams,
+                    self.db.filtered_channels
+                )
             self.write_es_height(self.db.db_height, self.db.db_tip[::-1].hex())
             self.log.info("Indexing block %i done. %i/%i successful", self._last_wrote_height, success, cnt)
             self._touched_claims.clear()

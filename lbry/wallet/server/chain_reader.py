@@ -63,6 +63,12 @@ class BlockchainReader:
                 self.advance(height)
             self.clear_caches()
             self.last_state = state
+            self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+                self.db.blocking_channel_hashes
+            )
+            self.db.filtered_streams, self.db.filtered_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+                self.db.filtering_channel_hashes
+            )
 
     async def poll_for_changes(self):
         await asyncio.get_event_loop().run_in_executor(self._executor, self._detect_changes)

@@ -1513,9 +1513,11 @@ class StreamCommands(ClaimTestCase):
             await self.channel_create('@filtering', '0.1')
         )
         self.conductor.spv_node.server.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_streams))
+        self.conductor.spv_node.es_writer.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
+
+        self.assertEqual(0, len(self.conductor.spv_node.es_writer.db.filtered_streams))
         await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.filtered_streams))
 
         # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
@@ -1560,15 +1562,16 @@ class StreamCommands(ClaimTestCase):
         # test setting from env vars and starting from scratch
         await self.conductor.spv_node.stop(False)
         await self.conductor.spv_node.start(self.conductor.lbcwallet_node,
-                                            extraconf={'BLOCKING_CHANNEL_IDS': blocking_channel_id,
-                                                       'FILTERING_CHANNEL_IDS': filtering_channel_id})
+                                            extraconf={'blocking_channel_ids': [blocking_channel_id],
+                                                       'filtering_channel_ids': [filtering_channel_id]})
         await self.daemon.wallet_manager.reset()
 
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_streams))
+        self.assertEqual(0, len(self.conductor.spv_node.es_writer.db.blocked_streams))
         await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.blocked_streams))
 
         # blocked content is not resolveable
+        print((await self.resolve('lbry://@some_channel/bad_content')))
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
         self.assertEqual(error['name'], 'BLOCKED')
         self.assertTrue(error['text'].startswith("Resolve of 'lbry://@some_channel/bad_content' was censored"))

@@ -122,8 +122,8 @@ class Env:
             (float(self.integer('QUERY_TIMEOUT_MS', 10000)) / 1000.0)
 
         # Filtering / Blocking
-        self.blocking_channel_ids = (blocking_channel_ids if blocking_channel_ids is not None else self.default('BLOCKING_CHANNEL_IDS', '')).split(' ')
-        self.filtering_channel_ids = (filtering_channel_ids if filtering_channel_ids is not None else self.default('FILTERING_CHANNEL_IDS', '')).split(' ')
+        self.blocking_channel_ids = blocking_channel_ids if blocking_channel_ids is not None else self.default('BLOCKING_CHANNEL_IDS', '').split(' ')
+        self.filtering_channel_ids = filtering_channel_ids if filtering_channel_ids is not None else self.default('FILTERING_CHANNEL_IDS', '').split(' ')
 
     @classmethod
     def default(cls, envvar, default):
