@@ -108,7 +108,7 @@ class BlockchainReader:
 
 class BlockchainReaderServer(BlockchainReader):
     def __init__(self, env):
-        super().__init__(env, 'lbry-reader', thread_workers=1, thread_prefix='hub-worker')
+        super().__init__(env, 'lbry-reader', thread_workers=max(1, env.max_query_workers), thread_prefix='hub-worker')
         self.history_cache = {}
         self.resolve_outputs_cache = {}
         self.resolve_cache = {}
@@ -208,6 +208,8 @@ class BlockchainReaderServer(BlockchainReader):
 
         await self.start_prometheus()
         if self.env.udp_port and int(self.env.udp_port):
+            self.log.warning("country=%s interface=%s:%s allow_lan=%s", self.env.country,
+                self.env.host, self.env.udp_port, self.env.allow_lan_udp)
             await self.status_server.start(
                 0, bytes.fromhex(self.env.coin.GENESIS_HASH)[::-1], self.env.country,
                 self.env.host, self.env.udp_port, self.env.allow_lan_udp
@@ -218,7 +220,7 @@ class BlockchainReaderServer(BlockchainReader):
         await _start_cancellable(self.session_manager.serve, self.mempool)
 
     async def stop(self):
-        self.status_server.stop()
+        await self.status_server.stop()
         async with self._lock:
             while self.cancellable_tasks:
                 t = self.cancellable_tasks.pop()
