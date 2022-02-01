@@ -214,9 +214,10 @@ class BlockchainReaderServer(BlockchainReader):
     async def stop(self):
         self.status_server.stop()
         async with self._lock:
-            for task in reversed(self.cancellable_tasks):
-                task.cancel()
-            await asyncio.wait(self.cancellable_tasks)
+            while self.cancellable_tasks:
+                t = self.cancellable_tasks.pop()
+                if not t.done():
+                    t.cancel()
         self.session_manager.search_index.stop()
         self.db.close()
         if self.prometheus_server:
