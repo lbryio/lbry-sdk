@@ -111,6 +111,12 @@ class IterativeFinder:
                 # seed nodes
                 self._schedule_probe(peer)
 
+    @property
+    def is_closest_peer_ready(self):
+        if not self.closest_peer or not self.prev_closest_peer:
+            return False
+        return self.closest_peer in self.contacted and self.peer_manager.peer_is_good(self.closest_peer) is not False
+
     async def send_probe(self, peer: 'KademliaPeer') -> FindResponse:
         """
         Send the rpc request to the peer and return an object with the FindResponse interface
@@ -308,7 +314,7 @@ class IterativeNodeFinder(IterativeFinder):
             # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
             #          self.bottom_out_count, self.iteration_count)
             self.bottom_out_count = 0
-        elif self.prev_closest_peer and self.closest_peer:
+        elif self.is_closest_peer_ready:
             self.bottom_out_count += 1
             log.info("bottom out %i %i %i", len(self.active), len(self.contacted), self.bottom_out_count)
         if self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
@@ -379,7 +385,7 @@ class IterativeValueFinder(IterativeFinder):
                 #     log.info("enough blob peers found")
                 #     if not self.finished.is_set():
                 #         self.finished.set()
-        elif self.prev_closest_peer and self.closest_peer:
+        elif self.is_closest_peer_ready:
             self.bottom_out_count += 1
             if self.bottom_out_count >= self.bottom_out_limit:
                 log.info("blob peer search bottomed out")
