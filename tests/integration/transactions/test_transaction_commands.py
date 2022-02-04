@@ -5,15 +5,14 @@ class TransactionCommandsTestCase(CommandTestCase):
 
     async def test_txo_dust_prevention(self):
         address = await self.daemon.jsonrpc_address_unused(self.account.id)
-        tx = await self.account_send('9.9998758', address)
+        tx = await self.account_send('9.9997758', address)
         # dust prevention threshold not reached, small txo created
         self.assertEqual(2, len(tx['outputs']))
-        self.assertEqual(tx['outputs'][1]['amount'], '0.0000002')
-        tx = await self.account_send('8.9998759', address)
-        # prior to dust prevention this produced a '0.0000001' change txo
+        self.assertEqual(tx['outputs'][1]['amount'], '0.0001002')
+        tx = await self.account_send('9.999706', address)
         # dust prevention prevented dust
         self.assertEqual(1, len(tx['outputs']))
-        self.assertEqual(tx['outputs'][0]['amount'], '8.9998759')
+        self.assertEqual(tx['outputs'][0]['amount'], '9.999706')
 
     async def test_transaction_show(self):
         # local tx
