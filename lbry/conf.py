@@ -622,7 +622,7 @@ class Config(CLIConfig):
         "Routing table bucket index below which we always split the bucket if given a new key to add to it and "
         "the bucket is full. As this value is raised the depth of the routing table (and number of peers in it) "
         "will increase. This setting is used by seed nodes, you probably don't want to change it during normal "
-        "use.", 1
+        "use.", 2
     )
 
     # protocol timeouts
