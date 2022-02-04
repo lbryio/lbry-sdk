@@ -11,7 +11,7 @@ from lbry.dht import constants
 from lbry.dht.serialization.datagram import make_compact_address, make_compact_ip, decode_compact_address
 
 ALLOW_LOCALHOST = False
-CACHE_SIZE = 2048
+CACHE_SIZE = 16384
 log = logging.getLogger(__name__)
 
 
