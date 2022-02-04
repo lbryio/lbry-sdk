@@ -14,7 +14,7 @@ from lbry.schema.purchase import Purchase
 from lbry.schema.support import Support
 
 from .script import InputScript, OutputScript
-from .constants import COIN, NULL_HASH32
+from .constants import COIN, DUST, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
@@ -818,10 +818,10 @@ class Transaction:
                 )
                 if payment > cost:
                     change = payment - cost
-                    if change > cost_of_change:
+                    change_amount = change - cost_of_change
+                    if change_amount > DUST:
                         change_address = await change_account.change.get_or_create_usable_address()
                         change_hash160 = change_account.ledger.address_to_hash160(change_address)
-                        change_amount = change - cost_of_change
                         change_output = Output.pay_pubkey_hash(change_amount, change_hash160)
                         change_output.is_internal_transfer = True
                         tx.add_outputs([Output.pay_pubkey_hash(change_amount, change_hash160)])
