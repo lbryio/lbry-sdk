@@ -150,6 +150,14 @@ class IterativeFinder:
     def _add_active(self, peer):
         if self.peer_manager.peer_is_good(peer) is False:
             return
+        if self.closest_peer and self.peer_manager.peer_is_good(self.closest_peer) is False:
+            log.debug("[%s] closest peer went bad", self.key.hex()[:8])
+            if self.prev_closest_peer and self.peer_manager.peer_is_good(self.prev_closest_peer) is not False:
+                log.debug("[%s] previous closest was bad too", self.key.hex()[:8])
+                self.closest_peer = self.prev_closest_peer
+            else:
+                self.closest_peer = None
+            self.prev_closest_peer = None
         if peer not in self.active and peer.node_id and peer.node_id != self.protocol.node_id:
             self.active.add(peer)
             if self._is_closer(peer):
@@ -166,6 +174,7 @@ class IterativeFinder:
                 log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer.address,
                             peer.udp_port, address, udp_port)
         self.check_result_ready(response)
+        self._log_state()
 
     async def _send_probe(self, peer: 'KademliaPeer'):
         try:
@@ -190,7 +199,8 @@ class IterativeFinder:
 
         added = 0
         to_probe = list(self.active - self.contacted)
-        to_probe.sort(key=lambda peer: self.distance(self.key))
+        to_probe.sort(key=lambda peer: self.distance(peer.node_id))
+        log.debug("closest to probe: %s", to_probe[0].node_id.hex()[:8] if to_probe else None)
         for peer in to_probe:
             if added >= constants.ALPHA:
                 break
@@ -235,6 +245,14 @@ class IterativeFinder:
         except (asyncio.CancelledError, StopAsyncIteration, TransportNotConnected):
             if self.running:
                 self.loop.call_soon(self.aclose)
+
+    def _log_state(self):
+        log.debug("[%s] check result: %i active nodes %i contacted %i bottomed count",
+                  self.key.hex()[:8], len(self.active), len(self.contacted), self.bottom_out_count)
+        if self.closest_peer and self.prev_closest_peer:
+            log.debug("[%s] best node id: %s (contacted: %s, good: %s), previous best: %s",
+                      self.key.hex()[:8], self.closest_peer.node_id.hex()[:8], self.closest_peer in self.contacted,
+                      self.peer_manager.peer_is_good(self.closest_peer), self.prev_closest_peer.node_id.hex()[:8])
 
     def _search(self):
         self.tasks.append(self.loop.create_task(self._search_task()))
@@ -310,15 +328,13 @@ class IterativeNodeFinder(IterativeFinder):
         if found:
             log.debug("found")
             return self.put_result(self.active, finish=True)
-        if self.prev_closest_peer and self.closest_peer and not self._is_closer(self.prev_closest_peer):
-            # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
-            #          self.bottom_out_count, self.iteration_count)
-            self.bottom_out_count = 0
         elif self.is_closest_peer_ready:
             self.bottom_out_count += 1
-            log.info("bottom out %i %i %i", len(self.active), len(self.contacted), self.bottom_out_count)
+        else:
+            self.bottom_out_count = 0
+
         if self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
-            log.info("limit hit")
+            log.debug("limit hit")
             self.put_result(self.active, True)
 
 
