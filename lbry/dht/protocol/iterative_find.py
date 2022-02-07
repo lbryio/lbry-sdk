@@ -106,7 +106,7 @@ class IterativeFinder:
         self.delayed_calls: typing.List[asyncio.Handle] = []
         for peer in get_shortlist(routing_table, key, shortlist):
             if peer.node_id:
-                self._add_active(peer)
+                self._add_active(peer, force=True)
             else:
                 # seed nodes
                 self._schedule_probe(peer)
@@ -147,8 +147,8 @@ class IterativeFinder:
     def _is_closer(self, peer: 'KademliaPeer') -> bool:
         return not self.closest_peer or self.distance.is_closer(peer.node_id, self.closest_peer.node_id)
 
-    def _add_active(self, peer):
-        if self.peer_manager.peer_is_good(peer) is False:
+    def _add_active(self, peer, force=False):
+        if not force and self.peer_manager.peer_is_good(peer) is False:
             return
         if self.closest_peer and self.peer_manager.peer_is_good(self.closest_peer) is False:
             log.debug("[%s] closest peer went bad", self.key.hex()[:8])
@@ -210,9 +210,6 @@ class IterativeFinder:
             if peer.node_id == self.protocol.node_id:
                 continue
             if origin_address == (self.protocol.external_ip, self.protocol.udp_port):
-                continue
-            if self.peer_manager.peer_is_good(peer) is False:
-                self.active.discard(peer)
                 continue
             self._schedule_probe(peer)
             added += 1
