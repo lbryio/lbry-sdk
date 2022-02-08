@@ -360,8 +360,8 @@ class IterativeNodeFinder(IterativeFinder):
         if self.are_k_closest_peers_ready:
             self.put_result(self.active.keys(), True)
         elif self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
-            log.debug("peer search bottomed out.")
-            self.put_result(self.active.keys(), True)
+            log.warning("peer search bottomed out.")
+            self.put_result([], True)
 
 
 class IterativeValueFinder(IterativeFinder):
