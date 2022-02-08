@@ -216,7 +216,7 @@ class Node:
                                     key, bottom_out_limit, max_results, None, shortlist)
 
     async def peer_search(self, node_id: bytes, count=constants.K, max_results=constants.K * 2,
-                          bottom_out_limit=20, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
+                          bottom_out_limit=60, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
                           ) -> typing.List['KademliaPeer']:
         peers = []
         async for iteration_peers in self.get_iterative_node_finder(
