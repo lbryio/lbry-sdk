@@ -351,8 +351,9 @@ class IterativeNodeFinder(IterativeFinder):
         if self.are_k_closest_peers_ready:
             self.put_result(self.active, True)
         elif self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
-            log.info("peer search bottomed out.")
+            log.debug("peer search bottomed out.")
             self.put_result(self.active, True)
+
 
 class IterativeValueFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
@@ -420,10 +421,10 @@ class IterativeValueFinder(IterativeFinder):
         elif self.is_closest_peer_ready:
             self.bottom_out_count += 1
             if self.are_k_closest_peers_ready:
-                log.info("blob peer search finished.")
+                log.info("blob peer search finished for %s", self.key.hex()[:8])
                 self.iteration_queue.put_nowait(None)
             elif self.bottom_out_count >= self.bottom_out_limit:
-                log.info("blob peer search bottomed out")
+                log.info("blob peer search bottomed out for %s", self.key.hex()[:8])
                 self.iteration_queue.put_nowait(None)
 
     def get_initial_result(self) -> typing.List['KademliaPeer']:
