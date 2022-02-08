@@ -317,7 +317,7 @@ class IterativeNodeFinder(IterativeFinder):
             peer for peer in from_iter
             if peer not in self.yielded_peers
             and peer.node_id != self.protocol.node_id
-            and self.peer_manager.peer_is_good(peer) is not False
+            and self.peer_manager.peer_is_good(peer) is True  # return only peers who answered
         ]
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
         to_yield = not_yet_yielded[:max(constants.K, self.max_results)]
