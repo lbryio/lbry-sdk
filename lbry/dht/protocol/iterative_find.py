@@ -176,14 +176,22 @@ class IterativeFinder:
         self.check_result_ready(response)
         self._log_state()
 
+    def _reset_closest(self, peer):
+        if peer == self.prev_closest_peer:
+            self.prev_closest_peer = None
+        if peer == self.closest_peer:
+            self.closest_peer = self.prev_closest_peer
+
     async def _send_probe(self, peer: 'KademliaPeer'):
         try:
             response = await self.send_probe(peer)
         except asyncio.TimeoutError:
+            self._reset_closest(peer)
             self.active.discard(peer)
             return
         except ValueError as err:
             log.warning(str(err))
+            self._reset_closest(peer)
             self.active.discard(peer)
             return
         except TransportNotConnected:
