@@ -86,7 +86,7 @@ class IterativeFinder:
 
         self.key = key
         self.bottom_out_limit = bottom_out_limit
-        self.max_results = max_results
+        self.max_results = max(constants.K, max_results)
         self.exclude = exclude or []
 
         self.active: typing.Dict['KademliaPeer', int] = {}  # peer: distance, sorted
@@ -228,6 +228,8 @@ class IterativeFinder:
             if peer in self.contacted:
                 continue
             if added >= constants.ALPHA:
+                break
+            if index > self.max_results:
                 break
             origin_address = (peer.address, peer.udp_port)
             if origin_address in self.exclude:
