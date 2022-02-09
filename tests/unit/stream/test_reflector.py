@@ -97,7 +97,7 @@ class TestReflector(AsyncioTestCase):
     async def test_announces(self):
         to_announce = await self.storage.get_blobs_to_announce()
         self.assertIn(self.stream.sd_hash, to_announce, "sd blob not set to announce")
-        self.assertIn(self.stream.descriptor.blobs[0].blob_hash, to_announce, "head blob not set to announce")
+        self.assertNotIn(self.stream.descriptor.blobs[0].blob_hash, to_announce, "head blob set to announce")
 
     async def test_result_from_disconnect_mid_sd_transfer(self):
         stop = asyncio.Event()

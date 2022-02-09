@@ -187,8 +187,8 @@ def store_stream(transaction: sqlite3.Connection, sd_blob: 'BlobFile', descripto
     ).fetchall()
     # ensure should_announce is set regardless if insert was ignored
     transaction.execute(
-        "update blob set should_announce=1 where blob_hash in (?, ?)",
-        (sd_blob.blob_hash, descriptor.blobs[0].blob_hash,)
+        "update blob set should_announce=1 where blob_hash in (?)",
+        (sd_blob.blob_hash,)
     ).fetchall()
 
 
