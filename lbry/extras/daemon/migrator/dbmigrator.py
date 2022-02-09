@@ -37,6 +37,8 @@ def migrate_db(conf, start, end):
             from .migrate13to14 import do_migration
         elif current == 14:
             from .migrate14to15 import do_migration
+        elif current == 15:
+            from .migrate15to16 import do_migration
         else:
             raise Exception(f"DB migration of version {current} to {current+1} is not available")
         try:
