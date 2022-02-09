@@ -98,10 +98,6 @@ class StreamDownloader:
         if not self.descriptor:
             await self.load_descriptor(connection_id)
 
-        # add the head blob to the peer search
-        self.search_queue.put_nowait(self.descriptor.blobs[0].blob_hash)
-        log.info("added head blob to peer search for stream %s", self.sd_hash)
-
         if not await self.blob_manager.storage.stream_exists(self.sd_hash) and save_stream:
             await self.blob_manager.storage.store_stream(
                 self.blob_manager.get_blob(self.sd_hash, length=self.descriptor.length), self.descriptor
