@@ -44,7 +44,7 @@ On Ubuntu (we recommend 18.04 or 20.04), install the following:
 ```
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt-get update
-sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python-protobuf
+sudo apt-get install build-essential python3.7 python3.7-dev git python3.7-venv libssl-dev python3-protobuf libffi-dev autoconf autogen libtool pkg-config libleveldb-dev
 ```
 
 The [deadsnakes PPA](https://launchpad.net/~deadsnakes/+archive/ubuntu/ppa) provides Python 3.7
@@ -78,6 +78,11 @@ source lbry-venv/bin/activate
 Make sure you're on Python 3.7+ as default in the virtual environment:
 ```bash
 python --version
+```
+
+Install wheel, a tool that is necessary to install other packages (which doesn't seem to be available from OS repos):
+```
+pip install wheel
 ```
 
 Install packages:
