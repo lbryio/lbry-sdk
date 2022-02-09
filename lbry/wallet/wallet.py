@@ -268,6 +268,10 @@ class WalletStorage:
             return self._default.copy()
 
     def upgrade(self, json_dict):
+        # NOTE - The purpose of this method is to act as a scaffolding for
+        # someone to implement actual upgrade when it becomes necessary. As
+        # currently written, most of the code has no effect.
+
         json_dict = json_dict.copy()
         version = json_dict.pop('version', -1)
         if version == -1:
