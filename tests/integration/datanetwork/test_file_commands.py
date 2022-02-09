@@ -107,18 +107,12 @@ class FileCommands(CommandTestCase):
         self.assertEqual(await self.daemon.storage.get_blobs_to_announce(), [])
         await self.stream_create('foo', '0.01')
         stream = (await self.daemon.jsonrpc_file_list())["items"][0]
-        self.assertSetEqual(
-            set(await self.daemon.storage.get_blobs_to_announce()),
-            {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
-        )
+        self.assertSetEqual(set(await self.daemon.storage.get_blobs_to_announce()), {stream.sd_hash})
         self.assertTrue(await self.daemon.jsonrpc_file_delete(delete_all=True))
         # announces on download
         self.assertEqual(await self.daemon.storage.get_blobs_to_announce(), [])
         stream = await self.daemon.jsonrpc_get('foo')
-        self.assertSetEqual(
-            set(await self.daemon.storage.get_blobs_to_announce()),
-            {stream.sd_hash, stream.descriptor.blobs[0].blob_hash}
-        )
+        self.assertSetEqual(set(await self.daemon.storage.get_blobs_to_announce()), {stream.sd_hash})
 
     async def _purge_file(self, claim_name, full_path):
         self.assertTrue(
