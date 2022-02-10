@@ -2059,6 +2059,17 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(txs[0]['fee'], '-0.000107')
         await self.assertBalance(self.account, '9.9795695')
 
+    async def test_no_source_and_valid_channel_signature_and_media_type(self):
+        await self.channel_create('@spam2', '1.0')
+        await self.stream_create('bar', '1.0', channel_name='@spam2', preview=True, confirm=False, file_path=self.video_file_name)
+        no_source_claims = await self.claim_search(has_source=False, valid_channel_signature=True,
+                                                   media_type="video/mp4")
+        mp4_claims = await self.claim_search(valid_channel_signature=True, media_type="video/mp4")
+        no_source_claims_no_media = await self.claim_search(has_source=False, valid_channel_signature=True)
+        self.assertEqual(0, len(no_source_claims))
+        self.assertEqual(1, len(mp4_claims))
+        self.assertEqual(0, len(no_source_claims_no_media))
+
     async def test_abandoning_stream_at_loss(self):
         await self.assertBalance(self.account, '10.0')
         tx = await self.stream_create(bid='0.0001')
