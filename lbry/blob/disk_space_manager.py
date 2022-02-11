@@ -36,31 +36,29 @@ class DiskSpaceManager:
         await self._clean(True)
 
     async def _clean(self, is_network_blob=False):
-        space_used_bytes = await self.get_space_used_bytes()
+        space_used_mb = await self.get_space_used_mb(cached=False)
         if is_network_blob:
-            space_used_bytes = space_used_bytes['network_storage']
+            space_used_mb = space_used_mb['network_storage']
         else:
-            space_used_bytes = space_used_bytes['content_storage'] + space_used_bytes['private_storage']
+            space_used_mb = space_used_mb['content_storage'] + space_used_mb['private_storage']
         storage_limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
-        storage_limit = storage_limit_mb*1024*1024 if storage_limit_mb else None
         if self.analytics:
             asyncio.create_task(
-                self.analytics.send_disk_space_used(space_used_bytes, storage_limit, is_network_blob)
+                self.analytics.send_disk_space_used(space_used_mb, storage_limit_mb, is_network_blob)
             )
-        if not storage_limit:
-            return 0
         delete = []
-        available = storage_limit - space_used_bytes
-        if available > 0:
+        available = storage_limit_mb - space_used_mb
+        if storage_limit_mb == 0 if not is_network_blob else available >= 0:
             return 0
         for blob_hash, file_size, _ in await self.db.get_stored_blobs(is_mine=False, is_network_blob=is_network_blob):
             delete.append(blob_hash)
-            available += file_size
-            if available > 0:
+            available += int(file_size/1024.0/1024.0)
+            if available >= 0:
                 break
         if delete:
             await self.db.stop_all_files()
             await self.blob_manager.delete_blobs(delete, delete_from_db=True)
+        self._used_space_bytes = None
         return len(delete)
 
     async def cleaning_loop(self):

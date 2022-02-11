@@ -617,6 +617,7 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
 
         background_downloader = BackgroundDownloader(self.daemon.conf, self.daemon.storage, self.daemon.blob_manager)
+        self.daemon.conf.network_storage_limit = 32
         await self.clear()
         await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['total_used_mb'])
@@ -625,6 +626,7 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         await self.blob_clean()
         self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
         self.assertEqual(32, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
+        self.daemon.conf.network_storage_limit = 48
         await background_downloader.download_blobs(content2)
         await self.assertBlobs(content1, content2)
         await self.blob_clean()
@@ -654,3 +656,7 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         self.daemon.conf.blob_storage_limit = 1
         await self.blob_clean()
         await self.assertBlobs(content1, no_files=False)
+
+        self.daemon.conf.network_storage_limit = 0
+        await self.blob_clean()
+        self.assertEqual(0, (await self.status())['disk_space']['seed_blobs_storage_used_mb'])
