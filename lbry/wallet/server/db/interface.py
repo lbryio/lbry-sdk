@@ -139,3 +139,6 @@ class BasePrefixDB:
 
     def stage_raw_delete(self, key: bytes, value: bytes):
         self._op_stack.append_op(RevertableDelete(key, value))
+
+    def estimate_num_keys(self, column_family: 'rocksdb.ColumnFamilyHandle' = None):
+        return int(self._db.get_property(b'rocksdb.estimate-num-keys', column_family).decode())

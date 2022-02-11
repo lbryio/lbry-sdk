@@ -144,6 +144,9 @@ class PrefixRow(metaclass=PrefixRowType):
     def unpack_item(cls, key: bytes, value: bytes):
         return cls.unpack_key(key), cls.unpack_value(value)
 
+    def estimate_num_keys(self) -> int:
+        return int(self._db.get_property(b'rocksdb.estimate-num-keys', self._column_family).decode())
+
 
 class UTXOKey(NamedTuple):
     hashX: bytes
