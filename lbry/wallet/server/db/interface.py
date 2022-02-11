@@ -130,10 +130,6 @@ class BasePrefixDB:
     def try_catch_up_with_primary(self):
         self._db.try_catch_up_with_primary()
 
-    @property
-    def closed(self) -> bool:
-        return self._db.is_closed
-
     def stage_raw_put(self, key: bytes, value: bytes):
         self._op_stack.append_op(RevertablePut(key, value))
 
