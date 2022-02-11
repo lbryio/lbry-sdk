@@ -413,7 +413,8 @@ class BackgroundDownloaderComponent(Component):
             self.space_available = await self.space_manager.get_free_space_mb(True)
             if not self.is_busy and self.space_available > 10:
                 blob_hash = next((key.hex() for key in self.dht_node.stored_blob_hashes if
-                                 key.hex() not in self.blob_manager.completed_blob_hashes), None)
+                                 key[0] == self.dht_node.protocol.node_id[0]
+                                 and key.hex() not in self.blob_manager.completed_blob_hashes), None)
                 if blob_hash:
                     self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash))
             await asyncio.sleep(self.download_loop_delay_seconds)
