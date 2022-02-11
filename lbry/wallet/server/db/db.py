@@ -656,7 +656,6 @@ class HubDB:
                 claim_txo.tx_num, claim_txo.position, claim_hash, claim_txo.name, claim_txo.root_tx_num,
                 claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
             )
-
             if claim:
                 batch.append(claim)
             if len(batch) == batch_size:
@@ -742,7 +741,9 @@ class HubDB:
 
         def get_counts():
             return [
-                v.tx_count for v in self.prefix_db.tx_count.iterate(include_key=False, fill_cache=False)
+                v.tx_count for v in self.prefix_db.tx_count.iterate(
+                    start=(0,), stop=(self.db_height + 1,), include_key=False, fill_cache=False
+                )
             ]
 
         tx_counts = await asyncio.get_event_loop().run_in_executor(self._executor, get_counts)
@@ -777,7 +778,7 @@ class HubDB:
         def get_headers():
             return [
                 header for header in self.prefix_db.header.iterate(
-                    include_key=False, fill_cache=False, deserialize_value=False
+                    start=(0, ), stop=(self.db_height + 1, ), include_key=False, fill_cache=False, deserialize_value=False
                 )
             ]
 
@@ -787,7 +788,7 @@ class HubDB:
 
     async def _read_tx_hashes(self):
         def _read_tx_hashes():
-            return list(self.prefix_db.tx_hash.iterate(include_key=False, fill_cache=False, deserialize_value=False))
+            return list(self.prefix_db.tx_hash.iterate(start=(0,), stop=(self.db_tx_count + 1), include_key=False, fill_cache=False, deserialize_value=False))
 
         self.logger.info("loading tx hashes")
         self.total_transactions.clear()
