@@ -4885,20 +4885,16 @@ class Daemon(metaclass=JSONRPCServerType):
     """
 
     @requires(DHT_COMPONENT)
-    async def jsonrpc_peer_list(self, blob_hash, search_bottom_out_limit=None, page=None, page_size=None):
+    async def jsonrpc_peer_list(self, blob_hash, page=None, page_size=None):
         """
         Get peers for blob hash
 
         Usage:
             peer_list (<blob_hash> | --blob_hash=<blob_hash>)
-                [<search_bottom_out_limit> | --search_bottom_out_limit=<search_bottom_out_limit>]
                 [--page=<page>] [--page_size=<page_size>]
 
         Options:
             --blob_hash=<blob_hash>                                  : (str) find available peers for this blob hash
-            --search_bottom_out_limit=<search_bottom_out_limit>      : (int) the number of search probes in a row
-                                                                             that don't find any new peers
-                                                                             before giving up and returning
             --page=<page>                                            : (int) page to return during paginating
             --page_size=<page_size>                                  : (int) number of items on page during pagination
 
@@ -4910,13 +4906,6 @@ class Daemon(metaclass=JSONRPCServerType):
         if not is_valid_blobhash(blob_hash):
             # TODO: use error from lbry.error
             raise Exception("invalid blob hash")
-        if search_bottom_out_limit is not None:
-            search_bottom_out_limit = int(search_bottom_out_limit)
-            if search_bottom_out_limit <= 0:
-                # TODO: use error from lbry.error
-                raise Exception("invalid bottom out limit")
-        else:
-            search_bottom_out_limit = 4
         peers = []
         peer_q = asyncio.Queue(loop=self.component_manager.loop)
         await self.dht_node._peers_for_value_producer(blob_hash, peer_q)
