@@ -44,7 +44,7 @@ class HubDB:
 
     def __init__(self, coin, db_dir: str, cache_MB: int = 512, reorg_limit: int = 200,
                  cache_all_claim_txos: bool = False, cache_all_tx_hashes: bool = False,
-                 secondary_name: str = '', max_open_files: int = 256, blocking_channel_ids: List[str] = None,
+                 secondary_name: str = '', max_open_files: int = 64, blocking_channel_ids: List[str] = None,
                  filtering_channel_ids: List[str] = None, executor: ThreadPoolExecutor = None):
         self.logger = util.class_logger(__name__, self.__class__.__name__)
         self.coin = coin

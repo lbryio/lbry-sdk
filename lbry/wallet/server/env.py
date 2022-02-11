@@ -36,7 +36,7 @@ class Env:
                  allow_lan_udp=None, cache_all_tx_hashes=None, cache_all_claim_txos=None, country=None,
                  payment_address=None, donation_address=None, max_send=None, max_receive=None, max_sessions=None,
                  session_timeout=None, drop_client=None, description=None, daily_fee=None,
-                 database_query_timeout=None, db_max_open_files=512, elastic_notifier_port=None,
+                 database_query_timeout=None, db_max_open_files=64, elastic_notifier_port=None,
                  blocking_channel_ids=None, filtering_channel_ids=None, peer_hubs=None, peer_announce=None):
         self.logger = class_logger(__name__, self.__class__.__name__)
 
@@ -303,8 +303,8 @@ class Env:
         parser.add_argument('--daemon_url',
                             help='URL for rpc from lbrycrd, <rpcuser>:<rpcpassword>@<lbrycrd rpc ip><lbrycrd rpc port>',
                             default=cls.default('DAEMON_URL', None))
-        parser.add_argument('--db_max_open_files', type=int, default=512,
-                            help='number of files leveldb can have open at a time')
+        parser.add_argument('--db_max_open_files', type=int, default=64,
+                            help='number of files rocksdb can have open at a time')
         parser.add_argument('--host', type=str, default=cls.default('HOST', 'localhost'),
                             help='Interface for hub server to listen on')
         parser.add_argument('--tcp_port', type=int, default=cls.integer('TCP_PORT', 50001),

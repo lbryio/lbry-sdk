@@ -2,14 +2,13 @@ import typing
 import struct
 import array
 import base64
+import rocksdb
+import rocksdb.interfaces
 from typing import Union, Tuple, NamedTuple, Optional
-from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db import DB_PREFIXES, COLUMN_SETTINGS
 from lbry.wallet.server.db.interface import BasePrefixDB
-from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 from lbry.schema.url import normalize_name
-if typing.TYPE_CHECKING:
-    import rocksdb
 
 ACTIVATED_CLAIM_TXO_TYPE = 1
 ACTIVATED_SUPPORT_TXO_TYPE = 2
@@ -32,6 +31,10 @@ class PrefixRowType(type):
         klass = super().__new__(cls, name, bases, kwargs)
         if name != "PrefixRow":
             ROW_TYPES[klass.prefix] = klass
+            cache_size = klass.cache_size
+            COLUMN_SETTINGS[klass.prefix] = {
+                'cache_size': cache_size,
+            }
         return klass
 
 
@@ -40,6 +43,7 @@ class PrefixRow(metaclass=PrefixRowType):
     key_struct: struct.Struct
     value_struct: struct.Struct
     key_part_lambdas = []
+    cache_size: int = 1024 * 1024 * 64
 
     def __init__(self, db: 'rocksdb.DB', op_stack: RevertableOpStack):
         self._db = db
@@ -568,6 +572,7 @@ class ActiveAmountPrefixRow(PrefixRow):
         struct.Struct(b'>20sBLL').pack,
         struct.Struct(b'>20sBLLH').pack
     ]
+    cache_size = 1024 * 1024 * 128
 
     @classmethod
     def pack_key(cls, claim_hash: bytes, txo_type: int, activation_height: int, tx_num: int, position: int):
@@ -598,6 +603,7 @@ class ClaimToTXOPrefixRow(PrefixRow):
         lambda: b'',
         struct.Struct(b'>20s').pack
     ]
+    cache_size = 1024 * 1024 * 128
 
     @classmethod
     def pack_key(cls, claim_hash: bytes):
@@ -637,6 +643,7 @@ class TXOToClaimPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.txo_to_claim.value
     key_struct = struct.Struct(b'>LH')
     value_struct = struct.Struct(b'>20s')
+    cache_size = 1024 * 1024 * 128
 
     @classmethod
     def pack_key(cls, tx_num: int, position: int):
@@ -1031,6 +1038,7 @@ class EffectiveAmountPrefixRow(PrefixRow):
         shortid_key_helper(b'>QL'),
         shortid_key_helper(b'>QLH'),
     ]
+    cache_size = 1024 * 1024 * 128
 
     @classmethod
     def pack_key(cls, name: str, effective_amount: int, tx_num: int, position: int):
@@ -1061,6 +1069,7 @@ class EffectiveAmountPrefixRow(PrefixRow):
 
 class RepostPrefixRow(PrefixRow):
     prefix = DB_PREFIXES.repost.value
+    key_struct = struct.Struct(b'>20s')
 
     key_part_lambdas = [
         lambda: b'',
@@ -1069,13 +1078,11 @@ class RepostPrefixRow(PrefixRow):
 
     @classmethod
     def pack_key(cls, claim_hash: bytes):
-        return cls.prefix + claim_hash
+        return super().pack_key(claim_hash)
 
     @classmethod
     def unpack_key(cls, key: bytes) -> RepostKey:
-        assert key[:1] == cls.prefix
-        assert len(key) == 21
-        return RepostKey(key[1:])
+        return RepostKey(*super().unpack_key(key))
 
     @classmethod
     def pack_value(cls, reposted_claim_hash: bytes) -> bytes:
@@ -1746,7 +1753,7 @@ class TouchedHashXPrefixRow(PrefixRow):
 
 
 class PrefixDB(BasePrefixDB):
-    def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 512,
+    def __init__(self, path: str, cache_mb: int = 128, reorg_limit: int = 200, max_open_files: int = 64,
                  secondary_path: str = '', unsafe_prefixes: Optional[typing.Set[bytes]] = None):
         super().__init__(path, max_open_files=max_open_files, secondary_path=secondary_path,
                          max_undo_depth=reorg_limit, unsafe_prefixes=unsafe_prefixes)

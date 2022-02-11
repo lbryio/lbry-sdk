@@ -1,4 +1,5 @@
 import enum
+from typing import NamedTuple, Optional
 
 
 @enum.unique
@@ -43,3 +44,6 @@ class DB_PREFIXES(enum.Enum):
     trending_notifications = b'c'
     mempool_tx = b'd'
     touched_hashX = b'e'
+
+
+COLUMN_SETTINGS = {}  # this is updated by the PrefixRow metaclass

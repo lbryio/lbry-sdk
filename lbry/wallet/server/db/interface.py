@@ -3,7 +3,7 @@ import typing
 
 import rocksdb
 from typing import Optional
-from lbry.wallet.server.db import DB_PREFIXES
+from lbry.wallet.server.db import DB_PREFIXES, COLUMN_SETTINGS
 from lbry.wallet.server.db.revertable import RevertableOpStack, RevertablePut, RevertableDelete
 
 
@@ -15,20 +15,25 @@ class BasePrefixDB:
     PARTIAL_UNDO_KEY_STRUCT = struct.Struct(b'>Q')
 
     def __init__(self, path, max_open_files=64, secondary_path='', max_undo_depth: int = 200, unsafe_prefixes=None):
-        column_family_options = {
-                prefix.value: rocksdb.ColumnFamilyOptions() for prefix in DB_PREFIXES
-        }
+        column_family_options = {}
+        for prefix in DB_PREFIXES:
+            settings = COLUMN_SETTINGS[prefix.value]
+            column_family_options[prefix.value] = rocksdb.ColumnFamilyOptions()
+            column_family_options[prefix.value].table_factory = rocksdb.BlockBasedTableFactory(
+                block_cache=rocksdb.LRUCache(settings['cache_size']),
+            )
         self.column_families: typing.Dict[bytes, 'rocksdb.ColumnFamilyHandle'] = {}
+        options = rocksdb.Options(
+            create_if_missing=True, use_fsync=False, target_file_size_base=33554432,
+            max_open_files=max_open_files if not secondary_path else -1, create_missing_column_families=True
+        )
         self._db = rocksdb.DB(
-            path, rocksdb.Options(
-                create_if_missing=True, use_fsync=False, target_file_size_base=33554432,
-                max_open_files=max_open_files if not secondary_path else -1, create_missing_column_families=True
-            ), secondary_name=secondary_path, column_families=column_family_options
+            path, options, secondary_name=secondary_path, column_families=column_family_options
         )
         for prefix in DB_PREFIXES:
             cf = self._db.get_column_family(prefix.value)
             if cf is None and not secondary_path:
-                self._db.create_column_family(prefix.value, rocksdb.ColumnFamilyOptions())
+                self._db.create_column_family(prefix.value, column_family_options[prefix.value])
                 cf = self._db.get_column_family(prefix.value)
             self.column_families[prefix.value] = cf
 
@@ -116,7 +121,7 @@ class BasePrefixDB:
     def iterator(self, start: bytes, column_family: 'rocksdb.ColumnFamilyHandle' = None,
                  iterate_lower_bound: bytes = None, iterate_upper_bound: bytes = None,
                  reverse: bool = False, include_key: bool = True, include_value: bool = True,
-                 fill_cache: bool = True, prefix_same_as_start: bool = False, auto_prefix_mode: bool = False):
+                 fill_cache: bool = True, prefix_same_as_start: bool = False, auto_prefix_mode: bool = True):
         return self._db.iterator(
             start=start, column_family=column_family, iterate_lower_bound=iterate_lower_bound,
             iterate_upper_bound=iterate_upper_bound, reverse=reverse, include_key=include_key,
