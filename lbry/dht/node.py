@@ -202,25 +202,23 @@ class Node:
         self._join_task = self.loop.create_task(self.join_network(interface, known_node_urls))
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
-                                  bottom_out_limit: int = constants.BOTTOM_OUT_LIMIT,
                                   max_results: int = constants.K) -> IterativeNodeFinder:
 
         return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                   key, bottom_out_limit, max_results, None, shortlist)
+                                   key, max_results, None, shortlist)
 
     def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
-                                   bottom_out_limit: int = 40,
                                    max_results: int = -1) -> IterativeValueFinder:
 
         return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                    key, bottom_out_limit, max_results, None, shortlist)
+                                    key, max_results, None, shortlist)
 
     async def peer_search(self, node_id: bytes, count=constants.K, max_results=constants.K * 2,
-                          bottom_out_limit=60, shortlist: typing.Optional[typing.List['KademliaPeer']] = None
+                          shortlist: typing.Optional[typing.List['KademliaPeer']] = None
                           ) -> typing.List['KademliaPeer']:
         peers = []
         async for iteration_peers in self.get_iterative_node_finder(
-                node_id, shortlist=shortlist, bottom_out_limit=bottom_out_limit, max_results=max_results):
+                node_id, shortlist=shortlist, max_results=max_results):
             peers.extend(iteration_peers)
         distance = Distance(node_id)
         peers.sort(key=lambda peer: distance(peer.node_id))
