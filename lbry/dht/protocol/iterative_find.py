@@ -184,11 +184,12 @@ class IterativeFinder:
         for index, peer in enumerate(self.active.keys()):
             if index == 0:
                 log.debug("closest to probe: %s", peer.node_id.hex()[:8])
+
             if peer in self.contacted:
                 continue
             if len(self.running_probes) >= constants.ALPHA:
                 break
-            if index > (constants.K - 1):
+            if index > (constants.K + len(self.running_probes)):
                 break
             origin_address = (peer.address, peer.udp_port)
             if origin_address in self.exclude:
