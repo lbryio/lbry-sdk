@@ -1151,10 +1151,3 @@ class HubDB:
                     utxo_append((hashX, utxo_value.amount))
             return utxos
         return await asyncio.get_event_loop().run_in_executor(self._executor, lookup_utxos)
-
-    async def get_trending_notifications(self, height: int):
-        def read_trending():
-            return {
-                k.claim_hash: v for k, v in self.prefix_db.trending_notification.iterate((height,))
-            }
-        return await asyncio.get_event_loop().run_in_executor(self._executor, read_trending)

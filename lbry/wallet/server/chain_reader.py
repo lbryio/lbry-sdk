@@ -50,7 +50,7 @@ class BlockchainReader:
         if self.last_state:
             while True:
                 if self.db.headers[-1] == self.db.prefix_db.header.get(last_height, deserialize_value=False):
-                    self.log.info("connects to block %i", last_height)
+                    self.log.debug("connects to block %i", last_height)
                     break
                 else:
                     self.log.warning("disconnect block %i", last_height)

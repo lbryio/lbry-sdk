@@ -17,6 +17,7 @@ from lbry.wallet.server.db.elasticsearch.notifier import ElasticNotifierProtocol
 from lbry.wallet.server.db.elasticsearch.fast_ar_trending import FAST_AR_TRENDING_SCRIPT
 from lbry.wallet.server.chain_reader import BlockchainReader
 from lbry.wallet.server.db.revertable import RevertableOp
+from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db import DB_PREFIXES
 
 
@@ -34,9 +35,7 @@ class ElasticWriter(BlockchainReader):
         self._elastic_host = env.elastic_host
         self._elastic_port = env.elastic_port
         self.sync_timeout = 1800
-        self.sync_client = AsyncElasticsearch(
-            [{'host': self._elastic_host, 'port': self._elastic_port}], timeout=self.sync_timeout
-        )
+        self.sync_client = None
         self._es_info_path = os.path.join(env.db_dir, 'es_info')
         self._last_wrote_height = 0
         self._last_wrote_block_hash = None
@@ -66,8 +65,10 @@ class ElasticWriter(BlockchainReader):
             self.log.info("notify listener %i", height)
 
     def _read_es_height(self):
-        with open(self._es_info_path, 'r') as f:
-            info = json.loads(f.read())
+        info = {}
+        if os.path.exists(self._es_info_path):
+            with open(self._es_info_path, 'r') as f:
+                info.update(json.loads(f.read()))
         self._last_wrote_height = int(info.get('height', 0))
         self._last_wrote_block_hash = info.get('block_hash', None)
 
@@ -100,22 +101,26 @@ class ElasticWriter(BlockchainReader):
         while True:
             try:
                 await self.sync_client.cluster.health(wait_for_status='yellow')
+                self.log.info("ES is ready to connect to")
                 break
             except ConnectionError:
                 self.log.warning("Failed to connect to Elasticsearch. Waiting for it!")
                 await asyncio.sleep(1)
 
+        index_version = await self.get_index_version()
+
         res = await self.sync_client.indices.create(self.index, INDEX_DEFAULT_SETTINGS, ignore=400)
         acked = res.get('acknowledged', False)
+
         if acked:
             await self.set_index_version(self.VERSION)
-            return acked
-        index_version = await self.get_index_version()
-        if index_version != self.VERSION:
+            return True
+        elif index_version != self.VERSION:
             self.log.error("es search index has an incompatible version: %s vs %s", index_version, self.VERSION)
             raise IndexVersionMismatch(index_version, self.VERSION)
-        await self.sync_client.indices.refresh(self.index)
-        return acked
+        else:
+            await self.sync_client.indices.refresh(self.index)
+            return False
 
     async def stop_index(self):
         if self.sync_client:
@@ -195,10 +200,10 @@ class ElasticWriter(BlockchainReader):
                 'params': {'src': {
                     'changes': [
                         {
-                            'height': notify_height,
-                            'prev_amount': trending_v.previous_amount / 1E8,
-                            'new_amount': trending_v.new_amount / 1E8,
-                        } for (notify_height, trending_v) in notifications
+                            'height': notification.height,
+                            'prev_amount': notification.prev_amount / 1E8,
+                            'new_amount': notification.new_amount / 1E8,
+                        } for notification in notifications
                     ]
                 }}
             },
@@ -219,7 +224,7 @@ class ElasticWriter(BlockchainReader):
 
         touched_or_deleted = self.db.prefix_db.touched_or_deleted.get(height)
         for k, v in self.db.prefix_db.trending_notification.iterate((height,)):
-            self._trending[k.claim_hash].append((k.height, v))
+            self._trending[k.claim_hash].append(TrendingNotification(k.height, v.previous_amount, v.new_amount))
         if touched_or_deleted:
             readded_after_reorg = self._removed_during_undo.intersection(touched_or_deleted.touched_claims)
             self._deleted_claims.difference_update(readded_after_reorg)
@@ -292,7 +297,7 @@ class ElasticWriter(BlockchainReader):
     def last_synced_height(self) -> int:
         return self._last_wrote_height
 
-    async def start(self):
+    async def start(self, reindex=False):
         await super().start()
 
         def _start_cancellable(run, *args):
@@ -302,10 +307,15 @@ class ElasticWriter(BlockchainReader):
 
         self.db.open_db()
         await self.db.initialize_caches()
+        await self.read_es_height()
         await self.start_index()
         self.last_state = self.db.read_db_state()
 
         await _start_cancellable(self.run_es_notifier)
+
+        if reindex or self._last_wrote_height == 0 and self.db.db_height > 0:
+            self.log.warning("reindex (last wrote: %i, db height: %i)", self._last_wrote_height, self.db.db_height)
+            await self.reindex()
         await _start_cancellable(self.refresh_blocks_forever)
 
     async def stop(self, delete_index=False):
@@ -319,8 +329,9 @@ class ElasticWriter(BlockchainReader):
         await self.stop_index()
         self._executor.shutdown(wait=True)
         self._executor = None
+        self.shutdown_event.set()
 
-    def run(self):
+    def run(self, reindex=False):
         loop = asyncio.get_event_loop()
 
         def __exit():
@@ -328,9 +339,65 @@ class ElasticWriter(BlockchainReader):
         try:
             loop.add_signal_handler(signal.SIGINT, __exit)
             loop.add_signal_handler(signal.SIGTERM, __exit)
-            loop.run_until_complete(self.start())
+            loop.run_until_complete(self.start(reindex=reindex))
             loop.run_until_complete(self.shutdown_event.wait())
         except (SystemExit, KeyboardInterrupt):
             pass
         finally:
             loop.run_until_complete(self.stop())
+
+    async def reindex(self):
+        async with self._lock:
+            self.log.info("reindexing %i claims (estimate)", self.db.prefix_db.claim_to_txo.estimate_num_keys())
+            await self.delete_index()
+            res = await self.sync_client.indices.create(self.index, INDEX_DEFAULT_SETTINGS, ignore=400)
+            acked = res.get('acknowledged', False)
+            if acked:
+                await self.set_index_version(self.VERSION)
+            await self.sync_client.indices.refresh(self.index)
+            self.write_es_height(0, self.env.coin.GENESIS_HASH)
+            await self._sync_all_claims()
+            await self.sync_client.indices.refresh(self.index)
+            self.write_es_height(self.db.db_height, self.db.db_tip[::-1].hex())
+            self.notify_es_notification_listeners(self.db.db_height, self.db.db_tip)
+            self.log.warning("finished reindexing")
+
+    async def _sync_all_claims(self, batch_size=100000):
+        def load_historic_trending():
+            notifications = self._trending
+            for k, v in self.db.prefix_db.trending_notification.iterate():
+                notifications[k.claim_hash].append(TrendingNotification(k.height, v.previous_amount, v.new_amount))
+
+        async def all_claims_producer():
+            async for claim in self.db.all_claims_producer(batch_size=batch_size):
+                yield self._upsert_claim_query(self.index, claim)
+                claim_hash = bytes.fromhex(claim['claim_id'])
+                if claim_hash in self._trending:
+                    yield self._update_trending_query(self.index, claim_hash, self._trending.pop(claim_hash))
+            self._trending.clear()
+
+        self.log.info("loading about %i historic trending updates", self.db.prefix_db.trending_notification.estimate_num_keys())
+        await asyncio.get_event_loop().run_in_executor(self._executor, load_historic_trending)
+        self.log.info("loaded historic trending updates for %i claims", len(self._trending))
+
+        cnt = 0
+        success = 0
+        producer = all_claims_producer()
+
+        finished = False
+        try:
+            async for ok, item in async_streaming_bulk(self.sync_client, producer, raise_on_error=False):
+                cnt += 1
+                if not ok:
+                    self.log.warning("indexing failed for an item: %s", item)
+                else:
+                    success += 1
+                if cnt % batch_size == 0:
+                    self.log.info(f"indexed {success} claims")
+            finished = True
+            await self.sync_client.indices.refresh(self.index)
+            self.log.info("indexed %i/%i claims", success, cnt)
+        finally:
+            if not finished:
+                await producer.aclose()
+            self.shutdown_event.set()

@@ -1420,7 +1420,6 @@ class BlockProcessor:
         # flush the changes
         save_undo = (self.daemon.cached_height() - self.height) <= self.env.reorg_limit
 
-        self.db.write_db_state()
         if save_undo:
             self.db.prefix_db.commit(self.height, self.tip)
         else:

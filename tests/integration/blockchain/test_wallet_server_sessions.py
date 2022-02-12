@@ -89,37 +89,58 @@ class TestUsagePayment(CommandTestCase):
 
 class TestESSync(CommandTestCase):
     async def test_es_sync_utility(self):
+        es_writer = self.conductor.spv_node.es_writer
+        server_search_client = self.conductor.spv_node.server.session_manager.search_index
+
         for i in range(10):
             await self.stream_create(f"stream{i}", bid='0.001')
         await self.generate(1)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
-        db = self.conductor.spv_node.server.db
-        env = self.conductor.spv_node.server.env
 
-        await db.search_index.delete_index()
-        db.search_index.clear_caches()
-        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
-        await db.search_index.stop()
-
-        async def resync():
-            await db.search_index.start()
-            db.search_index.clear_caches()
-            await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
-            self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
-
+        # delete the index and verify nothing is returned by claim search
+        await es_writer.delete_index()
+        server_search_client.clear_caches()
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
 
-        await resync()
-
-        # this time we will test a migration from unversioned to v1
-        await db.search_index.sync_client.indices.delete_template(db.search_index.index)
-        await db.search_index.stop()
-
-        await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
-        await db.search_index.start()
-
-        await resync()
+        # reindex, 10 claims should be returned
+        await es_writer.reindex()
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        server_search_client.clear_caches()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # reindex again, this should not appear to do anything but will delete and reinsert the same 10 claims
+        await es_writer.reindex()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        server_search_client.clear_caches()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # delete the index again and stop the writer, upon starting it the writer should reindex automatically
+        await es_writer.stop(delete_index=True)
+        server_search_client.clear_caches()
+        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
+
+        await es_writer.start(reindex=True)
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # stop the es writer and advance the chain by 1, adding a new claim. upon resuming the es writer, it should
+        # add the new claim
+        await es_writer.stop()
+        await self.stream_create(f"stream11", bid='0.001', confirm=False)
+        generate_block_task = asyncio.create_task(self.generate(1))
+        await es_writer.start()
+        await generate_block_task
+        self.assertEqual(11, len(await self.claim_search(order_by=['height'])))
+
+
+    # # this time we will test a migration from unversioned to v1
+        # await db.search_index.sync_client.indices.delete_template(db.search_index.index)
+        # await db.search_index.stop()
+        #
+        # await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
+        # await db.search_index.start()
+        #
+        # await es_writer.reindex()
+        # self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
 
 class TestHubDiscovery(CommandTestCase):

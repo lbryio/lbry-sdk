@@ -263,7 +263,8 @@ class SPVNode:
         self.es_writer = ElasticWriter(env)
         await self.writer.open()
         await self.writer.start()
-        await asyncio.wait([self.server.start(), self.es_writer.start()])
+        await self.es_writer.start()
+        await self.server.start()
 
     async def stop(self, cleanup=True):
         if self.stopped:
