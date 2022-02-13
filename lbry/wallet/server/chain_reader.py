@@ -1,9 +1,9 @@
 import signal
 import logging
 import asyncio
-from concurrent.futures.thread import ThreadPoolExecutor
 import typing
-
+from concurrent.futures.thread import ThreadPoolExecutor
+from prometheus_client import Gauge, Histogram
 import lbry
 from lbry.wallet.server.mempool import MemPool
 from lbry.wallet.server.db.prefixes import DBState
@@ -14,7 +14,22 @@ from lbry.wallet.server.session import LBRYSessionManager
 from lbry.prometheus import PrometheusServer
 
 
+HISTOGRAM_BUCKETS = (
+    .005, .01, .025, .05, .075, .1, .25, .5, .75, 1.0, 2.5, 5.0, 7.5, 10.0, 15.0, 20.0, 30.0, 60.0, float('inf')
+)
+
+
 class BlockchainReader:
+    block_count_metric = Gauge(
+        "block_count", "Number of processed blocks", namespace="blockchain_reader"
+    )
+    block_update_time_metric = Histogram(
+        "block_time", "Block update times", namespace="blockchain_reader", buckets=HISTOGRAM_BUCKETS
+    )
+    reorg_count_metric = Gauge(
+        "reorg_count", "Number of reorgs", namespace="blockchain_reader"
+    )
+
     def __init__(self, env, secondary_name: str, thread_workers: int = 1, thread_prefix: str = 'blockchain-reader'):
         self.env = env
         self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
@@ -47,6 +62,7 @@ class BlockchainReader:
             self.log.warning("reorg detected, waiting until the writer has flushed the new blocks to advance")
             return
         last_height = 0 if not self.last_state else self.last_state.height
+        rewound = False
         if self.last_state:
             while True:
                 if self.db.headers[-1] == self.db.prefix_db.header.get(last_height, deserialize_value=False):
@@ -55,7 +71,10 @@ class BlockchainReader:
                 else:
                     self.log.warning("disconnect block %i", last_height)
                     self.unwind()
+                    rewound = True
                     last_height -= 1
+        if rewound:
+            self.reorg_count_metric.inc()
         self.db.read_db_state()
         if not self.last_state or last_height < state.height:
             for height in range(last_height + 1, state.height + 1):
@@ -63,6 +82,7 @@ class BlockchainReader:
                 self.advance(height)
             self.clear_caches()
             self.last_state = state
+            self.block_count_metric.set(self.last_state.height)
             self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
                 self.db.blocking_channel_hashes
             )
@@ -107,6 +127,16 @@ class BlockchainReader:
 
 
 class BlockchainReaderServer(BlockchainReader):
+    block_count_metric = Gauge(
+        "block_count", "Number of processed blocks", namespace="wallet_server"
+    )
+    block_update_time_metric = Histogram(
+        "block_time", "Block update times", namespace="wallet_server", buckets=HISTOGRAM_BUCKETS
+    )
+    reorg_count_metric = Gauge(
+        "reorg_count", "Number of reorgs", namespace="wallet_server"
+    )
+
     def __init__(self, env):
         super().__init__(env, 'lbry-reader', thread_workers=max(1, env.max_query_workers), thread_prefix='hub-worker')
         self.history_cache = {}

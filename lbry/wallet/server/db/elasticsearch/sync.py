@@ -8,6 +8,7 @@ import asyncio
 import logging
 from elasticsearch import AsyncElasticsearch, NotFoundError
 from elasticsearch.helpers import async_streaming_bulk
+from prometheus_client import Gauge, Histogram
 
 from lbry.schema.result import Censor
 from lbry.wallet.server.db.elasticsearch.search import IndexVersionMismatch
@@ -15,7 +16,7 @@ from lbry.wallet.server.db.elasticsearch.constants import ALL_FIELDS, INDEX_DEFA
 from lbry.wallet.server.db.elasticsearch.common import expand_query
 from lbry.wallet.server.db.elasticsearch.notifier import ElasticNotifierProtocol
 from lbry.wallet.server.db.elasticsearch.fast_ar_trending import FAST_AR_TRENDING_SCRIPT
-from lbry.wallet.server.chain_reader import BlockchainReader
+from lbry.wallet.server.chain_reader import BlockchainReader, HISTOGRAM_BUCKETS
 from lbry.wallet.server.db.revertable import RevertableOp
 from lbry.wallet.server.db.common import TrendingNotification
 from lbry.wallet.server.db import DB_PREFIXES
@@ -26,6 +27,16 @@ log = logging.getLogger()
 
 class ElasticWriter(BlockchainReader):
     VERSION = 1
+    prometheus_namespace = ""
+    block_count_metric = Gauge(
+        "block_count", "Number of processed blocks", namespace="elastic_sync"
+    )
+    block_update_time_metric = Histogram(
+        "block_time", "Block update times", namespace="elastic_sync", buckets=HISTOGRAM_BUCKETS
+    )
+    reorg_count_metric = Gauge(
+        "reorg_count", "Number of reorgs", namespace="elastic_sync"
+    )
 
     def __init__(self, env):
         super().__init__(env, 'lbry-elastic-writer', thread_workers=1, thread_prefix='lbry-elastic-writer')
