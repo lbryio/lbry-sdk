@@ -234,8 +234,6 @@ class ElasticWriter(BlockchainReader):
             for to_del in touched_or_deleted.deleted_claims:
                 if to_del in self._trending:
                     self._trending.pop(to_del)
-        self.log.info("advanced to %i, %i touched %i to delete (%i %i)", height, len(touched_or_deleted.touched_claims), len(touched_or_deleted.deleted_claims),
-                         len(self._touched_claims), len(self._deleted_claims))
         self._advanced = True
 
     def unwind(self):
@@ -314,7 +312,10 @@ class ElasticWriter(BlockchainReader):
         await _start_cancellable(self.run_es_notifier)
 
         if reindex or self._last_wrote_height == 0 and self.db.db_height > 0:
-            self.log.warning("reindex (last wrote: %i, db height: %i)", self._last_wrote_height, self.db.db_height)
+            if self._last_wrote_height == 0:
+                self.log.info("running initial ES indexing of rocksdb at block height %i", self.db.db_height)
+            else:
+                self.log.info("reindex (last wrote: %i, db height: %i)", self._last_wrote_height, self.db.db_height)
             await self.reindex()
         await _start_cancellable(self.refresh_blocks_forever)
 
@@ -360,7 +361,7 @@ class ElasticWriter(BlockchainReader):
             await self.sync_client.indices.refresh(self.index)
             self.write_es_height(self.db.db_height, self.db.db_tip[::-1].hex())
             self.notify_es_notification_listeners(self.db.db_height, self.db.db_tip)
-            self.log.warning("finished reindexing")
+            self.log.info("finished reindexing")
 
     async def _sync_all_claims(self, batch_size=100000):
         def load_historic_trending():

@@ -180,9 +180,10 @@ class BlockchainReaderServer(BlockchainReader):
                 self.clear_search_cache()
                 if self.last_state and self._es_block_hash == self.last_state.tip:
                     self.synchronized.set()
-                    self.log.info("es and reader are in sync")
+                    self.log.info("es and reader are in sync at block %i", self.last_state.height)
                 else:
-                    self.log.info("es and reader are not yet in sync %s vs %s", self._es_height, self.db.db_height)
+                    self.log.info("es and reader are not yet in sync (block %s vs %s)", self._es_height,
+                                  self.db.db_height)
         finally:
             self.es_notification_client.close()
 
@@ -208,8 +209,6 @@ class BlockchainReaderServer(BlockchainReader):
 
         await self.start_prometheus()
         if self.env.udp_port and int(self.env.udp_port):
-            self.log.warning("country=%s interface=%s:%s allow_lan=%s", self.env.country,
-                self.env.host, self.env.udp_port, self.env.allow_lan_udp)
             await self.status_server.start(
                 0, bytes.fromhex(self.env.coin.GENESIS_HASH)[::-1], self.env.country,
                 self.env.host, self.env.udp_port, self.env.allow_lan_udp

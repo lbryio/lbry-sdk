@@ -13,7 +13,6 @@ from collections import defaultdict
 import lbry
 from lbry.schema.claim import Claim
 from lbry.wallet.ledger import Ledger, TestNetLedger, RegTestLedger
-from lbry.utils import LRUCache
 from lbry.wallet.rpc.jsonrpc import RPCError
 from lbry.wallet.server.tx import Tx, TxOutput, TxInput
 from lbry.wallet.server.hash import hash_to_hex_str
@@ -26,6 +25,7 @@ from lbry.wallet.server.db.db import HubDB
 from lbry.wallet.transaction import OutputScript, Output, Transaction
 
 if typing.TYPE_CHECKING:
+    from lbry.wallet.server.env import Env
     from lbry.wallet.server.db.revertable import RevertableOpStack
 
 
@@ -263,16 +263,12 @@ class BlockProcessor:
                             "applying extended claim expiration fork on claims accepted by, %i", self.height
                         )
                         await self.run_in_thread_with_lock(self.db.apply_expiration_extension_fork)
-                # print("******************\n")
             except:
                 self.logger.exception("advance blocks failed")
                 raise
             processed_time = time.perf_counter() - total_start
             self.block_count_metric.set(self.height)
             self.block_update_time_metric.observe(processed_time)
-            if not self.db.first_sync:
-                s = '' if len(blocks) == 1 else 's'
-                self.logger.info('processed {:,d} block{} in {:.1f}s'.format(len(blocks), s, processed_time))
             self.touched_hashXs.clear()
         elif hprevs[0] != chain[0]:
             min_start_height = max(self.height - self.coin.REORG_LIMIT, 0)
