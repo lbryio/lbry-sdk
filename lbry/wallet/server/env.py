@@ -371,6 +371,11 @@ class Env:
         parser.add_argument('--query_timeout_ms', type=int, default=cls.integer('QUERY_TIMEOUT_MS', 10000),
                             help="elasticsearch query timeout")
 
+        parser.add_argument('--blocking_channel_ids', nargs='*', help='',
+                            default=cls.default('BLOCKING_CHANNEL_IDS', '').split(' '))
+        parser.add_argument('--filtering_channel_ids', nargs='*', help='',
+                            default=cls.default('FILTERING_CHANNEL_IDS', '').split(' '))
+
     @classmethod
     def from_arg_parser(cls, args):
         return cls(
@@ -387,5 +392,6 @@ class Env:
             country=args.country, payment_address=args.payment_address, donation_address=args.donation_address,
             max_send=args.max_send, max_receive=args.max_receive, max_sessions=args.max_sessions,
             session_timeout=args.session_timeout, drop_client=args.drop_client, description=args.description,
-            daily_fee=args.daily_fee, database_query_timeout=(args.query_timeout_ms / 1000)
+            daily_fee=args.daily_fee, database_query_timeout=(args.query_timeout_ms / 1000),
+            blocking_channel_ids=args.blocking_channel_ids, filtering_channel_ids=args.filtering_channel_ids
         )
