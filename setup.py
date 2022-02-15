@@ -53,6 +53,7 @@ setup(
         'multidict==4.6.1',
         'coincurve==15.0.0',
         'pbkdf2==1.3',
+        'jsonschema==4.4.0',
         'attrs==18.2.0',
         'pylru==1.1.0',
         'elasticsearch==7.10.1',

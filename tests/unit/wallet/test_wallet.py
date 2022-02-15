@@ -1,3 +1,7 @@
+import json
+import jsonschema
+import os
+import pathlib
 import tempfile
 from binascii import hexlify
 
@@ -16,6 +20,12 @@ class TestWalletCreation(AsyncioTestCase):
         config = {'data_path': '/tmp/wallet'}
         self.main_ledger = self.manager.get_or_create_ledger(Ledger.get_id(), config)
         self.test_ledger = self.manager.get_or_create_ledger(RegTestLedger.get_id(), config)
+
+        base_dir = pathlib.Path(__file__).parents[3]
+        types_dir = base_dir.joinpath('lbry', 'schema', 'types', 'v2')
+
+        with types_dir.joinpath('wallet.json').open() as f:
+          self.wallet_schema = json.load(f)
 
     def test_create_wallet_and_accounts(self):
         wallet = Wallet()
@@ -73,6 +83,62 @@ class TestWalletCreation(AsyncioTestCase):
         encrypted = wallet.pack('password')
         decrypted = Wallet.unpack('password', encrypted)
         self.assertEqual(decrypted['accounts'][0]['name'], 'An Account')
+
+
+    def test_wallet_file_schema(self):
+        # One Deterministic Chain, one Single Address, to test both paths in the schema.
+        wallet_dict = {
+            'version': 1,
+            'name': 'Main Wallet',
+            'preferences': {},
+            'accounts': [
+                {
+                    'certificates': {'x': 'y'},
+                    'name': 'Account 1',
+                    'ledger': 'lbc_mainnet',
+                    'modified_on': 123,
+                    'seed':
+                        "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                        "h absent",
+                    'encrypted': False,
+                    'private_key':
+                        'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                        'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
+                    'public_key':
+                        'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMm'
+                        'Dgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+                    'address_generator': {
+                        'name': 'deterministic-chain',
+                        'receiving': {'gap': 17, 'maximum_uses_per_address': 3},
+                        'change': {'gap': 10, 'maximum_uses_per_address': 3}
+                    }
+                },
+                {
+                    'certificates': {'a': 'b'},
+                    'name': 'Account 2',
+                    'ledger': 'lbc_mainnet',
+                    'modified_on': 123,
+                    'seed':
+                        "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                        "h absent",
+                    'encrypted': True,
+                    'private_key':
+                        'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                        'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
+                    'public_key':
+                        'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMm'
+                        'Dgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+                    'address_generator': {
+                        'name': 'single-address',
+                    }
+                },
+            ]
+        }
+
+        storage = WalletStorage(default=wallet_dict)
+        wallet = Wallet.from_storage(storage, self.manager)
+        self.assertDictEqual(wallet_dict, wallet.to_dict())
+        jsonschema.validate(schema=self.wallet_schema, instance=wallet.to_dict())
 
     def test_no_password_but_encryption_preferred(self):
         wallet_dict = {

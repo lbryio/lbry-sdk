@@ -1,0 +1,139 @@
+{
+  "title": "Wallet",
+  "description": "An LBC wallet",
+  "type": "object",
+  "required": ["name", "version", "accounts", "preferences"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "description": "Human readable name for this wallet",
+      "type": "string"
+    },
+    "version": {
+      "description": "Wallet spec version",
+      "type": "integer",
+      "$comment": "Should this be a string? We may need some sort of decimal type if we want exact decimal versions."
+    },
+    "accounts": {
+      "description": "Accounts associated with this wallet",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["address_generator", "certificates", "encrypted", "ledger", "modified_on", "name", "private_key", "public_key", "seed"],
+        "additionalProperties": false,
+        "properties": {
+          "address_generator": {
+            "description": "Higher level manager of either singular or deterministically generated addresses",
+            "type": "object",
+            "oneOf": [
+              {
+                "required": ["name", "change", "receiving"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "type of address generator: a deterministic chain of addresses",
+                    "enum": ["deterministic-chain"],
+                    "type": "string"
+                  },
+                  "change": {
+                    "$ref": "#/$defs/address_manager",
+                    "description": "Manager for deterministically generated change address (not used for single address)"
+                  },
+                  "receiving": {
+                    "$ref": "#/$defs/address_manager",
+                    "description": "Manager for deterministically generated receiving address (not used for single address)"
+                  }
+                }
+              }, {
+                "required": ["name"],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "description": "type of address generator: a single address",
+                    "enum": ["single-address"],
+                    "type": "string"
+                  }
+                }
+              }
+            ]
+          },
+          "certificates": {
+            "type": "object",
+            "description": "Channel keys. Mapping from public key address to pem-formatted private key.",
+            "additionalProperties": {"type": "string"}
+          },
+          "encrypted": {
+            "type": "boolean",
+            "description": "Whether private key and seed are encrypted with a password"
+          },
+          "ledger": {
+            "description": "Which network to use",
+            "type": "string",
+            "examples": [
+              "lbc_mainnet",
+              "lbc_testnet"
+            ]
+          },
+          "modified_on": {
+            "description": "last modified time in Unix Time",
+            "type": "integer"
+          },
+          "name": {
+            "description": "Name for account, possibly human readable",
+            "type": "string"
+          },
+          "private_key": {
+            "description": "Private key for address if `address_generator` is a single address. Root of chain of private keys for addresses if `address_generator` is a deterministic chain of addresses. Encrypted if `encrypted` is true.",
+            "type": "string"
+          },
+          "public_key": {
+            "description": "Public key for address if `address_generator` is a single address. Root of chain of public keys for addresses if `address_generator` is a deterministic chain of addresses.",
+            "type": "string"
+          },
+          "seed": {
+            "description": "Human readable representation of `private_key`. encrypted if `encrypted` is set to `true`",
+            "type": "string"
+          }
+        }
+      }
+    },
+    "preferences": {
+      "description": "Timestamped application-level preferences. Values can be objects or of a primitive type.",
+      "$comment": "enable-sync is seen in example wallet. encrypt-on-disk is seen in example wallet. they both have a boolean `value` field. Do we want them explicitly defined here? local and shared seem to have at least a similar structure (type, value [yes, again], version), value being the free-form part. Should we define those here? Or can there be any key under preferences, and `value` be literally be anything in any form?",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["ts", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "ts": {
+            "type": "number",
+            "description": "When the item was set, in Unix time format.",
+            "$comment": "Do we want a string (decimal)?"
+          },
+          "value": {
+            "$comment": "Sometimes this has been an object, sometimes just a boolean. I don't want to prescribe anything."
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "address_manager": {
+      "description": "Manager for deterministically generated addresses",
+      "type": "object",
+      "required": ["gap", "maximum_uses_per_address"],
+      "additionalProperties": false,
+      "properties": {
+        "gap": {
+          "description": "Maximum allowed consecutive generated addresses with no transactions",
+          "type": "integer"
+        },
+        "maximum_uses_per_address": {
+          "description": "Maximum number of uses for each generated address",
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
