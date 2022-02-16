@@ -56,8 +56,6 @@ class BlockchainReader:
         state = self.db.prefix_db.db_state.get()
         if not state or state.height <= 0:
             return
-        # if state and self.last_state and self.db.headers and self.last_state.tip == self.db.coin.header_hash(self.db.headers[-1]):
-        #     return
         if self.last_state and self.last_state.height > state.height:
             self.log.warning("reorg detected, waiting until the writer has flushed the new blocks to advance")
             return

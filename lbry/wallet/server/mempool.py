@@ -66,8 +66,6 @@ class MemPool:
         self.raw_mempool.clear()
         self.raw_mempool.update(new_mempool)
 
-        # Re-sync with the new set of hashes
-
         # hashXs = self.hashXs  # hashX: [tx_hash, ...]
         touched_hashXs = set()
 
@@ -82,6 +80,7 @@ class MemPool:
                         self.touched_hashXs.pop(hashX)
             touched_hashXs.update(tx_hashXs)
 
+        # Re-sync with the new set of hashes
         tx_map = {}
         for tx_hash, raw_tx in self.raw_mempool.items():
             if tx_hash in self.txs:
@@ -95,26 +94,12 @@ class MemPool:
             txout_pairs = tuple((self.coin.hashX_from_script(txout.pk_script), txout.value)
                                 for txout in tx.outputs)
 
-            tx_map[tx_hash] = MemPoolTx(txin_pairs, None, txout_pairs, 0, tx_size, raw_tx)
-
-        # Determine all prevouts not in the mempool, and fetch the
-        # UTXO information from the database.  Failed prevout lookups
-        # return None - concurrent database updates happen - which is
-        # relied upon by _accept_transactions. Ignore prevouts that are
-        # generation-like.
-        # prevouts = tuple(prevout for tx in tx_map.values()
-        #                  for prevout in tx.prevouts
-        #                  if prevout[0] not in self.raw_mempool)
-        # utxos = await self._db.lookup_utxos(prevouts)
-        # utxo_map = dict(zip(prevouts, utxos))
-        # unspent = set(utxo_map)
+            tx_map[tx_hash] = MemPoolTx(None, txin_pairs, txout_pairs, 0, tx_size, raw_tx)
 
         for tx_hash, tx in tx_map.items():
-            in_pairs = []
-            for prevout in tx.prevouts:
-                # utxo = utxo_map.get(prevout)
-                # if not utxo:
-                prev_hash, prev_index = prevout
+            prevouts = []
+            # Look up the prevouts
+            for prev_hash, prev_index in tx.in_pairs:
                 if prev_hash in self.txs:  # accepted mempool
                     utxo = self.txs[prev_hash].out_pairs[prev_index]
                 elif prev_hash in tx_map:  # this set of changes
@@ -130,39 +115,30 @@ class MemPool:
                     hashX = hashX_val.hashX
                     utxo_value = prefix_db.utxo.get(hashX, prev_tx_num, prev_index)
                     utxo = (hashX, utxo_value.amount)
-                    # if not prev_raw:
-                    #     print("derp", prev_hash[::-1].hex())
-                    #     print(self._db.get_tx_num(prev_hash))
-                    # prev_tx, prev_tx_size = self.coin.DESERIALIZER(prev_raw.raw_tx).read_tx_and_vsize()
-                    # prev_txo = prev_tx.outputs[prev_index]
-                    # utxo = (self.coin.hashX_from_script(prev_txo.pk_script), prev_txo.value)
-                in_pairs.append(utxo)
+                prevouts.append(utxo)
 
-            # # Spend the prevouts
-            # unspent.difference_update(tx.prevouts)
-
-            # Save the in_pairs, compute the fee and accept the TX
-            tx.in_pairs = tuple(in_pairs)
+            # Save the prevouts, compute the fee and accept the TX
+            tx.prevouts = tuple(prevouts)
             # Avoid negative fees if dealing with generation-like transactions
             # because some in_parts would be missing
-            tx.fee = max(0, (sum(v for _, v in tx.in_pairs) -
+            tx.fee = max(0, (sum(v for _, v in tx.prevouts) -
                              sum(v for _, v in tx.out_pairs)))
             self.txs[tx_hash] = tx
             # print(f"added {tx_hash[::-1].hex()} reader to mempool")
 
-            for hashX, value in itertools.chain(tx.in_pairs, tx.out_pairs):
+            for hashX, value in itertools.chain(tx.prevouts, tx.out_pairs):
                 self.touched_hashXs[hashX].add(tx_hash)
                 touched_hashXs.add(hashX)
-        # utxo_map = {prevout: utxo_map[prevout] for prevout in unspent}
-
         return touched_hashXs
 
     def transaction_summaries(self, hashX):
         """Return a list of MemPoolTxSummary objects for the hashX."""
         result = []
         for tx_hash in self.touched_hashXs.get(hashX, ()):
+            if tx_hash not in self.txs:
+                continue  # the tx hash for the touched address is an input that isn't in mempool anymore
             tx = self.txs[tx_hash]
-            has_ui = any(hash in self.txs for hash, idx in tx.prevouts)
+            has_ui = any(hash in self.txs for hash, idx in tx.in_pairs)
             result.append(MemPoolTxSummary(tx_hash, tx.fee, has_ui))
         return result
 
@@ -175,7 +151,7 @@ class MemPool:
         if tx_hash not in self.txs:
             return -2
         tx = self.txs[tx_hash]
-        unspent_inputs = any(hash in self.raw_mempool for hash, idx in tx.prevouts)
+        unspent_inputs = any(hash in self.raw_mempool for hash, idx in tx.in_pairs)
         if unspent_inputs:
             return -1
         return 0

@@ -270,8 +270,8 @@ class SPVNode:
         if self.stopped:
             return
         try:
-            await self.es_writer.stop(delete_index=True)
             await self.server.stop()
+            await self.es_writer.stop(delete_index=True)
             await self.writer.stop()
             self.stopped = True
         finally:
