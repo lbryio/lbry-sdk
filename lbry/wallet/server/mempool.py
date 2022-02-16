@@ -124,7 +124,7 @@ class MemPool:
                     if not prev_tx_num:
                         continue
                     prev_tx_num = prev_tx_num.tx_num
-                    hashX_val = prefix_db.hashX_utxo.get(tx_hash[:4], prev_tx_num, prev_index)
+                    hashX_val = prefix_db.hashX_utxo.get(prev_hash[:4], prev_tx_num, prev_index)
                     if not hashX_val:
                         continue
                     hashX = hashX_val.hashX
