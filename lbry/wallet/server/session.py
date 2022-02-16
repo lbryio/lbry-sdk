@@ -8,7 +8,7 @@ import asyncio
 import logging
 import itertools
 import collections
-
+from bisect import bisect_right
 from asyncio import Event, sleep
 from collections import defaultdict
 from functools import partial
@@ -1034,13 +1034,14 @@ class LBRYElectrumX(SessionBase):
 
     async def transaction_get_height(self, tx_hash):
         self.assert_tx_hash(tx_hash)
-        transaction_info = await self.daemon.getrawtransaction(tx_hash, True)
-        if transaction_info and 'hex' in transaction_info and 'confirmations' in transaction_info:
-            # an unconfirmed transaction from lbrycrdd will not have a 'confirmations' field
-            return (self.db.db_height - transaction_info['confirmations']) + 1
-        elif transaction_info and 'hex' in transaction_info:
-            return -1
-        return None
+
+        def get_height():
+            v = self.db.prefix_db.tx_num.get(tx_hash)
+            if v:
+                return bisect_right(self.db.tx_counts, v.tx_num)
+            return self.mempool.get_mempool_height(tx_hash)
+
+        return await asyncio.get_event_loop().run_in_executor(self.db._executor, get_height)
 
     async def claimtrie_getclaimbyid(self, claim_id):
         rows = []
