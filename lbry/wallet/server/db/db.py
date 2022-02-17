@@ -383,11 +383,10 @@ class HubDB:
             return v.amount
         return 0
 
-    def get_effective_amount(self, claim_hash: bytes, support_only=False) -> int:
-        support_amount = self._get_active_amount(claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.db_height + 1)
-        if support_only:
-            return support_only
-        return support_amount + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
+    def get_effective_amount(self, claim_hash: bytes) -> int:
+        return self._get_active_amount(
+            claim_hash, ACTIVATED_SUPPORT_TXO_TYPE, self.db_height + 1
+        ) + self._get_active_amount(claim_hash, ACTIVATED_CLAIM_TXO_TYPE, self.db_height + 1)
 
     def get_url_effective_amount(self, name: str, claim_hash: bytes) -> Optional['EffectiveAmountKey']:
         for k, v in self.prefix_db.effective_amount.iterate(prefix=(name,)):
