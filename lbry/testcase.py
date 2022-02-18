@@ -202,7 +202,13 @@ class AsyncioTestCase(unittest.TestCase):
 
     def add_timeout(self):
         if self.TIMEOUT:
-            self.loop.call_later(self.TIMEOUT, self.cancel)
+            self.loop.call_later(self.TIMEOUT, self.check_timeout, time())
+
+    def check_timeout(self, started):
+        if time() - started >= self.TIMEOUT:
+            self.cancel()
+        else:
+            self.loop.call_later(self.TIMEOUT, self.check_timeout, started)
 
 
 class AdvanceTimeTestCase(AsyncioTestCase):
