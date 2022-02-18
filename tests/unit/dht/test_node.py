@@ -12,7 +12,6 @@ from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):
-    TIMEOUT = None  # not supported as it advances time
     async def test_ping_queue_discover(self):
         loop = asyncio.get_event_loop()
         loop.set_debug(False)
@@ -93,7 +92,6 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 
 
 class TestTemporarilyLosingConnection(AsyncioTestCase):
-    TIMEOUT = None  # not supported as it advances time
     @unittest.SkipTest
     async def test_losing_connection(self):
         async def wait_for(check_ok, insist, timeout=20):
