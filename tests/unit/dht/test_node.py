@@ -29,7 +29,7 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
             (constants.generate_id(9), '1.2.3.9'),
         ]
         with dht_mocks.mock_network_loop(loop):
-            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            advance = dht_mocks.get_time_accelerator(loop)
             # start the nodes
             nodes: typing.Dict[int, Node] = {
                 i: Node(loop, PeerManager(loop), node_id, 4444, 4444, 3333, address)
@@ -131,7 +131,7 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
             await asyncio.gather(*[n.joined.wait() for n in nodes])
 
             node = nodes[-1]
-            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            advance = dht_mocks.get_time_accelerator(loop)
             await advance(500)
 
             # Join the network, assert that at least the known peers are in RT
