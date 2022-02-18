@@ -17,8 +17,6 @@ from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestBlobAnnouncer(AsyncioTestCase):
-    TIMEOUT = 20.0  # lower than default
-
     async def setup_node(self, peer_addresses, address, node_id):
         self.nodes: typing.Dict[int, Node] = {}
         self.advance = dht_mocks.get_time_accelerator(self.loop)
