@@ -190,3 +190,6 @@ class KademliaPeer:
 
     def compact_ip(self):
         return make_compact_ip(self.address)
+
+    def __str__(self):
+        return f"{self.__class__.__name__}({self.node_id.hex()[:8]}@{self.address}:{self.udp_port}-{self.tcp_port})"
