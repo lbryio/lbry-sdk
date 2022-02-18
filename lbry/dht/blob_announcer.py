@@ -27,6 +27,7 @@ class BlobAnnouncer:
         self.storage = storage
         self.announce_task: asyncio.Task = None
         self.announce_queue: typing.List[str] = []
+        self._done = asyncio.Event()
 
     async def _submit_announcement(self, blob_hash):
         try:
@@ -64,6 +65,8 @@ class BlobAnnouncer:
                 if announced:
                     await self.storage.update_last_announced_blobs(announced)
                     log.info("announced %i blobs", len(announced))
+            self._done.set()
+            self._done.clear()
 
     def start(self, batch_size: typing.Optional[int] = 10):
         assert not self.announce_task or self.announce_task.done(), "already running"
@@ -72,3 +75,6 @@ class BlobAnnouncer:
     def stop(self):
         if self.announce_task and not self.announce_task.done():
             self.announce_task.cancel()
+
+    def wait(self):
+        return self._done.wait()
