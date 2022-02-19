@@ -381,6 +381,7 @@ class FileManagerComponent(Component):
 
 
 class BackgroundDownloaderComponent(Component):
+    MIN_PREFIX_COLLIDING_BITS = 8
     component_name = BACKGROUND_DOWNLOADER_COMPONENT
     depends_on = [DATABASE_COMPONENT, BLOB_COMPONENT, DISK_SPACE_COMPONENT]
 
@@ -412,11 +413,14 @@ class BackgroundDownloaderComponent(Component):
         while True:
             self.space_available = await self.space_manager.get_free_space_mb(True)
             if not self.is_busy and self.space_available > 10:
-                blob_hash = next((key.hex() for key in self.dht_node.stored_blob_hashes if
-                                 key[0] == self.dht_node.protocol.node_id[0]
-                                 and key.hex() not in self.blob_manager.completed_blob_hashes), None)
-                if blob_hash:
-                    self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash))
+                node_id_prefix = int.from_bytes(self.dht_node.protocol.node_id[:4], "big")
+                for hash in self.dht_node.stored_blob_hashes:
+                    colliding_bits = 16 - int(node_id_prefix ^ int.from_bytes(hash[:4], "big")).bit_length()
+                    if hash.hex() in self.blob_manager.completed_blob_hashes:
+                        continue
+                    if colliding_bits >= self.MIN_PREFIX_COLLIDING_BITS:
+                        self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(hash))
+                        break
             await asyncio.sleep(self.download_loop_delay_seconds)
 
     async def start(self):
