@@ -1,6 +1,6 @@
 import asyncio
 from itertools import chain
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import typing
 import logging
 from typing import TYPE_CHECKING
@@ -88,7 +88,7 @@ class IterativeFinder:
         self.max_results = max(constants.K, max_results)
         self.exclude = exclude or []
 
-        self.active: typing.Dict['KademliaPeer', int] = {}  # peer: distance, sorted
+        self.active: typing.Dict['KademliaPeer', int] = OrderedDict()  # peer: distance, sorted
         self.contacted: typing.Set['KademliaPeer'] = set()
         self.distance = Distance(key)
 
@@ -139,7 +139,7 @@ class IterativeFinder:
             return
         if peer not in self.active and peer.node_id and peer.node_id != self.protocol.node_id:
             self.active[peer] = self.distance(peer.node_id)
-            self.active = dict(sorted(self.active.items(), key=lambda item: item[1]))
+            self.active = OrderedDict(sorted(self.active.items(), key=lambda item: item[1]))
 
     async def _handle_probe_result(self, peer: 'KademliaPeer', response: FindResponse):
         self._add_active(peer)
