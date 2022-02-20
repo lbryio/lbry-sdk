@@ -1682,6 +1682,7 @@ class BlockProcessor:
 
     def run(self):
         loop = asyncio.get_event_loop()
+        loop.set_default_executor(self._chain_executor)
 
         def __exit():
             raise SystemExit()

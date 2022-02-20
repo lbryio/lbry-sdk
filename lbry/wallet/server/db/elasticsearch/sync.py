@@ -345,6 +345,7 @@ class ElasticWriter(BlockchainReader):
 
     def run(self, reindex=False):
         loop = asyncio.get_event_loop()
+        loop.set_default_executor(self._executor)
 
         def __exit():
             raise SystemExit()

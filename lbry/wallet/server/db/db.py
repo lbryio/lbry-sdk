@@ -348,7 +348,7 @@ class HubDB:
 
     async def fs_getclaimbyid(self, claim_id):
         return await asyncio.get_event_loop().run_in_executor(
-            None, self._fs_get_claim_by_hash, bytes.fromhex(claim_id)
+            self._executor, self._fs_get_claim_by_hash, bytes.fromhex(claim_id)
         )
 
     def get_claim_txo_amount(self, claim_hash: bytes) -> Optional[int]:
@@ -967,7 +967,7 @@ class HubDB:
         tx_infos = {}
         for tx_hash in tx_hashes:
             tx_infos[tx_hash] = await asyncio.get_event_loop().run_in_executor(
-                None, self._get_transaction_and_merkle, tx_hash
+                self._executor, self._get_transaction_and_merkle, tx_hash
             )
             await asyncio.sleep(0)
         return tx_infos
