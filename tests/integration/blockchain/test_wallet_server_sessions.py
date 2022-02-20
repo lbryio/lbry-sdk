@@ -45,7 +45,7 @@ class TestSessions(IntegrationTestCase):
 
 
 class TestUsagePayment(CommandTestCase):
-    async def _test_single_server_payment(self):
+    async def test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
         wallet_pay_service.payment_period = 1
         # only starts with a positive max key fee
@@ -63,7 +63,7 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(history, [])
 
         node = SPVNode(self.conductor.spv_module, node_number=2)
-        await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
+        await node.start(self.blockchain, extraconf={"payment_address": address, "daily_fee": "1.1"})
         self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()

@@ -37,6 +37,12 @@ class NetworkTests(IntegrationTestCase):
             }, await self.ledger.network.get_server_features())
         # await self.conductor.spv_node.stop()
         payment_address, donation_address = await self.account.get_addresses(limit=2)
+
+        original_address = self.conductor.spv_node.server.env.payment_address
+        original_donation_address = self.conductor.spv_node.server.env.donation_address
+        original_description = self.conductor.spv_node.server.env.description
+        original_daily_fee = self.conductor.spv_node.server.env.daily_fee
+
         self.conductor.spv_node.server.env.payment_address = payment_address
         self.conductor.spv_node.server.env.donation_address = donation_address
         self.conductor.spv_node.server.env.description = 'Fastest server in the west.'
@@ -60,6 +66,13 @@ class NetworkTests(IntegrationTestCase):
             'server_version': lbry.__version__,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
+
+        # cleanup the changes since the attributes are set on the class
+        self.conductor.spv_node.server.env.payment_address = original_address
+        self.conductor.spv_node.server.env.donation_address = original_donation_address
+        self.conductor.spv_node.server.env.description = original_description
+        self.conductor.spv_node.server.env.daily_fee = original_daily_fee
+        LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
 
 
 class ReconnectTests(IntegrationTestCase):
@@ -156,7 +169,6 @@ class ReconnectTests(IntegrationTestCase):
 
 
 class UDPServerFailDiscoveryTest(AsyncioTestCase):
-
     async def test_wallet_connects_despite_lack_of_udp(self):
         conductor = Conductor()
         conductor.spv_node.udp_port = '0'

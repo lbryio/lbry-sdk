@@ -47,7 +47,7 @@ class WalletCommands(CommandTestCase):
         status = await self.daemon.jsonrpc_status()
         self.assertEqual(len(status['wallet']['servers']), 1)
         self.assertEqual(status['wallet']['servers'][0]['port'], 50002)
-        await self.conductor.spv_node.stop(True)
+        await self.conductor.spv_node.stop()
         self.conductor.spv_node.port = 54320
         await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         status = await self.daemon.jsonrpc_status()
