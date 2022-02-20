@@ -462,7 +462,7 @@ class SQLiteStorage(SQLiteMixin):
         content_blobs = await self.db.execute_fetchall(
             "select blob.blob_hash, blob.blob_length, blob.added_on "
             "from blob join stream_blob using (blob_hash) cross join stream using (stream_hash)"
-            "cross join file using (stream_hash) where blob.is_mine=? order by blob.added_on asc",
+            "cross join file using (stream_hash) where blob.is_mine=? order by blob.added_on asc, blob.blob_length asc",
             (is_mine,)
         )
         return content_blobs + sd_blobs
