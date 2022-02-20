@@ -1579,12 +1579,16 @@ class BlockProcessor:
                 if not blocks:
                     try:
                         await self.refresh_mempool()
+                    except asyncio.CancelledError:
+                        raise
                     except Exception:
                         self.logger.exception("error while updating mempool txs")
                         raise
                 else:
                     try:
                         await self.check_and_advance_blocks(blocks)
+                    except asyncio.CancelledError:
+                        raise
                     except Exception:
                         self.logger.exception("error while processing txs")
                         raise
