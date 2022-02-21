@@ -413,15 +413,17 @@ class BackgroundDownloaderComponent(Component):
         while True:
             self.space_available = await self.space_manager.get_free_space_mb(True)
             if not self.is_busy and self.space_available > 10:
-                node_id_prefix = int.from_bytes(self.dht_node.protocol.node_id[:4], "big")
-                for hash in self.dht_node.stored_blob_hashes:
-                    colliding_bits = 16 - int(node_id_prefix ^ int.from_bytes(hash[:4], "big")).bit_length()
-                    if hash.hex() in self.blob_manager.completed_blob_hashes:
-                        continue
-                    if colliding_bits >= self.MIN_PREFIX_COLLIDING_BITS:
-                        self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(hash))
-                        break
+                self._download_next_close_blob_hash()
             await asyncio.sleep(self.download_loop_delay_seconds)
+
+    def _download_next_close_blob_hash(self):
+        node_id_prefix = int.from_bytes(self.dht_node.protocol.node_id[:4], "big")
+        for blob_hash in self.dht_node.stored_blob_hashes:
+            colliding_bits = 32 - int(node_id_prefix ^ int.from_bytes(blob_hash[:4], "big")).bit_length()
+            if blob_hash.hex() in self.blob_manager.completed_blob_hashes:
+                continue
+            if colliding_bits >= self.MIN_PREFIX_COLLIDING_BITS:
+                self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash.hex()))
 
     async def start(self):
         self.space_manager: DiskSpaceManager = self.component_manager.get_component(DISK_SPACE_COMPONENT)
