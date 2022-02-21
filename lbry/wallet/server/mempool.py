@@ -62,7 +62,7 @@ class MemPool:
 
     def refresh(self) -> typing.Set[bytes]:  # returns list of new touched hashXs
         prefix_db = self._db.prefix_db
-        new_mempool = {k.tx_hash: v.raw_tx for k, v in prefix_db.mempool_tx.iterate()}
+        new_mempool = {k.tx_hash: v.raw_tx for k, v in prefix_db.mempool_tx.iterate()}  # TODO: make this more efficient
         self.raw_mempool.clear()
         self.raw_mempool.update(new_mempool)
 
@@ -187,7 +187,7 @@ class MemPool:
                 self.session_manager.mempool_statuses.pop(hashX, None)
         # self.bp._chain_executor
         await asyncio.get_event_loop().run_in_executor(
-            None, touched.intersection_update, self.session_manager.hashx_subscriptions_by_session.keys()
+            self._db._executor, touched.intersection_update, self.session_manager.hashx_subscriptions_by_session.keys()
         )
 
         if touched or new_touched or (height_changed and self.session_manager.mempool_statuses):

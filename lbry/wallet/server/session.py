@@ -984,7 +984,7 @@ class LBRYElectrumX(SessionBase):
 
     async def _cached_resolve_url(self, url):
         if url not in self.session_manager.resolve_cache:
-            self.session_manager.resolve_cache[url] = await self.loop.run_in_executor(None, self.db._resolve, url)
+            self.session_manager.resolve_cache[url] = await self.loop.run_in_executor(self.db._executor, self.db._resolve, url)
         return self.session_manager.resolve_cache[url]
 
     async def claimtrie_resolve(self, *urls) -> str:
