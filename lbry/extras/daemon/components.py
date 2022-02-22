@@ -417,12 +417,11 @@ class BackgroundDownloaderComponent(Component):
             await asyncio.sleep(self.download_loop_delay_seconds)
 
     def _download_next_close_blob_hash(self):
-        node_id_prefix = int.from_bytes(self.dht_node.protocol.node_id[:4], "big")
+        node_id = self.dht_node.protocol.node_id
         for blob_hash in self.dht_node.stored_blob_hashes:
-            colliding_bits = 32 - int(node_id_prefix ^ int.from_bytes(blob_hash[:4], "big")).bit_length()
             if blob_hash.hex() in self.blob_manager.completed_blob_hashes:
                 continue
-            if colliding_bits >= self.MIN_PREFIX_COLLIDING_BITS:
+            if utils.get_colliding_prefix_bits(node_id, blob_hash, 32) >= self.MIN_PREFIX_COLLIDING_BITS:
                 self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash.hex()))
 
     async def start(self):
