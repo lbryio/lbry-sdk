@@ -6,6 +6,7 @@ import itertools
 
 from prometheus_client import Gauge
 
+from lbry import utils
 from lbry.dht import constants
 from lbry.dht.protocol.distance import Distance
 if typing.TYPE_CHECKING:
@@ -70,9 +71,8 @@ class KBucket:
         if len(self.peers) < constants.K:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
-            if peer.node_id[0] == self._node_id[0]:
-                bits_colliding = 8 - (peer.node_id[1] ^ self._node_id[1]).bit_length()
-                self.peer_with_x_bit_colliding_metric.labels(amount=(bits_colliding + 8)).inc()
+            bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id, 32)
+            self.peer_with_x_bit_colliding_metric.labels(amount=bits_colliding).inc()
             return True
         else:
             return False
@@ -140,9 +140,8 @@ class KBucket:
     def remove_peer(self, peer: 'KademliaPeer') -> None:
         self.peers.remove(peer)
         self.peer_in_routing_table_metric.labels("global").dec()
-        if peer.node_id[0] == self._node_id[0]:
-            bits_colliding = 8 - (peer.node_id[1] ^ self._node_id[1]).bit_length()
-            self.peer_with_x_bit_colliding_metric.labels(amount=(bits_colliding + 8)).dec()
+        bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id, 32)
+        self.peer_with_x_bit_colliding_metric.labels(amount=bits_colliding).dec()
 
     def key_in_range(self, key: bytes) -> bool:
         """ Tests whether the specified key (i.e. node ID) is in the range
