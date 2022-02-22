@@ -474,3 +474,21 @@ class LockWithMetrics(asyncio.Lock):
             return super().release()
         finally:
             self._lock_held_time_metric.observe(time.perf_counter() - self._lock_acquired_time)
+
+
+def get_colliding_prefix_bits(first_value: bytes, second_value: bytes, size: int):
+    """
+    Calculates the amount of colliding bits between <first_value> and <second_value> over the <size> first bits.
+    This is given by the amount of bits that are the same until the first different one (via XOR).
+    :param first_value: first value to compare, bigger than size.
+    :param second_value: second value to compare, bigger than size.
+    :param size: prefix size in bits.
+    :return: amount of prefix colliding bits.
+    """
+    assert size % 8 == 0, "size has to be a multiple of 8"
+    size_in_bytes = size // 8
+    assert len(first_value) >= size_in_bytes, "first_value has to be larger than size parameter"
+    first_value = int.from_bytes(first_value[:size_in_bytes], "big")
+    assert len(second_value) >= size_in_bytes, "second_value has to be larger than size parameter"
+    second_value = int.from_bytes(second_value[:size_in_bytes], "big")
+    return size - (first_value ^ second_value).bit_length()
