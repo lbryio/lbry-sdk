@@ -423,6 +423,7 @@ class BackgroundDownloaderComponent(Component):
                 continue
             if utils.get_colliding_prefix_bits(node_id, blob_hash, 32) >= self.MIN_PREFIX_COLLIDING_BITS:
                 self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash.hex()))
+                return
 
     async def start(self):
         self.space_manager: DiskSpaceManager = self.component_manager.get_component(DISK_SPACE_COMPONENT)
