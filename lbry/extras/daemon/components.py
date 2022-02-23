@@ -421,7 +421,7 @@ class BackgroundDownloaderComponent(Component):
         for blob_hash in self.dht_node.stored_blob_hashes:
             if blob_hash.hex() in self.blob_manager.completed_blob_hashes:
                 continue
-            if utils.get_colliding_prefix_bits(node_id, blob_hash, 32) >= self.MIN_PREFIX_COLLIDING_BITS:
+            if utils.get_colliding_prefix_bits(node_id, blob_hash) >= self.MIN_PREFIX_COLLIDING_BITS:
                 self.ongoing_download = asyncio.create_task(self.background_downloader.download_blobs(blob_hash.hex()))
                 return
 

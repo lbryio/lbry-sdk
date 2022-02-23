@@ -71,7 +71,7 @@ class KBucket:
         if len(self.peers) < constants.K:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
-            bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id, 32)
+            bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id)
             self.peer_with_x_bit_colliding_metric.labels(amount=bits_colliding).inc()
             return True
         else:
@@ -140,7 +140,7 @@ class KBucket:
     def remove_peer(self, peer: 'KademliaPeer') -> None:
         self.peers.remove(peer)
         self.peer_in_routing_table_metric.labels("global").dec()
-        bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id, 32)
+        bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id)
         self.peer_with_x_bit_colliding_metric.labels(amount=bits_colliding).dec()
 
     def key_in_range(self, key: bytes) -> bool:
