@@ -12,7 +12,6 @@ from lbry.extras.daemon.storage import SQLiteStorage
 
 
 class TestNodePingQueueDiscover(AsyncioTestCase):
-    TIMEOUT = None  # not supported as it advances time
     async def test_ping_queue_discover(self):
         loop = asyncio.get_event_loop()
         loop.set_debug(False)
@@ -29,7 +28,7 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
             (constants.generate_id(9), '1.2.3.9'),
         ]
         with dht_mocks.mock_network_loop(loop):
-            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            advance = dht_mocks.get_time_accelerator(loop)
             # start the nodes
             nodes: typing.Dict[int, Node] = {
                 i: Node(loop, PeerManager(loop), node_id, 4444, 4444, 3333, address)
@@ -93,7 +92,6 @@ class TestNodePingQueueDiscover(AsyncioTestCase):
 
 
 class TestTemporarilyLosingConnection(AsyncioTestCase):
-    TIMEOUT = None  # not supported as it advances time
     @unittest.SkipTest
     async def test_losing_connection(self):
         async def wait_for(check_ok, insist, timeout=20):
@@ -131,7 +129,7 @@ class TestTemporarilyLosingConnection(AsyncioTestCase):
             await asyncio.gather(*[n.joined.wait() for n in nodes])
 
             node = nodes[-1]
-            advance = dht_mocks.get_time_accelerator(loop, loop.time())
+            advance = dht_mocks.get_time_accelerator(loop)
             await advance(500)
 
             # Join the network, assert that at least the known peers are in RT

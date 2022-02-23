@@ -1,6 +1,6 @@
 import asyncio
 from itertools import chain
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 import typing
 import logging
 from typing import TYPE_CHECKING
@@ -74,7 +74,7 @@ def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
 class IterativeFinder:
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
+                 max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
         if len(key) != constants.HASH_LENGTH:
@@ -85,28 +85,22 @@ class IterativeFinder:
         self.protocol = protocol
 
         self.key = key
-        self.bottom_out_limit = bottom_out_limit
-        self.max_results = max_results
+        self.max_results = max(constants.K, max_results)
         self.exclude = exclude or []
 
-        self.active: typing.Set['KademliaPeer'] = set()
+        self.active: typing.Dict['KademliaPeer', int] = OrderedDict()  # peer: distance, sorted
         self.contacted: typing.Set['KademliaPeer'] = set()
         self.distance = Distance(key)
 
-        self.closest_peer: typing.Optional['KademliaPeer'] = None
-        self.prev_closest_peer: typing.Optional['KademliaPeer'] = None
-
         self.iteration_queue = asyncio.Queue(loop=self.loop)
 
-        self.running_probes: typing.Set[asyncio.Task] = set()
+        self.running_probes: typing.Dict['KademliaPeer', asyncio.Task] = {}
         self.iteration_count = 0
-        self.bottom_out_count = 0
         self.running = False
         self.tasks: typing.List[asyncio.Task] = []
-        self.delayed_calls: typing.List[asyncio.Handle] = []
         for peer in get_shortlist(routing_table, key, shortlist):
             if peer.node_id:
-                self._add_active(peer)
+                self._add_active(peer, force=True)
             else:
                 # seed nodes
                 self._schedule_probe(peer)
@@ -138,15 +132,14 @@ class IterativeFinder:
         """
         return []
 
-    def _is_closer(self, peer: 'KademliaPeer') -> bool:
-        return not self.closest_peer or self.distance.is_closer(peer.node_id, self.closest_peer.node_id)
-
-    def _add_active(self, peer):
+    def _add_active(self, peer, force=False):
+        if not force and self.peer_manager.peer_is_good(peer) is False:
+            return
+        if peer in self.contacted:
+            return
         if peer not in self.active and peer.node_id and peer.node_id != self.protocol.node_id:
-            self.active.add(peer)
-            if self._is_closer(peer):
-                self.prev_closest_peer = self.closest_peer
-                self.closest_peer = peer
+            self.active[peer] = self.distance(peer.node_id)
+            self.active = OrderedDict(sorted(self.active.items(), key=lambda item: item[1]))
 
     async def _handle_probe_result(self, peer: 'KademliaPeer', response: FindResponse):
         self._add_active(peer)
@@ -158,33 +151,43 @@ class IterativeFinder:
                 log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer.address,
                             peer.udp_port, address, udp_port)
         self.check_result_ready(response)
+        self._log_state()
+
+    def _reset_closest(self, peer):
+        if peer in self.active:
+            del self.active[peer]
 
     async def _send_probe(self, peer: 'KademliaPeer'):
         try:
             response = await self.send_probe(peer)
         except asyncio.TimeoutError:
-            self.active.discard(peer)
+            self._reset_closest(peer)
             return
         except ValueError as err:
             log.warning(str(err))
-            self.active.discard(peer)
+            self._reset_closest(peer)
             return
         except TransportNotConnected:
             return self.aclose()
         except RemoteException:
+            self._reset_closest(peer)
             return
         return await self._handle_probe_result(peer, response)
 
-    async def _search_round(self):
+    def _search_round(self):
         """
         Send up to constants.alpha (5) probes to closest active peers
         """
 
         added = 0
-        to_probe = list(self.active - self.contacted)
-        to_probe.sort(key=lambda peer: self.distance(self.key))
-        for peer in to_probe:
-            if added >= constants.ALPHA:
+        for index, peer in enumerate(self.active.keys()):
+            if index == 0:
+                log.debug("closest to probe: %s", peer.node_id.hex()[:8])
+            if peer in self.contacted:
+                continue
+            if len(self.running_probes) >= constants.ALPHA:
+                break
+            if index > (constants.K + len(self.running_probes)):
                 break
             origin_address = (peer.address, peer.udp_port)
             if origin_address in self.exclude:
@@ -206,33 +209,22 @@ class IterativeFinder:
         t = self.loop.create_task(self._send_probe(peer))
 
         def callback(_):
-            self.running_probes.difference_update({
-                probe for probe in self.running_probes if probe.done() or probe == t
-            })
-            if not self.running_probes:
-                self.tasks.append(self.loop.create_task(self._search_task(0.0)))
+            self.running_probes.pop(peer, None)
+            if self.running:
+                self._search_round()
 
         t.add_done_callback(callback)
-        self.running_probes.add(t)
+        self.running_probes[peer] = t
 
-    async def _search_task(self, delay: typing.Optional[float] = constants.ITERATIVE_LOOKUP_DELAY):
-        try:
-            if self.running:
-                await self._search_round()
-            if self.running:
-                self.delayed_calls.append(self.loop.call_later(delay, self._search))
-        except (asyncio.CancelledError, StopAsyncIteration, TransportNotConnected):
-            if self.running:
-                self.loop.call_soon(self.aclose)
-
-    def _search(self):
-        self.tasks.append(self.loop.create_task(self._search_task()))
+    def _log_state(self):
+        log.debug("[%s] check result: %i active nodes %i contacted",
+                  self.key.hex()[:8], len(self.active), len(self.contacted))
 
     def __aiter__(self):
         if self.running:
             raise Exception("already running")
         self.running = True
-        self._search()
+        self.loop.call_soon(self._search_round)
         return self
 
     async def __anext__(self) -> typing.List['KademliaPeer']:
@@ -252,20 +244,19 @@ class IterativeFinder:
     def aclose(self):
         self.running = False
         self.iteration_queue.put_nowait(None)
-        for task in chain(self.tasks, self.running_probes, self.delayed_calls):
+        for task in chain(self.tasks, self.running_probes.values()):
             task.cancel()
         self.tasks.clear()
         self.running_probes.clear()
-        self.delayed_calls.clear()
 
 
 class IterativeNodeFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
+                 max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
-        super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
+        super().__init__(loop, peer_manager, routing_table, protocol, key, max_results, exclude,
                          shortlist)
         self.yielded_peers: typing.Set['KademliaPeer'] = set()
 
@@ -276,14 +267,14 @@ class IterativeNodeFinder(IterativeFinder):
         return FindNodeResponse(self.key, response)
 
     def search_exhausted(self):
-        self.put_result(self.active, finish=True)
+        self.put_result(self.active.keys(), finish=True)
 
     def put_result(self, from_iter: typing.Iterable['KademliaPeer'], finish=False):
         not_yet_yielded = [
             peer for peer in from_iter
             if peer not in self.yielded_peers
             and peer.node_id != self.protocol.node_id
-            and self.peer_manager.peer_is_good(peer) is not False
+            and self.peer_manager.peer_is_good(peer) is True  # return only peers who answered
         ]
         not_yet_yielded.sort(key=lambda peer: self.distance(peer.node_id))
         to_yield = not_yet_yielded[:max(constants.K, self.max_results)]
@@ -298,26 +289,16 @@ class IterativeNodeFinder(IterativeFinder):
 
         if found:
             log.debug("found")
-            return self.put_result(self.active, finish=True)
-        if self.prev_closest_peer and self.closest_peer and not self._is_closer(self.prev_closest_peer):
-            # log.info("improving, %i %i %i %i %i", len(self.shortlist), len(self.active), len(self.contacted),
-            #          self.bottom_out_count, self.iteration_count)
-            self.bottom_out_count = 0
-        elif self.prev_closest_peer and self.closest_peer:
-            self.bottom_out_count += 1
-            log.info("bottom out %i %i %i", len(self.active), len(self.contacted), self.bottom_out_count)
-        if self.bottom_out_count >= self.bottom_out_limit or self.iteration_count >= self.bottom_out_limit:
-            log.info("limit hit")
-            self.put_result(self.active, True)
+            return self.put_result(self.active.keys(), finish=True)
 
 
 class IterativeValueFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
-                 bottom_out_limit: typing.Optional[int] = 2, max_results: typing.Optional[int] = constants.K,
+                 max_results: typing.Optional[int] = constants.K,
                  exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
-        super().__init__(loop, peer_manager, routing_table, protocol, key, bottom_out_limit, max_results, exclude,
+        super().__init__(loop, peer_manager, routing_table, protocol, key, max_results, exclude,
                          shortlist)
         self.blob_peers: typing.Set['KademliaPeer'] = set()
         # this tracks the index of the most recent page we requested from each peer
@@ -362,23 +343,12 @@ class IterativeValueFinder(IterativeFinder):
             blob_peers = [self.peer_manager.decode_tcp_peer_from_compact_address(compact_addr)
                           for compact_addr in response.found_compact_addresses]
             to_yield = []
-            self.bottom_out_count = 0
             for blob_peer in blob_peers:
                 if blob_peer not in self.blob_peers:
                     self.blob_peers.add(blob_peer)
                     to_yield.append(blob_peer)
             if to_yield:
-                # log.info("found %i new peers for blob", len(to_yield))
                 self.iteration_queue.put_nowait(to_yield)
-                # if self.max_results and len(self.blob_peers) >= self.max_results:
-                #     log.info("enough blob peers found")
-                #     if not self.finished.is_set():
-                #         self.finished.set()
-        elif self.prev_closest_peer and self.closest_peer:
-            self.bottom_out_count += 1
-            if self.bottom_out_count >= self.bottom_out_limit:
-                log.info("blob peer search bottomed out")
-                self.iteration_queue.put_nowait(None)
 
     def get_initial_result(self) -> typing.List['KademliaPeer']:
         if self.protocol.data_store.has_peers_for_blob(self.key):
