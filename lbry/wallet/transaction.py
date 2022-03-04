@@ -145,6 +145,12 @@ class Input(InputOutput):
         script = InputScript.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
         return cls(txo.ref, script)
 
+    @classmethod
+    def spend_time_lock(cls, txo: 'Output', script_source: bytes) -> 'Input':
+        """ Create an input to spend time lock script."""
+        script = InputScript.redeem_time_lock_from_script(script_source)
+        return cls(txo.ref, script)
+
     @property
     def amount(self) -> int:
         """ Amount this input adds to the transaction. """
@@ -936,6 +942,16 @@ class Transaction:
         payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))
         return cls.create([], [payment, data], funding_accounts, change_account)
+
+    @classmethod
+    def spend_time_lock(
+        cls, time_locked_txo: Output, amount: int, holding_address: str, script_source: str,
+        funding_accounts: List['Account'], change_account: 'Account'
+    ):
+        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        txi = Input.spend_time_lock(time_locked_txo, unhexlify(script_source))
+        txo = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(holding_address))
+        return cls.create([txi], [txo], funding_accounts, change_account)
 
     @property
     def my_inputs(self):

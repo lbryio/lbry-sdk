@@ -679,6 +679,11 @@ class LBCWalletNode:
     def get_raw_transaction(self, txid):
         return self._cli_cmnd('getrawtransaction', txid, '1')
 
+    async def add_time_locked_address(self, height, address):
+        return json.loads(
+            await self._cli_cmnd('addtimelockedaddress', str(height), address)
+        )
+
 
 class HubProcess(asyncio.SubprocessProtocol):
     def __init__(self, ready, stopped):

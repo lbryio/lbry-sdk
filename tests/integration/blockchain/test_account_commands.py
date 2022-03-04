@@ -1,8 +1,9 @@
 from binascii import unhexlify
 
 from lbry.testcase import CommandTestCase
-from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.wallet.account import DeterministicChannelKeyManager
+from lbry.wallet.transaction import Transaction, Input, Output
 
 
 def extract(d, keys):
@@ -288,4 +289,18 @@ class AccountManagement(CommandTestCase):
         self.assertTrue(channel1c.has_private_key)
         self.assertTrue(channel2c.has_private_key)
         self.assertTrue(channel3c.has_private_key)
+
+    async def test_time_locked_transactions(self):
+        from lbry.wallet.script import InputScript
+        address = await self.account.receiving.get_or_create_usable_address()
+        redeem = await self.blockchain.add_time_locked_address(210, address)
+        tx = await self.daemon.jsonrpc_account_send('4.0', redeem['address'])
+        await self.confirm_tx(tx.id)
+        await self.blockchain.generate(10)
+        txi = Input.spend(tx.outputs[0])
+        txi.script.source = unhexlify(redeem['redeemScript'])
+        txo = Output.pay_pubkey_hash(lbc_to_dewies('3.9'), self.ledger.address_to_hash160(address))
+        new_tx = await Transaction.create([txi], [txo], self.wallet.accounts, self.wallet.default_account)
+        src = new_tx.raw
+        print(new_tx.raw)
 

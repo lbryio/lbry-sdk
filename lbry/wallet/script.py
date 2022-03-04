@@ -17,6 +17,7 @@ OP_HASH160 = 0xa9
 OP_EQUALVERIFY = 0x88
 OP_CHECKSIG = 0xac
 OP_CHECKMULTISIG = 0xae
+OP_CHECKLOCKTIMEVERIFY = 0xb1
 OP_EQUAL = 0x87
 OP_PUSHDATA1 = 0x4c
 OP_PUSHDATA2 = 0x4d
@@ -364,12 +365,18 @@ class InputScript(Script):
     REDEEM_SCRIPT_HASH = Template('script_hash', (
         OP_0, PUSH_MANY('signatures'), PUSH_SUBSCRIPT('script', REDEEM_SCRIPT)
     ))
+    REDEEM_TIME_LOCK = Template('timelock', (
+        SMALL_INTEGER('height'), OP_CHECKLOCKTIMEVERIFY, OP_DROP,
+        # rest is identical to OutputScript.PAY_PUBKEY_HASH:
+        OP_DUP, OP_HASH160, PUSH_SINGLE('pubkey_hash'), OP_EQUALVERIFY, OP_CHECKSIG
+    ))
 
     templates = [
         REDEEM_PUBKEY,
         REDEEM_PUBKEY_HASH,
         REDEEM_SCRIPT_HASH,
-        REDEEM_SCRIPT
+        REDEEM_SCRIPT,
+        REDEEM_TIME_LOCK
     ]
 
     @classmethod
@@ -393,6 +400,17 @@ class InputScript(Script):
             'pubkeys': pubkeys,
             'pubkeys_count': len(pubkeys)
         })
+
+    @classmethod
+    def redeem_time_lock(cls, height, pubkey_hash):
+        return cls(template=cls.REDEEM_SCRIPT, values={
+            'height': height,
+            'pubkey_hash': pubkey_hash
+        })
+
+    @classmethod
+    def redeem_time_lock_from_script(cls, script: bytes):
+        return cls.from_source_with_template(script, cls.REDEEM_SCRIPT)
 
 
 class OutputScript(Script):
