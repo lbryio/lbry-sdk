@@ -16,23 +16,17 @@ from binascii import hexlify
 from typing import Type, Optional
 import urllib.request
 from uuid import uuid4
-
 import lbry
-from lbry.wallet.server.env import Env
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
-from lbry.wallet.server.block_processor import BlockProcessor
-from lbry.wallet.server.chain_reader import BlockchainReaderServer
-from lbry.wallet.server.db.elasticsearch.sync import ElasticWriter
+
+from scribe.env import Env
+from scribe.server.server import BlockchainReaderServer
+from scribe.elasticsearch.sync import ElasticWriter
+from scribe.writer.block_processor import BlockProcessor
 
 log = logging.getLogger(__name__)
-
-
-def get_spvserver_from_ledger(ledger_module):
-    spvserver_path, regtest_class_name = ledger_module.__spvserver__.rsplit('.', 1)
-    spvserver_module = importlib.import_module(spvserver_path)
-    return getattr(spvserver_module, regtest_class_name)
 
 
 def get_lbcd_node_from_ledger(ledger_module):
@@ -41,6 +35,7 @@ def get_lbcd_node_from_ledger(ledger_module):
         ledger_module.__lbcd__,
         ledger_module.__lbcctl__
     )
+
 
 def get_lbcwallet_node_from_ledger(ledger_module):
     return LBCWalletNode(
@@ -54,11 +49,9 @@ class Conductor:
 
     def __init__(self, seed=None):
         self.manager_module = WalletManager
-        self.spv_module = get_spvserver_from_ledger(lbry.wallet)
-
         self.lbcd_node = get_lbcd_node_from_ledger(lbry.wallet)
         self.lbcwallet_node = get_lbcwallet_node_from_ledger(lbry.wallet)
-        self.spv_node = SPVNode(self.spv_module)
+        self.spv_node = SPVNode()
         self.wallet_node = WalletNode(
             self.manager_module, RegTestLedger, default_seed=seed
         )
@@ -222,10 +215,8 @@ class WalletNode:
 
 
 class SPVNode:
-
-    def __init__(self, coin_class, node_number=1):
+    def __init__(self, node_number=1):
         self.node_number = node_number
-        self.coin_class = coin_class
         self.controller = None
         self.data_path = None
         self.server: Optional[BlockchainReaderServer] = None
@@ -244,6 +235,7 @@ class SPVNode:
         if not self.stopped:
             log.warning("spv node is already running")
             return
+        print("start spv node")
         self.stopped = False
         try:
             self.data_path = tempfile.mkdtemp()
@@ -262,15 +254,18 @@ class SPVNode:
                 'session_timeout': self.session_timeout,
                 'max_query_workers': 0,
                 'es_index_prefix': self.index_name,
+                'chain': 'regtest'
             }
             if extraconf:
                 conf.update(extraconf)
-            env = Env(self.coin_class, **conf)
+            env = Env(**conf)
             self.writer = BlockProcessor(env)
             self.server = BlockchainReaderServer(env)
             self.es_writer = ElasticWriter(env)
             await self.writer.open()
+            print("opened writer, starting")
             await self.writer.start()
+            print("started writer")
             await self.es_writer.start()
             await self.server.start()
         except Exception as e:

@@ -3,6 +3,8 @@ import asyncio
 import lbry
 from unittest.mock import Mock
 
+from lbry_schema.coin import LBCRegTest
+
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import SPVNode
@@ -22,7 +24,7 @@ class NetworkTests(IntegrationTestCase):
 
     async def test_server_features(self):
         self.assertDictEqual({
-            'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+            'genesis_hash': LBCRegTest.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
             'protocol_max': '0.199.0',
@@ -53,7 +55,7 @@ class NetworkTests(IntegrationTestCase):
 
         # await self.ledger.network.on_connected.first
         self.assertDictEqual({
-            'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+            'genesis_hash': LBCRegTest.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
             'protocol_max': '0.199.0',
@@ -79,7 +81,7 @@ class ReconnectTests(IntegrationTestCase):
 
     async def test_multiple_servers(self):
         # we have a secondary node that connects later, so
-        node2 = SPVNode(self.conductor.spv_module, node_number=2)
+        node2 = SPVNode(node_number=2)
         await node2.start(self.blockchain)
 
         self.ledger.network.config['explicit_servers'].append((node2.hostname, node2.port))

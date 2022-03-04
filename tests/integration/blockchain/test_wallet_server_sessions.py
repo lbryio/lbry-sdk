@@ -62,7 +62,7 @@ class TestUsagePayment(CommandTestCase):
         _, history = await self.ledger.get_local_status_and_history(address)
         self.assertEqual(history, [])
 
-        node = SPVNode(self.conductor.spv_module, node_number=2)
+        node = SPVNode(node_number=2)
         await node.start(self.blockchain, extraconf={"payment_address": address, "daily_fee": "1.1"})
         self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
@@ -146,17 +146,17 @@ class TestESSync(CommandTestCase):
 class TestHubDiscovery(CommandTestCase):
 
     async def test_hub_discovery(self):
-        us_final_node = SPVNode(self.conductor.spv_module, node_number=2)
+        us_final_node = SPVNode(node_number=2)
         await us_final_node.start(self.blockchain, extraconf={"country": "US"})
         self.addCleanup(us_final_node.stop)
         final_node_host = f"{us_final_node.hostname}:{us_final_node.port}"
 
-        kp_final_node = SPVNode(self.conductor.spv_module, node_number=3)
+        kp_final_node = SPVNode(node_number=3)
         await kp_final_node.start(self.blockchain, extraconf={"country": "KP"})
         self.addCleanup(kp_final_node.stop)
         kp_final_node_host = f"{kp_final_node.hostname}:{kp_final_node.port}"
 
-        relay_node = SPVNode(self.conductor.spv_module, node_number=4)
+        relay_node = SPVNode(node_number=4)
         await relay_node.start(self.blockchain, extraconf={
             "country": "FR",
             "peer_hubs": ",".join([kp_final_node_host, final_node_host])
