@@ -405,7 +405,7 @@ async def fallback_get_external_ip():  # used if spv servers can't be used for i
 
 async def _get_external_ip(default_servers) -> typing.Tuple[typing.Optional[str], typing.Optional[str]]:
     # used if upnp is disabled or non-functioning
-    from lbry.wallet.server.udp import SPVStatusClientProtocol  # pylint: disable=C0415
+    from lbry.wallet.udp import SPVStatusClientProtocol  # pylint: disable=C0415
 
     hostname_to_ip = {}
     ip_to_hostnames = collections.defaultdict(list)

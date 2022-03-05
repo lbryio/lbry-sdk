@@ -7,7 +7,7 @@ from prometheus_client import Gauge, Histogram
 import lbry
 from lbry.wallet.server.mempool import MemPool
 from lbry.wallet.server.db.prefixes import DBState
-from lbry.wallet.server.udp import StatusServer
+from lbry.wallet.udp import StatusServer
 from lbry.wallet.server.db.db import HubDB
 from lbry.wallet.server.db.elasticsearch.notifier import ElasticNotifierClientProtocol
 from lbry.wallet.server.session import LBRYSessionManager

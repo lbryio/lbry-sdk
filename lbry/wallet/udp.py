@@ -175,9 +175,11 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
 
 class StatusServer:
     def __init__(self):
+        1/0
         self._protocol: Optional[SPVServerStatusProtocol] = None
 
     async def start(self, height: int, tip: bytes, country: str, interface: str, port: int, allow_lan: bool = False):
+        1/0
         if self.is_running:
             return
         loop = asyncio.get_event_loop()

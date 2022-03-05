@@ -9,7 +9,7 @@ from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
-from lbry.wallet.server.udp import StatusServer
+from lbry.wallet.udp import StatusServer
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
 from lbry.conf import Config
 

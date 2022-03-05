@@ -16,7 +16,7 @@ from lbry.utils import resolve_host
 from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
-from lbry.wallet.server.udp import SPVStatusClientProtocol, SPVPong
+from lbry.wallet.udp import SPVStatusClientProtocol, SPVPong
 from lbry.conf import KnownHubsList
 
 log = logging.getLogger(__name__)
