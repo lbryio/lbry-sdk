@@ -120,11 +120,7 @@ async def get_peer_list(info_hash, node_id, port, tracker_ip, tracker_port, stop
     transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: proto, local_addr=("0.0.0.0", 0))
     try:
         reply, _ = await proto.announce(info_hash, node_id, port, tracker_ip, tracker_port, stopped=stopped)
-        return reply.peers
-    except asyncio.CancelledError:
-        raise
-    except Exception as exc:
-        log.warning("Error fetching from tracker: %s", exc.args)
-        return []
+        return reply
     finally:
-        transport.close()
+        if not transport.is_closing():
+            transport.close()

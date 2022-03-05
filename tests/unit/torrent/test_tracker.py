@@ -60,10 +60,10 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
 
     async def test_announce_using_helper_function(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
-        peers = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900)
+        announcemenet = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900)
+        peers = announcemenet.peers
         self.assertEqual(peers, [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
-        peers = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900, stopped=True)
-        self.assertEqual(peers, [])
+        self.assertEqual((await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900, stopped=True)).peers, [])
 
     async def test_error(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
