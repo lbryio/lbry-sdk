@@ -54,7 +54,8 @@ class BlobExchangeTestBase(AsyncioTestCase):
             download_dir=self.client_dir,
             wallet=self.client_wallet_dir,
             save_files=True,
-            fixed_peers=[]
+            fixed_peers=[],
+            tracker_servers=[]
         )
         self.client_config.transaction_cache_size = 10000
         self.client_storage = SQLiteStorage(self.client_config, os.path.join(self.client_dir, "lbrynet.sqlite"))
