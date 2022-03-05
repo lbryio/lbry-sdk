@@ -722,8 +722,8 @@ class TrackerAnnouncerComponent(Component):
         self.announce_task = None
 
     @property
-    def component(self) -> ExchangeRateManager:
-        return self.exchange_rate_manager
+    def component(self):
+        return self
 
     async def announce_forever(self):
         while True:
