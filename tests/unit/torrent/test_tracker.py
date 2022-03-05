@@ -32,7 +32,11 @@ class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not su
             else:
                 self.peers.setdefault(req.info_hash, [])
                 compact_ip = reduce(lambda buff, x: buff + bytearray([int(x)]), address[0].split('.'), bytearray())
-                self.peers[req.info_hash].append(compact_ip + req.port.to_bytes(2, "big", signed=False))
+                compact_address = compact_ip + req.port.to_bytes(2, "big", signed=False)
+                if req.event != 3:
+                    self.peers[req.info_hash].append(compact_address)
+                elif compact_address in self.peers[req.info_hash]:
+                    self.peers[req.info_hash].remove(compact_address)
                 peers = [decode(CompactIPv4Peer, peer) for peer in self.peers[req.info_hash]]
                 resp = encode(AnnounceResponse(1, req.transaction_id, 1700, 0, len(peers), peers))
             return self.transport.sendto(resp, address)
@@ -57,8 +61,9 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
     async def test_announce_using_helper_function(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
         peers = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900)
-        self.assertEqual(len(peers), 1)
         self.assertEqual(peers, [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
+        peers = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900, stopped=True)
+        self.assertEqual(peers, [])
 
     async def test_error(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)

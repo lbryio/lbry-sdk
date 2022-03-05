@@ -77,14 +77,15 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
         return decode(ConnectResponse,
                       await self.request(ConnectRequest(0x41727101980, 0, transaction_id), tracker_ip, tracker_port))
 
-    async def announce(self, info_hash, peer_id, port, tracker_ip, tracker_port, connection_id=None):
+    async def announce(self, info_hash, peer_id, port, tracker_ip, tracker_port, connection_id=None, stopped=False):
         if not connection_id:
             reply = await self.connect(tracker_ip, tracker_port)
             connection_id = reply.connection_id
         # this should make the key deterministic but unique per info hash + peer id
         key = int.from_bytes(info_hash[:4], "big") ^ int.from_bytes(peer_id[:4], "big") ^ port
         transaction_id = random.getrandbits(32)
-        req = AnnounceRequest(connection_id, 1, transaction_id, info_hash, peer_id, 0, 0, 0, 1, 0, key, -1, port)
+        req = AnnounceRequest(
+            connection_id, 1, transaction_id, info_hash, peer_id, 0, 0, 0, 3 if stopped else 1, 0, key, -1, port)
         reply = await self.request(req, tracker_ip, tracker_port)
         return decode(AnnounceResponse, reply), connection_id
 
@@ -112,13 +113,13 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
         self.transport = None
 
 
-async def get_peer_list(info_hash, node_id, port, tracker_ip, tracker_port):
+async def get_peer_list(info_hash, node_id, port, tracker_ip, tracker_port, stopped=False):
     node_id = node_id or random.getrandbits(160).to_bytes(20, "big", signed=False)
     tracker_ip = await resolve_host(tracker_ip, tracker_port, 'udp')
     proto = UDPTrackerClientProtocol()
     transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: proto, local_addr=("0.0.0.0", 0))
     try:
-        reply, _ = await proto.announce(info_hash, node_id, port, tracker_ip, tracker_port)
+        reply, _ = await proto.announce(info_hash, node_id, port, tracker_ip, tracker_port, stopped=stopped)
         return reply.peers
     except asyncio.CancelledError:
         raise
