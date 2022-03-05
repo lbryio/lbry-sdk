@@ -3,6 +3,7 @@ import os
 import asyncio
 import logging
 import binascii
+import time
 import typing
 
 import base58
@@ -48,6 +49,7 @@ BACKGROUND_DOWNLOADER_COMPONENT = "background_downloader"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
+TRACKER_ANNOUNCER_COMPONENT = "tracker_announcer_component"
 LIBTORRENT_COMPONENT = "libtorrent_component"
 
 
@@ -708,3 +710,40 @@ class ExchangeRateManagerComponent(Component):
 
     async def stop(self):
         self.exchange_rate_manager.stop()
+
+
+class TrackerAnnouncerComponent(Component):
+    component_name = TRACKER_ANNOUNCER_COMPONENT
+    depends_on = [FILE_MANAGER_COMPONENT]
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.file_manager = None
+        self.announce_task = None
+
+    @property
+    def component(self) -> ExchangeRateManager:
+        return self.exchange_rate_manager
+
+    async def announce_forever(self):
+        while True:
+            to_sleep = 60 * 10
+            for file in self.file_manager.get_filtered():
+                if not file.downloader:
+                    continue
+                next_announce = file.downloader.next_tracker_announce_time
+                if next_announce is None or next_announce <= time.time():
+                    await file.downloader.refresh_from_trackers(False)
+                else:
+                    to_sleep = min(to_sleep, next_announce - time.time())
+            await asyncio.sleep(to_sleep + 1)
+
+    async def start(self):
+        self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
+        self.announce_task = asyncio.create_task(self.announce_forever())
+
+    async def stop(self):
+        self.file_manager = None
+        if self.announce_task and not self.announce_task.done():
+            self.announce_task.cancel()
+        self.announce_task = None

@@ -76,6 +76,7 @@ class StreamDownloader:
             try:
                 announcement = await get_peer_list(
                     bytes.fromhex(self.sd_hash)[:20], node_id, port, server[0], server[1])
+                log.info("Announced %s to %s", self.sd_hash[:8], server)
                 self.next_tracker_announce_time = max(self.next_tracker_announce_time or 0,
                                                       time.time() + announcement.interval)
             except asyncio.CancelledError:
