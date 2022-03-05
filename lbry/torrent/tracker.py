@@ -4,6 +4,8 @@ import asyncio
 import logging
 from collections import namedtuple
 
+from lbry.utils import resolve_host
+
 log = logging.getLogger(__name__)
 # see: http://bittorrent.org/beps/bep_0015.html and http://xbtt.sourceforge.net/udp_tracker_protocol.html
 ConnectRequest = namedtuple("ConnectRequest", ["connection_id", "action", "transaction_id"])
@@ -108,3 +110,20 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
 
     def connection_lost(self, exc: Exception = None) -> None:
         self.transport = None
+
+
+async def get_peer_list(info_hash, node_id, port, tracker_ip, tracker_port):
+    node_id = node_id or random.getrandbits(160).to_bytes(20, "big", signed=False)
+    tracker_ip = await resolve_host(tracker_ip, tracker_port, 'udp')
+    proto = UDPTrackerClientProtocol()
+    transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(lambda: proto, local_addr=("0.0.0.0", 0))
+    try:
+        reply, _ = await proto.announce(info_hash, node_id, port, tracker_ip, tracker_port)
+        return reply.peers
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log.warning("Error fetching from tracker: %s", exc.args)
+        return []
+    finally:
+        transport.close()

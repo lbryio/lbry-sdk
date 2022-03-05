@@ -4,7 +4,7 @@ from functools import reduce
 
 from lbry.testcase import AsyncioTestCase
 from lbry.torrent.tracker import UDPTrackerClientProtocol, encode, decode, CompactIPv4Peer, ConnectRequest, \
-    ConnectResponse, AnnounceRequest, ErrorResponse, AnnounceResponse
+    ConnectResponse, AnnounceRequest, ErrorResponse, AnnounceResponse, get_peer_list
 
 
 class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not suitable for production
@@ -53,6 +53,12 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
         self.assertEqual(announcement.seeders, 1)
         self.assertEqual(announcement.peers,
                          [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
+
+    async def test_announce_using_helper_function(self):
+        info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
+        peers = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900)
+        self.assertEqual(len(peers), 1)
+        self.assertEqual(peers, [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
 
     async def test_error(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
