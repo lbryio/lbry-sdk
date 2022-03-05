@@ -50,7 +50,7 @@ class NetworkTests(IntegrationTestCase):
         self.conductor.spv_node.server.env.description = 'Fastest server in the west.'
         self.conductor.spv_node.server.env.daily_fee = '42'
 
-        from lbry.wallet.server.session import LBRYElectrumX
+        from scribe.server.session import LBRYElectrumX
         LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
 
         # await self.ledger.network.on_connected.first

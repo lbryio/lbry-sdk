@@ -1,13 +1,11 @@
 import base64
-from typing import List, TYPE_CHECKING, Union, Optional
+from typing import List, Union, Optional, NamedTuple
 from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError
 from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
 from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
-if TYPE_CHECKING:
-    from lbry.wallet.server.db.common import ResolveResult
 
 INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
 NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
@@ -56,6 +54,32 @@ class Censor:
             blocked.count = len(count)
             set_reference(blocked.channel, censoring_channel_hash, extra_txo_rows)
             outputs.blocked_total += len(count)
+
+
+class ResolveResult(NamedTuple):  # a  named tuple returned by the database containing all the resolve fields
+    name: str
+    normalized_name: str
+    claim_hash: bytes
+    tx_num: int
+    position: int
+    tx_hash: bytes
+    height: int
+    amount: int
+    short_url: str
+    is_controlling: bool
+    canonical_url: str
+    creation_height: int
+    activation_height: int
+    expiration_height: int
+    effective_amount: int
+    support_amount: int
+    reposted: int
+    last_takeover_height: Optional[int]
+    claims_in_channel: Optional[int]
+    channel_hash: Optional[bytes]
+    reposted_claim_hash: Optional[bytes]
+    signature_valid: Optional[bool]
+
 
 
 class Outputs:
@@ -202,7 +226,7 @@ class Outputs:
         return page.SerializeToString()
 
     @classmethod
-    def encode_txo(cls, txo_message, resolve_result: Union['ResolveResult', Exception]):
+    def encode_txo(cls, txo_message, resolve_result: Union[ResolveResult, Exception]):
         if isinstance(resolve_result, Exception):
             txo_message.error.text = resolve_result.args[0]
             if isinstance(resolve_result, ValueError):

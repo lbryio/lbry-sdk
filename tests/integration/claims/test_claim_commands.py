@@ -12,12 +12,21 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
-from lbry.wallet.server.db.common import STREAM_TYPES
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.util import satoshis_to_coins as lbc
 from lbry.crypto.hash import sha256
 
 log = logging.getLogger(__name__)
+
+
+STREAM_TYPES = {
+    'video': 1,
+    'audio': 2,
+    'image': 3,
+    'document': 4,
+    'binary': 5,
+    'model': 6,
+}
 
 
 def verify(channel, data, signature, channel_hash=None):

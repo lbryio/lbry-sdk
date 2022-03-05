@@ -53,8 +53,7 @@ from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
 from lbry.schema.url import URL, normalize_name
-from lbry.wallet.server.db.elasticsearch.constants import RANGE_FIELDS, REPLACEMENTS
-MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
+
 
 if typing.TYPE_CHECKING:
     from lbry.blob.blob_manager import BlobManager
@@ -66,6 +65,29 @@ if typing.TYPE_CHECKING:
     from lbry.file.file_manager import FileManager
 
 log = logging.getLogger(__name__)
+
+RANGE_FIELDS = {
+    'height', 'creation_height', 'activation_height', 'expiration_height',
+    'timestamp', 'creation_timestamp', 'duration', 'release_time', 'fee_amount',
+    'tx_position', 'repost_count', 'limit_claims_per_channel',
+    'amount', 'effective_amount', 'support_amount',
+    'trending_score', 'censor_type', 'tx_num'
+}
+MY_RANGE_FIELDS = RANGE_FIELDS - {"limit_claims_per_channel"}
+REPLACEMENTS = {
+    'claim_name': 'normalized_name',
+    'name': 'normalized_name',
+    'txid': 'tx_id',
+    'nout': 'tx_nout',
+    'trending_group': 'trending_score',
+    'trending_mixed': 'trending_score',
+    'trending_global': 'trending_score',
+    'trending_local': 'trending_score',
+    'reposted': 'repost_count',
+    'stream_types': 'stream_type',
+    'media_types': 'media_type',
+    'valid_channel_signature': 'is_signature_valid'
+}
 
 
 def is_transactional_function(name):

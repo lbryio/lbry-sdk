@@ -5,7 +5,7 @@ import lbry.wallet
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
-from lbry.wallet.server.session import LBRYElectrumX
+from scribe.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
 
