@@ -730,7 +730,7 @@ class TrackerAnnouncerComponent(Component):
 
     async def announce_forever(self):
         while True:
-            to_sleep = 60 * 10
+            to_sleep = 60 * 1
             for file in self.file_manager.get_filtered():
                 if not file.downloader:
                     continue
