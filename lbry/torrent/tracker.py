@@ -164,4 +164,5 @@ class TrackerClient:
 
 def subscribe_hash(hash, on_data):
     TrackerClient.EVENT_CONTROLLER.add(('search', bytes.fromhex(hash)))
-    TrackerClient.EVENT_CONTROLLER.stream.listen(lambda request: on_data(request[1]) if request[0] == hash else None)
+    TrackerClient.EVENT_CONTROLLER.stream.listen(
+        lambda request: on_data(request[1]) if request[0].hex() == hash else None)
