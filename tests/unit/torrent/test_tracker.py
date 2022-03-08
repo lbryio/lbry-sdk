@@ -70,6 +70,7 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
         await self.client.get_peer_list(info_hash)
         self.server.known_conns.clear()
+        self.client.results.clear()
         with self.assertRaises(Exception) as err:
             await self.client.get_peer_list(info_hash)
         self.assertEqual(err.exception.args[0], b'Connection ID missmatch.\x00')

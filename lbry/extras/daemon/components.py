@@ -3,7 +3,6 @@ import os
 import asyncio
 import logging
 import binascii
-import time
 import typing
 
 import base58
@@ -730,14 +729,12 @@ class TrackerAnnouncerComponent(Component):
 
     async def announce_forever(self):
         while True:
-            to_sleep = 60 * 1
+            to_sleep = 6
             for file in self.file_manager.get_filtered():
                 if not file.downloader:
                     continue
-                next_announce = file.downloader.next_tracker_announce_time
-                if next_announce is None or next_announce <= time.time():
-                    self.tracker_client.on_hash(bytes.fromhex(file.sd_hash))
-            await asyncio.sleep(to_sleep + 1)
+                self.tracker_client.on_hash(bytes.fromhex(file.sd_hash))
+            await asyncio.sleep(to_sleep)
 
     async def start(self):
         node = self.component_manager.get_component(DHT_COMPONENT) \

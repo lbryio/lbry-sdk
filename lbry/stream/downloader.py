@@ -41,7 +41,6 @@ class StreamDownloader:
         self.added_fixed_peers = False
         self.time_to_descriptor: typing.Optional[float] = None
         self.time_to_first_bytes: typing.Optional[float] = None
-        self.next_tracker_announce_time = None
 
         async def cached_read_blob(blob_info: 'BlobInfo') -> bytes:
             return await self.read_blob(blob_info, 2)
@@ -72,8 +71,6 @@ class StreamDownloader:
         peers = [(str(ipaddress.ip_address(peer.address)), peer.port) for peer in announcement.peers]
         peers = await get_kademlia_peers_from_hosts(peers)
         log.info("Found %d peers from tracker for %s", len(peers), self.sd_hash[:8])
-        self.next_tracker_announce_time = min(time() + announcement.interval,
-                                              self.next_tracker_announce_time or 1 << 64)
         self.peer_queue.put_nowait(peers)
 
     async def load_descriptor(self, connection_id: int = 0):
@@ -105,7 +102,8 @@ class StreamDownloader:
                 self.accumulate_task.cancel()
             _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)
         await self.add_fixed_peers()
-        subscribe_hash(self.sd_hash, self._process_announcement)
+        subscribe_hash(
+            bytes.fromhex(self.sd_hash), lambda result: asyncio.ensure_future(self._process_announcement(result)))
         # start searching for peers for the sd hash
         self.search_queue.put_nowait(self.sd_hash)
         log.info("searching for peers for stream %s", self.sd_hash)

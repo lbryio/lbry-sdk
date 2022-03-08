@@ -2,6 +2,7 @@ import random
 import struct
 import asyncio
 import logging
+import time
 from collections import namedtuple
 
 from lbry.utils import resolve_host, async_timed_cache
@@ -120,12 +121,14 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
 
 class TrackerClient:
     EVENT_CONTROLLER = StreamController()
+
     def __init__(self, node_id, announce_port, servers):
         self.client = UDPTrackerClientProtocol()
         self.transport = None
         self.node_id = node_id or random.getrandbits(160).to_bytes(20, "big", signed=False)
         self.announce_port = announce_port
         self.servers = servers
+        self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
 
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
@@ -145,24 +148,33 @@ class TrackerClient:
     async def get_peer_list(self, info_hash, stopped=False):
         found = []
         for done in asyncio.as_completed([self._probe_server(info_hash, *server, stopped) for server in self.servers]):
-            found.extend(await done)
+            result = await done
+            if result is not None:
+                self.EVENT_CONTROLLER.add((info_hash, result))
+                found.append(result)
         return found
 
     async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False):
+        result = None
+        if info_hash in self.results:
+            next_announcement, result = self.results[info_hash]
+            if time.time() < next_announcement:
+                return result
         try:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
             result = await self.client.announce(
                 info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
         except asyncio.TimeoutError:
             log.info("Tracker timed out: %s:%d", tracker_host, tracker_port)
-            return []
+            return None
+        finally:
+            self.results[info_hash] = (time.time() + (result.interval if result else 60.0), result)
         log.info("Announced to tracker. Found %d peers for %s on %s",
                  len(result.peers), info_hash.hex()[:8], tracker_host)
-        self.EVENT_CONTROLLER.add((info_hash, result))
         return result
 
 
-def subscribe_hash(hash, on_data):
-    TrackerClient.EVENT_CONTROLLER.add(('search', bytes.fromhex(hash)))
-    TrackerClient.EVENT_CONTROLLER.stream.listen(
-        lambda request: on_data(request[1]) if request[0].hex() == hash else None)
+def subscribe_hash(hash: bytes, on_data):
+    TrackerClient.EVENT_CONTROLLER.add(('search', hash))
+    TrackerClient.EVENT_CONTROLLER.stream.where(lambda request: request[0] == hash).add_done_callback(
+        lambda request: on_data(request.result()[1]))
