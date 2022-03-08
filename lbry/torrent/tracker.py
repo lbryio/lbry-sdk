@@ -149,9 +149,8 @@ class TrackerClient:
         self.tasks.clear()
 
     def hash_done(self, info_hash):
-        self.announced += 1
         self.tasks.pop(info_hash, None)
-        if len(self.tasks) == 0:
+        if len(self.tasks) == 0 and self.announced > 0:
             log.info("Tracker finished announcing %d files.", self.announced)
             self.announced = 0
 
@@ -178,6 +177,7 @@ class TrackerClient:
                 return result
         try:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
+            self.announced += 1
             result = await self.client.announce(
                 info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
         except asyncio.TimeoutError:
