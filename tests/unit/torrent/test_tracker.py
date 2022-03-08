@@ -3,8 +3,8 @@ import random
 from functools import reduce
 
 from lbry.testcase import AsyncioTestCase
-from lbry.torrent.tracker import UDPTrackerClientProtocol, encode, decode, CompactIPv4Peer, ConnectRequest, \
-    ConnectResponse, AnnounceRequest, ErrorResponse, AnnounceResponse, get_peer_list
+from lbry.torrent.tracker import encode, decode, CompactIPv4Peer, ConnectRequest, \
+    ConnectResponse, AnnounceRequest, ErrorResponse, AnnounceResponse, TrackerClient, subscribe_hash
 
 
 class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not suitable for production
@@ -44,30 +44,32 @@ class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not su
 
 class UDPTrackerClientTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
-        transport, _ = await self.loop.create_datagram_endpoint(UDPTrackerServerProtocol, local_addr=("127.0.0.1", 59900))
+        self.server = UDPTrackerServerProtocol()
+        transport, _ = await self.loop.create_datagram_endpoint(lambda: self.server, local_addr=("127.0.0.1", 59900))
         self.addCleanup(transport.close)
-        self.client = UDPTrackerClientProtocol()
-        transport, _ = await self.loop.create_datagram_endpoint(lambda: self.client, local_addr=("127.0.0.1", 0))
-        self.addCleanup(transport.close)
+        self.client = TrackerClient(b"\x00" * 48, 4444, [("127.0.0.1", 59900)])
+        await self.client.start()
+        self.addCleanup(self.client.stop)
 
     async def test_announce(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
-        peer_id = random.getrandbits(160).to_bytes(20, "big", signed=False)
-        announcement, _ = await self.client.announce(info_hash, peer_id, 4444, "127.0.0.1", 59900)
+        announcement = (await self.client.get_peer_list(info_hash))[0]
         self.assertEqual(announcement.seeders, 1)
         self.assertEqual(announcement.peers,
                          [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
 
     async def test_announce_using_helper_function(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
-        announcemenet = await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900)
-        peers = announcemenet.peers
+        queue = asyncio.Queue()
+        subscribe_hash(info_hash, queue.put_nowait)
+        announcement = await queue.get()
+        peers = announcement.peers
         self.assertEqual(peers, [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
-        self.assertEqual((await get_peer_list(info_hash, None, 4444, "127.0.0.1", 59900, stopped=True)).peers, [])
 
     async def test_error(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
-        peer_id = random.getrandbits(160).to_bytes(20, "big", signed=False)
+        await self.client.get_peer_list(info_hash)
+        self.server.known_conns.clear()
         with self.assertRaises(Exception) as err:
-            announcement, _ = await self.client.announce(info_hash, peer_id, 4444, "127.0.0.1", 59900, connection_id=10)
+            await self.client.get_peer_list(info_hash)
         self.assertEqual(err.exception.args[0], b'Connection ID missmatch.\x00')

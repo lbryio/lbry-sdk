@@ -28,6 +28,8 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
+from lbry.torrent.tracker import TrackerClient
+
 try:
     from lbry.torrent.session import TorrentSession
 except ImportError:
@@ -720,6 +722,7 @@ class TrackerAnnouncerComponent(Component):
         super().__init__(component_manager)
         self.file_manager = None
         self.announce_task = None
+        self.tracker_client: typing.Optional[TrackerClient] = None
 
     @property
     def component(self):
@@ -733,12 +736,15 @@ class TrackerAnnouncerComponent(Component):
                     continue
                 next_announce = file.downloader.next_tracker_announce_time
                 if next_announce is None or next_announce <= time.time():
-                    await file.downloader.refresh_from_trackers(False)
-                else:
-                    to_sleep = min(to_sleep, next_announce - time.time())
+                    self.tracker_client.on_hash(bytes.fromhex(file.sd_hash))
             await asyncio.sleep(to_sleep + 1)
 
     async def start(self):
+        node = self.component_manager.get_component(DHT_COMPONENT) \
+            if self.component_manager.has_component(DHT_COMPONENT) else None
+        node_id = node.protocol.node_id if node else None
+        self.tracker_client = TrackerClient(node_id, self.conf.tcp_port, self.conf.tracker_servers)
+        await self.tracker_client.start()
         self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
         self.announce_task = asyncio.create_task(self.announce_forever())
 
