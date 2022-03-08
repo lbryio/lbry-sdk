@@ -64,15 +64,17 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
         self.transport = None
         self.data_queue = {}
         self.timeout = timeout
+        self.semaphore = asyncio.Semaphore(10)
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         self.transport = transport
 
     async def request(self, obj, tracker_ip, tracker_port):
         self.data_queue[obj.transaction_id] = asyncio.get_running_loop().create_future()
-        self.transport.sendto(encode(obj), (tracker_ip, tracker_port))
         try:
-            return await asyncio.wait_for(self.data_queue[obj.transaction_id], self.timeout)
+            async with self.semaphore:
+                self.transport.sendto(encode(obj), (tracker_ip, tracker_port))
+                return await asyncio.wait_for(self.data_queue[obj.transaction_id], self.timeout)
         finally:
             self.data_queue.pop(obj.transaction_id, None)
 
@@ -129,7 +131,6 @@ class TrackerClient:
         self.announce_port = announce_port
         self.servers = servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
-        self.semaphore = asyncio.Semaphore(10)
 
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
@@ -163,9 +164,8 @@ class TrackerClient:
                 return result
         try:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
-            async with self.semaphore:
-                result = await self.client.announce(
-                    info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
+            result = await self.client.announce(
+                info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
         except asyncio.TimeoutError:
             log.info("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
