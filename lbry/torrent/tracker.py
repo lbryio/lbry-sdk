@@ -129,6 +129,7 @@ class TrackerClient:
         self.announce_port = announce_port
         self.servers = servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
+        self.semaphore = asyncio.Semaphore(10)
 
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
@@ -162,8 +163,9 @@ class TrackerClient:
                 return result
         try:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
-            result = await self.client.announce(
-                info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
+            async with self.semaphore:
+                result = await self.client.announce(
+                    info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
         except asyncio.TimeoutError:
             log.info("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
