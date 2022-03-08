@@ -5,7 +5,7 @@ import logging
 import time
 from collections import namedtuple
 
-from lbry.utils import resolve_host, async_timed_cache
+from lbry.utils import resolve_host, async_timed_cache, cancel_tasks
 from lbry.wallet.stream import StreamController
 
 log = logging.getLogger(__name__)
@@ -145,6 +145,8 @@ class TrackerClient:
         self.client = None
         self.transport = None
         self.EVENT_CONTROLLER.close()
+        cancel_tasks([task for _, task in self.tasks])
+        self.tasks.clear()
 
     def hash_done(self, info_hash):
         self.announced += 1

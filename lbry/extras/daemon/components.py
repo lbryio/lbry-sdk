@@ -750,3 +750,4 @@ class TrackerAnnouncerComponent(Component):
         if self.announce_task and not self.announce_task.done():
             self.announce_task.cancel()
         self.announce_task = None
+        self.tracker_client.stop()
