@@ -132,6 +132,7 @@ class TrackerClient:
         self.servers = servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
         self.tasks = {}
+        self.announced = 0
 
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
@@ -145,10 +146,17 @@ class TrackerClient:
         self.transport = None
         self.EVENT_CONTROLLER.close()
 
+    def hash_done(self, info_hash):
+        self.announced += 1
+        self.tasks.pop(info_hash, None)
+        if len(self.tasks) == 0:
+            log.info("Tracker finished announcing %d files.", self.announced)
+            self.announced = 0
+
     def on_hash(self, info_hash):
         if info_hash not in self.tasks:
             fut = asyncio.ensure_future(self.get_peer_list(info_hash))
-            fut.add_done_callback(lambda *_: self.tasks.pop(info_hash, None))
+            fut.add_done_callback(lambda *_: self.hash_done(info_hash))
             self.tasks[info_hash] = fut
 
     async def get_peer_list(self, info_hash, stopped=False):
@@ -175,8 +183,7 @@ class TrackerClient:
             return None
         finally:
             self.results[info_hash] = (time.time() + (result.interval if result else 60.0), result)
-        log.info("Announced to tracker. Found %d peers for %s on %s",
-                 len(result.peers), info_hash.hex()[:8], tracker_host)
+        log.debug("Announced: %s found %d peers for %s on %s", tracker_host, len(result.peers), info_hash.hex()[:8])
         return result
 
 
