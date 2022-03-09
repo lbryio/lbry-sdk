@@ -734,10 +734,12 @@ class TrackerAnnouncerComponent(Component):
     async def announce_forever(self):
         while True:
             to_sleep = 60.0
+            to_announce = []
             for file in self.file_manager.get_filtered():
                 if not file.downloader:
                     continue
-                self.tracker_client.on_hash(bytes.fromhex(file.sd_hash))
+                to_announce.append(bytes.fromhex(file.sd_hash))
+            await self.tracker_client.announce_many(*to_announce)
             await asyncio.sleep(to_sleep)
 
     async def start(self):

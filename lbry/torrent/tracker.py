@@ -132,7 +132,6 @@ class TrackerClient:
         self.servers = servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
         self.tasks = {}
-        self.announced = 0
 
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
@@ -149,17 +148,30 @@ class TrackerClient:
         while self.tasks:
             self.tasks.popitem()[1].cancel()
 
-    def hash_done(self, info_hash):
-        self.tasks.pop(info_hash, None)
-        if len(self.tasks) == 0 and self.announced > 0:
-            log.info("Tracker finished announcing %d files.", self.announced)
-            self.announced = 0
-
     def on_hash(self, info_hash, on_announcement=None):
         if info_hash not in self.tasks:
             task = asyncio.create_task(self.get_peer_list(info_hash, on_announcement=on_announcement))
-            task.add_done_callback(lambda *_: self.hash_done(info_hash))
+            task.add_done_callback(lambda *_: self.tasks.pop(info_hash, None))
             self.tasks[info_hash] = task
+
+    async def announce_many(self, *info_hashes, stopped=False):
+        await asyncio.gather(
+            *[self._announce_many(server, info_hashes, stopped=stopped) for server in self.servers],
+            return_exceptions=True)
+
+    async def _announce_many(self, server, info_hashes, stopped=False):
+        tracker_ip = await resolve_host(*server, 'udp')
+        still_good_info_hashes = {
+            info_hash for (info_hash, (next_announcement, _)) in self.results.get(tracker_ip, {}).items()
+            if time.time() < next_announcement
+        }
+        results = await asyncio.gather(
+            *[self._probe_server(info_hash, tracker_ip, server[1], stopped=stopped)
+              for info_hash in info_hashes if info_hash not in still_good_info_hashes],
+            return_exceptions=True)
+        if results:
+            errors = sum([1 for result in results if result is None or isinstance(result, Exception)])
+            log.info("Tracker: finished announcing %d files to %s:%d, %d errors", len(results), *server, errors)
 
     async def get_peer_list(self, info_hash, stopped=False, on_announcement=None):
         found = []
@@ -172,18 +184,18 @@ class TrackerClient:
 
     async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False):
         result = None
-        if info_hash in self.results:
-            next_announcement, result = self.results[info_hash]
+        self.results.setdefault(tracker_host, {})
+        tracker_host = await resolve_host(tracker_host, tracker_port, 'udp')
+        if info_hash in self.results[tracker_host]:
+            next_announcement, result = self.results[tracker_host][info_hash]
             if time.time() < next_announcement:
                 return result
         try:
-            tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
             result = await self.client.announce(
-                info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
-            self.results[info_hash] = (time.time() + result.interval, result)
-            self.announced += 1
+                info_hash, self.node_id, self.announce_port, tracker_host, tracker_port, stopped)
+            self.results[tracker_host][info_hash] = (time.time() + result.interval, result)
         except asyncio.TimeoutError:  # todo: this is UDP, timeout is common, we need a better metric for failures
-            self.results[info_hash] = (time.time() + 60.0, result)
+            self.results[tracker_host][info_hash] = (time.time() + 60.0, result)
             log.debug("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
         log.debug("Announced: %s found %d peers for %s", tracker_host, len(result.peers), info_hash.hex()[:8])
