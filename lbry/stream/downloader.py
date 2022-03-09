@@ -1,6 +1,5 @@
 import asyncio
 import ipaddress
-import time
 import typing
 import logging
 import binascii

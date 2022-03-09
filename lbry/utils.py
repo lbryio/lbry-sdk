@@ -131,21 +131,6 @@ def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
 
-def cancel_task(task: typing.Optional[asyncio.Task]):
-    if task and not task.done():
-        task.cancel()
-
-
-def cancel_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    for task in tasks:
-        cancel_task(task)
-
-
-def drain_tasks(tasks: typing.List[typing.Optional[asyncio.Task]]):
-    while tasks:
-        cancel_task(tasks.pop())
-
-
 def async_timed_cache(duration: int):
     def wrapper(func):
         cache: typing.Dict[typing.Tuple,
