@@ -727,6 +727,10 @@ class TrackerAnnouncerComponent(Component):
     def component(self):
         return self
 
+    @property
+    def running(self):
+        return self._running and self.announce_task and not self.announce_task.done()
+
     async def announce_forever(self):
         while True:
             to_sleep = 60.0
