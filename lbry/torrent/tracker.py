@@ -140,13 +140,13 @@ class TrackerClient:
             lambda request: self.on_hash(request[1], request[2]) if request[0] == 'search' else None)
 
     def stop(self):
+        while self.tasks:
+            self.tasks.popitem()[1].cancel()
         if self.transport is not None:
             self.transport.close()
         self.client = None
         self.transport = None
         self.EVENT_CONTROLLER.close()
-        while self.tasks:
-            self.tasks.popitem()[1].cancel()
 
     def on_hash(self, info_hash, on_announcement=None):
         if info_hash not in self.tasks:
