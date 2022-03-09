@@ -8,7 +8,6 @@ import tarfile
 import logging
 import tempfile
 import subprocess
-import importlib
 import platform
 from distutils.util import strtobool
 
@@ -22,9 +21,8 @@ from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
 
 from scribe.env import Env
-from scribe.server.server import BlockchainReaderServer
-from scribe.elasticsearch.sync import ElasticWriter
-from scribe.writer.block_processor import BlockProcessor
+from scribe.readers import BlockchainReaderServer, ElasticWriter
+from scribe.blockchain.block_processor import BlockProcessor
 
 log = logging.getLogger(__name__)
 
@@ -235,7 +233,6 @@ class SPVNode:
         if not self.stopped:
             log.warning("spv node is already running")
             return
-        print("start spv node")
         self.stopped = False
         try:
             self.data_path = tempfile.mkdtemp()
@@ -263,9 +260,7 @@ class SPVNode:
             self.server = BlockchainReaderServer(env)
             self.es_writer = ElasticWriter(env)
             await self.writer.open()
-            print("opened writer, starting")
             await self.writer.start()
-            print("started writer")
             await self.es_writer.start()
             await self.server.start()
         except Exception as e:

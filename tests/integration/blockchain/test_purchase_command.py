@@ -1,6 +1,6 @@
 from typing import Optional
 from lbry.testcase import CommandTestCase
-from lbry.schema.purchase import Purchase
+from scribe.schema.purchase import Purchase
 from lbry.wallet.transaction import Transaction
 from lbry.wallet.dewies import lbc_to_dewies, dewies_to_lbc
 

@@ -4,7 +4,7 @@ from time import perf_counter
 import logging
 from typing import Optional, Tuple, NamedTuple
 from lbry.utils import LRUCache, is_valid_public_ipv4
-from lbry.schema.attrs import country_str_to_int, country_int_to_str
+from scribe.schema.attrs import country_str_to_int, country_int_to_str
 # from prometheus_client import Counter
 
 

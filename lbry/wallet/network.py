@@ -8,8 +8,8 @@ from collections import defaultdict
 from typing import Dict, Optional, Tuple
 import aiohttp
 import grpc
-from lbry.schema.types.v2 import hub_pb2_grpc
-from lbry.schema.types.v2.hub_pb2 import SearchRequest
+from scribe.schema.types.v2 import hub_pb2_grpc
+from scribe.schema.types.v2.hub_pb2 import SearchRequest
 
 from lbry import __version__
 from lbry.utils import resolve_host

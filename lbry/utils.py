@@ -21,7 +21,7 @@ import pkg_resources
 import certifi
 import aiohttp
 from prometheus_client import Counter
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 
 
 log = logging.getLogger(__name__)

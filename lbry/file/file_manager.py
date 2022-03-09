@@ -9,7 +9,7 @@ from lbry.error import InvalidStreamURLError
 from lbry.stream.managed_stream import ManagedStream
 from lbry.torrent.torrent_manager import TorrentSource
 from lbry.utils import cache_concurrent
-from lbry.schema.url import URL
+from scribe.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.file.source_manager import SourceManager
 from lbry.file.source import ManagedDownloadSource

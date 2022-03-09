@@ -6,7 +6,7 @@ import logging
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 from lbry.error import DownloadSDTimeoutError
-from lbry.schema.mime_types import guess_media_type
+from scribe.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
 from lbry.stream.reflector.client import StreamReflectorClient
@@ -16,7 +16,7 @@ from lbry.file.source import ManagedDownloadSource
 
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
-    from lbry.schema.claim import Claim
+    from scribe.schema.claim import Claim
     from lbry.blob.blob_manager import BlobManager
     from lbry.blob.blob_info import BlobInfo
     from lbry.dht.node import Node

@@ -1,15 +1,16 @@
 import asyncio
+import scribe
 
-import lbry
 from unittest.mock import Mock
 
-from lbry_schema.coin import LBCRegTest
+from scribe.blockchain.network import LBCRegTest
+from scribe.hub.udp import StatusServer
+from scribe.hub.session import LBRYElectrumX
 
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
-from lbry.wallet.udp import StatusServer
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
 from lbry.conf import Config
 
@@ -34,7 +35,7 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': '',
             'donation_address': '',
             'daily_fee': '0',
-            'server_version': lbry.__version__,
+            'server_version': scribe.__version__,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
         # await self.conductor.spv_node.stop()
@@ -50,7 +51,6 @@ class NetworkTests(IntegrationTestCase):
         self.conductor.spv_node.server.env.description = 'Fastest server in the west.'
         self.conductor.spv_node.server.env.daily_fee = '42'
 
-        from scribe.server.session import LBRYElectrumX
         LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
 
         # await self.ledger.network.on_connected.first
@@ -65,7 +65,7 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': payment_address,
             'donation_address': donation_address,
             'daily_fee': '42',
-            'server_version': lbry.__version__,
+            'server_version': scribe.__version__,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
 

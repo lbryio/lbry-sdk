@@ -1,7 +1,7 @@
 import asyncio
 from decimal import Decimal
 from time import time
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 from lbry.extras.daemon.exchange_rate_manager import (
     ExchangeRate, ExchangeRateManager, CurrencyConversionError,
     BittrexUSDFeed, BittrexBTCFeed,

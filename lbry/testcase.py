@@ -20,7 +20,7 @@ from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.dewies import lbc_to_dewies
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import LBCWalletNode, WalletNode, HubNode
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent

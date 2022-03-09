@@ -1,5 +1,5 @@
 import unittest
-from lbry.schema import mime_types
+from scribe.schema import mime_types
 
 
 class TestMimeTypes(unittest.TestCase):

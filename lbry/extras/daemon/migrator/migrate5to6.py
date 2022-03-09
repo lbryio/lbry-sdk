@@ -3,7 +3,7 @@ import os
 import json
 import logging
 from binascii import hexlify
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 
 log = logging.getLogger(__name__)
 

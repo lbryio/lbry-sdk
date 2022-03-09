@@ -1,11 +1,11 @@
 import asyncio
 
-import lbry
-import lbry.wallet
+import scribe
+from scribe.hub.session import LBRYElectrumX
+
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
-from scribe.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
 
@@ -34,7 +34,7 @@ class TestSessions(IntegrationTestCase):
 
     async def test_proper_version(self):
         info = await self.ledger.network.get_server_features()
-        self.assertEqual(lbry.__version__, info['server_version'])
+        self.assertEqual(scribe.__version__, info['server_version'])
 
     async def test_client_errors(self):
         # Goal is ensuring thsoe are raised and not trapped accidentally

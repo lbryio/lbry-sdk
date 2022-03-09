@@ -1,7 +1,7 @@
 from unittest import TestCase
 from binascii import unhexlify
 
-from lbry.schema import Claim
+from scribe.schema import Claim
 
 
 class TestOldJSONSchemaCompatibility(TestCase):

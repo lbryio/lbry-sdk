@@ -27,7 +27,7 @@ from lbry.wallet import (
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
-from lbry.wallet.bip32 import PrivateKey
+from scribe.bip32 import PrivateKey
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -51,8 +51,8 @@ from lbry.extras.daemon.json_response_encoder import JSONResponseEncoder
 from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
-from lbry.schema.claim import Claim
-from lbry.schema.url import URL, normalize_name
+from scribe.schema.claim import Claim
+from scribe.schema.url import URL, normalize_name
 
 
 if typing.TYPE_CHECKING:

@@ -22,7 +22,7 @@ from lbry.stream.descriptor import StreamDescriptor
 from lbry.dht.node import Node
 from lbry.dht.protocol.protocol import KademliaProtocol
 from lbry.dht.protocol.routing_table import TreeRoutingTable
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 
 
 def get_mock_node(peer=None):

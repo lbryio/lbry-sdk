@@ -1,7 +1,7 @@
 from unittest import TestCase
 from decimal import Decimal
 
-from lbry.schema.claim import Claim, Stream, Collection
+from scribe.schema.claim import Claim, Stream, Collection
 from lbry.error import InputValueIsNoneError
 
 

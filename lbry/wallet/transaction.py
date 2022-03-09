@@ -7,18 +7,18 @@ from typing import List, Iterable, Optional, Tuple
 from lbry.error import InsufficientFundsError
 from lbry.crypto.hash import hash160, sha256
 from lbry.crypto.base58 import Base58
-from lbry.schema.url import normalize_name
-from lbry.schema.claim import Claim
-from lbry.schema.base import Signable
-from lbry.schema.purchase import Purchase
-from lbry.schema.support import Support
+from scribe.schema.url import normalize_name
+from scribe.schema.claim import Claim
+from scribe.schema.base import Signable
+from scribe.schema.purchase import Purchase
+from scribe.schema.support import Support
+from scribe.bip32 import PrivateKey, PublicKey
 
 from .script import InputScript, OutputScript
 from .constants import COIN, DUST, NULL_HASH32
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
-from .bip32 import PrivateKey, PublicKey
 
 if typing.TYPE_CHECKING:
     from lbry.wallet.account import Account

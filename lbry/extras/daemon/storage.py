@@ -10,7 +10,7 @@ from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies
 from lbry.wallet.transaction import Transaction, Output
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 from lbry.dht.constants import DATA_EXPIRATION
 from lbry.blob.blob_info import BlobInfo
 

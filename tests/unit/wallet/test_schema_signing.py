@@ -2,10 +2,10 @@ from binascii import unhexlify
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
-from lbry.wallet.bip32 import PrivateKey, KeyPath
+from scribe.bip32 import PrivateKey, KeyPath
 from lbry.wallet.mnemonic import Mnemonic
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 from lbry.crypto.hash import sha256
 
 

@@ -2,7 +2,7 @@ import unittest
 import tempfile
 import os
 
-from lbry.schema.mime_types import guess_media_type
+from scribe.schema.mime_types import guess_media_type
 
 class MediaTypeTests(unittest.TestCase):
     def test_guess_media_type_from_path_only(self):

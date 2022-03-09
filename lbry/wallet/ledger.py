@@ -10,8 +10,8 @@ from collections import defaultdict
 from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict, NamedTuple
 
-from lbry.schema.result import Outputs, INVALID, NOT_FOUND
-from lbry.schema.url import URL
+from scribe.schema.result import Outputs, INVALID, NOT_FOUND
+from scribe.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
 from lbry.utils import LRUCacheWithMetrics
@@ -26,7 +26,7 @@ from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.header import Headers, UnvalidatedHeaders
 from lbry.wallet.checkpoints import HASHES
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
-from lbry.wallet.bip32 import PublicKey, PrivateKey
+from scribe.bip32 import PublicKey, PrivateKey
 from lbry.wallet.coinselection import CoinSelector
 
 log = logging.getLogger(__name__)

@@ -4,7 +4,7 @@ import asyncio
 import os
 from binascii import hexlify
 
-from lbry.schema import Claim
+from scribe.schema import Claim
 from lbry.stream.background_downloader import BackgroundDownloader
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase

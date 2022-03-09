@@ -1,6 +1,6 @@
 import unittest
 
-from lbry.schema.tags import normalize_tag, clean_tags
+from scribe.schema.tags import normalize_tag, clean_tags
 
 
 class TestTagNormalization(unittest.TestCase):

@@ -3,7 +3,7 @@ import asyncio
 from lbry.testcase import IntegrationTestCase
 
 import lbry.wallet
-from lbry.schema.claim import Claim
+from scribe.schema.claim import Claim
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.dewies import dewies_to_lbc as d2l, lbc_to_dewies as l2d
 
