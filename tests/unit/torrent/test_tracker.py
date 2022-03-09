@@ -45,7 +45,7 @@ class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not su
 class UDPTrackerClientTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
         self.servers = {}
-        self.client = TrackerClient(b"\x00" * 48, 4444, [])
+        self.client = TrackerClient(b"\x00" * 48, 4444, [], timeout=0.1)
         await self.client.start()
         self.addCleanup(self.client.stop)
         await self.add_server()
@@ -86,6 +86,15 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
 
     async def test_multiple(self):
         await asyncio.gather(*[self.add_server() for _ in range(10)])
+        info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
+        await self.client.get_peer_list(info_hash)
+        for server in self.servers.values():
+            self.assertEqual(1, len(server.peers))
+            self.assertEqual(1, len(server.peers[info_hash]))
+
+    async def test_multiple_with_bad_one(self):
+        await asyncio.gather(*[self.add_server() for _ in range(10)])
+        self.client.servers.append(("127.0.0.2", 7070))
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
         await self.client.get_peer_list(info_hash)
         for server in self.servers.values():

@@ -124,8 +124,8 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
 class TrackerClient:
     EVENT_CONTROLLER = StreamController()
 
-    def __init__(self, node_id, announce_port, servers):
-        self.client = UDPTrackerClientProtocol()
+    def __init__(self, node_id, announce_port, servers, timeout=10.0):
+        self.client = UDPTrackerClientProtocol(timeout=timeout)
         self.transport = None
         self.node_id = node_id or random.getrandbits(160).to_bytes(20, "big", signed=False)
         self.announce_port = announce_port
