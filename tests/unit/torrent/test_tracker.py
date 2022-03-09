@@ -52,10 +52,11 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
 
     async def add_server(self, port=None, add_to_client=True):
         port = port or len(self.servers) + 59990
+        assert port not in self.servers
         server = UDPTrackerServerProtocol()
+        self.servers[port] = server
         transport, _ = await self.loop.create_datagram_endpoint(lambda: server, local_addr=("127.0.0.1", port))
         self.addCleanup(transport.close)
-        self.servers[port] = server
         if add_to_client:
             self.client.servers.append(("127.0.0.1", port))
 
@@ -82,3 +83,11 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
         with self.assertRaises(Exception) as err:
             await self.client.get_peer_list(info_hash)
         self.assertEqual(err.exception.args[0], b'Connection ID missmatch.\x00')
+
+    async def test_multiple(self):
+        await asyncio.gather(*[self.add_server() for _ in range(10)])
+        info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
+        await self.client.get_peer_list(info_hash)
+        for server in self.servers.values():
+            self.assertEqual(1, len(server.peers))
+            self.assertEqual(1, len(server.peers[info_hash]))
