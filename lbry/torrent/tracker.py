@@ -179,12 +179,12 @@ class TrackerClient:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
             result = await self.client.announce(
                 info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
+            self.results[info_hash] = (time.time() + result.interval, result)
             self.announced += 1
         except asyncio.TimeoutError:  # todo: this is UDP, timeout is common, we need a better metric for failures
+            self.results[info_hash] = (time.time() + 60.0, result)
             log.debug("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
-        finally:
-            self.results[info_hash] = (time.time() + (result.interval if result else 60.0), result)
         log.debug("Announced: %s found %d peers for %s on %s", tracker_host, len(result.peers), info_hash.hex()[:8])
         return result
 
