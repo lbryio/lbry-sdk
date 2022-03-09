@@ -9,7 +9,7 @@ from lbry.utils import resolve_host, async_timed_cache, cache_concurrent
 from lbry.wallet.stream import StreamController
 
 log = logging.getLogger(__name__)
-CONNECTION_EXPIRES_AFTER_SECONDS = 360
+CONNECTION_EXPIRES_AFTER_SECONDS = 50
 # see: http://bittorrent.org/beps/bep_0015.html and http://xbtt.sourceforge.net/udp_tracker_protocol.html
 ConnectRequest = namedtuple("ConnectRequest", ["connection_id", "action", "transaction_id"])
 ConnectResponse = namedtuple("ConnectResponse", ["action", "transaction_id", "connection_id"])
