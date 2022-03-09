@@ -21,7 +21,7 @@ from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
 
 from scribe.env import Env
-from scribe.readers import BlockchainReaderServer, ElasticWriter
+from scribe.reader import BlockchainReaderServer, ElasticWriter
 from scribe.blockchain.block_processor import BlockProcessor
 
 log = logging.getLogger(__name__)
