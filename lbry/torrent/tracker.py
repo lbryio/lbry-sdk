@@ -5,7 +5,7 @@ import logging
 import time
 from collections import namedtuple
 
-from lbry.utils import resolve_host, async_timed_cache, cancel_tasks
+from lbry.utils import resolve_host, async_timed_cache
 from lbry.wallet.stream import StreamController
 
 log = logging.getLogger(__name__)
@@ -145,8 +145,8 @@ class TrackerClient:
         self.client = None
         self.transport = None
         self.EVENT_CONTROLLER.close()
-        cancel_tasks([task for _, task in self.tasks.values()])
-        self.tasks.clear()
+        while self.tasks:
+            self.tasks.popitem()[1].cancel()
 
     def hash_done(self, info_hash):
         self.tasks.pop(info_hash, None)
@@ -156,9 +156,9 @@ class TrackerClient:
 
     def on_hash(self, info_hash):
         if info_hash not in self.tasks:
-            fut = asyncio.ensure_future(self.get_peer_list(info_hash))
-            fut.add_done_callback(lambda *_: self.hash_done(info_hash))
-            self.tasks[info_hash] = fut
+            task = asyncio.create_task(self.get_peer_list(info_hash))
+            task.add_done_callback(lambda *_: self.hash_done(info_hash))
+            self.tasks[info_hash] = task
 
     async def get_peer_list(self, info_hash, stopped=False):
         found = []
