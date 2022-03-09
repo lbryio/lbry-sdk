@@ -138,7 +138,7 @@ class TrackerClient:
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
             lambda: self.client, local_addr=("0.0.0.0", 0))
         self.EVENT_CONTROLLER.stream.listen(
-            lambda request: self.on_hash(request[1]) if request[0] == 'search' else None)
+            lambda request: self.on_hash(request[1], request[2]) if request[0] == 'search' else None)
 
     def stop(self):
         if self.transport is not None:
@@ -155,18 +155,18 @@ class TrackerClient:
             log.info("Tracker finished announcing %d files.", self.announced)
             self.announced = 0
 
-    def on_hash(self, info_hash):
+    def on_hash(self, info_hash, on_announcement=None):
         if info_hash not in self.tasks:
-            task = asyncio.create_task(self.get_peer_list(info_hash))
+            task = asyncio.create_task(self.get_peer_list(info_hash, on_announcement=on_announcement))
             task.add_done_callback(lambda *_: self.hash_done(info_hash))
             self.tasks[info_hash] = task
 
-    async def get_peer_list(self, info_hash, stopped=False):
+    async def get_peer_list(self, info_hash, stopped=False, on_announcement=None):
         found = []
         for done in asyncio.as_completed([self._probe_server(info_hash, *server, stopped) for server in self.servers]):
             result = await done
             if result is not None:
-                self.EVENT_CONTROLLER.add((info_hash, result))
+                await asyncio.gather(*filter(asyncio.iscoroutine, [on_announcement(result)] if on_announcement else []))
                 found.append(result)
         return found
 
@@ -191,6 +191,4 @@ class TrackerClient:
 
 
 def subscribe_hash(info_hash: bytes, on_data):
-    TrackerClient.EVENT_CONTROLLER.add(('search', info_hash))
-    TrackerClient.EVENT_CONTROLLER.stream.where(lambda request: request[0] == info_hash).add_done_callback(
-        lambda request: on_data(request.result()[1]))
+    TrackerClient.EVENT_CONTROLLER.add(('search', info_hash, on_data))
