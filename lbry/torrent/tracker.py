@@ -5,7 +5,7 @@ import logging
 import time
 from collections import namedtuple
 
-from lbry.utils import resolve_host, async_timed_cache
+from lbry.utils import resolve_host, async_timed_cache, cache_concurrent
 from lbry.wallet.stream import StreamController
 
 log = logging.getLogger(__name__)
@@ -83,6 +83,7 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
         return decode(ConnectResponse,
                       await self.request(ConnectRequest(0x41727101980, 0, transaction_id), tracker_ip, tracker_port))
 
+    @cache_concurrent
     @async_timed_cache(CONNECTION_EXPIRES_AFTER_SECONDS)
     async def ensure_connection_id(self, peer_id, tracker_ip, tracker_port):
         # peer_id is just to ensure cache coherency
@@ -98,9 +99,7 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
         return decode(AnnounceResponse, await self.request(req, tracker_ip, tracker_port))
 
     async def scrape(self, infohashes, tracker_ip, tracker_port, connection_id=None):
-        if not connection_id:
-            reply = await self.connect(tracker_ip, tracker_port)
-            connection_id = reply.connection_id
+        connection_id = await self.ensure_connection_id(None, tracker_ip, tracker_port)
         transaction_id = random.getrandbits(32)
         reply = await self.request(
             ScrapeRequest(connection_id, 2, transaction_id, infohashes), tracker_ip, tracker_port)
