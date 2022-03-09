@@ -145,7 +145,7 @@ class TrackerClient:
         self.client = None
         self.transport = None
         self.EVENT_CONTROLLER.close()
-        cancel_tasks([task for _, task in self.tasks])
+        cancel_tasks([task for _, task in self.tasks.values()])
         self.tasks.clear()
 
     def hash_done(self, info_hash):
@@ -177,11 +177,11 @@ class TrackerClient:
                 return result
         try:
             tracker_ip = await resolve_host(tracker_host, tracker_port, 'udp')
-            self.announced += 1
             result = await self.client.announce(
                 info_hash, self.node_id, self.announce_port, tracker_ip, tracker_port, stopped)
-        except asyncio.TimeoutError:
-            log.info("Tracker timed out: %s:%d", tracker_host, tracker_port)
+            self.announced += 1
+        except asyncio.TimeoutError:  # todo: this is UDP, timeout is common, we need a better metric for failures
+            log.debug("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
         finally:
             self.results[info_hash] = (time.time() + (result.interval if result else 60.0), result)
