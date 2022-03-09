@@ -60,7 +60,7 @@ def encode(obj):
 
 
 class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
-    def __init__(self, timeout = 30.0):
+    def __init__(self, timeout=10.0):
         self.transport = None
         self.data_queue = {}
         self.timeout = timeout
@@ -137,7 +137,8 @@ class TrackerClient:
     async def start(self):
         self.transport, _ = await asyncio.get_running_loop().create_datagram_endpoint(
             lambda: self.client, local_addr=("0.0.0.0", 0))
-        self.EVENT_CONTROLLER.stream.listen(lambda request: self.on_hash(request[1]) if request[0] == 'search' else None)
+        self.EVENT_CONTROLLER.stream.listen(
+            lambda request: self.on_hash(request[1]) if request[0] == 'search' else None)
 
     def stop(self):
         if self.transport is not None:
@@ -185,11 +186,11 @@ class TrackerClient:
             self.results[info_hash] = (time.time() + 60.0, result)
             log.debug("Tracker timed out: %s:%d", tracker_host, tracker_port)
             return None
-        log.debug("Announced: %s found %d peers for %s on %s", tracker_host, len(result.peers), info_hash.hex()[:8])
+        log.debug("Announced: %s found %d peers for %s", tracker_host, len(result.peers), info_hash.hex()[:8])
         return result
 
 
-def subscribe_hash(hash: bytes, on_data):
-    TrackerClient.EVENT_CONTROLLER.add(('search', hash))
-    TrackerClient.EVENT_CONTROLLER.stream.where(lambda request: request[0] == hash).add_done_callback(
+def subscribe_hash(info_hash: bytes, on_data):
+    TrackerClient.EVENT_CONTROLLER.add(('search', info_hash))
+    TrackerClient.EVENT_CONTROLLER.stream.where(lambda request: request[0] == info_hash).add_done_callback(
         lambda request: on_data(request.result()[1]))
