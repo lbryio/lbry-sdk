@@ -860,7 +860,7 @@ class Transaction:
     def signature_hash_type(hash_type):
         return hash_type
 
-    async def sign(self, funding_accounts: Iterable['Account']):
+    async def sign(self, funding_accounts: Iterable['Account'], extra_keys: dict = None):
         self._reset()
         ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
         for i, txi in enumerate(self._inputs):
@@ -870,6 +870,8 @@ class Transaction:
             if txo_script.is_pay_pubkey_hash:
                 address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
                 private_key = await ledger.get_private_key_for_address(wallet, address)
+                if private_key is None and extra_keys:
+                    private_key = extra_keys.get(address)
                 assert private_key is not None, 'Cannot find private key for signing output.'
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
@@ -944,14 +946,9 @@ class Transaction:
         return cls.create([], [payment, data], funding_accounts, change_account)
 
     @classmethod
-    def spend_time_lock(
-        cls, time_locked_txo: Output, amount: int, holding_address: str, script_source: str,
-        funding_accounts: List['Account'], change_account: 'Account'
-    ):
-        ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        txi = Input.spend_time_lock(time_locked_txo, unhexlify(script_source))
-        txo = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(holding_address))
-        return cls.create([txi], [txo], funding_accounts, change_account)
+    def spend_time_lock(cls, time_locked_txo: Output, script: bytes, account: 'Account'):
+        txi = Input.spend_time_lock(time_locked_txo, script)
+        return cls.create([txi], [], [account], account, sign=False)
 
     @property
     def my_inputs(self):

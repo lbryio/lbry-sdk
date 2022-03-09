@@ -215,6 +215,10 @@ class PrivateKey(_KeyBase):
         private_key = cPrivateKey.from_int(key_int)
         return cls(ledger, private_key, bytes((0,)*32), 0, 0)
 
+    @classmethod
+    def from_bytes(cls, ledger, key_bytes) -> 'PrivateKey':
+        return cls(ledger, cPrivateKey(key_bytes), bytes((0,)*32), 0, 0)
+
     @cachedproperty
     def private_key_bytes(self):
         """ Return the serialized private key (no leading zero byte). """

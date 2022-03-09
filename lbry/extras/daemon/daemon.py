@@ -28,6 +28,7 @@ from lbry.wallet import (
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
 from lbry.wallet.bip32 import PrivateKey
+from lbry.crypto.base58 import Base58
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -1871,6 +1872,48 @@ class Daemon(metaclass=JSONRPCServerType):
             to_account=to_account, amount=amount, everything=everything,
             outputs=outputs, broadcast=broadcast
         )
+
+    @requires("wallet")
+    async def jsonrpc_account_deposit(
+        self, txid, nout, redeem_script, private_key,
+        to_account=None, wallet_id=None, preview=False, blocking=False
+    ):
+        """
+        Spend a time locked transaction into your account.
+
+        Usage:
+            account_deposit <txid> <nout> <redeem_script> <private_key>
+                [<to_account> | --to_account=<to_account>]
+                [--wallet_id=<wallet_id>] [--preview] [--blocking]
+
+        Options:
+            --txid=<txid>                   : (str) id of the transaction
+            --nout=<nout>                   : (int) output number in the transaction
+            --redeem_script=<redeem_script> : (str) redeem script for output
+            --private_key=<private_key>     : (str) private key to sign transaction
+            --to_account=<to_account>       : (str) deposit to this account
+            --wallet_id=<wallet_id>         : (str) limit operation to specific wallet.
+            --preview                       : (bool) do not broadcast the transaction
+            --blocking                      : (bool) wait until tx has synced
+
+        Returns: {Transaction}
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        account = wallet.get_account_or_default(to_account)
+        other_tx = await self.wallet_manager.get_transaction(txid)
+        tx = await Transaction.spend_time_lock(
+            other_tx.outputs[nout], unhexlify(redeem_script), account
+        )
+        pk = PrivateKey.from_bytes(
+            account.ledger, Base58.decode_check(private_key)[1:-1]
+        )
+        tx.sign([account], {pk.address: pk})
+        if not preview:
+            await self.broadcast_or_release(tx, blocking)
+            self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())
+        else:
+            await self.ledger.release_tx(tx)
+        return tx
 
     @requires(WALLET_COMPONENT)
     def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False, blocking=False):
