@@ -224,7 +224,6 @@ class SPVNode:
         self.port = 50001 + node_number  # avoid conflict with default daemon
         self.udp_port = self.port
         self.elastic_notifier_port = 19080 + node_number
-        self.rpc_port = 8000 + node_number
         self.session_timeout = 600
         self.stopped = True
         self.index_name = uuid4().hex
@@ -246,7 +245,6 @@ class SPVNode:
                 'host': self.hostname,
                 'tcp_port': self.port,
                 'udp_port': self.udp_port,
-                'rpc_port': self.rpc_port,
                 'elastic_notifier_port': self.elastic_notifier_port,
                 'session_timeout': self.session_timeout,
                 'max_query_workers': 0,
@@ -275,7 +273,8 @@ class SPVNode:
             return
         try:
             await self.server.stop()
-            await self.es_writer.stop(delete_index=True)
+            await self.es_writer.delete_index()
+            await self.es_writer.stop()
             await self.writer.stop()
             self.stopped = True
         except Exception as e:
