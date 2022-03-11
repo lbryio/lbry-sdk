@@ -1,12 +1,15 @@
 import random
+import string
 import struct
 import asyncio
 import logging
 import time
 from collections import namedtuple
+from typing import Optional
 
 from lbry.utils import resolve_host, async_timed_cache, cache_concurrent
 from lbry.wallet.stream import StreamController
+from lbry import version
 
 log = logging.getLogger(__name__)
 CONNECTION_EXPIRES_AFTER_SECONDS = 50
@@ -59,8 +62,16 @@ def encode(obj):
     return STRUCTS[type(obj)].pack(*obj)
 
 
+def make_peer_id(random_part: Optional[str] = None) -> bytes:
+    # see https://wiki.theory.org/BitTorrentSpecification#peer_id and https://www.bittorrent.org/beps/bep_0020.html
+    # not to confuse with node id; peer id identifies uniquely the software, version and instance
+    PREFIX = 'LB'  # todo: PR BEP20 to add ourselves
+    random_part = random_part or ''.join(random.choice(string.ascii_letters) for _ in range(20))
+    return f"{PREFIX}-{'-'.join(map(str, version))}-{random_part}"[:20].encode()
+
+
 class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
-    def __init__(self, timeout=10.0):
+    def __init__(self, timeout: float = 10.0):
         self.transport = None
         self.data_queue = {}
         self.timeout = timeout
@@ -126,7 +137,7 @@ class TrackerClient:
     def __init__(self, node_id, announce_port, servers, timeout=10.0):
         self.client = UDPTrackerClientProtocol(timeout=timeout)
         self.transport = None
-        self.node_id = node_id or random.getrandbits(160).to_bytes(20, "big", signed=False)
+        self.peer_id = make_peer_id(node_id.hex() if node_id else None)
         self.announce_port = announce_port
         self.servers = servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
@@ -191,7 +202,7 @@ class TrackerClient:
                 return result
         try:
             result = await self.client.announce(
-                info_hash, self.node_id, self.announce_port, tracker_host, tracker_port, stopped)
+                info_hash, self.peer_id, self.announce_port, tracker_host, tracker_port, stopped)
             self.results[tracker_host][info_hash] = (time.time() + result.interval, result)
         except asyncio.TimeoutError:  # todo: this is UDP, timeout is common, we need a better metric for failures
             self.results[tracker_host][info_hash] = (time.time() + 60.0, result)
