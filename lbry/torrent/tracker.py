@@ -197,12 +197,12 @@ class TrackerClient:
 
     async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False):
         result = None
-        self.results.setdefault(tracker_host, {})
         try:
             tracker_host = await resolve_host(tracker_host, tracker_port, 'udp')
         except socket.error:
             log.warning("DNS failure while resolving tracker host: %s, skipping.", tracker_host)
             return
+        self.results.setdefault(tracker_host, {})
         if info_hash in self.results[tracker_host]:
             next_announcement, result = self.results[tracker_host][info_hash]
             if time.time() < next_announcement:
