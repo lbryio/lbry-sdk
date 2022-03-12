@@ -236,7 +236,7 @@ class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not su
         self.peers.setdefault(info_hash, [])
         self.peers[info_hash].append(encode_peer(ip_address, port))
 
-    def datagram_received(self, data: bytes, address: (str, int)) -> None:
+    def datagram_received(self, data: bytes, addr: (str, int)) -> None:
         if len(data) < 16:
             return
         action = int.from_bytes(data[8:12], "big", signed=False)
@@ -244,20 +244,20 @@ class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not su
             req = decode(ConnectRequest, data)
             connection_id = random.getrandbits(32)
             self.known_conns.add(connection_id)
-            return self.transport.sendto(encode(ConnectResponse(0, req.transaction_id, connection_id)), address)
+            return self.transport.sendto(encode(ConnectResponse(0, req.transaction_id, connection_id)), addr)
         elif action == 1:
             req = decode(AnnounceRequest, data)
             if req.connection_id not in self.known_conns:
                 resp = encode(ErrorResponse(3, req.transaction_id, b'Connection ID missmatch.\x00'))
             else:
-                compact_address = encode_peer(address[0], req.port)
+                compact_address = encode_peer(addr[0], req.port)
                 if req.event != 3:
-                    self.add_peer(req.info_hash, address[0], req.port)
+                    self.add_peer(req.info_hash, addr[0], req.port)
                 elif compact_address in self.peers.get(req.info_hash, []):
                     self.peers[req.info_hash].remove(compact_address)
                 peers = [decode(CompactIPv4Peer, peer) for peer in self.peers[req.info_hash]]
                 resp = encode(AnnounceResponse(1, req.transaction_id, 1700, 0, len(peers), peers))
-            return self.transport.sendto(resp, address)
+            return self.transport.sendto(resp, addr)
 
 
 def encode_peer(ip_address: str, port: int):
