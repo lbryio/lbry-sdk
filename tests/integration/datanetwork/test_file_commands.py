@@ -10,6 +10,7 @@ from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
 from lbry.wallet import Transaction
+from lbry.torrent.tracker import UDPTrackerServerProtocol
 
 
 class FileCommands(CommandTestCase):
@@ -101,6 +102,24 @@ class FileCommands(CommandTestCase):
 
         await self.daemon.jsonrpc_get('lbry://foo')
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+
+    async def test_tracker_discovery(self):
+        port = 50990
+        server = UDPTrackerServerProtocol()
+        transport, _ = await self.loop.create_datagram_endpoint(lambda: server, local_addr=("127.0.0.1", port))
+        self.addCleanup(transport.close)
+        self.daemon.conf.fixed_peers = []
+        self.daemon.conf.tracker_servers = [("127.0.0.1", port)]
+        tx = await self.stream_create('foo', '0.01')
+        sd_hash = tx['outputs'][0]['value']['source']['sd_hash']
+        self.assertNotIn(bytes.fromhex(sd_hash)[:20], server.peers)
+        server.add_peer(bytes.fromhex(sd_hash)[:20], "127.0.0.1", 5567)
+        self.assertEqual(1, len(server.peers[bytes.fromhex(sd_hash)[:20]]))
+        self.assertTrue(await self.daemon.jsonrpc_file_delete(delete_all=True))
+        stream = await self.daemon.jsonrpc_get('foo', save_file=True)
+        await self.wait_files_to_complete()
+        self.assertEqual(0, stream.blobs_remaining)
+        self.assertEqual(2, len(server.peers[bytes.fromhex(sd_hash)[:20]]))
 
     async def test_announces(self):
         # announces on publish
