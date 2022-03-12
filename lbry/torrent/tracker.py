@@ -14,6 +14,7 @@ from lbry import version
 
 log = logging.getLogger(__name__)
 CONNECTION_EXPIRES_AFTER_SECONDS = 50
+PREFIX = 'LB'  # todo: PR BEP20 to add ourselves
 # see: http://bittorrent.org/beps/bep_0015.html and http://xbtt.sourceforge.net/udp_tracker_protocol.html
 ConnectRequest = namedtuple("ConnectRequest", ["connection_id", "action", "transaction_id"])
 ConnectResponse = namedtuple("ConnectResponse", ["action", "transaction_id", "connection_id"])
@@ -66,7 +67,6 @@ def encode(obj):
 def make_peer_id(random_part: Optional[str] = None) -> bytes:
     # see https://wiki.theory.org/BitTorrentSpecification#peer_id and https://www.bittorrent.org/beps/bep_0020.html
     # not to confuse with node id; peer id identifies uniquely the software, version and instance
-    PREFIX = 'LB'  # todo: PR BEP20 to add ourselves
     random_part = random_part or ''.join(random.choice(string.ascii_letters) for _ in range(20))
     return f"{PREFIX}-{'-'.join(map(str, version))}-{random_part}"[:20].encode()
 
