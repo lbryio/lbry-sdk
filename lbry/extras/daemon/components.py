@@ -746,7 +746,7 @@ class TrackerAnnouncerComponent(Component):
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
         node_id = node.protocol.node_id if node else None
-        self.tracker_client = TrackerClient(node_id, self.conf.tcp_port, self.conf.tracker_servers)
+        self.tracker_client = TrackerClient(node_id, self.conf.tcp_port, lambda: self.conf.tracker_servers)
         await self.tracker_client.start()
         self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
         self.announce_task = asyncio.create_task(self.announce_forever())

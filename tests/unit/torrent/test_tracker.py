@@ -51,8 +51,9 @@ def encode_peer(ip_address: str, port: int):
 
 class UDPTrackerClientTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
+        self.client_servers_list = []
         self.servers = {}
-        self.client = TrackerClient(b"\x00" * 48, 4444, [], timeout=0.1)
+        self.client = TrackerClient(b"\x00" * 48, 4444, lambda: self.client_servers_list, timeout=0.1)
         await self.client.start()
         self.addCleanup(self.client.stop)
         await self.add_server()
@@ -65,7 +66,7 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
         transport, _ = await self.loop.create_datagram_endpoint(lambda: server, local_addr=("127.0.0.1", port))
         self.addCleanup(transport.close)
         if add_to_client:
-            self.client.servers.append(("127.0.0.1", port))
+            self.client_servers_list.append(("127.0.0.1", port))
 
     async def test_announce(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
@@ -76,8 +77,8 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
 
     async def test_announce_many_info_hashes_to_many_servers_with_bad_one_and_dns_error(self):
         await asyncio.gather(*[self.add_server() for _ in range(3)])
-        self.client.servers.append(("no.it.does.not.exist", 7070))
-        self.client.servers.append(("127.0.0.2", 7070))
+        self.client_servers_list.append(("no.it.does.not.exist", 7070))
+        self.client_servers_list.append(("127.0.0.2", 7070))
         info_hashes = [random.getrandbits(160).to_bytes(20, "big", signed=False) for _ in range(5)]
         await self.client.announce_many(*info_hashes)
         for server in self.servers.values():
@@ -112,7 +113,7 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
 
     async def test_multiple_servers_with_bad_one(self):
         await asyncio.gather(*[self.add_server() for _ in range(10)])
-        self.client.servers.append(("127.0.0.2", 7070))
+        self.client_servers_list.append(("127.0.0.2", 7070))
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
         await self.client.get_peer_list(info_hash)
         for server in self.servers.values():

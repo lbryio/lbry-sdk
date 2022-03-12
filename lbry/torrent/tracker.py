@@ -135,12 +135,12 @@ class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
 class TrackerClient:
     EVENT_CONTROLLER = StreamController()
 
-    def __init__(self, node_id, announce_port, servers, timeout=10.0):
+    def __init__(self, node_id, announce_port, get_servers, timeout=10.0):
         self.client = UDPTrackerClientProtocol(timeout=timeout)
         self.transport = None
         self.peer_id = make_peer_id(node_id.hex() if node_id else None)
         self.announce_port = announce_port
-        self.servers = servers
+        self._get_servers = get_servers
         self.results = {}  # we can't probe the server before the interval, so we keep the result here until it expires
         self.tasks = {}
 
@@ -167,7 +167,7 @@ class TrackerClient:
 
     async def announce_many(self, *info_hashes, stopped=False):
         await asyncio.gather(
-            *[self._announce_many(server, info_hashes, stopped=stopped) for server in self.servers],
+            *[self._announce_many(server, info_hashes, stopped=stopped) for server in self._get_servers()],
             return_exceptions=True)
 
     async def _announce_many(self, server, info_hashes, stopped=False):
@@ -186,7 +186,8 @@ class TrackerClient:
 
     async def get_peer_list(self, info_hash, stopped=False, on_announcement=None):
         found = []
-        for done in asyncio.as_completed([self._probe_server(info_hash, *server, stopped) for server in self.servers]):
+        servers = self._get_servers()
+        for done in asyncio.as_completed([self._probe_server(info_hash, *server, stopped) for server in servers]):
             result = await done
             if result is not None:
                 await asyncio.gather(*filter(asyncio.iscoroutine, [on_announcement(result)] if on_announcement else []))
