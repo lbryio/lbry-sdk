@@ -1907,7 +1907,7 @@ class Daemon(metaclass=JSONRPCServerType):
         pk = PrivateKey.from_bytes(
             account.ledger, Base58.decode_check(private_key)[1:-1]
         )
-        tx.sign([account], {pk.address: pk})
+        await tx.sign([account], {pk.address: pk})
         if not preview:
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())

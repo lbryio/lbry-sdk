@@ -148,7 +148,9 @@ class Input(InputOutput):
     @classmethod
     def spend_time_lock(cls, txo: 'Output', script_source: bytes) -> 'Input':
         """ Create an input to spend time lock script."""
-        script = InputScript.redeem_time_lock_from_script(script_source)
+        script = InputScript.redeem_time_lock_script_hash(
+            cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY, script_source=script_source
+        )
         return cls(txo.ref, script)
 
     @property
@@ -867,11 +869,12 @@ class Transaction:
             assert txi.script is not None
             assert txi.txo_ref.txo is not None
             txo_script = txi.txo_ref.txo.script
-            if txo_script.is_pay_pubkey_hash:
-                address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = await ledger.get_private_key_for_address(wallet, address)
-                if private_key is None and extra_keys:
-                    private_key = extra_keys.get(address)
+            if txo_script.is_pay_pubkey_hash or txo_script.is_pay_script_hash:
+                if 'pubkey_hash' in txo_script.values:
+                    address = ledger.hash160_to_address(txo_script.values.get('pubkey_hash', ''))
+                    private_key = await ledger.get_private_key_for_address(wallet, address)
+                else:
+                    private_key = next(iter(extra_keys.values()))
                 assert private_key is not None, 'Cannot find private key for signing output.'
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \

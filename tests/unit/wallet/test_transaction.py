@@ -262,6 +262,46 @@ class TestTransactionSerialization(unittest.TestCase):
         tx._reset()
         self.assertEqual(tx.raw, raw)
 
+    def test_redeem_scripthash_transaction(self):
+        raw = unhexlify(
+            "0200000001409223c2405238fdc516d4f2e8aa57637ce52d3b1ac42b26f1accdcda9697e79010000008a4"
+            "730440220033d5286f161da717d9d1bc3c2bc28da7636b38fc0c6aefb1e0864212f05282c02205df3ce13"
+            "5e79c76d44489212f77ad4e3a838562e601e6377704fa6206a6ae44f012102261773e7eebe9da80a5653d"
+            "865cc600362f8e7b2b598661139dd902b5b01ea101f03aaf30ab17576a914a3328f18ac1892a6667f713d"
+            "7020ff3437d973c888acfeffffff0180ed3e17000000001976a914353352b7ce1e3c9c05ffcd6ae97609d"
+            "e2999744488accdf50a00"
+        )
+        tx = Transaction(raw)
+        self.assertEqual(tx.id, 'e466881128889d1cc4110627753051c22e72a81d11229a1a1337da06940bebcf')
+        self.assertEqual(tx.version, 2)
+        self.assertEqual(tx.locktime, 718285,)
+        self.assertEqual(len(tx.inputs), 1)
+        self.assertEqual(len(tx.outputs), 1)
+
+        txin = tx.inputs[0]
+        self.assertEqual(
+            txin.txo_ref.id,
+            '797e69a9cdcdacf1262bc41a3b2de57c6357aae8f2d416c5fd385240c2239240:1'
+        )
+        self.assertEqual(txin.txo_ref.position, 1)
+        self.assertEqual(txin.sequence, 4294967294)
+        self.assertIsNone(txin.coinbase)
+        self.assertEqual(txin.script.template.name, 'script_hash+timelock')
+        self.assertEqual(
+            hexlify(txin.script.values['signature']),
+            b'30440220033d5286f161da717d9d1bc3c2bc28da7636b38fc0c6aefb1e0864212f'
+            b'05282c02205df3ce135e79c76d44489212f77ad4e3a838562e601e6377704fa620'
+            b'6a6ae44f01'
+        )
+        self.assertEqual(
+            hexlify(txin.script.values['pubkey']),
+            b'02261773e7eebe9da80a5653d865cc600362f8e7b2b598661139dd902b5b01ea10'
+        )
+        script = txin.script.values['script']
+        self.assertEqual(script.template.name, 'timelock')
+        self.assertEqual(script.values['height'], 717738)
+        self.assertEqual(hexlify(script.values['pubkey_hash']), b'a3328f18ac1892a6667f713d7020ff3437d973c8')
+
 
 class TestTransactionSigning(AsyncioTestCase):
 
