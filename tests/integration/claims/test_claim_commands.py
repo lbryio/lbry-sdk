@@ -1516,6 +1516,7 @@ class StreamCommands(ClaimTestCase):
         await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
         self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.filtered_streams))
 
+        self.assertEqual('0.1', (await self.out(self.daemon.jsonrpc_resolve('bad_content')))['bad_content']['amount'])
         # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
         blocked = result['blocked']
@@ -1568,7 +1569,6 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.blocked_streams))
 
         # blocked content is not resolveable
-        print((await self.resolve('lbry://@some_channel/bad_content')))
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
         self.assertEqual(error['name'], 'BLOCKED')
         self.assertTrue(error['text'].startswith("Resolve of 'lbry://@some_channel/bad_content' was censored"))
@@ -1621,6 +1621,11 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_channels))
 
         # channel, claim in channel or claim individually no longer resolve
+        self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
+
+        await self.stream_update(worse_content_id, channel_name='@bad_channel', tags=['bad-stuff'])
         self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')

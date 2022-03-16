@@ -786,7 +786,7 @@ class Ledger(metaclass=LedgerRegistry):
         if hub_server:
             outputs = Outputs.from_grpc(encoded_outputs)
         else:
-            outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
+            outputs = Outputs.from_base64(encoded_outputs or '')  # TODO: why is the server returning None?
         txs: List[Transaction] = []
         if len(outputs.txs) > 0:
             async for tx in self.request_transactions(tuple(outputs.txs), cached=True):

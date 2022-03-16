@@ -103,7 +103,7 @@ class PurchaseCommandTests(CommandTestCase):
 
         # purchase non-existent claim fails
         with self.assertRaisesRegex(Exception, "Could not find claim with claim_id"):
-            await self.daemon.jsonrpc_purchase_create('abc123')
+            await self.daemon.jsonrpc_purchase_create('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
 
         # purchase stream with no price fails
         no_price_stream = await self.priced_stream('no_price_stream', price=None)

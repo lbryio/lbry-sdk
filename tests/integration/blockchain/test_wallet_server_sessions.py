@@ -103,19 +103,20 @@ class TestESSync(CommandTestCase):
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
 
         # reindex, 10 claims should be returned
-        await es_writer.reindex()
+        await es_writer.reindex(force=True)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
         server_search_client.clear_caches()
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
         # reindex again, this should not appear to do anything but will delete and reinsert the same 10 claims
-        await es_writer.reindex()
+        await es_writer.reindex(force=True)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
         server_search_client.clear_caches()
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
         # delete the index again and stop the writer, upon starting it the writer should reindex automatically
-        await es_writer.stop(delete_index=True)
+        await es_writer.delete_index()
+        await es_writer.stop()
         server_search_client.clear_caches()
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
 
