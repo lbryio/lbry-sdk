@@ -573,6 +573,12 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertTrue(blobs2.issubset(blobs))
         self.assertFalse(blobs3.issubset(blobs))
         self.assertTrue(blobs4.issubset(blobs))
+        # check that added_on gets set on downloads (was a bug)
+        self.assertLess(0, await self.daemon.storage.run_and_return_one_or_none("select min(added_on) from blob"))
+        await self.daemon.jsonrpc_file_delete(delete_all=True)
+        await self.daemon.jsonrpc_get("foo4", save_file=False)
+        self.assertLess(0, await self.daemon.storage.run_and_return_one_or_none("select min(added_on) from blob"))
+
 
 
 class TestBackgroundDownloaderComponent(CommandTestCase):

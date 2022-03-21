@@ -1,3 +1,4 @@
+import time
 import typing
 
 
@@ -18,7 +19,7 @@ class BlobInfo:
         self.blob_num = blob_num
         self.length = length
         self.iv = iv
-        self.added_on = added_on
+        self.added_on = added_on or time.time()
         self.is_mine = is_mine
 
     def as_dict(self) -> typing.Dict:
