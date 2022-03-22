@@ -633,6 +633,12 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         self.assertDictEqual(await self.resolve('@other/signed4'),
                              await self.resolve('signed4'))
 
+        self.assertEqual(2, len(await self.claim_search(channel_ids=[channel_id2])))
+
+        await self.channel_update(channel_id2)
+        await make_claim('third_signed', '0.01', channel_id=channel_id2)
+        self.assertEqual(3, len(await self.claim_search(channel_ids=[channel_id2])))
+
     async def _test_activation_delay(self):
         name = 'derp'
         # initially claim the name
