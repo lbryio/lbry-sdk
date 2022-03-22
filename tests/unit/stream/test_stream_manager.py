@@ -451,22 +451,41 @@ class TestStreamManager(BlobExchangeTestBase):
         await asyncio.sleep(0, loop=self.loop)
         self.stream_manager.stop()
         self.client_blob_manager.stop()
+        # partial removal, only sd blob is missing.
+        # in this case, we recover the sd blob while the other blobs are kept untouched as 'finished'
         os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
-        for blob in stream.descriptor.blobs[:-1]:
-            os.remove(os.path.join(self.client_blob_manager.blob_dir, blob.blob_hash))
         await self.client_blob_manager.setup()
         await self.stream_manager.start()
         self.assertEqual(1, len(self.stream_manager.streams))
         self.assertListEqual([self.sd_hash], list(self.stream_manager.streams.keys()))
         for blob_hash in [stream.sd_hash] + [b.blob_hash for b in stream.descriptor.blobs[:-1]]:
             blob_status = await self.client_storage.get_blob_status(blob_hash)
-            self.assertEqual('pending', blob_status)
+            self.assertEqual('finished', blob_status)
         self.assertEqual('finished', self.stream_manager.streams[self.sd_hash].status)
 
         sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
         self.assertTrue(sd_blob.file_exists)
         self.assertTrue(sd_blob.get_is_verified())
         self.assertListEqual(expected_analytics_events, received_events)
+
+        # full removal, check that status is preserved (except sd blob, which was written)
+        self.client_blob_manager.stop()
+        os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
+        for blob in stream.descriptor.blobs[:-1]:
+            os.remove(os.path.join(self.client_blob_manager.blob_dir, blob.blob_hash))
+        await self.client_blob_manager.setup()
+        await self.stream_manager.start()
+        for blob_hash in [b.blob_hash for b in stream.descriptor.blobs[:-1]]:
+            blob_status = await self.client_storage.get_blob_status(blob_hash)
+            self.assertEqual('pending', blob_status)
+        # sd blob was recovered
+        sd_blob = self.client_blob_manager.get_blob(stream.sd_hash)
+        self.assertTrue(sd_blob.file_exists)
+        self.assertTrue(sd_blob.get_is_verified())
+        self.assertListEqual(expected_analytics_events, received_events)
+        # db reflects that too
+        blob_status = await self.client_storage.get_blob_status(stream.sd_hash)
+        self.assertEqual('finished', blob_status)
 
     def test_download_then_recover_old_sort_stream_on_startup(self):
         return self.test_download_then_recover_stream_on_startup(old_sort=True)

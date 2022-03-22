@@ -113,9 +113,15 @@ class BlobManager:
                 (blob.blob_hash, blob.length, blob.added_on, blob.is_mine), finished=False)
             )
 
-    def check_completed_blobs(self, blob_hashes: typing.List[str]) -> typing.List[str]:
-        """Returns of the blobhashes_to_check, which are valid"""
-        return [blob_hash for blob_hash in blob_hashes if self.is_blob_verified(blob_hash)]
+    def ensure_completed_blobs_status(self, blob_hashes: typing.List[str]) -> asyncio.Task:
+        """Ensures that completed blobs from a given list of blob hashes are set as 'finished' in the database."""
+        to_add = []
+        for blob_hash in blob_hashes:
+            if not self.is_blob_verified(blob_hash):
+                continue
+            blob = self.get_blob(blob_hash)
+            to_add.append((blob.blob_hash, blob.length, blob.added_on, blob.is_mine))
+        return self.loop.create_task(self.storage.add_blobs(*to_add, finished=True))
 
     def delete_blob(self, blob_hash: str):
         if not is_valid_blobhash(blob_hash):
