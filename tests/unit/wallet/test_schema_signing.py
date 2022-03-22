@@ -2,7 +2,7 @@ from binascii import unhexlify
 
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, NULL_HASH32
-from scribe.bip32 import PrivateKey, KeyPath
+from scribe.schema.bip32 import PrivateKey, KeyPath
 from lbry.wallet.mnemonic import Mnemonic
 from lbry.wallet import Ledger, Database, Headers, Transaction, Input, Output
 from scribe.schema.claim import Claim

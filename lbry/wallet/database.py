@@ -13,7 +13,7 @@ from datetime import date
 from prometheus_client import Gauge, Counter, Histogram
 from lbry.utils import LockWithMetrics
 
-from scribe.bip32 import PublicKey
+from scribe.schema.bip32 import PublicKey
 from .transaction import Transaction, Output, OutputScript, TXRefImmutable, Input
 from .constants import TXO_TYPES, CLAIM_TYPES
 from .util import date_to_julian_day

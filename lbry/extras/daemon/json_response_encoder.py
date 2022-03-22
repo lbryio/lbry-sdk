@@ -8,7 +8,7 @@ from google.protobuf.message import DecodeError
 
 from scribe.schema.claim import Claim
 from scribe.schema.support import Support
-from scribe.bip32 import PublicKey
+from scribe.schema.bip32 import PublicKey
 from lbry.torrent.torrent_manager import TorrentSource
 from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
 from lbry.wallet.dewies import dewies_to_lbc

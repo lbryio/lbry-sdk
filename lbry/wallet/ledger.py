@@ -26,7 +26,7 @@ from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.header import Headers, UnvalidatedHeaders
 from lbry.wallet.checkpoints import HASHES
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
-from scribe.bip32 import PublicKey, PrivateKey
+from scribe.schema.bip32 import PublicKey, PrivateKey
 from lbry.wallet.coinselection import CoinSelector
 
 log = logging.getLogger(__name__)

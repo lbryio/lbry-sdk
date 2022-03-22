@@ -12,7 +12,7 @@ from scribe.schema.claim import Claim
 from scribe.schema.base import Signable
 from scribe.schema.purchase import Purchase
 from scribe.schema.support import Support
-from scribe.bip32 import PrivateKey, PublicKey
+from scribe.schema.bip32 import PrivateKey, PublicKey
 
 from .script import InputScript, OutputScript
 from .constants import COIN, DUST, NULL_HASH32

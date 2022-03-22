@@ -1,7 +1,7 @@
 from binascii import unhexlify, hexlify
 
 from lbry.testcase import AsyncioTestCase
-from scribe.bip32 import PublicKey, PrivateKey, from_extended_key_string
+from scribe.schema.bip32 import PublicKey, PrivateKey, from_extended_key_string
 from lbry.wallet import Ledger, Database, Headers
 
 from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys

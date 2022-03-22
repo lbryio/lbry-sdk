@@ -21,8 +21,9 @@ from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
 
 from scribe.env import Env
-from scribe.reader import BlockchainReaderServer, ElasticWriter
-from scribe.blockchain.block_processor import BlockProcessor
+from scribe.hub.service import HubServerService
+from scribe.elasticsearch.service import ElasticSyncService
+from scribe.blockchain.service import BlockchainProcessorService
 
 log = logging.getLogger(__name__)
 
@@ -217,9 +218,9 @@ class SPVNode:
         self.node_number = node_number
         self.controller = None
         self.data_path = None
-        self.server: Optional[BlockchainReaderServer] = None
-        self.writer: Optional[BlockProcessor] = None
-        self.es_writer: Optional[ElasticWriter] = None
+        self.server: Optional[HubServerService] = None
+        self.writer: Optional[BlockchainProcessorService] = None
+        self.es_writer: Optional[ElasticSyncService] = None
         self.hostname = 'localhost'
         self.port = 50001 + node_number  # avoid conflict with default daemon
         self.udp_port = self.port
@@ -254,10 +255,9 @@ class SPVNode:
             if extraconf:
                 conf.update(extraconf)
             env = Env(**conf)
-            self.writer = BlockProcessor(env)
-            self.server = BlockchainReaderServer(env)
-            self.es_writer = ElasticWriter(env)
-            await self.writer.open()
+            self.writer = BlockchainProcessorService(env)
+            self.server = HubServerService(env)
+            self.es_writer = ElasticSyncService(env)
             await self.writer.start()
             await self.es_writer.start()
             await self.server.start()

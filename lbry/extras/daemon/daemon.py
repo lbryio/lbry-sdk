@@ -27,7 +27,7 @@ from lbry.wallet import (
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
-from scribe.bip32 import PrivateKey
+from scribe.schema.bip32 import PrivateKey
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET

@@ -12,7 +12,7 @@ from typing import Type, Dict, Tuple, Optional, Any, List
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
 
-from scribe.bip32 import PrivateKey, PublicKey, KeyPath, from_extended_key_string
+from scribe.schema.bip32 import PrivateKey, PublicKey, KeyPath, from_extended_key_string
 from .mnemonic import Mnemonic
 from .constants import COIN, TXO_TYPES
 from .transaction import Transaction, Input, Output
