@@ -83,6 +83,8 @@ class BlobManager:
         to_add = await self.storage.sync_missing_blobs(in_blobfiles_dir)
         if to_add:
             self.completed_blob_hashes.update(to_add)
+        # check blobs that aren't set as finished but were seen on disk
+        await self.ensure_completed_blobs_status(in_blobfiles_dir - to_add)
         if self.config.track_bandwidth:
             self.connection_manager.start()
         return True
@@ -113,7 +115,7 @@ class BlobManager:
                 (blob.blob_hash, blob.length, blob.added_on, blob.is_mine), finished=False)
             )
 
-    def ensure_completed_blobs_status(self, blob_hashes: typing.List[str]) -> asyncio.Task:
+    async def ensure_completed_blobs_status(self, blob_hashes: typing.Iterable[str]):
         """Ensures that completed blobs from a given list of blob hashes are set as 'finished' in the database."""
         to_add = []
         for blob_hash in blob_hashes:
@@ -121,7 +123,10 @@ class BlobManager:
                 continue
             blob = self.get_blob(blob_hash)
             to_add.append((blob.blob_hash, blob.length, blob.added_on, blob.is_mine))
-        return self.loop.create_task(self.storage.add_blobs(*to_add, finished=True))
+            if len(to_add) > 500:
+                await self.storage.add_blobs(*to_add, finished=True)
+                to_add.clear()
+        return await self.storage.add_blobs(*to_add, finished=True)
 
     def delete_blob(self, blob_hash: str):
         if not is_valid_blobhash(blob_hash):
