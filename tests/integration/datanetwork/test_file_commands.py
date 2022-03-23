@@ -580,7 +580,6 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertLess(0, await self.daemon.storage.run_and_return_one_or_none("select min(added_on) from blob"))
 
 
-
 class TestBackgroundDownloaderComponent(CommandTestCase):
     async def get_blobs_from_sd_blob(self, sd_blob):
         descriptor = await StreamDescriptor.from_stream_descriptor_blob(

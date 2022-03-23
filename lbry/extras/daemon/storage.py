@@ -449,7 +449,7 @@ class SQLiteStorage(SQLiteMixin):
             return await self.db.execute_fetchall(
                 "select blob.blob_hash, blob.blob_length, blob.added_on "
                 "from blob left join stream_blob using (blob_hash) "
-                "where stream_blob.stream_hash is null and blob.is_mine=?"
+                "where stream_blob.stream_hash is null and blob.is_mine=? "
                 "order by blob.blob_length desc, blob.added_on asc",
                 (is_mine,)
             )
