@@ -408,6 +408,7 @@ class InputScript(Script):
             })
         elif script_source:
             script = cls(source=script_source, template=cls.TIME_LOCK_SCRIPT)
+            script.parse(script.template)
         else:
             raise ValueError("script_source or both height and pubkey_hash are required.")
         return cls(template=cls.REDEEM_SCRIPT_HASH_TIME_LOCK, values={
