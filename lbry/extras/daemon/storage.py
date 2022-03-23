@@ -532,7 +532,8 @@ class SQLiteStorage(SQLiteMixin):
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
             stream_blobs = transaction.execute(
-                "select blob_hash, position, iv from stream_blob where stream_hash=? "
+                "select s.blob_hash, s.position, s.iv, b.added_on "
+                "from stream_blob s left outer join blob b on b.blob_hash=s.blob_hash where stream_hash=? "
                 "order by position asc", (stream_hash, )
             ).fetchall()
             if only_completed:
@@ -552,9 +553,10 @@ class SQLiteStorage(SQLiteMixin):
             for blob_hash, length in lengths:
                 blob_length_dict[blob_hash] = length
 
-            for blob_hash, position, iv in stream_blobs:
+            current_time = time.time()
+            for blob_hash, position, iv, added_on in stream_blobs:
                 blob_length = blob_length_dict.get(blob_hash, 0)
-                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
+                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, added_on or current_time, blob_hash))
                 if not blob_hash:
                     break
             return crypt_blob_infos

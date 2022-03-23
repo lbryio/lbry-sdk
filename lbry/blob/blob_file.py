@@ -201,7 +201,7 @@ class AbstractBlob:
         writer = blob.get_blob_writer()
         writer.write(blob_bytes)
         await blob.verified.wait()
-        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), blob_hash, added_on, is_mine)
+        return BlobInfo(blob_num, length, binascii.hexlify(iv).decode(), added_on, blob_hash, is_mine)
 
     def save_verified_blob(self, verified_bytes: bytes):
         if self.verified.is_set():

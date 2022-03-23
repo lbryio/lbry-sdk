@@ -1,4 +1,3 @@
-import time
 import typing
 
 
@@ -13,13 +12,13 @@ class BlobInfo:
     ]
 
     def __init__(
-            self, blob_num: int, length: int, iv: str,
-             blob_hash: typing.Optional[str] = None, added_on=0, is_mine=False):
+            self, blob_num: int, length: int, iv: str, added_on,
+             blob_hash: typing.Optional[str] = None, is_mine=False):
         self.blob_hash = blob_hash
         self.blob_num = blob_num
         self.length = length
         self.iv = iv
-        self.added_on = added_on or time.time()
+        self.added_on = added_on
         self.is_mine = is_mine
 
     def as_dict(self) -> typing.Dict:
