@@ -620,18 +620,39 @@ def expand_query(**kwargs):
         if 'signature_valid' in kwargs:
             query['must'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
     elif 'signature_valid' in kwargs:
-        query.setdefault('should', [])
-        query["minimum_should_match"] = 1
-        query['should'].append({"bool": {"must_not": {"exists": {"field": "signature"}}}})
-        query['should'].append({"term": {"is_signature_valid": bool(kwargs["signature_valid"])}})
+        query['must'].append(
+            {"bool":
+                {"should": [
+                    {"bool": {"must_not": {"exists": {"field": "signature"}}}},
+                    {"bool" : {"must" : {"term": {"is_signature_valid": bool(kwargs["signature_valid"])}}}}
+                ]}
+             }
+        )
     if 'has_source' in kwargs:
-        query.setdefault('should', [])
-        query["minimum_should_match"] = 1
-        is_stream_or_repost = {"terms": {"claim_type": [CLAIM_TYPES['stream'], CLAIM_TYPES['repost']]}}
-        query['should'].append(
-            {"bool": {"must": [{"match": {"has_source": kwargs['has_source']}}, is_stream_or_repost]}})
-        query['should'].append({"bool": {"must_not": [is_stream_or_repost]}})
-        query['should'].append({"bool": {"must": [{"term": {"reposted_claim_type": CLAIM_TYPES['channel']}}]}})
+        is_stream_or_repost_terms = {"terms": {"claim_type": [CLAIM_TYPES['stream'], CLAIM_TYPES['repost']]}}
+        query['must'].append(
+            {"bool":
+                {"should": [
+                    {"bool": # when is_stream_or_repost AND has_source
+                        {"must": [
+                            {"match": {"has_source": kwargs['has_source']}},
+                            is_stream_or_repost_terms,
+                        ]
+                        },
+                     },
+                    {"bool": # when not is_stream_or_repost
+                        {"must_not": is_stream_or_repost_terms}
+                     },
+                    {"bool": # when reposted_claim_type wouldn't have source
+                        {"must_not":
+                            [
+                                {"term": {"reposted_claim_type": CLAIM_TYPES['stream']}}
+                            ]
+                        }
+                     }
+                ]}
+             }
+        )
     if kwargs.get('text'):
         query['must'].append(
                     {"simple_query_string":
@@ -669,6 +690,7 @@ def expand_query(**kwargs):
                 "sort": query["sort"]
             }
         }
+    print('query', query)
     return query
 
 
