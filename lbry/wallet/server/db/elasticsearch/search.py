@@ -694,7 +694,6 @@ def expand_query(**kwargs):
                 "sort": query["sort"]
             }
         }
-    print('query', query)
     return query
 
 

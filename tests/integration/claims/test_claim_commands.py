@@ -407,18 +407,12 @@ class ClaimSearchCommand(ClaimTestCase):
 
     async def test_no_source_and_valid_channel_signature_and_media_type(self):
         await self.channel_create('@spam2', '1.0')
-        newstream = await self.stream_create('barrrrrr', '1.0', channel_name='@spam2', file_path=self.video_file_name)
-        print('news', newstream)
-        all_claims = await self.claim_search() ## why this is missing "newstream" above
-        no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True,
+        await self.stream_create('barrrrrr', '1.0', channel_name='@spam2', file_path=self.video_file_name)
+        paradox_no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True,
                                                    media_type="video/mp4")
         mp4_claims = await self.claim_search(media_type="video/mp4")
-        no_source_claims_no_media = await self.claim_search(has_no_source=True, valid_channel_signature=True)
-        print('ALL', all_claims)
-        print('NOSRC', no_source_claims)
-        print('MP4', mp4_claims)
-        print('NSRC NO MEDIA', no_source_claims_no_media)
-        self.assertEqual(1, len(no_source_claims_no_media))
+        no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True)
+        self.assertEqual(0, len(paradox_no_source_claims))
         self.assertEqual(1, len(no_source_claims))
         self.assertEqual(1, len(mp4_claims))
 
