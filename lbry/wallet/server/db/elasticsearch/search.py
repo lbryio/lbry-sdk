@@ -647,6 +647,10 @@ def expand_query(**kwargs):
                         {"must_not":
                             [
                                 {"term": {"reposted_claim_type": CLAIM_TYPES['stream']}}
+                            ],
+                        "must":
+                            [
+                                {"term": {"claim_type": CLAIM_TYPES['repost']}}
                             ]
                         }
                      }

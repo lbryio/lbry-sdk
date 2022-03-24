@@ -418,7 +418,7 @@ class ClaimSearchCommand(ClaimTestCase):
         print('NOSRC', no_source_claims)
         print('MP4', mp4_claims)
         print('NSRC NO MEDIA', no_source_claims_no_media)
-        # self.assertEqual(1, len(no_source_claims_no_media))
+        self.assertEqual(1, len(no_source_claims_no_media))
         self.assertEqual(1, len(no_source_claims))
         self.assertEqual(1, len(mp4_claims))
 
