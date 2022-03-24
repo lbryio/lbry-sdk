@@ -693,9 +693,6 @@ class HubProcess(asyncio.SubprocessProtocol):
         self.ready.set()
         if self.log:
             self.log.info(data.decode())
-        if b'error' in data.lower():
-            self.ready.set()
-            raise SystemError(data.decode())
         if b'listening on' in data:
             self.ready.set()
         str_lines = str(data.decode()).split("\n")
@@ -788,7 +785,11 @@ class HubNode:
         loop = asyncio.get_event_loop()
         asyncio.get_child_watcher().attach_loop(loop)
         command = [
-            self.daemon_bin, 'serve', '--esindex', self.spv_node.index_name + 'claims', '--debug'
+            self.daemon_bin,
+            'serve',
+            '--esindex', self.spv_node.index_name + 'claims',
+            '--debug',
+            '--db-path', os.path.join(self.spv_node.data_path, "lbry-rocksdb")
         ]
         self.log.info(' '.join(command))
         self.protocol = HubProcess(self.running, self._stopped)

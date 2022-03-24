@@ -786,7 +786,7 @@ class Ledger(metaclass=LedgerRegistry):
         if hub_server:
             outputs = Outputs.from_grpc(encoded_outputs)
         else:
-            outputs = Outputs.from_base64(encoded_outputs or '')  # TODO: why is the server returning None?
+            outputs = Outputs.from_base64(encoded_outputs or b'') # TODO: why is the server returning None?
         txs: List[Transaction] = []
         if len(outputs.txs) > 0:
             async for tx in self.request_transactions(tuple(outputs.txs), cached=True):
@@ -866,7 +866,7 @@ class Ledger(metaclass=LedgerRegistry):
         txos = []
         urls_copy = list(urls)
         if new_sdk_server:
-            resolve = partial(self.network.new_resolve, new_sdk_server)
+            resolve = partial(self.network.go_hub_resolve, new_sdk_server)
         else:
             resolve = partial(self.network.retriable_call, self.network.resolve)
         while urls_copy:

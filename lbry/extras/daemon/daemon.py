@@ -1140,6 +1140,12 @@ class Daemon(metaclass=JSONRPCServerType):
             }
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        if self.ledger.config.get('use_go_hub'):
+            # If client isn't connected yet (which happens in some test for some reason?)
+            # just default to localhost
+            host = self.ledger.network.client.server[0] if self.ledger.network.client else "127.0.0.1"
+            port = "50051"
+            kwargs['new_sdk_server'] = f"{host}:{port}"
 
         if isinstance(urls, str):
             urls = [urls]

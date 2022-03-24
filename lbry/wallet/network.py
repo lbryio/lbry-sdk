@@ -1,5 +1,6 @@
 import logging
 import asyncio
+import base64
 import json
 import socket
 import random
@@ -10,6 +11,7 @@ import aiohttp
 import grpc
 from lbry.schema.types.v2 import hub_pb2_grpc
 from lbry.schema.types.v2.hub_pb2 import SearchRequest
+from lbry.schema.types.v2.hub_pb2 import StringArray
 
 from lbry import __version__
 from lbry.utils import resolve_host
@@ -490,6 +492,20 @@ class Network:
                 response = await stub.Search(SearchRequest(**kwargs))
             except grpc.aio.AioRpcError as error:
                 raise RPCError(error.code(), error.details())
+            return response
+
+    async def go_hub_resolve(self, server, urls, **kwargs):
+        async with grpc.aio.insecure_channel(server) as channel:
+            stub = hub_pb2_grpc.HubStub(channel)
+            try:
+                response = await stub.Resolve(StringArray(value=urls))
+            except grpc.aio.AioRpcError as error:
+                raise RPCError(error.code(), error.details())
+            # Currently we get the grpc type from the go hub, so we need to serialize it and
+            # encode it on this side before returning it.
+            serialized = response.SerializeToString()
+            # log.warn(serialized)
+            response = base64.b64encode(serialized).decode()
             return response
 
     async def sum_supports(self, server, **kwargs):
