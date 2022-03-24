@@ -421,6 +421,17 @@ class ClaimSearchCommand(ClaimTestCase):
             limit_claims_per_channel=3, claim_type='stream'
         )
 
+    async def test_no_source_and_valid_channel_signature_and_media_type(self):
+        await self.channel_create('@spam2', '1.0')
+        await self.stream_create('barrrrrr', '1.0', channel_name='@spam2', file_path=self.video_file_name)
+        paradox_no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True,
+                                                   media_type="video/mp4")
+        mp4_claims = await self.claim_search(media_type="video/mp4")
+        no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True)
+        self.assertEqual(0, len(paradox_no_source_claims))
+        self.assertEqual(1, len(no_source_claims))
+        self.assertEqual(1, len(mp4_claims))
+
     async def test_no_duplicates(self):
         await self.generate(10)
         match = self.assertFindsClaims
