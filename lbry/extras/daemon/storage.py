@@ -449,7 +449,8 @@ class SQLiteStorage(SQLiteMixin):
             return await self.db.execute_fetchall(
                 "select blob.blob_hash, blob.blob_length, blob.added_on "
                 "from blob left join stream_blob using (blob_hash) "
-                "where stream_blob.stream_hash is null and blob.is_mine=? order by blob.added_on asc",
+                "where stream_blob.stream_hash is null and blob.is_mine=? "
+                "order by blob.blob_length desc, blob.added_on asc",
                 (is_mine,)
             )
 
@@ -479,7 +480,7 @@ class SQLiteStorage(SQLiteMixin):
                coalesce(sum(case when
                    is_mine=1
                then blob_length else 0 end), 0) as private_storage
-        from blob left join stream_blob using (blob_hash)
+        from blob left join stream_blob using (blob_hash) where blob_hash not in (select sd_hash from stream)
         """)
         return {
             'network_storage': network_size,
@@ -531,7 +532,8 @@ class SQLiteStorage(SQLiteMixin):
         def _get_blobs_for_stream(transaction):
             crypt_blob_infos = []
             stream_blobs = transaction.execute(
-                "select blob_hash, position, iv from stream_blob where stream_hash=? "
+                "select s.blob_hash, s.position, s.iv, b.added_on "
+                "from stream_blob s left outer join blob b on b.blob_hash=s.blob_hash where stream_hash=? "
                 "order by position asc", (stream_hash, )
             ).fetchall()
             if only_completed:
@@ -551,9 +553,10 @@ class SQLiteStorage(SQLiteMixin):
             for blob_hash, length in lengths:
                 blob_length_dict[blob_hash] = length
 
-            for blob_hash, position, iv in stream_blobs:
+            current_time = time.time()
+            for blob_hash, position, iv, added_on in stream_blobs:
                 blob_length = blob_length_dict.get(blob_hash, 0)
-                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, blob_hash))
+                crypt_blob_infos.append(BlobInfo(position, blob_length, iv, added_on or current_time, blob_hash))
                 if not blob_hash:
                     break
             return crypt_blob_infos
