@@ -20,7 +20,7 @@ def do_migration(conf):
                            "left outer join blob b ON b.blob_hash=s.blob_hash order by s.position").fetchall()
     blobs_by_stream = {}
     for stream_hash, position, iv, blob_hash, blob_length in blobs:
-        blobs_by_stream.setdefault(stream_hash, []).append(BlobInfo(position, blob_length or 0, iv, blob_hash))
+        blobs_by_stream.setdefault(stream_hash, []).append(BlobInfo(position, blob_length or 0, iv, 0, blob_hash))
 
     for stream_name, stream_key, suggested_filename, sd_hash, stream_hash in streams:
         sd = StreamDescriptor(None, blob_dir, stream_name, stream_key, suggested_filename,

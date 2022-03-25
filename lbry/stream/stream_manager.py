@@ -70,6 +70,7 @@ class StreamManager(SourceManager):
 
     async def recover_streams(self, file_infos: typing.List[typing.Dict]):
         to_restore = []
+        to_check = []
 
         async def recover_stream(sd_hash: str, stream_hash: str, stream_name: str,
                                  suggested_file_name: str, key: str,
@@ -82,6 +83,7 @@ class StreamManager(SourceManager):
             if not descriptor:
                 return
             to_restore.append((descriptor, sd_blob, content_fee))
+            to_check.extend([sd_blob.blob_hash] + [blob.blob_hash for blob in descriptor.blobs[:-1]])
 
         await asyncio.gather(*[
             recover_stream(
@@ -93,6 +95,8 @@ class StreamManager(SourceManager):
 
         if to_restore:
             await self.storage.recover_streams(to_restore, self.config.download_dir)
+        if to_check:
+            await self.blob_manager.ensure_completed_blobs_status(to_check)
 
         # if self.blob_manager._save_blobs:
         #     log.info("Recovered %i/%i attempted streams", len(to_restore), len(file_infos))
