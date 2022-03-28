@@ -1796,7 +1796,7 @@ def generate_signed_legacy(address: bytes, output: Output):
         claim.SerializeToString(),
         output.claim_hash[::-1]
     ]))
-    signature = output.private_key.sign_compact(digest)
+    signature = output.private_key.sign_digest_deterministic(digest, hashfunc=hashlib.sha256)
     claim.publisherSignature.version = 1
     claim.publisherSignature.signatureType = 1
     claim.publisherSignature.signature = signature

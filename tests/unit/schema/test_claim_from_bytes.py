@@ -138,7 +138,9 @@ class TestTypesV1Compatibility(TestCase):
         channel = cert.channel
         self.assertEqual(
             channel.public_key,
-            '033878b1edd4a1373149909ef03f4339f6da9c2bd2214c040fd2e530463ffe6609'
+            '3056301006072a8648ce3d020106052b8104000a034200043878b1edd4a1373149909ef03f4339f6da9c2b'
+            'd2214c040fd2e530463ffe66098eca14fc70b50ff3aefd106049a815f595ed5a13eda7419ad78d9ed7ae47'
+            '3f17'
         )
 
     def test_unsigned_with_fee(self):

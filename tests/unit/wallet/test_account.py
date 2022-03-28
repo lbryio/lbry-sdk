@@ -1,11 +1,7 @@
 import asyncio
 from binascii import hexlify
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet import (
-    Wallet, Ledger, Database, Headers,
-    Account, SingleKey, HierarchicalDeterministic,
-    DeterministicChannelKeyManager
-)
+from lbry.wallet import Wallet, Ledger, Database, Headers, Account, SingleKey, HierarchicalDeterministic
 
 
 class TestAccount(AsyncioTestCase):

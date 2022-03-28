@@ -1,8 +1,5 @@
-from binascii import unhexlify
-
 from lbry.testcase import CommandTestCase
 from lbry.wallet.dewies import dewies_to_lbc
-from lbry.wallet.account import DeterministicChannelKeyManager
 
 
 def extract(d, keys):
@@ -63,30 +60,15 @@ class AccountManagement(CommandTestCase):
         self.assertEqual(accounts['items'][0]['name'], 'recreated account')
 
     async def test_wallet_migration(self):
-        old_id, new_id, valid_key = (
-            'mi9E8KqFfW5ngktU22pN2jpgsdf81ZbsGY',
-            'mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8',
-            '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
-            '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
-            '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
-            'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
-        )
         # null certificates should get deleted
-        self.account.channel_keys = {
-            new_id: 'not valid key',
-            'foo': 'bar',
-        }
+        await self.channel_create('@foo1')
+        await self.channel_create('@foo2')
+        await self.channel_create('@foo3')
+        keys = list(self.account.channel_keys.keys())
+        self.account.channel_keys[keys[0]] = None
+        self.account.channel_keys[keys[1]] = "some invalid junk"
         await self.account.maybe_migrate_certificates()
-        self.assertEqual(self.account.channel_keys, {})
-        self.account.channel_keys = {
-            new_id: 'not valid key',
-            'foo': 'bar',
-            'invalid address': valid_key,
-        }
-        await self.account.maybe_migrate_certificates()
-        self.assertEqual(self.account.channel_keys, {
-            new_id: valid_key
-        })
+        self.assertEqual(list(self.account.channel_keys.keys()), [keys[2]])
 
     async def assertFindsClaims(self, claim_names, awaitable):
         self.assertEqual(claim_names, [txo.claim_name for txo in (await awaitable)['items']])
@@ -192,100 +174,3 @@ class AccountManagement(CommandTestCase):
         bad_address = address[0:20] + '9999999' + address[27:]
         with self.assertRaisesRegex(Exception, f"'{bad_address}' is not a valid address"):
             await self.daemon.jsonrpc_account_send('0.1', addresses=[bad_address])
-
-    async def test_hybrid_channel_keys(self):
-        # non-deterministic channel
-        self.account.channel_keys = {
-            'mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8':
-                '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
-                '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
-                '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
-                'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
-        }
-        channel1 = await self.create_nondeterministic_channel('@foo1', '1.0', unhexlify(
-            '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
-            '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
-            'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
-        ))
-        await self.confirm_tx(channel1['txid'])
-
-        # deterministic channel
-        channel2 = await self.channel_create('@foo2')
-
-        await self.stream_create('stream-in-channel1', '0.01', channel_id=self.get_claim_id(channel1))
-        await self.stream_create('stream-in-channel2', '0.01', channel_id=self.get_claim_id(channel2))
-
-        resolved_stream1 = await self.resolve('@foo1/stream-in-channel1')
-        self.assertEqual('stream-in-channel1', resolved_stream1['name'])
-        self.assertTrue(resolved_stream1['is_channel_signature_valid'])
-
-        resolved_stream2 = await self.resolve('@foo2/stream-in-channel2')
-        self.assertEqual('stream-in-channel2', resolved_stream2['name'])
-        self.assertTrue(resolved_stream2['is_channel_signature_valid'])
-
-    async def test_deterministic_channel_keys(self):
-        seed = self.account.seed
-        keys = self.account.deterministic_channel_keys
-
-        # create two channels and make sure they have different keys
-        channel1a = await self.channel_create('@foo1')
-        channel2a = await self.channel_create('@foo2')
-        self.assertNotEqual(
-            channel1a['outputs'][0]['value']['public_key'],
-            channel2a['outputs'][0]['value']['public_key'],
-        )
-
-        # start another daemon from the same seed
-        self.daemon2 = await self.add_daemon(seed=seed)
-        channel2b, channel1b = (await self.daemon2.jsonrpc_channel_list())['items']
-
-        # both daemons end up with the same channel signing keys automagically
-        self.assertTrue(channel1b.has_private_key)
-        self.assertEqual(
-            channel1a['outputs'][0]['value']['public_key_id'],
-            channel1b.private_key.address
-        )
-        self.assertTrue(channel2b.has_private_key)
-        self.assertEqual(
-            channel2a['outputs'][0]['value']['public_key_id'],
-            channel2b.private_key.address
-        )
-
-        # repeatedly calling next channel key returns the same key when not used
-        current_known = keys.last_known
-        next_key = await keys.generate_next_key()
-        self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.address, (await keys.generate_next_key()).address)
-        # again, should be idempotent
-        next_key = await keys.generate_next_key()
-        self.assertEqual(current_known, keys.last_known)
-        self.assertEqual(next_key.address, (await keys.generate_next_key()).address)
-
-        # create third channel while both daemons running, second daemon should pick it up
-        channel3a = await self.channel_create('@foo3')
-        self.assertEqual(current_known+1, keys.last_known)
-        self.assertNotEqual(next_key.address, (await keys.generate_next_key()).address)
-        channel3b, = (await self.daemon2.jsonrpc_channel_list(name='@foo3'))['items']
-        self.assertTrue(channel3b.has_private_key)
-        self.assertEqual(
-            channel3a['outputs'][0]['value']['public_key_id'],
-            channel3b.private_key.address
-        )
-
-        # channel key cache re-populated after simulated restart
-
-        # reset cache
-        self.account.deterministic_channel_keys = DeterministicChannelKeyManager(self.account)
-        channel3c, channel2c, channel1c = (await self.daemon.jsonrpc_channel_list())['items']
-        self.assertFalse(channel1c.has_private_key)
-        self.assertFalse(channel2c.has_private_key)
-        self.assertFalse(channel3c.has_private_key)
-
-        # repopulate cache
-        await self.account.deterministic_channel_keys.ensure_cache_primed()
-        self.assertEqual(self.account.deterministic_channel_keys.last_known, keys.last_known)
-        channel3c, channel2c, channel1c = (await self.daemon.jsonrpc_channel_list())['items']
-        self.assertTrue(channel1c.has_private_key)
-        self.assertTrue(channel2c.has_private_key)
-        self.assertTrue(channel3c.has_private_key)
-

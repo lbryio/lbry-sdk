@@ -1,19 +1,8 @@
-from asn1crypto.keys import PrivateKeyInfo, ECPrivateKey
-from coincurve import PublicKey as cPublicKey, PrivateKey as cPrivateKey
-from coincurve.utils import (
-    pem_to_der, lib as libsecp256k1, ffi as libsecp256k1_ffi
-)
-from coincurve.ecdsa import CDATA_SIG_LENGTH
+from coincurve import PublicKey, PrivateKey as _PrivateKey
 
 from lbry.crypto.hash import hmac_sha512, hash160, double_sha256
 from lbry.crypto.base58 import Base58
 from .util import cachedproperty
-
-
-class KeyPath:
-    RECEIVE = 0
-    CHANGE = 1
-    CHANNEL = 2
 
 
 class DerivationError(Exception):
@@ -82,30 +71,26 @@ class _KeyBase:
         return Base58.encode_check(self.extended_key())
 
 
-class PublicKey(_KeyBase):
+class PubKey(_KeyBase):
     """ A BIP32 public key. """
 
     def __init__(self, ledger, pubkey, chain_code, n, depth, parent=None):
         super().__init__(ledger, chain_code, n, depth, parent)
-        if isinstance(pubkey, cPublicKey):
+        if isinstance(pubkey, PublicKey):
             self.verifying_key = pubkey
         else:
             self.verifying_key = self._verifying_key_from_pubkey(pubkey)
 
     @classmethod
-    def from_compressed(cls, public_key_bytes, ledger=None) -> 'PublicKey':
-        return cls(ledger, public_key_bytes, bytes((0,)*32), 0, 0)
-
-    @classmethod
     def _verifying_key_from_pubkey(cls, pubkey):
-        """ Converts a 33-byte compressed pubkey into an coincurve.PublicKey object. """
+        """ Converts a 33-byte compressed pubkey into an PublicKey object. """
         if not isinstance(pubkey, (bytes, bytearray)):
             raise TypeError('pubkey must be raw bytes')
         if len(pubkey) != 33:
             raise ValueError('pubkey must be 33 bytes')
         if pubkey[0] not in (2, 3):
             raise ValueError('invalid pubkey prefix byte')
-        return cPublicKey(pubkey)
+        return PublicKey(pubkey)
 
     @cachedproperty
     def pubkey_bytes(self):
@@ -120,7 +105,7 @@ class PublicKey(_KeyBase):
     def ec_point(self):
         return self.verifying_key.point()
 
-    def child(self, n: int) -> 'PublicKey':
+    def child(self, n: int):
         """ Return the derived child extended pubkey at index N. """
         if not 0 <= n < (1 << 31):
             raise ValueError('invalid BIP32 public key child number')
@@ -128,7 +113,7 @@ class PublicKey(_KeyBase):
         msg = self.pubkey_bytes + n.to_bytes(4, 'big')
         L_b, R_b = self._hmac_sha512(msg)  # pylint: disable=invalid-name
         derived_key = self.verifying_key.add(L_b)
-        return PublicKey(self.ledger, derived_key, R_b, n, self.depth + 1, self)
+        return PubKey(self.ledger, derived_key, R_b, n, self.depth + 1, self)
 
     def identifier(self):
         """ Return the key's identifier as 20 bytes. """
@@ -141,36 +126,6 @@ class PublicKey(_KeyBase):
             self.pubkey_bytes
         )
 
-    def verify(self, signature, digest) -> bool:
-        """ Verify that a signature is valid for a 32 byte digest. """
-
-        if len(signature) != 64:
-            raise ValueError('Signature must be 64 bytes long.')
-
-        if len(digest) != 32:
-            raise ValueError('Digest must be 32 bytes long.')
-
-        key = self.verifying_key
-
-        raw_signature = libsecp256k1_ffi.new('secp256k1_ecdsa_signature *')
-
-        parsed = libsecp256k1.secp256k1_ecdsa_signature_parse_compact(
-            key.context.ctx, raw_signature, signature
-        )
-        assert parsed == 1
-
-        normalized_signature = libsecp256k1_ffi.new('secp256k1_ecdsa_signature *')
-
-        libsecp256k1.secp256k1_ecdsa_signature_normalize(
-            key.context.ctx, normalized_signature, raw_signature
-        )
-
-        verified = libsecp256k1.secp256k1_ecdsa_verify(
-            key.context.ctx, normalized_signature, digest, key.public_key
-        )
-
-        return bool(verified)
-
 
 class PrivateKey(_KeyBase):
     """A BIP32 private key."""
@@ -179,7 +134,7 @@ class PrivateKey(_KeyBase):
 
     def __init__(self, ledger, privkey, chain_code, n, depth, parent=None):
         super().__init__(ledger, chain_code, n, depth, parent)
-        if isinstance(privkey, cPrivateKey):
+        if isinstance(privkey, _PrivateKey):
             self.signing_key = privkey
         else:
             self.signing_key = self._signing_key_from_privkey(privkey)
@@ -187,7 +142,7 @@ class PrivateKey(_KeyBase):
     @classmethod
     def _signing_key_from_privkey(cls, private_key):
         """ Converts a 32-byte private key into an coincurve.PrivateKey object. """
-        return cPrivateKey.from_int(PrivateKey._private_key_secret_exponent(private_key))
+        return _PrivateKey.from_int(PrivateKey._private_key_secret_exponent(private_key))
 
     @classmethod
     def _private_key_secret_exponent(cls, private_key):
@@ -199,21 +154,11 @@ class PrivateKey(_KeyBase):
         return int.from_bytes(private_key, 'big')
 
     @classmethod
-    def from_seed(cls, ledger, seed) -> 'PrivateKey':
+    def from_seed(cls, ledger, seed):
         # This hard-coded message string seems to be coin-independent...
         hmac = hmac_sha512(b'Bitcoin seed', seed)
         privkey, chain_code = hmac[:32], hmac[32:]
         return cls(ledger, privkey, chain_code, 0, 0)
-
-    @classmethod
-    def from_pem(cls, ledger, pem) -> 'PrivateKey':
-        der = pem_to_der(pem.encode())
-        try:
-            key_int = ECPrivateKey.load(der).native['private_key']
-        except ValueError:
-            key_int = PrivateKeyInfo.load(der).native['private_key']['private_key']
-        private_key = cPrivateKey.from_int(key_int)
-        return cls(ledger, private_key, bytes((0,)*32), 0, 0)
 
     @cachedproperty
     def private_key_bytes(self):
@@ -221,14 +166,12 @@ class PrivateKey(_KeyBase):
         return self.signing_key.secret
 
     @cachedproperty
-    def public_key(self) -> PublicKey:
+    def public_key(self):
         """ Return the corresponding extended public key. """
         verifying_key = self.signing_key.public_key
         parent_pubkey = self.parent.public_key if self.parent else None
-        return PublicKey(
-            self.ledger, verifying_key, self.chain_code,
-            self.n, self.depth, parent_pubkey
-        )
+        return PubKey(self.ledger, verifying_key, self.chain_code, self.n, self.depth,
+                      parent_pubkey)
 
     def ec_point(self):
         return self.public_key.ec_point()
@@ -241,12 +184,11 @@ class PrivateKey(_KeyBase):
         """ Return the private key encoded in Wallet Import Format. """
         return self.ledger.private_key_to_wif(self.private_key_bytes)
 
-    @property
     def address(self):
         """ The public key as a P2PKH address. """
         return self.public_key.address
 
-    def child(self, n) -> 'PrivateKey':
+    def child(self, n):
         """ Return the derived child extended private key at index N."""
         if not 0 <= n < (1 << 32):
             raise ValueError('invalid BIP32 private key child number')
@@ -265,28 +207,6 @@ class PrivateKey(_KeyBase):
         """ Produce a signature for piece of data by double hashing it and signing the hash. """
         return self.signing_key.sign(data, hasher=double_sha256)
 
-    def sign_compact(self, digest):
-        """ Produce a compact signature. """
-        key = self.signing_key
-
-        signature = libsecp256k1_ffi.new('secp256k1_ecdsa_signature *')
-        signed = libsecp256k1.secp256k1_ecdsa_sign(
-            key.context.ctx, signature, digest, key.secret,
-            libsecp256k1_ffi.NULL, libsecp256k1_ffi.NULL
-        )
-
-        if not signed:
-            raise ValueError('The private key was invalid.')
-
-        serialized = libsecp256k1_ffi.new('unsigned char[%d]' % CDATA_SIG_LENGTH)
-        compacted = libsecp256k1.secp256k1_ecdsa_signature_serialize_compact(
-            key.context.ctx, serialized, signature
-        )
-        if compacted != 1:
-            raise ValueError('The signature could not be compacted.')
-
-        return bytes(libsecp256k1_ffi.buffer(serialized, CDATA_SIG_LENGTH))
-
     def identifier(self):
         """Return the key's identifier as 20 bytes."""
         return self.public_key.identifier()
@@ -298,12 +218,9 @@ class PrivateKey(_KeyBase):
             b'\0' + self.private_key_bytes
         )
 
-    def to_pem(self):
-        return self.signing_key.to_pem()
-
 
 def _from_extended_key(ledger, ekey):
-    """Return a PublicKey or PrivateKey from an extended key raw bytes."""
+    """Return a PubKey or PrivateKey from an extended key raw bytes."""
     if not isinstance(ekey, (bytes, bytearray)):
         raise TypeError('extended key must be raw bytes')
     if len(ekey) != 78:
@@ -315,7 +232,7 @@ def _from_extended_key(ledger, ekey):
 
     if ekey[:4] == ledger.extended_public_key_prefix:
         pubkey = ekey[45:]
-        key = PublicKey(ledger, pubkey, chain_code, n, depth)
+        key = PubKey(ledger, pubkey, chain_code, n, depth)
     elif ekey[:4] == ledger.extended_private_key_prefix:
         if ekey[45] != 0:
             raise ValueError('invalid extended private key prefix byte')
@@ -333,6 +250,6 @@ def from_extended_key_string(ledger, ekey_str):
     xpub6BsnM1W2Y7qLMiuhi7f7dbAwQZ5Cz5gYJCRzTNainXzQXYjFwtuQXHd
     3qfi3t3KJtHxshXezfjft93w4UE7BGMtKwhqEHae3ZA7d823DVrL
 
-    return a PublicKey or PrivateKey.
+    return a PubKey or PrivateKey.
     """
     return _from_extended_key(ledger, Base58.decode_check(ekey_str))

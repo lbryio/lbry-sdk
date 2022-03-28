@@ -1,6 +1,5 @@
 import asyncio
 import json
-from binascii import unhexlify
 
 from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
@@ -282,19 +281,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         )
 
         # Channel Certificate
-        # non-deterministic channel
-        self.daemon2.wallet_manager.default_account.channel_keys['mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8'] = (
-            '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
-            '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
-            '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
-            'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
-        )
-        channel = await self.create_nondeterministic_channel('@foo', '0.1', unhexlify(
-            '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
-            '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
-            'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
-        ), self.daemon2, blocking=True)
-        await self.confirm_tx(channel['txid'], self.daemon2.ledger)
+        channel = await daemon2.jsonrpc_channel_create('@foo', '0.1')
+        await self.confirm_tx(channel.id, self.daemon2.ledger)
 
         # both daemons will have the channel but only one has the cert so far
         self.assertItemCount(await daemon.jsonrpc_channel_list(), 1)
@@ -326,7 +314,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         with self.assertRaisesRegex(AssertionError, "Cannot lock an unencrypted wallet, encrypt first."):
             daemon.jsonrpc_wallet_lock()
         # safe to call unlock and decrypt, they are no-ops at this point
-        await daemon.jsonrpc_wallet_unlock('password')  # already unlocked
+        daemon.jsonrpc_wallet_unlock('password')  # already unlocked
         daemon.jsonrpc_wallet_decrypt()  # already not encrypted
 
         daemon.jsonrpc_wallet_encrypt('password')
@@ -342,7 +330,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         # can't sign transactions with locked wallet
         with self.assertRaises(AssertionError):
             await daemon.jsonrpc_channel_create('@foo', '1.0')
-        await daemon.jsonrpc_wallet_unlock('password')
+        daemon.jsonrpc_wallet_unlock('password')
         self.assertEqual(daemon.jsonrpc_wallet_status(), {'is_locked': False, 'is_encrypted': True,
                                                           'is_syncing': False})
         await daemon.jsonrpc_channel_create('@foo', '1.0')
@@ -360,16 +348,9 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         await daemon2.jsonrpc_channel_import(exported)
         self.assertTrue(daemon2.jsonrpc_wallet_encrypt('password'))
         self.assertTrue(daemon2.jsonrpc_wallet_lock())
-        self.assertTrue(await daemon2.jsonrpc_wallet_unlock("password"))
+        self.assertTrue(daemon2.jsonrpc_wallet_unlock("password"))
         self.assertEqual(daemon2.jsonrpc_wallet_status(),
                          {'is_locked': False, 'is_encrypted': True, 'is_syncing': False})
-
-    async def test_locking_unlocking_does_not_break_deterministic_channels(self):
-        self.assertTrue(self.daemon.jsonrpc_wallet_encrypt("password"))
-        self.assertTrue(self.daemon.jsonrpc_wallet_lock())
-        self.account.deterministic_channel_keys._private_key = None
-        self.assertTrue(await self.daemon.jsonrpc_wallet_unlock("password"))
-        await self.channel_create()
 
     async def test_sync_with_encryption_and_password_change(self):
         daemon, daemon2 = self.daemon, self.daemon2
@@ -397,8 +378,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
 
         # check new password is active
         daemon.jsonrpc_wallet_lock()
-        self.assertFalse(await daemon.jsonrpc_wallet_unlock('password'))
-        self.assertTrue(await daemon.jsonrpc_wallet_unlock('password2'))
+        self.assertFalse(daemon.jsonrpc_wallet_unlock('password'))
+        self.assertTrue(daemon.jsonrpc_wallet_unlock('password2'))
 
         # propagate disk encryption to daemon2
         data = await daemon.jsonrpc_sync_apply('password3')
@@ -414,4 +395,4 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertWalletEncrypted(wallet2.storage.path, True)
 
         daemon2.jsonrpc_wallet_lock()
-        self.assertTrue(await daemon2.jsonrpc_wallet_unlock('password3'))
+        self.assertTrue(daemon2.jsonrpc_wallet_unlock('password3'))

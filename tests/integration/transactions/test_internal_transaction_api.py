@@ -31,9 +31,7 @@ class BasicTransactionTest(IntegrationTestCase):
         channel_txo = Output.pay_claim_name_pubkey_hash(
             l2d('1.0'), '@bar', channel, self.account.ledger.address_to_hash160(address1)
         )
-        channel_txo.set_channel_private_key(
-            await self.account.generate_channel_private_key()
-        )
+        await channel_txo.generate_channel_private_key()
         channel_txo.script.generate()
         channel_tx = await Transaction.create([], [channel_txo], [self.account], self.account)
 

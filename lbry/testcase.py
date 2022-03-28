@@ -17,10 +17,8 @@ from functools import partial
 from lbry.wallet import WalletManager, Wallet, Ledger, Account, Transaction
 from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
-from lbry.wallet.dewies import lbc_to_dewies
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import LBCWalletNode, WalletNode, HubNode
-from lbry.schema.claim import Claim
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
 from lbry.extras.daemon.components import Component, WalletComponent
@@ -558,19 +556,6 @@ class CommandTestCase(IntegrationTestCase):
         if not return_tx:
             return self.sout(tx)
         return tx
-
-    async def create_nondeterministic_channel(self, name, price, pubkey_bytes, daemon=None, blocking=False):
-        account = (daemon or self.daemon).wallet_manager.default_account
-        claim_address = await account.receiving.get_or_create_usable_address()
-        claim = Claim()
-        claim.channel.public_key_bytes = pubkey_bytes
-        tx = await Transaction.claim_create(
-            name, claim, lbc_to_dewies(price),
-            claim_address, [self.account], self.account
-        )
-        await tx.sign([self.account])
-        await (daemon or self.daemon).broadcast_or_release(tx, blocking)
-        return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):
         file_path = tempfile.mktemp(prefix=prefix or "tmp", suffix=suffix or "", dir=self.daemon.conf.upload_dir)

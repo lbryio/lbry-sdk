@@ -2,9 +2,6 @@ import logging
 from typing import List
 from binascii import hexlify, unhexlify
 
-from asn1crypto.keys import PublicKeyInfo
-from coincurve import PublicKey as cPublicKey
-
 from google.protobuf.json_format import MessageToDict
 from google.protobuf.message import DecodeError
 from hachoir.core.log import log as hachoir_log
@@ -349,7 +346,7 @@ class Channel(BaseClaim):
 
     @property
     def public_key(self) -> str:
-        return hexlify(self.public_key_bytes).decode()
+        return hexlify(self.message.public_key).decode()
 
     @public_key.setter
     def public_key(self, sd_public_key: str):
@@ -357,11 +354,7 @@ class Channel(BaseClaim):
 
     @property
     def public_key_bytes(self) -> bytes:
-        if len(self.message.public_key) == 33:
-            return self.message.public_key
-        public_key_info = PublicKeyInfo.load(self.message.public_key)
-        public_key = cPublicKey(public_key_info.native['public_key'])
-        return public_key.format(compressed=True)
+        return self.message.public_key
 
     @public_key_bytes.setter
     def public_key_bytes(self, public_key: bytes):

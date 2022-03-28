@@ -8,6 +8,7 @@ import time
 import inspect
 import typing
 import random
+import hashlib
 import tracemalloc
 from decimal import Decimal
 from urllib.parse import urlencode, quote
@@ -16,6 +17,7 @@ from binascii import hexlify, unhexlify
 from traceback import format_exc
 from functools import wraps, partial
 
+import ecdsa
 import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
@@ -27,7 +29,6 @@ from lbry.wallet import (
 )
 from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
-from lbry.wallet.bip32 import PrivateKey
 
 from lbry import utils
 from lbry.conf import Config, Setting, NOT_SET
@@ -2728,13 +2729,12 @@ class Daemon(metaclass=JSONRPCServerType):
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         txo = tx.outputs[0]
-        txo.set_channel_private_key(
-            await funding_accounts[0].generate_channel_private_key()
-        )
+        await txo.generate_channel_private_key()
 
         await tx.sign(funding_accounts)
 
         if not preview:
+            account.add_channel_private_key(txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
@@ -2883,9 +2883,7 @@ class Daemon(metaclass=JSONRPCServerType):
         new_txo = tx.outputs[0]
 
         if new_signing_key:
-            new_txo.set_channel_private_key(
-                await funding_accounts[0].generate_channel_private_key()
-            )
+            await new_txo.generate_channel_private_key()
         else:
             new_txo.private_key = old_txo.private_key
 
@@ -2894,6 +2892,7 @@ class Daemon(metaclass=JSONRPCServerType):
         await tx.sign(funding_accounts)
 
         if not preview:
+            account.add_channel_private_key(new_txo.private_key)
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
@@ -3065,7 +3064,7 @@ class Daemon(metaclass=JSONRPCServerType):
             'channel_id': channel.claim_id,
             'holding_address': address,
             'holding_public_key': public_key.extended_key_string(),
-            'signing_private_key': channel.private_key.signing_key.to_pem().decode()
+            'signing_private_key': channel.private_key.to_pem().decode()
         }
         return base58.b58encode(json.dumps(export, separators=(',', ':')))
 
@@ -3088,14 +3087,15 @@ class Daemon(metaclass=JSONRPCServerType):
 
         decoded = base58.b58decode(channel_data)
         data = json.loads(decoded)
-        channel_private_key = PrivateKey.from_pem(
-            self.ledger, data['signing_private_key']
+        channel_private_key = ecdsa.SigningKey.from_pem(
+            data['signing_private_key'], hashfunc=hashlib.sha256
         )
+        public_key_der = channel_private_key.get_verifying_key().to_der()
 
         # check that the holding_address hasn't changed since the export was made
         holding_address = data['holding_address']
         channels, _, _, _ = await self.ledger.claim_search(
-            wallet.accounts, public_key_id=channel_private_key.address
+            wallet.accounts, public_key_id=self.ledger.public_key_to_address(public_key_der)
         )
         if channels and channels[0].get_address(self.ledger) != holding_address:
             holding_address = channels[0].get_address(self.ledger)

@@ -15,8 +15,7 @@ from lbry.wallet.wallet import Wallet, WalletStorage, TimestampedPreferences, EN
 from lbry.wallet.manager import WalletManager
 from lbry.wallet.network import Network
 from lbry.wallet.ledger import Ledger, RegTestLedger, TestNetLedger, BlockHeightEvent
-from lbry.wallet.account import Account, AddressManager, SingleKey, HierarchicalDeterministic, \
-    DeterministicChannelKeyManager
+from lbry.wallet.account import Account, AddressManager, SingleKey, HierarchicalDeterministic
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.wallet.script import OutputScript, InputScript
 from lbry.wallet.database import SQLiteMixin, Database

@@ -26,7 +26,7 @@ from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.header import Headers, UnvalidatedHeaders
 from lbry.wallet.checkpoints import HASHES
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
-from lbry.wallet.bip32 import PublicKey, PrivateKey
+from lbry.wallet.bip32 import PubKey, PrivateKey
 from lbry.wallet.coinselection import CoinSelector
 
 log = logging.getLogger(__name__)
@@ -226,7 +226,7 @@ class Ledger(metaclass=LedgerRegistry):
             return account.get_private_key(address_info['chain'], address_info['pubkey'].n)
         return None
 
-    async def get_public_key_for_address(self, wallet, address) -> Optional[PublicKey]:
+    async def get_public_key_for_address(self, wallet, address) -> Optional[PubKey]:
         match = await self._get_account_and_address_info_for_address(wallet, address)
         if match:
             _, address_info = match
@@ -474,7 +474,6 @@ class Ledger(metaclass=LedgerRegistry):
         for address_manager in account.address_managers.values():
             await self.subscribe_addresses(address_manager, await address_manager.get_addresses())
         await account.ensure_address_gap()
-        await account.deterministic_channel_keys.ensure_cache_primed()
 
     async def unsubscribe_account(self, account: Account):
         for address in await account.get_addresses():
@@ -555,7 +554,6 @@ class Ledger(metaclass=LedgerRegistry):
             )
             remote_history_txids = {txid for txid, _ in remote_history}
             async for tx in self.request_synced_transactions(to_request, remote_history_txids, address):
-                self.maybe_has_channel_key(tx)
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 if len(pending_synced_history) % 100 == 0:
                     log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
@@ -622,12 +620,6 @@ class Ledger(metaclass=LedgerRegistry):
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
         return tx
-
-    def maybe_has_channel_key(self, tx):
-        for txo in tx._outputs:
-            if txo.can_decode_claim and txo.claim.is_channel:
-                for account in self.accounts:
-                    account.deterministic_channel_keys.maybe_generate_deterministic_key_for_channel(txo)
 
     async def request_transactions(self, to_request: Tuple[Tuple[str, int], ...], cached=False):
         batches = [[]]

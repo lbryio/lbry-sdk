@@ -18,6 +18,12 @@ from lbry.crypto.hash import sha256
 
 log = logging.getLogger(__name__)
 
+def get_encoded_signature(signature):
+    signature = signature.encode() if isinstance(signature, str) else signature
+    r = int(signature[:int(len(signature) / 2)], 16)
+    s = int(signature[int(len(signature) / 2):], 16)
+    return ecdsa.util.sigencode_der(r, s, len(signature) * 4)
+
 
 STREAM_TYPES = {
     'video': 1,
@@ -36,7 +42,7 @@ def verify(channel, data, signature, channel_hash=None):
         data
     ]
     return Output.is_signature_valid(
-        unhexlify(signature['signature']),
+        get_encoded_signature(signature['signature']),
         sha256(b''.join(pieces)),
         channel.claim.channel.public_key_bytes
     )
@@ -1129,17 +1135,17 @@ class ChannelCommands(CommandTestCase):
         tx = await self.channel_update(claim_id, bid='4.0')
         self.assertEqual(tx['outputs'][0]['amount'], '4.0')
 
-        await self.assertBalance(self.account, '5.991503')
+        await self.assertBalance(self.account, '5.991447')
 
         # not enough funds
         with self.assertRaisesRegex(
                 InsufficientFundsError, "Not enough funds to cover this transaction."):
             await self.channel_create('@foo2', '9.0')
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 1)
-        await self.assertBalance(self.account, '5.991503')
+        await self.assertBalance(self.account, '5.991447')
 
         # spend exactly amount available, no change
-        tx = await self.channel_create('@foo3', '5.981322')
+        tx = await self.channel_create('@foo3', '5.981266')
         await self.assertBalance(self.account, '0.0')
         self.assertEqual(len(tx['outputs']), 1)  # no change
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 2)
@@ -1257,7 +1263,7 @@ class ChannelCommands(CommandTestCase):
         await daemon2.jsonrpc_channel_import(exported_data)
         channels = (await daemon2.jsonrpc_channel_list())['items']
         self.assertEqual(1, len(channels))
-        self.assertEqual(channel_private_key.private_key_bytes, channels[0].private_key.private_key_bytes)
+        self.assertEqual(channel_private_key.to_string(), channels[0].private_key.to_string())
 
         # second wallet can't update until channel is sent to it
         with self.assertRaisesRegex(AssertionError, 'Cannot find private key for signing output.'):

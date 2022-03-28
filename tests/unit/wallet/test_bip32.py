@@ -1,7 +1,7 @@
 from binascii import unhexlify, hexlify
 
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.bip32 import PublicKey, PrivateKey, from_extended_key_string
+from lbry.wallet.bip32 import PubKey, PrivateKey, from_extended_key_string
 from lbry.wallet import Ledger, Database, Headers
 
 from tests.unit.wallet.key_fixtures import expected_ids, expected_privkeys, expected_hardened_privkeys
@@ -11,24 +11,24 @@ class BIP32Tests(AsyncioTestCase):
 
     def test_pubkey_validation(self):
         with self.assertRaisesRegex(TypeError, 'chain code must be raw bytes'):
-            PublicKey(None, None, 1, None, None, None)
+            PubKey(None, None, 1, None, None, None)
         with self.assertRaisesRegex(ValueError, 'invalid chain code'):
-            PublicKey(None, None, b'abcd', None, None, None)
+            PubKey(None, None, b'abcd', None, None, None)
         with self.assertRaisesRegex(ValueError, 'invalid child number'):
-            PublicKey(None, None, b'abcd'*8, -1, None, None)
+            PubKey(None, None, b'abcd'*8, -1, None, None)
         with self.assertRaisesRegex(ValueError, 'invalid depth'):
-            PublicKey(None, None, b'abcd'*8, 0, 256, None)
+            PubKey(None, None, b'abcd'*8, 0, 256, None)
         with self.assertRaisesRegex(TypeError, 'pubkey must be raw bytes'):
-            PublicKey(None, None, b'abcd'*8, 0, 255, None)
+            PubKey(None, None, b'abcd'*8, 0, 255, None)
         with self.assertRaisesRegex(ValueError, 'pubkey must be 33 bytes'):
-            PublicKey(None, b'abcd', b'abcd'*8, 0, 255, None)
+            PubKey(None, b'abcd', b'abcd'*8, 0, 255, None)
         with self.assertRaisesRegex(ValueError, 'invalid pubkey prefix byte'):
-            PublicKey(
+            PubKey(
                 None,
                 unhexlify('33d1a3dc8155673bc1e2214fa493ccc82d57961b66054af9b6b653ac28eeef3ffe'),
                 b'abcd'*8, 0, 255, None
             )
-        pubkey = PublicKey(  # success
+        pubkey = PubKey(  # success
             None,
             unhexlify('03d1a3dc8155673bc1e2214fa493ccc82d57961b66054af9b6b653ac28eeef3ffe'),
             b'abcd'*8, 0, 1, None
@@ -37,7 +37,7 @@ class BIP32Tests(AsyncioTestCase):
             pubkey.child(-1)
         for i in range(20):
             new_key = pubkey.child(i)
-            self.assertIsInstance(new_key, PublicKey)
+            self.assertIsInstance(new_key, PubKey)
             self.assertEqual(hexlify(new_key.identifier()), expected_ids[i])
 
     async def test_private_key_validation(self):
@@ -60,7 +60,7 @@ class BIP32Tests(AsyncioTestCase):
         self.assertEqual(
             ec_point[1], 86198965946979720220333266272536217633917099472454294641561154971209433250106
         )
-        self.assertEqual('bUDcmraBp2zCV3QWmVVeQaEgepbs1b2gC9', private_key.address)
+        self.assertEqual('bUDcmraBp2zCV3QWmVVeQaEgepbs1b2gC9', private_key.address())
         with self.assertRaisesRegex(ValueError, 'invalid BIP32 private key child number'):
             private_key.child(-1)
         self.assertIsInstance(private_key.child(PrivateKey.HARDENED), PrivateKey)
@@ -100,5 +100,5 @@ class BIP32Tests(AsyncioTestCase):
                 ledger,
                 'xpub661MyMwAqRbcF84AR8yfHoMzf4S2ct6mPJtvBtvNeyN9hBHuZ6uGJszkTSn5fQUCdz3XU17eBzFeAUwV6f'
                 'iW44g14WF52fYC5J483wqQ5ZP',
-            ), PublicKey
+            ), PubKey
         )

@@ -10,7 +10,7 @@ from lbry.schema.claim import Claim
 from lbry.schema.support import Support
 from lbry.torrent.torrent_manager import TorrentSource
 from lbry.wallet import Wallet, Ledger, Account, Transaction, Output
-from lbry.wallet.bip32 import PublicKey
+from lbry.wallet.bip32 import PubKey
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.stream.managed_stream import ManagedStream
 
@@ -138,7 +138,7 @@ class JSONResponseEncoder(JSONEncoder):
             return self.encode_claim(obj)
         if isinstance(obj, Support):
             return obj.to_dict()
-        if isinstance(obj, PublicKey):
+        if isinstance(obj, PubKey):
             return obj.extended_key_string()
         if isinstance(obj, datetime):
             return obj.strftime("%Y%m%dT%H:%M:%S")

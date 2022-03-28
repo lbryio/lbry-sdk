@@ -203,12 +203,11 @@ class Wallet:
                 return True
         return False
 
-    async def unlock(self, password):
+    def unlock(self, password):
         for account in self.accounts:
             if account.encrypted:
                 if not account.decrypt(password):
                     return False
-                await account.deterministic_channel_keys.ensure_cache_primed()
         self.encryption_password = password
         return True
 
