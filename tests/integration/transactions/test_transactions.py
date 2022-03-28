@@ -1,7 +1,7 @@
 import asyncio
 import random
-from itertools import chain
 
+import lbry.wallet.rpc.jsonrpc
 from lbry.wallet.transaction import Transaction, Output, Input
 from lbry.testcase import IntegrationTestCase
 from lbry.wallet.util import satoshis_to_coins, coins_to_satoshis
@@ -9,9 +9,8 @@ from lbry.wallet.manager import WalletManager
 
 
 class BasicTransactionTests(IntegrationTestCase):
-
     async def test_variety_of_transactions_and_longish_history(self):
-        await self.blockchain.generate(300)
+        await self.generate(300)
         await self.assertBalance(self.account, '0.0')
         addresses = await self.account.receiving.get_addresses()
 
@@ -19,10 +18,10 @@ class BasicTransactionTests(IntegrationTestCase):
         # to the 10th receiving address for a total of 30 UTXOs on the entire account
         for i in range(10):
             notification = asyncio.ensure_future(self.on_address_update(addresses[i]))
-            txid = await self.blockchain.send_to_address(addresses[i], 10)
+            _ = await self.send_to_address_and_wait(addresses[i], 10)
             await notification
             notification = asyncio.ensure_future(self.on_address_update(addresses[9]))
-            txid = await self.blockchain.send_to_address(addresses[9], 10)
+            _ = await self.send_to_address_and_wait(addresses[9], 10)
             await notification
 
         # use batching to reduce issues with send_to_address on cli
@@ -57,7 +56,7 @@ class BasicTransactionTests(IntegrationTestCase):
             for tx in await self.ledger.db.get_transactions(txid__in=[tx.id for tx in txs])
         ]))
 
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await asyncio.wait([self.ledger.wait(tx) for tx in txs])
         await self.assertBalance(self.account, '199.99876')
 
@@ -74,7 +73,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)
 
         self.assertEqual(2, await self.account.get_utxo_count())  # 199 + change
@@ -88,12 +87,10 @@ class BasicTransactionTests(IntegrationTestCase):
         await self.assertBalance(account2, '0.0')
 
         addresses = await account1.receiving.get_addresses()
-        txids = await asyncio.gather(*(
-            self.blockchain.send_to_address(address, 1.1) for address in addresses[:5]
-        ))
-        await asyncio.wait([self.on_transaction_id(txid) for txid in txids])  # mempool
-        await self.blockchain.generate(1)
-        await asyncio.wait([self.on_transaction_id(txid) for txid in txids])  # confirmed
+        txids = []
+        for address in addresses[:5]:
+            txids.append(await self.send_to_address_and_wait(address, 1.1))
+        await self.generate_and_wait(1, txids)
         await self.assertBalance(account1, '5.5')
         await self.assertBalance(account2, '0.0')
 
@@ -107,7 +104,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
         await self.assertBalance(account1, '3.499802')
@@ -121,7 +118,7 @@ class BasicTransactionTests(IntegrationTestCase):
         )
         await self.broadcast(tx)
         await self.ledger.wait(tx)  # mempool
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await self.ledger.wait(tx)  # confirmed
 
         tx = (await account1.get_transactions(include_is_my_input=True, include_is_my_output=True))[1]
@@ -133,11 +130,11 @@ class BasicTransactionTests(IntegrationTestCase):
         self.assertTrue(tx.outputs[1].is_internal_transfer)
 
     async def test_history_edge_cases(self):
-        await self.blockchain.generate(300)
+        await self.generate(300)
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         # evil trick: mempool is unsorted on real life, but same order between python instances. reproduce it
-        original_summary = self.conductor.spv_node.server.bp.mempool.transaction_summaries
+        original_summary = self.conductor.spv_node.server.mempool.transaction_summaries
 
         def random_summary(*args, **kwargs):
             summary = original_summary(*args, **kwargs)
@@ -146,13 +143,10 @@ class BasicTransactionTests(IntegrationTestCase):
                 while summary == ordered:
                     random.shuffle(summary)
             return summary
-        self.conductor.spv_node.server.bp.mempool.transaction_summaries = random_summary
+        self.conductor.spv_node.server.mempool.transaction_summaries = random_summary
         # 10 unconfirmed txs, all from blockchain wallet
-        sends = [self.blockchain.send_to_address(address, 10) for _ in range(10)]
-        # use batching to reduce issues with send_to_address on cli
-        for batch in range(0, len(sends), 10):
-            txids = await asyncio.gather(*sends[batch:batch + 10])
-            await asyncio.wait([self.on_transaction_id(txid) for txid in txids])
+        for i in range(10):
+            await self.send_to_address_and_wait(address, 10)
         remote_status = await self.ledger.network.subscribe_address(address)
         self.assertTrue(await self.ledger.update_history(address, remote_status))
         # 20 unconfirmed txs, 10 from blockchain, 10 from local to local
@@ -170,8 +164,7 @@ class BasicTransactionTests(IntegrationTestCase):
         remote_status = await self.ledger.network.subscribe_address(address)
         self.assertTrue(await self.ledger.update_history(address, remote_status))
         # server history grows unordered
-        txid = await self.blockchain.send_to_address(address, 1)
-        await self.on_transaction_id(txid)
+        await self.send_to_address_and_wait(address, 1)
         self.assertTrue(await self.ledger.update_history(address, remote_status))
         self.assertEqual(21, len((await self.ledger.get_local_status_and_history(address))[1]))
         self.assertEqual(0, len(self.ledger._known_addresses_out_of_sync))
@@ -195,37 +188,37 @@ class BasicTransactionTests(IntegrationTestCase):
                 self.ledger, 2000000000000, [self.account], set_reserved=False, return_insufficient_funds=True
             )
         got_amounts = [estimator.effective_amount for estimator in spendable]
-        self.assertListEqual(amounts, got_amounts)
+        self.assertListEqual(sorted(amounts), sorted(got_amounts))
 
     async def test_sqlite_coin_chooser(self):
         wallet_manager = WalletManager([self.wallet], {self.ledger.get_id(): self.ledger})
-        await self.blockchain.generate(300)
+        await self.generate(300)
 
         await self.assertBalance(self.account, '0.0')
         address = await self.account.receiving.get_or_create_usable_address()
         other_account = self.wallet.generate_account(self.ledger)
         other_address = await other_account.receiving.get_or_create_usable_address()
         self.ledger.coin_selection_strategy = 'sqlite'
-        await self.ledger.subscribe_account(self.account)
+        await self.ledger.subscribe_account(other_account)
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
-        txid = await self.blockchain.send_to_address(address, 1.0)
+        _ = await self.send_to_address_and_wait(address, 1.0)
         await accepted
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
-        txid = await self.blockchain.send_to_address(address, 1.0)
+        _ = await self.send_to_address_and_wait(address, 1.0)
         await accepted
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
-        txid = await self.blockchain.send_to_address(address, 3.0)
+        _ = await self.send_to_address_and_wait(address, 3.0)
         await accepted
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
-        txid = await self.blockchain.send_to_address(address, 5.0)
+        _ = await self.send_to_address_and_wait(address, 5.0)
         await accepted
 
         accepted = asyncio.ensure_future(self.on_address_update(address))
-        txid = await self.blockchain.send_to_address(address, 10.0)
+        _ = await self.send_to_address_and_wait(address, 10.0)
         await accepted
 
         await self.assertBalance(self.account, '20.0')
@@ -266,6 +259,12 @@ class BasicTransactionTests(IntegrationTestCase):
         async def broadcast(tx):
             try:
                 return await real_broadcast(tx)
+            except lbry.wallet.rpc.jsonrpc.RPCError as err:
+                # this is expected in tests where we try to double spend.
+                if 'the transaction was rejected by network rules.' in str(err):
+                    pass
+                else:
+                    raise err
             finally:
                 e.set()
 

@@ -9,7 +9,7 @@ class BlockchainReorganizationTests(CommandTestCase):
     VERBOSITY = logging.WARN
 
     async def assertBlockHash(self, height):
-        bp = self.conductor.spv_node.server.bp
+        bp = self.conductor.spv_node.writer
 
         def get_txids():
             return [
@@ -29,15 +29,16 @@ class BlockchainReorganizationTests(CommandTestCase):
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')
 
     async def test_reorg(self):
-        bp = self.conductor.spv_node.server.bp
+        bp = self.conductor.spv_node.writer
         bp.reorg_count_metric.set(0)
         # invalidate current block, move forward 2
         height = 206
         self.assertEqual(self.ledger.headers.height, height)
         await self.assertBlockHash(height)
-        await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
+        block_hash = (await self.ledger.headers.hash(206)).decode()
+        await self.blockchain.invalidate_block(block_hash)
         await self.blockchain.generate(2)
-        await self.ledger.on_header.where(lambda e: e.height == 207)
+        await asyncio.wait_for(self.on_header(207), 3.0)
         self.assertEqual(self.ledger.headers.height, 207)
         await self.assertBlockHash(206)
         await self.assertBlockHash(207)
@@ -46,14 +47,14 @@ class BlockchainReorganizationTests(CommandTestCase):
         # invalidate current block, move forward 3
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(206)).decode())
         await self.blockchain.generate(3)
-        await self.ledger.on_header.where(lambda e: e.height == 208)
+        await asyncio.wait_for(self.on_header(208), 3.0)
         self.assertEqual(self.ledger.headers.height, 208)
         await self.assertBlockHash(206)
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         self.assertEqual(2, bp.reorg_count_metric._samples()[0][2])
         await self.blockchain.generate(3)
-        await self.ledger.on_header.where(lambda e: e.height == 211)
+        await asyncio.wait_for(self.on_header(211), 3.0)
         await self.assertBlockHash(209)
         await self.assertBlockHash(210)
         await self.assertBlockHash(211)
@@ -62,7 +63,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         )
         await self.ledger.wait(still_valid)
         await self.blockchain.generate(1)
-        await self.ledger.on_header.where(lambda e: e.height == 212)
+        await asyncio.wait_for(self.on_header(212), 1.0)
         claim_id = still_valid.outputs[0].claim_id
         c1 = (await self.resolve(f'still-valid#{claim_id}'))['claim_id']
         c2 = (await self.resolve(f'still-valid#{claim_id[:2]}'))['claim_id']
@@ -71,7 +72,7 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         abandon_tx = await self.daemon.jsonrpc_stream_abandon(claim_id=claim_id)
         await self.blockchain.generate(1)
-        await self.ledger.on_header.where(lambda e: e.height == 213)
+        await asyncio.wait_for(self.on_header(213), 1.0)
         c1 = await self.resolve(f'still-valid#{still_valid.outputs[0].claim_id}')
         c2 = await self.daemon.jsonrpc_resolve([f'still-valid#{claim_id[:2]}'])
         c3 = await self.daemon.jsonrpc_resolve([f'still-valid'])
@@ -112,11 +113,10 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
-
-        # wait for the client to catch up and verify the reorg
         await asyncio.wait_for(self.on_header(209), 3.0)
+
         await self.assertBlockHash(207)
         await self.assertBlockHash(208)
         await self.assertBlockHash(209)
@@ -142,9 +142,8 @@ class BlockchainReorganizationTests(CommandTestCase):
         # broadcast the claim in a different block
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
         self.assertEqual(broadcast_tx.id, new_txid)
-        await self.blockchain.generate(1)
 
-        # wait for the client to catch up
+        await self.blockchain.generate(1)
         await asyncio.wait_for(self.on_header(210), 1.0)
 
         # verify the claim is in the new block and that it is returned by claim_search
@@ -191,7 +190,7 @@ class BlockchainReorganizationTests(CommandTestCase):
 
         # reorg the last block dropping our claim tx
         await self.blockchain.invalidate_block(invalidated_block_hash)
-        await self.blockchain.clear_mempool()
+        await self.conductor.clear_mempool()
         await self.blockchain.generate(2)
 
         # wait for the client to catch up and verify the reorg
@@ -222,8 +221,6 @@ class BlockchainReorganizationTests(CommandTestCase):
         new_txid = await self.blockchain.sendrawtransaction(hexlify(broadcast_tx.raw).decode())
         self.assertEqual(broadcast_tx.id, new_txid)
         await self.blockchain.generate(1)
-
-        # wait for the client to catch up
         await asyncio.wait_for(self.on_header(210), 1.0)
 
         # verify the claim is in the new block and that it is returned by claim_search

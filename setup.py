@@ -7,9 +7,11 @@ BASE = os.path.dirname(__file__)
 with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
 
-PLYVEL = []
-if sys.platform.startswith('linux'):
-    PLYVEL.append('plyvel==1.3.0')
+
+ROCKSDB = []
+if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
+    ROCKSDB.append('lbry-rocksdb==0.8.2')
+
 
 setup(
     name=__name__,
@@ -28,16 +30,14 @@ setup(
     entry_points={
         'console_scripts': [
             'lbrynet=lbry.extras.cli:main',
-            'lbry-hub=lbry.wallet.server.cli:main',
-            'orchstr8=lbry.wallet.orchstr8.cli:main',
-            'lbry-hub-elastic-sync=lbry.wallet.server.db.elasticsearch.sync:run_elastic_sync'
+            'orchstr8=lbry.wallet.orchstr8.cli:main'
         ],
     },
     install_requires=[
-        'aiohttp==3.5.4',
+        'aiohttp==3.7.4',
         'aioupnp==0.0.18',
         'appdirs==1.4.3',
-        'certifi>=2018.11.29',
+        'certifi>=2021.10.08',
         'colorama==0.3.7',
         'distro==1.4.0',
         'base58==1.0.0',
@@ -49,7 +49,7 @@ setup(
         'ecdsa==0.13.3',
         'pyyaml==5.3.1',
         'docopt==0.6.2',
-        'hachoir',
+        'hachoir==3.1.2',
         'multidict==4.6.1',
         'coincurve==15.0.0',
         'pbkdf2==1.3',
@@ -57,12 +57,13 @@ setup(
         'pylru==1.1.0',
         'elasticsearch==7.10.1',
         'grpcio==1.38.0',
-        'filetype==1.0.9'
-    ] + PLYVEL,
+        'filetype==1.0.9',
+    ] + ROCKSDB,
     extras_require={
         'torrent': ['lbry-libtorrent'],
         'lint': ['pylint==2.10.0'],
         'test': ['coverage'],
+        'scribe': ['scribe @ git+https://github.com/lbryio/scribe.git'],
     },
     classifiers=[
         'Framework :: AsyncIO',

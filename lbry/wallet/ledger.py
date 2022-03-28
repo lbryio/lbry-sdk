@@ -16,18 +16,18 @@ from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
 from lbry.utils import LRUCacheWithMetrics
 
-from .tasks import TaskGroup
-from .database import Database
-from .stream import StreamController
-from .dewies import dewies_to_lbc
-from .account import Account, AddressManager, SingleKey
-from .network import Network
-from .transaction import Transaction, Output
-from .header import Headers, UnvalidatedHeaders
-from .checkpoints import HASHES
-from .constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
-from .bip32 import PublicKey, PrivateKey
-from .coinselection import CoinSelector
+from lbry.wallet.tasks import TaskGroup
+from lbry.wallet.database import Database
+from lbry.wallet.stream import StreamController
+from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.account import Account, AddressManager, SingleKey
+from lbry.wallet.network import Network
+from lbry.wallet.transaction import Transaction, Output
+from lbry.wallet.header import Headers, UnvalidatedHeaders
+from lbry.wallet.checkpoints import HASHES
+from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPES, COIN, NULL_HASH32
+from lbry.wallet.bip32 import PublicKey, PrivateKey
+from lbry.wallet.coinselection import CoinSelector
 
 log = logging.getLogger(__name__)
 
@@ -364,6 +364,10 @@ class Ledger(metaclass=LedgerRegistry):
         await self.network.stop()
         await self.db.close()
         await self.headers.close()
+
+    async def tasks_are_done(self):
+        await self._update_tasks.done.wait()
+        await self._other_tasks.done.wait()
 
     @property
     def local_height_including_downloaded_height(self):
@@ -739,7 +743,7 @@ class Ledger(metaclass=LedgerRegistry):
         while timeout and (int(time.perf_counter()) - start) <= timeout:
             if await self._wait_round(tx, height, addresses):
                 return
-        raise asyncio.TimeoutError('Timed out waiting for transaction.')
+        raise asyncio.TimeoutError(f'Timed out waiting for transaction. {tx.id}')
 
     async def _wait_round(self, tx: Transaction, height: int, addresses: Iterable[str]):
         records = await self.db.get_addresses(address__in=addresses)
@@ -782,7 +786,7 @@ class Ledger(metaclass=LedgerRegistry):
         if hub_server:
             outputs = Outputs.from_grpc(encoded_outputs)
         else:
-            outputs = Outputs.from_base64(encoded_outputs or b'')  # TODO: why is the server returning None?
+            outputs = Outputs.from_base64(encoded_outputs or '')  # TODO: why is the server returning None?
         txs: List[Transaction] = []
         if len(outputs.txs) > 0:
             async for tx in self.request_transactions(tuple(outputs.txs), cached=True):

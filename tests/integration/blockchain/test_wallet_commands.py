@@ -11,7 +11,7 @@ from lbry.wallet.dewies import dict_values_to_lbc
 class WalletCommands(CommandTestCase):
 
     async def test_wallet_create_and_add_subscribe(self):
-        session = next(iter(self.conductor.spv_node.server.session_mgr.sessions.values()))
+        session = next(iter(self.conductor.spv_node.server.session_manager.sessions.values()))
         self.assertEqual(len(session.hashX_subs), 27)
         wallet = await self.daemon.jsonrpc_wallet_create('foo', create_account=True, single_key=True)
         self.assertEqual(len(session.hashX_subs), 28)
@@ -23,7 +23,7 @@ class WalletCommands(CommandTestCase):
     async def test_wallet_syncing_status(self):
         address = await self.daemon.jsonrpc_address_unused()
         self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
-        await self.blockchain.send_to_address(address, 1)
+        await self.send_to_address_and_wait(address, 1)
         await self.ledger._update_tasks.started.wait()
         self.assertTrue(self.daemon.jsonrpc_wallet_status()['is_syncing'])
         await self.ledger._update_tasks.done.wait()
@@ -47,9 +47,9 @@ class WalletCommands(CommandTestCase):
         status = await self.daemon.jsonrpc_status()
         self.assertEqual(len(status['wallet']['servers']), 1)
         self.assertEqual(status['wallet']['servers'][0]['port'], 50002)
-        await self.conductor.spv_node.stop(True)
+        await self.conductor.spv_node.stop()
         self.conductor.spv_node.port = 54320
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         status = await self.daemon.jsonrpc_status()
         self.assertEqual(len(status['wallet']['servers']), 0)
         self.daemon.jsonrpc_settings_set('lbryum_servers', ['localhost:54320'])
@@ -59,23 +59,22 @@ class WalletCommands(CommandTestCase):
         self.assertEqual(status['wallet']['servers'][0]['port'], 54320)
 
     async def test_sending_to_scripthash_address(self):
-        self.assertEqual(await self.blockchain.get_balance(), '95.99973580')
+        bal = await self.blockchain.get_balance()
         await self.assertBalance(self.account, '10.0')
         p2sh_address1 = await self.blockchain.get_new_address(self.blockchain.P2SH_SEGWIT_ADDRESS)
         tx = await self.account_send('2.0', p2sh_address1)
         self.assertEqual(tx['outputs'][0]['address'], p2sh_address1)
-        self.assertEqual(await self.blockchain.get_balance(), '98.99973580')  # +1 lbc for confirm block
+        self.assertEqual(await self.blockchain.get_balance(), str(float(bal)+3))  # +1 lbc for confirm block
         await self.assertBalance(self.account, '7.999877')
         await self.wallet_send('3.0', p2sh_address1)
-        self.assertEqual(await self.blockchain.get_balance(), '102.99973580')  # +1 lbc for confirm block
+        self.assertEqual(await self.blockchain.get_balance(), str(float(bal)+7))  # +1 lbc for confirm block
         await self.assertBalance(self.account, '4.999754')
 
     async def test_balance_caching(self):
         account2 = await self.daemon.jsonrpc_account_create("Tip-er")
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
-        sendtxid = await self.blockchain.send_to_address(address2, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(1)
+        await self.send_to_address_and_wait(address2, 10, 2)
+        await self.ledger.tasks_are_done()  # don't mess with the query count while we need it
 
         wallet_balance = self.daemon.jsonrpc_wallet_balance
         ledger = self.ledger
@@ -90,14 +89,16 @@ class WalletCommands(CommandTestCase):
         self.assertIsNone(ledger._balance_cache.get(self.account.id))
 
         query_count += 2
-        self.assertEqual(await wallet_balance(), expected)
+        balance = await wallet_balance()
         self.assertEqual(self.ledger.db.db.query_count, query_count)
+        self.assertEqual(balance, expected)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
         # calling again uses cache
-        self.assertEqual(await wallet_balance(), expected)
+        balance = await wallet_balance()
         self.assertEqual(self.ledger.db.db.query_count, query_count)
+        self.assertEqual(balance, expected)
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(self.account.id))['total'], '10.0')
         self.assertEqual(dict_values_to_lbc(ledger._balance_cache.get(account2.id))['total'], '10.0')
 
@@ -123,8 +124,7 @@ class WalletCommands(CommandTestCase):
         wallet2 = await self.daemon.jsonrpc_wallet_create('foo', create_account=True)
         account3 = wallet2.default_account
         address3 = await self.daemon.jsonrpc_address_unused(account3.id, wallet2.id)
-        await self.confirm_tx(await self.blockchain.send_to_address(address3, 1))
-        await self.generate(1)
+        await self.send_to_address_and_wait(address3, 1, 1)
 
         account_balance = self.daemon.jsonrpc_account_balance
         wallet_balance = self.daemon.jsonrpc_wallet_balance
@@ -154,7 +154,7 @@ class WalletCommands(CommandTestCase):
         address2 = await self.daemon.jsonrpc_address_unused(account2.id)
 
         # send lbc to someone else
-        tx = await self.daemon.jsonrpc_account_send('1.0', address2)
+        tx = await self.daemon.jsonrpc_account_send('1.0', address2, blocking=True)
         await self.confirm_tx(tx.id)
         self.assertEqual(await account_balance(), {
             'total': '8.97741',
@@ -187,7 +187,7 @@ class WalletCommands(CommandTestCase):
         })
 
         # tip claimed
-        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0)
+        tx = await self.daemon.jsonrpc_support_abandon(txid=support1['txid'], nout=0, blocking=True)
         await self.confirm_tx(tx.id)
         self.assertEqual(await account_balance(), {
             'total': '9.277303',
@@ -238,8 +238,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
                  "carbon smart garage balance margin twelve"
         )
         address = (await self.daemon2.wallet_manager.default_account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        sendtxid = await self.blockchain.send_to_address(address, 1)
-        await self.confirm_tx(sendtxid, self.daemon2.ledger)
+        await self.send_to_address_and_wait(address, 1, 1, ledger=self.daemon2.ledger)
 
     def assertWalletEncrypted(self, wallet_path, encrypted):
         with open(wallet_path) as opened:
@@ -294,7 +293,7 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
             '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
             'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
-        ), self.daemon2)
+        ), self.daemon2, blocking=True)
         await self.confirm_tx(channel['txid'], self.daemon2.ledger)
 
         # both daemons will have the channel but only one has the cert so far

@@ -12,13 +12,13 @@ from typing import List, Type, MutableSequence, MutableMapping, Optional
 from lbry.error import KeyFeeAboveMaxAllowedError, WalletNotLoadedError
 from lbry.conf import Config, NOT_SET
 
-from .dewies import dewies_to_lbc
-from .account import Account
-from .ledger import Ledger, LedgerRegistry
-from .transaction import Transaction, Output
-from .database import Database
-from .wallet import Wallet, WalletStorage, ENCRYPT_ON_DISK
-from .rpc.jsonrpc import CodeMessageError
+from lbry.wallet.dewies import dewies_to_lbc
+from lbry.wallet.account import Account
+from lbry.wallet.ledger import Ledger, LedgerRegistry
+from lbry.wallet.transaction import Transaction, Output
+from lbry.wallet.database import Database
+from lbry.wallet.wallet import Wallet, WalletStorage, ENCRYPT_ON_DISK
+from lbry.wallet.rpc.jsonrpc import CodeMessageError
 
 if typing.TYPE_CHECKING:
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager

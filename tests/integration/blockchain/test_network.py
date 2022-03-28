@@ -1,13 +1,16 @@
 import asyncio
+import scribe
 
-import lbry
 from unittest.mock import Mock
+
+from scribe.blockchain.network import LBCRegTest
+from scribe.hub.udp import StatusServer
+from scribe.hub.session import LBRYElectrumX
 
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
 from lbry.wallet.orchstr8.node import SPVNode
 from lbry.wallet.rpc import RPCSession
-from lbry.wallet.server.udp import StatusServer
 from lbry.testcase import IntegrationTestCase, AsyncioTestCase
 from lbry.conf import Config
 
@@ -22,7 +25,7 @@ class NetworkTests(IntegrationTestCase):
 
     async def test_server_features(self):
         self.assertDictEqual({
-            'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+            'genesis_hash': LBCRegTest.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
             'protocol_max': '0.199.0',
@@ -32,22 +35,27 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': '',
             'donation_address': '',
             'daily_fee': '0',
-            'server_version': lbry.__version__,
+            'server_version': scribe.__version__,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
         # await self.conductor.spv_node.stop()
         payment_address, donation_address = await self.account.get_addresses(limit=2)
+
+        original_address = self.conductor.spv_node.server.env.payment_address
+        original_donation_address = self.conductor.spv_node.server.env.donation_address
+        original_description = self.conductor.spv_node.server.env.description
+        original_daily_fee = self.conductor.spv_node.server.env.daily_fee
+
         self.conductor.spv_node.server.env.payment_address = payment_address
         self.conductor.spv_node.server.env.donation_address = donation_address
         self.conductor.spv_node.server.env.description = 'Fastest server in the west.'
         self.conductor.spv_node.server.env.daily_fee = '42'
 
-        from lbry.wallet.server.session import LBRYElectrumX
         LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
 
         # await self.ledger.network.on_connected.first
         self.assertDictEqual({
-            'genesis_hash': self.conductor.spv_node.coin_class.GENESIS_HASH,
+            'genesis_hash': LBCRegTest.GENESIS_HASH,
             'hash_function': 'sha256',
             'hosts': {},
             'protocol_max': '0.199.0',
@@ -57,16 +65,23 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': payment_address,
             'donation_address': donation_address,
             'daily_fee': '42',
-            'server_version': lbry.__version__,
+            'server_version': scribe.__version__,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
+
+        # cleanup the changes since the attributes are set on the class
+        self.conductor.spv_node.server.env.payment_address = original_address
+        self.conductor.spv_node.server.env.donation_address = original_donation_address
+        self.conductor.spv_node.server.env.description = original_description
+        self.conductor.spv_node.server.env.daily_fee = original_daily_fee
+        LBRYElectrumX.set_server_features(self.conductor.spv_node.server.env)
 
 
 class ReconnectTests(IntegrationTestCase):
 
     async def test_multiple_servers(self):
         # we have a secondary node that connects later, so
-        node2 = SPVNode(self.conductor.spv_module, node_number=2)
+        node2 = SPVNode(node_number=2)
         await node2.start(self.blockchain)
 
         self.ledger.network.config['explicit_servers'].append((node2.hostname, node2.port))
@@ -86,7 +101,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.stop()
         initial_height = self.ledger.local_height_including_downloaded_height
         await self.blockchain.generate(100)
-        while self.conductor.spv_node.server.session_mgr.notified_height < initial_height + 99:  # off by 1
+        while self.conductor.spv_node.server.session_manager.notified_height < initial_height + 99:  # off by 1
             await asyncio.sleep(0.1)
         self.assertEqual(initial_height, self.ledger.local_height_including_downloaded_height)
         await self.ledger.headers.open()
@@ -101,12 +116,7 @@ class ReconnectTests(IntegrationTestCase):
         self.ledger.network.client.transport.close()
         self.assertFalse(self.ledger.network.is_connected)
         await self.ledger.resolve([], 'derp')
-        sendtxid = await self.blockchain.send_to_address(address1, 1.1337)
-        # await self.ledger.resolve([], 'derp')
-        # self.assertTrue(self.ledger.network.is_connected)
-        await asyncio.wait_for(self.on_transaction_id(sendtxid), 10.0)  # mempool
-        await self.blockchain.generate(1)
-        await self.on_transaction_id(sendtxid)  # confirmed
+        sendtxid = await self.send_to_address_and_wait(address1, 1.1337, 1)
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
         await self.assertBalance(self.account, '1.1337')
@@ -135,7 +145,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.conductor.spv_node.stop()
         self.assertFalse(self.ledger.network.is_connected)
         await asyncio.sleep(0.2)  # let it retry and fail once
-        await self.conductor.spv_node.start(self.conductor.blockchain_node)
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node)
         await self.ledger.network.on_connected.first
         self.assertTrue(self.ledger.network.is_connected)
 
@@ -161,15 +171,16 @@ class ReconnectTests(IntegrationTestCase):
 
 
 class UDPServerFailDiscoveryTest(AsyncioTestCase):
-
     async def test_wallet_connects_despite_lack_of_udp(self):
         conductor = Conductor()
         conductor.spv_node.udp_port = '0'
-        await conductor.start_blockchain()
-        self.addCleanup(conductor.stop_blockchain)
+        await conductor.start_lbcd()
+        self.addCleanup(conductor.stop_lbcd)
+        await conductor.start_lbcwallet()
+        self.addCleanup(conductor.stop_lbcwallet)
         await conductor.start_spv()
         self.addCleanup(conductor.stop_spv)
-        self.assertFalse(conductor.spv_node.server.bp.status_server.is_running)
+        self.assertFalse(conductor.spv_node.server.status_server.is_running)
         await asyncio.wait_for(conductor.start_wallet(), timeout=5)
         self.addCleanup(conductor.stop_wallet)
         self.assertTrue(conductor.wallet_node.ledger.network.is_connected)

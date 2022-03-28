@@ -19,7 +19,7 @@ from lbry.conf import Config
 from lbry.wallet.util import satoshis_to_coins
 from lbry.wallet.dewies import lbc_to_dewies
 from lbry.wallet.orchstr8 import Conductor
-from lbry.wallet.orchstr8.node import BlockchainNode, WalletNode, HubNode
+from lbry.wallet.orchstr8.node import LBCWalletNode, WalletNode, HubNode
 from lbry.schema.claim import Claim
 
 from lbry.extras.daemon.daemon import Daemon, jsonrpc_dumps_pretty
@@ -236,7 +236,7 @@ class IntegrationTestCase(AsyncioTestCase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.conductor: Optional[Conductor] = None
-        self.blockchain: Optional[BlockchainNode] = None
+        self.blockchain: Optional[LBCWalletNode] = None
         self.hub: Optional[HubNode] = None
         self.wallet_node: Optional[WalletNode] = None
         self.manager: Optional[WalletManager] = None
@@ -246,15 +246,17 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def asyncSetUp(self):
         self.conductor = Conductor(seed=self.SEED)
-        await self.conductor.start_blockchain()
-        self.addCleanup(self.conductor.stop_blockchain)
+        await self.conductor.start_lbcd()
+        self.addCleanup(self.conductor.stop_lbcd)
+        await self.conductor.start_lbcwallet()
+        self.addCleanup(self.conductor.stop_lbcwallet)
         await self.conductor.start_spv()
         self.addCleanup(self.conductor.stop_spv)
         await self.conductor.start_wallet()
         self.addCleanup(self.conductor.stop_wallet)
         await self.conductor.start_hub()
         self.addCleanup(self.conductor.stop_hub)
-        self.blockchain = self.conductor.blockchain_node
+        self.blockchain = self.conductor.lbcwallet_node
         self.hub = self.conductor.hub_node
         self.wallet_node = self.conductor.wallet_node
         self.manager = self.wallet_node.manager
@@ -269,6 +271,13 @@ class IntegrationTestCase(AsyncioTestCase):
     def broadcast(self, tx):
         return self.ledger.broadcast(tx)
 
+    async def broadcast_and_confirm(self, tx, ledger=None):
+        ledger = ledger or self.ledger
+        notifications = asyncio.create_task(ledger.wait(tx))
+        await ledger.broadcast(tx)
+        await notifications
+        await self.generate_and_wait(1, [tx.id], ledger)
+
     async def on_header(self, height):
         if self.ledger.headers.height < height:
             await self.ledger.on_header.where(
@@ -276,10 +285,35 @@ class IntegrationTestCase(AsyncioTestCase):
             )
         return True
 
-    def on_transaction_id(self, txid, ledger=None):
-        return (ledger or self.ledger).on_transaction.where(
-            lambda e: e.tx.id == txid
+    async def send_to_address_and_wait(self, address, amount, blocks_to_generate=0, ledger=None):
+        tx_watch = []
+        txid = None
+        done = False
+        watcher = (ledger or self.ledger).on_transaction.where(
+            lambda e: e.tx.id == txid or done or tx_watch.append(e.tx.id)
         )
+
+        txid = await self.blockchain.send_to_address(address, amount)
+        done = txid in tx_watch
+        await watcher
+
+        await self.generate_and_wait(blocks_to_generate, [txid], ledger)
+        return txid
+
+    async def generate_and_wait(self, blocks_to_generate, txids, ledger=None):
+        if blocks_to_generate > 0:
+            watcher = (ledger or self.ledger).on_transaction.where(
+                lambda e: ((e.tx.id in txids and txids.remove(e.tx.id)), len(txids) <= 0)[-1]  # multi-statement lambda
+            )
+            self.conductor.spv_node.server.synchronized.clear()
+            await self.blockchain.generate(blocks_to_generate)
+            height = self.blockchain.block_expected
+            await watcher
+            while True:
+                await self.conductor.spv_node.server.synchronized.wait()
+                self.conductor.spv_node.server.synchronized.clear()
+                if self.conductor.spv_node.server.db.db_height >= height:
+                    break
 
     def on_address_update(self, address):
         return self.ledger.on_transaction.where(
@@ -290,6 +324,19 @@ class IntegrationTestCase(AsyncioTestCase):
         return self.ledger.on_transaction.where(
             lambda e: e.tx.id == tx.id and e.address == address
         )
+
+    async def generate(self, blocks):
+        """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
+        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
+        height = self.blockchain.block_expected
+        self.conductor.spv_node.server.synchronized.clear()
+        await self.blockchain.generate(blocks)
+        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
+        while True:
+            await self.conductor.spv_node.server.synchronized.wait()
+            self.conductor.spv_node.server.synchronized.clear()
+            if self.conductor.spv_node.server.db.db_height >= height:
+                break
 
 
 class FakeExchangeRateManager(ExchangeRateManager):
@@ -351,20 +398,19 @@ class CommandTestCase(IntegrationTestCase):
         self.skip_libtorrent = True
 
     async def asyncSetUp(self):
-        await super().asyncSetUp()
 
         logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
 
+        await super().asyncSetUp()
+
         self.daemon = await self.add_daemon(self.wallet_node)
 
         await self.account.ensure_address_gap()
         address = (await self.account.receiving.get_addresses(limit=1, only_usable=True))[0]
-        sendtxid = await self.blockchain.send_to_address(address, 10)
-        await self.confirm_tx(sendtxid)
-        await self.generate(5)
+        await self.send_to_address_and_wait(address, 10, 6)
 
         server_tmp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, server_tmp_dir)
@@ -461,9 +507,14 @@ class CommandTestCase(IntegrationTestCase):
 
     async def confirm_tx(self, txid, ledger=None):
         """ Wait for tx to be in mempool, then generate a block, wait for tx to be in a block. """
-        await self.on_transaction_id(txid, ledger)
-        await self.generate(1)
-        await self.on_transaction_id(txid, ledger)
+        # await (ledger or self.ledger).on_transaction.where(lambda e: e.tx.id == txid)
+        on_tx = (ledger or self.ledger).on_transaction.where(lambda e: e.tx.id == txid)
+        await asyncio.wait([self.generate(1), on_tx], timeout=5)
+
+        # # actually, if it's in the mempool or in the block we're fine
+        # await self.generate_and_wait(1, [txid], ledger=ledger)
+        # return txid
+
         return txid
 
     async def on_transaction_dict(self, tx):
@@ -477,12 +528,6 @@ class CommandTestCase(IntegrationTestCase):
         for txo in tx['outputs']:
             addresses.add(txo['address'])
         return list(addresses)
-
-    async def generate(self, blocks):
-        """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
-        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
-        await self.blockchain.generate(blocks)
-        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
 
     async def blockchain_claim_name(self, name: str, value: str, amount: str, confirm=True):
         txid = await self.blockchain._cli_cmnd('claimname', name, value, amount)
@@ -514,7 +559,7 @@ class CommandTestCase(IntegrationTestCase):
             return self.sout(tx)
         return tx
 
-    async def create_nondeterministic_channel(self, name, price, pubkey_bytes, daemon=None):
+    async def create_nondeterministic_channel(self, name, price, pubkey_bytes, daemon=None, blocking=False):
         account = (daemon or self.daemon).wallet_manager.default_account
         claim_address = await account.receiving.get_or_create_usable_address()
         claim = Claim()
@@ -524,7 +569,7 @@ class CommandTestCase(IntegrationTestCase):
             claim_address, [self.account], self.account
         )
         await tx.sign([self.account])
-        await (daemon or self.daemon).broadcast_or_release(tx, False)
+        await (daemon or self.daemon).broadcast_or_release(tx, blocking)
         return self.sout(tx)
 
     def create_upload_file(self, data, prefix=None, suffix=None):

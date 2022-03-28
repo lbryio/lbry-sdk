@@ -23,7 +23,7 @@ class SPVPing(NamedTuple):
     pad_bytes: bytes
 
     def encode(self):
-        return struct.pack(b'!lB64s', *self)
+        return struct.pack(b'!lB64s', *self)  # pylint: disable=not-an-iterable
 
     @staticmethod
     def make() -> bytes:
@@ -49,7 +49,7 @@ class SPVPong(NamedTuple):
     country: int
 
     def encode(self):
-        return struct.pack(PONG_ENCODING, *self)
+        return struct.pack(PONG_ENCODING, *self)  # pylint: disable=not-an-iterable
 
     @staticmethod
     def encode_address(address: str):
@@ -110,6 +110,7 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
         self._min_delay = 1 / throttle_reqs_per_sec
         self._allow_localhost = allow_localhost
         self._allow_lan = allow_lan
+        self.closed = asyncio.Event()
 
     def update_cached_response(self):
         self._left_cache, self._right_cache = SPVPong.make_sans_source_address(
@@ -160,13 +161,16 @@ class SPVServerStatusProtocol(asyncio.DatagramProtocol):
 
     def connection_made(self, transport) -> None:
         self.transport = transport
+        self.closed.clear()
 
     def connection_lost(self, exc: Optional[Exception]) -> None:
         self.transport = None
+        self.closed.set()
 
-    def close(self):
+    async def close(self):
         if self.transport:
             self.transport.close()
+        await self.closed.wait()
 
 
 class StatusServer:
@@ -184,9 +188,9 @@ class StatusServer:
         await loop.create_datagram_endpoint(lambda: self._protocol, (interface, port))
         log.info("started udp status server on %s:%i", interface, port)
 
-    def stop(self):
+    async def stop(self):
         if self.is_running:
-            self._protocol.close()
+            await self._protocol.close()
             self._protocol = None
 
     @property
