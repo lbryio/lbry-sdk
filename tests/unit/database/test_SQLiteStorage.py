@@ -84,7 +84,7 @@ class StorageTest(AsyncioTestCase):
         await self.storage.add_blobs((blob_hash, length, 0, 0), finished=True)
 
     async def store_fake_stream(self, stream_hash, blobs=None, file_name="fake_file", key="DEADBEEF"):
-        blobs = blobs or [BlobInfo(1, 100, "DEADBEEF", random_lbry_hash())]
+        blobs = blobs or [BlobInfo(1, 100, "DEADBEEF", 0, random_lbry_hash())]
         descriptor = StreamDescriptor(
             asyncio.get_event_loop(), self.blob_dir, file_name, key, file_name, blobs, stream_hash
         )
@@ -95,7 +95,7 @@ class StorageTest(AsyncioTestCase):
     async def make_and_store_fake_stream(self, blob_count=2, stream_hash=None):
         stream_hash = stream_hash or random_lbry_hash()
         blobs = [
-            BlobInfo(i + 1, 100, "DEADBEEF", random_lbry_hash())
+            BlobInfo(i + 1, 100, "DEADBEEF", 0, random_lbry_hash())
             for i in range(blob_count)
         ]
         await self.store_fake_stream(stream_hash, blobs)

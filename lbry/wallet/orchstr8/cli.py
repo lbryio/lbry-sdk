@@ -5,7 +5,9 @@ import aiohttp
 
 from lbry import wallet
 from lbry.wallet.orchstr8.node import (
-    Conductor, get_blockchain_node_from_ledger
+    Conductor,
+    get_lbcd_node_from_ledger,
+    get_lbcwallet_node_from_ledger
 )
 from lbry.wallet.orchstr8.service import ConductorService
 
@@ -16,10 +18,11 @@ def get_argument_parser():
     )
     subparsers = parser.add_subparsers(dest='command', help='sub-command help')
 
-    subparsers.add_parser("download", help="Download blockchain node binary.")
+    subparsers.add_parser("download", help="Download lbcd and lbcwallet node binaries.")
 
     start = subparsers.add_parser("start", help="Start orchstr8 service.")
-    start.add_argument("--blockchain", help="Hostname to start blockchain node.")
+    start.add_argument("--lbcd", help="Hostname to start lbcd node.")
+    start.add_argument("--lbcwallet", help="Hostname to start lbcwallet node.")
     start.add_argument("--spv", help="Hostname to start SPV server.")
     start.add_argument("--wallet", help="Hostname to start wallet daemon.")
 
@@ -47,7 +50,8 @@ def main():
 
     if command == 'download':
         logging.getLogger('blockchain').setLevel(logging.INFO)
-        get_blockchain_node_from_ledger(wallet).ensure()
+        get_lbcd_node_from_ledger(wallet).ensure()
+        get_lbcwallet_node_from_ledger(wallet).ensure()
 
     elif command == 'generate':
         loop.run_until_complete(run_remote_command(
@@ -57,9 +61,12 @@ def main():
     elif command == 'start':
 
         conductor = Conductor()
-        if getattr(args, 'blockchain', False):
-            conductor.blockchain_node.hostname = args.blockchain
-            loop.run_until_complete(conductor.start_blockchain())
+        if getattr(args, 'lbcd', False):
+            conductor.lbcd_node.hostname = args.lbcd
+            loop.run_until_complete(conductor.start_lbcd())
+        if getattr(args, 'lbcwallet', False):
+            conductor.lbcwallet_node.hostname = args.lbcwallet
+            loop.run_until_complete(conductor.start_lbcwallet())
         if getattr(args, 'spv', False):
             conductor.spv_node.hostname = args.spv
             loop.run_until_complete(conductor.start_spv())

@@ -63,7 +63,7 @@ class SyncTests(IntegrationTestCase):
         await self.assertBalance(account1, '1.0')
         await self.assertBalance(account2, '1.0')
 
-        await self.blockchain.generate(1)
+        await self.generate(1)
 
         # pay 0.01 from main node to receiving node, would have increased change addresses
         address0 = (await account0.receiving.get_addresses())[0]
@@ -79,7 +79,7 @@ class SyncTests(IntegrationTestCase):
             account1.ledger.wait(tx),
             account2.ledger.wait(tx),
         ])
-        await self.blockchain.generate(1)
+        await self.generate(1)
         await asyncio.wait([
             account0.ledger.wait(tx),
             account1.ledger.wait(tx),
@@ -92,7 +92,7 @@ class SyncTests(IntegrationTestCase):
         await self.assertBalance(account1, '0.989876')
         await self.assertBalance(account2, '0.989876')
 
-        await self.blockchain.generate(1)
+        await self.generate(1)
 
         # create a new mirror node and see if it syncs to same balance from scratch
         node3 = await self.make_wallet_node(account1.seed)

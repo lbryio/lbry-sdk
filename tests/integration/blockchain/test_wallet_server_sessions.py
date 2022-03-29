@@ -1,12 +1,11 @@
 import asyncio
 
-import lbry
-import lbry.wallet
+import scribe
+from scribe.hub.session import LBRYElectrumX
+
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
-from lbry.wallet.server.db.elasticsearch.sync import make_es_index_and_run_sync
-from lbry.wallet.server.session import LBRYElectrumX
 from lbry.testcase import IntegrationTestCase, CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
 
@@ -25,17 +24,17 @@ class TestSessions(IntegrationTestCase):
         )
         await session.create_connection()
         await session.send_request('server.banner', ())
-        self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 1)
+        self.assertEqual(len(self.conductor.spv_node.server.session_manager.sessions), 1)
         self.assertFalse(session.is_closing())
         await asyncio.sleep(1.1)
         with self.assertRaises(asyncio.TimeoutError):
             await session.send_request('server.banner', ())
         self.assertTrue(session.is_closing())
-        self.assertEqual(len(self.conductor.spv_node.server.session_mgr.sessions), 0)
+        self.assertEqual(len(self.conductor.spv_node.server.session_manager.sessions), 0)
 
     async def test_proper_version(self):
         info = await self.ledger.network.get_server_features()
-        self.assertEqual(lbry.__version__, info['server_version'])
+        self.assertEqual(scribe.__version__, info['server_version'])
 
     async def test_client_errors(self):
         # Goal is ensuring thsoe are raised and not trapped accidentally
@@ -46,7 +45,7 @@ class TestSessions(IntegrationTestCase):
 
 
 class TestUsagePayment(CommandTestCase):
-    async def _test_single_server_payment(self):
+    async def test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
         wallet_pay_service.payment_period = 1
         # only starts with a positive max key fee
@@ -63,8 +62,8 @@ class TestUsagePayment(CommandTestCase):
         _, history = await self.ledger.get_local_status_and_history(address)
         self.assertEqual(history, [])
 
-        node = SPVNode(self.conductor.spv_module, node_number=2)
-        await node.start(self.blockchain, extraconf={"PAYMENT_ADDRESS": address, "DAILY_FEE": "1.1"})
+        node = SPVNode(node_number=2)
+        await node.start(self.blockchain, extraconf={"payment_address": address, "daily_fee": "1.1"})
         self.addCleanup(node.stop)
         self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
@@ -90,56 +89,78 @@ class TestUsagePayment(CommandTestCase):
 
 class TestESSync(CommandTestCase):
     async def test_es_sync_utility(self):
+        es_writer = self.conductor.spv_node.es_writer
+        server_search_client = self.conductor.spv_node.server.session_manager.search_index
+
         for i in range(10):
             await self.stream_create(f"stream{i}", bid='0.001')
         await self.generate(1)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
-        db = self.conductor.spv_node.server.db
-        env = self.conductor.spv_node.server.env
 
-        await db.search_index.delete_index()
-        db.search_index.clear_caches()
-        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
-        await db.search_index.stop()
-
-        async def resync():
-            await db.search_index.start()
-            db.search_index.clear_caches()
-            await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
-            self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
-
+        # delete the index and verify nothing is returned by claim search
+        await es_writer.delete_index()
+        server_search_client.clear_caches()
         self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
 
-        await resync()
-
-        # this time we will test a migration from unversioned to v1
-        await db.search_index.sync_client.indices.delete_template(db.search_index.index)
-        await db.search_index.stop()
-
-        await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
-        await db.search_index.start()
-
-        await resync()
+        # reindex, 10 claims should be returned
+        await es_writer.reindex(force=True)
         self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        server_search_client.clear_caches()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # reindex again, this should not appear to do anything but will delete and reinsert the same 10 claims
+        await es_writer.reindex(force=True)
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+        server_search_client.clear_caches()
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # delete the index again and stop the writer, upon starting it the writer should reindex automatically
+        await es_writer.delete_index()
+        await es_writer.stop()
+        server_search_client.clear_caches()
+        self.assertEqual(0, len(await self.claim_search(order_by=['height'])))
+
+        await es_writer.start(reindex=True)
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
+
+        # stop the es writer and advance the chain by 1, adding a new claim. upon resuming the es writer, it should
+        # add the new claim
+        await es_writer.stop()
+        await self.stream_create(f"stream11", bid='0.001', confirm=False)
+        generate_block_task = asyncio.create_task(self.generate(1))
+        await es_writer.start()
+        await generate_block_task
+        self.assertEqual(11, len(await self.claim_search(order_by=['height'])))
+
+
+    # # this time we will test a migration from unversioned to v1
+        # await db.search_index.sync_client.indices.delete_template(db.search_index.index)
+        # await db.search_index.stop()
+        #
+        # await make_es_index_and_run_sync(env, db=db, index_name=db.search_index.index, force=True)
+        # await db.search_index.start()
+        #
+        # await es_writer.reindex()
+        # self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
 
 class TestHubDiscovery(CommandTestCase):
 
     async def test_hub_discovery(self):
-        us_final_node = SPVNode(self.conductor.spv_module, node_number=2)
-        await us_final_node.start(self.blockchain, extraconf={"COUNTRY": "US"})
+        us_final_node = SPVNode(node_number=2)
+        await us_final_node.start(self.blockchain, extraconf={"country": "US"})
         self.addCleanup(us_final_node.stop)
         final_node_host = f"{us_final_node.hostname}:{us_final_node.port}"
 
-        kp_final_node = SPVNode(self.conductor.spv_module, node_number=3)
-        await kp_final_node.start(self.blockchain, extraconf={"COUNTRY": "KP"})
+        kp_final_node = SPVNode(node_number=3)
+        await kp_final_node.start(self.blockchain, extraconf={"country": "KP"})
         self.addCleanup(kp_final_node.stop)
         kp_final_node_host = f"{kp_final_node.hostname}:{kp_final_node.port}"
 
-        relay_node = SPVNode(self.conductor.spv_module, node_number=4)
+        relay_node = SPVNode(node_number=4)
         await relay_node.start(self.blockchain, extraconf={
-            "COUNTRY": "FR",
-            "PEER_HUBS": ",".join([kp_final_node_host, final_node_host])
+            "country": "FR",
+            "peer_hubs": ",".join([kp_final_node_host, final_node_host])
         })
         relay_node_host = f"{relay_node.hostname}:{relay_node.port}"
         self.addCleanup(relay_node.stop)
@@ -186,7 +207,7 @@ class TestHubDiscovery(CommandTestCase):
             self.daemon.ledger.network.client.server_address_and_port, ('127.0.0.1', kp_final_node.port)
         )
 
-        kp_final_node.server.session_mgr._notify_peer('127.0.0.1:9988')
+        kp_final_node.server.session_manager._notify_peer('127.0.0.1:9988')
         await self.daemon.ledger.network.on_hub.first
         await asyncio.sleep(0.5)  # wait for above event to be processed by other listeners
         self.assertEqual(

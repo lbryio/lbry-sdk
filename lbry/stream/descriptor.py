@@ -194,12 +194,13 @@ class StreamDescriptor:
             raise InvalidStreamDescriptorError("Stream terminator blob should not have a hash")
         if any(i != blob_info['blob_num'] for i, blob_info in enumerate(decoded['blobs'])):
             raise InvalidStreamDescriptorError("Stream contains out of order or skipped blobs")
+        added_on = time.time()
         descriptor = cls(
             loop, blob_dir,
             binascii.unhexlify(decoded['stream_name']).decode(),
             decoded['key'],
             binascii.unhexlify(decoded['suggested_file_name']).decode(),
-            [BlobInfo(info['blob_num'], info['length'], info['iv'], info.get('blob_hash'))
+            [BlobInfo(info['blob_num'], info['length'], info['iv'], added_on, info.get('blob_hash'))
              for info in decoded['blobs']],
             decoded['stream_hash'],
             blob.blob_hash
@@ -266,7 +267,7 @@ class StreamDescriptor:
             blobs.append(blob_info)
         blobs.append(
             # add the stream terminator
-            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode(), None, added_on, True)
+            BlobInfo(len(blobs), 0, binascii.hexlify(next(iv_generator)).decode(), added_on, None, True)
         )
         file_name = os.path.basename(file_path)
         suggested_file_name = sanitize_file_name(file_name)

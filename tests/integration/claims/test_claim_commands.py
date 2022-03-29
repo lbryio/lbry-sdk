@@ -12,12 +12,21 @@ from lbry.error import InsufficientFundsError
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
 from lbry.testcase import CommandTestCase
 from lbry.wallet.orchstr8.node import SPVNode
-from lbry.wallet.server.db.common import STREAM_TYPES
 from lbry.wallet.transaction import Transaction, Output
 from lbry.wallet.util import satoshis_to_coins as lbc
 from lbry.crypto.hash import sha256
 
 log = logging.getLogger(__name__)
+
+
+STREAM_TYPES = {
+    'video': 1,
+    'audio': 2,
+    'image': 3,
+    'document': 4,
+    'binary': 5,
+    'model': 6,
+}
 
 
 def verify(channel, data, signature, channel_hash=None):
@@ -124,18 +133,6 @@ class ClaimSearchCommand(ClaimTestCase):
         ] * 33829
         with self.assertRaises(ConnectionResetError):
             await self.claim_search(claim_ids=claim_ids)
-
-    async def test_claim_search_as_reader_server(self):
-        node2 = SPVNode(self.conductor.spv_module, node_number=2)
-        current_prefix = self.conductor.spv_node.server.bp.env.es_index_prefix
-        await node2.start(self.blockchain, extraconf={'ES_MODE': 'reader', 'ES_INDEX_PREFIX': current_prefix})
-        self.addCleanup(node2.stop)
-        self.ledger.network.config['default_servers'] = [(node2.hostname, node2.port)]
-        await self.ledger.stop()
-        await self.ledger.start()
-        channel2 = await self.channel_create('@abc', '0.1', allow_duplicate_name=True)
-        await asyncio.sleep(1)  # fixme: find a way to block on the writer
-        await self.assertFindsClaims([channel2], name='@abc')
 
     async def test_basic_claim_search(self):
         await self.create_channel()
@@ -405,6 +402,18 @@ class ClaimSearchCommand(ClaimTestCase):
                     not_channel_ids=[chan2_id], has_channel_signature=True, valid_channel_signature=True)
         await match([], not_channel_ids=[chan1_id, chan2_id], has_channel_signature=True, valid_channel_signature=True)
 
+    @skip
+    async def test_no_source_and_valid_channel_signature_and_media_type(self):
+        await self.channel_create('@spam2', '1.0')
+        await self.stream_create('barrrrrr', '1.0', channel_name='@spam2', file_path=self.video_file_name)
+        paradox_no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True,
+                                                   media_type="video/mp4")
+        mp4_claims = await self.claim_search(media_type="video/mp4")
+        no_source_claims = await self.claim_search(has_no_source=True, valid_channel_signature=True)
+        self.assertEqual(0, len(paradox_no_source_claims))
+        self.assertEqual(1, len(no_source_claims))
+        self.assertEqual(1, len(mp4_claims))
+
     async def test_limit_claims_per_channel(self):
         match = self.assertFindsClaims
         chan1_id = self.get_claim_id(await self.channel_create('@chan1'))
@@ -494,8 +503,7 @@ class ClaimSearchCommand(ClaimTestCase):
         tx = await Transaction.claim_create(
             'unknown', b'{"sources":{"lbry_sd_hash":""}}', 1, address, [self.account], self.account)
         await tx.sign([self.account])
-        await self.broadcast(tx)
-        await self.confirm_tx(tx.id)
+        await self.broadcast_and_confirm(tx)
 
         octet = await self.stream_create()
         video = await self.stream_create('chrome', file_path=self.video_file_name)
@@ -1226,7 +1234,7 @@ class ChannelCommands(CommandTestCase):
         data_to_sign = "CAFEBABE"
         # claim new name
         await self.channel_create('@someotherchan')
-        channel_tx = await self.daemon.jsonrpc_channel_create('@signer', '0.1')
+        channel_tx = await self.daemon.jsonrpc_channel_create('@signer', '0.1', blocking=True)
         await self.confirm_tx(channel_tx.id)
         channel = channel_tx.outputs[0]
         signature1 = await self.out(self.daemon.jsonrpc_channel_sign(channel_name='@signer', hexdata=data_to_sign))
@@ -1373,7 +1381,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual('8.989893', (await self.daemon.jsonrpc_account_balance())['available'])
 
         result = await self.out(self.daemon.jsonrpc_account_send(
-            '5.0', await self.daemon.jsonrpc_address_unused(account2_id)
+            '5.0', await self.daemon.jsonrpc_address_unused(account2_id), blocking=True
         ))
         await self.confirm_tx(result['txid'])
 
@@ -1514,10 +1522,13 @@ class StreamCommands(ClaimTestCase):
             await self.channel_create('@filtering', '0.1')
         )
         self.conductor.spv_node.server.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.filtered_streams))
-        await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.filtered_streams))
+        self.conductor.spv_node.es_writer.db.filtering_channel_hashes.add(bytes.fromhex(filtering_channel_id))
 
+        self.assertEqual(0, len(self.conductor.spv_node.es_writer.db.filtered_streams))
+        await self.stream_repost(bad_content_id, 'filter1', '0.1', channel_name='@filtering')
+        self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.filtered_streams))
+
+        self.assertEqual('0.1', (await self.out(self.daemon.jsonrpc_resolve('bad_content')))['bad_content']['amount'])
         # search for filtered content directly
         result = await self.out(self.daemon.jsonrpc_claim_search(name='bad_content'))
         blocked = result['blocked']
@@ -1560,14 +1571,14 @@ class StreamCommands(ClaimTestCase):
         )
         # test setting from env vars and starting from scratch
         await self.conductor.spv_node.stop(False)
-        await self.conductor.spv_node.start(self.conductor.blockchain_node,
-                                            extraconf={'BLOCKING_CHANNEL_IDS': blocking_channel_id,
-                                                       'FILTERING_CHANNEL_IDS': filtering_channel_id})
+        await self.conductor.spv_node.start(self.conductor.lbcwallet_node,
+                                            extraconf={'blocking_channel_ids': [blocking_channel_id],
+                                                       'filtering_channel_ids': [filtering_channel_id]})
         await self.daemon.wallet_manager.reset()
 
-        self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_streams))
+        self.assertEqual(0, len(self.conductor.spv_node.es_writer.db.blocked_streams))
         await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
-        self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_streams))
+        self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.blocked_streams))
 
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
@@ -1626,6 +1637,11 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
 
+        await self.stream_update(worse_content_id, channel_name='@bad_channel', tags=['bad-stuff'])
+        self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
+        self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
+
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')
         txo = tx['outputs'][0]
@@ -1651,6 +1667,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(tx['txid'], files[0]['txid'])
         self.assertEqual(expected, files[0]['metadata'])
 
+    @skip
     async def test_setting_stream_fields(self):
         values = {
             'title': "Cool Content",
@@ -1791,22 +1808,35 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=self.account.id), 3)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=account2_id), 1)
 
-        self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
-        self.assertEqual(3, len(await self.claim_search(release_time='>=0', order_by=['release_time'])))
+        self.assertEqual(4, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'], claim_type='stream')))
+
+        self.assertEqual(4, len(await self.claim_search(release_time='>=0', order_by=['release_time'])))
         self.assertEqual(4, len(await self.claim_search(order_by=['release_time'])))
         self.assertEqual(3, len(await self.claim_search(claim_type='stream', order_by=['release_time'])))
         self.assertEqual(1, len(await self.claim_search(claim_type='channel', order_by=['release_time'])))
-        self.assertEqual(1, len(await self.claim_search(release_time='>=123456', order_by=['release_time'])))
-        self.assertEqual(1, len(await self.claim_search(release_time='>123456', order_by=['release_time'])))
-        self.assertEqual(2, len(await self.claim_search(release_time='<123457', order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time='>=123456', order_by=['release_time'])))
 
-        self.assertEqual(2, len(await self.claim_search(release_time=['<123457'], order_by=['release_time'])))
-        self.assertEqual(2, len(await self.claim_search(release_time=['>0', '<123457'], order_by=['release_time'])))
+        self.assertEqual(1, len(await self.claim_search(release_time='>=123456', order_by=['release_time'], claim_type='stream')))
+
+        self.assertEqual(1, len(await self.claim_search(release_time='>123456', order_by=['release_time'], claim_type='stream')))
+        self.assertEqual(2, len(await self.claim_search(release_time='>123456', order_by=['release_time'])))
+
+        self.assertEqual(3, len(await self.claim_search(release_time='<123457', order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time='<123457', order_by=['release_time'], claim_type='stream')))
+
+        self.assertEqual(2, len(await self.claim_search(release_time=['<123457'], order_by=['release_time'], claim_type='stream')))
+        self.assertEqual(3, len(await self.claim_search(release_time=['<123457'], order_by=['release_time'])))
+        self.assertEqual(3, len(await self.claim_search(release_time=['>0', '<123457'], order_by=['release_time'])))
+        self.assertEqual(2, len(await self.claim_search(release_time=['>0', '<123457'], order_by=['release_time'], claim_type='stream')))
+        self.assertEqual(3, len(await self.claim_search(release_time=['<123457'], order_by=['release_time'], height=['>0'])))
+        self.assertEqual(4, len(await self.claim_search(order_by=['release_time'], height=['>0'])))
+        self.assertEqual(4, len(await self.claim_search(order_by=['release_time'], height=['>0'], claim_type=['stream', 'channel'])))
         self.assertEqual(
-            2, len(await self.claim_search(release_time=['>=123097', '<123457'], order_by=['release_time']))
+            3, len(await self.claim_search(release_time=['>=123097', '<123457'], order_by=['release_time']))
         )
         self.assertEqual(
-            2, len(await self.claim_search(release_time=['<123457', '>0'], order_by=['release_time']))
+            3, len(await self.claim_search(release_time=['<123457', '>0'], order_by=['release_time']))
         )
 
     async def test_setting_fee_fields(self):
@@ -2177,7 +2207,7 @@ class SupportCommands(CommandTestCase):
         tip = await self.out(
             self.daemon.jsonrpc_support_create(
                 claim_id, '1.0', True, account_id=account2.id, wallet_id='wallet2',
-                funding_account_ids=[account2.id])
+                funding_account_ids=[account2.id], blocking=True)
         )
         await self.confirm_tx(tip['txid'])
 
@@ -2209,7 +2239,7 @@ class SupportCommands(CommandTestCase):
         support = await self.out(
             self.daemon.jsonrpc_support_create(
                 claim_id, '2.0', False, account_id=account2.id, wallet_id='wallet2',
-                funding_account_ids=[account2.id])
+                funding_account_ids=[account2.id], blocking=True)
         )
         await self.confirm_tx(support['txid'])
 

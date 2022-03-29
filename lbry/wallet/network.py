@@ -16,7 +16,7 @@ from lbry.utils import resolve_host
 from lbry.error import IncompatibleWalletServerError
 from lbry.wallet.rpc import RPCSession as BaseClientSession, Connector, RPCError, ProtocolError
 from lbry.wallet.stream import StreamController
-from lbry.wallet.server.udp import SPVStatusClientProtocol, SPVPong
+from lbry.wallet.udp import SPVStatusClientProtocol, SPVPong
 from lbry.conf import KnownHubsList
 
 log = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ class ClientSession(BaseClientSession):
                     await asyncio.sleep(max(0, max_idle - (now - self.last_send)))
         except Exception as err:
             if isinstance(err, asyncio.CancelledError):
-                log.warning("closing connection to %s:%i", *self.server)
+                log.info("closing connection to %s:%i", *self.server)
             else:
                 log.exception("lost connection to spv")
         finally:
@@ -140,7 +140,7 @@ class ClientSession(BaseClientSession):
         controller.add(request.args)
 
     def connection_lost(self, exc):
-        log.warning("Connection lost: %s:%d", *self.server)
+        log.debug("Connection lost: %s:%d", *self.server)
         super().connection_lost(exc)
         self.response_time = None
         self.connection_latency = None
@@ -303,7 +303,7 @@ class Network:
                                    concurrency=self.config.get('concurrent_hub_requests', 30))
             try:
                 await client.create_connection()
-                log.warning("Connected to spv server %s:%i", host, port)
+                log.info("Connected to spv server %s:%i", host, port)
                 await client.ensure_server_version()
                 return client
             except (asyncio.TimeoutError, ConnectionError, OSError, IncompatibleWalletServerError, RPCError):
@@ -357,7 +357,7 @@ class Network:
                     self._keepalive_task = None
                     self.client = None
                     self.server_features = None
-                    log.warning("connection lost to %s", server_str)
+                    log.info("connection lost to %s", server_str)
         log.info("network loop finished")
 
     async def stop(self):

@@ -1,1 +1,0 @@
-from .search import SearchIndex

@@ -61,8 +61,10 @@ class ConductorService:
         #set_logging(
         #    self.stack.ledger_module, logging.DEBUG, WebSocketLogHandler(self.send_message)
         #)
-        self.stack.blockchain_started or await self.stack.start_blockchain()
-        self.send_message({'type': 'service', 'name': 'blockchain', 'port': self.stack.blockchain_node.port})
+        self.stack.lbcd_started or await self.stack.start_lbcd()
+        self.send_message({'type': 'service', 'name': 'lbcd', 'port': self.stack.lbcd_node.port})
+        self.stack.lbcwallet_started or await self.stack.start_lbcwallet()
+        self.send_message({'type': 'service', 'name': 'lbcwallet', 'port': self.stack.lbcwallet_node.port})
         self.stack.spv_started or await self.stack.start_spv()
         self.send_message({'type': 'service', 'name': 'spv', 'port': self.stack.spv_node.port})
         self.stack.wallet_started or await self.stack.start_wallet()
@@ -74,7 +76,7 @@ class ConductorService:
     async def generate(self, request):
         data = await request.post()
         blocks = data.get('blocks', 1)
-        await self.stack.blockchain_node.generate(int(blocks))
+        await self.stack.lbcwallet_node.generate(int(blocks))
         return json_response({'blocks': blocks})
 
     async def transfer(self, request):
@@ -85,11 +87,14 @@ class ConductorService:
         if not address:
             raise ValueError("No address was provided.")
         amount = data.get('amount', 1)
-        txid = await self.stack.blockchain_node.send_to_address(address, amount)
         if self.stack.wallet_started:
-            await self.stack.wallet_node.ledger.on_transaction.where(
-                lambda e: e.tx.id == txid and e.address == address
+            watcher = self.stack.wallet_node.ledger.on_transaction.where(
+                lambda e: e.address == address  # and e.tx.id == txid -- might stall; see send_to_address_and_wait
             )
+            txid = await self.stack.lbcwallet_node.send_to_address(address, amount)
+            await watcher
+        else:
+            txid = await self.stack.lbcwallet_node.send_to_address(address, amount)
         return json_response({
             'address': address,
             'amount': amount,
@@ -98,7 +103,7 @@ class ConductorService:
 
     async def balance(self, _):
         return json_response({
-            'balance': await self.stack.blockchain_node.get_balance()
+            'balance': await self.stack.lbcwallet_node.get_balance()
         })
 
     async def log(self, request):
@@ -129,7 +134,7 @@ class ConductorService:
             'type': 'status',
             'height': self.stack.wallet_node.ledger.headers.height,
             'balance': satoshis_to_coins(await self.stack.wallet_node.account.get_balance()),
-            'miner': await self.stack.blockchain_node.get_balance()
+            'miner': await self.stack.lbcwallet_node.get_balance()
         })
 
     def send_message(self, msg):
