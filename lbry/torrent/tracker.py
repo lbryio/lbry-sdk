@@ -187,10 +187,10 @@ class TrackerClient:
             errors = sum([1 for result in results if result is None or isinstance(result, Exception)])
             log.info("Tracker: finished announcing %d files to %s:%d, %d errors", len(results), *server, errors)
 
-    async def get_peer_list(self, info_hash, stopped=False, on_announcement=None):
+    async def get_peer_list(self, info_hash, stopped=False, on_announcement=None, no_port=False):
         found = []
-        servers = self._get_servers()
-        for done in asyncio.as_completed([self._probe_server(info_hash, *server, stopped) for server in servers]):
+        probes = [self._probe_server(info_hash, *server, stopped, no_port) for server in self._get_servers()]
+        for done in asyncio.as_completed(probes):
             result = await done
             if result is not None:
                 await asyncio.gather(*filter(asyncio.iscoroutine, [on_announcement(result)] if on_announcement else []))
@@ -198,11 +198,14 @@ class TrackerClient:
         return found
 
     async def get_kademlia_peer_list(self, info_hash):
-        responses = await self.get_peer_list(info_hash)
-        peers = [(str(ipaddress.ip_address(peer.address)), peer.port) for ann in responses for peer in ann.peers]
+        responses = await self.get_peer_list(info_hash, no_port=True)
+        peers = [
+            (str(ipaddress.ip_address(peer.address)), peer.port)
+            for ann in responses for peer in ann.peers if peer.port > 1024  # filter out privileged and 0
+        ]
         return await get_kademlia_peers_from_hosts(peers)
 
-    async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False):
+    async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False, no_port=False):
         result = None
         try:
             tracker_host = await resolve_host(tracker_host, tracker_port, 'udp')
@@ -216,7 +219,7 @@ class TrackerClient:
                 return result
         try:
             result = await self.client.announce(
-                info_hash, self.peer_id, self.announce_port, tracker_host, tracker_port, stopped)
+                info_hash, self.peer_id, 0 if no_port else self.announce_port, tracker_host, tracker_port, stopped)
             self.results[tracker_host][info_hash] = (time.time() + result.interval, result)
         except asyncio.TimeoutError:  # todo: this is UDP, timeout is common, we need a better metric for failures
             self.results[tracker_host][info_hash] = (time.time() + 60.0, result)

@@ -4949,7 +4949,6 @@ class Daemon(metaclass=JSONRPCServerType):
     DHT / Blob Exchange peer commands.
     """
 
-    @requires(DHT_COMPONENT)
     async def jsonrpc_peer_list(self, blob_hash, page=None, page_size=None):
         """
         Get peers for blob hash
@@ -4977,8 +4976,11 @@ class Daemon(metaclass=JSONRPCServerType):
             tracker_peers = await tracker.get_kademlia_peer_list(bytes.fromhex(blob_hash))
             log.info("Found %d peers for %s from trackers.", len(tracker_peers), blob_hash[:8])
             peer_q.put_nowait(tracker_peers)
+        elif not self.component_manager.has_component(DHT_COMPONENT):
+            raise Exception("Peer list needs, at least, either a DHT component or a Tracker component for discovery.")
         peers = []
-        await self.dht_node._peers_for_value_producer(blob_hash, peer_q)
+        if self.component_manager.has_component(DHT_COMPONENT):
+            await self.dht_node._peers_for_value_producer(blob_hash, peer_q)
         while not peer_q.empty():
             peers.extend(peer_q.get_nowait())
         results = {

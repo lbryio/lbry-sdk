@@ -9,7 +9,7 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
     async def asyncSetUp(self):
         self.client_servers_list = []
         self.servers = {}
-        self.client = TrackerClient(b"\x00" * 48, 4444, lambda: self.client_servers_list, timeout=0.1)
+        self.client = TrackerClient(b"\x00" * 48, 4444, lambda: self.client_servers_list, timeout=1)
         await self.client.start()
         self.addCleanup(self.client.stop)
         await self.add_server()

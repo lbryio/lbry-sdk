@@ -67,8 +67,9 @@ class StreamDownloader:
         self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _add_fixed_peers, fixed_peers)
 
     async def _process_announcement(self, announcement: 'AnnounceResponse'):
-        peers = [(str(ipaddress.ip_address(peer.address)), peer.port) for peer in announcement.peers]
-        peers = await get_kademlia_peers_from_hosts(peers)
+        peers = await get_kademlia_peers_from_hosts([
+            (str(ipaddress.ip_address(peer.address)), peer.port) for peer in announcement.peers if peer.port > 1024
+        ])
         log.info("Found %d peers from tracker for %s", len(peers), self.sd_hash[:8])
         self.peer_queue.put_nowait(peers)
 

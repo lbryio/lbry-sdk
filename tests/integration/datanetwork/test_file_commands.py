@@ -120,6 +120,14 @@ class FileCommands(CommandTestCase):
         await self.wait_files_to_complete()
         self.assertEqual(0, stream.blobs_remaining)
         self.assertEqual(2, len(server.peers[bytes.fromhex(sd_hash)[:20]]))
+        self.assertEqual([{'address': '127.0.0.1',
+                           'node_id': None,
+                           'tcp_port': 5567,
+                           'udp_port': None},
+                          {'address': '127.0.0.1',
+                           'node_id': None,
+                           'tcp_port': 4444,
+                           'udp_port': None}], (await self.daemon.jsonrpc_peer_list(sd_hash))['items'])
 
     async def test_announces(self):
         # announces on publish
