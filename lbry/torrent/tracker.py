@@ -5,10 +5,12 @@ import struct
 import asyncio
 import logging
 import time
+import ipaddress
 from collections import namedtuple
 from functools import reduce
 from typing import Optional
 
+from lbry.dht.node import get_kademlia_peers_from_hosts
 from lbry.utils import resolve_host, async_timed_cache, cache_concurrent
 from lbry.wallet.stream import StreamController
 from lbry import version
@@ -194,6 +196,11 @@ class TrackerClient:
                 await asyncio.gather(*filter(asyncio.iscoroutine, [on_announcement(result)] if on_announcement else []))
                 found.append(result)
         return found
+
+    async def get_kademlia_peer_list(self, info_hash):
+        responses = await self.get_peer_list(info_hash)
+        peers = [(str(ipaddress.ip_address(peer.address)), peer.port) for ann in responses for peer in ann.peers]
+        return await get_kademlia_peers_from_hosts(peers)
 
     async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False):
         result = None

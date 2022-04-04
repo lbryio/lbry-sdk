@@ -44,7 +44,7 @@ from lbry.error import (
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
 from lbry.extras.daemon.components import WALLET_COMPONENT, DATABASE_COMPONENT, DHT_COMPONENT, BLOB_COMPONENT
-from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT, DISK_SPACE_COMPONENT
+from lbry.extras.daemon.components import FILE_MANAGER_COMPONENT, DISK_SPACE_COMPONENT, TRACKER_ANNOUNCER_COMPONENT
 from lbry.extras.daemon.components import EXCHANGE_RATE_MANAGER_COMPONENT, UPNP_COMPONENT
 from lbry.extras.daemon.componentmanager import RequiredCondition
 from lbry.extras.daemon.componentmanager import ComponentManager
@@ -4971,21 +4971,26 @@ class Daemon(metaclass=JSONRPCServerType):
         if not is_valid_blobhash(blob_hash):
             # TODO: use error from lbry.error
             raise Exception("invalid blob hash")
-        peers = []
         peer_q = asyncio.Queue(loop=self.component_manager.loop)
+        if self.component_manager.has_component(TRACKER_ANNOUNCER_COMPONENT):
+            tracker = self.component_manager.get_component(TRACKER_ANNOUNCER_COMPONENT)
+            tracker_peers = await tracker.get_kademlia_peer_list(bytes.fromhex(blob_hash))
+            log.info("Found %d peers for %s from trackers.", len(tracker_peers), blob_hash[:8])
+            peer_q.put_nowait(tracker_peers)
+        peers = []
         await self.dht_node._peers_for_value_producer(blob_hash, peer_q)
         while not peer_q.empty():
             peers.extend(peer_q.get_nowait())
-        results = [
-            {
-                "node_id": hexlify(peer.node_id).decode(),
+        results = {
+            (peer.address, peer.tcp_port): {
+                "node_id": hexlify(peer.node_id).decode() if peer.node_id else None,
                 "address": peer.address,
                 "udp_port": peer.udp_port,
                 "tcp_port": peer.tcp_port,
             }
             for peer in peers
-        ]
-        return paginate_list(results, page, page_size)
+        }
+        return paginate_list(list(results.values()), page, page_size)
 
     @requires(DATABASE_COMPONENT)
     async def jsonrpc_blob_announce(self, blob_hash=None, stream_hash=None, sd_hash=None):

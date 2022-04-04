@@ -725,7 +725,7 @@ class TrackerAnnouncerComponent(Component):
 
     @property
     def component(self):
-        return self
+        return self.tracker_client
 
     @property
     def running(self):
