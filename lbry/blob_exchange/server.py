@@ -1,6 +1,7 @@
 import asyncio
 import binascii
 import logging
+import socket
 import typing
 from json.decoder import JSONDecodeError
 from lbry.blob_exchange.serialization import BlobResponse, BlobRequest, blob_response_types
@@ -167,6 +168,13 @@ class BlobServer:
             raise Exception("already running")
 
         async def _start_server():
+            # checking if the port is in use
+            # thx https://stackoverflow.com/questions/2470971/fast-way-to-test-if-a-port-is-in-use-using-python/52872579#52872579
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if s.connect_ex(('localhost', port)) == 0:
+                    # the port is already in use!
+                    log.error("Failed to bind TCP {}:{}".format(interface, port))
+
             server = await self.loop.create_server(
                 lambda: self.server_protocol_class(self.loop, self.blob_manager, self.lbrycrd_address,
                                                    self.idle_timeout, self.transfer_timeout),
