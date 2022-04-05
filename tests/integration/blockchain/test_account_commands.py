@@ -1,8 +1,10 @@
-from binascii import unhexlify
+from binascii import hexlify, unhexlify
 
 from lbry.testcase import CommandTestCase
+from lbry.wallet.script import InputScript
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.wallet.account import DeterministicChannelKeyManager
+from lbry.crypto.hash import hash160
 from lbry.crypto.base58 import Base58
 
 
@@ -293,15 +295,22 @@ class AccountManagement(CommandTestCase):
     async def test_time_locked_transactions(self):
         address = await self.account.receiving.get_or_create_usable_address()
         private_key = await self.ledger.get_private_key_for_address(self.wallet, address)
-        redeem = await self.blockchain.add_time_locked_address(210, address)
+
+        script = InputScript(
+            template=InputScript.TIME_LOCK_SCRIPT,
+            values={'height': 210, 'pubkey_hash': self.ledger.address_to_hash160(address)}
+        )
+        script_address = self.ledger.hash160_to_script_address(hash160(script.source))
+        script_source = hexlify(script.source).decode()
+
         await self.assertBalance(self.account, '10.0')
-        tx = await self.daemon.jsonrpc_account_send('4.0', redeem['address'])
+        tx = await self.daemon.jsonrpc_account_send('4.0', script_address)
         await self.confirm_tx(tx.id)
         await self.generate(510)
         await self.assertBalance(self.account, '5.999877')
         tx = await self.daemon.jsonrpc_account_deposit(
-            tx.id, 0, redeem['redeemScript'],
+            tx.id, 0, script_source,
             Base58.encode_check(self.ledger.private_key_to_wif(private_key.private_key_bytes))
         )
         await self.confirm_tx(tx.id)
-        await self.assertBalance(self.account, '9.999877')
+        await self.assertBalance(self.account, '9.9997545')

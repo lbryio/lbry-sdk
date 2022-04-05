@@ -718,8 +718,11 @@ class Transaction:
         stream.write_compact_size(len(self._inputs))
         for i, txin in enumerate(self._inputs):
             if signing_input == i:
-                assert txin.txo_ref.txo is not None
-                txin.serialize_to(stream, txin.txo_ref.txo.script.source)
+                if txin.script.is_script_hash:
+                    txin.serialize_to(stream, txin.script.values['script'].source)
+                else:
+                    assert txin.txo_ref.txo is not None
+                    txin.serialize_to(stream, txin.txo_ref.txo.script.source)
             else:
                 txin.serialize_to(stream, b'')
         self._serialize_outputs(stream)
@@ -949,9 +952,13 @@ class Transaction:
         return cls.create([], [payment, data], funding_accounts, change_account)
 
     @classmethod
-    def spend_time_lock(cls, time_locked_txo: Output, script: bytes, account: 'Account'):
+    async def spend_time_lock(cls, time_locked_txo: Output, script: bytes, account: 'Account'):
         txi = Input.spend_time_lock(time_locked_txo, script)
-        return cls.create([txi], [], [account], account, sign=False)
+        txi.sequence = 0xFFFFFFFE
+        tx = await cls.create([txi], [], [account], account, sign=False)
+        tx.locktime = txi.script.values['script'].values['height']
+        tx._reset()
+        return tx
 
     @property
     def my_inputs(self):

@@ -277,7 +277,7 @@ class Template:
             elif isinstance(opcode, PUSH_INTEGER):
                 data = values[opcode.name]
                 source.write_many(push_data(
-                    data.to_bytes((data.bit_length() + 7) // 8, byteorder='little')
+                    data.to_bytes((data.bit_length() + 8) // 8, byteorder='little', signed=True)
                 ))
             elif isinstance(opcode, PUSH_SUBSCRIPT):
                 data = values[opcode.name]
@@ -416,6 +416,10 @@ class InputScript(Script):
             'pubkey': pubkey,
             'script': script
         })
+
+    @property
+    def is_script_hash(self):
+        return self.template.name.startswith('script_hash+')
 
 
 class OutputScript(Script):
