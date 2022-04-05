@@ -2,7 +2,8 @@ import asyncio
 import random
 
 from lbry.testcase import AsyncioTestCase
-from lbry.torrent.tracker import CompactIPv4Peer, TrackerClient, subscribe_hash, UDPTrackerServerProtocol, encode_peer
+from lbry.dht.peer import KademliaPeer
+from lbry.torrent.tracker import CompactIPv4Peer, TrackerClient, enqueue_tracker_search, UDPTrackerServerProtocol, encode_peer
 
 
 class UDPTrackerClientTestCase(AsyncioTestCase):
@@ -46,10 +47,9 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
     async def test_announce_using_helper_function(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
         queue = asyncio.Queue()
-        subscribe_hash(info_hash, queue.put)
-        announcement = await queue.get()
-        peers = announcement.peers
-        self.assertEqual(peers, [CompactIPv4Peer(int.from_bytes(bytes([127, 0, 0, 1]), "big", signed=False), 4444)])
+        enqueue_tracker_search(info_hash, queue)
+        peers = await queue.get()
+        self.assertEqual(peers, [KademliaPeer('127.0.0.1', None, None, 4444, allow_localhost=True)])
 
     async def test_error(self):
         info_hash = random.getrandbits(160).to_bytes(20, "big", signed=False)
@@ -85,8 +85,8 @@ class UDPTrackerClientTestCase(AsyncioTestCase):
                 peer = (f"127.0.0.{random.randint(1, 255)}", random.randint(2000, 65500))
                 fake_peers.append(peer)
                 server.add_peer(info_hash, *peer)
-        response = []
-        subscribe_hash(info_hash, response.append)
+        peer_q = asyncio.Queue()
+        enqueue_tracker_search(info_hash, peer_q)
         await asyncio.sleep(0)
         await asyncio.gather(*self.client.tasks.values())
-        self.assertEqual(11, len(response))
+        self.assertEqual(11, peer_q.qsize())

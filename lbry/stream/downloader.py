@@ -1,5 +1,4 @@
 import asyncio
-import ipaddress
 import typing
 import logging
 import binascii
@@ -9,10 +8,9 @@ from lbry.error import DownloadSDTimeoutError
 from lbry.utils import lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.blob_exchange.downloader import BlobDownloader
-from lbry.torrent.tracker import subscribe_hash
+from lbry.torrent.tracker import enqueue_tracker_search
 
 if typing.TYPE_CHECKING:
-    from lbry.torrent.tracker import AnnounceResponse
     from lbry.conf import Config
     from lbry.dht.node import Node
     from lbry.blob.blob_manager import BlobManager
@@ -66,13 +64,6 @@ class StreamDownloader:
         fixed_peers = await get_kademlia_peers_from_hosts(self.config.fixed_peers)
         self.fixed_peers_handle = self.loop.call_later(self.fixed_peers_delay, _add_fixed_peers, fixed_peers)
 
-    async def _process_announcement(self, announcement: 'AnnounceResponse'):
-        peers = await get_kademlia_peers_from_hosts([
-            (str(ipaddress.ip_address(peer.address)), peer.port) for peer in announcement.peers if peer.port > 1024
-        ])
-        log.info("Found %d peers from tracker for %s", len(peers), self.sd_hash[:8])
-        self.peer_queue.put_nowait(peers)
-
     async def load_descriptor(self, connection_id: int = 0):
         # download or get the sd blob
         sd_blob = self.blob_manager.get_blob(self.sd_hash)
@@ -102,8 +93,7 @@ class StreamDownloader:
                 self.accumulate_task.cancel()
             _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)
         await self.add_fixed_peers()
-        subscribe_hash(
-            bytes.fromhex(self.sd_hash), lambda result: asyncio.ensure_future(self._process_announcement(result)))
+        enqueue_tracker_search(bytes.fromhex(self.sd_hash), self.peer_queue)
         # start searching for peers for the sd hash
         self.search_queue.put_nowait(self.sd_hash)
         log.info("searching for peers for stream %s", self.sd_hash)

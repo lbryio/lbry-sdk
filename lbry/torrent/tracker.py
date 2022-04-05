@@ -199,11 +199,7 @@ class TrackerClient:
 
     async def get_kademlia_peer_list(self, info_hash):
         responses = await self.get_peer_list(info_hash, no_port=True)
-        peers = [
-            (str(ipaddress.ip_address(peer.address)), peer.port)
-            for ann in responses for peer in ann.peers if peer.port > 1024  # filter out privileged and 0
-        ]
-        return await get_kademlia_peers_from_hosts(peers)
+        return await announcement_to_kademlia_peers(*responses)
 
     async def _probe_server(self, info_hash, tracker_host, tracker_port, stopped=False, no_port=False):
         result = None
@@ -229,8 +225,20 @@ class TrackerClient:
         return result
 
 
-def subscribe_hash(info_hash: bytes, on_data):
-    TrackerClient.EVENT_CONTROLLER.add(('search', info_hash, on_data))
+def enqueue_tracker_search(info_hash: bytes, peer_q: asyncio.Queue):
+    async def on_announcement(announcement: AnnounceResponse):
+        peers = await announcement_to_kademlia_peers(announcement)
+        log.info("Found %d peers from tracker for %s", len(peers), info_hash.hex()[:8])
+        peer_q.put_nowait(peers)
+    TrackerClient.EVENT_CONTROLLER.add(('search', info_hash, on_announcement))
+
+
+def announcement_to_kademlia_peers(*announcements: AnnounceResponse):
+    peers = [
+        (str(ipaddress.ip_address(peer.address)), peer.port)
+        for announcement in announcements for peer in announcement.peers if peer.port > 1024  # no privileged or 0
+    ]
+    return get_kademlia_peers_from_hosts(peers)
 
 
 class UDPTrackerServerProtocol(asyncio.DatagramProtocol):  # for testing. Not suitable for production
