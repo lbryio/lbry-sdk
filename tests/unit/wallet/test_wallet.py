@@ -1,10 +1,10 @@
 import json
 import jsonschema
 import os
-import pathlib
 import tempfile
 from binascii import hexlify
 
+import lbry.schema.types.v2 as schema_v2
 from unittest import TestCase, mock
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet import (
@@ -20,12 +20,6 @@ class TestWalletCreation(AsyncioTestCase):
         config = {'data_path': '/tmp/wallet'}
         self.main_ledger = self.manager.get_or_create_ledger(Ledger.get_id(), config)
         self.test_ledger = self.manager.get_or_create_ledger(RegTestLedger.get_id(), config)
-
-        base_dir = pathlib.Path(__file__).parents[3]
-        types_dir = base_dir.joinpath('lbry', 'schema', 'types', 'v2')
-
-        with types_dir.joinpath('wallet.json').open() as f:
-          self.wallet_schema = json.load(f)
 
     def test_create_wallet_and_accounts(self):
         wallet = Wallet()
@@ -84,9 +78,7 @@ class TestWalletCreation(AsyncioTestCase):
         decrypted = Wallet.unpack('password', encrypted)
         self.assertEqual(decrypted['accounts'][0]['name'], 'An Account')
 
-
     def test_wallet_file_schema(self):
-        # One Deterministic Chain, one Single Address, to test both paths in the schema.
         wallet_dict = {
             'version': 1,
             'name': 'Main Wallet',
@@ -138,7 +130,9 @@ class TestWalletCreation(AsyncioTestCase):
         storage = WalletStorage(default=wallet_dict)
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertDictEqual(wallet_dict, wallet.to_dict())
-        jsonschema.validate(schema=self.wallet_schema, instance=wallet.to_dict())
+        with open(os.path.join(*schema_v2.__path__, 'wallet.json')) as f:
+            wallet_schema = json.load(f)
+        jsonschema.validate(schema=wallet_schema, instance=wallet.to_dict())
 
     def test_no_password_but_encryption_preferred(self):
         wallet_dict = {
