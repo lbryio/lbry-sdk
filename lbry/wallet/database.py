@@ -1211,9 +1211,7 @@ class Database(SQLiteMixin):
         return addresses
 
     async def get_address_count(self, cols=None, read_only=False, **constraints):
-        #  this is a count query that returns one line. Don't pass offset.
-        if 'offset' in constraints:
-            constraints.pop('offset')
+        self._clean_txo_constraints_for_aggregation(constraints)
         count = await self.select_addresses('COUNT(*) as total', read_only=read_only, **constraints)
         return count[0]['total'] or 0
 
