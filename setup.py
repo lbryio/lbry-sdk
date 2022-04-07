@@ -53,7 +53,6 @@ setup(
         'multidict==4.6.1',
         'coincurve==15.0.0',
         'pbkdf2==1.3',
-        'jsonschema==4.4.0',
         'attrs==18.2.0',
         'pylru==1.1.0',
         'elasticsearch==7.10.1',
@@ -63,7 +62,10 @@ setup(
     extras_require={
         'torrent': ['lbry-libtorrent'],
         'lint': ['pylint==2.10.0'],
-        'test': ['coverage'],
+        'test': [
+            'coverage',
+            'jsonschema==4.4.0',
+        ],
         'scribe': ['scribe @ git+https://github.com/lbryio/scribe.git'],
     },
     classifiers=[
