@@ -1,6 +1,6 @@
 import asyncio
 
-import scribe
+from scribe.hub import HUB_PROTOCOL_VERSION
 from scribe.hub.session import LBRYElectrumX
 
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
@@ -34,7 +34,7 @@ class TestSessions(IntegrationTestCase):
 
     async def test_proper_version(self):
         info = await self.ledger.network.get_server_features()
-        self.assertEqual(scribe.__version__, info['server_version'])
+        self.assertEqual(HUB_PROTOCOL_VERSION, info['server_version'])
 
     async def test_client_errors(self):
         # Goal is ensuring thsoe are raised and not trapped accidentally

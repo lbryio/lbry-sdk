@@ -106,7 +106,7 @@ class Ledger(metaclass=LedgerRegistry):
     target_timespan = 150
 
     default_fee_per_byte = 50
-    default_fee_per_name_char = 200000
+    default_fee_per_name_char = 0
 
     checkpoints = HASHES
 

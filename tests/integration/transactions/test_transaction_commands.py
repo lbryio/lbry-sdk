@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 
 from lbry.testcase import CommandTestCase
@@ -28,6 +29,7 @@ class TransactionCommandsTestCase(CommandTestCase):
         # someone's tx
         change_address = await self.blockchain.get_raw_change_address()
         sendtxid = await self.blockchain.send_to_address(change_address, 10)
+        await asyncio.sleep(0.2)
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
         self.assertEqual(tx.id, sendtxid)
         self.assertEqual(tx.height, -1)

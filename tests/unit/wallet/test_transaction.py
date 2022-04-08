@@ -42,7 +42,8 @@ class TestSizeAndFeeEstimation(AsyncioTestCase):
     async def asyncSetUp(self):
         self.ledger = Ledger({
             'db': Database(':memory:'),
-            'headers': Headers(':memory:')
+            'headers': Headers(':memory:'),
+            'fee_per_name_char': 200_000
         })
         await self.ledger.db.open()
 
