@@ -81,7 +81,9 @@ class Conductor:
 
     async def start_hub(self):
         if not self.hub_started:
+            self.log.info("Starting hub")
             await self.hub_node.start()
+            self.log.info("waiting for lbcwallet_node")
             await self.lbcwallet_node.running.wait()
             self.hub_started = True
 
@@ -92,6 +94,7 @@ class Conductor:
 
     async def start_spv(self):
         if not self.spv_started:
+            self.log.info("Starting lbcwallet_node")
             await self.spv_node.start(self.lbcwallet_node)
             self.spv_started = True
 
@@ -129,15 +132,19 @@ class Conductor:
     async def start(self):
         await self.start_lbcd()
         await self.start_lbcwallet()
-        await self.start_spv()
-        await self.start_hub()
+        # self.log("creating hub task")
+        hub_start = asyncio.create_task(self.start_hub())
+        # self.log("creating spv task")
+        spv_start = asyncio.create_task(self.start_spv())
+        # self.log("starting hub and spv")
+        await asyncio.wait([hub_start, spv_start])
         await self.start_wallet()
 
     async def stop(self):
         all_the_stops = [
             self.stop_wallet,
-            self.stop_hub,
             self.stop_spv,
+            self.stop_hub,
             self.stop_lbcwallet,
             self.stop_lbcd
         ]
@@ -231,6 +238,7 @@ class SPVNode:
         self.port = 50001 + node_number  # avoid conflict with default daemon
         self.udp_port = self.port
         self.elastic_notifier_port = 19080 + node_number
+        self.go_hub_notifier_port = 18080 + node_number
         self.session_timeout = 600
         self.stopped = True
         self.index_name = uuid4().hex
@@ -253,6 +261,7 @@ class SPVNode:
                 'tcp_port': self.port,
                 'udp_port': self.udp_port,
                 'elastic_notifier_port': self.elastic_notifier_port,
+                'go_hub_notifier_port': self.go_hub_notifier_port,
                 'session_timeout': self.session_timeout,
                 'max_query_workers': 0,
                 'es_index_prefix': self.index_name,
@@ -697,8 +706,8 @@ class HubProcess(asyncio.SubprocessProtocol):
             self.ready.set()
         str_lines = str(data.decode()).split("\n")
         for line in str_lines:
-            if 'releaseTime' in line:
-                print(line)
+            # if 'releaseTime' in line:
+            print(line)
 
     def process_exited(self):
         self.ready.clear()
@@ -730,7 +739,8 @@ class HubNode:
         self.transport = None
         self.protocol = None
         self.hostname = 'localhost'
-        self.rpcport = 50051  # avoid conflict with default rpc port
+        self.rpcport = 50050 + spv_node.node_number # avoid conflict with default rpc port
+        self.notifier_port = 18080 + spv_node.node_number
         self._stopped = asyncio.Event()
         self.running = asyncio.Event()
 
@@ -789,7 +799,9 @@ class HubNode:
             'serve',
             '--esindex', self.spv_node.index_name + 'claims',
             '--debug',
-            '--db-path', os.path.join(self.spv_node.data_path, "lbry-rocksdb")
+            '--db-path', os.path.join(self.spv_node.data_path, "lbry-rocksdb"),
+            '--rpcport', str(self.rpcport),
+            '--notifier-port', str(self.notifier_port),
         ]
         self.log.info(' '.join(command))
         self.protocol = HubProcess(self.running, self._stopped)

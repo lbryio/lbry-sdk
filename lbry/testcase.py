@@ -6,6 +6,7 @@ import logging
 import tempfile
 import functools
 import asyncio
+import grpc
 from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
 from unittest.case import _Outcome
@@ -37,6 +38,8 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
 from lbry.blob_exchange.server import BlobServer
+from lbry.schema.types.v2 import hub_pb2_grpc
+from lbry.schema.types.v2 import hub_pb2
 
 
 class ColorHandler(logging.StreamHandler):
@@ -250,12 +253,13 @@ class IntegrationTestCase(AsyncioTestCase):
         self.addCleanup(self.conductor.stop_lbcd)
         await self.conductor.start_lbcwallet()
         self.addCleanup(self.conductor.stop_lbcwallet)
-        await self.conductor.start_spv()
+        start_spv = asyncio.create_task(self.conductor.start_spv())
+        start_hub = asyncio.create_task(self.conductor.start_hub())
+        await asyncio.wait([start_spv, start_hub])
         self.addCleanup(self.conductor.stop_spv)
+        self.addCleanup(self.conductor.stop_hub)
         await self.conductor.start_wallet()
         self.addCleanup(self.conductor.stop_wallet)
-        await self.conductor.start_hub()
-        self.addCleanup(self.conductor.stop_hub)
         self.blockchain = self.conductor.lbcwallet_node
         self.hub = self.conductor.hub_node
         self.wallet_node = self.conductor.wallet_node
@@ -279,6 +283,21 @@ class IntegrationTestCase(AsyncioTestCase):
         await self.generate_and_wait(1, [tx.id], ledger)
 
     async def on_header(self, height):
+        if self.ledger.config.get('use_go_hub'):
+            # If client isn't connected yet (which happens in some test for some reason?)
+            # just default to localhost
+            host = self.ledger.network.client.server[0] if self.ledger.network.client else "127.0.0.1"
+            port = "50051"
+            server = f"{host}:{port}"
+            async with grpc.aio.insecure_channel(server) as channel:
+                stub = hub_pb2_grpc.HubStub(channel)
+                try:
+                    async for res in stub.HeightSubscribe(hub_pb2.UInt32Value(value=height)):
+                        if res.value < height:
+                            print(f"??? {res.value} < {height}")
+                        return True
+                except grpc.aio.AioRpcError as error:
+                    raise RPCError(error.code(), error.details())
         if self.ledger.headers.height < height:
             await self.ledger.on_header.where(
                 lambda e: e.height == height
@@ -329,13 +348,18 @@ class IntegrationTestCase(AsyncioTestCase):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
         prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
         height = self.blockchain.block_expected
+        self.conductor.spv_node.server.es_synchronized.clear()
+        self.conductor.spv_node.server.go_hub_synchronized.clear()
         self.conductor.spv_node.server.synchronized.clear()
         await self.blockchain.generate(blocks)
         await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
         while True:
             await self.conductor.spv_node.server.synchronized.wait()
+            self.conductor.spv_node.server.es_synchronized.clear()
+            self.conductor.spv_node.server.go_hub_synchronized.clear()
             self.conductor.spv_node.server.synchronized.clear()
-            if self.conductor.spv_node.server.db.db_height >= height:
+            if self.conductor.spv_node.server.db.db_height >= height and \
+                self.conductor.spv_node.server._go_hub_height == self.conductor.spv_node.server.db.db_height == self.conductor.spv_node.server._es_height:
                 break
 
 

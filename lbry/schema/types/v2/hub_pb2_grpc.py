@@ -55,6 +55,21 @@ class HubStub(object):
                 request_serializer=hub__pb2.EmptyMessage.SerializeToString,
                 response_deserializer=hub__pb2.UInt32Value.FromString,
                 )
+        self.Height = channel.unary_unary(
+                '/pb.Hub/Height',
+                request_serializer=hub__pb2.EmptyMessage.SerializeToString,
+                response_deserializer=hub__pb2.UInt32Value.FromString,
+                )
+        self.HeightSubscribe = channel.unary_stream(
+                '/pb.Hub/HeightSubscribe',
+                request_serializer=hub__pb2.UInt32Value.SerializeToString,
+                response_deserializer=hub__pb2.UInt32Value.FromString,
+                )
+        self.Resolve = channel.unary_unary(
+                '/pb.Hub/Resolve',
+                request_serializer=hub__pb2.StringArray.SerializeToString,
+                response_deserializer=result__pb2.Outputs.FromString,
+                )
 
 
 class HubServicer(object):
@@ -108,6 +123,24 @@ class HubServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def Height(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def HeightSubscribe(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Resolve(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_HubServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -150,6 +183,21 @@ def add_HubServicer_to_server(servicer, server):
                     servicer.Broadcast,
                     request_deserializer=hub__pb2.EmptyMessage.FromString,
                     response_serializer=hub__pb2.UInt32Value.SerializeToString,
+            ),
+            'Height': grpc.unary_unary_rpc_method_handler(
+                    servicer.Height,
+                    request_deserializer=hub__pb2.EmptyMessage.FromString,
+                    response_serializer=hub__pb2.UInt32Value.SerializeToString,
+            ),
+            'HeightSubscribe': grpc.unary_stream_rpc_method_handler(
+                    servicer.HeightSubscribe,
+                    request_deserializer=hub__pb2.UInt32Value.FromString,
+                    response_serializer=hub__pb2.UInt32Value.SerializeToString,
+            ),
+            'Resolve': grpc.unary_unary_rpc_method_handler(
+                    servicer.Resolve,
+                    request_deserializer=hub__pb2.StringArray.FromString,
+                    response_serializer=result__pb2.Outputs.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -294,5 +342,56 @@ class Hub(object):
         return grpc.experimental.unary_unary(request, target, '/pb.Hub/Broadcast',
             hub__pb2.EmptyMessage.SerializeToString,
             hub__pb2.UInt32Value.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Height(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Height',
+            hub__pb2.EmptyMessage.SerializeToString,
+            hub__pb2.UInt32Value.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def HeightSubscribe(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_stream(request, target, '/pb.Hub/HeightSubscribe',
+            hub__pb2.UInt32Value.SerializeToString,
+            hub__pb2.UInt32Value.FromString,
+            options, channel_credentials,
+            insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
+
+    @staticmethod
+    def Resolve(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(request, target, '/pb.Hub/Resolve',
+            hub__pb2.StringArray.SerializeToString,
+            result__pb2.Outputs.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
