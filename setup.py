@@ -61,12 +61,16 @@ setup(
     ] + ROCKSDB,
     extras_require={
         'torrent': ['lbry-libtorrent'],
-        'lint': ['pylint==2.10.0'],
+        'lint': [
+            'pylint==2.10.0'
+        ],
         'test': [
             'coverage',
             'jsonschema==4.4.0',
         ],
-        'scribe': ['scribe @ git+https://github.com/lbryio/scribe.git'],
+        'scribe': [
+            'scribe @ git+https://github.com/lbryio/scribe.git#311db529a03de7fce43ed8579f51ac23a1a884ea'
+        ]
     },
     classifiers=[
         'Framework :: AsyncIO',
