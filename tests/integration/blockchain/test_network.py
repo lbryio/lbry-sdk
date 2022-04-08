@@ -3,9 +3,10 @@ import scribe
 
 from unittest.mock import Mock
 
-from scribe.blockchain.network import LBCRegTest
+from scribe.hub import HUB_PROTOCOL_VERSION
 from scribe.hub.udp import StatusServer
 from scribe.hub.session import LBRYElectrumX
+from scribe.blockchain.network import LBCRegTest
 
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
@@ -35,7 +36,7 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': '',
             'donation_address': '',
             'daily_fee': '0',
-            'server_version': scribe.__version__,
+            'server_version': HUB_PROTOCOL_VERSION,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
         # await self.conductor.spv_node.stop()
@@ -65,7 +66,7 @@ class NetworkTests(IntegrationTestCase):
             'payment_address': payment_address,
             'donation_address': donation_address,
             'daily_fee': '42',
-            'server_version': scribe.__version__,
+            'server_version': HUB_PROTOCOL_VERSION,
             'trending_algorithm': 'fast_ar',
             }, await self.ledger.network.get_server_features())
 
