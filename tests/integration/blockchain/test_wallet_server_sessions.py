@@ -1,6 +1,5 @@
 import asyncio
 
-import scribe
 from scribe.hub import HUB_PROTOCOL_VERSION
 from scribe.hub.session import LBRYElectrumX
 
