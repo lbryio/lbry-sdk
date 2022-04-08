@@ -145,6 +145,14 @@ class Input(InputOutput):
         script = InputScript.redeem_pubkey_hash(cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY)
         return cls(txo.ref, script)
 
+    @classmethod
+    def spend_time_lock(cls, txo: 'Output', script_source: bytes) -> 'Input':
+        """ Create an input to spend time lock script."""
+        script = InputScript.redeem_time_lock_script_hash(
+            cls.NULL_SIGNATURE, cls.NULL_PUBLIC_KEY, script_source=script_source
+        )
+        return cls(txo.ref, script)
+
     @property
     def amount(self) -> int:
         """ Amount this input adds to the transaction. """
@@ -710,8 +718,11 @@ class Transaction:
         stream.write_compact_size(len(self._inputs))
         for i, txin in enumerate(self._inputs):
             if signing_input == i:
-                assert txin.txo_ref.txo is not None
-                txin.serialize_to(stream, txin.txo_ref.txo.script.source)
+                if txin.script.is_script_hash:
+                    txin.serialize_to(stream, txin.script.values['script'].source)
+                else:
+                    assert txin.txo_ref.txo is not None
+                    txin.serialize_to(stream, txin.txo_ref.txo.script.source)
             else:
                 txin.serialize_to(stream, b'')
         self._serialize_outputs(stream)
@@ -854,16 +865,19 @@ class Transaction:
     def signature_hash_type(hash_type):
         return hash_type
 
-    async def sign(self, funding_accounts: Iterable['Account']):
+    async def sign(self, funding_accounts: Iterable['Account'], extra_keys: dict = None):
         self._reset()
         ledger, wallet = self.ensure_all_have_same_ledger_and_wallet(funding_accounts)
         for i, txi in enumerate(self._inputs):
             assert txi.script is not None
             assert txi.txo_ref.txo is not None
             txo_script = txi.txo_ref.txo.script
-            if txo_script.is_pay_pubkey_hash:
-                address = ledger.hash160_to_address(txo_script.values['pubkey_hash'])
-                private_key = await ledger.get_private_key_for_address(wallet, address)
+            if txo_script.is_pay_pubkey_hash or txo_script.is_pay_script_hash:
+                if 'pubkey_hash' in txo_script.values:
+                    address = ledger.hash160_to_address(txo_script.values.get('pubkey_hash', ''))
+                    private_key = await ledger.get_private_key_for_address(wallet, address)
+                else:
+                    private_key = next(iter(extra_keys.values()))
                 assert private_key is not None, 'Cannot find private key for signing output.'
                 tx = self._serialize_for_signature(i)
                 txi.script.values['signature'] = \
@@ -936,6 +950,15 @@ class Transaction:
         payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))
         return cls.create([], [payment, data], funding_accounts, change_account)
+
+    @classmethod
+    async def spend_time_lock(cls, time_locked_txo: Output, script: bytes, account: 'Account'):
+        txi = Input.spend_time_lock(time_locked_txo, script)
+        txi.sequence = 0xFFFFFFFE
+        tx = await cls.create([txi], [], [account], account, sign=False)
+        tx.locktime = txi.script.values['script'].values['height']
+        tx._reset()
+        return tx
 
     @property
     def my_inputs(self):

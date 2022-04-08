@@ -17,6 +17,7 @@ OP_HASH160 = 0xa9
 OP_EQUALVERIFY = 0x88
 OP_CHECKSIG = 0xac
 OP_CHECKMULTISIG = 0xae
+OP_CHECKLOCKTIMEVERIFY = 0xb1
 OP_EQUAL = 0x87
 OP_PUSHDATA1 = 0x4c
 OP_PUSHDATA2 = 0x4d
@@ -276,7 +277,7 @@ class Template:
             elif isinstance(opcode, PUSH_INTEGER):
                 data = values[opcode.name]
                 source.write_many(push_data(
-                    data.to_bytes((data.bit_length() + 7) // 8, byteorder='little')
+                    data.to_bytes((data.bit_length() + 8) // 8, byteorder='little', signed=True)
                 ))
             elif isinstance(opcode, PUSH_SUBSCRIPT):
                 data = values[opcode.name]
@@ -357,19 +358,27 @@ class InputScript(Script):
     REDEEM_PUBKEY_HASH = Template('pubkey_hash', (
         PUSH_SINGLE('signature'), PUSH_SINGLE('pubkey')
     ))
-    REDEEM_SCRIPT = Template('script', (
+    MULTI_SIG_SCRIPT = Template('multi_sig', (
         SMALL_INTEGER('signatures_count'), PUSH_MANY('pubkeys'), SMALL_INTEGER('pubkeys_count'),
         OP_CHECKMULTISIG
     ))
-    REDEEM_SCRIPT_HASH = Template('script_hash', (
-        OP_0, PUSH_MANY('signatures'), PUSH_SUBSCRIPT('script', REDEEM_SCRIPT)
+    REDEEM_SCRIPT_HASH_MULTI_SIG = Template('script_hash+multi_sig', (
+        OP_0, PUSH_MANY('signatures'), PUSH_SUBSCRIPT('script', MULTI_SIG_SCRIPT)
+    ))
+    TIME_LOCK_SCRIPT = Template('timelock', (
+        PUSH_INTEGER('height'), OP_CHECKLOCKTIMEVERIFY, OP_DROP,
+        # rest is identical to OutputScript.PAY_PUBKEY_HASH:
+        OP_DUP, OP_HASH160, PUSH_SINGLE('pubkey_hash'), OP_EQUALVERIFY, OP_CHECKSIG
+    ))
+    REDEEM_SCRIPT_HASH_TIME_LOCK = Template('script_hash+timelock', (
+        PUSH_SINGLE('signature'), PUSH_SINGLE('pubkey'), PUSH_SUBSCRIPT('script', TIME_LOCK_SCRIPT)
     ))
 
     templates = [
         REDEEM_PUBKEY,
         REDEEM_PUBKEY_HASH,
-        REDEEM_SCRIPT_HASH,
-        REDEEM_SCRIPT
+        REDEEM_SCRIPT_HASH_TIME_LOCK,
+        REDEEM_SCRIPT_HASH_MULTI_SIG,
     ]
 
     @classmethod
@@ -380,19 +389,37 @@ class InputScript(Script):
         })
 
     @classmethod
-    def redeem_script_hash(cls, signatures, pubkeys):
-        return cls(template=cls.REDEEM_SCRIPT_HASH, values={
+    def redeem_multi_sig_script_hash(cls, signatures, pubkeys):
+        return cls(template=cls.REDEEM_SCRIPT_HASH_MULTI_SIG, values={
             'signatures': signatures,
-            'script': cls.redeem_script(signatures, pubkeys)
+            'script': cls(template=cls.MULTI_SIG_SCRIPT, values={
+                'signatures_count': len(signatures),
+                'pubkeys': pubkeys,
+                'pubkeys_count': len(pubkeys)
+            })
         })
 
     @classmethod
-    def redeem_script(cls, signatures, pubkeys):
-        return cls(template=cls.REDEEM_SCRIPT, values={
-            'signatures_count': len(signatures),
-            'pubkeys': pubkeys,
-            'pubkeys_count': len(pubkeys)
+    def redeem_time_lock_script_hash(cls, signature, pubkey, height=None, pubkey_hash=None, script_source=None):
+        if height and pubkey_hash:
+            script = cls(template=cls.TIME_LOCK_SCRIPT, values={
+                'height': height,
+                'pubkey_hash': pubkey_hash
+            })
+        elif script_source:
+            script = cls(source=script_source, template=cls.TIME_LOCK_SCRIPT)
+            script.parse(script.template)
+        else:
+            raise ValueError("script_source or both height and pubkey_hash are required.")
+        return cls(template=cls.REDEEM_SCRIPT_HASH_TIME_LOCK, values={
+            'signature': signature,
+            'pubkey': pubkey,
+            'script': script
         })
+
+    @property
+    def is_script_hash(self):
+        return self.template.name.startswith('script_hash+')
 
 
 class OutputScript(Script):
@@ -460,21 +487,6 @@ class OutputScript(Script):
         UPDATE_CLAIM_OPCODES + PAY_SCRIPT_HASH.opcodes
     ))
 
-    SELL_SCRIPT = Template('sell_script', (
-        OP_VERIFY, OP_DROP, OP_DROP, OP_DROP, PUSH_INTEGER('price'), OP_PRICECHECK
-    ))
-    SELL_CLAIM = Template('sell_claim+pay_script_hash', (
-        OP_SELL_CLAIM, PUSH_SINGLE('claim_id'), PUSH_SUBSCRIPT('sell_script', SELL_SCRIPT),
-        PUSH_SUBSCRIPT('receive_script', InputScript.REDEEM_SCRIPT), OP_2DROP, OP_2DROP
-    ) + PAY_SCRIPT_HASH.opcodes)
-
-    BUY_CLAIM = Template('buy_claim+pay_script_hash', (
-        OP_BUY_CLAIM, PUSH_SINGLE('sell_id'),
-        PUSH_SINGLE('claim_id'), PUSH_SINGLE('claim_version'),
-        PUSH_SINGLE('owner_pubkey_hash'), PUSH_SINGLE('negotiation_signature'),
-        OP_2DROP, OP_2DROP, OP_2DROP,
-    ) + PAY_SCRIPT_HASH.opcodes)
-
     templates = [
         PAY_PUBKEY_FULL,
         PAY_PUBKEY_HASH,
@@ -489,8 +501,6 @@ class OutputScript(Script):
         SUPPORT_CLAIM_DATA_SCRIPT,
         UPDATE_CLAIM_PUBKEY,
         UPDATE_CLAIM_SCRIPT,
-        SELL_CLAIM, SELL_SCRIPT,
-        BUY_CLAIM,
     ]
 
     @classmethod
@@ -550,30 +560,6 @@ class OutputScript(Script):
             'pubkey_hash': pubkey_hash
         })
 
-    @classmethod
-    def sell_script(cls, price):
-        return cls(template=cls.SELL_SCRIPT, values={
-            'price': price,
-        })
-
-    @classmethod
-    def sell_claim(cls, claim_id, price, signatures, pubkeys):
-        return cls(template=cls.SELL_CLAIM, values={
-            'claim_id': claim_id,
-            'sell_script': OutputScript.sell_script(price),
-            'receive_script': InputScript.redeem_script(signatures, pubkeys)
-        })
-
-    @classmethod
-    def buy_claim(cls, sell_id, claim_id, claim_version, owner_pubkey_hash, negotiation_signature):
-        return cls(template=cls.BUY_CLAIM, values={
-            'sell_id': sell_id,
-            'claim_id': claim_id,
-            'claim_version': claim_version,
-            'owner_pubkey_hash': owner_pubkey_hash,
-            'negotiation_signature': negotiation_signature,
-        })
-
     @property
     def is_pay_pubkey_hash(self):
         return self.template.name.endswith('pay_pubkey_hash')
@@ -603,16 +589,5 @@ class OutputScript(Script):
         return self.template.name.startswith('support_claim+data+')
 
     @property
-    def is_sell_claim(self):
-        return self.template.name.startswith('sell_claim+')
-
-    @property
-    def is_buy_claim(self):
-        return self.template.name.startswith('buy_claim+')
-
-    @property
     def is_claim_involved(self):
-        return any((
-            self.is_claim_name, self.is_support_claim, self.is_update_claim,
-            self.is_sell_claim, self.is_buy_claim
-        ))
+        return any((self.is_claim_name, self.is_support_claim, self.is_update_claim))
