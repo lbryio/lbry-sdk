@@ -1,6 +1,10 @@
+import json
+import jsonschema
+import os
 import tempfile
 from binascii import hexlify
 
+import lbry.schema.types.v2 as schema_v2
 from unittest import TestCase, mock
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet import (
@@ -73,6 +77,62 @@ class TestWalletCreation(AsyncioTestCase):
         encrypted = wallet.pack('password')
         decrypted = Wallet.unpack('password', encrypted)
         self.assertEqual(decrypted['accounts'][0]['name'], 'An Account')
+
+    def test_wallet_file_schema(self):
+        wallet_dict = {
+            'version': 1,
+            'name': 'Main Wallet',
+            'preferences': {},
+            'accounts': [
+                {
+                    'certificates': {'x': 'y'},
+                    'name': 'Account 1',
+                    'ledger': 'lbc_mainnet',
+                    'modified_on': 123,
+                    'seed':
+                        "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                        "h absent",
+                    'encrypted': False,
+                    'private_key':
+                        'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                        'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
+                    'public_key':
+                        'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMm'
+                        'Dgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+                    'address_generator': {
+                        'name': 'deterministic-chain',
+                        'receiving': {'gap': 17, 'maximum_uses_per_address': 3},
+                        'change': {'gap': 10, 'maximum_uses_per_address': 3}
+                    }
+                },
+                {
+                    'certificates': {'a': 'b'},
+                    'name': 'Account 2',
+                    'ledger': 'lbc_mainnet',
+                    'modified_on': 123,
+                    'seed':
+                        "carbon smart garage balance margin twelve chest sword toast envelope bottom stomac"
+                        "h absent",
+                    'encrypted': True,
+                    'private_key':
+                        'xprv9s21ZrQH143K42ovpZygnjfHdAqSd9jo7zceDfPRogM7bkkoNVv7'
+                        'DRNLEoB8HoirMgH969NrgL8jNzLEegqFzPRWM37GXd4uE8uuRkx4LAe',
+                    'public_key':
+                        'xpub661MyMwAqRbcGWtPvbWh9sc2BCfw2cTeVDYF23o3N1t6UZ5wv3EMm'
+                        'Dgp66FxHuDtWdft3B5eL5xQtyzAtkdmhhC95gjRjLzSTdkho95asu9',
+                    'address_generator': {
+                        'name': 'single-address',
+                    }
+                },
+            ]
+        }
+
+        storage = WalletStorage(default=wallet_dict)
+        wallet = Wallet.from_storage(storage, self.manager)
+        self.assertDictEqual(wallet_dict, wallet.to_dict())
+        with open(os.path.join(*schema_v2.__path__, 'wallet.json')) as f:
+            wallet_schema = json.load(f)
+        jsonschema.validate(schema=wallet_schema, instance=wallet.to_dict())
 
     def test_no_password_but_encryption_preferred(self):
         wallet_dict = {

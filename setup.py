@@ -62,7 +62,10 @@ setup(
     extras_require={
         'torrent': ['lbry-libtorrent'],
         'lint': ['pylint==2.10.0'],
-        'test': ['coverage'],
+        'test': [
+            'coverage',
+            'jsonschema==4.4.0',
+        ],
         'scribe': ['scribe @ git+https://github.com/lbryio/scribe.git'],
     },
     classifiers=[
