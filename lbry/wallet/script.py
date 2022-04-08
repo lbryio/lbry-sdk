@@ -362,8 +362,8 @@ class InputScript(Script):
         SMALL_INTEGER('signatures_count'), PUSH_MANY('pubkeys'), SMALL_INTEGER('pubkeys_count'),
         OP_CHECKMULTISIG
     ))
-    REDEEM_SCRIPT_HASH_MULTI_SIG = Template('script_hash+mult_sig', (
-        PUSH_SINGLE('signature'), PUSH_SINGLE('pubkey'), PUSH_SUBSCRIPT('script', MULTI_SIG_SCRIPT)
+    REDEEM_SCRIPT_HASH_MULTI_SIG = Template('script_hash+multi_sig', (
+        OP_0, PUSH_MANY('signatures'), PUSH_SUBSCRIPT('script', MULTI_SIG_SCRIPT)
     ))
     TIME_LOCK_SCRIPT = Template('timelock', (
         PUSH_INTEGER('height'), OP_CHECKLOCKTIMEVERIFY, OP_DROP,
@@ -389,7 +389,7 @@ class InputScript(Script):
         })
 
     @classmethod
-    def redeem_mult_sig_script_hash(cls, signatures, pubkeys):
+    def redeem_multi_sig_script_hash(cls, signatures, pubkeys):
         return cls(template=cls.REDEEM_SCRIPT_HASH_MULTI_SIG, values={
             'signatures': signatures,
             'script': cls(template=cls.MULTI_SIG_SCRIPT, values={

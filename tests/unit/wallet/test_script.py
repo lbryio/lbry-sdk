@@ -130,12 +130,12 @@ class TestRedeemScriptHash(unittest.TestCase):
 
     def redeem_script_hash(self, sigs, pubkeys):
         # this checks that factory function correctly sets up the script
-        src1 = InputScript.redeem_script_hash(
+        src1 = InputScript.redeem_multi_sig_script_hash(
             [unhexlify(sig) for sig in sigs],
             [unhexlify(pubkey) for pubkey in pubkeys]
         )
         subscript1 = src1.values['script']
-        self.assertEqual(src1.template.name, 'script_hash')
+        self.assertEqual(src1.template.name, 'script_hash+multi_sig')
         self.assertListEqual([hexlify(v) for v in src1.values['signatures']], sigs)
         self.assertListEqual([hexlify(p) for p in subscript1.values['pubkeys']], pubkeys)
         self.assertEqual(subscript1.values['signatures_count'], len(sigs))
@@ -143,7 +143,7 @@ class TestRedeemScriptHash(unittest.TestCase):
         # now we test that it will round trip
         src2 = InputScript(src1.source)
         subscript2 = src2.values['script']
-        self.assertEqual(src2.template.name, 'script_hash')
+        self.assertEqual(src2.template.name, 'script_hash+multi_sig')
         self.assertListEqual([hexlify(v) for v in src2.values['signatures']], sigs)
         self.assertListEqual([hexlify(p) for p in subscript2.values['pubkeys']], pubkeys)
         self.assertEqual(subscript2.values['signatures_count'], len(sigs))
