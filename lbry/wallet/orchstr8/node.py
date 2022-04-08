@@ -189,6 +189,7 @@ class WalletNode:
                     'known_hubs': config.known_hubs if config else KnownHubsList(),
                     'hub_timeout': 30,
                     'concurrent_hub_requests': 32,
+                    'fee_per_name_char': 200000
                 }
             },
             'wallets': [wallet_file_name]
