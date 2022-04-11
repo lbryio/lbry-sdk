@@ -2,7 +2,7 @@ import os
 import re
 import io
 import sys
-import json
+import yaml
 import argparse
 import unittest
 from datetime import date
@@ -25,25 +25,17 @@ AREA_RENAME = {
 
 
 def get_github():
-    config_path = os.path.expanduser('~/.lbry-release-tool.json')
+    config_path = os.path.expanduser('~/.config/gh/hosts.yml')
     if os.path.exists(config_path):
         with open(config_path, 'r') as config_file:
-            config = json.load(config_file)
-            return github3.login(token=config['token'])
+            config = yaml.load(config_file, Loader=yaml.FullLoader)
+            return github3.login(token=config['github.com']['oauth_token'])
 
-    token = os.environ.get("GH_TOKEN")
-    if not token:
-        print('GitHub Credentials')
-        username = input('username: ')
-        password = getpass('password: ')
-        gh = github3.authorize(
-            username, password, ['repo'], 'lbry release tool',
-            two_factor_callback=lambda: input('Enter 2FA: ')
-        )
-        with open(config_path, 'w') as config_file:
-            json.dump({'token': gh.token}, config_file)
-        token = gh.token
-    return github3.login(token=token)
+    print('To run release tool you need to first login using the github cli:')
+    print('')
+    print('  $ gh auth login')
+    print('')
+    sys.exit(1)
 
 
 def get_labels(pr, prefix):
