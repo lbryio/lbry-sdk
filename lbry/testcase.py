@@ -6,7 +6,6 @@ import logging
 import tempfile
 import functools
 import asyncio
-import grpc
 from asyncio.runners import _cancel_all_tasks  # type: ignore
 import unittest
 from unittest.case import _Outcome
@@ -38,8 +37,6 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.blob.blob_manager import BlobManager
 from lbry.stream.reflector.server import ReflectorServer
 from lbry.blob_exchange.server import BlobServer
-from lbry.schema.types.v2 import hub_pb2_grpc
-from lbry.schema.types.v2 import hub_pb2
 
 
 class ColorHandler(logging.StreamHandler):
@@ -346,18 +343,19 @@ class IntegrationTestCase(AsyncioTestCase):
         """ Ask lbrycrd to generate some blocks and wait until ledger has them. """
         prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
         height = self.blockchain.block_expected
-        self.conductor.spv_node.server.es_synchronized.clear()
-        self.conductor.spv_node.server.go_hub_synchronized.clear()
-        self.conductor.spv_node.server.synchronized.clear()
+        server = self.conductor.spv_node.server
+        server.es_synchronized.clear()
+        server.go_hub_synchronized.clear()
+        server.synchronized.clear()
         await self.blockchain.generate(blocks)
         await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
         while True:
-            await self.conductor.spv_node.server.synchronized.wait()
-            self.conductor.spv_node.server.es_synchronized.clear()
-            self.conductor.spv_node.server.go_hub_synchronized.clear()
-            self.conductor.spv_node.server.synchronized.clear()
-            if self.conductor.spv_node.server.db.db_height >= height and \
-                self.conductor.spv_node.server._go_hub_height == self.conductor.spv_node.server.db.db_height == self.conductor.spv_node.server._es_height:
+            await server.synchronized.wait()
+            server.es_synchronized.clear()
+            server.go_hub_synchronized.clear()
+            server.synchronized.clear()
+            if server.db.db_height >= height and \
+                server._go_hub_height == server.db.db_height == server._es_height:
                 break
 
 

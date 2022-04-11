@@ -10,8 +10,7 @@ from typing import Dict, Optional, Tuple
 import aiohttp
 import grpc
 from lbry.schema.types.v2 import hub_pb2_grpc
-from lbry.schema.types.v2.hub_pb2 import SearchRequest
-from lbry.schema.types.v2.hub_pb2 import StringArray
+from lbry.schema.types.v2.hub_pb2 import SearchRequest, StringArray
 
 from lbry import __version__
 from lbry.utils import resolve_host
@@ -478,12 +477,6 @@ class Network:
 
     def claim_search(self, session_override=None, **kwargs):
         return self.rpc('blockchain.claimtrie.search', kwargs, False, session_override)
-
-    async def new_resolve(self, server, urls):
-        message = {"method": "resolve", "params": {"urls": urls, "protobuf": True}}
-        async with self.aiohttp_session.post(server, json=message) as r:
-            result = await r.json()
-            return result['result']
 
     async def new_claim_search(self, server, **kwargs):
         async with grpc.aio.insecure_channel(server) as channel:
