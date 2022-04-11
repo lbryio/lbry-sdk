@@ -284,11 +284,9 @@ class IntegrationTestCase(AsyncioTestCase):
         if self.ledger.config.get('use_go_hub'):
             server = self.conductor.spv_node.server
             while True:
-                # self.log.warning('server.db.db_height: %s, self.ledger.headers.height: %s', server.db.db_height, self.ledger.headers.height)
                 if server.db.db_height >= height and \
                     server._go_hub_height == server.db.db_height == server._es_height:
                     return True
-                # self.log.warning('Waiting for header %s', height)
                 await server.synchronized.wait()
                 server.es_synchronized.clear()
                 server.go_hub_synchronized.clear()
