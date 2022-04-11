@@ -246,6 +246,7 @@ class IntegrationTestCase(AsyncioTestCase):
         self.ledger: Optional[Ledger] = None
         self.wallet: Optional[Wallet] = None
         self.account: Optional[Account] = None
+        self.log = logging.getLogger(__name__).getChild(self.__class__.__name__)
 
     async def asyncSetUp(self):
         self.conductor = Conductor(seed=self.SEED)
@@ -284,20 +285,17 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def on_header(self, height):
         if self.ledger.config.get('use_go_hub'):
-            # If client isn't connected yet (which happens in some test for some reason?)
-            # just default to localhost
-            host = self.ledger.network.client.server[0] if self.ledger.network.client else "127.0.0.1"
-            port = "50051"
-            server = f"{host}:{port}"
-            async with grpc.aio.insecure_channel(server) as channel:
-                stub = hub_pb2_grpc.HubStub(channel)
-                try:
-                    async for res in stub.HeightSubscribe(hub_pb2.UInt32Value(value=height)):
-                        if res.value < height:
-                            print(f"??? {res.value} < {height}")
-                        return True
-                except grpc.aio.AioRpcError as error:
-                    raise RPCError(error.code(), error.details())
+            server = self.conductor.spv_node.server
+            while True:
+                # self.log.warning('server.db.db_height: %s, self.ledger.headers.height: %s', server.db.db_height, self.ledger.headers.height)
+                if server.db.db_height >= height and \
+                    server._go_hub_height == server.db.db_height == server._es_height:
+                    return True
+                # self.log.warning('Waiting for header %s', height)
+                await server.synchronized.wait()
+                server.es_synchronized.clear()
+                server.go_hub_synchronized.clear()
+                server.synchronized.clear()
         if self.ledger.headers.height < height:
             await self.ledger.on_header.where(
                 lambda e: e.height == height
