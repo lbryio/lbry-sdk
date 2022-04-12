@@ -175,7 +175,8 @@ class IterativeFinder(AsyncGenerator):
             self._reset_closest(peer)
             return
         except TransportNotConnected:
-            return self._aclose()
+            await self._aclose(reason="not connected")
+            return
         except RemoteException:
             self._reset_closest(peer)
             return
