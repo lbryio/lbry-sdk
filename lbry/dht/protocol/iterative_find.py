@@ -287,8 +287,6 @@ class IterativeFinder(AsyncGenerator):
         running_tasks = list(chain(self.tasks, self.running_probes.values()))
         for task in running_tasks:
             task.cancel()
-        if len(running_tasks):
-            await asyncio.wait(running_tasks, loop=self.loop)
         log.debug("%s[%x] [%s] async close because %s: %i active nodes %i contacted %i produced %i queued",
                   type(self).__name__, id(self), self.key.hex()[:8],
                   reason, len(self.active), len(self.contacted),
