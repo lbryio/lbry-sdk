@@ -5,6 +5,7 @@ import shutil
 from binascii import hexlify, unhexlify
 from itertools import cycle
 
+import lbry.error
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet.constants import CENT, COIN, NULL_HASH32
 from lbry.wallet import Wallet, Account, Ledger, Database, Headers, Transaction, Output, Input
@@ -373,8 +374,8 @@ class TransactionIOBalancing(AsyncioTestCase):
     def txi(self, txo):
         return Input.spend(txo)
 
-    def tx(self, inputs, outputs):
-        return Transaction.create(inputs, outputs, [self.account], self.account)
+    def tx(self, inputs, outputs, everything: bool = False):
+        return Transaction.create(inputs, outputs, [self.account], self.account, everything=everything)
 
     async def create_utxos(self, amounts):
         utxos = [self.txo(amount) for amount in amounts]
@@ -532,3 +533,106 @@ class TransactionIOBalancing(AsyncioTestCase):
         self.assertListEqual([0.01, 1], self.inputs(tx))
         # change is now needed to consume extra input
         self.assertListEqual([0.97], self.outputs(tx))
+
+    async def _test_send_everything_use_cases(self):
+        self.ledger.fee_per_byte = int(.01*CENT)
+
+        # available UTXOs for filling missing inputs
+        avail = [
+            1, 1, 3, 5, 10
+        ]
+        utxos = await self.create_utxos(avail)
+        #total = sum(avail)
+
+        # everything: outputs populated via change_account
+        tx = await self.tx(
+            [],  # inputs
+            [],  # outputs
+            everything=True
+        )
+        self.assertListEqual(self.inputs(tx), avail)
+        self.assertListEqual(self.outputs(tx), [19.92])
+
+        await self.ledger.release_outputs(utxos)
+
+        # everything: one output with initial amount (0.0) bumped
+        tx = await self.tx(
+            [],  # inputs
+            [self.txo(0.0)],  # outputs
+            everything=True
+        )
+        self.assertListEqual(self.inputs(tx), avail)
+        self.assertListEqual(self.outputs(tx), [19.92])
+
+        await self.ledger.release_outputs(utxos)
+
+        # everything: two outputs with initial amounts bumped
+        tx = await self.tx(
+            [],  # inputs
+            [self.txo(1.0), self.txo(4.0)],  # outputs
+            everything=True
+        )
+        self.assertListEqual(self.inputs(tx), avail)
+        self.assertListEqual(self.outputs(tx), [8.46, 11.46])
+
+        await self.ledger.release_outputs(utxos)
+
+        # everything: some inputs provided
+        if self.ledger.coin_selection_strategy == 'sqlite':
+            # NOTE: With this strategy, get_spendable_utxos() grabs extra
+            # utxos with the plan that any excess change can be added to
+            # the outputs. Hence the given initial output must be less
+            # than the absolute maximum (19.92).
+            await self.ledger.reserve_outputs(utxos[2:]);
+            tx = await self.tx(
+                [self.txi(self.txo(a)) for a in avail[2:]],  # inputs
+                [self.txo(19.0)],  # outputs
+                everything=True
+            )
+            self.assertListEqual(self.inputs(tx), avail[2:] + avail[0:2])
+            # NOTE: The maximum amount (19.92) was transferred. But it
+            # was broken into two outputs (19.0 and 0.92).
+            self.assertListEqual(self.outputs(tx), [19.0, 0.92])
+        else:
+            await self.ledger.reserve_outputs(utxos[2:]);
+            tx = await self.tx(
+                [self.txi(self.txo(a)) for a in avail[2:]],  # inputs
+                [self.txo(19.92)],  # outputs
+                everything=True
+            )
+            self.assertListEqual(self.inputs(tx), avail[2:] + avail[0:2])
+            self.assertListEqual(self.outputs(tx), [19.92])
+
+        await self.ledger.release_outputs(utxos)
+
+        # everything: maximum output already present
+        tx = await self.tx(
+            [],  # inputs
+            [self.txo(19.92)],  # outputs
+            everything=True
+        )
+        self.assertListEqual(self.inputs(tx), avail)
+        self.assertListEqual(self.outputs(tx), [19.92])
+
+        await self.ledger.release_outputs(utxos)
+
+        # everything: insufficient funds
+        try:
+            tx = await self.tx(
+                [],            # inputs
+                [self.txo(19.93)],  # outputs
+                everything=True
+            )
+        except lbry.error.InsufficientFundsError:
+            pass
+        else:
+            self.fail("expected InsufficientFunds exception")
+
+        await self.ledger.release_outputs(utxos)
+
+    async def test_send_everything_use_cases(self):
+        await self._test_send_everything_use_cases()
+
+    async def test_send_everything_use_cases_sqlite(self):
+        self.ledger.coin_selection_strategy = 'sqlite'
+        await self._test_send_everything_use_cases()
