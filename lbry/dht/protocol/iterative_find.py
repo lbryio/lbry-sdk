@@ -276,8 +276,8 @@ class IterativeFinder(AsyncGenerator):
     async def __anext__(self) -> typing.List['KademliaPeer']:
         return await super().__anext__()
 
-    async def asend(self, val):
-        return await self.generator.asend(val)
+    async def asend(self, value):
+        return await self.generator.asend(value)
 
     async def athrow(self, typ, val=None, tb=None):
         return await self.generator.athrow(typ, val, tb)
