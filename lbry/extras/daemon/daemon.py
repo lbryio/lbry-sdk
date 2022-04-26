@@ -1544,6 +1544,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         Send the same number of credits to multiple addresses using all accounts in wallet to
         fund the transaction and the default account to receive any change.
+        If amount is "everything", then all funds from the selected account/wallets are sent.
 
         Usage:
             wallet_send <amount> <addresses>... [--wallet_id=<wallet_id>] [--preview]
@@ -1564,7 +1565,8 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(change_account_id)
         accounts = wallet.get_accounts_or_all(funding_account_ids)
 
-        amount = self.get_dewies_or_error("amount", amount)
+        everything = amount == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error("amount", amount)
 
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]
@@ -1588,7 +1590,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 raise ValueError(f"Unsupported address: '{address}'")  # TODO: use error from lbry.error
 
         tx = await Transaction.create(
-            [], outputs, accounts, account
+            [], outputs, accounts, account, everything=everything
         )
         if not preview:
             await self.broadcast_or_release(tx, blocking)
@@ -1861,7 +1863,8 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         to_account = wallet.get_account_or_default(to_account)
         from_account = wallet.get_account_or_default(from_account)
-        amount = self.get_dewies_or_error('amount', amount) if amount else None
+        everything = amount == 'everything' or everything
+        amount = 0 if everything else self.get_dewies_or_error('amount', amount)
         if not isinstance(outputs, int):
             # TODO: use error from lbry.error
             raise ValueError("--outputs must be an integer.")
@@ -1919,6 +1922,7 @@ class Daemon(metaclass=JSONRPCServerType):
     def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None, preview=False, blocking=False):
         """
         Send the same number of credits to multiple addresses from a specific account (or default account).
+        If amount is "everything", then all funds from the selected account/wallets are sent.
 
         Usage:
             account_send <amount> <addresses>... [--account_id=<account_id>] [--wallet_id=<wallet_id>] [--preview]
@@ -2689,7 +2693,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --name=<name>                  : (str) name of the channel prefixed with '@'
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
         --allow_duplicate_name=<allow_duplicate_name> : (bool) create new channel even if one already exists with
                                               given name. default: false.
             --title=<title>                : (str) title of the publication
@@ -2753,7 +2757,8 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_channel_name_or_error(name)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        everything = bid == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
 
         existing_channels = await self.ledger.get_channels(accounts=wallet.accounts, claim_name=name)
@@ -2768,7 +2773,8 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0],
+            everything=everything
         )
         txo = tx.outputs[0]
         txo.set_channel_private_key(
@@ -2813,7 +2819,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the channel to update
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
             --title=<title>                : (str) title of the publication
             --description=<description>    : (str) description of the publication
             --email=<email>                : (str) email of channel owner
@@ -2904,8 +2910,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a channel."
             )
 
+        everything = False
         if bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+            everything = bid == 'everything'
+            amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         else:
             amount = old_txo.amount
 
@@ -2921,7 +2929,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0]
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
+            everything=everything
         )
         new_txo = tx.outputs[0]
 
@@ -3320,7 +3329,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
             Options:
                 --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-                --bid=<bid>                    : (decimal) amount to back the claim
+                --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
                 --claim_id=<claim_id>          : (str) id of the claim being reposted
                 --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
                                                                        given name. default: false.
@@ -3346,7 +3355,8 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        everything = bid == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
         claims = await account.get_claims(claim_name=name)
         if len(claims) > 0:
@@ -3364,7 +3374,8 @@ class Daemon(metaclass=JSONRPCServerType):
         claim.repost.update(**kwargs)
         claim.repost.reference.claim_id = claim_id
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            everything=everything
         )
         new_txo = tx.outputs[0]
 
@@ -3406,7 +3417,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --file_name=<file_name>        : (str) name of file to be associated with stream.
             --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
@@ -3495,7 +3506,8 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        everything = bid == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
         kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
@@ -3520,7 +3532,8 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim.stream.update(**kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            everything=everything
         )
         new_txo = tx.outputs[0]
 
@@ -3580,7 +3593,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --claim_id=<claim_id>          : (str) id of the stream claim to update
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --validate_file                : (bool) validate that the video container and encodings match
                                              common web browser support or that optimization succeeds if specified.
@@ -3699,8 +3712,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a stream or repost claim."
             )
 
+        everything = False
         if bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+            everything = bid == 'everything'
+            amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         else:
             amount = old_txo.amount
 
@@ -3749,7 +3764,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim.clear_signature()
         tx = await Transaction.claim_update(
             old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
-            channel if not clear_channel else None
+            channel if not clear_channel else None,
+            everything=everything
         )
 
         new_txo = tx.outputs[0]
@@ -3924,7 +3940,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --name=<name>                  : (str) name of the collection
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
             --claims=<claims>              : (list) claim ids to be included in the collection
             --allow_duplicate_name         : (bool) create new collection even if one already exists with
                                                     given name. default: false.
@@ -3990,7 +4006,8 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_collection_name_or_error(name)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+        everything = bid == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         claim_address = await self.get_receiving_address(claim_address, account)
 
         existing_collections = await self.ledger.get_collections(accounts=wallet.accounts, claim_name=name)
@@ -4005,7 +4022,8 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.collection.update(claims=claims, **kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            everything=everything
         )
         new_txo = tx.outputs[0]
 
@@ -4045,7 +4063,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --claim_id=<claim_id>          : (str) claim_id of the collection to update
-            --bid=<bid>                    : (decimal) amount to back the claim
+            --bid=<bid>                    : (decimal) amount to back the claim or (str) "everything"
             --claims=<claims>              : (list) claim ids
             --clear_claims                 : (bool) clear existing claim references (prior to adding new ones)
             --title=<title>                : (str) title of the collection
@@ -4131,8 +4149,10 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a collection."
             )
 
+        everything = False
         if bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
+            everything = bid == 'everything'
+            amount = 0 if everything else self.get_dewies_or_error('bid', bid, positive_value=True)
         else:
             amount = old_txo.amount
 
@@ -4155,7 +4175,8 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.collection.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
+            everything=everything
         )
         new_txo = tx.outputs[0]
 
@@ -4297,7 +4318,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --claim_id=<claim_id>         : (str) claim_id of the claim to support
-            --amount=<amount>             : (decimal) amount of support
+            --amount=<amount>             : (decimal) amount of support or (str) "everything"
             --tip                         : (bool) send support to claim owner, default: false.
             --channel_id=<channel_id>     : (str) claim id of the supporters identity channel
             --channel_name=<channel_name> : (str) name of the supporters identity channel
@@ -4316,7 +4337,8 @@ class Daemon(metaclass=JSONRPCServerType):
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error("amount", amount)
+        everything = amount == 'everything'
+        amount = 0 if everything else self.get_dewies_or_error("amount", amount)
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
@@ -4325,7 +4347,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         tx = await Transaction.support(
             claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            comment=comment
+            comment=comment, everything=everything
         )
         new_txo = tx.outputs[0]
 
