@@ -804,11 +804,12 @@ class Transaction:
 
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
 
-        if everything and not len(tx._inputs):
+        if everything and not any(map(lambda txi: not txi.txo_ref.txo.is_claim, tx._inputs)):
             # Spend "everything" requested, but inputs not specified.
             # Make a set of inputs from all funding accounts.
             all_utxos = []
             for a in funding_accounts:
+                # TODO: Constraints for get_utxos()?
                 utxos = await a.get_utxos()
                 await a.ledger.reserve_outputs(utxos)
                 all_utxos.extend(utxos)
@@ -914,27 +915,31 @@ class Transaction:
         self._reset()
 
     @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account'):
+    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account',
+            everything: bool = False):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
-        return cls.create([], [output], funding_accounts, change_account)
+        return cls.create([], [output], funding_accounts, change_account, everything=everything)
 
     @classmethod
     def claim_create(
             cls, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
+            everything: bool = False):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         claim_output = Output.pay_claim_name_pubkey_hash(
             amount, name, claim, ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
             claim_output.sign(signing_channel, b'placeholder txid:nout')
-        return cls.create([], [claim_output], funding_accounts, change_account, sign=False)
+        return cls.create([], [claim_output], funding_accounts, change_account,
+                          everything=everything, sign=False)
 
     @classmethod
     def claim_update(
             cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
+            everything: bool = False):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         updated_claim = Output.pay_update_claim_pubkey_hash(
             amount, previous_claim.claim_name, previous_claim.claim_id,
@@ -945,7 +950,8 @@ class Transaction:
         else:
             updated_claim.clear_signature()
         return cls.create(
-            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account, sign=False
+            [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account,
+            everything=everything, sign=False
         )
 
     @classmethod
@@ -966,7 +972,8 @@ class Transaction:
             support_output = Output.pay_support_pubkey_hash(
                 amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
             )
-        return cls.create([], [support_output], funding_accounts, change_account, sign=False)
+        return cls.create([], [support_output], funding_accounts, change_account,
+                          everything=everything, sign=False)
 
     @classmethod
     def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
