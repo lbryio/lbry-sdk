@@ -808,12 +808,12 @@ class Transaction:
             # Spend "everything" requested, but inputs not specified.
             # Make a set of inputs from all funding accounts.
             all_utxos = []
-            for a in funding_accounts:
+            for acct in funding_accounts:
                 # TODO: Constraints for get_utxos()?
-                utxos = await a.get_utxos()
-                await a.ledger.reserve_outputs(utxos)
+                utxos = await acct.get_utxos()
+                await acct.ledger.reserve_outputs(utxos)
                 all_utxos.extend(utxos)
-            if not len(all_utxos):
+            if not all_utxos:
                 raise InsufficientFundsError()
             everything_in = [Input.spend(txo) for txo in all_utxos]
             tx.add_inputs(everything_in)
@@ -826,7 +826,7 @@ class Transaction:
         # value of the inputs less the cost to spend those inputs
         payment = tx.get_effective_input_sum(ledger)
 
-        if everything and len(tx._outputs) and payment > cost:
+        if everything and tx._outputs and payment > cost:
             # Distribute the surplus across the known set of outputs.
             amount = (payment - cost) // len(tx._outputs)
             for txo in tx._outputs:
@@ -957,7 +957,7 @@ class Transaction:
     @classmethod
     def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
                 funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
-                comment: str = None):
+                comment: str = None, everything: bool = False):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
         if signing_channel is not None or comment is not None:
             support = Support()
