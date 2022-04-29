@@ -132,7 +132,7 @@ def json_dumps_pretty(obj, **kwargs):
 
 try:
     # the standard contextlib.aclosing() is available in 3.10+
-    from contextlib import aclosing
+    from contextlib import aclosing  # pylint: disable=unused-import
 except ImportError:
     @contextlib.asynccontextmanager
     async def aclosing(thing):
