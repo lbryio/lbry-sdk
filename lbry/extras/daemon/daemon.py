@@ -1838,7 +1838,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return wallet.get_account_or_error(account_id).get_max_gap()
 
     @requires("wallet")
-    def jsonrpc_account_fund(self, to_account=None, from_account=None, amount='0.0',
+    def jsonrpc_account_fund(self, to_account=None, from_account=None, amount=None,
                              everything=False, outputs=1, broadcast=False, wallet_id=None):
         """
         Transfer some amount (or --everything) to an account from another
@@ -1867,9 +1867,8 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         to_account = wallet.get_account_or_default(to_account)
         from_account = wallet.get_account_or_default(from_account)
-        everything = amount == 'everything' or everything
         amount = self.get_dewies_or_error('amount', amount, everything=everything,
-                                          argument_everything='everything')
+                                          default_value=0, argument_everything='everything')
         if not isinstance(outputs, int):
             # TODO: use error from lbry.error
             raise ValueError("--outputs must be an integer.")
