@@ -39,7 +39,7 @@ from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
     ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError,
-    InputValueError
+    InputValueError, InputValueIsNoneError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -1539,7 +1539,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_wallet_send(
-            self, amount, addresses, wallet_id=None,
+            self, amount=None, addresses=None, wallet_id=None,
             change_account_id=None, funding_account_ids=None,
             preview=False, blocking=True, amount_everything=False):
         """
@@ -1568,11 +1568,10 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(change_account_id)
         accounts = wallet.get_accounts_or_all(funding_account_ids)
 
-        amount = self.get_dewies_or_error('amount', amount)
-        if amount_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("amount", "amount_everything")
+        amount = self.get_dewies_or_error('amount', amount, everything=amount_everything)
 
+        if addresses is None:
+            raise InputValueIsNoneError('addresses')
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]
 
@@ -1869,7 +1868,8 @@ class Daemon(metaclass=JSONRPCServerType):
         to_account = wallet.get_account_or_default(to_account)
         from_account = wallet.get_account_or_default(from_account)
         everything = amount == 'everything' or everything
-        amount = 0 if everything else self.get_dewies_or_error('amount', amount)
+        amount = self.get_dewies_or_error('amount', amount, everything=everything,
+                                          argument_everything='everything')
         if not isinstance(outputs, int):
             # TODO: use error from lbry.error
             raise ValueError("--outputs must be an integer.")
@@ -1924,7 +1924,7 @@ class Daemon(metaclass=JSONRPCServerType):
         return tx
 
     @requires(WALLET_COMPONENT)
-    def jsonrpc_account_send(self, amount, addresses, account_id=None, wallet_id=None,
+    def jsonrpc_account_send(self, amount=None, addresses=None, account_id=None, wallet_id=None,
                              preview=False, blocking=False, amount_everything=False):
         """
         Send the same number of credits to multiple addresses from a specific account (or default account).
@@ -2683,7 +2683,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_create(
-            self, name, bid, allow_duplicate_name=False, account_id=None, wallet_id=None,
+            self, name, bid=None, allow_duplicate_name=False, account_id=None, wallet_id=None,
             claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, bid_everything=False,
             **kwargs):
@@ -2769,10 +2769,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_channel_name_or_error(name)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        if bid_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("bid", "bid_everything")
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
 
         existing_channels = await self.ledger.get_channels(accounts=wallet.accounts, claim_name=name)
@@ -2927,14 +2924,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a channel."
             )
 
-        if bid_everything:
-            if bid is not None:
-                raise ConflictingInputValueError("bid", "bid_everything")
-            amount = 0
-        elif bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        else:
-            amount = old_txo.amount
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+                                          default_value=old_txo.amount)
 
         if claim_address is not None:
             self.valid_address_or_error(claim_address)
@@ -3330,7 +3321,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_repost(
-            self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
+            self, name, bid=None, claim_id=None, allow_duplicate_name=False, channel_id=None,
             channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
             claim_address=None, funding_account_ids=None, preview=False, blocking=False,
             bid_everything=False, **kwargs):
@@ -3378,10 +3369,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        if bid_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("bid", "bid_everything")
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
         claims = await account.get_claims(claim_name=name)
         if len(claims) > 0:
@@ -3391,6 +3379,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"You already have a stream claim published under the name '{name}'. "
                     f"Use --allow-duplicate-name flag to override."
                 )
+        if claim_id is None:
+            raise InputValueIsNoneError('claim_id')
         if not VALID_FULL_CLAIM_ID.fullmatch(claim_id):
             # TODO: use error from lbry.error
             raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
@@ -3418,7 +3408,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
     async def jsonrpc_stream_create(
-            self, name, bid, file_path=None, allow_duplicate_name=False,
+            self, name, bid=None, file_path=None, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, validate_file=False, optimize_file=False, bid_everything=False,
@@ -3535,10 +3525,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        if bid_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("bid", "bid_everything")
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
         kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
@@ -3748,14 +3735,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a stream or repost claim."
             )
 
-        if bid_everything:
-            if bid is not None:
-                raise ConflictingInputValueError("bid", "bid_everything")
-            amount = 0
-        elif bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        else:
-            amount = old_txo.amount
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+                                          default_value=old_txo.amount)
 
         if claim_address is not None:
             self.valid_address_or_error(claim_address)
@@ -3956,7 +3937,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_collection_create(
-            self, name, bid, claims, allow_duplicate_name=False,
+            self, name, bid=None, claims=None, allow_duplicate_name=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, claim_address=None, funding_account_ids=None,
             preview=False, blocking=False, bid_everything=False,
@@ -4047,10 +4028,7 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_collection_name_or_error(name)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        if bid_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("bid", "bid_everything")
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
 
         claim_address = await self.get_receiving_address(claim_address, account)
 
@@ -4063,6 +4041,8 @@ class Daemon(metaclass=JSONRPCServerType):
                     f"Use --allow-duplicate-name flag to override."
                 )
 
+        if claims is None:
+            raise InputValueIsNoneError('claims')
         claim = Claim()
         claim.collection.update(claims=claims, **kwargs)
         tx = await Transaction.claim_create(
@@ -4196,14 +4176,8 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a collection."
             )
 
-        if bid_everything:
-            if bid is not None:
-                raise ConflictingInputValueError("bid", "bid_everything")
-            amount = 0
-        elif bid is not None:
-            amount = self.get_dewies_or_error('bid', bid, positive_value=True)
-        else:
-            amount = old_txo.amount
+        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+                                          default_value=old_txo.amount)
 
         if claim_address is not None:
             self.valid_address_or_error(claim_address)
@@ -4351,7 +4325,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_support_create(
-            self, claim_id, amount, tip=False,
+            self, claim_id, amount=None, tip=False,
             channel_id=None, channel_name=None, channel_account_id=None,
             account_id=None, wallet_id=None, funding_account_ids=None,
             comment=None, preview=False, blocking=False, amount_everything=False):
@@ -4388,10 +4362,8 @@ class Daemon(metaclass=JSONRPCServerType):
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('amount', amount)
-        if amount_everything:
-            if amount != 0:
-                raise ConflictingInputValueError("amount", "amount_everything")
+        amount = self.get_dewies_or_error('amount', amount, everything=amount_everything)
+
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
         if not tip:
@@ -5521,16 +5493,28 @@ class Daemon(metaclass=JSONRPCServerType):
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     @staticmethod
-    def get_dewies_or_error(argument: str, lbc: str, positive_value=False):
-        try:
-            dewies = lbc_to_dewies(lbc)
-            if positive_value and dewies <= 0:
+    def get_dewies_or_error(argument: str, lbc: str, positive_value=False,
+                            everything=False, default_value=None,
+                            argument_everything=None):
+        if everything:
+            if lbc is not None:
+                argument_everything = argument_everything or argument + '_everything'
+                raise ConflictingInputValueError(argument, argument_everything)
+            return 0
+        elif lbc is not None:
+            try:
+                dewies = lbc_to_dewies(lbc)
+                if positive_value and dewies <= 0:
+                    # TODO: use error from lbry.error
+                    raise ValueError(f"'{argument}' value must be greater than 0.0")
+                return dewies
+            except ValueError as e:
                 # TODO: use error from lbry.error
-                raise ValueError(f"'{argument}' value must be greater than 0.0")
-            return dewies
-        except ValueError as e:
-            # TODO: use error from lbry.error
-            raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+                raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+        elif default_value is not None:
+            return default_value
+        else:
+            raise InputValueIsNoneError(argument)
 
     async def resolve(self, accounts, urls, **kwargs):
         results = await self.ledger.resolve(accounts, urls, **kwargs)
