@@ -1553,6 +1553,7 @@ class Daemon(metaclass=JSONRPCServerType):
                         [--blocking]
 
         Options:
+            --amount=<amount>               : (decimal) the amount to transfer lbc
             --amount_everything             : (bool) send everything from funding accounts (excluding claims),
                                                      default: false.
             --wallet_id=<wallet_id>         : (str) restrict operation to specific wallet
@@ -1856,7 +1857,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --to_account=<to_account>     : (str) send to this account
             --from_account=<from_account> : (str) spend from this account
-            --amount=<amount>             : (str) the amount to transfer lbc
+            --amount=<amount>             : (decimal) the amount to transfer lbc
             --everything                  : (bool) transfer everything (excluding claims), default: false.
             --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
             --wallet_id=<wallet_id>       : (str) limit operation to specific wallet.
@@ -1934,6 +1935,7 @@ class Daemon(metaclass=JSONRPCServerType):
                         [--blocking]
 
         Options:
+            --amount=<amount>          : (decimal) the amount to transfer lbc
             --amount_everything        : (bool) send everything from funding accounts (excluding claims),
                                                 default: false.
             --account_id=<account_id>  : (str) account to fund the transaction
@@ -3199,7 +3201,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Create or replace a stream claim at a given name (use 'stream create/update' for more control).
 
         Usage:
-            publish (<name> | --name=<name>) [--bid=<bid>] [--file_path=<file_path>]
+            publish (<name> | --name=<name>) [--bid=<bid> | --bid_everything] [--file_path=<file_path>]
                     [--file_name=<file_name>] [--file_hash=<file_hash>] [--validate_file] [--optimize_file]
                     [--fee_currency=<fee_currency>] [--fee_amount=<fee_amount>] [--fee_address=<fee_address>]
                     [--title=<title>] [--description=<description>] [--author=<author>]
@@ -3215,6 +3217,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --name=<name>                  : (str) name of the content (can only consist of a-z A-Z 0-9 and -(dash))
             --bid=<bid>                    : (decimal) amount to back the claim
+            --bid_everything               : (bool) bid everything from funding accounts (excluding claims),
+                                                    default: false.
             --file_path=<file_path>        : (str) path to file to be associated with name.
             --file_name=<file_name>        : (str) name of file to be associated with stream.
             --file_hash=<file_hash>        : (str) hash of file to be associated with stream.
@@ -3305,9 +3309,6 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet=wallet, accounts=accounts, claim_name=name
         )
         if len(claims) == 0:
-            if 'bid' not in kwargs:
-                # TODO: use error from lbry.error
-                raise Exception("'bid' is a required argument for new publishes.")
             return await self.jsonrpc_stream_create(name, **kwargs)
         elif len(claims) == 1:
             assert claims[0].claim.is_stream, f"Claim at name '{name}' is not a stream claim."
