@@ -5493,9 +5493,10 @@ class Daemon(metaclass=JSONRPCServerType):
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     @staticmethod
-    def get_dewies_or_error(argument: str, lbc: str, positive_value=False,
-                            everything=False, default_value=None,
-                            argument_everything=None):
+    def get_dewies_or_error(argument: str, lbc: Optional[str],
+                            positive_value: bool = False, everything: bool = False,
+                            default_value: Optional[int] = None,
+                            argument_everything: Optional[str] = None) -> int:
         if everything:
             if lbc is not None:
                 argument_everything = argument_everything or argument + '_everything'
