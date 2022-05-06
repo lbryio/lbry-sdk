@@ -17,8 +17,9 @@ from typing import Type, Optional
 import urllib.request
 from uuid import uuid4
 
+
 try:
-    from scribe.env import Env
+    from scribe.hub.env import ServerEnv
     from scribe.hub.service import HubServerService
     from scribe.elasticsearch.service import ElasticSyncService
     from scribe.blockchain.service import BlockchainProcessorService
@@ -260,7 +261,7 @@ class SPVNode:
             }
             if extraconf:
                 conf.update(extraconf)
-            env = Env(**conf)
+            env = ServerEnv(**conf)
             self.writer = BlockchainProcessorService(env)
             self.server = HubServerService(env)
             self.es_writer = ElasticSyncService(env)
