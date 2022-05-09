@@ -138,7 +138,7 @@ class BlobServerProtocol(asyncio.Protocol):
             try:
                 request = BlobRequest.deserialize(self.buf + data)
                 self.buf = remainder
-            except JSONDecodeError:
+            except (UnicodeDecodeError, JSONDecodeError):
                 log.error("request from %s is not valid json (%i bytes): %s", self.peer_address_and_port,
                           len(self.buf + data), '' if not data else binascii.hexlify(self.buf + data).decode())
                 self.close()

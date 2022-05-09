@@ -326,6 +326,30 @@ class ResolveCommand(BaseResolveTestCase):
         await self.support_abandon(claim_id1)
         await self.assertResolvesToClaimId('@foo', claim_id2)
 
+    async def test_resolve_duplicate_name_in_channel(self):
+        db_resolve = self.conductor.spv_node.server.db.resolve
+        # first one remains winner unless something else changes
+        channel_id = self.get_claim_id(await self.channel_create('@foo'))
+
+        file_path = self.create_upload_file(data=b'hi!')
+        tx = await self.daemon.jsonrpc_stream_create('duplicate', '0.1', file_path=file_path, allow_duplicate_name=True, channel_id=channel_id)
+        await self.ledger.wait(tx)
+
+        first_claim = tx.outputs[0].claim_id
+
+        file_path = self.create_upload_file(data=b'hi!')
+        tx = await self.daemon.jsonrpc_stream_create('duplicate', '0.1', file_path=file_path, allow_duplicate_name=True, channel_id=channel_id)
+        await self.ledger.wait(tx)
+        duplicate_claim = tx.outputs[0].claim_id
+        await self.generate(1)
+
+        stream, channel, _, _ = await db_resolve(f"@foo:{channel_id}/duplicate:{first_claim}")
+        self.assertEqual(stream.claim_hash.hex(), first_claim)
+        self.assertEqual(channel.claim_hash.hex(), channel_id)
+        stream, channel, _, _ = await db_resolve(f"@foo:{channel_id}/duplicate:{duplicate_claim}")
+        self.assertEqual(stream.claim_hash.hex(), duplicate_claim)
+        self.assertEqual(channel.claim_hash.hex(), channel_id)
+
     async def test_advanced_resolve(self):
         claim_id1 = self.get_claim_id(
             await self.stream_create('foo', '0.7', allow_duplicate_name=True))

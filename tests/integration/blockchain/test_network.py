@@ -1,12 +1,12 @@
 import asyncio
-import scribe
+import hub
 
 from unittest.mock import Mock
 
-from scribe.hub import HUB_PROTOCOL_VERSION
-from scribe.hub.udp import StatusServer
-from scribe.hub.session import LBRYElectrumX
-from scribe.blockchain.network import LBCRegTest
+from hub.herald import HUB_PROTOCOL_VERSION
+from hub.herald.udp import StatusServer
+from hub.herald.session import LBRYElectrumX
+from hub.scribe.network import LBCRegTest
 
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
