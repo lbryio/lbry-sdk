@@ -18,6 +18,8 @@ from lbry import version
 log = logging.getLogger(__name__)
 CONNECTION_EXPIRES_AFTER_SECONDS = 50
 PREFIX = 'LB'  # todo: PR BEP20 to add ourselves
+DEFAULT_TIMEOUT_SECONDS = 10.0
+DEFAULT_CONCURRENCY_LIMIT = 100
 # see: http://bittorrent.org/beps/bep_0015.html and http://xbtt.sourceforge.net/udp_tracker_protocol.html
 ConnectRequest = namedtuple("ConnectRequest", ["connection_id", "action", "transaction_id"])
 ConnectResponse = namedtuple("ConnectResponse", ["action", "transaction_id", "connection_id"])
@@ -75,11 +77,11 @@ def make_peer_id(random_part: Optional[str] = None) -> bytes:
 
 
 class UDPTrackerClientProtocol(asyncio.DatagramProtocol):
-    def __init__(self, timeout: float = 10.0):
+    def __init__(self, timeout: float = DEFAULT_TIMEOUT_SECONDS):
         self.transport = None
         self.data_queue = {}
         self.timeout = timeout
-        self.semaphore = asyncio.Semaphore(10)
+        self.semaphore = asyncio.Semaphore(DEFAULT_CONCURRENCY_LIMIT)
 
     def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         self.transport = transport
