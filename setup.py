@@ -69,7 +69,7 @@ setup(
             'jsonschema==4.4.0',
         ],
         'scribe': [
-            'scribe @ git+https://github.com/lbryio/scribe.git#311db529a03de7fce43ed8579f51ac23a1a884ea'
+            'scribe @ git+https://github.com/lbryio/scribe.git@311db529a03de7fce43ed8579f51ac23a1a884ea'
         ]
     },
     classifiers=[
