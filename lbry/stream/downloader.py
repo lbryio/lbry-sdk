@@ -8,6 +8,8 @@ from lbry.error import DownloadSDTimeoutError
 from lbry.utils import lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.blob_exchange.downloader import BlobDownloader
+from lbry.torrent.tracker import enqueue_tracker_search
+
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.dht.node import Node
@@ -91,6 +93,7 @@ class StreamDownloader:
                 self.accumulate_task.cancel()
             _, self.accumulate_task = self.node.accumulate_peers(self.search_queue, self.peer_queue)
         await self.add_fixed_peers()
+        enqueue_tracker_search(bytes.fromhex(self.sd_hash), self.peer_queue)
         # start searching for peers for the sd hash
         self.search_queue.put_nowait(self.sd_hash)
         log.info("searching for peers for stream %s", self.sd_hash)

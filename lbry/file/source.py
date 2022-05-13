@@ -45,6 +45,7 @@ class ManagedDownloadSource:
         self.purchase_receipt = None
         self._added_on = added_on
         self.analytics_manager = analytics_manager
+        self.downloader = None
 
         self.saving = asyncio.Event(loop=self.loop)
         self.finished_writing = asyncio.Event(loop=self.loop)

@@ -13,13 +13,6 @@ from lbry.stream.descriptor import StreamDescriptor
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 
 
-def get_mock_node(loop):
-    mock_node = mock.Mock(spec=Node)
-    mock_node.joined = asyncio.Event(loop=loop)
-    mock_node.joined.set()
-    return mock_node
-
-
 class TestManagedStream(BlobExchangeTestBase):
     async def create_stream(self, blob_count: int = 10, file_name='test_file'):
         self.stream_bytes = b''

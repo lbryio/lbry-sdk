@@ -34,6 +34,7 @@ class TestComponentManager(AsyncioTestCase):
             ],
             [
                 components.BackgroundDownloaderComponent,
+                components.TrackerAnnouncerComponent
             ]
         ]
         self.component_manager = ComponentManager(Config())
@@ -149,6 +150,9 @@ class FakeDelayedFileManager(FakeComponent):
 
     async def start(self):
         await asyncio.sleep(1)
+
+    def get_filtered(self):
+        return []
 
 
 class TestComponentManagerProperStart(AdvanceTimeTestCase):

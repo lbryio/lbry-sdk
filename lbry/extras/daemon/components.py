@@ -27,6 +27,8 @@ from lbry.extras.daemon.storage import SQLiteStorage
 from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
+from lbry.torrent.tracker import TrackerClient
+
 try:
     from lbry.torrent.session import TorrentSession
 except ImportError:
@@ -48,6 +50,7 @@ BACKGROUND_DOWNLOADER_COMPONENT = "background_downloader"
 PEER_PROTOCOL_SERVER_COMPONENT = "peer_protocol_server"
 UPNP_COMPONENT = "upnp"
 EXCHANGE_RATE_MANAGER_COMPONENT = "exchange_rate_manager"
+TRACKER_ANNOUNCER_COMPONENT = "tracker_announcer_component"
 LIBTORRENT_COMPONENT = "libtorrent_component"
 
 
@@ -708,3 +711,49 @@ class ExchangeRateManagerComponent(Component):
 
     async def stop(self):
         self.exchange_rate_manager.stop()
+
+
+class TrackerAnnouncerComponent(Component):
+    component_name = TRACKER_ANNOUNCER_COMPONENT
+    depends_on = [FILE_MANAGER_COMPONENT]
+
+    def __init__(self, component_manager):
+        super().__init__(component_manager)
+        self.file_manager = None
+        self.announce_task = None
+        self.tracker_client: typing.Optional[TrackerClient] = None
+
+    @property
+    def component(self):
+        return self.tracker_client
+
+    @property
+    def running(self):
+        return self._running and self.announce_task and not self.announce_task.done()
+
+    async def announce_forever(self):
+        while True:
+            sleep_seconds = 60.0
+            announce_sd_hashes = []
+            for file in self.file_manager.get_filtered():
+                if not file.downloader:
+                    continue
+                announce_sd_hashes.append(bytes.fromhex(file.sd_hash))
+            await self.tracker_client.announce_many(*announce_sd_hashes)
+            await asyncio.sleep(sleep_seconds)
+
+    async def start(self):
+        node = self.component_manager.get_component(DHT_COMPONENT) \
+            if self.component_manager.has_component(DHT_COMPONENT) else None
+        node_id = node.protocol.node_id if node else None
+        self.tracker_client = TrackerClient(node_id, self.conf.tcp_port, lambda: self.conf.tracker_servers)
+        await self.tracker_client.start()
+        self.file_manager = self.component_manager.get_component(FILE_MANAGER_COMPONENT)
+        self.announce_task = asyncio.create_task(self.announce_forever())
+
+    async def stop(self):
+        self.file_manager = None
+        if self.announce_task and not self.announce_task.done():
+            self.announce_task.cancel()
+        self.announce_task = None
+        self.tracker_client.stop()

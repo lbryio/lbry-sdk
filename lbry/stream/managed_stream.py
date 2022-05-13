@@ -16,10 +16,8 @@ from lbry.file.source import ManagedDownloadSource
 
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
-    from lbry.schema.claim import Claim
     from lbry.blob.blob_manager import BlobManager
     from lbry.blob.blob_info import BlobInfo
-    from lbry.dht.node import Node
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.wallet.transaction import Transaction
 
