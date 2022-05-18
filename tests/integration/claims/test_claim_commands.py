@@ -2129,7 +2129,7 @@ class StreamCommands(ClaimTestCase):
     async def test_publish(self):
 
         # errors on missing arguments to create a stream
-        with self.assertRaisesRegex(Exception, "'bid' is a required argument for new publishes."):
+        with self.assertRaisesRegex(Exception, "None or null is not valid value for argument 'bid'."):
             await self.daemon.jsonrpc_publish('foo')
 
         # successfully create stream
