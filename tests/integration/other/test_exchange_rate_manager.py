@@ -27,7 +27,7 @@ class TestExchangeRateManager(AsyncioTestCase):
         self.assertLessEqual(lbc, 80.0)
         lbc = manager.convert_currency('BTC', 'LBC', Decimal('0.01'))
         self.assertGreaterEqual(lbc, 1_000)
-        self.assertLessEqual(lbc, 20_000)
+        self.assertLessEqual(lbc, 30_000)
 
     async def test_it_handles_feed_being_offline(self):
         class FakeFeed(MarketFeed):
