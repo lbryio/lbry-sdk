@@ -130,6 +130,16 @@ def get_sd_hash(stream_info):
 def json_dumps_pretty(obj, **kwargs):
     return json.dumps(obj, sort_keys=True, indent=2, separators=(',', ': '), **kwargs)
 
+try:
+    # the standard contextlib.aclosing() is available in 3.10+
+    from contextlib import aclosing  # pylint: disable=unused-import
+except ImportError:
+    @contextlib.asynccontextmanager
+    async def aclosing(thing):
+        try:
+            yield thing
+        finally:
+            await thing.aclose()
 
 def async_timed_cache(duration: int):
     def wrapper(func):

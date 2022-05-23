@@ -1,6 +1,7 @@
 import asyncio
 from itertools import chain
 from collections import defaultdict, OrderedDict
+from collections.abc import AsyncIterator
 import typing
 import logging
 from typing import TYPE_CHECKING
@@ -71,7 +72,7 @@ def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
     return shortlist or routing_table.find_close_peers(key)
 
 
-class IterativeFinder:
+class IterativeFinder(AsyncIterator):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
                  routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
                  max_results: typing.Optional[int] = constants.K,
@@ -151,7 +152,7 @@ class IterativeFinder:
                 log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer.address,
                             peer.udp_port, address, udp_port)
         self.check_result_ready(response)
-        self._log_state()
+        self._log_state(reason="check result")
 
     def _reset_closest(self, peer):
         if peer in self.active:
@@ -163,12 +164,17 @@ class IterativeFinder:
         except asyncio.TimeoutError:
             self._reset_closest(peer)
             return
+        except asyncio.CancelledError:
+            log.debug("%s[%x] cancelled probe",
+                      type(self).__name__, id(self))
+            raise
         except ValueError as err:
             log.warning(str(err))
             self._reset_closest(peer)
             return
         except TransportNotConnected:
-            return self.aclose()
+            await self._aclose(reason="not connected")
+            return
         except RemoteException:
             self._reset_closest(peer)
             return
@@ -182,7 +188,9 @@ class IterativeFinder:
         added = 0
         for index, peer in enumerate(self.active.keys()):
             if index == 0:
-                log.debug("closest to probe: %s", peer.node_id.hex()[:8])
+                log.debug("%s[%x] closest to probe: %s",
+                          type(self).__name__, id(self),
+                          peer.node_id.hex()[:8])
             if peer in self.contacted:
                 continue
             if len(self.running_probes) >= constants.ALPHA:
@@ -198,9 +206,13 @@ class IterativeFinder:
                 continue
             self._schedule_probe(peer)
             added += 1
-        log.debug("running %d probes for key %s", len(self.running_probes), self.key.hex()[:8])
+        log.debug("%s[%x] running %d probes for key %s",
+                  type(self).__name__, id(self),
+                  len(self.running_probes), self.key.hex()[:8])
         if not added and not self.running_probes:
-            log.debug("search for %s exhausted", self.key.hex()[:8])
+            log.debug("%s[%x] search for %s exhausted",
+                      type(self).__name__, id(self),
+                      self.key.hex()[:8])
             self.search_exhausted()
 
     def _schedule_probe(self, peer: 'KademliaPeer'):
@@ -216,9 +228,11 @@ class IterativeFinder:
         t.add_done_callback(callback)
         self.running_probes[peer] = t
 
-    def _log_state(self):
-        log.debug("[%s] check result: %i active nodes %i contacted",
-                  self.key.hex()[:8], len(self.active), len(self.contacted))
+    def _log_state(self, reason="?"):
+        log.debug("%s[%x] [%s] %s: %i active nodes %i contacted %i produced %i queued",
+                  type(self).__name__, id(self), self.key.hex()[:8],
+                  reason, len(self.active), len(self.contacted),
+                  self.iteration_count, self.iteration_queue.qsize())
 
     def __aiter__(self):
         if self.running:
@@ -237,11 +251,18 @@ class IterativeFinder:
                 raise StopAsyncIteration
             self.iteration_count += 1
             return result
-        except (asyncio.CancelledError, StopAsyncIteration):
-            self.loop.call_soon(self.aclose)
+        except asyncio.CancelledError:
+            await self._aclose(reason="cancelled")
+            raise
+        except StopAsyncIteration:
+            await self._aclose(reason="no more results")
             raise
 
-    def aclose(self):
+    async def _aclose(self, reason="?"):
+        log.debug("%s[%x] [%s] shutdown because %s: %i active nodes %i contacted %i produced %i queued",
+                  type(self).__name__, id(self), self.key.hex()[:8],
+                  reason, len(self.active), len(self.contacted),
+                  self.iteration_count, self.iteration_queue.qsize())
         self.running = False
         self.iteration_queue.put_nowait(None)
         for task in chain(self.tasks, self.running_probes.values()):
@@ -249,6 +270,11 @@ class IterativeFinder:
         self.tasks.clear()
         self.running_probes.clear()
 
+    async def aclose(self):
+        if self.running:
+            await self._aclose(reason="aclose")
+        log.debug("%s[%x] [%s] async close completed",
+                  type(self).__name__, id(self), self.key.hex()[:8])
 
 class IterativeNodeFinder(IterativeFinder):
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
