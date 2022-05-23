@@ -48,7 +48,7 @@ jobs:
         uses: ASzc/change-string-case-action@v1
         with:
           string: ${{ runner.os }}
-      - run: pip install --user --upgrade pip wheel
+      - run: python -m pip install --user --upgrade pip wheel
       - if: startsWith(runner.os, 'linux')
         run: pip install -e .[torrent,test]
       - if: startsWith(runner.os, 'linux')
