@@ -682,7 +682,8 @@ class Config(CLIConfig):
     ])
 
     tracker_servers = Servers("BitTorrent-compatible (BEP15) UDP trackers for helping P2P discovery", [
-        ('tracker.lbry.com', 1337)
+        ('tracker.lbry.com', 9252),
+        ('tracker.lbry.grin.io', 9252),
     ])
 
     lbryum_servers = Servers("SPV wallet servers", [
