@@ -273,7 +273,8 @@ class SPVNode:
                 ElasticEnv(
                     db_dir=self.data_path, reorg_limit=100, max_query_workers=0, chain='regtest',
                     elastic_notifier_port=self.elastic_notifier_port,
-                    es_index_prefix=self.index_name, filtering_channel_ids=(extraconf or {}).get('filtering_channel_ids'),
+                    es_index_prefix=self.index_name,
+                    filtering_channel_ids=(extraconf or {}).get('filtering_channel_ids'),
                     blocking_channel_ids=(extraconf or {}).get('blocking_channel_ids')
                 )
             )
