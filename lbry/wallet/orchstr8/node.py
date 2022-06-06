@@ -17,13 +17,6 @@ from typing import Type, Optional
 import urllib.request
 from uuid import uuid4
 
-try:
-    from scribe.env import Env
-    from scribe.hub.service import HubServerService
-    from scribe.elasticsearch.service import ElasticSyncService
-    from scribe.blockchain.service import BlockchainProcessorService
-except ImportError:
-    pass
 
 import lbry
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
@@ -31,6 +24,16 @@ from lbry.conf import KnownHubsList, Config
 from lbry.wallet.orchstr8 import __hub_url__
 
 log = logging.getLogger(__name__)
+
+try:
+    from hub.herald.env import ServerEnv
+    from hub.scribe.env import BlockchainEnv
+    from hub.elastic_sync.env import ElasticEnv
+    from hub.herald.service import HubServerService
+    from hub.elastic_sync.service import ElasticSyncService
+    from hub.scribe.service import BlockchainProcessorService
+except ImportError:
+    pass
 
 
 def get_lbcd_node_from_ledger(ledger_module):
@@ -256,14 +259,25 @@ class SPVNode:
                 'session_timeout': self.session_timeout,
                 'max_query_workers': 0,
                 'es_index_prefix': self.index_name,
-                'chain': 'regtest'
+                'chain': 'regtest',
+                'index_address_status': False
             }
             if extraconf:
                 conf.update(extraconf)
-            env = Env(**conf)
-            self.writer = BlockchainProcessorService(env)
-            self.server = HubServerService(env)
-            self.es_writer = ElasticSyncService(env)
+            self.writer = BlockchainProcessorService(
+                BlockchainEnv(db_dir=self.data_path, daemon_url=lbcwallet_node.rpc_url,
+                              reorg_limit=100, max_query_workers=0, chain='regtest', index_address_status=False)
+            )
+            self.server = HubServerService(ServerEnv(**conf))
+            self.es_writer = ElasticSyncService(
+                ElasticEnv(
+                    db_dir=self.data_path, reorg_limit=100, max_query_workers=0, chain='regtest',
+                    elastic_notifier_port=self.elastic_notifier_port,
+                    es_index_prefix=self.index_name,
+                    filtering_channel_ids=(extraconf or {}).get('filtering_channel_ids'),
+                    blocking_channel_ids=(extraconf or {}).get('blocking_channel_ids')
+                )
+            )
             await self.writer.start()
             await self.es_writer.start()
             await self.server.start()

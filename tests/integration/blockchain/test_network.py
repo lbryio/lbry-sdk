@@ -1,12 +1,12 @@
 import asyncio
-import scribe
+import hub
 
 from unittest.mock import Mock
 
-from scribe.hub import HUB_PROTOCOL_VERSION
-from scribe.hub.udp import StatusServer
-from scribe.hub.session import LBRYElectrumX
-from scribe.blockchain.network import LBCRegTest
+from hub.herald import HUB_PROTOCOL_VERSION
+from hub.herald.udp import StatusServer
+from hub.herald.session import LBRYElectrumX
+from hub.scribe.network import LBCRegTest
 
 from lbry.wallet.network import Network
 from lbry.wallet.orchstr8 import Conductor
@@ -116,7 +116,7 @@ class ReconnectTests(IntegrationTestCase):
         # disconnect and send a new tx, should reconnect and get it
         self.ledger.network.client.transport.close()
         self.assertFalse(self.ledger.network.is_connected)
-        await self.ledger.resolve([], 'derp')
+        await self.ledger.resolve([], ['derp'])
         sendtxid = await self.send_to_address_and_wait(address1, 1.1337, 1)
         self.assertLess(self.ledger.network.client.response_time, 1)  # response time properly set lower, we are fine
 
@@ -139,6 +139,7 @@ class ReconnectTests(IntegrationTestCase):
         if not self.ledger.network.is_connected:
             await asyncio.wait_for(self.ledger.network.on_connected.first, timeout=10.0)
         # omg, the burned cable still works! torba is fire proof!
+        await self.ledger.on_header.where(self.blockchain.is_expected_block)
         await self.ledger.network.get_transaction(sendtxid)
 
     async def test_timeout_then_reconnect(self):

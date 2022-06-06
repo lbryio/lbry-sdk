@@ -1,7 +1,7 @@
 import asyncio
 
-from scribe.hub import HUB_PROTOCOL_VERSION
-from scribe.hub.session import LBRYElectrumX
+from hub.herald import HUB_PROTOCOL_VERSION
+from hub.herald.session import LBRYElectrumX
 
 from lbry.error import ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession

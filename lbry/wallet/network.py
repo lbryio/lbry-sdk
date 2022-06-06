@@ -348,7 +348,6 @@ class Network:
                         await self._keepalive_task
                     if self._urgent_need_reconnect.is_set():
                         log.warning("urgent reconnect needed")
-                        self._urgent_need_reconnect.clear()
                     if self._keepalive_task and not self._keepalive_task.done():
                         self._keepalive_task.cancel()
                 except asyncio.CancelledError:

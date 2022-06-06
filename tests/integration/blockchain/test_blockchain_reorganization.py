@@ -10,20 +10,21 @@ class BlockchainReorganizationTests(CommandTestCase):
 
     async def assertBlockHash(self, height):
         bp = self.conductor.spv_node.writer
+        reader = self.conductor.spv_node.server
 
         def get_txids():
             return [
-                bp.db.fs_tx_hash(tx_num)[0][::-1].hex()
+                reader.db.fs_tx_hash(tx_num)[0][::-1].hex()
                 for tx_num in range(bp.db.tx_counts[height - 1], bp.db.tx_counts[height])
             ]
 
         block_hash = await self.blockchain.get_block_hash(height)
 
         self.assertEqual(block_hash, (await self.ledger.headers.hash(height)).decode())
-        self.assertEqual(block_hash, (await bp.db.fs_block_hashes(height, 1))[0][::-1].hex())
+        self.assertEqual(block_hash, (await reader.db.fs_block_hashes(height, 1))[0][::-1].hex())
 
         txids = await asyncio.get_event_loop().run_in_executor(None, get_txids)
-        txs = await bp.db.get_transactions_and_merkles(txids)
+        txs = await reader.db.get_transactions_and_merkles(txids)
         block_txs = (await bp.daemon.deserialised_block(block_hash))['tx']
         self.assertSetEqual(set(block_txs), set(txs.keys()), msg='leveldb/lbrycrd is missing transactions')
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')

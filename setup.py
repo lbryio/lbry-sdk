@@ -68,8 +68,8 @@ setup(
             'coverage',
             'jsonschema==4.4.0',
         ],
-        'scribe': [
-            'scribe @ git+https://github.com/lbryio/scribe.git@311db529a03de7fce43ed8579f51ac23a1a884ea'
+        'hub': [
+            'hub@git+https://github.com/lbryio/hub.git@76dd9c392b776a2823015762814f375794120076'
         ]
     },
     classifiers=[
