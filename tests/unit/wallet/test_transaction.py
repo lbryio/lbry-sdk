@@ -617,16 +617,12 @@ class TransactionIOBalancing(AsyncioTestCase):
         await self.ledger.release_outputs(utxos)
 
         # everything: insufficient funds
-        try:
+        with self.assertRaises(lbry.error.InsufficientFundsError):
             tx = await self.tx(
                 [],            # inputs
                 [self.txo(19.93)],  # outputs
                 everything=True
             )
-        except lbry.error.InsufficientFundsError:
-            pass
-        else:
-            self.fail("expected InsufficientFunds exception")
 
         await self.ledger.release_outputs(utxos)
 
