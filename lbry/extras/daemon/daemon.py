@@ -11,7 +11,7 @@ import random
 import tracemalloc
 from decimal import Decimal
 from urllib.parse import urlencode, quote
-from typing import Callable, Optional, List
+from typing import Callable, Optional, List, Union
 from binascii import hexlify, unhexlify
 from traceback import format_exc
 from functools import wraps, partial
@@ -25,7 +25,7 @@ from lbry.wallet import (
     Wallet, ENCRYPT_ON_DISK, SingleKey, HierarchicalDeterministic,
     Transaction, Output, Input, Account, database
 )
-from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc
+from lbry.wallet.dewies import dewies_to_lbc, lbc_to_dewies, dict_values_to_lbc, AMOUNT_EVERYTHING
 from lbry.wallet.constants import TXO_TYPES, CLAIM_TYPE_NAMES
 from lbry.wallet.bip32 import PrivateKey
 from lbry.crypto.base58 import Base58
@@ -1569,34 +1569,17 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(change_account_id)
         accounts = wallet.get_accounts_or_all(funding_account_ids)
 
-        amount = self.get_dewies_or_error('amount', amount, everything=amount_everything)
+        amount = self.get_amount_or_error('amount', amount, everything=amount_everything)
 
         if addresses is None:
             raise InputValueIsNoneError('addresses')
         if addresses and not isinstance(addresses, list):
             addresses = [addresses]
 
-        outputs = []
         for address in addresses:
             self.valid_address_or_error(address, allow_script_address=True)
-            if self.ledger.is_pubkey_address(address):
-                outputs.append(
-                    Output.pay_pubkey_hash(
-                        amount, self.ledger.address_to_hash160(address)
-                    )
-                )
-            elif self.ledger.is_script_address(address):
-                outputs.append(
-                    Output.pay_script_hash(
-                        amount, self.ledger.address_to_hash160(address)
-                    )
-                )
-            else:
-                raise ValueError(f"Unsupported address: '{address}'")  # TODO: use error from lbry.error
 
-        tx = await Transaction.create(
-            [], outputs, accounts, account, everything=amount_everything
-        )
+        tx = await Transaction.pay(amount, addresses, accounts, account)
         if not preview:
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.analytics_manager.send_credits_sent())
@@ -1868,7 +1851,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         to_account = wallet.get_account_or_default(to_account)
         from_account = wallet.get_account_or_default(from_account)
-        amount = self.get_dewies_or_error('amount', amount, everything=everything,
+        amount = self.get_amount_or_error('amount', amount, everything=everything,
                                           default_value=0, argument_everything='everything')
         if not isinstance(outputs, int):
             # TODO: use error from lbry.error
@@ -1877,8 +1860,7 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: use error from lbry.error
             raise ValueError("Using --everything along with --outputs is not supported.")
         return from_account.fund(
-            to_account=to_account, amount=amount, everything=everything,
-            outputs=outputs, broadcast=broadcast
+            to_account=to_account, amount=amount, outputs=outputs, broadcast=broadcast
         )
 
     @requires("wallet")
@@ -2770,7 +2752,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_channel_name_or_error(name)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
 
         existing_channels = await self.ledger.get_channels(accounts=wallet.accounts, claim_name=name)
@@ -2785,8 +2767,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0],
-            everything=bid_everything
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         txo = tx.outputs[0]
         txo.set_channel_private_key(
@@ -2925,7 +2906,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a channel."
             )
 
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything,
                                           default_value=old_txo.amount)
 
         if claim_address is not None:
@@ -2940,8 +2921,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
         claim.channel.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
-            everything=bid_everything
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0]
         )
         new_txo = tx.outputs[0]
 
@@ -3369,7 +3349,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
         claims = await account.get_claims(claim_name=name)
         if len(claims) > 0:
@@ -3389,8 +3369,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claim.repost.update(**kwargs)
         claim.repost.reference.claim_id = claim_id
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            everything=bid_everything
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -3525,7 +3504,7 @@ class Daemon(metaclass=JSONRPCServerType):
         account = wallet.get_account_or_default(account_id)
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything)
         claim_address = await self.get_receiving_address(claim_address, account)
         kwargs['fee_address'] = self.get_fee_address(kwargs, claim_address)
 
@@ -3550,8 +3529,7 @@ class Daemon(metaclass=JSONRPCServerType):
         else:
             claim.stream.update(**kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            everything=bid_everything
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -3735,7 +3713,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a stream or repost claim."
             )
 
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything,
                                           default_value=old_txo.amount)
 
         if claim_address is not None:
@@ -3783,8 +3761,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim.clear_signature()
         tx = await Transaction.claim_update(
             old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0],
-            channel if not clear_channel else None,
-            everything=bid_everything
+            channel if not clear_channel else None
         )
 
         new_txo = tx.outputs[0]
@@ -4028,7 +4005,7 @@ class Daemon(metaclass=JSONRPCServerType):
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         self.valid_collection_name_or_error(name)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything)
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything)
 
         claim_address = await self.get_receiving_address(claim_address, account)
 
@@ -4046,8 +4023,7 @@ class Daemon(metaclass=JSONRPCServerType):
         claim = Claim()
         claim.collection.update(claims=claims, **kwargs)
         tx = await Transaction.claim_create(
-            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            everything=bid_everything
+            name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -4176,7 +4152,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 f"A claim with id '{claim_id}' was found but it is not a collection."
             )
 
-        amount = self.get_dewies_or_error('bid', bid, positive_value=True, everything=bid_everything,
+        amount = self.get_amount_or_error('bid', bid, positive_value=True, everything=bid_everything,
                                           default_value=old_txo.amount)
 
         if claim_address is not None:
@@ -4198,8 +4174,7 @@ class Daemon(metaclass=JSONRPCServerType):
             claim = Claim.from_bytes(old_txo.claim.to_bytes())
             claim.collection.update(**kwargs)
         tx = await Transaction.claim_update(
-            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            everything=bid_everything
+            old_txo, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
         )
         new_txo = tx.outputs[0]
 
@@ -4362,7 +4337,7 @@ class Daemon(metaclass=JSONRPCServerType):
         assert not wallet.is_locked, "Cannot spend funds with locked wallet, unlock first."
         funding_accounts = wallet.get_accounts_or_all(funding_account_ids)
         channel = await self.get_channel_or_none(wallet, channel_account_id, channel_id, channel_name, for_signing=True)
-        amount = self.get_dewies_or_error('amount', amount, everything=amount_everything)
+        amount = self.get_amount_or_error('amount', amount, everything=amount_everything)
 
         claim = await self.ledger.get_claim_by_claim_id(claim_id)
         claim_address = claim.get_address(self.ledger)
@@ -4372,7 +4347,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         tx = await Transaction.support(
             claim.claim_name, claim_id, amount, claim_address, funding_accounts, funding_accounts[0], channel,
-            comment=comment, everything=amount_everything
+            comment=comment
         )
         new_txo = tx.outputs[0]
 
@@ -5493,25 +5468,29 @@ class Daemon(metaclass=JSONRPCServerType):
         raise ValueError(f"Couldn't find channel with channel_{key} '{value}'.")
 
     @staticmethod
-    def get_dewies_or_error(argument: str, lbc: Optional[str],
+    def get_dewies_or_error(argument: str, lbc: str, positive_value: bool = False) -> int:
+        try:
+            dewies = lbc_to_dewies(lbc)
+            if positive_value and dewies <= 0:
+                # TODO: use error from lbry.error
+                raise ValueError(f"'{argument}' value must be greater than 0.0")
+            return dewies
+        except ValueError as e:
+            # TODO: use error from lbry.error
+            raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+
+    @staticmethod
+    def get_amount_or_error(argument: str, lbc: Optional[str],
                             positive_value: bool = False, everything: bool = False,
                             default_value: Optional[int] = None,
-                            argument_everything: Optional[str] = None) -> int:
+                            argument_everything: Optional[str] = None) -> Union[int, str]:
         if everything:
             if lbc is not None:
                 argument_everything = argument_everything or argument + '_everything'
                 raise ConflictingInputValueError(argument, argument_everything)
-            return 0
+            return AMOUNT_EVERYTHING
         elif lbc is not None:
-            try:
-                dewies = lbc_to_dewies(lbc)
-                if positive_value and dewies <= 0:
-                    # TODO: use error from lbry.error
-                    raise ValueError(f"'{argument}' value must be greater than 0.0")
-                return dewies
-            except ValueError as e:
-                # TODO: use error from lbry.error
-                raise ValueError(f"Invalid value for '{argument}': {e.args[0]}")
+            return Daemon.get_dewies_or_error(argument, lbc, positive_value=positive_value)
         elif default_value is not None:
             return default_value
         else:

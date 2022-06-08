@@ -374,8 +374,8 @@ class TransactionIOBalancing(AsyncioTestCase):
     def txi(self, txo):
         return Input.spend(txo)
 
-    def tx(self, inputs, outputs, everything: bool = False):
-        return Transaction.create(inputs, outputs, [self.account], self.account, everything=everything)
+    def tx(self, inputs, outputs, **kwargs):
+        return Transaction.create(inputs, outputs, [self.account], self.account, **kwargs)
 
     async def create_utxos(self, amounts):
         utxos = [self.txo(amount) for amount in amounts]

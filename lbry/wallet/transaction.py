@@ -2,7 +2,7 @@ import struct
 import logging
 import typing
 from binascii import hexlify, unhexlify
-from typing import List, Iterable, Optional, Tuple
+from typing import List, Iterable, Optional, Tuple, Union
 
 from lbry.error import InsufficientFundsError
 from lbry.crypto.hash import hash160, sha256
@@ -12,6 +12,7 @@ from lbry.schema.claim import Claim
 from lbry.schema.base import Signable
 from lbry.schema.purchase import Purchase
 from lbry.schema.support import Support
+from lbry.wallet.dewies import amount_to_dewies
 
 from .script import InputScript, OutputScript
 from .constants import COIN, DUST, NULL_HASH32
@@ -793,8 +794,8 @@ class Transaction:
     @classmethod
     async def create(cls, inputs: Iterable[Input], outputs: Iterable[Output],
                      funding_accounts: Iterable['Account'], change_account: 'Account',
-                     everything: bool = False,
-                     sign: bool = True):
+                     sign: bool = True,
+                     *, everything: bool = False):
         """ Find optimal set of inputs when only outputs are provided; add change
             outputs if only inputs are provided or if inputs are greater than outputs. """
 
@@ -915,34 +916,50 @@ class Transaction:
         self._reset()
 
     @classmethod
-    def pay(cls, amount: int, address: bytes, funding_accounts: List['Account'], change_account: 'Account',
-            everything: bool = False):
+    def pay(cls, amount: Union[int, str], addresses: List[bytes],
+            funding_accounts: List['Account'], change_account: 'Account'):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        output = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(address))
-        return cls.create([], [output], funding_accounts, change_account, everything=everything)
+        dewies, everything = amount_to_dewies(amount)
+        outputs = []
+        for address in addresses:
+            if ledger.is_pubkey_address(address):
+                outputs.append(
+                    Output.pay_pubkey_hash(
+                        dewies, ledger.address_to_hash160(address)
+                    )
+                )
+            elif ledger.is_script_address(address):
+                outputs.append(
+                    Output.pay_script_hash(
+                        dewies, ledger.address_to_hash160(address)
+                    )
+                )
+            else:
+                raise ValueError(f"Unsupported address: '{address}'")  # TODO: use error from lbry.error
+        return cls.create([], outputs, funding_accounts, change_account, everything=everything)
 
     @classmethod
     def claim_create(
-            cls, name: str, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
-            everything: bool = False):
+            cls, name: str, claim: Claim, amount: Union[int, str], holding_address: str,
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        dewies, everything = amount_to_dewies(amount)
         claim_output = Output.pay_claim_name_pubkey_hash(
-            amount, name, claim, ledger.address_to_hash160(holding_address)
+            dewies, name, claim, ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
             claim_output.sign(signing_channel, b'placeholder txid:nout')
         return cls.create([], [claim_output], funding_accounts, change_account,
-                          everything=everything, sign=False)
+                          sign=False, everything=everything)
 
     @classmethod
     def claim_update(
-            cls, previous_claim: Output, claim: Claim, amount: int, holding_address: str,
-            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
-            everything: bool = False):
+            cls, previous_claim: Output, claim: Claim, amount: Union[int, str], holding_address: str,
+            funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        dewies, everything = amount_to_dewies(amount)
         updated_claim = Output.pay_update_claim_pubkey_hash(
-            amount, previous_claim.claim_name, previous_claim.claim_id,
+            dewies, previous_claim.claim_name, previous_claim.claim_id,
             claim, ledger.address_to_hash160(holding_address)
         )
         if signing_channel is not None:
@@ -951,35 +968,37 @@ class Transaction:
             updated_claim.clear_signature()
         return cls.create(
             [Input.spend(previous_claim)], [updated_claim], funding_accounts, change_account,
-            everything=everything, sign=False
+            sign=False, everything=everything
         )
 
     @classmethod
-    def support(cls, claim_name: str, claim_id: str, amount: int, holding_address: str,
+    def support(cls, claim_name: str, claim_id: str, amount: Union[int, str], holding_address: str,
                 funding_accounts: List['Account'], change_account: 'Account', signing_channel: Output = None,
-                comment: str = None, everything: bool = False):
+                comment: str = None):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
+        dewies, everything = amount_to_dewies(amount)
         if signing_channel is not None or comment is not None:
             support = Support()
             if comment is not None:
                 support.comment = comment
             support_output = Output.pay_support_data_pubkey_hash(
-                amount, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
+                dewies, claim_name, claim_id, support, ledger.address_to_hash160(holding_address)
             )
             if signing_channel is not None:
                 support_output.sign(signing_channel, b'placeholder txid:nout')
         else:
             support_output = Output.pay_support_pubkey_hash(
-                amount, claim_name, claim_id, ledger.address_to_hash160(holding_address)
+                dewies, claim_name, claim_id, ledger.address_to_hash160(holding_address)
             )
         return cls.create([], [support_output], funding_accounts, change_account,
-                          everything=everything, sign=False)
+                          sign=False, everything=everything)
 
     @classmethod
     def purchase(cls, claim_id: str, amount: int, merchant_address: bytes,
                  funding_accounts: List['Account'], change_account: 'Account'):
         ledger, _ = cls.ensure_all_have_same_ledger_and_wallet(funding_accounts, change_account)
-        payment = Output.pay_pubkey_hash(amount, ledger.address_to_hash160(merchant_address))
+        dewies, _ = amount_to_dewies(amount)
+        payment = Output.pay_pubkey_hash(dewies, ledger.address_to_hash160(merchant_address))
         data = Output.add_purchase_data(Purchase(claim_id))
         return cls.create([], [payment, data], funding_accounts, change_account)
 
