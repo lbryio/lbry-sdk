@@ -1455,17 +1455,31 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
 
-        tx = await self.stream_repost(claim_id, 'newstuff-again', '1.1', channel_name='@spam')
+        tx = await self.stream_repost(
+            claim_id, 'newstuff-again', '1.1', channel_name='@spam',
+            title="repost title", description="repost desc", tags=["tag1", "tag2"]
+        )
         repost_id = self.get_claim_id(tx)
 
         # test inflating reposted channels works
         repost_url = f'newstuff-again:{repost_id}'
         self.ledger._tx_cache.clear()
-        self.assertEqual(
-            goodies_claim_id,
-            (await self.out(self.daemon.jsonrpc_resolve(repost_url))
-             )[repost_url]['reposted_claim']['signing_channel']['claim_id']
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual("repost title", repost["value"]["title"])
+        self.assertEqual("repost desc", repost["value"]["description"])
+        self.assertEqual(["tag1", "tag2"], repost["value"]["tags"])
+
+        await self.stream_update(
+            repost_id, title="title 2", description="desc 2", tags=["tag3"]
         )
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual("title 2", repost["value"]["title"])
+        self.assertEqual("desc 2", repost["value"]["description"])
+        self.assertEqual(["tag1", "tag2", "tag3"], repost["value"]["tags"])
 
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(claim_type='repost'), 1)
         self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 1)
