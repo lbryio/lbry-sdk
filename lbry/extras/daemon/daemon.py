@@ -3301,15 +3301,17 @@ class Daemon(metaclass=JSONRPCServerType):
         )
 
     @requires(WALLET_COMPONENT, FILE_MANAGER_COMPONENT, BLOB_COMPONENT, DATABASE_COMPONENT)
-    async def jsonrpc_stream_repost(self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
-                                    channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
-                                    claim_address=None, funding_account_ids=None, preview=False, blocking=False):
+    async def jsonrpc_stream_repost(
+            self, name, bid, claim_id, allow_duplicate_name=False, channel_id=None,
+            channel_name=None, channel_account_id=None, account_id=None, wallet_id=None,
+            claim_address=None, funding_account_ids=None, preview=False, blocking=False, **kwargs):
         """
             Creates a claim that references an existing stream by its claim id.
 
             Usage:
                 stream_repost (<name> | --name=<name>) (<bid> | --bid=<bid>) (<claim_id> | --claim_id=<claim_id>)
                         [--allow_duplicate_name=<allow_duplicate_name>]
+                        [--title=<title>] [--description=<description>] [--tags=<tags>...]
                         [--channel_id=<channel_id> | --channel_name=<channel_name>]
                         [--channel_account_id=<channel_account_id>...]
                         [--account_id=<account_id>] [--wallet_id=<wallet_id>]
@@ -3322,6 +3324,9 @@ class Daemon(metaclass=JSONRPCServerType):
                 --claim_id=<claim_id>          : (str) id of the claim being reposted
                 --allow_duplicate_name=<allow_duplicate_name> : (bool) create new claim even if one already exists with
                                                                        given name. default: false.
+                --title=<title>                : (str) title of the repost
+                --description=<description>    : (str) description of the repost
+                --tags=<tags>                  : (list) add repost tags
                 --channel_id=<channel_id>      : (str) claim id of the publisher channel
                 --channel_name=<channel_name>  : (str) name of the publisher channel
                 --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
@@ -3356,6 +3361,7 @@ class Daemon(metaclass=JSONRPCServerType):
             raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
 
         claim = Claim()
+        claim.repost.update(**kwargs)
         claim.repost.reference.claim_id = claim_id
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
@@ -3736,6 +3742,8 @@ class Daemon(metaclass=JSONRPCServerType):
 
         if old_txo.claim.is_stream:
             claim.stream.update(file_path=file_path, **kwargs)
+        elif old_txo.claim.is_repost:
+            claim.repost.update(**kwargs)
 
         if clear_channel:
             claim.clear_signature()
