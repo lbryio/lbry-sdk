@@ -599,12 +599,17 @@ class DiskSpaceManagement(CommandTestCase):
         self.assertTrue(blobs2.issubset(blobs))
         self.assertFalse(blobs3.issubset(blobs))
         self.assertTrue(blobs4.issubset(blobs))
+        # check that pending blobs are not accounted (#3617)
+        await self.daemon.storage.db.execute_fetchall("update blob set status='pending'")
+        await self.blob_clean()  # just to refresh caches, has no effect
+        self.assertEqual(0, (await self.status())['disk_space']['total_used_mb'])
+        self.assertEqual(0, (await self.status())['disk_space']['content_blobs_storage_used_mb'])
+        self.assertEqual(0, (await self.status())['disk_space']['published_blobs_storage_used_mb'])
         # check that added_on gets set on downloads (was a bug)
         self.assertLess(0, await self.daemon.storage.run_and_return_one_or_none("select min(added_on) from blob"))
         await self.daemon.jsonrpc_file_delete(delete_all=True)
         await self.daemon.jsonrpc_get("foo4", save_file=False)
         self.assertLess(0, await self.daemon.storage.run_and_return_one_or_none("select min(added_on) from blob"))
-
 
 class TestBackgroundDownloaderComponent(CommandTestCase):
     async def get_blobs_from_sd_blob(self, sd_blob):

@@ -449,7 +449,7 @@ class SQLiteStorage(SQLiteMixin):
             return await self.db.execute_fetchall(
                 "select blob.blob_hash, blob.blob_length, blob.added_on "
                 "from blob left join stream_blob using (blob_hash) "
-                "where stream_blob.stream_hash is null and blob.is_mine=? "
+                "where stream_blob.stream_hash is null and blob.is_mine=? and blob.status='finished'"
                 "order by blob.blob_length desc, blob.added_on asc",
                 (is_mine,)
             )
@@ -463,7 +463,8 @@ class SQLiteStorage(SQLiteMixin):
         content_blobs = await self.db.execute_fetchall(
             "select blob.blob_hash, blob.blob_length, blob.added_on "
             "from blob join stream_blob using (blob_hash) cross join stream using (stream_hash)"
-            "cross join file using (stream_hash) where blob.is_mine=? order by blob.added_on asc, blob.blob_length asc",
+            "cross join file using (stream_hash)"
+            "where blob.is_mine=? and blob.status='finished' order by blob.added_on asc, blob.blob_length asc",
             (is_mine,)
         )
         return content_blobs + sd_blobs
@@ -480,7 +481,8 @@ class SQLiteStorage(SQLiteMixin):
                coalesce(sum(case when
                    is_mine=1
                then blob_length else 0 end), 0) as private_storage
-        from blob left join stream_blob using (blob_hash) where blob_hash not in (select sd_hash from stream)
+        from blob left join stream_blob using (blob_hash)
+        where blob_hash not in (select sd_hash from stream) and blob.status="finished"
         """)
         return {
             'network_storage': network_size,
