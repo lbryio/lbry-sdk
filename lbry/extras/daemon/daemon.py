@@ -4362,7 +4362,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 'nout': tx.position,
                 'address': claim_address,
                 'claim_id': claim_id,
-                'amount': dewies_to_lbc(amount)
+                'amount': dewies_to_lbc(new_txo.amount)
             }]})
             self.component_manager.loop.create_task(self.analytics_manager.send_claim_action('new_support'))
         else:
