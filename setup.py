@@ -63,7 +63,7 @@ setup(
         'torrent': ['lbry-libtorrent'],
         'lint': ['pylint==2.10.0'],
         'test': ['coverage'],
-        'scribe': ['scribe @ git+https://github.com/lbryio/scribe.git'],
+        'scribe': ['scribe @ git+https://github.com/lbryio/hub.git@dfda41f85fb3e2ad909a1493d389cfdad5eaa5c1'],
     },
     classifiers=[
         'Framework :: AsyncIO',
