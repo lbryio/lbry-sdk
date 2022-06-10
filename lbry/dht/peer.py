@@ -100,6 +100,9 @@ class PeerManager:
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
         self.peer_manager_keys_metric.labels("global").set(self.count_cache_keys())
 
+    def get_node_id_for_endpoint(self, address, port):
+        return self._node_id_mapping.get((address, port))
+
     def prune(self):  # TODO: periodically call this
         now = self._loop.time()
         to_pop = []
