@@ -18,6 +18,13 @@ from sqlalchemy.orm import declarative_base, relationship
 import sqlalchemy as sqla
 
 
+@sqla.event.listens_for(sqla.engine.Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, _):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.close()
+
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-4s %(name)s:%(lineno)d: %(message)s")
 log = logging.getLogger(__name__)
 Base = declarative_base()
