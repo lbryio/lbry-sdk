@@ -184,8 +184,10 @@ class Crawler:
             except lbry.dht.error.RemoteException:
                 self.inc_errors(make_kademlia_peer(None, address, port))
                 pass
-        self.set_latency(make_kademlia_peer(key, address, port), latency)
-        if not latency:
+        self.set_latency(make_kademlia_peer(key, address, port), latency if key else None)
+        if not latency or not key:
+            if not key:
+                log.warning("No node id from %s:%d", host, port)
             return set()
         node_id = key
         distance = Distance(key)
