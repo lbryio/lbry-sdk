@@ -193,7 +193,7 @@ class Crawler:
                 pass
         self.set_latency(make_kademlia_peer(key, address, port), latency if key else None)
         if not latency or not key:
-            if not key:
+            if latency and not key:
                 log.warning("No node id from %s:%d", host, port)
             return set()
         node_id = key
