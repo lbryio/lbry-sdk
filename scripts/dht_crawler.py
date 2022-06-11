@@ -142,12 +142,12 @@ class Crawler:
 
     def associate_peers(self, target_peer, peers):
         db_peer = self.get_from_peer(target_peer)
-        connections = [
+        connections = {
             DHTConnection(
                 from_peer_id=db_peer.peer_id,
                 to_peer_id=self.get_from_peer(peer).peer_id)
             for peer in peers
-        ]
+        }
         for peer in peers:
             self.db.query(DHTPeer).filter(DHTPeer.address == peer.address, DHTPeer.udp_port == peer.udp_port).update(
                 {DHTPeer.last_seen: datetime.datetime.utcnow()})
@@ -261,8 +261,8 @@ async def test():
     crawler = Crawler("/tmp/a.db")
     await crawler.node.start_listening()
     conf = Config()
-    #for (host, port) in conf.known_dht_nodes:
-    #    await crawler.crawl_routing_table(host, port)
+    for (host, port) in conf.known_dht_nodes:
+        await crawler.crawl_routing_table(host, port)
     await crawler.process()
 
 if __name__ == '__main__':
