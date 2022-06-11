@@ -78,9 +78,12 @@ class Crawler:
         self.db = session()
 
     @property
+    def refresh_limit(self):
+        return datetime.datetime.utcnow() - datetime.timedelta(hours=1)
+
+    @property
     def recent_peers_query(self):
-        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
-        return self.db.query(DHTPeer).filter(DHTPeer.last_seen > half_hour_ago)
+        return self.db.query(DHTPeer).filter(DHTPeer.last_seen > self.refresh_limit)
 
     @property
     def all_peers(self):
@@ -88,22 +91,19 @@ class Crawler:
 
     @property
     def checked_peers_count(self):
-        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
-        return self.recent_peers_query.filter(DHTPeer.last_check > half_hour_ago).count()
+        return self.recent_peers_query.filter(DHTPeer.last_check > self.refresh_limit).count()
 
     @property
     def unreachable_peers_count(self):
-        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
-        return self.recent_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > half_hour_ago).count()
+        return self.recent_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > self.refresh_limit).count()
 
     @property
     def peers_with_errors_count(self):
         return self.recent_peers_query.filter(DHTPeer.errors > 0).count()
 
     def get_peers_needing_check(self):
-        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
         return set([peer.to_kad_peer() for peer in self.recent_peers_query.filter(
-            sqla.or_(DHTPeer.last_check == None, DHTPeer.last_check < half_hour_ago)).all()])
+            sqla.or_(DHTPeer.last_check == None, DHTPeer.last_check < self.refresh_limit)).all()])
 
     def add_peers(self, *peers):
         db_peers = []
