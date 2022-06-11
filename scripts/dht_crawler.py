@@ -80,6 +80,11 @@ class Crawler:
         return set([peer.to_kad_peer() for peer in self.recent_peers_query.all()])
 
     @property
+    def checked_peers_count(self):
+        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
+        return self.recent_peers_query.filter(DHTPeer.last_check > half_hour_ago).count()
+
+    @property
     def unreachable_peers_count(self):
         half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
         return self.recent_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > half_hour_ago).count()
@@ -231,9 +236,9 @@ class Crawler:
                 if len(to_process) > 20:
                     break
             await asyncio.sleep(0)
-            log.info("%d known, %d unreachable, %d error, %d processing, %d on queue",
-                     self.recent_peers_query.count(), self.unreachable_peers_count, self.peers_with_errors_count,
-                     len(to_process), len(to_check))
+            log.info("%d known, %d contacted recently, %d unreachable, %d error, %d processing, %d on queue",
+                     self.recent_peers_query.count(), self.checked_peers_count, self.unreachable_peers_count,
+                     self.peers_with_errors_count, len(to_process), len(to_check))
             await asyncio.wait(to_process.values(), return_when=asyncio.FIRST_COMPLETED)
             to_check = self.get_peers_needing_check()
             while not to_check and not to_process:
