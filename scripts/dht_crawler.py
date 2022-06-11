@@ -248,7 +248,8 @@ class Crawler:
             log.info("%d known, %d contacted recently, %d unreachable, %d error, %d processing, %d on queue",
                      self.recent_peers_query.count(), self.checked_peers_count, self.unreachable_peers_count,
                      self.peers_with_errors_count, len(to_process), len(to_check))
-            await asyncio.wait(to_process.values(), return_when=asyncio.FIRST_COMPLETED)
+            if to_process:
+                await asyncio.wait(to_process.values(), return_when=asyncio.FIRST_COMPLETED)
             to_check = self.get_peers_needing_check()
             while not to_check and not to_process:
                 log.info("Idle, sleeping a minute.")
