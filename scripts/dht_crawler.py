@@ -179,10 +179,10 @@ class Crawler:
         latency = None
         for _ in range(3):
             try:
+                ping_start = time.perf_counter_ns()
                 async with self.semaphore:
-                    ping_start = time.perf_counter_ns()
                     await self.node.protocol.get_rpc_peer(make_kademlia_peer(None, address, port)).ping()
-                key = self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
+                    key = key or self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
                 latency = time.perf_counter_ns() - ping_start
             except asyncio.TimeoutError:
                 pass
@@ -200,7 +200,6 @@ class Crawler:
         peers = set()
         factor = 2048
         for i in range(200):
-            #print(i, len(peers), key.hex(), host)
             new_peers = await self.request_peers(address, port, key)
             if not new_peers:
                 break
