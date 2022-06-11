@@ -81,7 +81,8 @@ class Crawler:
 
     @property
     def unreachable_peers_count(self):
-        return self.recent_peers_query.filter(DHTPeer.latency == None).count()
+        half_hour_ago = datetime.datetime.utcnow() - datetime.timedelta(minutes=30)
+        return self.recent_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > half_hour_ago).count()
 
     @property
     def peers_with_errors_count(self):
