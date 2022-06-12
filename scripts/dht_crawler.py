@@ -103,7 +103,8 @@ class Crawler:
 
     def get_peers_needing_check(self):
         return set([peer.to_kad_peer() for peer in self.recent_peers_query.filter(
-            sqla.or_(DHTPeer.last_check == None, DHTPeer.last_check < self.refresh_limit)).all()])
+            sqla.or_(DHTPeer.last_check == None,
+                     DHTPeer.last_check < self.refresh_limit)).order_by(DHTPeer.last_seen.desc()).all()])
 
     def add_peers(self, *peers):
         db_peers = []
