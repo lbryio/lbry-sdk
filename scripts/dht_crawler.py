@@ -149,7 +149,7 @@ class Crawler:
                 to_peer_id=peer_id)
             for peer_id in db_peer_ids
         }
-        self.db.query(DHTPeer).filter(DHTPeer.node_id.in_(set(db_peer_ids))).update(
+        self.db.query(DHTPeer).filter(DHTPeer.peer_id.in_(set(db_peer_ids))).update(
             {DHTPeer.last_seen: datetime.datetime.utcnow()})
         self.db.query(DHTConnection).filter(DHTConnection.from_peer_id == target_peer_id).delete()
         self.db.add_all(connections)
