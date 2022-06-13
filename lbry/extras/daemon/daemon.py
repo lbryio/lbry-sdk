@@ -1850,7 +1850,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Options:
             --to_account=<to_account>     : (str) send to this account
             --from_account=<from_account> : (str) spend from this account
-            --amount=<amount>             : (str) the amount to transfer lbc
+            --amount=<amount>             : (decimal) the amount to transfer lbc
             --everything                  : (bool) transfer everything (excluding claims), default: false.
             --outputs=<outputs>           : (int) split payment across many outputs, default: 1.
             --wallet_id=<wallet_id>       : (str) limit operation to specific wallet.
@@ -4038,6 +4038,8 @@ class Daemon(metaclass=JSONRPCServerType):
                            [--languages=<languages>...] [--clear_languages]
                            [--locations=<locations>...] [--clear_locations]
                            [--thumbnail_url=<thumbnail_url>] [--cover_url=<cover_url>]
+                           [--channel_id=<channel_id> | --channel_name=<channel_name>]
+                           [--channel_account_id=<channel_account_id>...]
                            [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                            [--claim_address=<claim_address>]
                            [--funding_account_ids=<funding_account_ids>...]
@@ -4093,6 +4095,10 @@ class Daemon(metaclass=JSONRPCServerType):
 
             --clear_locations              : (bool) clear existing locations (prior to adding new ones)
             --thumbnail_url=<thumbnail_url>: (str) thumbnail url
+            --channel_id=<channel_id>      : (str) claim id of the publisher channel
+            --channel_name=<channel_name>  : (str) name of the publisher channel
+            --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
+                                                   for channel certificates, defaults to all accounts.
             --account_id=<account_id>      : (str) account in which to look for collection (default: all)
             --wallet_id=<wallet_id>        : (str) restrict operation to specific wallet
           --funding_account_ids=<funding_account_ids>: (list) ids of accounts to fund this transaction
