@@ -82,27 +82,27 @@ class Crawler:
         return datetime.datetime.utcnow() - datetime.timedelta(hours=1)
 
     @property
-    def recent_peers_query(self):
-        return self.db.query(DHTPeer).filter(DHTPeer.last_seen > self.refresh_limit)
+    def active_peers_query(self):
+        return self.db.query(DHTPeer).filter(sqla.or_(DHTPeer.last_seen > self.refresh_limit, DHTPeer.latency > 0))
 
     @property
     def all_peers(self):
-        return set([peer.to_kad_peer() for peer in self.recent_peers_query.all()])
+        return set([peer.to_kad_peer() for peer in self.active_peers_query.all()])
 
     @property
     def checked_peers_count(self):
-        return self.recent_peers_query.filter(DHTPeer.last_check > self.refresh_limit).count()
+        return self.active_peers_query.filter(DHTPeer.last_check > self.refresh_limit).count()
 
     @property
     def unreachable_peers_count(self):
-        return self.recent_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > self.refresh_limit).count()
+        return self.active_peers_query.filter(DHTPeer.latency == None, DHTPeer.last_check > self.refresh_limit).count()
 
     @property
     def peers_with_errors_count(self):
-        return self.recent_peers_query.filter(DHTPeer.errors > 0).count()
+        return self.active_peers_query.filter(DHTPeer.errors > 0).count()
 
     def get_peers_needing_check(self):
-        return set([peer.to_kad_peer() for peer in self.recent_peers_query.filter(
+        return set([peer.to_kad_peer() for peer in self.active_peers_query.filter(
             sqla.or_(DHTPeer.last_check == None,
                      DHTPeer.last_check < self.refresh_limit)).order_by(DHTPeer.last_seen.desc()).all()])
 
@@ -245,7 +245,7 @@ class Crawler:
                     break
             await asyncio.sleep(0)
             log.info("%d known, %d contacted recently, %d unreachable, %d error, %d processing, %d on queue",
-                     self.recent_peers_query.count(), self.checked_peers_count, self.unreachable_peers_count,
+                     self.active_peers_query.count(), self.checked_peers_count, self.unreachable_peers_count,
                      self.peers_with_errors_count, len(to_process), len(to_check))
             if to_process:
                 await asyncio.wait(to_process.values(), return_when=asyncio.FIRST_COMPLETED)
@@ -260,8 +260,9 @@ async def test():
     crawler = Crawler("/tmp/a.db")
     await crawler.node.start_listening()
     conf = Config()
-    for (host, port) in conf.known_dht_nodes:
-        await crawler.crawl_routing_table(host, port)
+    if crawler.active_peers_query.count() < 100:
+        for (host, port) in conf.known_dht_nodes:
+            await crawler.crawl_routing_table(host, port)
     await crawler.process()
 
 if __name__ == '__main__':
