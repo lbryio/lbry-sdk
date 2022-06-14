@@ -1527,7 +1527,7 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(searched_repost['signing_channel']['claim_id'], spam_claim_id)
 
     async def test_filtering_channels_for_removing_content(self):
-        await self.channel_create('@some_channel', '0.1')
+        some_channel_id = self.get_claim_id(await self.channel_create('@some_channel', '0.1'))
         await self.stream_create('good_content', '0.1', channel_name='@some_channel', tags=['good'])
         bad_content_id = self.get_claim_id(
             await self.stream_create('bad_content', '0.1', channel_name='@some_channel', tags=['bad'])
@@ -1597,7 +1597,7 @@ class StreamCommands(ClaimTestCase):
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
         self.assertEqual(error['name'], 'BLOCKED')
-        self.assertTrue(error['text'].startswith("Resolve of 'lbry://@some_channel/bad_content' was censored"))
+        self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was censored"))
         self.assertTrue(error['censor']['short_url'].startswith('lbry://@blocking#'))
 
         # a filtered/blocked channel impacts all content inside it
