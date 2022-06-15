@@ -48,10 +48,12 @@ class DHTPeer(Base):
 
     @classmethod
     def from_kad_peer(cls, peer):
-        return DHTPeer(node_id=peer.node_id, address=peer.address, udp_port=peer.udp_port, tcp_port=peer.tcp_port)
+        node_id = peer.node_id.hex() if peer.node_id else None
+        return DHTPeer(node_id=node_id, address=peer.address, udp_port=peer.udp_port, tcp_port=peer.tcp_port)
 
     def to_kad_peer(self):
-        return make_kademlia_peer(self.node_id, self.address, self.udp_port, self.tcp_port)
+        node_id = bytes.fromhex(self.node_id.hex()) if self.node_id else None
+        return make_kademlia_peer(node_id, self.address, self.udp_port, self.tcp_port)
 
 
 class DHTConnection(Base):
@@ -111,7 +113,7 @@ class Crawler:
         for peer in peers:
             db_peer = self.get_from_peer(peer)
             if db_peer and db_peer.node_id is None and peer.node_id:
-                db_peer.node_id = peer.node_id
+                db_peer.node_id = peer.node_id.hex()
             elif not db_peer:
                 db_peer = DHTPeer.from_kad_peer(peer)
             self.db.add(db_peer)
@@ -126,7 +128,7 @@ class Crawler:
         db_peer = self.get_from_peer(peer)
         db_peer.latency = latency
         if not db_peer.node_id:
-            db_peer.node_id = peer.node_id
+            db_peer.node_id = peer.node_id.hex()
         if db_peer.first_online and latency is None:
             db_peer.last_churn = (datetime.datetime.utcnow() - db_peer.first_online).seconds
         elif latency is not None and db_peer.first_online is None:
