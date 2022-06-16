@@ -4,6 +4,7 @@ import aiohttp
 import aiohttp.web
 import asyncio
 
+from lbry.file.source import ManagedDownloadSource
 from lbry.utils import aiohttp_request
 from lbry.blob.blob_file import MAX_BLOB_SIZE
 from lbry.testcase import CommandTestCase
@@ -354,10 +355,15 @@ class RangeRequests(CommandTestCase):
         if wait_for_start_writing:
             await stream.started_writing.wait()
             self.assertTrue(os.path.isfile(path))
-        await self._restart_stream_manager()
+        await self.daemon.file_manager.stop()
+        # while stopped, we get no response to query and no file is present
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'], [])
+        self.assertEqual(os.path.isfile(path), stream.status == ManagedDownloadSource.STATUS_FINISHED)
+        await self.daemon.file_manager.start()
+        # after restart, we get a response to query and same file path
         stream = (await self.daemon.jsonrpc_file_list())['items'][0]
         self.assertIsNotNone(stream.full_path)
-        self.assertFalse(os.path.isfile(path))
+        self.assertEqual(stream.full_path, path)
         if wait_for_start_writing:
             await stream.started_writing.wait()
             self.assertTrue(os.path.isfile(path))
