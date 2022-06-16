@@ -354,7 +354,7 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_get('lbry://foo')
         with open(original_path, 'wb') as handle:
             handle.write(b'some other stuff was there instead')
-        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.stop()
         await self.daemon.file_manager.start()
         await asyncio.wait_for(self.wait_files_to_complete(), timeout=5)  # if this hangs, file didn't get set completed
         # check that internal state got through up to the file list API
@@ -382,8 +382,7 @@ class FileCommands(CommandTestCase):
         resp = await self.out(self.daemon.jsonrpc_get('lbry://foo', timeout=2))
         self.assertNotIn('error', resp)
         self.assertTrue(os.path.isfile(path))
-        self.daemon.file_manager.stop()
-        await asyncio.sleep(0.01)  # FIXME: this sleep should not be needed
+        await self.daemon.file_manager.stop()
         self.assertFalse(os.path.isfile(path))
 
     async def test_incomplete_downloads_retry(self):
@@ -478,7 +477,7 @@ class FileCommands(CommandTestCase):
 
         # restart the daemon and make sure the fee is still there
 
-        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.stop()
         await self.daemon.file_manager.start()
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].content_fee.raw, raw_content_fee)
