@@ -263,8 +263,7 @@ class SPVNode:
             await self.server.start()
         except Exception as e:
             self.stopped = True
-            if not isinstance(e, asyncio.CancelledError):
-                log.exception("failed to start spv node")
+            log.exception("failed to start spv node")
             raise e
 
     async def stop(self, cleanup=True):

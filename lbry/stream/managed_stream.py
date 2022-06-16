@@ -355,7 +355,7 @@ class ManagedStream(ManagedDownloadSource):
             return sent
         except ConnectionError:
             return sent
-        except (OSError, Exception) as err:
+        except (OSError, Exception, asyncio.CancelledError) as err:
             if isinstance(err, asyncio.CancelledError):
                 log.warning("stopped uploading %s#%s to reflector", self.claim_name, self.claim_id)
             elif isinstance(err, OSError):

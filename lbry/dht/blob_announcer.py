@@ -42,8 +42,6 @@ class BlobAnnouncer:
                     log.debug("failed to announce %s, could only find %d peers, retrying soon.", blob_hash[:8], peers)
             except Exception as err:
                 self.announcements_sent_metric.labels(peers=0, error=True).inc()
-                if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
-                    raise err
                 log.warning("error announcing %s: %s", blob_hash[:8], str(err))
 
     async def _announce(self, batch_size: typing.Optional[int] = 10):
