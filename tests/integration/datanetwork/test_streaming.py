@@ -21,7 +21,7 @@ def get_random_bytes(n: int) -> bytes:
 
 class RangeRequests(CommandTestCase):
     async def _restart_stream_manager(self):
-        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.stop()
         await self.daemon.file_manager.start()
         return
 

@@ -380,7 +380,7 @@ class FileManagerComponent(Component):
         log.info('Done setting up file manager')
 
     async def stop(self):
-        self.file_manager.stop()
+        await self.file_manager.stop()
 
 
 class BackgroundDownloaderComponent(Component):
