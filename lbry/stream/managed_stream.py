@@ -179,7 +179,7 @@ class ManagedStream(ManagedDownloadSource):
         Stop any running save/stream tasks as well as the downloader and update the status in the database
         """
 
-        self.stop_tasks()
+        await self.stop_tasks()
         if (finished and self.status != self.STATUS_FINISHED) or self.status == self.STATUS_RUNNING:
             await self.update_status(self.STATUS_FINISHED if finished else self.STATUS_STOPPED)
 
@@ -312,12 +312,13 @@ class ManagedStream(ManagedDownloadSource):
             await asyncio.wait_for(self.started_writing.wait(), self.config.download_timeout)
         except asyncio.TimeoutError:
             log.warning("timeout starting to write data for lbry://%s#%s", self.claim_name, self.claim_id)
-            self.stop_tasks()
+            await self.stop_tasks()
             await self.update_status(ManagedStream.STATUS_STOPPED)
 
-    def stop_tasks(self):
+    async def stop_tasks(self):
         if self.file_output_task and not self.file_output_task.done():
             self.file_output_task.cancel()
+            await asyncio.gather(self.file_output_task, return_exceptions=True)
         self.file_output_task = None
         while self.streaming_responses:
             req, response = self.streaming_responses.pop()

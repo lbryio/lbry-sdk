@@ -424,7 +424,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertIsNone(stream.full_path)
         self.assertEqual(0, stream.written_bytes)
 
-        self.stream_manager.stop()
+        await self.stream_manager.stop()
         await self.stream_manager.start()
         self.assertEqual(1, len(self.stream_manager.streams))
         stream = list(self.stream_manager.streams.values())[0]
@@ -449,7 +449,7 @@ class TestStreamManager(BlobExchangeTestBase):
         stream = await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager)
         await stream.finished_writing.wait()
         await asyncio.sleep(0, loop=self.loop)
-        self.stream_manager.stop()
+        await self.stream_manager.stop()
         self.client_blob_manager.stop()
         # partial removal, only sd blob is missing.
         # in this case, we recover the sd blob while the other blobs are kept untouched as 'finished'

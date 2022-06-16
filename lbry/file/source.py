@@ -67,7 +67,7 @@ class ManagedDownloadSource:
     async def save_file(self, file_name: Optional[str] = None, download_directory: Optional[str] = None):
         raise NotImplementedError()
 
-    def stop_tasks(self):
+    async def stop_tasks(self):
         raise NotImplementedError()
 
     def set_claim(self, claim_info: typing.Dict, claim: 'Claim'):
