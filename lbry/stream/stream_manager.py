@@ -224,7 +224,8 @@ class StreamManager(SourceManager):
         )
         return task
 
-    async def _retriable_reflect_stream(self, stream, host, port):
+    @staticmethod
+    async def _retriable_reflect_stream(stream, host, port):
         sent = await stream.upload_to_reflector(host, port)
         while not stream.is_fully_reflected and stream.reflector_progress > 0 and len(sent) > 0:
             stream.reflector_progress = 0
