@@ -196,8 +196,8 @@ class StreamManager(SourceManager):
         await super().start()
         self.re_reflect_task = self.loop.create_task(self.reflect_streams())
 
-    def stop(self):
-        super().stop()
+    async def stop(self):
+        await super().stop()
         if self.resume_saving_task and not self.resume_saving_task.done():
             self.resume_saving_task.cancel()
         if self.re_reflect_task and not self.re_reflect_task.done():
@@ -260,7 +260,7 @@ class StreamManager(SourceManager):
             return
         if source.identifier in self.running_reflector_uploads:
             self.running_reflector_uploads[source.identifier].cancel()
-        source.stop_tasks()
+        await source.stop_tasks()
         if source.identifier in self.streams:
             del self.streams[source.identifier]
         blob_hashes = [source.identifier] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
