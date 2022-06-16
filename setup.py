@@ -50,7 +50,7 @@ setup(
     ],
     extras_require={
         'lint': [
-            'pylint==2.10.0'
+            'pylint==2.13.9'
         ],
         'test': [
             'coverage',
