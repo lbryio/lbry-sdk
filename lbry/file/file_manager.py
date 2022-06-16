@@ -99,8 +99,6 @@ class FileManager:
             except asyncio.TimeoutError:
                 raise ResolveTimeoutError(uri)
             except Exception as err:
-                if isinstance(err, asyncio.CancelledError):
-                    raise
                 log.exception("Unexpected error resolving stream:")
                 raise ResolveError(f"Unexpected error resolving stream: {str(err)}")
             if 'error' in resolved_result:
@@ -249,7 +247,7 @@ class FileManager:
         except asyncio.TimeoutError:
             error = DownloadDataTimeoutError(stream.sd_hash)
             raise error
-        except Exception as err:  # forgive data timeout, don't delete stream
+        except (Exception, asyncio.CancelledError) as err:  # forgive data timeout, don't delete stream
             expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
                         KeyFeeAboveMaxAllowedError, ResolveError, InvalidStreamURLError)
             if isinstance(err, expected):
