@@ -59,11 +59,11 @@ class SourceManager:
     def add(self, source: ManagedDownloadSource):
         self._sources[source.identifier] = source
 
-    def remove(self, source: ManagedDownloadSource):
+    async def remove(self, source: ManagedDownloadSource):
         if source.identifier not in self._sources:
             return
         self._sources.pop(source.identifier)
-        source.stop_tasks()
+        await source.stop_tasks()
 
     async def initialize_from_database(self):
         raise NotImplementedError()
@@ -72,10 +72,10 @@ class SourceManager:
         await self.initialize_from_database()
         self.started.set()
 
-    def stop(self):
+    async def stop(self):
         while self._sources:
             _, source = self._sources.popitem()
-            source.stop_tasks()
+            await source.stop_tasks()
         self.started.clear()
 
     async def create(self, file_path: str, key: Optional[bytes] = None,
@@ -83,7 +83,7 @@ class SourceManager:
         raise NotImplementedError()
 
     async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
-        self.remove(source)
+        await self.remove(source)
         if delete_file and source.output_file_exists:
             os.remove(source.full_path)
 

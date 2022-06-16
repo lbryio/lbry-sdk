@@ -74,7 +74,7 @@ class TorrentSource(ManagedDownloadSource):
     def bt_infohash(self):
         return self.identifier
 
-    def stop_tasks(self):
+    async def stop_tasks(self):
         pass
 
     @property
@@ -118,8 +118,8 @@ class TorrentManager(SourceManager):
     async def start(self):
         await super().start()
 
-    def stop(self):
-        super().stop()
+    async def stop(self):
+        await super().stop()
         log.info("finished stopping the torrent manager")
 
     async def delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
