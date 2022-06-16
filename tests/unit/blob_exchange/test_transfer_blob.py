@@ -239,7 +239,8 @@ class TestBlobExchange(BlobExchangeTestBase):
     async def test_server_chunked_request(self):
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
         server_protocol = BlobServerProtocol(self.loop, self.server_blob_manager, self.server.lbrycrd_address)
-        transport = asyncio.Transport(extra={'peername': ('ip', 90)})
+        transport = mock.Mock(spec=asyncio.Transport)
+        transport.get_extra_info = lambda k: {'peername': ('ip', 90)}[k]
         received_data = BytesIO()
         transport.is_closing = lambda: received_data.closed
         transport.write = received_data.write

@@ -51,7 +51,8 @@ def mock_network_loop(loop: asyncio.AbstractEventLoop,
                 return rx.datagram_received(data, from_addr)
 
         protocol = proto_lam()
-        transport = asyncio.DatagramTransport(extra={'socket': mock_sock})
+        transport = mock.Mock(spec=asyncio.DatagramTransport)
+        transport.get_extra_info = lambda k: {'socket': mock_sock}[k]
         transport.is_closing = lambda: False
         transport.close = lambda: mock_sock.close()
         mock_sock.sendto = sendto
@@ -60,16 +61,14 @@ def mock_network_loop(loop: asyncio.AbstractEventLoop,
         dht_network[from_addr] = protocol
         return transport, protocol
 
-    with mock.patch('socket.socket') as mock_socket:
-        mock_sock = mock.Mock(spec=socket.socket)
-        mock_sock.setsockopt = lambda *_: None
-        mock_sock.bind = lambda *_: None
-        mock_sock.setblocking = lambda *_: None
-        mock_sock.getsockname = lambda: "0.0.0.0"
-        mock_sock.getpeername = lambda: ""
-        mock_sock.close = lambda: None
-        mock_sock.type = socket.SOCK_DGRAM
-        mock_sock.fileno = lambda: 7
-        mock_socket.return_value = mock_sock
-        loop.create_datagram_endpoint = create_datagram_endpoint
-        yield
+    mock_sock = mock.Mock(spec=socket.socket)
+    mock_sock.setsockopt = lambda *_: None
+    mock_sock.bind = lambda *_: None
+    mock_sock.setblocking = lambda *_: None
+    mock_sock.getsockname = lambda: "0.0.0.0"
+    mock_sock.getpeername = lambda: ""
+    mock_sock.close = lambda: None
+    mock_sock.type = socket.SOCK_DGRAM
+    mock_sock.fileno = lambda: 7
+    loop.create_datagram_endpoint = create_datagram_endpoint
+    yield
