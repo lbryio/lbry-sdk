@@ -614,7 +614,8 @@ class Daemon(metaclass=JSONRPCServerType):
             content_type='application/json'
         )
 
-    async def handle_metrics_get_request(self, request: web.Request):
+    @staticmethod
+    async def handle_metrics_get_request(request: web.Request):
         try:
             return web.Response(
                 text=prom_generate_latest().decode(),

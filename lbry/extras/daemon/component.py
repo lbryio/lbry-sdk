@@ -37,7 +37,7 @@ class Component(metaclass=ComponentType):
     def running(self):
         return self._running
 
-    async def get_status(self):
+    async def get_status(self): # pylint: disable=no-self-use
         return
 
     async def start(self):
