@@ -23,6 +23,7 @@ class BackgroundDownloader:
         except ValueError:
             return
         except asyncio.CancelledError:
+            log.debug("Cancelled background downloader")
             raise
         except Exception:
             log.error("Unexpected download error on background downloader")
