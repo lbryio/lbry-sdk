@@ -50,10 +50,10 @@ class FileManager:
             await manager.started.wait()
         self.started.set()
 
-    def stop(self):
+    async def stop(self):
         for manager in self.source_managers.values():
             # fixme: pop or not?
-            manager.stop()
+            await manager.stop()
         self.started.clear()
 
     @cache_concurrent
