@@ -136,7 +136,7 @@ class Crawler:
     def set_latency(self, peer, latency=None):
         db_peer = self.get_from_peer(peer)
         db_peer.latency = latency
-        if not db_peer.node_id:
+        if not db_peer.node_id and peer.node_id:
             db_peer.node_id = peer.node_id.hex()
         if db_peer.first_online and latency is None:
             db_peer.last_churn = (datetime.datetime.utcnow() - db_peer.first_online).seconds
@@ -156,42 +156,48 @@ class Crawler:
             peer = make_kademlia_peer(None, await resolve_host(host, port, 'udp'), port)
             for attempt in range(3):
                 try:
+                    req_start = time.perf_counter_ns()
                     response = await self.node.protocol.get_rpc_peer(peer).find_node(key)
+                    latency = time.perf_counter_ns() - req_start
+                    self.set_latency(make_kademlia_peer(key, host, port), latency)
                     return [make_kademlia_peer(*peer_tuple) for peer_tuple in response]
                 except asyncio.TimeoutError:
-                    log.info('Previously responding peer timed out: %s:%d attempt #%d', host, port, (attempt + 1))
+                    self.set_latency(make_kademlia_peer(key, host, port), None)
                     continue
                 except lbry.dht.error.RemoteException as e:
-                    log.info('Previously responding peer errored: %s:%d attempt #%d - %s',
+                    log.info('Peer errored: %s:%d attempt #%d - %s',
                              host, port, (attempt + 1), str(e))
                     self.inc_errors(peer)
+                    self.set_latency(make_kademlia_peer(key, host, port), None)
                     continue
         return []
 
-    async def crawl_routing_table(self, host, port):
+    async def crawl_routing_table(self, host, port, node_id=None):
         start = time.time()
         log.info("querying %s:%d", host, port)
         address = await resolve_host(host, port, 'udp')
         self.add_peers(make_kademlia_peer(None, address, port))
-        key = self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
-        latency = None
-        for _ in range(3):
-            try:
-                ping_start = time.perf_counter_ns()
-                async with self.semaphore:
-                    await self.node.protocol.get_rpc_peer(make_kademlia_peer(None, address, port)).ping()
-                    key = key or self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
-                latency = time.perf_counter_ns() - ping_start
-            except asyncio.TimeoutError:
-                pass
-            except lbry.dht.error.RemoteException:
-                self.inc_errors(make_kademlia_peer(None, address, port))
-                pass
-        self.set_latency(make_kademlia_peer(key, address, port), latency if key else None)
-        if not latency or not key:
-            if latency and not key:
-                log.warning("No node id from %s:%d", host, port)
-            return set()
+        key = node_id or self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
+        if not key:
+            latency = None
+            for _ in range(3):
+                try:
+                    ping_start = time.perf_counter_ns()
+                    async with self.semaphore:
+                        await self.node.protocol.get_rpc_peer(make_kademlia_peer(None, address, port)).ping()
+                        key = key or self.node.protocol.peer_manager.get_node_id_for_endpoint(address, port)
+                    latency = time.perf_counter_ns() - ping_start
+                    break
+                except asyncio.TimeoutError:
+                    pass
+                except lbry.dht.error.RemoteException:
+                    self.inc_errors(make_kademlia_peer(None, address, port))
+                    pass
+            self.set_latency(make_kademlia_peer(key, address, port), latency if key else None)
+            if not latency or not key:
+                if latency and not key:
+                    log.warning("No node id from %s:%d", host, port)
+                return set()
         node_id = key
         distance = Distance(key)
         max_distance = int.from_bytes(bytes([0xff] * 48), 'big')
@@ -229,7 +235,8 @@ class Crawler:
         to_process = {}
 
         def submit(_peer):
-            f = asyncio.ensure_future(self.crawl_routing_table(_peer.address, peer.udp_port))
+            f = asyncio.ensure_future(
+                self.crawl_routing_table(_peer.address, peer.udp_port, bytes.fromhex(peer.node_id)))
             to_process[_peer] = f
             f.add_done_callback(lambda _: to_process.pop(_peer))
 
