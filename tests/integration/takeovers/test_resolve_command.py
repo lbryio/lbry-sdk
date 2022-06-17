@@ -1526,6 +1526,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         )
         await self.generate(100)
         self.assertEqual(self.conductor.spv_node.writer.height, 309)
+        await asyncio.sleep(0.5)
         self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
 
         self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(

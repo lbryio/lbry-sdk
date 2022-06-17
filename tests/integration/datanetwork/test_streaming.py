@@ -353,7 +353,7 @@ class RangeRequests(CommandTestCase):
         path = stream.full_path
         self.assertIsNotNone(path)
         if wait_for_start_writing:
-            await stream.started_writing.wait()
+            await asyncio.gather(stream.started_writing.wait(), return_exceptions=True)
             self.assertTrue(os.path.isfile(path))
         await self.daemon.file_manager.stop()
         # while stopped, we get no response to query and no file is present
@@ -365,7 +365,7 @@ class RangeRequests(CommandTestCase):
         self.assertIsNotNone(stream.full_path)
         self.assertEqual(stream.full_path, path)
         if wait_for_start_writing:
-            await stream.started_writing.wait()
+            await asyncio.gather(stream.started_writing.wait(), return_exceptions=True)
             self.assertTrue(os.path.isfile(path))
 
     async def test_file_save_stop_before_finished_streaming_only_wait_for_start(self):
