@@ -214,7 +214,7 @@ class Network:
         def loop_task_done_callback(f):
             try:
                 f.result()
-            except Exception:
+            except (Exception, asyncio.CancelledError):
                 if self.running:
                     log.exception("wallet server connection loop crashed")
 
