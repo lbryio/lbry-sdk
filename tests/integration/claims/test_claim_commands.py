@@ -1681,7 +1681,6 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(tx['txid'], files[0]['txid'])
         self.assertEqual(expected, files[0]['metadata'])
 
-    @skip
     async def test_setting_stream_fields(self):
         values = {
             'title': "Cool Content",
@@ -1822,6 +1821,8 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=self.account.id), 3)
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(account_id=account2_id), 1)
 
+    @skip
+    async def test_release_time(self):
         self.assertEqual(4, len(await self.claim_search(release_time='>0', order_by=['release_time'])))
         self.assertEqual(3, len(await self.claim_search(release_time='>0', order_by=['release_time'], claim_type='stream')))
 
