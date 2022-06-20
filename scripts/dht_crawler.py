@@ -260,7 +260,8 @@ class Crawler:
         log.info("Done querying %s:%d in %.2f seconds: %d peers found over %d requests.",
                  host, port, (time.time() - start), len(peers), i)
         self.add_peers(*peers)
-        self.connections_found_metric.labels(host=host, port=port).set(len(peers))
+        if peers:
+            self.connections_found_metric.labels(host=host, port=port).set(len(peers))
         #self.associate_peers(this_peer_id, db_peer_ids)
         self.db.commit()
         return peers
