@@ -67,7 +67,7 @@ class DHTConnection(Base):
     connected_to = relationship("DHTPeer", backref="connections", primaryjoin=(DHTPeer.peer_id == to_peer_id))
 
 
-def new_node(address="0.0.0.0", udp_port=4444, node_id=None):
+def new_node(address="0.0.0.0", udp_port=0, node_id=None):
     node_id = node_id or generate_id()
     loop = asyncio.get_event_loop()
     return Node(loop, PeerManager(loop), node_id, udp_port, udp_port, 3333, address)
@@ -301,7 +301,10 @@ class Crawler:
                 self.flush_to_db()
                 last_flush = datetime.datetime.utcnow()
             while not to_check and not to_process:
-                log.info("Idle, sleeping a minute.")
+                port = self.node.listening_port.get_extra_info('socket').getsockname()[1]
+                self.node.stop()
+                await self.node.start_listening()
+                log.info("Idle, sleeping a minute. Port changed to %d", port)
                 await asyncio.sleep(60.0)
                 to_check = self.get_peers_needing_check()
 
