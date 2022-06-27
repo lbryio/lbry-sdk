@@ -31,7 +31,7 @@ RUN chown -R $user:$user $projects_dir
 USER $user
 WORKDIR $projects_dir
 
-RUN python3 -m pip install -U setuptools pip
+RUN python3 -m pip install -U setuptools pip sqlalchemy
 RUN make install
 RUN python3 docker/set_build.py
 RUN rm ~/.cache -rf

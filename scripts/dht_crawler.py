@@ -333,7 +333,7 @@ class SimpleMetrics:
 
 
 async def test():
-    metrics = SimpleMetrics('7070')
+    metrics = SimpleMetrics('8080')
     await metrics.start()
     crawler = Crawler("/tmp/a.db")
     await crawler.node.start_listening()
