@@ -1681,7 +1681,6 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(tx['txid'], files[0]['txid'])
         self.assertEqual(expected, files[0]['metadata'])
 
-    @skip
     async def test_setting_stream_fields(self):
         values = {
             'title': "Cool Content",
