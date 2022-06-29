@@ -126,11 +126,27 @@ class TestESSync(CommandTestCase):
         # stop the es writer and advance the chain by 1, adding a new claim. upon resuming the es writer, it should
         # add the new claim
         await es_writer.stop()
-        await self.stream_create(f"stream11", bid='0.001', confirm=False)
+
+        stream11 = self.get_claim_id(await self.stream_create(f"stream11", bid='0.001', confirm=False))
+        current_height = self.conductor.spv_node.writer.height
         generate_block_task = asyncio.create_task(self.generate(1))
+        await self.conductor.spv_node.writer.wait_until_block(current_height + 1)
+
         await es_writer.start()
         await generate_block_task
         self.assertEqual(11, len(await self.claim_search(order_by=['height'])))
+
+        # stop/delete es and advance the chain by 1, removing stream11
+        await es_writer.delete_index()
+        await es_writer.stop()
+        server_search_client.clear_caches()
+        await self.stream_abandon(stream11, confirm=False)
+        current_height = self.conductor.spv_node.writer.height
+        generate_block_task = asyncio.create_task(self.generate(1))
+        await self.conductor.spv_node.writer.wait_until_block(current_height + 1)
+        await es_writer.start(reindex=True)
+        await generate_block_task
+        self.assertEqual(10, len(await self.claim_search(order_by=['height'])))
 
 
     # # this time we will test a migration from unversioned to v1
