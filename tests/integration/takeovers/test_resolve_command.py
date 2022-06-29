@@ -215,6 +215,21 @@ class ResolveCommand(BaseResolveTestCase):
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1][:17]}', colliding_claim_ids[1])
         await self.assertResolvesToClaimId(f'@abc#{colliding_claim_ids[1]}', colliding_claim_ids[1])
 
+        # test resolving different streams for a channel using short urls
+        self.get_claim_id(
+            await self.stream_create('foo1', '0.01', channel_id=colliding_claim_ids[0])
+        )
+        self.get_claim_id(
+            await self.stream_create('foo2', '0.01', channel_id=colliding_claim_ids[0])
+        )
+        duplicated_resolved = list((
+            await self.ledger.resolve([], [
+                f'@abc#{colliding_claim_ids[0][:2]}/foo1', f'@abc#{colliding_claim_ids[0][:2]}/foo2'
+            ])
+        ).values())
+        self.assertEqual('foo1', duplicated_resolved[0].normalized_name)
+        self.assertEqual('foo2', duplicated_resolved[1].normalized_name)
+
     async def test_abandon_channel_and_claims_in_same_tx(self):
         channel_id = self.get_claim_id(
             await self.channel_create('@abc', '0.01')
