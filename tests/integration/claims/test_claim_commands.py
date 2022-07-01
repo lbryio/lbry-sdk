@@ -208,7 +208,7 @@ class ClaimSearchCommand(ClaimTestCase):
         # resolve by sd hash
         two_sd_hash = two['outputs'][0]['value']['source']['sd_hash']
         await self.assertFindsClaims([two], sd_hash=two_sd_hash)
-        await self.assertFindsClaims([two], sd_hash=two_sd_hash[:2])
+        await self.assertFindsClaims([two], sd_hash=two_sd_hash[:4])
 
     async def test_source_filter(self):
         channel = await self.channel_create('@abc')
