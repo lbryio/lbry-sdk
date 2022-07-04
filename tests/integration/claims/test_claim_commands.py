@@ -1125,23 +1125,31 @@ class ChannelCommands(CommandTestCase):
         tx = await self.channel_update(claim_id)
         self.assertEqual(tx['outputs'][0]['amount'], '5.0')
 
-        # bid changed on update
+        # spend exactly amount available, no change
+        tx = await self.channel_update(claim_id, bid_everything=True)
+        await self.assertBalance(self.account, '0.0')
+        self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(tx['outputs'][0]['amount'], '9.991457')
+        self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 1)
+
+        # bid reduced on update
         tx = await self.channel_update(claim_id, bid='4.0')
         self.assertEqual(tx['outputs'][0]['amount'], '4.0')
 
-        await self.assertBalance(self.account, '5.991503')
+        await self.assertBalance(self.account, '5.991299')
 
         # not enough funds
         with self.assertRaisesRegex(
                 InsufficientFundsError, "Not enough funds to cover this transaction."):
             await self.channel_create('@foo2', '9.0')
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 1)
-        await self.assertBalance(self.account, '5.991503')
+        await self.assertBalance(self.account, '5.991299')
 
         # spend exactly amount available, no change
-        tx = await self.channel_create('@foo3', '5.981322')
+        tx = await self.channel_create('@foo3', bid=None, bid_everything=True)
         await self.assertBalance(self.account, '0.0')
         self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(tx['outputs'][0]['amount'], '5.98122')
         self.assertItemCount(await self.daemon.jsonrpc_channel_list(), 2)
 
     async def test_setting_channel_fields(self):
@@ -1337,23 +1345,31 @@ class StreamCommands(ClaimTestCase):
         tx = await self.stream_update(claim_id)
         self.assertEqual(tx['outputs'][0]['amount'], '2.0')
 
-        # bid changed on update
+        # spend exactly amount available, no change
+        tx = await self.stream_update(claim_id, bid_everything=True)
+        await self.assertBalance(self.account, '0.0')
+        self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(tx['outputs'][0]['amount'], '9.993347')
+        self.assertItemCount(await self.daemon.jsonrpc_claim_list(), 1)
+
+        # bid reduced on update
         tx = await self.stream_update(claim_id, bid='3.0')
         self.assertEqual(tx['outputs'][0]['amount'], '3.0')
 
-        await self.assertBalance(self.account, '6.993319')
+        await self.assertBalance(self.account, '6.993134')
 
         # not enough funds
         with self.assertRaisesRegex(
                 InsufficientFundsError, "Not enough funds to cover this transaction."):
             await self.stream_create('foo2', '9.0')
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(), 1)
-        await self.assertBalance(self.account, '6.993319')
+        await self.assertBalance(self.account, '6.993134')
 
         # spend exactly amount available, no change
-        tx = await self.stream_create('foo3', '6.98523')
+        tx = await self.stream_create('foo3', bid=None, bid_everything=True)
         await self.assertBalance(self.account, '0.0')
         self.assertEqual(len(tx['outputs']), 1)  # no change
+        self.assertEqual(tx['outputs'][0]['amount'], '6.985055')
         self.assertItemCount(await self.daemon.jsonrpc_claim_list(), 2)
 
     async def test_stream_update_and_abandon_across_accounts(self):
@@ -2113,7 +2129,7 @@ class StreamCommands(ClaimTestCase):
     async def test_publish(self):
 
         # errors on missing arguments to create a stream
-        with self.assertRaisesRegex(Exception, "'bid' is a required argument for new publishes."):
+        with self.assertRaisesRegex(Exception, "None or null is not valid value for argument 'bid'."):
             await self.daemon.jsonrpc_publish('foo')
 
         # successfully create stream
@@ -2271,9 +2287,32 @@ class SupportCommands(CommandTestCase):
         self.assertEqual(txs2[0]['value'], '0.0')
         self.assertEqual(txs2[0]['fee'], '-0.0001415')
 
+        # send all remaining funds to support the claim using account2
+        support = await self.out(
+            self.daemon.jsonrpc_support_create(
+                claim_id, amount=None, tip=False, account_id=account2.id, wallet_id='wallet2',
+                funding_account_ids=[account2.id], amount_everything=True, blocking=True)
+        )
+        await self.confirm_tx(support['txid'])
+
+        # account2 balance went down to 0.0
+        await self.assertBalance(self.account, '3.979769')
+        await self.assertBalance(account2,     '0.0')
+
+        # verify that the outgoing support is marked correctly as is_tip=False in account2
+        txs2 = await self.transaction_list(wallet_id='wallet2')
+        self.assertEqual(len(txs2[0]['support_info']), 1)
+        self.assertEqual(txs2[0]['support_info'][0]['balance_delta'], '-1.9996035')
+        self.assertEqual(txs2[0]['support_info'][0]['claim_id'], claim_id)
+        self.assertFalse(txs2[0]['support_info'][0]['is_tip'])
+        self.assertFalse(txs2[0]['support_info'][0]['is_spent'])
+        self.assertEqual(txs2[0]['value'], '0.0')
+        self.assertEqual(txs2[0]['fee'], '-0.0001135')
+
         # abandoning the tip increases balance and shows tip as spent
         await self.support_abandon(claim_id)
         await self.assertBalance(self.account, '4.979662')
+        await self.assertBalance(account2,     '0.0')
         txs = await self.transaction_list(account_id=self.account.id)
         self.assertEqual(len(txs[0]['abandon_info']), 1)
         self.assertEqual(len(txs[1]['support_info']), 1)

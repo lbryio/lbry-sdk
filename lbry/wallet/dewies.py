@@ -1,6 +1,24 @@
 import textwrap
+from typing import Tuple, Union
 from .util import coins_to_satoshis, satoshis_to_coins
 
+# Symbolic amount EVERYTHING
+AMOUNT_EVERYTHING = "EVERYTHING"
+
+def amount_is_everything(amount: Union[int, str]) -> bool:
+    if isinstance(amount, str):
+        if amount != AMOUNT_EVERYTHING:
+            raise ValueError(f"The value '{amount}' for argument 'amount' is invalid.")
+        return True
+    elif isinstance(amount, int):
+        return False
+    else:
+        raise ValueError(f"The value '{amount}' for argument 'amount' is invalid.")
+
+def amount_to_dewies(amount: Union[int, str]) -> Tuple[int, bool]:
+    everything = amount_is_everything(amount)
+    dewies = 0 if everything else amount
+    return dewies, everything
 
 def lbc_to_dewies(lbc: str) -> int:
     try:

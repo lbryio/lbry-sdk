@@ -7,10 +7,11 @@ import asyncio
 import random
 from hashlib import sha256
 from string import hexdigits
-from typing import Type, Dict, Tuple, Optional, Any, List
+from typing import Type, Dict, Tuple, Optional, Any, List, Union
 
 from lbry.error import InvalidPasswordError
 from lbry.crypto.crypt import aes_encrypt, aes_decrypt
+from lbry.wallet.dewies import amount_to_dewies
 
 from .bip32 import PrivateKey, PublicKey, KeyPath, from_extended_key_string
 from .mnemonic import Mnemonic
@@ -526,9 +527,10 @@ class Account:
     def get_transaction_count(self, **constraints):
         return self.ledger.get_transaction_count(wallet=self.wallet, accounts=[self], **constraints)
 
-    async def fund(self, to_account, amount=None, everything=False,
+    async def fund(self, to_account, amount: Union[int, str],
                    outputs=1, broadcast=False, **constraints):
         assert self.ledger == to_account.ledger, 'Can only transfer between accounts of the same ledger.'
+        dewies, everything = amount_to_dewies(amount)
         if everything:
             utxos = await self.get_utxos(**constraints)
             await self.ledger.reserve_outputs(utxos)
@@ -538,13 +540,13 @@ class Account:
                 funding_accounts=[self],
                 change_account=to_account
             )
-        elif amount > 0:
+        elif dewies > 0:
             to_address = await to_account.change.get_or_create_usable_address()
             to_hash160 = to_account.ledger.address_to_hash160(to_address)
             tx = await Transaction.create(
                 inputs=[],
                 outputs=[
-                    Output.pay_pubkey_hash(amount//outputs, to_hash160)
+                    Output.pay_pubkey_hash(dewies//outputs, to_hash160)
                     for _ in range(outputs)
                 ],
                 funding_accounts=[self],
