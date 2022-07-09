@@ -34,6 +34,7 @@ class BlockchainReorganizationTests(CommandTestCase):
         bp.reorg_count_metric.set(0)
         # invalidate current block, move forward 2
         height = 206
+        await asyncio.wait_for(self.on_header(height), 3.0)
         self.assertEqual(self.ledger.headers.height, height)
         await self.assertBlockHash(height)
         block_hash = (await self.ledger.headers.hash(206)).decode()
