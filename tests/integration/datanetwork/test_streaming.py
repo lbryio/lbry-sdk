@@ -3,6 +3,7 @@ import hashlib
 import aiohttp
 import aiohttp.web
 import asyncio
+import contextlib
 
 from lbry.file.source import ManagedDownloadSource
 from lbry.utils import aiohttp_request
@@ -353,7 +354,8 @@ class RangeRequests(CommandTestCase):
         path = stream.full_path
         self.assertIsNotNone(path)
         if wait_for_start_writing:
-            await asyncio.gather(stream.started_writing.wait(), return_exceptions=True)
+            with contextlib.suppress(asyncio.CancelledError):
+                await stream.started_writing.wait()
             self.assertTrue(os.path.isfile(path))
         await self.daemon.file_manager.stop()
         # while stopped, we get no response to query and no file is present
@@ -365,7 +367,8 @@ class RangeRequests(CommandTestCase):
         self.assertIsNotNone(stream.full_path)
         self.assertEqual(stream.full_path, path)
         if wait_for_start_writing:
-            await asyncio.gather(stream.started_writing.wait(), return_exceptions=True)
+            with contextlib.suppress(asyncio.CancelledError):
+                await stream.started_writing.wait()
             self.assertTrue(os.path.isfile(path))
 
     async def test_file_save_stop_before_finished_streaming_only_wait_for_start(self):
