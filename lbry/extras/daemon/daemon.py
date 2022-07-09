@@ -4977,7 +4977,7 @@ class Daemon(metaclass=JSONRPCServerType):
         if not is_valid_blobhash(blob_hash):
             # TODO: use error from lbry.error
             raise Exception("invalid blob hash")
-        peer_q = asyncio.Queue(loop=self.component_manager.loop)
+        peer_q = asyncio.Queue()
         if self.component_manager.has_component(TRACKER_ANNOUNCER_COMPONENT):
             tracker = self.component_manager.get_component(TRACKER_ANNOUNCER_COMPONENT)
             tracker_peers = await tracker.get_kademlia_peer_list(bytes.fromhex(blob_hash))

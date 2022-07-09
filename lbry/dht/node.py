@@ -37,7 +37,7 @@ class Node:
         self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
                                          split_buckets_under_index)
         self.listening_port: asyncio.DatagramTransport = None
-        self.joined = asyncio.Event(loop=self.loop)
+        self.joined = asyncio.Event()
         self._join_task: asyncio.Task = None
         self._refresh_task: asyncio.Task = None
         self._storage = storage
@@ -280,7 +280,7 @@ class Node:
     def accumulate_peers(self, search_queue: asyncio.Queue,
                          peer_queue: typing.Optional[asyncio.Queue] = None
                          ) -> typing.Tuple[asyncio.Queue, asyncio.Task]:
-        queue = peer_queue or asyncio.Queue(loop=self.loop)
+        queue = peer_queue or asyncio.Queue()
         return queue, self.loop.create_task(self._accumulate_peers_for_value(search_queue, queue))
 
 

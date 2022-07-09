@@ -450,8 +450,8 @@ def is_running_from_bundle():
 
 
 class LockWithMetrics(asyncio.Lock):
-    def __init__(self, acquire_metric, held_time_metric, loop=None):
-        super().__init__(loop=loop)
+    def __init__(self, acquire_metric, held_time_metric):
+        super().__init__()
         self._acquire_metric = acquire_metric
         self._lock_held_time_metric = held_time_metric
         self._lock_acquired_time = None

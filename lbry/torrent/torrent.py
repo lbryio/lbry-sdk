@@ -36,7 +36,7 @@ class Torrent:
     def __init__(self, loop, handle):
         self._loop = loop
         self._handle = handle
-        self.finished = asyncio.Event(loop=loop)
+        self.finished = asyncio.Event()
 
     def _threaded_update_status(self):
         status = self._handle.status()

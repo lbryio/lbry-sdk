@@ -314,10 +314,10 @@ class KademliaProtocol(DatagramProtocol):
         self.ping_queue = PingQueue(self.loop, self)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
         self.rpc_timeout = rpc_timeout
-        self._split_lock = asyncio.Lock(loop=self.loop)
+        self._split_lock = asyncio.Lock()
         self._to_remove: typing.Set['KademliaPeer'] = set()
         self._to_add: typing.Set['KademliaPeer'] = set()
-        self._wakeup_routing_task = asyncio.Event(loop=self.loop)
+        self._wakeup_routing_task = asyncio.Event()
         self.maintaing_routing_task: typing.Optional[asyncio.Task] = None
 
     @functools.lru_cache(128)

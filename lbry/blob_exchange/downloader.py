@@ -126,7 +126,7 @@ class BlobDownloader:
 
 async def download_blob(loop, config: 'Config', blob_manager: 'BlobManager', dht_node: 'Node',
                         blob_hash: str) -> 'AbstractBlob':
-    search_queue = asyncio.Queue(loop=loop, maxsize=config.max_connections_per_download)
+    search_queue = asyncio.Queue(maxsize=config.max_connections_per_download)
     search_queue.put_nowait(blob_hash)
     peer_queue, accumulate_task = dht_node.accumulate_peers(search_queue)
     fixed_peers = None if not config.fixed_peers else await get_kademlia_peers_from_hosts(config.fixed_peers)
