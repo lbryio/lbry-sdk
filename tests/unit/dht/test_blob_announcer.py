@@ -128,7 +128,7 @@ class TestBlobAnnouncer(AsyncioTestCase):
             await self.chain_peer(constants.generate_id(current + 4), '1.2.3.13')
             last = await self.chain_peer(constants.generate_id(current + 5), '1.2.3.14')
 
-            search_q, peer_q = asyncio.Queue(loop=self.loop), asyncio.Queue(loop=self.loop)
+            search_q, peer_q = asyncio.Queue(), asyncio.Queue()
             search_q.put_nowait(blob1)
 
             _, task = last.accumulate_peers(search_q, peer_q)

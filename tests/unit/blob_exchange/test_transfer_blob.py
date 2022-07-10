@@ -183,7 +183,7 @@ class TestBlobExchange(BlobExchangeTestBase):
                 writer.write(mock_blob_bytes)
             return self.loop.create_task(_inner())
 
-        await asyncio.gather(write_task(writer1), write_task(writer2), loop=self.loop)
+        await asyncio.gather(write_task(writer1), write_task(writer2))
 
         self.assertDictEqual({1: mock_blob_bytes, 2: mock_blob_bytes}, results)
         self.assertEqual(1, write_called_count)
@@ -270,7 +270,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         client_blob.delete()
 
         # wait for less than the idle timeout
-        await asyncio.sleep(0.5, loop=self.loop)
+        await asyncio.sleep(0.5)
 
         # download the blob again
         downloaded, protocol2 = await request_blob(self.loop, client_blob, self.server_from_client.address,
@@ -284,10 +284,10 @@ class TestBlobExchange(BlobExchangeTestBase):
         client_blob.delete()
 
         # check that the connection times out from the server side
-        await asyncio.sleep(0.9, loop=self.loop)
+        await asyncio.sleep(0.9)
         self.assertFalse(protocol.transport.is_closing())
         self.assertIsNotNone(protocol.transport._sock)
-        await asyncio.sleep(0.1, loop=self.loop)
+        await asyncio.sleep(0.1)
         self.assertIsNone(protocol.transport)
 
     def test_max_request_size(self):
@@ -323,7 +323,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         server_blob = self.server_blob_manager.get_blob(blob_hash)
 
         async def sendfile(writer):
-            await asyncio.sleep(2, loop=self.loop)
+            await asyncio.sleep(2)
             return 0
 
         server_blob.sendfile = sendfile
@@ -347,7 +347,7 @@ class TestBlobExchange(BlobExchangeTestBase):
         def _mock_accumulate_peers(q1, q2=None):
             async def _task():
                 pass
-            q2 = q2 or asyncio.Queue(loop=self.loop)
+            q2 = q2 or asyncio.Queue()
             return q2, self.loop.create_task(_task())
 
         mock_node.accumulate_peers = _mock_accumulate_peers

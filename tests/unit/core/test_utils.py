@@ -72,14 +72,14 @@ class CacheConcurrentDecoratorTests(AsyncioTestCase):
     @utils.cache_concurrent
     async def foo(self, arg1, arg2=None, delay=1):
         self.called.append((arg1, arg2, delay))
-        await asyncio.sleep(delay, loop=self.loop)
+        await asyncio.sleep(delay)
         self.counter += 1
         self.finished.append((arg1, arg2, delay))
         return object()
 
     async def test_gather_duplicates(self):
         result = await asyncio.gather(
-            self.loop.create_task(self.foo(1)), self.loop.create_task(self.foo(1)), loop=self.loop
+            self.loop.create_task(self.foo(1)), self.loop.create_task(self.foo(1))
         )
         self.assertEqual(1, len(self.called))
         self.assertEqual(1, len(self.finished))
@@ -93,7 +93,7 @@ class CacheConcurrentDecoratorTests(AsyncioTestCase):
 
         with self.assertRaises(asyncio.CancelledError):
             await asyncio.gather(
-                t1, self.loop.create_task(self.foo(1)), loop=self.loop
+                t1, self.loop.create_task(self.foo(1))
             )
         self.assertEqual(1, len(self.called))
         self.assertEqual(0, len(self.finished))
