@@ -850,6 +850,7 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
             ]
         )
         await self.generate(10)
+        await asyncio.sleep(0.5)
         await self.assertNameState(
             height=559, name=name, winning_claim_id=first_claim_id, last_takeover_height=207,
             non_winning_claims=[
