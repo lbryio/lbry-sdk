@@ -218,6 +218,10 @@ class PingQueue:
     def running(self):
         return self._running
 
+    @property
+    def busy(self):
+        return self._running and (any(self._running_pings) or any(self._pending_contacts))
+
     def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: typing.Optional[float] = None):
         delay = delay if delay is not None else self._default_delay
         now = self._loop.time()
@@ -294,7 +298,7 @@ class KademliaProtocol(DatagramProtocol):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int, rpc_timeout: float = constants.RPC_TIMEOUT,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_boostrap_node: bool = False):
         self.peer_manager = peer_manager
         self.loop = loop
         self.node_id = node_id
@@ -309,7 +313,8 @@ class KademliaProtocol(DatagramProtocol):
         self.transport: DatagramTransport = None
         self.old_token_secret = constants.generate_id()
         self.token_secret = constants.generate_id()
-        self.routing_table = TreeRoutingTable(self.loop, self.peer_manager, self.node_id, split_buckets_under_index)
+        self.routing_table = TreeRoutingTable(
+            self.loop, self.peer_manager, self.node_id, split_buckets_under_index, is_bootstrap_node=is_boostrap_node)
         self.data_store = DictDataStore(self.loop, self.peer_manager)
         self.ping_queue = PingQueue(self.loop, self)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)

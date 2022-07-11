@@ -30,12 +30,12 @@ class Node:
     )
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX,
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_bootstrap_node: bool = False,
                  storage: typing.Optional['SQLiteStorage'] = None):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
         self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
-                                         split_buckets_under_index)
+                                         split_buckets_under_index, is_bootstrap_node)
         self.listening_port: asyncio.DatagramTransport = None
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None

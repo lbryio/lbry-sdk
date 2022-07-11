@@ -28,7 +28,8 @@ class KBucket:
         namespace="dht_node", labelnames=("amount",)
     )
 
-    def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int, node_id: bytes):
+    def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int,
+                 node_id: bytes, capacity: int = constants.K):
         """
         @param range_min: The lower boundary for the range in the n-bit ID
                          space covered by this k-bucket
@@ -42,6 +43,7 @@ class KBucket:
         self.peers: typing.List['KademliaPeer'] = []
         self._node_id = node_id
         self._distance_to_self = Distance(node_id)
+        self.capacity = capacity
 
     def add_peer(self, peer: 'KademliaPeer') -> bool:
         """ Add contact to _contact list in the right order. This will move the
@@ -68,7 +70,7 @@ class KBucket:
                     self.peers.remove(local_peer)
                     self.peers.append(peer)
                     return True
-        if len(self.peers) < constants.K:
+        if len(self.peers) < self.capacity:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
             bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id)
@@ -76,7 +78,6 @@ class KBucket:
             return True
         else:
             return False
-            # raise BucketFull("No space in bucket to insert contact")
 
     def get_peer(self, node_id: bytes) -> 'KademliaPeer':
         for peer in self.peers:
@@ -178,6 +179,13 @@ class TreeRoutingTable:
     version of the Kademlia paper, in section 2.4. It does, however, use the
     ping RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
+
+    BOOTSTRAP MODE: if set to True, we always add all peers. This is so a
+    bootstrap node does not get a bias towards its own node id and replies are
+    the best it can provide (joining peer knows its neighbors immediately).
+    Over time, this will need to be optimized so we use the disk as holding
+    everything in memory won't be feasible anymore.
+    See: https://github.com/bittorrent/bootstrap-dht
     """
     bucket_in_routing_table_metric = Gauge(
         "buckets_in_routing_table", "Number of buckets on routing table", namespace="dht_node",
@@ -185,14 +193,15 @@ class TreeRoutingTable:
     )
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_bootstrap_node: bool = False):
         self._loop = loop
         self._peer_manager = peer_manager
         self._parent_node_id = parent_node_id
         self._split_buckets_under_index = split_buckets_under_index
         self.buckets: typing.List[KBucket] = [
             KBucket(
-                self._peer_manager, range_min=0, range_max=2 ** constants.HASH_BITS, node_id=self._parent_node_id
+                self._peer_manager, range_min=0, range_max=2 ** constants.HASH_BITS, node_id=self._parent_node_id,
+                capacity=1 << 32 if is_bootstrap_node else constants.K
             )
         ]
 

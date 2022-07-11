@@ -83,7 +83,7 @@ async def main(host: str, port: int, db_file_path: str, bootstrap_node: Optional
     await storage.open()
     node = Node(
         loop, PeerManager(loop), node_id, port, port, 3333, None,
-        storage=storage
+        storage=storage, is_bootstrap_node=True
     )
     if prometheus_port > 0:
         metrics = SimpleMetrics(prometheus_port, node if export else None)

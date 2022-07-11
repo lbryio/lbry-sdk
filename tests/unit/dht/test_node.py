@@ -11,6 +11,34 @@ from lbry.dht.peer import PeerManager, make_kademlia_peer
 from lbry.extras.daemon.storage import SQLiteStorage
 
 
+class TestBootstrapNode(AsyncioTestCase):
+    TIMEOUT = 10.0  # do not increase. Hitting a timeout is a real failure
+    async def test_it_adds_all(self):
+        loop = asyncio.get_event_loop()
+        loop.set_debug(False)
+
+        with dht_mocks.mock_network_loop(loop):
+            advance = dht_mocks.get_time_accelerator(loop)
+            self.bootstrap_node = Node(self.loop, PeerManager(loop), constants.generate_id(),
+                                       4444, 4444, 3333, '1.2.3.4', is_bootstrap_node=True)
+            self.bootstrap_node.start('1.2.3.4', [])
+            self.bootstrap_node.protocol.ping_queue._default_delay = 0
+            self.addCleanup(self.bootstrap_node.stop)
+
+            # start the nodes
+            nodes = {}
+            futs = []
+            for i in range(100):
+                nodes[i] = Node(loop, PeerManager(loop), constants.generate_id(i), 4444, 4444, 3333, f'1.3.3.{i}')
+                nodes[i].start(f'1.3.3.{i}', [('1.2.3.4', 4444)])
+                self.addCleanup(nodes[i].stop)
+                futs.append(nodes[i].joined.wait())
+            await asyncio.gather(*futs)
+            while self.bootstrap_node.protocol.ping_queue.busy:
+                await advance(1)
+            self.assertEqual(100, len(self.bootstrap_node.protocol.routing_table.get_peers()))
+
+
 class TestNodePingQueueDiscover(AsyncioTestCase):
     async def test_ping_queue_discover(self):
         loop = asyncio.get_event_loop()
