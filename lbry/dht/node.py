@@ -70,13 +70,6 @@ class Node:
 
             # get ids falling in the midpoint of each bucket that hasn't been recently updated
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
-            # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
-            # populate/split the buckets further
-            buckets_with_contacts = self.protocol.routing_table.buckets_with_contacts()
-            if buckets_with_contacts <= 3:
-                for i in range(buckets_with_contacts):
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
 
             if self.protocol.routing_table.get_peers():
                 # if we have node ids to look up, perform the iterative search until we have k results

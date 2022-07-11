@@ -199,7 +199,7 @@ class TreeRoutingTable:
     def get_peers(self) -> typing.List['KademliaPeer']:
         return list(itertools.chain.from_iterable(map(lambda bucket: bucket.peers, self.buckets)))
 
-    def should_split(self, bucket_index: int, to_add: bytes) -> bool:
+    def _should_split(self, bucket_index: int, to_add: bytes) -> bool:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
         if bucket_index < self._split_buckets_under_index:
             return True
@@ -232,22 +232,29 @@ class TreeRoutingTable:
         now = int(self._loop.time())
         for bucket in self.buckets[start_index:]:
             if force or now - bucket.last_accessed >= constants.REFRESH_INTERVAL:
-                to_search = self.midpoint_id_in_bucket_range(bucket_index)
+                to_search = self._midpoint_id_in_bucket_range(bucket_index)
                 refresh_ids.append(to_search)
             bucket_index += 1
+        # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
+        # populate/split the buckets further
+        buckets_with_contacts = self.buckets_with_contacts()
+        if buckets_with_contacts <= 3:
+            for i in range(buckets_with_contacts):
+                refresh_ids.append(self._random_id_in_bucket_range(i))
+                refresh_ids.append(self._random_id_in_bucket_range(i))
         return refresh_ids
 
     def remove_peer(self, peer: 'KademliaPeer') -> None:
         if not peer.node_id:
             return
-        bucket_index = self.kbucket_index(peer.node_id)
+        bucket_index = self._kbucket_index(peer.node_id)
         try:
             self.buckets[bucket_index].remove_peer(peer)
             self._join_buckets()
         except ValueError:
             return
 
-    def kbucket_index(self, key: bytes) -> int:
+    def _kbucket_index(self, key: bytes) -> int:
         i = 0
         for bucket in self.buckets:
             if bucket.key_in_range(key):
@@ -256,19 +263,19 @@ class TreeRoutingTable:
                 i += 1
         return i
 
-    def random_id_in_bucket_range(self, bucket_index: int) -> bytes:
+    def _random_id_in_bucket_range(self, bucket_index: int) -> bytes:
         random_id = int(random.randrange(self.buckets[bucket_index].range_min, self.buckets[bucket_index].range_max))
         return Distance(
             self._parent_node_id
         )(random_id.to_bytes(constants.HASH_LENGTH, 'big')).to_bytes(constants.HASH_LENGTH, 'big')
 
-    def midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
+    def _midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
         half = int((self.buckets[bucket_index].range_max - self.buckets[bucket_index].range_min) // 2)
         return Distance(self._parent_node_id)(
             int(self.buckets[bucket_index].range_min + half).to_bytes(constants.HASH_LENGTH, 'big')
         ).to_bytes(constants.HASH_LENGTH, 'big')
 
-    def split_bucket(self, old_bucket_index: int) -> None:
+    def _split_bucket(self, old_bucket_index: int) -> None:
         """ Splits the specified k-bucket into two new buckets which together
         cover the same range in the key/ID space
 
@@ -333,13 +340,13 @@ class TreeRoutingTable:
             if (my_peer.address, my_peer.udp_port) == (peer.address, peer.udp_port) and my_peer.node_id != peer.node_id:
                 self.remove_peer(my_peer)
                 self._join_buckets()
-        bucket_index = self.kbucket_index(peer.node_id)
+        bucket_index = self._kbucket_index(peer.node_id)
         if self.buckets[bucket_index].add_peer(peer):
             return True
 
         # The bucket is full; see if it can be split (by checking if its range includes the host node's node_id)
-        if self.should_split(bucket_index, peer.node_id):
-            self.split_bucket(bucket_index)
+        if self._should_split(bucket_index, peer.node_id):
+            self._split_bucket(bucket_index)
             # Retry the insertion attempt
             result = await self.add_peer(peer, probe)
             self._join_buckets()
