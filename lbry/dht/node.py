@@ -203,15 +203,13 @@ class Node:
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                   max_results: int = constants.K) -> IterativeNodeFinder:
-
-        return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                   key, max_results, None, shortlist)
+        shortlist = shortlist or self.protocol.routing_table.find_close_peers(key)
+        return IterativeNodeFinder(self.loop, self.protocol, key, max_results, shortlist)
 
     def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                    max_results: int = -1) -> IterativeValueFinder:
-
-        return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                    key, max_results, None, shortlist)
+        shortlist = shortlist or self.protocol.routing_table.find_close_peers(key)
+        return IterativeValueFinder(self.loop, self.protocol, key, max_results, shortlist)
 
     async def peer_search(self, node_id: bytes, count=constants.K, max_results=constants.K * 2,
                           shortlist: typing.Optional[typing.List['KademliaPeer']] = None

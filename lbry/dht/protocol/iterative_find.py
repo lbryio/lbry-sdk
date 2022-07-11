@@ -12,7 +12,6 @@ from lbry.dht.peer import make_kademlia_peer
 from lbry.dht.serialization.datagram import PAGE_KEY
 
 if TYPE_CHECKING:
-    from lbry.dht.protocol.routing_table import TreeRoutingTable
     from lbry.dht.protocol.protocol import KademliaProtocol
     from lbry.dht.peer import PeerManager, KademliaPeer
 
@@ -57,37 +56,19 @@ class FindValueResponse(FindResponse):
         return [(node_id, address.decode(), port) for node_id, address, port in self.close_triples]
 
 
-def get_shortlist(routing_table: 'TreeRoutingTable', key: bytes,
-                  shortlist: typing.Optional[typing.List['KademliaPeer']]) -> typing.List['KademliaPeer']:
-    """
-    If not provided, initialize the shortlist of peers to probe to the (up to) k closest peers in the routing table
-
-    :param routing_table: a TreeRoutingTable
-    :param key: a 48 byte hash
-    :param shortlist: optional manually provided shortlist, this is done during bootstrapping when there are no
-                      peers in the routing table. During bootstrap the shortlist is set to be the seed nodes.
-    """
-    if len(key) != constants.HASH_LENGTH:
-        raise ValueError("invalid key length: %i" % len(key))
-    return shortlist or routing_table.find_close_peers(key)
-
-
 class IterativeFinder(AsyncIterator):
-    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
-                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+    def __init__(self, loop: asyncio.AbstractEventLoop,
+                 protocol: 'KademliaProtocol', key: bytes,
                  max_results: typing.Optional[int] = constants.K,
-                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
         if len(key) != constants.HASH_LENGTH:
             raise ValueError("invalid key length: %i" % len(key))
         self.loop = loop
-        self.peer_manager = peer_manager
-        self.routing_table = routing_table
+        self.peer_manager = protocol.peer_manager
         self.protocol = protocol
 
         self.key = key
         self.max_results = max(constants.K, max_results)
-        self.exclude = exclude or []
 
         self.active: typing.Dict['KademliaPeer', int] = OrderedDict()  # peer: distance, sorted
         self.contacted: typing.Set['KademliaPeer'] = set()
@@ -99,7 +80,7 @@ class IterativeFinder(AsyncIterator):
         self.iteration_count = 0
         self.running = False
         self.tasks: typing.List[asyncio.Task] = []
-        for peer in get_shortlist(routing_table, key, shortlist):
+        for peer in shortlist:
             if peer.node_id:
                 self._add_active(peer, force=True)
             else:
@@ -198,8 +179,6 @@ class IterativeFinder(AsyncIterator):
             if index > (constants.K + len(self.running_probes)):
                 break
             origin_address = (peer.address, peer.udp_port)
-            if origin_address in self.exclude:
-                continue
             if peer.node_id == self.protocol.node_id:
                 continue
             if origin_address == (self.protocol.external_ip, self.protocol.udp_port):
@@ -277,13 +256,11 @@ class IterativeFinder(AsyncIterator):
                   type(self).__name__, id(self), self.key.hex()[:8])
 
 class IterativeNodeFinder(IterativeFinder):
-    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
-                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+    def __init__(self, loop: asyncio.AbstractEventLoop,
+                 protocol: 'KademliaProtocol', key: bytes,
                  max_results: typing.Optional[int] = constants.K,
-                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
-        super().__init__(loop, peer_manager, routing_table, protocol, key, max_results, exclude,
-                         shortlist)
+        super().__init__(loop, protocol, key, max_results, shortlist)
         self.yielded_peers: typing.Set['KademliaPeer'] = set()
 
     async def send_probe(self, peer: 'KademliaPeer') -> FindNodeResponse:
@@ -319,13 +296,11 @@ class IterativeNodeFinder(IterativeFinder):
 
 
 class IterativeValueFinder(IterativeFinder):
-    def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager',
-                 routing_table: 'TreeRoutingTable', protocol: 'KademliaProtocol', key: bytes,
+    def __init__(self, loop: asyncio.AbstractEventLoop,
+                 protocol: 'KademliaProtocol', key: bytes,
                  max_results: typing.Optional[int] = constants.K,
-                 exclude: typing.Optional[typing.List[typing.Tuple[str, int]]] = None,
                  shortlist: typing.Optional[typing.List['KademliaPeer']] = None):
-        super().__init__(loop, peer_manager, routing_table, protocol, key, max_results, exclude,
-                         shortlist)
+        super().__init__(loop, protocol, key, max_results, shortlist)
         self.blob_peers: typing.Set['KademliaPeer'] = set()
         # this tracks the index of the most recent page we requested from each peer
         self.peer_pages: typing.DefaultDict['KademliaPeer', int] = defaultdict(int)
