@@ -229,7 +229,7 @@ class PingQueue:
         async def ping_task():
             try:
                 if self._protocol.peer_manager.peer_is_good(peer):
-                    if peer not in self._protocol.routing_table.get_peers():
+                    if not self._protocol.routing_table.get_peer(peer.node_id):
                         self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
@@ -419,9 +419,8 @@ class KademliaProtocol(DatagramProtocol):
         # This is an RPC method request
         self.received_request_metric.labels(method=request_datagram.method).inc()
         self.peer_manager.report_last_requested(address[0], address[1])
-        try:
-            peer = self.routing_table.get_peer(request_datagram.node_id)
-        except IndexError:
+        peer = self.routing_table.get_peer(request_datagram.node_id)
+        if not peer:
             try:
                 peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
             except ValueError as err:

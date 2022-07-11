@@ -82,7 +82,6 @@ class KBucket:
         for peer in self.peers:
             if peer.node_id == node_id:
                 return peer
-        raise IndexError(node_id)
 
     def get_peers(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List['KademliaPeer']:
         """ Returns a list containing up to the first count number of contacts
@@ -225,11 +224,7 @@ class TreeRoutingTable:
         return []
 
     def get_peer(self, contact_id: bytes) -> 'KademliaPeer':
-        """
-        @raise IndexError: No contact with the specified contact ID is known
-                           by this node
-        """
-        return self.buckets[self.kbucket_index(contact_id)].get_peer(contact_id)
+        return self.buckets[self._kbucket_index(contact_id)].get_peer(contact_id)
 
     def get_refresh_list(self, start_index: int = 0, force: bool = False) -> typing.List[bytes]:
         bucket_index = start_index
