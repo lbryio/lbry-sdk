@@ -297,6 +297,7 @@ class DHTComponent(Component):
             peer_port=self.external_peer_port,
             rpc_timeout=self.conf.node_rpc_timeout,
             split_buckets_under_index=self.conf.split_buckets_under_index,
+            is_bootstrap_node=self.conf.is_bootstrap_node,
             storage=storage
         )
         self.dht_node.start(self.conf.network_interface, self.conf.known_dht_nodes)
