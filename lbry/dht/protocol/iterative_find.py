@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from lbry.dht import constants
 from lbry.dht.error import RemoteException, TransportNotConnected
 from lbry.dht.protocol.distance import Distance
-from lbry.dht.peer import make_kademlia_peer
+from lbry.dht.peer import make_kademlia_peer, decode_tcp_peer_from_compact_address
 from lbry.dht.serialization.datagram import PAGE_KEY
 
 if TYPE_CHECKING:
@@ -25,6 +25,15 @@ class FindResponse:
 
     def get_close_triples(self) -> typing.List[typing.Tuple[bytes, str, int]]:
         raise NotImplementedError()
+
+    def get_close_kademlia_peers(self, peer_info) -> typing.Generator[typing.Iterator['KademliaPeer'], None, None]:
+        for contact_triple in self.get_close_triples():
+            node_id, address, udp_port = contact_triple
+            try:
+                yield make_kademlia_peer(node_id, address, udp_port)
+            except ValueError:
+                log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer_info.address,
+                            peer_info.udp_port, address, udp_port)
 
 
 class FindNodeResponse(FindResponse):
@@ -125,13 +134,8 @@ class IterativeFinder(AsyncIterator):
 
     async def _handle_probe_result(self, peer: 'KademliaPeer', response: FindResponse):
         self._add_active(peer)
-        for contact_triple in response.get_close_triples():
-            node_id, address, udp_port = contact_triple
-            try:
-                self._add_active(make_kademlia_peer(node_id, address, udp_port))
-            except ValueError:
-                log.warning("misbehaving peer %s:%i returned peer with reserved ip %s:%i", peer.address,
-                            peer.udp_port, address, udp_port)
+        for new_peer in response.get_close_kademlia_peers(peer):
+            self._add_active(new_peer)
         self.check_result_ready(response)
         self._log_state(reason="check result")
 
@@ -319,7 +323,7 @@ class IterativeValueFinder(IterativeFinder):
         decoded_peers = set()
         for compact_addr in parsed.found_compact_addresses:
             try:
-                decoded_peers.add(self.peer_manager.decode_tcp_peer_from_compact_address(compact_addr))
+                decoded_peers.add(decode_tcp_peer_from_compact_address(compact_addr))
             except ValueError:
                 log.warning("misbehaving peer %s:%i returned invalid peer for blob",
                             peer.address, peer.udp_port)
@@ -341,7 +345,7 @@ class IterativeValueFinder(IterativeFinder):
 
     def check_result_ready(self, response: FindValueResponse):
         if response.found:
-            blob_peers = [self.peer_manager.decode_tcp_peer_from_compact_address(compact_addr)
+            blob_peers = [decode_tcp_peer_from_compact_address(compact_addr)
                           for compact_addr in response.found_compact_addresses]
             to_yield = []
             for blob_peer in blob_peers:
