@@ -2784,7 +2784,7 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, txo, claim_address, claim, name, dewies_to_lbc(amount)
+                tx, txo, claim_address, claim, name
             )]))
             self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
@@ -2943,7 +2943,7 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet.save()
             await self.broadcast_or_release(tx, blocking)
             self.component_manager.loop.create_task(self.storage.save_claims([self._old_get_temp_claim_info(
-                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
+                tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name
             )]))
             self.component_manager.loop.create_task(self.analytics_manager.send_new_channel())
         else:
@@ -3542,7 +3542,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
             async def save_claims():
                 await self.storage.save_claims([self._old_get_temp_claim_info(
-                    tx, new_txo, claim_address, claim, name, dewies_to_lbc(amount)
+                    tx, new_txo, claim_address, claim, name
                 )])
                 if file_path is not None:
                     await self.storage.save_content_claim(file_stream.stream_hash, new_txo.id)
@@ -3779,7 +3779,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
             async def save_claims():
                 await self.storage.save_claims([self._old_get_temp_claim_info(
-                    tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name, dewies_to_lbc(amount)
+                    tx, new_txo, claim_address, new_txo.claim, new_txo.claim_name
                 )])
                 if stream_hash:
                     await self.storage.save_content_claim(stream_hash, new_txo.id)
@@ -5479,11 +5479,11 @@ class Daemon(metaclass=JSONRPCServerType):
         return results
 
     @staticmethod
-    def _old_get_temp_claim_info(tx, txo, address, claim_dict, name, bid):
+    def _old_get_temp_claim_info(tx, txo, address, claim_dict, name):
         return {
             "claim_id": txo.claim_id,
             "name": name,
-            "amount": bid,
+            "amount": dewies_to_lbc(txo.amount),
             "address": address,
             "txid": tx.id,
             "nout": txo.position,
