@@ -1987,6 +1987,8 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet_changed = False
         if data is not None:
             added_accounts = wallet.merge(self.wallet_manager, password, data)
+            for new_account in added_accounts:
+                await new_account.maybe_migrate_certificates()
             if added_accounts and self.ledger.network.is_connected:
                 if blocking:
                     await asyncio.wait([
