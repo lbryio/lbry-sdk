@@ -1,3 +1,4 @@
+import sys
 import datetime
 import logging
 import asyncio
@@ -457,12 +458,13 @@ def dict_row_factory(cursor, row):
 
 
 async def test():
+    db_path = "/tmp/peers.db" if len(sys.argv) == 1 else sys.argv[-1]
     asyncio.get_event_loop().set_debug(True)
     metrics = SimpleMetrics('8080')
     await metrics.start()
     conf = Config()
     hosting_samples = SDHashSamples("test.sample") if os.path.isfile("test.sample") else None
-    crawler = Crawler("/tmp/a.db", hosting_samples)
+    crawler = Crawler(db_path, hosting_samples)
     await crawler.open()
     await crawler.flush_to_db()
     await crawler.node.start_listening()
