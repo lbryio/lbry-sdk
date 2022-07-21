@@ -387,6 +387,11 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         # need to use new password2 in sync_apply
         with self.assertRaises(InvalidPasswordError):
             await daemon.jsonrpc_sync_apply('password', data=data['data'], blocking=True)
+        # first test --no_password_change
+        await daemon.jsonrpc_sync_apply('password2', data=data['data'], blocking=True, no_password_change=True)
+        # sync_apply should leave original password
+        self.assertEqual(wallet.encryption_password, 'password')
+        # now test with password change to password2
         await daemon.jsonrpc_sync_apply('password2', data=data['data'], blocking=True)
         # sync_apply with new password2 also sets it as new local password
         self.assertEqual(wallet.encryption_password, 'password2')
