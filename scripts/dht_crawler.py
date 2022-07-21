@@ -194,7 +194,7 @@ class Crawler:
         while True:
             for sd_hash in self.sd_hashes.read_samples(10_000):
                 self.refresh_reachable_set()
-                print(sd_hash.hex())
+                log.info("Querying stream %s for peers.", sd_hash[:8])
                 distance = Distance(sd_hash)
                 node_ids = list(self._reachable_by_node_id.keys())
                 node_ids.sort(key=lambda node_id: distance(node_id))
@@ -207,20 +207,16 @@ class Crawler:
                         self.announced_streams_metric.labels(sd_hash).inc()
                         blob_peers = [decode_tcp_peer_from_compact_address(compact_addr)
                                       for compact_addr in response.found_compact_addresses]
-                        print('FOUND', blob_peers, response.pages)
                         for blob_peer in blob_peers:
                             response = await self.request_peers(blob_peer.address, blob_peer.tcp_port, blob_peer.node_id, sd_hash)
                             if response:
                                 self.working_streams_metric.labels(sd_hash).inc()
-                                print('ALIVE', blob_peer.address)
-                                if response.found:
-                                    blob_peers = [decode_tcp_peer_from_compact_address(compact_addr)
-                                                  for compact_addr in response.found_compact_addresses]
-                                    print('REPLIED+FOUND', blob_peers, response.pages)
+                                log.info("Found responsive peer for %s: %s:%d(%d)",
+                                         sd_hash[:8], blob_peer.address, blob_peer.udp_port, blob_peer.tcp_port)
                             else:
-                                print('DEAD', blob_peer.address, blob_peer.tcp_port)
-                    else:
-                        print('NOT FOUND', response)
+                                log.info("Found dead peer for %s: %s:%d(%d)",
+                                         sd_hash[:8], blob_peer.address, blob_peer.udp_port, blob_peer.tcp_port)
+                await asyncio.sleep(.5)
 
     @property
     def refresh_limit(self):
