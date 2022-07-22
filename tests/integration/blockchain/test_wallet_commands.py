@@ -415,3 +415,69 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
 
         daemon2.jsonrpc_wallet_lock()
         self.assertTrue(await daemon2.jsonrpc_wallet_unlock('password3'))
+
+    async def test_wallet_import_and_export(self):
+        daemon, daemon2 = self.daemon, self.daemon2
+
+        # Preferences
+        self.assertFalse(daemon.jsonrpc_preference_get())
+        self.assertFalse(daemon2.jsonrpc_preference_get())
+
+        daemon.jsonrpc_preference_set("fruit", '["peach", "apricot"]')
+        daemon.jsonrpc_preference_set("one", "1")
+        daemon.jsonrpc_preference_set("conflict", "1")
+        daemon2.jsonrpc_preference_set("another", "A")
+        await asyncio.sleep(1)
+        # these preferences will win after merge since they are "newer"
+        daemon2.jsonrpc_preference_set("two", "2")
+        daemon2.jsonrpc_preference_set("conflict", "2")
+        daemon.jsonrpc_preference_set("another", "B")
+
+        self.assertDictEqual(daemon.jsonrpc_preference_get(), {
+            "one": "1", "conflict": "1", "another": "B", "fruit": ["peach", "apricot"]
+        })
+        self.assertDictEqual(daemon2.jsonrpc_preference_get(), {
+            "two": "2", "conflict": "2", "another": "A"
+        })
+
+        self.assertItemCount(await daemon.jsonrpc_account_list(), 1)
+
+        data = await daemon2.jsonrpc_wallet_export('password')
+        await daemon.jsonrpc_wallet_import('password', data=data['data'], blocking=True)
+
+        self.assertItemCount(await daemon.jsonrpc_account_list(), 2)
+        self.assertDictEqual(
+            # "two" key added and "conflict" value changed to "2"
+            daemon.jsonrpc_preference_get(),
+            {"one": "1", "two": "2", "conflict": "2", "another": "B", "fruit": ["peach", "apricot"]}
+        )
+
+        # Channel Certificate
+        # non-deterministic channel
+        self.daemon2.wallet_manager.default_account.channel_keys['mqs77XbdnuxWN4cXrjKbSoGLkvAHa4f4B8'] = (
+            '-----BEGIN EC PRIVATE KEY-----\nMHQCAQEEIBZRTZ7tHnYCH3IE9mCo95'
+            '466L/ShYFhXGrjmSMFJw8eoAcGBSuBBAAK\noUQDQgAEmucoPz9nI+ChZrfhnh'
+            '0RZ/bcX0r2G0pYBmoNKovtKzXGa8y07D66MWsW\nqXptakqO/9KddIkBu5eJNS'
+            'UZzQCxPQ==\n-----END EC PRIVATE KEY-----\n'
+        )
+        channel = await self.create_nondeterministic_channel('@foo', '0.1', unhexlify(
+            '3056301006072a8648ce3d020106052b8104000a034200049ae7283f3f6723e0a1'
+            '66b7e19e1d1167f6dc5f4af61b4a58066a0d2a8bed2b35c66bccb4ec3eba316b16'
+            'a97a6d6a4a8effd29d748901bb9789352519cd00b13d'
+        ), self.daemon2, blocking=True)
+        await self.confirm_tx(channel['txid'], self.daemon2.ledger)
+
+        # both daemons will have the channel but only one has the cert so far
+        self.assertItemCount(await daemon.jsonrpc_channel_list(), 1)
+        self.assertEqual(len(daemon.wallet_manager.default_wallet.accounts[1].channel_keys), 0)
+        self.assertItemCount(await daemon2.jsonrpc_channel_list(), 1)
+        self.assertEqual(len(daemon2.wallet_manager.default_account.channel_keys), 1)
+
+        data = await daemon2.jsonrpc_wallet_export('password')
+        await daemon.jsonrpc_wallet_import('password', data=data['data'], blocking=True)
+
+        # both daemons have the cert after sync'ing
+        self.assertEqual(
+            daemon2.wallet_manager.default_account.channel_keys,
+            daemon.wallet_manager.default_wallet.accounts[1].channel_keys
+        )
