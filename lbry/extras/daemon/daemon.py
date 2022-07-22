@@ -1414,7 +1414,8 @@ class Daemon(metaclass=JSONRPCServerType):
         Wallet must be unlocked to perform this operation.
 
         Usage:
-            wallet_import (<data> | --data=<data>) [<password> | --password=<password>] [--wallet_id=<wallet_id>] [--blocking]
+            wallet_import (<data> | --data=<data>) [<password> | --password=<password>]
+                          [--wallet_id=<wallet_id>] [--blocking]
 
         Options:
             --data=<data>                 : (str) incoming wallet data
