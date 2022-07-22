@@ -1384,6 +1384,71 @@ class Daemon(metaclass=JSONRPCServerType):
         return wallet
 
     @requires("wallet")
+    async def jsonrpc_wallet_export(self, password, wallet_id=None):
+        """
+        Export wallet data
+
+        Wallet must be unlocked to perform this operation.
+
+        Usage:
+            wallet_export <password> [--wallet_id=<wallet_id>]
+
+        Options:
+            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
+            --wallet_id=<wallet_id>       : (str) wallet being sync'ed
+
+        Returns:
+            (map) sync hash and data
+
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        encrypted = wallet.pack(password)
+        return {
+            'hash': self.jsonrpc_sync_hash(wallet_id),
+            'data': encrypted.decode()
+        }
+
+
+    @requires("wallet")
+    async def jsonrpc_wallet_import(self, password, data, wallet_id=None, blocking=False):
+        """
+        Import wallet data and merge accounts, preferences.
+
+        Wallet must be unlocked to perform this operation.
+
+        Usage:
+            wallet_import <password> (<data> | --data=<data>) [--wallet_id=<wallet_id>] [--blocking]
+
+        Options:
+            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
+            --data=<data>                 : (str) incoming wallet data
+            --wallet_id=<wallet_id>       : (str) wallet being merged into
+            --blocking                    : (bool) wait until any new accounts have merged
+
+        Returns:
+            (map) sync hash and data
+
+        """
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        added_accounts = wallet.merge(self.wallet_manager, password, data)
+        for new_account in added_accounts:
+            await new_account.maybe_migrate_certificates()
+        if added_accounts and self.ledger.network.is_connected:
+            if blocking:
+                await asyncio.wait([
+                    a.ledger.subscribe_account(a) for a in added_accounts
+                ])
+            else:
+                for new_account in added_accounts:
+                    asyncio.create_task(self.ledger.subscribe_account(new_account))
+        wallet.save()
+        encrypted = wallet.pack(password)
+        return {
+            'hash': self.jsonrpc_sync_hash(wallet_id),
+            'data': encrypted.decode()
+        }
+
+    @requires("wallet")
     async def jsonrpc_wallet_add(self, wallet_id):
         """
         Add existing wallet.
