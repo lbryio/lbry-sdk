@@ -442,8 +442,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
 
         self.assertItemCount(await daemon.jsonrpc_account_list(), 1)
 
-        data = await daemon2.jsonrpc_wallet_export('password')
-        await daemon.jsonrpc_wallet_import('password', data=data['data'], blocking=True)
+        data = await daemon2.jsonrpc_wallet_export(password='password')
+        await daemon.jsonrpc_wallet_import(data=data, password='password', blocking=True)
 
         self.assertItemCount(await daemon.jsonrpc_account_list(), 2)
         self.assertDictEqual(
@@ -473,8 +473,8 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         self.assertItemCount(await daemon2.jsonrpc_channel_list(), 1)
         self.assertEqual(len(daemon2.wallet_manager.default_account.channel_keys), 1)
 
-        data = await daemon2.jsonrpc_wallet_export('password')
-        await daemon.jsonrpc_wallet_import('password', data=data['data'], blocking=True)
+        data = await daemon2.jsonrpc_wallet_export(password='password')
+        await daemon.jsonrpc_wallet_import(data=data, password='password', blocking=True)
 
         # both daemons have the cert after sync'ing
         self.assertEqual(
