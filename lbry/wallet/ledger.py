@@ -956,7 +956,10 @@ class Ledger(metaclass=LedgerRegistry):
 
     @staticmethod
     def constraint_spending_utxos(constraints):
-        constraints['txo_type__in'] = (0, TXO_TYPES['purchase'])
+        spending_types = {TXO_TYPES['other'], TXO_TYPES['purchase']}
+        if 'txo_type__in' in constraints:
+            spending_types &= constraints['txo_type__in']
+        constraints['txo_type__in'] = spending_types
 
     async def get_purchases(self, resolve=False, **constraints):
         purchases = await self.db.get_purchases(**constraints)

@@ -15,7 +15,7 @@ from lbry.schema.support import Support
 from lbry.wallet.dewies import amount_to_dewies
 
 from .script import InputScript, OutputScript
-from .constants import COIN, DUST, NULL_HASH32
+from .constants import COIN, DUST, NULL_HASH32, TXO_TYPES
 from .bcd_data_stream import BCDataStream
 from .hash import TXRef, TXRefImmutable
 from .util import ReadOnlyList
@@ -810,8 +810,8 @@ class Transaction:
             # Make a set of inputs from all funding accounts.
             all_utxos = []
             for acct in funding_accounts:
-                # TODO: Constraints for get_utxos()?
-                utxos = await acct.get_utxos()
+                constraints = {'txo_type__in': {TXO_TYPES['other']}}
+                utxos = await acct.get_utxos(**constraints)
                 await acct.ledger.reserve_outputs(utxos)
                 all_utxos.extend(utxos)
             if not all_utxos:
