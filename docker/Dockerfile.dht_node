@@ -2,6 +2,7 @@ FROM debian:10-slim
 
 ARG user=lbry
 ARG projects_dir=/home/$user
+ARG db_dir=/database
 
 ARG DOCKER_TAG
 ARG DOCKER_COMMIT=docker
@@ -27,6 +28,8 @@ RUN groupadd -g 999 $user && useradd -m -u 999 -g $user $user
 
 COPY . $projects_dir
 RUN chown -R $user:$user $projects_dir
+RUN mkdir -p $db_dir
+RUN chown -R $user:$user $db_dir
 
 USER $user
 WORKDIR $projects_dir
@@ -35,5 +38,6 @@ RUN python3 -m pip install -U setuptools pip
 RUN make install
 RUN python3 docker/set_build.py
 RUN rm ~/.cache -rf
+VOLUME $db_dir
 ENTRYPOINT ["python3", "scripts/dht_node.py"]
 
