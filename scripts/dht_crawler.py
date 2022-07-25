@@ -206,8 +206,12 @@ class Crawler:
                     self.probed_streams_metric.labels("global").inc()
                     if response and response.found:
                         self.announced_streams_metric.labels("global").inc()
-                        blob_peers = [decode_tcp_peer_from_compact_address(compact_addr)
-                                      for compact_addr in response.found_compact_addresses]
+                        blob_peers = []
+                        for compact_addr in response.found_compact_addresses:
+                            try:
+                                blob_peers.append(decode_tcp_peer_from_compact_address(compact_addr))
+                            except ValueError as e:
+                                log.error("Error decoding compact peers: %s", e)
                         for blob_peer in blob_peers:
                             response = await self.request_peers(blob_peer.address, blob_peer.tcp_port, blob_peer.node_id, sd_hash)
                             if response:
