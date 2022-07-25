@@ -131,7 +131,7 @@ class RangeRequests(CommandTestCase):
         self.assertTrue(os.path.isfile(self.daemon.blob_manager.get_blob(stream.sd_hash).file_path))
         self.assertIsNone(stream.download_directory)
         self.assertIsNone(stream.full_path)
-        files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
 
         # test that repeated range requests do not create duplicate files
         for _ in range(3):
@@ -140,7 +140,7 @@ class RangeRequests(CommandTestCase):
             self.assertTrue(os.path.isfile(self.daemon.blob_manager.get_blob(stream.sd_hash).file_path))
             self.assertIsNone(stream.download_directory)
             self.assertIsNone(stream.full_path)
-            current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+            current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
             self.assertEqual(
                 len(files_in_download_dir), len(current_files_in_download_dir)
             )
@@ -148,7 +148,7 @@ class RangeRequests(CommandTestCase):
         # test that a range request after restart does not create a duplicate file
         await self._restart_stream_manager()
 
-        current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
         self.assertEqual(
             len(files_in_download_dir), len(current_files_in_download_dir)
         )
@@ -162,7 +162,7 @@ class RangeRequests(CommandTestCase):
         self.assertTrue(os.path.isfile(self.daemon.blob_manager.get_blob(stream.sd_hash).file_path))
         self.assertIsNone(stream.download_directory)
         self.assertIsNone(stream.full_path)
-        current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
         self.assertEqual(
             len(files_in_download_dir), len(current_files_in_download_dir)
         )
@@ -174,7 +174,7 @@ class RangeRequests(CommandTestCase):
         stream = (await self.daemon.jsonrpc_file_list())['items'][0]
         self.assertIsNone(stream.download_directory)
         self.assertIsNone(stream.full_path)
-        files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
 
         # test that repeated range requests do not create duplicate files
         for _ in range(3):
@@ -182,7 +182,7 @@ class RangeRequests(CommandTestCase):
             stream = (await self.daemon.jsonrpc_file_list())['items'][0]
             self.assertIsNone(stream.download_directory)
             self.assertIsNone(stream.full_path)
-            current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+            current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
             self.assertEqual(
                 len(files_in_download_dir), len(current_files_in_download_dir)
             )
@@ -190,7 +190,7 @@ class RangeRequests(CommandTestCase):
         # test that a range request after restart does not create a duplicate file
         await self._restart_stream_manager()
 
-        current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
         self.assertEqual(
             len(files_in_download_dir), len(current_files_in_download_dir)
         )
@@ -202,7 +202,7 @@ class RangeRequests(CommandTestCase):
         stream = (await self.daemon.jsonrpc_file_list())['items'][0]
         self.assertIsNone(stream.download_directory)
         self.assertIsNone(stream.full_path)
-        current_files_in_download_dir = list(os.scandir(os.path.dirname(self.daemon.conf.data_dir)))
+        current_files_in_download_dir = list(os.scandir(self.daemon.conf.data_dir))
         self.assertEqual(
             len(files_in_download_dir), len(current_files_in_download_dir)
         )
