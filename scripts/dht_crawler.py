@@ -217,10 +217,12 @@ class Crawler:
                             if response:
                                 self.working_streams_metric.labels("global").inc()
                                 log.info("Found responsive peer for %s: %s:%d(%d)",
-                                         sd_hash.hex()[:8], blob_peer.address, blob_peer.udp_port, blob_peer.tcp_port)
+                                         sd_hash.hex()[:8], blob_peer.address,
+                                         blob_peer.udp_port or -1, blob_peer.tcp_port or -1)
                             else:
                                 log.info("Found dead peer for %s: %s:%d(%d)",
-                                         sd_hash.hex()[:8], blob_peer.address, blob_peer.udp_port, blob_peer.tcp_port)
+                                         sd_hash.hex()[:8], blob_peer.address,
+                                         blob_peer.udp_port or -1, blob_peer.tcp_port or -1)
                 await asyncio.sleep(.5)
 
     @property
