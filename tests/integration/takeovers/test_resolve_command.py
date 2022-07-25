@@ -1580,6 +1580,7 @@ class ResolveAfterReorg(BaseResolveTestCase):
         self.assertListEqual(block_txs, list(txs.keys()), msg='leveldb/lbrycrd transactions are of order')
 
     async def test_reorg(self):
+        await asyncio.wait_for(self.on_header(206), 3.0)
         self.assertEqual(self.ledger.headers.height, 206)
 
         channel_name = '@abc'
