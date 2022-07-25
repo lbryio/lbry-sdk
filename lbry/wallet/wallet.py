@@ -175,9 +175,9 @@ class Wallet:
         return json.loads(decompressed)
 
     def merge(self, manager: 'WalletManager',
-              password: str, data: str) -> List['Account']:
+              password: str, data: str) -> (List['Account'], List['Account']):
         assert not self.is_locked, "Cannot sync apply on a locked wallet."
-        added_accounts = []
+        added_accounts, merged_accounts = [], []
         decrypted_data = self.unpack(password, data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
         for account_dict in decrypted_data['accounts']:
@@ -191,10 +191,11 @@ class Wallet:
                     break
             if local_match is not None:
                 local_match.merge(account_dict)
+                merged_accounts.append(local_match)
             else:
                 new_account = Account.from_dict(ledger, self, account_dict)
                 added_accounts.append(new_account)
-        return added_accounts
+        return added_accounts, merged_accounts
 
     @property
     def is_locked(self) -> bool:

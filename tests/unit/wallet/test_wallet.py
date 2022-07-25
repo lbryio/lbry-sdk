@@ -209,7 +209,7 @@ class TestWalletCreation(AsyncioTestCase):
         self.assertEqual(len(wallet1.accounts), 1)
         self.assertEqual(wallet1.preferences, {'one': 1, 'conflict': 1})
 
-        added = wallet1.merge(self.manager, 'password', wallet2.pack('password'))
+        added, _ = wallet1.merge(self.manager, 'password', wallet2.pack('password'))
         self.assertEqual(added[0].id, wallet2.default_account.id)
         self.assertEqual(len(wallet1.accounts), 2)
         self.assertEqual(wallet1.accounts[1].id, wallet2.default_account.id)
