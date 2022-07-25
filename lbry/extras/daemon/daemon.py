@@ -9,7 +9,7 @@ import inspect
 import typing
 import random
 import tracemalloc
-from itertools import chain
+import itertools
 from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
@@ -1988,7 +1988,7 @@ class Daemon(metaclass=JSONRPCServerType):
         wallet_changed = False
         if data is not None:
             added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
-            for new_account in chain(added_accounts, merged_accounts):
+            for new_account in itertools.chain(added_accounts, merged_accounts):
                 await new_account.maybe_migrate_certificates()
             if added_accounts and self.ledger.network.is_connected:
                 if blocking:
