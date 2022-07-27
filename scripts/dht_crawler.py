@@ -315,21 +315,23 @@ class Crawler:
                 if key == node_id:
                     response = await self.node.protocol.get_rpc_peer(peer).find_node(key)
                     response = FindNodeResponse(key, response)
+                    latency = time.perf_counter_ns() - req_start
+                    self.set_latency(peer, latency)
                 else:
                     response = await self.node.protocol.get_rpc_peer(peer).find_value(key)
                     response = FindValueResponse(key, response)
                 await asyncio.sleep(0.05)
-                latency = time.perf_counter_ns() - req_start
-                self.set_latency(peer, latency)
                 return response
             except asyncio.TimeoutError:
-                self.set_latency(peer, None)
+                if key == node_id:
+                    self.set_latency(peer, None)
                 continue
             except lbry.dht.error.RemoteException as e:
                 log.info('Peer errored: %s:%d attempt #%d - %s',
                          host, port, (attempt + 1), str(e))
-                self.inc_errors(peer)
-                self.set_latency(peer, None)
+                if key == node_id:
+                    self.inc_errors(peer)
+                    self.set_latency(peer, None)
                 continue
 
     async def crawl_routing_table(self, host, port, node_id=None):
