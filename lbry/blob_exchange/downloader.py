@@ -64,7 +64,7 @@ class BlobDownloader:
             self.scores[peer] = bytes_received / elapsed if bytes_received and elapsed else 1
 
     async def new_peer_or_finished(self):
-        active_tasks = list(self.active_connections.values()) + [asyncio.sleep(1)]
+        active_tasks = list(self.active_connections.values()) + [asyncio.create_task(asyncio.sleep(1))]
         await asyncio.wait(active_tasks, return_when='FIRST_COMPLETED')
 
     def cleanup_active(self):
