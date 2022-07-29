@@ -335,6 +335,9 @@ class Crawler:
                 if key == node_id:
                     self.set_latency(peer, None)
                 continue
+            except lbry.dht.error.TransportNotConnected:
+                log.info("Transport unavailable, waiting 1s to retry")
+                await asyncio.sleep(1)
             except lbry.dht.error.RemoteException as e:
                 log.info('Peer errored: %s:%d attempt #%d - %s',
                          host, port, (attempt + 1), str(e))
