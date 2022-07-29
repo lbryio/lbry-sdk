@@ -277,7 +277,7 @@ class Crawler:
         await self.db.save_peers(*self._memory_peers.values())
         connections_to_save = self._connections
         self._connections = {}
-        await self.db.save_connections(connections_to_save)
+        # await self.db.save_connections(connections_to_save)  heavy call
 
     def get_from_peer(self, peer):
         return self._memory_peers.get((peer.address, peer.udp_port), None)
