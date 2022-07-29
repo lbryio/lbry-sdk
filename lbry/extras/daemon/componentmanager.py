@@ -118,7 +118,7 @@ class ComponentManager:
                 component._setup() for component in stage if not component.running
             ]
             if needing_start:
-                await asyncio.wait(needing_start)
+                await asyncio.wait(map(asyncio.create_task, needing_start))
         self.started.set()
 
     async def stop(self):
@@ -131,7 +131,7 @@ class ComponentManager:
                 component._stop() for component in stage if component.running
             ]
             if needing_stop:
-                await asyncio.wait(needing_stop)
+                await asyncio.wait(map(asyncio.create_task, needing_stop))
 
     def all_components_running(self, *component_names):
         """

@@ -329,10 +329,10 @@ class Ledger(metaclass=LedgerRegistry):
     async def start(self):
         if not os.path.exists(self.path):
             os.mkdir(self.path)
-        await asyncio.wait([
+        await asyncio.wait(map(asyncio.create_task, [
             self.db.open(),
             self.headers.open()
-        ])
+        ]))
         fully_synced = self.on_ready.first
         asyncio.create_task(self.network.start())
         await self.network.on_connected.first
@@ -466,9 +466,9 @@ class Ledger(metaclass=LedgerRegistry):
     async def subscribe_accounts(self):
         if self.network.is_connected and self.accounts:
             log.info("Subscribe to %i accounts", len(self.accounts))
-            await asyncio.wait([
+            await asyncio.wait(map(asyncio.create_task, [
                 self.subscribe_account(a) for a in self.accounts
-            ])
+            ]))
 
     async def subscribe_account(self, account: Account):
         for address_manager in account.address_managers.values():
