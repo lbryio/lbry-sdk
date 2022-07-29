@@ -312,7 +312,8 @@ class Network:
         sleep_delay = 30
         while self.running:
             await asyncio.wait(
-                [asyncio.sleep(30), self._urgent_need_reconnect.wait()], return_when=asyncio.FIRST_COMPLETED
+                map(asyncio.create_task, [asyncio.sleep(30), self._urgent_need_reconnect.wait()]),
+                return_when=asyncio.FIRST_COMPLETED
             )
             if self._urgent_need_reconnect.is_set():
                 sleep_delay = 30
@@ -338,7 +339,7 @@ class Network:
                 try:
                     if not self._urgent_need_reconnect.is_set():
                         await asyncio.wait(
-                            [self._keepalive_task, self._urgent_need_reconnect.wait()],
+                            [self._keepalive_task, asyncio.create_task(self._urgent_need_reconnect.wait())],
                             return_when=asyncio.FIRST_COMPLETED
                         )
                     else:

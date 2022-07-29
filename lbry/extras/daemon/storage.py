@@ -793,7 +793,7 @@ class SQLiteStorage(SQLiteMixin):
 
         await self.db.run(_save_claims)
         if update_file_callbacks:
-            await asyncio.wait(update_file_callbacks)
+            await asyncio.wait(map(asyncio.create_task, update_file_callbacks))
         if claim_id_to_supports:
             await self.save_supports(claim_id_to_supports)
 
