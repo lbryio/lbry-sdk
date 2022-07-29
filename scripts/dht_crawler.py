@@ -488,8 +488,7 @@ async def test():
             probes.append(asyncio.create_task(crawler.crawl_routing_table(host, port)))
         await asyncio.gather(*probes)
         await crawler.flush_to_db()
-    probe_task = asyncio.ensure_future(crawler.probe_files())
-    await crawler.process()
+    await asyncio.gather(crawler.process(), crawler.probe_files())
 
 if __name__ == '__main__':
     asyncio.run(test())
