@@ -71,7 +71,10 @@ class PeerStorage(SQLiteMixin):
         self.db.writer_connection.row_factory = dict_row_factory
 
     async def all_peers(self):
-        return [DHTPeer(**peer) for peer in await self.db.execute_fetchall("select * from peer")]
+        return [
+            DHTPeer(**peer) for peer in await self.db.execute_fetchall(
+                "select * from peer where latency > 0 or last_seen < datetime('now', '-1h')")
+        ]
 
     async def save_peers(self, *peers):
         log.info("Saving graph nodes (peers) to DB")
@@ -263,6 +266,11 @@ class Crawler:
         to_check = [peer for peer in self.all_peers if peer.last_check is None or peer.last_check < self.refresh_limit]
         return to_check
 
+    def remove_expired_peers(self):
+        for key, peer in list(self._memory_peers.items()):
+            if (peer.latency or 0) < 1 and peer.last_seen < self.refresh_limit:
+                del self._memory_peers[key]
+
     def add_peers(self, *peers):
         for peer in peers:
             db_peer = self.get_from_peer(peer)
@@ -278,6 +286,7 @@ class Crawler:
         connections_to_save = self._connections
         self._connections = {}
         # await self.db.save_connections(connections_to_save)  heavy call
+        self.remove_expired_peers()
 
     def get_from_peer(self, peer):
         return self._memory_peers.get((peer.address, peer.udp_port), None)
