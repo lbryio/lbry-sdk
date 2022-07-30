@@ -122,10 +122,8 @@ class TorrentSession:
     async def bind(self, interface: str = '0.0.0.0', port: int = 10889):
         settings = {
             'listen_interfaces': f"{interface}:{port}",
-            'enable_outgoing_utp': True,
-            'enable_incoming_utp': True,
-            'enable_outgoing_tcp': False,
-            'enable_incoming_tcp': False
+            'enable_natpmp': False,
+            'enable_upnp': False
         }
         self._session = await self._loop.run_in_executor(
             self._executor, libtorrent.session, settings  # pylint: disable=c-extension-no-member
