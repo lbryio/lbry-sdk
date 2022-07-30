@@ -46,9 +46,9 @@ setup(
         'coincurve==15.0.0',
         'pbkdf2==1.3',
         'filetype==1.0.9',
+        'libtorrent==2.0.6',
     ],
     extras_require={
-        'torrent': ['lbry-libtorrent'],
         'lint': [
             'pylint==2.10.0'
         ],

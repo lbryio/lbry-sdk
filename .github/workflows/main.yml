@@ -18,7 +18,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - run: pip install --user --upgrade pip wheel
-      - run: pip install -e .[torrent,lint]
+      - run: pip install -e .[lint]
       - run: make lint
 
   tests-unit:
@@ -50,7 +50,7 @@ jobs:
           string: ${{ runner.os }}
       - run: python -m pip install --user --upgrade pip wheel
       - if: startsWith(runner.os, 'linux')
-        run: pip install -e .[torrent,test]
+        run: pip install -e .[test]
       - if: startsWith(runner.os, 'linux')
         env:
           HOME: /tmp
