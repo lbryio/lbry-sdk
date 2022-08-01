@@ -1431,8 +1431,8 @@ class Daemon(metaclass=JSONRPCServerType):
             print("passwordless use is not implemented yet")
         else:
             wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-            added_accounts = wallet.merge(self.wallet_manager, password, data)
-            for new_account in added_accounts:
+            added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
+            for new_account in itertools.chain(added_accounts, merged_accounts):
                 await new_account.maybe_migrate_certificates()
             if added_accounts and self.ledger.network.is_connected:
                 if blocking:
