@@ -1394,7 +1394,7 @@ class Daemon(metaclass=JSONRPCServerType):
             wallet_export [--password=<password>] [--wallet_id=<wallet_id>]
 
         Options:
-            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
+            --password=<password>         : (str) password to encrypt outgoing data
             --wallet_id=<wallet_id>       : (str) wallet being exported
 
         Returns:
@@ -1419,7 +1419,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Options:
             --data=<data>                 : (str) incoming wallet data
-            --password=<password>         : (str) password to decrypt incoming and encrypt outgoing data
+            --password=<password>         : (str) password to decrypt incoming data
             --wallet_id=<wallet_id>       : (str) wallet being merged into
             --blocking                    : (bool) wait until any new accounts have merged
 
