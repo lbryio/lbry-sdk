@@ -1428,7 +1428,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
 
         if data.strip().startswith("{"):
-            print("passwordless use is not implemented yet")
+            raise NotImplementedError("unencrypted wallet import is not implemented yet")
         else:
             wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
             added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
