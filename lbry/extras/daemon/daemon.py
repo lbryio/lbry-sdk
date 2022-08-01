@@ -1426,25 +1426,22 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) data
         """
-
-        if data.strip().startswith("{"):
-            raise NotImplementedError("unencrypted wallet import is not implemented yet")
-        else:
-            wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-            added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
-            for new_account in itertools.chain(added_accounts, merged_accounts):
-                await new_account.maybe_migrate_certificates()
-            if added_accounts and self.ledger.network.is_connected:
-                if blocking:
-                    await asyncio.wait([
-                        a.ledger.subscribe_account(a) for a in added_accounts
-                    ])
-                else:
-                    for new_account in added_accounts:
-                        asyncio.create_task(self.ledger.subscribe_account(new_account))
-            wallet.save()
-            encrypted = wallet.pack(password)
-            return encrypted.decode()
+        assert not data.strip().startswith("{"), "unencrypted wallet import is not implemented yet"
+        wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
+        for new_account in itertools.chain(added_accounts, merged_accounts):
+            await new_account.maybe_migrate_certificates()
+        if added_accounts and self.ledger.network.is_connected:
+            if blocking:
+                await asyncio.wait([
+                    a.ledger.subscribe_account(a) for a in added_accounts
+                ])
+            else:
+                for new_account in added_accounts:
+                    asyncio.create_task(self.ledger.subscribe_account(new_account))
+        wallet.save()
+        encrypted = wallet.pack(password)
+        return encrypted.decode()
 
     @requires("wallet")
     async def jsonrpc_wallet_add(self, wallet_id):
