@@ -40,7 +40,7 @@ setup(
         'protobuf==3.17.2',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
-        'pyyaml==5.3.1',
+        'pyyaml==5.4',
         'docopt==0.6.2',
         'hachoir==3.1.2',
         'coincurve==15.0.0',
