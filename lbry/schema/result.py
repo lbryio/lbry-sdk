@@ -178,19 +178,6 @@ class Outputs:
         )
 
     @classmethod
-    def from_grpc(cls, outputs: OutputsMessage) -> 'Outputs':
-        txs = set()
-        for txo_message in chain(outputs.txos, outputs.extra_txos):
-            if txo_message.WhichOneof('meta') == 'error':
-                continue
-            txs.add((hexlify(txo_message.tx_hash[::-1]).decode(), txo_message.height))
-        return cls(
-            outputs.txos, outputs.extra_txos, txs,
-            outputs.offset, outputs.total,
-            outputs.blocked, outputs.blocked_total
-        )
-
-    @classmethod
     def to_base64(cls, txo_rows, extra_txo_rows, offset=0, total=None, blocked=None) -> str:
         return base64.b64encode(cls.to_bytes(txo_rows, extra_txo_rows, offset, total, blocked)).decode()
 

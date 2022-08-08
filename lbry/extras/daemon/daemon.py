@@ -196,61 +196,6 @@ def paginate_list(items: List, page: Optional[int], page_size: Optional[int]):
     }
 
 
-def fix_kwargs_for_hub(**kwargs):
-    repeated_fields = {"media_type", "stream_type", "claim_type"}
-    value_fields = {"tx_nout", "has_source", "is_signature_valid"}
-    opcodes = {'=': 0, '<=': 1, '>=': 2, '<': 3, '>': 4}
-    for key, value in list(kwargs.items()):
-        if value in (None, [], False):
-            kwargs.pop(key)
-            continue
-        if key in REPLACEMENTS:
-            kwargs[REPLACEMENTS[key]] = kwargs.pop(key)
-            key = REPLACEMENTS[key]
-
-        if key == "normalized_name":
-            kwargs[key] = normalize_name(value)
-        if key == "limit_claims_per_channel":
-            value = kwargs.pop("limit_claims_per_channel") or 0
-            if value > 0:
-                kwargs["limit_claims_per_channel"] = value
-        elif key == "invalid_channel_signature":
-            kwargs["is_signature_valid"] = {"value": not kwargs.pop("invalid_channel_signature")}
-        elif key == "has_no_source":
-            kwargs["has_source"] = {"value": not kwargs.pop("has_no_source")}
-        elif key in value_fields:
-            kwargs[key] = {"value": value} if not isinstance(value, dict) else value
-        elif key in repeated_fields and isinstance(value, str):
-            kwargs[key] = [value]
-        elif key in ("claim_id", "channel_id"):
-            kwargs[key] = {"invert": False, "value": [kwargs[key]]}
-        elif key in ("claim_ids", "channel_ids"):
-            kwargs[key[:-1]] = {"invert": False, "value": kwargs.pop(key)}
-        elif key == "not_channel_ids":
-            kwargs["channel_id"] = {"invert": True, "value": kwargs.pop("not_channel_ids")}
-        elif key in MY_RANGE_FIELDS:
-            constraints = []
-            for val in value if isinstance(value, list) else [value]:
-                operator = '='
-                if isinstance(val, str) and val[0] in opcodes:
-                    operator_length = 2 if val[:2] in opcodes else 1
-                    operator, val = val[:operator_length], val[operator_length:]
-                val = [int(val if key != 'fee_amount' else Decimal(val)*1000)]
-                constraints.append({"op": opcodes[operator], "value": val})
-            kwargs[key] = constraints
-        elif key == 'order_by':  # TODO: remove this after removing support for old trending args from the api
-            value = value if isinstance(value, list) else [value]
-            new_value = []
-            for new_v in value:
-                migrated = new_v if new_v not in (
-                    'trending_mixed', 'trending_local', 'trending_global', 'trending_group'
-                ) else 'trending_score'
-                if migrated not in new_value:
-                    new_value.append(migrated)
-            kwargs[key] = new_value
-    return kwargs
-
-
 DHT_HAS_CONTACTS = "dht_has_contacts"
 
 
@@ -2673,42 +2618,27 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Returns: {Paginated[Output]}
         """
-        if self.ledger.config.get('use_go_hub'):
-            host = self.ledger.network.client.server[0]
-            port = "50051"
-            kwargs['new_sdk_server'] = f"{host}:{port}"
-            if kwargs.get("channel"):
-                channel = kwargs.pop("channel")
-                channel_obj = (await self.jsonrpc_resolve(channel))[channel]
-                if isinstance(channel_obj, dict):
-                    # This happens when the channel doesn't exist
-                    kwargs["channel_id"] = ""
-                else:
-                    kwargs["channel_id"] = channel_obj.claim_id
-            kwargs = fix_kwargs_for_hub(**kwargs)
-        else:
-            # Don't do this if using the hub server, it screws everything up
-            if "claim_ids" in kwargs and not kwargs["claim_ids"]:
-                kwargs.pop("claim_ids")
-            if {'claim_id', 'claim_ids'}.issubset(kwargs):
-                raise ConflictingInputValueError('claim_id', 'claim_ids')
-            if kwargs.pop('valid_channel_signature', False):
-                kwargs['signature_valid'] = 1
-            if kwargs.pop('invalid_channel_signature', False):
-                kwargs['signature_valid'] = 0
-            if 'has_no_source' in kwargs:
-                kwargs['has_source'] = not kwargs.pop('has_no_source')
-            if 'order_by' in kwargs:  # TODO: remove this after removing support for old trending args from the api
-                value = kwargs.pop('order_by')
-                value = value if isinstance(value, list) else [value]
-                new_value = []
-                for new_v in value:
-                    migrated = new_v if new_v not in (
-                        'trending_mixed', 'trending_local', 'trending_global', 'trending_group'
-                    ) else 'trending_score'
-                    if migrated not in new_value:
-                        new_value.append(migrated)
-                kwargs['order_by'] = new_value
+        if "claim_ids" in kwargs and not kwargs["claim_ids"]:
+            kwargs.pop("claim_ids")
+        if {'claim_id', 'claim_ids'}.issubset(kwargs):
+            raise ConflictingInputValueError('claim_id', 'claim_ids')
+        if kwargs.pop('valid_channel_signature', False):
+            kwargs['signature_valid'] = 1
+        if kwargs.pop('invalid_channel_signature', False):
+            kwargs['signature_valid'] = 0
+        if 'has_no_source' in kwargs:
+            kwargs['has_source'] = not kwargs.pop('has_no_source')
+        if 'order_by' in kwargs:  # TODO: remove this after removing support for old trending args from the api
+            value = kwargs.pop('order_by')
+            value = value if isinstance(value, list) else [value]
+            new_value = []
+            for new_v in value:
+                migrated = new_v if new_v not in (
+                    'trending_mixed', 'trending_local', 'trending_global', 'trending_group'
+                ) else 'trending_score'
+                if migrated not in new_value:
+                    new_value.append(migrated)
+            kwargs['order_by'] = new_value
         page_num, page_size = abs(kwargs.pop('page', 1)), min(abs(kwargs.pop('page_size', DEFAULT_PAGE_SIZE)), 50)
         wallet = self.wallet_manager.get_wallet_or_default(kwargs.pop('wallet_id', None))
         kwargs.update({'offset': page_size * (page_num - 1), 'limit': page_size})

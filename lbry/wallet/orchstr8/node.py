@@ -1,6 +1,5 @@
 # pylint: disable=import-error
 import os
-import signal
 import json
 import shutil
 import asyncio
@@ -10,7 +9,6 @@ import logging
 import tempfile
 import subprocess
 import platform
-from distutils.util import strtobool
 
 from binascii import hexlify
 from typing import Type, Optional
@@ -21,7 +19,6 @@ from uuid import uuid4
 import lbry
 from lbry.wallet import Wallet, Ledger, RegTestLedger, WalletManager, Account, BlockHeightEvent
 from lbry.conf import KnownHubsList, Config
-from lbry.wallet.orchstr8 import __hub_url__
 
 log = logging.getLogger(__name__)
 
@@ -62,13 +59,10 @@ class Conductor:
         self.wallet_node = WalletNode(
             self.manager_module, RegTestLedger, default_seed=seed
         )
-        self.hub_node = HubNode(__hub_url__, "hub", self.spv_node)
-
         self.lbcd_started = False
         self.lbcwallet_started = False
         self.spv_started = False
         self.wallet_started = False
-        self.hub_started = False
 
         self.log = log.getChild('conductor')
 
@@ -81,17 +75,6 @@ class Conductor:
         if self.lbcd_started:
             await self.lbcd_node.stop(cleanup)
             self.lbcd_started = False
-
-    async def start_hub(self):
-        if not self.hub_started:
-            await self.hub_node.start()
-            await self.lbcwallet_node.running.wait()
-            self.hub_started = True
-
-    async def stop_hub(self, cleanup=True):
-        if self.hub_started:
-            await self.hub_node.stop(cleanup)
-            self.hub_started = False
 
     async def start_spv(self):
         if not self.spv_started:
@@ -133,13 +116,11 @@ class Conductor:
         await self.start_lbcd()
         await self.start_lbcwallet()
         await self.start_spv()
-        await self.start_hub()
         await self.start_wallet()
 
     async def stop(self):
         all_the_stops = [
             self.stop_wallet,
-            self.stop_hub,
             self.stop_spv,
             self.stop_lbcwallet,
             self.stop_lbcd
@@ -184,7 +165,6 @@ class WalletNode:
         self.manager = self.manager_class.from_config({
             'ledgers': {
                 self.ledger_class.get_id(): {
-                    'use_go_hub': not strtobool(os.environ.get('ENABLE_LEGACY_SEARCH') or 'yes'),
                     'api_port': self.port,
                     'explicit_servers': [(spv_node.hostname, spv_node.port)],
                     'default_servers': Config.lbryum_servers.default,
@@ -693,139 +673,3 @@ class LBCWalletNode:
 
     def get_raw_transaction(self, txid):
         return self._cli_cmnd('getrawtransaction', txid, '1')
-
-
-class HubProcess(asyncio.SubprocessProtocol):
-    def __init__(self, ready, stopped):
-        self.ready = ready
-        self.stopped = stopped
-        self.log = log.getChild('hub')
-        self.transport = None
-
-    def pipe_data_received(self, fd, data):
-        self.stopped.clear()
-        self.ready.set()
-        if self.log:
-            self.log.info(data.decode())
-        if b'error' in data.lower():
-            self.ready.set()
-            raise SystemError(data.decode())
-        if b'listening on' in data:
-            self.ready.set()
-        str_lines = str(data.decode()).split("\n")
-        for line in str_lines:
-            if 'releaseTime' in line:
-                print(line)
-
-    def process_exited(self):
-        self.ready.clear()
-        self.stopped.set()
-
-    async def stop(self):
-        t = asyncio.create_task(self.stopped.wait())
-        try:
-            self.transport.send_signal(signal.SIGINT)
-            await asyncio.wait_for(t, 3)
-            # log.warning("stopped go hub")
-        except asyncio.TimeoutError:
-            if not t.done():
-                t.cancel()
-            self.transport.terminate()
-            await self.stopped.wait()
-            log.warning("terminated go hub")
-
-
-class HubNode:
-    def __init__(self, url, daemon, spv_node):
-        self.spv_node = spv_node
-        self.latest_release_url = url
-        self.project_dir = os.path.dirname(os.path.dirname(__file__))
-        self.bin_dir = os.path.join(self.project_dir, 'bin')
-        self.daemon_bin = os.path.join(self.bin_dir, daemon)
-        self.cli_bin = os.path.join(self.bin_dir, daemon)
-        self.log = log.getChild('hub')
-        self.transport = None
-        self.protocol = None
-        self.hostname = 'localhost'
-        self.rpcport = 50051  # avoid conflict with default rpc port
-        self._stopped = asyncio.Event()
-        self.running = asyncio.Event()
-
-    @property
-    def stopped(self):
-        return not self.running.is_set()
-
-    @property
-    def exists(self):
-        return (
-            os.path.exists(self.cli_bin) and
-            os.path.exists(self.daemon_bin)
-        )
-
-    def download(self):
-        downloaded_file = os.path.join(
-            self.bin_dir,
-            self.latest_release_url[self.latest_release_url.rfind('/')+1:]
-        )
-
-        if not os.path.exists(self.bin_dir):
-            os.mkdir(self.bin_dir)
-
-        if not os.path.exists(downloaded_file):
-            self.log.info('Downloading: %s', self.latest_release_url)
-            with urllib.request.urlopen(self.latest_release_url) as response:
-                with open(downloaded_file, 'wb') as out_file:
-                    shutil.copyfileobj(response, out_file)
-
-        self.log.info('Extracting: %s', downloaded_file)
-
-        if downloaded_file.endswith('.zip'):
-            with zipfile.ZipFile(downloaded_file) as dotzip:
-                dotzip.extractall(self.bin_dir)
-                # zipfile bug https://bugs.python.org/issue15795
-                os.chmod(self.cli_bin, 0o755)
-                os.chmod(self.daemon_bin, 0o755)
-
-        elif downloaded_file.endswith('.tar.gz'):
-            with tarfile.open(downloaded_file) as tar:
-                tar.extractall(self.bin_dir)
-
-        os.chmod(self.daemon_bin, 0o755)
-
-        return self.exists
-
-    def ensure(self):
-        return self.exists or self.download()
-
-    async def start(self):
-        assert self.ensure()
-        loop = asyncio.get_event_loop()
-        asyncio.get_child_watcher().attach_loop(loop)
-        command = [
-            self.daemon_bin, 'serve', '--esindex', self.spv_node.index_name + 'claims', '--debug'
-        ]
-        self.log.info(' '.join(command))
-        self.protocol = HubProcess(self.running, self._stopped)
-        try:
-            self.transport, _ = await loop.subprocess_exec(
-                lambda: self.protocol, *command
-            )
-            self.protocol.transport = self.transport
-        except Exception as e:
-            log.exception('failed to start go hub', exc_info=e)
-            raise e
-        await self.protocol.ready.wait()
-
-    async def stop(self, cleanup=True):
-        try:
-            if self.protocol:
-                await self.protocol.stop()
-        except Exception as e:
-            log.exception('failed to stop go hub', exc_info=e)
-            raise e
-        finally:
-            if cleanup:
-                self.cleanup()
-
-    def cleanup(self):
-        pass

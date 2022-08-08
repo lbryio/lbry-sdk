@@ -7,12 +7,6 @@ BASE = os.path.dirname(__file__)
 with open(os.path.join(BASE, 'README.md'), encoding='utf-8') as fh:
     long_description = fh.read()
 
-
-ROCKSDB = []
-if sys.platform.startswith('linux') or sys.platform.startswith('darwin'):
-    ROCKSDB.append('lbry-rocksdb==0.8.2')
-
-
 setup(
     name=__name__,
     version=__version__,
@@ -44,21 +38,15 @@ setup(
         'cffi==1.13.2',
         'cryptography==2.5',
         'protobuf==3.17.2',
-        'msgpack==0.6.1',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
         'pyyaml==5.3.1',
         'docopt==0.6.2',
         'hachoir==3.1.2',
-        'multidict==4.6.1',
         'coincurve==15.0.0',
         'pbkdf2==1.3',
-        'attrs==18.2.0',
-        'pylru==1.1.0',
-        'elasticsearch==7.10.1',
-        'grpcio==1.38.0',
         'filetype==1.0.9',
-    ] + ROCKSDB,
+    ],
     extras_require={
         'torrent': ['lbry-libtorrent'],
         'lint': [
