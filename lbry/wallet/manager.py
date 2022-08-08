@@ -190,7 +190,8 @@ class WalletManager:
             'jurisdiction': config.jurisdiction,
             'concurrent_hub_requests': config.concurrent_hub_requests,
             'data_path': config.wallet_dir,
-            'tx_cache_size': config.transaction_cache_size
+            'tx_cache_size': config.transaction_cache_size,
+            'exit_on_disconnect': config.exit_on_disconnect,
         }
         if 'LBRY_FEE_PER_NAME_CHAR' in os.environ:
             ledger_config['fee_per_name_char'] = int(os.environ.get('LBRY_FEE_PER_NAME_CHAR'))
@@ -244,6 +245,7 @@ class WalletManager:
             'hub_timeout': self.config.hub_timeout,
             'concurrent_hub_requests': self.config.concurrent_hub_requests,
             'data_path': self.config.wallet_dir,
+            'exit_on_disconnect': self.config.exit_on_disconnect,
         }
         if Config.lbryum_servers.is_set(self.config):
             self.ledger.config['explicit_servers'] = self.config.lbryum_servers
