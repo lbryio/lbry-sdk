@@ -305,6 +305,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertEqual(stored_status, "running")
 
         await stream.stop()
+        await asyncio.sleep(1)  # TODO: should not be needed
 
         self.assertFalse(stream.finished)
         self.assertFalse(stream.running)
