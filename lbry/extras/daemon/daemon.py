@@ -10,7 +10,6 @@ import typing
 import random
 import tracemalloc
 import itertools
-from decimal import Decimal
 from urllib.parse import urlencode, quote
 from typing import Callable, Optional, List
 from binascii import hexlify, unhexlify
@@ -54,7 +53,7 @@ from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
-from lbry.schema.url import URL, normalize_name
+from lbry.schema.url import URL
 
 
 if typing.TYPE_CHECKING:
