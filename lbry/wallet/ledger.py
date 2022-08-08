@@ -780,13 +780,9 @@ class Ledger(metaclass=LedgerRegistry):
             include_is_my_output=False,
             include_sent_supports=False,
             include_sent_tips=False,
-            include_received_tips=False,
-            hub_server=False) -> Tuple[List[Output], dict, int, int]:
+            include_received_tips=False) -> Tuple[List[Output], dict, int, int]:
         encoded_outputs = await query
-        if hub_server:
-            outputs = Outputs.from_grpc(encoded_outputs)
-        else:
-            outputs = Outputs.from_base64(encoded_outputs or '')  # TODO: why is the server returning None?
+        outputs = Outputs.from_base64(encoded_outputs or '')  # TODO: why is the server returning None?
         txs: List[Transaction] = []
         if len(outputs.txs) > 0:
             async for tx in self.request_transactions(tuple(outputs.txs), cached=True):
@@ -862,13 +858,10 @@ class Ledger(metaclass=LedgerRegistry):
                         txo.received_tips = tips
         return txos, blocked, outputs.offset, outputs.total
 
-    async def resolve(self, accounts, urls, new_sdk_server=None, **kwargs):
+    async def resolve(self, accounts, urls, **kwargs):
         txos = []
         urls_copy = list(urls)
-        if new_sdk_server:
-            resolve = partial(self.network.new_resolve, new_sdk_server)
-        else:
-            resolve = partial(self.network.retriable_call, self.network.resolve)
+        resolve = partial(self.network.retriable_call, self.network.resolve)
         while urls_copy:
             batch, urls_copy = urls_copy[:100], urls_copy[100:]
             txos.extend(
@@ -893,17 +886,14 @@ class Ledger(metaclass=LedgerRegistry):
         return await self.network.sum_supports(new_sdk_server, **kwargs)
 
     async def claim_search(
-            self, accounts, include_purchase_receipt=False, include_is_my_output=False,
-            new_sdk_server=None, **kwargs) -> Tuple[List[Output], dict, int, int]:
-        if new_sdk_server:
-            claim_search = partial(self.network.new_claim_search, new_sdk_server)
-        else:
-            claim_search = self.network.claim_search
+            self, accounts,
+            include_purchase_receipt=False,
+            include_is_my_output=False,
+            **kwargs) -> Tuple[List[Output], dict, int, int]:
         return await self._inflate_outputs(
-            claim_search(**kwargs), accounts,
+            self.network.claim_search(**kwargs), accounts,
             include_purchase_receipt=include_purchase_receipt,
-            include_is_my_output=include_is_my_output,
-            hub_server=new_sdk_server is not None
+            include_is_my_output=include_is_my_output
         )
 
     # async def get_claim_by_claim_id(self, accounts, claim_id, **kwargs) -> Output:
