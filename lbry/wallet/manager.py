@@ -3,7 +3,6 @@ import json
 import typing
 import logging
 import asyncio
-from distutils.util import strtobool
 
 from binascii import unhexlify
 from decimal import Decimal
