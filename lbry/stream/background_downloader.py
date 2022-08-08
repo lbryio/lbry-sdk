@@ -22,8 +22,6 @@ class BackgroundDownloader:
                 await downloader.download_stream_blob(blob_info)
         except ValueError:
             return
-        except asyncio.CancelledError:
-            raise
         except Exception:
             log.error("Unexpected download error on background downloader")
         finally:
