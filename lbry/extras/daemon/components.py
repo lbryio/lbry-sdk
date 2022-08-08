@@ -560,8 +560,6 @@ class UPnPComponent(Component):
                 self.upnp = await UPnP.discover(loop=self.component_manager.loop)
                 log.info("found upnp gateway: %s", self.upnp.gateway.manufacturer_string)
             except Exception as err:
-                if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
-                    raise
                 log.warning("upnp discovery failed: %s", err)
                 self.upnp = None
 
