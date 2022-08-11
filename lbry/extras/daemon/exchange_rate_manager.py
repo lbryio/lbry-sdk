@@ -196,9 +196,9 @@ FEEDS: Iterable[Type[MarketFeed]] = (
     BittrexUSDFeed,
     CoinExBTCFeed,
     CoinExUSDFeed,
-    HotbitBTCFeed,
-    HotbitUSDFeed,
-    UPbitBTCFeed,
+#    HotbitBTCFeed,
+#    HotbitUSDFeed,
+#    UPbitBTCFeed,
 )
 
 
