@@ -37,7 +37,6 @@ class KBucket:
                          covered by this k-bucket
         """
         self._peer_manager = peer_manager
-        self.last_accessed = 0
         self.range_min = range_min
         self.range_max = range_max
         self.peers: typing.List['KademliaPeer'] = []
@@ -240,9 +239,8 @@ class TreeRoutingTable:
         refresh_ids = []
         now = int(self._loop.time())
         for bucket in self.buckets[start_index:]:
-            if force or now - bucket.last_accessed >= constants.REFRESH_INTERVAL:
-                to_search = self._midpoint_id_in_bucket_range(bucket_index)
-                refresh_ids.append(to_search)
+            to_search = self._midpoint_id_in_bucket_range(bucket_index)
+            refresh_ids.append(to_search)
             bucket_index += 1
         # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
         # populate/split the buckets further
