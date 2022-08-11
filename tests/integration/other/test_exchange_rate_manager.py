@@ -1,8 +1,9 @@
 import asyncio
-import logging
 from decimal import Decimal
 from lbry.testcase import AsyncioTestCase
-from lbry.extras.daemon.exchange_rate_manager import ExchangeRate, ExchangeRateManager, FEEDS, MarketFeed
+from lbry.extras.daemon.exchange_rate_manager import (
+    ExchangeRate, ExchangeRateManager, FEEDS, MarketFeed
+)
 
 
 class TestExchangeRateManager(AsyncioTestCase):
