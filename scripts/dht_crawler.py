@@ -146,8 +146,12 @@ class Crawler:
     hosts_with_errors_metric = Gauge(
         "error_hosts", "Number of hosts that raised errors during contact.", namespace="dht_crawler_node",
     )
-    connections_found_metric = Gauge(
+    ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS = (
+        0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 60., 70., 80., 100., 200., 1000., 3000., float('inf')
+    )
+    connections_found_metric = Histogram(
         "connections_found", "Number of hosts returned by the last successful contact.", namespace="dht_crawler_node",
+        buckets=ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS
     )
     LATENCY_HISTOGRAM_BUCKETS = (
         0., 5., 10., 15., 30., 60., 120., 180., 240., 300., 600., 1200., 1800., 4000., 6000., float('inf')
