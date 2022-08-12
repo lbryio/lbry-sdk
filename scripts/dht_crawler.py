@@ -146,12 +146,20 @@ class Crawler:
     hosts_with_errors_metric = Gauge(
         "error_hosts", "Number of hosts that raised errors during contact.", namespace="dht_crawler_node",
     )
-    ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS = (
-        0., 5., 10., 15., 20., 25., 30., 35., 40., 45., 60., 70., 80., 100., 200., 1000., 3000., float('inf')
+    ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS = tuple(map(float, range(100))) + (
+        500., 1000., 2000., float('inf')
     )
     connections_found_metric = Histogram(
         "connections_found", "Number of hosts returned by the last successful contact.", namespace="dht_crawler_node",
         buckets=ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS
+    )
+    known_connections_found_metric = Histogram(
+        "known_connections_found", "Number of already known hosts returned by last contact.",
+        namespace="dht_crawler_node", buckets=ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS
+    )
+    reachable_connections_found_metric = Histogram(
+        "reachable_connections_found", "Number of reachable known hosts returned by last contact.",
+        namespace="dht_crawler_node", buckets=ROUTING_TABLE_SIZE_HISTOGRAM_BUCKETS
     )
     LATENCY_HISTOGRAM_BUCKETS = (
         0., 5., 10., 15., 30., 60., 120., 180., 240., 300., 600., 1200., 1800., 4000., 6000., float('inf')
@@ -401,9 +409,17 @@ class Crawler:
         if peers:
             log.info("Done querying %s:%d in %.2f seconds: %d peers found over %d requests.",
                      host, port, (time.time() - start), len(peers), i)
-        self.add_peers(*peers)
         if peers:
-            self.connections_found_metric.set(len(peers))
+            self.connections_found_metric.observe(len(peers))
+            known_peers = 0
+            reachable_connections = 0
+            for peer in peers:
+                known_peer = self.get_from_peer(peer)
+                known_peers += 1 if known_peer else 0
+                reachable_connections += 1 if known_peer and (known_peer.latency or 0) > 0 else 0
+            self.known_connections_found_metric.observe(known_peers)
+            self.reachable_connections_found_metric.observe(reachable_connections)
+        self.add_peers(*peers)
         self.associate_peers(peer, peers)
         return peers
 
