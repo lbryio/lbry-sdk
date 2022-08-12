@@ -235,13 +235,9 @@ class TreeRoutingTable:
         return self.buckets[self._kbucket_index(contact_id)].get_peer(contact_id)
 
     def get_refresh_list(self, start_index: int = 0, force: bool = False) -> typing.List[bytes]:
-        bucket_index = start_index
         refresh_ids = []
-        now = int(self._loop.time())
-        for bucket in self.buckets[start_index:]:
-            to_search = self._midpoint_id_in_bucket_range(bucket_index)
-            refresh_ids.append(to_search)
-            bucket_index += 1
+        for offset, _ in enumerate(self.buckets[start_index:]):
+            refresh_ids.append(self._midpoint_id_in_bucket_range(start_index + offset))
         # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
         # populate/split the buckets further
         buckets_with_contacts = self.buckets_with_contacts()
