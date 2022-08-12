@@ -73,7 +73,7 @@ class PeerStorage(SQLiteMixin):
     async def all_peers(self):
         return [
             DHTPeer(**peer) for peer in await self.db.execute_fetchall(
-                "select * from peer where latency > 0 or last_seen < datetime('now', '-1h')")
+                "select * from peer where latency > 0 or last_seen > datetime('now', '-1 hour')")
         ]
 
     async def save_peers(self, *peers):
