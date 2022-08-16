@@ -28,11 +28,7 @@ from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
 from lbry.torrent.tracker import TrackerClient
-
-try:
-    from lbry.torrent.session import TorrentSession
-except ImportError:
-    TorrentSession = None
+from lbry.torrent.session import TorrentSession
 
 log = logging.getLogger(__name__)
 
