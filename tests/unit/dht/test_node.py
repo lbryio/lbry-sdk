@@ -13,7 +13,8 @@ from lbry.extras.daemon.storage import SQLiteStorage
 
 class TestBootstrapNode(AsyncioTestCase):
     TIMEOUT = 10.0  # do not increase. Hitting a timeout is a real failure
-    async def test_it_adds_all(self):
+
+    async def test_bootstrap_node_adds_all_peers(self):
         loop = asyncio.get_event_loop()
         loop.set_debug(False)
 
