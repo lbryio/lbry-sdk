@@ -28,7 +28,8 @@ class KBucket:
         namespace="dht_node", labelnames=("amount",)
     )
 
-    def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int, node_id: bytes):
+    def __init__(self, peer_manager: 'PeerManager', range_min: int, range_max: int,
+                 node_id: bytes, capacity: int = constants.K):
         """
         @param range_min: The lower boundary for the range in the n-bit ID
                          space covered by this k-bucket
@@ -36,12 +37,12 @@ class KBucket:
                          covered by this k-bucket
         """
         self._peer_manager = peer_manager
-        self.last_accessed = 0
         self.range_min = range_min
         self.range_max = range_max
         self.peers: typing.List['KademliaPeer'] = []
         self._node_id = node_id
         self._distance_to_self = Distance(node_id)
+        self.capacity = capacity
 
     def add_peer(self, peer: 'KademliaPeer') -> bool:
         """ Add contact to _contact list in the right order. This will move the
@@ -68,7 +69,7 @@ class KBucket:
                     self.peers.remove(local_peer)
                     self.peers.append(peer)
                     return True
-        if len(self.peers) < constants.K:
+        if len(self.peers) < self.capacity:
             self.peers.append(peer)
             self.peer_in_routing_table_metric.labels("global").inc()
             bits_colliding = utils.get_colliding_prefix_bits(peer.node_id, self._node_id)
@@ -76,13 +77,11 @@ class KBucket:
             return True
         else:
             return False
-            # raise BucketFull("No space in bucket to insert contact")
 
     def get_peer(self, node_id: bytes) -> 'KademliaPeer':
         for peer in self.peers:
             if peer.node_id == node_id:
                 return peer
-        raise IndexError(node_id)
 
     def get_peers(self, count=-1, exclude_contact=None, sort_distance_to=None) -> typing.List['KademliaPeer']:
         """ Returns a list containing up to the first count number of contacts
@@ -179,6 +178,13 @@ class TreeRoutingTable:
     version of the Kademlia paper, in section 2.4. It does, however, use the
     ping RPC-based k-bucket eviction algorithm described in section 2.2 of
     that paper.
+
+    BOOTSTRAP MODE: if set to True, we always add all peers. This is so a
+    bootstrap node does not get a bias towards its own node id and replies are
+    the best it can provide (joining peer knows its neighbors immediately).
+    Over time, this will need to be optimized so we use the disk as holding
+    everything in memory won't be feasible anymore.
+    See: https://github.com/bittorrent/bootstrap-dht
     """
     bucket_in_routing_table_metric = Gauge(
         "buckets_in_routing_table", "Number of buckets on routing table", namespace="dht_node",
@@ -186,21 +192,22 @@ class TreeRoutingTable:
     )
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', parent_node_id: bytes,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_bootstrap_node: bool = False):
         self._loop = loop
         self._peer_manager = peer_manager
         self._parent_node_id = parent_node_id
         self._split_buckets_under_index = split_buckets_under_index
         self.buckets: typing.List[KBucket] = [
             KBucket(
-                self._peer_manager, range_min=0, range_max=2 ** constants.HASH_BITS, node_id=self._parent_node_id
+                self._peer_manager, range_min=0, range_max=2 ** constants.HASH_BITS, node_id=self._parent_node_id,
+                capacity=1 << 32 if is_bootstrap_node else constants.K
             )
         ]
 
     def get_peers(self) -> typing.List['KademliaPeer']:
         return list(itertools.chain.from_iterable(map(lambda bucket: bucket.peers, self.buckets)))
 
-    def should_split(self, bucket_index: int, to_add: bytes) -> bool:
+    def _should_split(self, bucket_index: int, to_add: bytes) -> bool:
         #  https://stackoverflow.com/questions/32129978/highly-unbalanced-kademlia-routing-table/32187456#32187456
         if bucket_index < self._split_buckets_under_index:
             return True
@@ -225,39 +232,32 @@ class TreeRoutingTable:
         return []
 
     def get_peer(self, contact_id: bytes) -> 'KademliaPeer':
-        """
-        @raise IndexError: No contact with the specified contact ID is known
-                           by this node
-        """
-        return self.buckets[self.kbucket_index(contact_id)].get_peer(contact_id)
+        return self.buckets[self._kbucket_index(contact_id)].get_peer(contact_id)
 
     def get_refresh_list(self, start_index: int = 0, force: bool = False) -> typing.List[bytes]:
-        bucket_index = start_index
         refresh_ids = []
-        now = int(self._loop.time())
-        for bucket in self.buckets[start_index:]:
-            if force or now - bucket.last_accessed >= constants.REFRESH_INTERVAL:
-                to_search = self.midpoint_id_in_bucket_range(bucket_index)
-                refresh_ids.append(to_search)
-            bucket_index += 1
+        for offset, _ in enumerate(self.buckets[start_index:]):
+            refresh_ids.append(self._midpoint_id_in_bucket_range(start_index + offset))
+        # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
+        # populate/split the buckets further
+        buckets_with_contacts = self.buckets_with_contacts()
+        if buckets_with_contacts <= 3:
+            for i in range(buckets_with_contacts):
+                refresh_ids.append(self._random_id_in_bucket_range(i))
+                refresh_ids.append(self._random_id_in_bucket_range(i))
         return refresh_ids
 
     def remove_peer(self, peer: 'KademliaPeer') -> None:
         if not peer.node_id:
             return
-        bucket_index = self.kbucket_index(peer.node_id)
+        bucket_index = self._kbucket_index(peer.node_id)
         try:
             self.buckets[bucket_index].remove_peer(peer)
+            self._join_buckets()
         except ValueError:
             return
 
-    def touch_kbucket(self, key: bytes) -> None:
-        self.touch_kbucket_by_index(self.kbucket_index(key))
-
-    def touch_kbucket_by_index(self, bucket_index: int):
-        self.buckets[bucket_index].last_accessed = int(self._loop.time())
-
-    def kbucket_index(self, key: bytes) -> int:
+    def _kbucket_index(self, key: bytes) -> int:
         i = 0
         for bucket in self.buckets:
             if bucket.key_in_range(key):
@@ -266,19 +266,19 @@ class TreeRoutingTable:
                 i += 1
         return i
 
-    def random_id_in_bucket_range(self, bucket_index: int) -> bytes:
+    def _random_id_in_bucket_range(self, bucket_index: int) -> bytes:
         random_id = int(random.randrange(self.buckets[bucket_index].range_min, self.buckets[bucket_index].range_max))
         return Distance(
             self._parent_node_id
         )(random_id.to_bytes(constants.HASH_LENGTH, 'big')).to_bytes(constants.HASH_LENGTH, 'big')
 
-    def midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
+    def _midpoint_id_in_bucket_range(self, bucket_index: int) -> bytes:
         half = int((self.buckets[bucket_index].range_max - self.buckets[bucket_index].range_min) // 2)
         return Distance(self._parent_node_id)(
             int(self.buckets[bucket_index].range_min + half).to_bytes(constants.HASH_LENGTH, 'big')
         ).to_bytes(constants.HASH_LENGTH, 'big')
 
-    def split_bucket(self, old_bucket_index: int) -> None:
+    def _split_bucket(self, old_bucket_index: int) -> None:
         """ Splits the specified k-bucket into two new buckets which together
         cover the same range in the key/ID space
 
@@ -303,7 +303,7 @@ class TreeRoutingTable:
             old_bucket.remove_peer(contact)
         self.bucket_in_routing_table_metric.labels("global").set(len(self.buckets))
 
-    def join_buckets(self):
+    def _join_buckets(self):
         if len(self.buckets) == 1:
             return
         to_pop = [i for i, bucket in enumerate(self.buckets) if len(bucket) == 0]
@@ -326,14 +326,7 @@ class TreeRoutingTable:
             self.buckets[bucket_index_to_pop + 1].range_min = bucket.range_min
         self.buckets.remove(bucket)
         self.bucket_in_routing_table_metric.labels("global").set(len(self.buckets))
-        return self.join_buckets()
-
-    def contact_in_routing_table(self, address_tuple: typing.Tuple[str, int]) -> bool:
-        for bucket in self.buckets:
-            for contact in bucket.get_peers(sort_distance_to=False):
-                if address_tuple[0] == contact.address and address_tuple[1] == contact.udp_port:
-                    return True
-        return False
+        return self._join_buckets()
 
     def buckets_with_contacts(self) -> int:
         count = 0
@@ -341,3 +334,70 @@ class TreeRoutingTable:
             if len(bucket) > 0:
                 count += 1
         return count
+
+    async def add_peer(self, peer: 'KademliaPeer', probe: typing.Callable[['KademliaPeer'], typing.Awaitable]):
+        if not peer.node_id:
+            log.warning("Tried adding a peer with no node id!")
+            return False
+        for my_peer in self.get_peers():
+            if (my_peer.address, my_peer.udp_port) == (peer.address, peer.udp_port) and my_peer.node_id != peer.node_id:
+                self.remove_peer(my_peer)
+                self._join_buckets()
+        bucket_index = self._kbucket_index(peer.node_id)
+        if self.buckets[bucket_index].add_peer(peer):
+            return True
+
+        # The bucket is full; see if it can be split (by checking if its range includes the host node's node_id)
+        if self._should_split(bucket_index, peer.node_id):
+            self._split_bucket(bucket_index)
+            # Retry the insertion attempt
+            result = await self.add_peer(peer, probe)
+            self._join_buckets()
+            return result
+        else:
+            # We can't split the k-bucket
+            #
+            # The 13 page kademlia paper specifies that the least recently contacted node in the bucket
+            # shall be pinged. If it fails to reply it is replaced with the new contact. If the ping is successful
+            # the new contact is ignored and not added to the bucket (sections 2.2 and 2.4).
+            #
+            # A reasonable extension to this is BEP 0005, which extends the above:
+            #
+            #    Not all nodes that we learn about are equal. Some are "good" and some are not.
+            #    Many nodes using the DHT are able to send queries and receive responses,
+            #    but are not able to respond to queries from other nodes. It is important that
+            #    each node's routing table must contain only known good nodes. A good node is
+            #    a node has responded to one of our queries within the last 15 minutes. A node
+            #    is also good if it has ever responded to one of our queries and has sent us a
+            #    query within the last 15 minutes. After 15 minutes of inactivity, a node becomes
+            #    questionable. Nodes become bad when they fail to respond to multiple queries
+            #    in a row. Nodes that we know are good are given priority over nodes with unknown status.
+            #
+            # When there are bad or questionable nodes in the bucket, the least recent is selected for
+            # potential replacement (BEP 0005). When all nodes in the bucket are fresh, the head (least recent)
+            # contact is selected as described in section 2.2 of the kademlia paper. In both cases the new contact
+            # is ignored if the pinged node replies.
+
+            not_good_contacts = self.buckets[bucket_index].get_bad_or_unknown_peers()
+            not_recently_replied = []
+            for my_peer in not_good_contacts:
+                last_replied = self._peer_manager.get_last_replied(my_peer.address, my_peer.udp_port)
+                if not last_replied or last_replied + 60 < self._loop.time():
+                    not_recently_replied.append(my_peer)
+            if not_recently_replied:
+                to_replace = not_recently_replied[0]
+            else:
+                to_replace = self.buckets[bucket_index].peers[0]
+                last_replied = self._peer_manager.get_last_replied(to_replace.address, to_replace.udp_port)
+                if last_replied and last_replied + 60 > self._loop.time():
+                    return False
+            log.debug("pinging %s:%s", to_replace.address, to_replace.udp_port)
+            try:
+                await probe(to_replace)
+                return False
+            except asyncio.TimeoutError:
+                log.debug("Replacing dead contact in bucket %i: %s:%i with %s:%i ", bucket_index,
+                          to_replace.address, to_replace.udp_port, peer.address, peer.udp_port)
+                if to_replace in self.buckets[bucket_index]:
+                    self.buckets[bucket_index].remove_peer(to_replace)
+                return await self.add_peer(peer, probe)

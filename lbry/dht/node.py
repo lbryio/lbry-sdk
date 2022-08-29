@@ -30,12 +30,12 @@ class Node:
     )
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, udp_port: int,
                  internal_udp_port: int, peer_port: int, external_ip: str, rpc_timeout: float = constants.RPC_TIMEOUT,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX,
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_bootstrap_node: bool = False,
                  storage: typing.Optional['SQLiteStorage'] = None):
         self.loop = loop
         self.internal_udp_port = internal_udp_port
         self.protocol = KademliaProtocol(loop, peer_manager, node_id, external_ip, udp_port, peer_port, rpc_timeout,
-                                         split_buckets_under_index)
+                                         split_buckets_under_index, is_bootstrap_node)
         self.listening_port: asyncio.DatagramTransport = None
         self.joined = asyncio.Event(loop=self.loop)
         self._join_task: asyncio.Task = None
@@ -70,13 +70,6 @@ class Node:
 
             # get ids falling in the midpoint of each bucket that hasn't been recently updated
             node_ids = self.protocol.routing_table.get_refresh_list(0, True)
-            # if we have 3 or fewer populated buckets get two random ids in the range of each to try and
-            # populate/split the buckets further
-            buckets_with_contacts = self.protocol.routing_table.buckets_with_contacts()
-            if buckets_with_contacts <= 3:
-                for i in range(buckets_with_contacts):
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
-                    node_ids.append(self.protocol.routing_table.random_id_in_bucket_range(i))
 
             if self.protocol.routing_table.get_peers():
                 # if we have node ids to look up, perform the iterative search until we have k results
@@ -203,15 +196,13 @@ class Node:
 
     def get_iterative_node_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                   max_results: int = constants.K) -> IterativeNodeFinder:
-
-        return IterativeNodeFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                   key, max_results, None, shortlist)
+        shortlist = shortlist or self.protocol.routing_table.find_close_peers(key)
+        return IterativeNodeFinder(self.loop, self.protocol, key, max_results, shortlist)
 
     def get_iterative_value_finder(self, key: bytes, shortlist: typing.Optional[typing.List['KademliaPeer']] = None,
                                    max_results: int = -1) -> IterativeValueFinder:
-
-        return IterativeValueFinder(self.loop, self.protocol.peer_manager, self.protocol.routing_table, self.protocol,
-                                    key, max_results, None, shortlist)
+        shortlist = shortlist or self.protocol.routing_table.find_close_peers(key)
+        return IterativeValueFinder(self.loop, self.protocol, key, max_results, shortlist)
 
     async def peer_search(self, node_id: bytes, count=constants.K, max_results=constants.K * 2,
                           shortlist: typing.Optional[typing.List['KademliaPeer']] = None

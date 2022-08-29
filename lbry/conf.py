@@ -624,6 +624,10 @@ class Config(CLIConfig):
         "will increase. This setting is used by seed nodes, you probably don't want to change it during normal "
         "use.", 2
     )
+    is_bootstrap_node = Toggle(
+        "When running as a bootstrap node, disable all logic related to balancing the routing table, so we can "
+        "add as many peers as possible and better help first-runs.", False
+    )
 
     # protocol timeouts
     download_timeout = Float("Cumulative timeout for a stream to begin downloading before giving up", 30.0)

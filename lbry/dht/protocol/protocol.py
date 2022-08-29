@@ -218,6 +218,10 @@ class PingQueue:
     def running(self):
         return self._running
 
+    @property
+    def busy(self):
+        return self._running and (any(self._running_pings) or any(self._pending_contacts))
+
     def enqueue_maybe_ping(self, *peers: 'KademliaPeer', delay: typing.Optional[float] = None):
         delay = delay if delay is not None else self._default_delay
         now = self._loop.time()
@@ -229,7 +233,7 @@ class PingQueue:
         async def ping_task():
             try:
                 if self._protocol.peer_manager.peer_is_good(peer):
-                    if peer not in self._protocol.routing_table.get_peers():
+                    if not self._protocol.routing_table.get_peer(peer.node_id):
                         self._protocol.add_peer(peer)
                     return
                 await self._protocol.get_rpc_peer(peer).ping()
@@ -294,7 +298,7 @@ class KademliaProtocol(DatagramProtocol):
 
     def __init__(self, loop: asyncio.AbstractEventLoop, peer_manager: 'PeerManager', node_id: bytes, external_ip: str,
                  udp_port: int, peer_port: int, rpc_timeout: float = constants.RPC_TIMEOUT,
-                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX):
+                 split_buckets_under_index: int = constants.SPLIT_BUCKETS_UNDER_INDEX, is_boostrap_node: bool = False):
         self.peer_manager = peer_manager
         self.loop = loop
         self.node_id = node_id
@@ -309,7 +313,8 @@ class KademliaProtocol(DatagramProtocol):
         self.transport: DatagramTransport = None
         self.old_token_secret = constants.generate_id()
         self.token_secret = constants.generate_id()
-        self.routing_table = TreeRoutingTable(self.loop, self.peer_manager, self.node_id, split_buckets_under_index)
+        self.routing_table = TreeRoutingTable(
+            self.loop, self.peer_manager, self.node_id, split_buckets_under_index, is_bootstrap_node=is_boostrap_node)
         self.data_store = DictDataStore(self.loop, self.peer_manager)
         self.ping_queue = PingQueue(self.loop, self)
         self.node_rpc = KademliaRPC(self, self.loop, self.peer_port)
@@ -356,72 +361,10 @@ class KademliaProtocol(DatagramProtocol):
         return args, {}
 
     async def _add_peer(self, peer: 'KademliaPeer'):
-        if not peer.node_id:
-            log.warning("Tried adding a peer with no node id!")
-            return False
-        for my_peer in self.routing_table.get_peers():
-            if (my_peer.address, my_peer.udp_port) == (peer.address, peer.udp_port) and my_peer.node_id != peer.node_id:
-                self.routing_table.remove_peer(my_peer)
-                self.routing_table.join_buckets()
-        bucket_index = self.routing_table.kbucket_index(peer.node_id)
-        if self.routing_table.buckets[bucket_index].add_peer(peer):
-            return True
-
-        # The bucket is full; see if it can be split (by checking if its range includes the host node's node_id)
-        if self.routing_table.should_split(bucket_index, peer.node_id):
-            self.routing_table.split_bucket(bucket_index)
-            # Retry the insertion attempt
-            result = await self._add_peer(peer)
-            self.routing_table.join_buckets()
-            return result
-        else:
-            # We can't split the k-bucket
-            #
-            # The 13 page kademlia paper specifies that the least recently contacted node in the bucket
-            # shall be pinged. If it fails to reply it is replaced with the new contact. If the ping is successful
-            # the new contact is ignored and not added to the bucket (sections 2.2 and 2.4).
-            #
-            # A reasonable extension to this is BEP 0005, which extends the above:
-            #
-            #    Not all nodes that we learn about are equal. Some are "good" and some are not.
-            #    Many nodes using the DHT are able to send queries and receive responses,
-            #    but are not able to respond to queries from other nodes. It is important that
-            #    each node's routing table must contain only known good nodes. A good node is
-            #    a node has responded to one of our queries within the last 15 minutes. A node
-            #    is also good if it has ever responded to one of our queries and has sent us a
-            #    query within the last 15 minutes. After 15 minutes of inactivity, a node becomes
-            #    questionable. Nodes become bad when they fail to respond to multiple queries
-            #    in a row. Nodes that we know are good are given priority over nodes with unknown status.
-            #
-            # When there are bad or questionable nodes in the bucket, the least recent is selected for
-            # potential replacement (BEP 0005). When all nodes in the bucket are fresh, the head (least recent)
-            # contact is selected as described in section 2.2 of the kademlia paper. In both cases the new contact
-            # is ignored if the pinged node replies.
-
-            not_good_contacts = self.routing_table.buckets[bucket_index].get_bad_or_unknown_peers()
-            not_recently_replied = []
-            for my_peer in not_good_contacts:
-                last_replied = self.peer_manager.get_last_replied(my_peer.address, my_peer.udp_port)
-                if not last_replied or last_replied + 60 < self.loop.time():
-                    not_recently_replied.append(my_peer)
-            if not_recently_replied:
-                to_replace = not_recently_replied[0]
-            else:
-                to_replace = self.routing_table.buckets[bucket_index].peers[0]
-                last_replied = self.peer_manager.get_last_replied(to_replace.address, to_replace.udp_port)
-                if last_replied and last_replied + 60 > self.loop.time():
-                    return False
-            log.debug("pinging %s:%s", to_replace.address, to_replace.udp_port)
-            try:
-                to_replace_rpc = self.get_rpc_peer(to_replace)
-                await to_replace_rpc.ping()
-                return False
-            except asyncio.TimeoutError:
-                log.debug("Replacing dead contact in bucket %i: %s:%i with %s:%i ", bucket_index,
-                          to_replace.address, to_replace.udp_port, peer.address, peer.udp_port)
-                if to_replace in self.routing_table.buckets[bucket_index]:
-                    self.routing_table.buckets[bucket_index].remove_peer(to_replace)
-                return await self._add_peer(peer)
+        async def probe(some_peer: 'KademliaPeer'):
+            rpc_peer = self.get_rpc_peer(some_peer)
+            await rpc_peer.ping()
+        return await self.routing_table.add_peer(peer, probe)
 
     def add_peer(self, peer: 'KademliaPeer'):
         if peer.node_id == self.node_id:
@@ -439,7 +382,6 @@ class KademliaProtocol(DatagramProtocol):
                 async with self._split_lock:
                     peer = self._to_remove.pop()
                     self.routing_table.remove_peer(peer)
-                    self.routing_table.join_buckets()
             while self._to_add:
                 async with self._split_lock:
                     await self._add_peer(self._to_add.pop())
@@ -482,9 +424,8 @@ class KademliaProtocol(DatagramProtocol):
         # This is an RPC method request
         self.received_request_metric.labels(method=request_datagram.method).inc()
         self.peer_manager.report_last_requested(address[0], address[1])
-        try:
-            peer = self.routing_table.get_peer(request_datagram.node_id)
-        except IndexError:
+        peer = self.routing_table.get_peer(request_datagram.node_id)
+        if not peer:
             try:
                 peer = make_kademlia_peer(request_datagram.node_id, address[0], address[1])
             except ValueError as err:
