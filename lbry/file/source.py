@@ -99,9 +99,9 @@ class ManagedDownloadSource:
     def completed(self):
         raise NotImplementedError()
 
-    # @property
-    # def stream_url(self):
-    #     return f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}
+    @property
+    def stream_url(self):
+        return f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.identifier}"
 
     @property
     def finished(self) -> bool:

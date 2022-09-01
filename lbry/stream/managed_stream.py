@@ -104,10 +104,6 @@ class ManagedStream(ManagedDownloadSource):
     def completed(self):
         return self.written_bytes >= self.descriptor.lower_bound_decrypted_length()
 
-    @property
-    def stream_url(self):
-        return f"http://{self.config.streaming_host}:{self.config.streaming_port}/stream/{self.sd_hash}"
-
     async def update_status(self, status: str):
         assert status in [self.STATUS_RUNNING, self.STATUS_STOPPED, self.STATUS_FINISHED]
         self._status = status
