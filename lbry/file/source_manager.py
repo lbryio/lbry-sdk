@@ -23,6 +23,7 @@ COMPARISON_OPERATORS = {
 
 class SourceManager:
     filter_fields = {
+        'identifier',
         'rowid',
         'status',
         'file_name',

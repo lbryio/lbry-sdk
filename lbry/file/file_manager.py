@@ -290,8 +290,10 @@ class FileManager:
                     )
                 )
 
-    async def stream_partial_content(self, request: Request, sd_hash: str):
-        return await self.source_managers['stream'].stream_partial_content(request, sd_hash)
+    async def stream_partial_content(self, request: Request, identifier: str):
+        for source_manager in self.source_managers.values():
+            if source_manager.get_filtered(identifier=identifier):
+                return await source_manager.stream_partial_content(request, identifier)
 
     def get_filtered(self, *args, **kwargs) -> typing.List[ManagedDownloadSource]:
         """

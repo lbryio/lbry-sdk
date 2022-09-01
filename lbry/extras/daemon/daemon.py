@@ -639,7 +639,7 @@ class Daemon(metaclass=JSONRPCServerType):
         stream = await self.jsonrpc_get(uri)
         if isinstance(stream, dict):
             raise web.HTTPServerError(text=stream['error'])
-        raise web.HTTPFound(f"/stream/{stream.sd_hash}")
+        raise web.HTTPFound(f"/stream/{stream.identifier}")
 
     async def handle_stream_range_request(self, request: web.Request):
         try:
@@ -658,12 +658,13 @@ class Daemon(metaclass=JSONRPCServerType):
             log.debug("finished handling /stream range request")
 
     async def _handle_stream_range_request(self, request: web.Request):
-        sd_hash = request.path.split("/stream/")[1]
+        identifier = request.path.split("/stream/")[1]
         if not self.file_manager.started.is_set():
             await self.file_manager.started.wait()
-        if sd_hash not in self.file_manager.streams:
+        stream = self.file_manager.get_filtered(identifier=identifier)
+        if not stream:
             return web.HTTPNotFound()
-        return await self.file_manager.stream_partial_content(request, sd_hash)
+        return await self.file_manager.stream_partial_content(request, identifier)
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
