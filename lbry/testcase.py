@@ -308,9 +308,9 @@ class IntegrationTestCase(AsyncioTestCase):
             while True:
                 await self.conductor.spv_node.server.synchronized.wait()
                 self.conductor.spv_node.server.synchronized.clear()
-                if (self.conductor.spv_node.server.db.db_height < height):
+                if self.conductor.spv_node.server.db.db_height < height:
                     continue
-                if (self.conductor.spv_node.server._es_height < height):
+                if self.conductor.spv_node.server._es_height < height:
                     continue
                 break
 
@@ -334,9 +334,9 @@ class IntegrationTestCase(AsyncioTestCase):
         while True:
             await self.conductor.spv_node.server.synchronized.wait()
             self.conductor.spv_node.server.synchronized.clear()
-            if (self.conductor.spv_node.server.db.db_height < height):
+            if self.conductor.spv_node.server.db.db_height < height:
                 continue
-            if (self.conductor.spv_node.server._es_height < height):
+            if self.conductor.spv_node.server._es_height < height:
                 continue
             break
 
