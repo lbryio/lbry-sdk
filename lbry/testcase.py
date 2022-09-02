@@ -308,8 +308,11 @@ class IntegrationTestCase(AsyncioTestCase):
             while True:
                 await self.conductor.spv_node.server.synchronized.wait()
                 self.conductor.spv_node.server.synchronized.clear()
-                if self.conductor.spv_node.server.db.db_height >= height:
-                    break
+                if (self.conductor.spv_node.server.db.db_height < height):
+                    continue
+                if (self.conductor.spv_node.server._es_height < height):
+                    continue
+                break
 
     def on_address_update(self, address):
         return self.ledger.on_transaction.where(
@@ -331,8 +334,11 @@ class IntegrationTestCase(AsyncioTestCase):
         while True:
             await self.conductor.spv_node.server.synchronized.wait()
             self.conductor.spv_node.server.synchronized.clear()
-            if self.conductor.spv_node.server.db.db_height >= height:
-                break
+            if (self.conductor.spv_node.server.db.db_height < height):
+                continue
+            if (self.conductor.spv_node.server._es_height < height):
+                continue
+            break
 
 
 class FakeExchangeRateManager(ExchangeRateManager):
