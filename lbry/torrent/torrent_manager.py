@@ -94,7 +94,7 @@ class TorrentSource(ManagedDownloadSource):
     async def stream_file(self, request):
         log.info("stream torrent to browser for lbry://%s#%s (btih %s...)", self.claim_name, self.claim_id,
                  self.identifier[:6])
-        headers, size, start, end = self._prepare_range_response_headers(
+        headers, start, end = self._prepare_range_response_headers(
             request.headers.get('range', 'bytes=0-')
         )
         await self.start()
@@ -105,9 +105,13 @@ class TorrentSource(ManagedDownloadSource):
         await response.prepare(request)
         with open(self.full_path, 'rb') as infile:
             infile.seek(start)
-            await response.write_eof(infile.read(size))
+            async for read_size in self.torrent_session.stream_largest_file(self.identifier, start, end):
+                if start + read_size < end:
+                    await response.write(infile.read(read_size))
+                else:
+                    await response.write_eof(infile.read(end - infile.tell()))
 
-    def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int, int]:
+    def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int]:
         if '=' in get_range:
             get_range = get_range.split('=')[1]
         start, end = get_range.split('-')
@@ -126,7 +130,7 @@ class TorrentSource(ManagedDownloadSource):
             'Content-Length': str(final_size),
             'Content-Type': self.mime_type
         }
-        return headers, final_size, start, end
+        return headers, start, end
 
 
 class TorrentManager(SourceManager):

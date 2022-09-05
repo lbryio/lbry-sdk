@@ -5,7 +5,7 @@ import logging
 import random
 from hashlib import sha1
 from tempfile import mkdtemp
-from typing import Optional
+from typing import Optional, Tuple
 
 import libtorrent
 
@@ -31,8 +31,12 @@ class TorrentHandle:
         self.total_wanted_done = 0
         self.name = ''
         self.tasks = []
-        self.torrent_file: Optional[libtorrent.file_storage] = None
+        self._torrent_info: libtorrent.torrent_info = handle.torrent_file()
         self._base_path = None
+
+    @property
+    def torrent_file(self) -> Optional[libtorrent.file_storage]:
+        return self._torrent_info.files()
 
     @property
     def largest_file(self) -> Optional[str]:
@@ -58,6 +62,25 @@ class TorrentHandle:
         while self.tasks:
             self.tasks.pop().cancel()
 
+    def byte_range_to_piece_range(
+            self, file_index, start_offset, end_offset) -> Tuple[libtorrent.peer_request, libtorrent.peer_request]:
+        start_piece = self._torrent_info.map_file(file_index, start_offset, 0)
+        end_piece = self._torrent_info.map_file(file_index, end_offset, 0)
+        return start_piece, end_piece
+
+    async def stream_range_as_completed(self, file_index, start, end):
+        first_piece, final_piece = self.byte_range_to_piece_range(file_index, start, end)
+        start_piece_offset = final_piece.start
+        piece_size = self._torrent_info.piece_length()
+        log.info("Streaming torrent from piece %d to %d (bytes: %d -> %d): %s",
+                 first_piece.piece, final_piece.piece, start, end, self.name)
+        for piece_index in range(first_piece.piece, final_piece.piece + 1):
+            while not self._handle.have_piece(piece_index):
+                log.info("Waiting for piece %d: %s", piece_index, self.name)
+                await asyncio.sleep(0.2)
+            log.info("Streaming piece offset %d / %d for torrent %s", piece_index, final_piece.piece, self.name)
+            yield piece_size - start_piece_offset
+
     def _show_status(self):
         # fixme: cleanup
         if not self._handle.is_valid():
@@ -69,8 +92,8 @@ class TorrentHandle:
             self.name = status.name
             if not self.metadata_completed.is_set():
                 self.metadata_completed.set()
+                self._torrent_info = self._handle.torrent_file()
                 log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
-                self.torrent_file = self._handle.torrent_file().files()
                 self._base_path = status.save_path
             first_piece = self.torrent_file.piece_index_at_file(self.largest_file_index)
             if not self.started.is_set():
@@ -219,6 +242,10 @@ class TorrentSession:
 
     def is_completed(self, btih):
         return self._handles[btih].finished.is_set()
+
+    def stream_largest_file(self, btih, start, end):
+        handle = self._handles[btih]
+        return handle.stream_range_as_completed(handle.largest_file_index, start, end)
 
 
 def get_magnet_uri(btih):
