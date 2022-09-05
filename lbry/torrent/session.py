@@ -14,6 +14,8 @@ log = logging.getLogger(__name__)
 DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
         libtorrent.add_torrent_params_flags_t.flag_auto_managed
         | libtorrent.add_torrent_params_flags_t.flag_update_subscribe
+        | libtorrent.add_torrent_params_flags_t.flag_sequential_download
+        | libtorrent.add_torrent_params_flags_t.flag_paused
 )
 
 
@@ -31,7 +33,6 @@ class TorrentHandle:
         self.tasks = []
         self.torrent_file: Optional[libtorrent.file_storage] = None
         self._base_path = None
-        self._handle.set_sequential_download(1)
 
     @property
     def largest_file(self) -> Optional[str]:
