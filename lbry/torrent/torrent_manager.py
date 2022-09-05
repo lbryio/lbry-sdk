@@ -48,7 +48,7 @@ class TorrentSource(ManagedDownloadSource):
     @property
     def full_path(self) -> Optional[str]:
         full_path = self.torrent_session.full_path(self.identifier)
-        self.download_directory = os.path.dirname(full_path)
+        self.download_directory = self.torrent_session.save_path(self.identifier)
         return full_path
 
     @property
