@@ -1555,18 +1555,10 @@ class ResolveAfterReorg(BaseResolveTestCase):
         blocks = self.ledger.headers.height - start
         self.blockchain.block_expected = start - 1
 
-
-        prepare = self.ledger.on_header.where(self.blockchain.is_expected_block)
-        self.conductor.spv_node.server.synchronized.clear()
-
         # go back to start
         await self.blockchain.invalidate_block((await self.ledger.headers.hash(start)).decode())
         # go to previous + 1
-        await self.blockchain.generate(blocks + 2)
-
-        await prepare  # no guarantee that it didn't happen already, so start waiting from before calling generate
-        await self.conductor.spv_node.server.synchronized.wait()
-        # await asyncio.wait_for(self.on_header(self.blockchain.block_expected), 30.0)
+        await self.generate(blocks + 2)
 
     async def assertBlockHash(self, height):
         reader_db = self.conductor.spv_node.server.db
