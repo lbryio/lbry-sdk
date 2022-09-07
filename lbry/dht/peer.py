@@ -100,6 +100,9 @@ class PeerManager:
         self._node_id_reverse_mapping[node_id] = (address, udp_port)
         self.peer_manager_keys_metric.labels("global").set(self.count_cache_keys())
 
+    def get_node_id_for_endpoint(self, address, port):
+        return self._node_id_mapping.get((address, port))
+
     def prune(self):  # TODO: periodically call this
         now = self._loop.time()
         to_pop = []
@@ -150,9 +153,10 @@ class PeerManager:
     def peer_is_good(self, peer: 'KademliaPeer'):
         return self.contact_triple_is_good(peer.node_id, peer.address, peer.udp_port)
 
-    def decode_tcp_peer_from_compact_address(self, compact_address: bytes) -> 'KademliaPeer':  # pylint: disable=no-self-use
-        node_id, address, tcp_port = decode_compact_address(compact_address)
-        return make_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
+
+def decode_tcp_peer_from_compact_address(compact_address: bytes) -> 'KademliaPeer':  # pylint: disable=no-self-use
+    node_id, address, tcp_port = decode_compact_address(compact_address)
+    return make_kademlia_peer(node_id, address, udp_port=None, tcp_port=tcp_port)
 
 
 @dataclass(unsafe_hash=True)
