@@ -102,7 +102,7 @@ class ReconnectTests(IntegrationTestCase):
         await self.ledger.stop()
         initial_height = self.ledger.local_height_including_downloaded_height
         await self.blockchain.generate(100)
-        while self.conductor.spv_node.server.session_manager.notified_height < initial_height + 99:  # off by 1
+        while self.conductor.spv_node.server.session_manager.notified_height < initial_height + 100:
             await asyncio.sleep(0.1)
         self.assertEqual(initial_height, self.ledger.local_height_including_downloaded_height)
         await self.ledger.headers.open()
