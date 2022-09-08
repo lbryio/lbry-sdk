@@ -22,14 +22,14 @@ class ClaimStateValue(NamedTuple):
 class BaseResolveTestCase(CommandTestCase):
 
     def assertMatchESClaim(self, claim_from_es, claim_from_db):
-        self.assertEqual(claim_from_es['claim_hash'][::-1].hex(), claim_from_db.claim_hash.hex(), f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
-        self.assertEqual(claim_from_es['claim_id'], claim_from_db.claim_hash.hex(), f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
+        self.assertEqual(claim_from_es['claim_hash'][::-1].hex(), claim_from_db.claim_hash.hex())
+        self.assertEqual(claim_from_es['claim_id'], claim_from_db.claim_hash.hex())
         self.assertEqual(claim_from_es['activation_height'], claim_from_db.activation_height, f"es height: {claim_from_es['activation_height']}, rocksdb height: {claim_from_db.activation_height}")
-        self.assertEqual(claim_from_es['last_take_over_height'], claim_from_db.last_takeover_height, f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
-        self.assertEqual(claim_from_es['tx_id'], claim_from_db.tx_hash[::-1].hex(), f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
-        self.assertEqual(claim_from_es['tx_nout'], claim_from_db.position, f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
-        self.assertEqual(claim_from_es['amount'], claim_from_db.amount, f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
-        self.assertEqual(claim_from_es['effective_amount'], claim_from_db.effective_amount, f'ES: {str(claim_from_es)} DB: {str(claim_from_db)}')
+        self.assertEqual(claim_from_es['last_take_over_height'], claim_from_db.last_takeover_height)
+        self.assertEqual(claim_from_es['tx_id'], claim_from_db.tx_hash[::-1].hex())
+        self.assertEqual(claim_from_es['tx_nout'], claim_from_db.position)
+        self.assertEqual(claim_from_es['amount'], claim_from_db.amount)
+        self.assertEqual(claim_from_es['effective_amount'], claim_from_db.effective_amount)
 
     def assertMatchDBClaim(self, expected, claim):
         self.assertEqual(expected['claimid'], claim.claim_hash.hex())
@@ -1499,10 +1499,10 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.assertNameState(272, name, second_claim_id, last_takeover_height=272, non_winning_claims=[])
 
     async def test_trending(self):
-        async def get_claim(claim_id):
+        async def get_trending_score(claim_id):
             return (await self.conductor.spv_node.server.session_manager.search_index.search(
                 claim_id=claim_id
-            ))[0][0]
+            ))[0][0]['trending_score']
 
         claim_id1 = (await self.stream_create('derp', '1.0'))['outputs'][0]['claim_id']
         COIN = int(1E8)
@@ -1514,22 +1514,19 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         await self.generate(1)
         self.assertEqual(self.conductor.spv_node.writer.height, 208)
 
-        claim1 = await get_claim(claim_id1)
-        self.assertEqual(1.7090807854206793, claim1['trending_score'], str(claim1))
+        self.assertEqual(1.7090807854206793, await get_trending_score(claim_id1))
         self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
             (209, bytes.fromhex(claim_id1)), (10 * COIN, 100 * COIN)
         )
         await self.generate(1)
         self.assertEqual(self.conductor.spv_node.writer.height, 209)
-        claim1 = await get_claim(claim_id1)
-        self.assertEqual(2.2437974397778886, claim1['trending_score'], str(claim1))
+        self.assertEqual(2.2437974397778886, await get_trending_score(claim_id1))
         self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
             (309, bytes.fromhex(claim_id1)), (100 * COIN, 1000000 * COIN)
         )
         await self.generate(100)
         self.assertEqual(self.conductor.spv_node.writer.height, 309)
-        claim1 = await get_claim(claim_id1)
-        self.assertEqual(5.157053472135866, claim1['trending_score'], str(claim1))
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
 
         self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
             (409, bytes.fromhex(claim_id1)), (1000000 * COIN, 1 * COIN)
@@ -1537,14 +1534,12 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
 
         await self.generate(99)
         self.assertEqual(self.conductor.spv_node.writer.height, 408)
-        claim1 = await get_claim(claim_id1)
-        self.assertEqual(5.157053472135866, claim1['trending_score'], str(claim1))
+        self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
 
         await self.generate(1)
         self.assertEqual(self.conductor.spv_node.writer.height, 409)
 
-        claim1 = await get_claim(claim_id1)
-        self.assertEqual(-3.4256156592205627, claim1['trending_score'], str(claim1))
+        self.assertEqual(-3.4256156592205627, await get_trending_score(claim_id1))
         search_results = (await self.conductor.spv_node.server.session_manager.search_index.search(claim_name="derp"))[0]
         self.assertEqual(1, len(search_results))
         self.assertListEqual([claim_id1], [c['claim_id'] for c in search_results])
