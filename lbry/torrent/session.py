@@ -89,6 +89,7 @@ class TorrentHandle:
         if not self._handle.is_valid():
             return
         status = self._handle.status()
+        self._base_path = status.save_path
         if status.has_metadata:
             self.size = status.total_wanted
             self.total_wanted_done = status.total_wanted_done
@@ -99,7 +100,6 @@ class TorrentHandle:
                 log.info("Metadata completed for btih:%s - %s", status.info_hash, self.name)
                 # prioritize first 2mb
                 self.prioritize(self.largest_file_index, 0, 2 * 1024 * 1024)
-                self._base_path = status.save_path
             first_piece = self.torrent_file.piece_index_at_file(self.largest_file_index)
             if not self.started.is_set():
                 if self._handle.have_piece(first_piece):
@@ -117,7 +117,7 @@ class TorrentHandle:
         priorities = self._handle.get_piece_priorities()
         priorities = [0 if cleanup else 1 for _ in priorities]
         self._handle.clear_piece_deadlines()
-        for idx, piece_number in enumerate(range(first_piece.piece, last_piece.piece + 1)):
+        for idx, piece_number in enumerate(range(first_piece.piece, last_piece.piece)):
             priorities[piece_number] = 7 - idx if 0 <= idx <= 6 else 1
             self._handle.set_piece_deadline(piece_number, idx)
         log.debug("Prioritizing pieces for %s: %s", self.name, priorities)
