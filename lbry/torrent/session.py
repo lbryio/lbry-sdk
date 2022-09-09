@@ -3,7 +3,6 @@ import binascii
 import os
 import logging
 import random
-from hashlib import sha1
 from tempfile import mkdtemp
 from typing import Optional, Tuple
 
@@ -59,6 +58,7 @@ class TorrentHandle:
         return index
 
     def stop_tasks(self):
+        self._handle.save_resume_data()
         while self.tasks:
             self.tasks.pop().cancel()
 
@@ -152,13 +152,13 @@ class TorrentSession:
 
     async def add_fake_torrent(self):
         tmpdir = mkdtemp()
-        info, btih = _create_fake_torrent(tmpdir)
+        info = _create_fake_torrent(tmpdir)
         flags = libtorrent.add_torrent_params_flags_t.flag_seed_mode
         handle = self._session.add_torrent({
             'ti': info, 'save_path': tmpdir, 'flags': flags
         })
-        self._handles[btih] = TorrentHandle(self._loop, self._executor, handle)
-        return btih
+        self._handles[str(info.info_hash())] = TorrentHandle(self._loop, self._executor, handle)
+        return str(info.info_hash())
 
     async def bind(self, interface: str = '0.0.0.0', port: int = 10889):
         settings = {
@@ -172,14 +172,12 @@ class TorrentSession:
         self.tasks.append(self._loop.create_task(self.process_alerts()))
 
     def stop(self):
+        while self._handles:
+            self._handles.popitem()[1].stop_tasks()
         while self.tasks:
             self.tasks.pop().cancel()
         self._session.save_state()
         self._session.pause()
-        self._session.stop_dht()
-        self._session.stop_lsd()
-        self._session.stop_natpmp()
-        self._session.stop_upnp()
         self._session = None
 
     def _pop_alerts(self):
@@ -271,9 +269,7 @@ def _create_fake_torrent(tmpdir):
     file_storage.add_file('tmp', size)
     t = libtorrent.create_torrent(file_storage, 0, 4 * 1024 * 1024)
     libtorrent.set_piece_hashes(t, tmpdir)
-    info = libtorrent.torrent_info(t.generate())
-    btih = sha1(info.metadata()).hexdigest()
-    return info, btih
+    return libtorrent.torrent_info(t.generate())
 
 
 async def main():
