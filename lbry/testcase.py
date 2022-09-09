@@ -298,13 +298,15 @@ class IntegrationTestCase(AsyncioTestCase):
 
     async def generate_and_wait(self, blocks_to_generate, txids, ledger=None):
         if blocks_to_generate > 0:
-            watcher = (ledger or self.ledger).on_transaction.where(
+            watcher1 = (ledger or self.ledger).on_transaction.where(
                 lambda e: ((e.tx.id in txids and txids.remove(e.tx.id)), len(txids) <= 0)[-1]  # multi-statement lambda
             )
+            watcher2 = (ledger or self.ledger).on_header.where(self.blockchain.is_expected_block)
             self.conductor.spv_node.server.synchronized.clear()
             await self.blockchain.generate(blocks_to_generate)
             height = self.blockchain.block_expected
-            await watcher
+            await watcher1
+            await watcher2
             while True:
                 await self.conductor.spv_node.server.synchronized.wait()
                 self.conductor.spv_node.server.synchronized.clear()
