@@ -10,45 +10,11 @@ from typing import Optional
 import libtorrent
 
 
-NOTIFICATION_MASKS = [
-    "error",
-    "peer",
-    "port_mapping",
-    "storage",
-    "tracker",
-    "debug",
-    "status",
-    "progress",
-    "ip_block",
-    "dht",
-    "stats",
-    "session_log",
-    "torrent_log",
-    "peer_log",
-    "incoming_request",
-    "dht_log",
-    "dht_operation",
-    "port_mapping_log",
-    "picker_log",
-    "file_progress",
-    "piece_progress",
-    "upload",
-    "block_progress"
-]
 log = logging.getLogger(__name__)
-
-
 DEFAULT_FLAGS = (  # fixme: somehow the logic here is inverted?
         libtorrent.add_torrent_params_flags_t.flag_auto_managed
         | libtorrent.add_torrent_params_flags_t.flag_update_subscribe
 )
-
-
-def get_notification_type(notification) -> str:
-    for i, notification_type in enumerate(NOTIFICATION_MASKS):
-        if (1 << i) & notification:
-            return notification_type
-    raise ValueError("unrecognized notification type")
 
 
 class TorrentHandle:
@@ -156,10 +122,8 @@ class TorrentSession:
     async def bind(self, interface: str = '0.0.0.0', port: int = 10889):
         settings = {
             'listen_interfaces': f"{interface}:{port}",
-            'enable_outgoing_utp': True,
-            'enable_incoming_utp': True,
-            'enable_outgoing_tcp': False,
-            'enable_incoming_tcp': False
+            'enable_natpmp': False,
+            'enable_upnp': False
         }
         self._session = await self._loop.run_in_executor(
             self._executor, libtorrent.session, settings  # pylint: disable=c-extension-no-member

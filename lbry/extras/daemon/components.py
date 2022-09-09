@@ -28,11 +28,7 @@ from lbry.torrent.torrent_manager import TorrentManager
 from lbry.wallet import WalletManager
 from lbry.wallet.usage_payment import WalletServerPayer
 from lbry.torrent.tracker import TrackerClient
-
-try:
-    from lbry.torrent.session import TorrentSession
-except ImportError:
-    TorrentSession = None
+from lbry.torrent.session import TorrentSession
 
 log = logging.getLogger(__name__)
 
@@ -361,10 +357,6 @@ class FileManagerComponent(Component):
         wallet = self.component_manager.get_component(WALLET_COMPONENT)
         node = self.component_manager.get_component(DHT_COMPONENT) \
             if self.component_manager.has_component(DHT_COMPONENT) else None
-        try:
-            torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT) if TorrentSession else None
-        except NameError:
-            torrent = None
         log.info('Starting the file manager')
         loop = asyncio.get_event_loop()
         self.file_manager = FileManager(
@@ -373,7 +365,8 @@ class FileManagerComponent(Component):
         self.file_manager.source_managers['stream'] = StreamManager(
             loop, self.conf, blob_manager, wallet, storage, node,
         )
-        if TorrentSession and LIBTORRENT_COMPONENT not in self.conf.components_to_skip:
+        if self.component_manager.has_component(LIBTORRENT_COMPONENT):
+            torrent = self.component_manager.get_component(LIBTORRENT_COMPONENT)
             self.file_manager.source_managers['torrent'] = TorrentManager(
                 loop, self.conf, torrent, storage, self.component_manager.analytics_manager
             )
@@ -502,9 +495,8 @@ class TorrentComponent(Component):
         }
 
     async def start(self):
-        if TorrentSession:
-            self.torrent_session = TorrentSession(asyncio.get_event_loop(), None)
-            await self.torrent_session.bind()  # TODO: specify host/port
+        self.torrent_session = TorrentSession(asyncio.get_event_loop(), None)
+        await self.torrent_session.bind()  # TODO: specify host/port
 
     async def stop(self):
         if self.torrent_session:

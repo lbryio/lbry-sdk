@@ -18,11 +18,17 @@ class FileCommands(CommandTestCase):
         super().__init__(*a, **kw)
         self.skip_libtorrent = False
 
+    async def add_forever(self):
+        while True:
+            for handle in self.client_session._handles.values():
+                handle._handle.connect_peer(('127.0.0.1', 4040))
+            await asyncio.sleep(.1)
+
     async def initialize_torrent(self, tx_to_update=None):
         if not hasattr(self, 'seeder_session'):
             self.seeder_session = TorrentSession(self.loop, None)
             self.addCleanup(self.seeder_session.stop)
-            await self.seeder_session.bind(port=4040)
+            await self.seeder_session.bind('127.0.0.1', port=4040)
         btih = await self.seeder_session.add_fake_torrent()
         address = await self.account.receiving.get_or_create_usable_address()
         if not tx_to_update:
@@ -40,8 +46,9 @@ class FileCommands(CommandTestCase):
         await tx.sign([self.account])
         await self.broadcast_and_confirm(tx)
         self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
-        self.client_session._session.add_dht_node(('localhost', 4040))
         self.client_session.wait_start = False  # fixme: this is super slow on tests
+        task = asyncio.create_task(self.add_forever())
+        self.addCleanup(task.cancel)
         return tx, btih
 
     @skipIf(TorrentSession is None, "libtorrent not installed")
