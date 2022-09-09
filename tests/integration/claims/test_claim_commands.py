@@ -1597,7 +1597,7 @@ class StreamCommands(ClaimTestCase):
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
         self.assertEqual(error['name'], 'BLOCKED')
-        self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was censored"))
+        self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was blocked"))
         self.assertTrue(error['censor']['short_url'].startswith('lbry://@blocking#'))
 
         # a filtered/blocked channel impacts all content inside it
