@@ -22,6 +22,7 @@ class WalletCommands(CommandTestCase):
 
     async def test_wallet_syncing_status(self):
         address = await self.daemon.jsonrpc_address_unused()
+        await self.ledger._update_tasks.done.wait()
         self.assertFalse(self.daemon.jsonrpc_wallet_status()['is_syncing'])
         await self.send_to_address_and_wait(address, 1)
         await self.ledger._update_tasks.started.wait()
