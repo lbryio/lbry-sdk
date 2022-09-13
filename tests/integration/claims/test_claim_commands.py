@@ -1591,14 +1591,21 @@ class StreamCommands(ClaimTestCase):
         await self.daemon.wallet_manager.reset()
 
         self.assertEqual(0, len(self.conductor.spv_node.es_writer.db.blocked_streams))
-        await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking')
+        block1_claim_id = self.get_claim_id(
+            await self.stream_repost(bad_content_id, 'block1', '0.1', channel_name='@blocking',
+                                     description='a descriptive good reason')
+        )
         self.assertEqual(1, len(self.conductor.spv_node.es_writer.db.blocked_streams))
 
         # blocked content is not resolveable
         error = (await self.resolve('lbry://@some_channel/bad_content'))['error']
+        print((await self.resolve('lbry://@some_channel/bad_content'))['error']['text'])
         self.assertEqual(error['name'], 'BLOCKED')
-        self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was censored"))
+        self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was blocked by lbry://@blocking"))
+        self.assertTrue(error['text'].endswith(f"Reason given: a descriptive good reason"))
         self.assertTrue(error['censor']['short_url'].startswith('lbry://@blocking#'))
+
+        self.assertEqual((await self.resolve('lbry://@blocking/block1'))['error']['name'], 'BLOCKED')
 
         # a filtered/blocked channel impacts all content inside it
         bad_channel_id = self.get_claim_id(
@@ -1655,6 +1662,10 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
+
+        self.assertTrue('error' in await self.resolve('lbry://@some_channel/bad_content'))
+        await self.stream_abandon(block1_claim_id)
+        self.assertTrue('error' not in await self.resolve('lbry://@some_channel/bad_content'))
 
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')
