@@ -10,6 +10,7 @@ from collections import UserDict
 from hashlib import sha256
 from operator import attrgetter
 from lbry.crypto.crypt import better_aes_encrypt, better_aes_decrypt
+from lbry.error import InvalidPasswordError
 from .account import Account
 
 if typing.TYPE_CHECKING:
@@ -171,7 +172,12 @@ class Wallet:
     @classmethod
     def unpack(cls, password, encrypted):
         decrypted = better_aes_decrypt(password, encrypted)
-        decompressed = zlib.decompress(decrypted)
+        try:
+            decompressed = zlib.decompress(decrypted)
+        except zlib.error as e:
+            if "incorrect header check" in e.args[0].lower():
+                raise InvalidPasswordError()
+            raise
         return json.loads(decompressed)
 
     def merge(self, manager: 'WalletManager',
