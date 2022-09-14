@@ -57,7 +57,7 @@ setup(
             'jsonschema==4.4.0',
         ],
         'hub': [
-            'hub@git+https://github.com/lbryio/hub.git@75d53c3c6fe2916aa42ce583e9f9ea9347ab7a82'
+            'hub@git+https://github.com/lbryio/hub.git@024aceda53fe6d1ab8d519b73584437c25de6975'
         ]
     },
     classifiers=[
