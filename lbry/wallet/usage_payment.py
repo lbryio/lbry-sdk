@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import sys
+import traceback
 
 from lbry.error import (
     ServerPaymentFeeAboveMaxAllowedError,
@@ -27,6 +29,20 @@ class WalletServerPayer:
         self.on_payment.listen(None, on_error=lambda e: logging.warning(e.args[0]))
 
     async def pay(self):
+        while self.running:
+            try:
+                await self._pay()
+            except BaseException:
+                if self.running:
+                    traceback.print_exception(*sys.exc_info())
+                    log.warning("Caught exception: %s", sys.exc_info()[0].__name__)
+                else:
+                    log.warning("Caught exception: %s", sys.exc_info()[0].__name__)
+                raise
+                #if not self.running:
+                #    raise
+
+    async def _pay(self):
         while self.running:
             log.info("pay loop: before sleep")
             await asyncio.sleep(self.payment_period)
@@ -80,7 +96,16 @@ class WalletServerPayer:
         self.wallet = wallet
         self.running = True
         self.task = asyncio.ensure_future(self.pay())
-        self.task.add_done_callback(lambda _: log.info("Stopping wallet server payments."))
+        self.task.add_done_callback(self._done_callback)
+
+    def _done_callback(self, f):
+        if f.cancelled():
+            reason = "Cancelled"
+        elif not self.running:
+            reason = "Stopped"
+        else:
+            reason = f'Exception: {f.exception()}'
+        log.info("Stopping wallet server payments. %s", reason)
 
     async def stop(self):
         if self.running:
