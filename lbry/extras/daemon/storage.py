@@ -5,6 +5,7 @@ import typing
 import asyncio
 import binascii
 import time
+from operator import itemgetter
 from typing import Optional
 from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
@@ -635,6 +636,15 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:
         return self.db.run(get_all_lbry_files)
 
+    async def get_all_torrent_files(self) -> typing.List[typing.Dict]:
+        def _get_all_torrent_files(transaction):
+            cursor = transaction.execute("select * from file join torrent on file.bt_infohash=torrent.bt_infohash")
+            return [
+                {field: value for field, value in zip(list(map(itemgetter(0), cursor.description)), row)}
+                for row in cursor.fetchall()
+            ]
+        return await self.db.run(_get_all_torrent_files)
+
     def change_file_status(self, stream_hash: str, new_status: str):
         log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute_fetchall("update file set status=? where stream_hash=?", (new_status, stream_hash))
@@ -907,7 +917,7 @@ class SQLiteStorage(SQLiteMixin):
 
     async def get_content_claim_for_torrent(self, bt_infohash):
         claims = await self.db.run(get_claims_from_torrent_info_hashes, [bt_infohash])
-        return claims[bt_infohash].as_dict() if claims else None
+        return claims[bt_infohash] if claims else None
 
     # # # # # # # # # reflector functions # # # # # # # # #
 

@@ -66,6 +66,14 @@ class FileCommands(CommandTestCase):
         # claim now points to another torrent, update to it
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+
+        # restart and verify that only one updated stream was recovered
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+
         self.assertIn(new_btih, self.client_session._handles)
         self.assertNotIn(btih, self.client_session._handles)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)

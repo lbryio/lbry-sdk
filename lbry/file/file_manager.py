@@ -139,7 +139,7 @@ class FileManager:
                         existing[0].identifier, outpoint, existing[0].torrent_length, existing[0].torrent_name
                     )
                     claim_info = await self.storage.get_content_claim_for_torrent(existing[0].identifier)
-                    existing[0].set_claim(claim_info, claim)
+                    existing[0].set_claim(claim_info.as_dict() if claim_info else None, claim)
                 else:
                     await self.storage.save_content_claim(
                         existing[0].stream_hash, outpoint
@@ -242,7 +242,7 @@ class FileManager:
                     stream.identifier, outpoint, stream.torrent_length, stream.torrent_name
                 )
                 claim_info = await self.storage.get_content_claim_for_torrent(stream.identifier)
-                stream.set_claim(claim_info, claim)
+                stream.set_claim(claim_info.as_dict() if claim_info else None, claim)
             if save_file:
                 await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download))
             return stream

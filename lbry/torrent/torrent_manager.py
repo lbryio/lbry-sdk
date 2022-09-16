@@ -161,7 +161,7 @@ class TorrentManager(SourceManager):
     async def _load_stream(self, rowid: int, bt_infohash: str, file_name: Optional[str],
                            download_directory: Optional[str], status: str,
                            claim: Optional['StoredContentClaim'], content_fee: Optional['Transaction'],
-                           added_on: Optional[int]):
+                           added_on: Optional[int], **kwargs):
         stream = TorrentSource(
             self.loop, self.config, self.storage, identifier=bt_infohash, file_name=file_name,
             download_directory=download_directory, status=status, claim=claim, rowid=rowid,
@@ -171,7 +171,9 @@ class TorrentManager(SourceManager):
         self.add(stream)
 
     async def initialize_from_database(self):
-        pass
+        for file in await self.storage.get_all_torrent_files():
+            claim = await self.storage.get_content_claim_for_torrent(file['bt_infohash'])
+            await self._load_stream(None, claim=claim, **file)
 
     async def start(self):
         await super().start()
