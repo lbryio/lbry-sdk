@@ -83,7 +83,7 @@ class WalletServerPayer:
             )
 
             log.info("pay loop: before transaction broadcast")
-            await self.ledger.broadcast(tx)
+            await self.ledger.broadcast_or_release(tx, blocking=True)
             if self.analytics_manager:
                 await self.analytics_manager.send_credits_sent()
             log.info("pay loop: after transaction broadcast")
