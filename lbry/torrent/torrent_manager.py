@@ -3,6 +3,7 @@ import binascii
 import logging
 import os
 import typing
+from pathlib import Path
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 
@@ -57,6 +58,12 @@ class TorrentSource(ManagedDownloadSource):
 
     async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
         await self.torrent_session.add_torrent(self.identifier, self.download_directory)
+        self.download_directory = self.torrent_session.save_path(self.identifier)
+        self._file_name = Path(self.torrent_session.full_path(self.identifier)).name
+        await self.storage.add_torrent(self.identifier, self.torrent_length, self.torrent_name)
+        self.rowid = await self.storage.save_downloaded_file(
+            self.identifier, self.file_name, self.download_directory, 0.0, added_on=self._added_on
+        )
 
     async def stop(self, finished: bool = False):
         await self.torrent_session.remove_torrent(self.identifier)

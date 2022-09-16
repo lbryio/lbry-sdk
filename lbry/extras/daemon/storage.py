@@ -211,7 +211,7 @@ def delete_torrent(transaction: sqlite3.Connection, bt_infohash: str):
     transaction.execute("delete from torrent where bt_infohash=?", (bt_infohash,)).fetchall()
 
 
-def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
+def store_file(transaction: sqlite3.Connection, identifier_value: str, file_name: typing.Optional[str],
                download_directory: typing.Optional[str], data_payment_rate: float, status: str,
                content_fee: typing.Optional[Transaction], added_on: typing.Optional[int] = None) -> int:
     if not file_name and not download_directory:
@@ -219,15 +219,18 @@ def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typ
     else:
         encoded_file_name = binascii.hexlify(file_name.encode()).decode()
         encoded_download_dir = binascii.hexlify(download_directory.encode()).decode()
+    is_torrent = len(identifier_value) == 40
     time_added = added_on or int(time.time())
     transaction.execute(
-        "insert or replace into file values (?, NULL, ?, ?, ?, ?, ?, ?, ?)",
-        (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status,
+        f"insert or replace into file values ({'NULL, ?' if is_torrent else '?, NULL'}, ?, ?, ?, ?, ?, ?, ?)",
+        (identifier_value, encoded_file_name, encoded_download_dir, data_payment_rate, status,
          1 if (file_name and download_directory and os.path.isfile(os.path.join(download_directory, file_name))) else 0,
          None if not content_fee else binascii.hexlify(content_fee.raw).decode(), time_added)
     ).fetchall()
 
-    return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
+    return transaction.execute(
+        f"select rowid from file where {'bt_infohash' if is_torrent else 'stream_hash'}=?",
+        (identifier_value, )).fetchone()[0]
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -872,11 +875,17 @@ class SQLiteStorage(SQLiteMixin):
         if stream_hash in self.content_claim_callbacks:
             await self.content_claim_callbacks[stream_hash]()
 
+    def _save_torrent(self, transaction, bt_infohash, length, name):
+        transaction.execute(
+            "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
+        ).fetchall()
+
+    async def add_torrent(self, bt_infohash, length, name):
+        return await self.db.run(self._save_torrent, bt_infohash, length, name)
+
     async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
         def _save_torrent(transaction):
-            transaction.execute(
-                "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
-            ).fetchall()
+            self._save_torrent(transaction, bt_infohash, length, name)
             transaction.execute(
                 "insert or replace into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
             ).fetchall()
