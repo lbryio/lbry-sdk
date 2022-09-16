@@ -317,10 +317,4 @@ class WalletManager:
         )
 
     async def broadcast_or_release(self, tx, blocking=False):
-        try:
-            await self.ledger.broadcast(tx)
-        except:
-            await self.ledger.release_tx(tx)
-            raise
-        if blocking:
-            await self.ledger.wait(tx, timeout=None)
+        await self.ledger.broadcast_or_release(tx, blocking=blocking)
