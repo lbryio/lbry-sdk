@@ -3,7 +3,7 @@ import asyncio
 from hub.herald import HUB_PROTOCOL_VERSION
 from hub.herald.session import LBRYElectrumX
 
-from lbry.error import ServerPaymentFeeAboveMaxAllowedError
+from lbry.error import InsufficientFundsError, ServerPaymentFeeAboveMaxAllowedError
 from lbry.wallet.network import ClientSession
 from lbry.wallet.rpc import RPCError
 from lbry.testcase import IntegrationTestCase, CommandTestCase
@@ -48,7 +48,7 @@ class TestUsagePayment(CommandTestCase):
     async def test_single_server_payment(self):
         wallet_pay_service = self.daemon.component_manager.get_component('wallet_server_payments')
         self.assertFalse(wallet_pay_service.running)
-        wallet_pay_service.payment_period = 0.1
+        wallet_pay_service.payment_period = 0.5
         # only starts with a positive max key fee
         wallet_pay_service.max_fee = "0.0"
         await wallet_pay_service.start(ledger=self.ledger, wallet=self.wallet)
@@ -74,19 +74,24 @@ class TestUsagePayment(CommandTestCase):
         self.assertEqual(features["daily_fee"], "1.1")
         with self.assertRaises(ServerPaymentFeeAboveMaxAllowedError):
             await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=30)
-        node.server.env.daily_fee = "0.1"
+        node.server.env.daily_fee = "1.0"
         node.server.env.payment_address = address
         LBRYElectrumX.set_server_features(node.server.env)
         # self.daemon.jsonrpc_settings_set('lbryum_servers', [f"{node.hostname}:{node.port}"])
         await self.daemon.jsonrpc_wallet_reconnect()
         features = await self.ledger.network.get_server_features()
         self.assertEqual(features["payment_address"], address)
-        self.assertEqual(features["daily_fee"], "0.1")
+        self.assertEqual(features["daily_fee"], "1.0")
         tx = await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=30)
         self.assertIsNotNone(await self.blockchain.get_raw_transaction(tx.id))  # verify its broadcasted
-        self.assertEqual(tx.outputs[0].amount, 10000000)
+        self.assertEqual(tx.outputs[0].amount, 100000000)
         self.assertEqual(tx.outputs[0].get_address(self.ledger), address)
 
+        # continue paying until account is out of funds
+        with self.assertRaises(InsufficientFundsError):
+            for i in range(10):
+                await asyncio.wait_for(wallet_pay_service.on_payment.first, timeout=30)
+        self.assertTrue(wallet_pay_service.running)
 
 class TestESSync(CommandTestCase):
     async def test_es_sync_utility(self):
