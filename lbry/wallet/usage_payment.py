@@ -37,8 +37,10 @@ class WalletServerPayer:
                 delay = max(self.payment_period / 24, 10)
                 log.warning("Payement failed. Will retry after %g seconds.", delay)
                 asyncio.sleep(delay)
-            except Exception:
-                log.exception("Unexpected exception. Payment task exiting early.")
+            except BaseException as e:
+                if not isinstance(e, asyncio.CancelledError):
+                    log.exception("Unexpected exception. Payment task exiting early.")
+                self.running = False
                 raise
 
     async def _pay(self):
@@ -78,8 +80,8 @@ class WalletServerPayer:
                     self.wallet.get_accounts_or_all(None),
                     self.wallet.get_account_or_default(None)
                 )
-            except InsufficientFundsError as e:
-                self._on_payment_controller.add_error(e)
+            except InsufficientFundsError:
+                self._on_payment_controller.add_error(InsufficientFundsError())
                 continue
 
             await self.ledger.broadcast_or_release(tx, blocking=True)
