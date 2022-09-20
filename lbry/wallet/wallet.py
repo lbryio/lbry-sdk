@@ -177,6 +177,8 @@ class Wallet:
         except zlib.error as e:
             if "incorrect header check" in e.args[0].lower():
                 raise InvalidPasswordError()
+            if "unknown compression method" in e.args[0].lower():
+                raise InvalidPasswordError()
             raise
         return json.loads(decompressed)
 
