@@ -101,11 +101,13 @@ class WalletServerPayer:
     def _done_callback(self, f):
         if f.cancelled():
             reason = "Cancelled"
+        elif f.exception():
+            reason = f'Exception: {f.exception()}'
         elif not self.running:
             reason = "Stopped"
         else:
-            reason = f'Exception: {f.exception()}'
-        log.info("Stopping wallet server payments. %s", reason)
+            reason = ""
+        log.warning("Stopping wallet server payments. %s", reason)
 
     async def stop(self):
         if self.running:
