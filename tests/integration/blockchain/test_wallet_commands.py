@@ -1,6 +1,8 @@
 import asyncio
 import json
+import string
 from binascii import unhexlify
+from random import Random
 
 from lbry.wallet import ENCRYPT_ON_DISK
 from lbry.error import InvalidPasswordError
@@ -385,9 +387,16 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         data = await daemon2.jsonrpc_sync_apply('password2')
         # sync_apply doesn't save password if encrypt-on-disk is False
         self.assertEqual(wallet2.encryption_password, None)
-        # need to use new password2 in sync_apply
-        with self.assertRaises(InvalidPasswordError):
-            await daemon.jsonrpc_sync_apply('password', data=data['data'], blocking=True)
+
+        # Need to use new password2 in sync_apply. Attempts with other passwords
+        # should fail consistently with InvalidPasswordError.
+        random = Random('password')
+        for i in range(200):
+            bad_guess = ''.join(random.choices(string.digits + string.ascii_letters + string.punctuation, k=40))
+            self.assertNotEqual(bad_guess, 'password2')
+            with self.assertRaises(InvalidPasswordError):
+                await daemon.jsonrpc_sync_apply(bad_guess, data=data['data'], blocking=True)
+
         await daemon.jsonrpc_sync_apply('password2', data=data['data'], blocking=True)
         # sync_apply with new password2 also sets it as new local password
         self.assertEqual(wallet.encryption_password, 'password2')
