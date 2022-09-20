@@ -107,7 +107,7 @@ class WalletServerPayer:
             reason = "Stopped"
         else:
             reason = ""
-        log.warning("Stopping wallet server payments. %s", reason)
+        log.info("Stopping wallet server payments. %s", reason)
 
     async def stop(self):
         if self.running:
