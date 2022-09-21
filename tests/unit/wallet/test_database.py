@@ -470,7 +470,7 @@ class TestUpgrade(AsyncioTestCase):
 
 
 class TestSQLiteRace(AsyncioTestCase):
-    max_misuse_attempts = 80000
+    max_misuse_attempts = 120000
 
     def setup_db(self):
         self.db = sqlite3.connect(":memory:", isolation_level=None)
