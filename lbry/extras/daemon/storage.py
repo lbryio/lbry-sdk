@@ -639,11 +639,8 @@ class SQLiteStorage(SQLiteMixin):
     async def get_all_torrent_files(self) -> typing.List[typing.Dict]:
         def _get_all_torrent_files(transaction):
             cursor = transaction.execute("select * from file join torrent on file.bt_infohash=torrent.bt_infohash")
-            return [
-                {field: value for field, value in zip(list(map(itemgetter(0), cursor.description)), row)}
-                for row in cursor.fetchall()
-            ]
-        return await self.db.run(_get_all_torrent_files)
+            return map(lambda row: dict(zip(list(map(itemgetter(0), cursor.description)), row)), cursor.fetchall())
+        return list(await self.db.run(_get_all_torrent_files))
 
     def change_file_status(self, stream_hash: str, new_status: str):
         log.debug("update file status %s -> %s", stream_hash, new_status)
@@ -885,21 +882,20 @@ class SQLiteStorage(SQLiteMixin):
         if stream_hash in self.content_claim_callbacks:
             await self.content_claim_callbacks[stream_hash]()
 
-    def _save_torrent(self, transaction, bt_infohash, length, name):
-        transaction.execute(
-            "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
-        ).fetchall()
-
     async def add_torrent(self, bt_infohash, length, name):
-        return await self.db.run(self._save_torrent, bt_infohash, length, name)
+        def _save_torrent(transaction, bt_infohash, length, name):
+            transaction.execute(
+                "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
+            ).fetchall()
+        return await self.db.run(_save_torrent, bt_infohash, length, name)
 
     async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
-        def _save_torrent(transaction):
-            self._save_torrent(transaction, bt_infohash, length, name)
+        def _save_torrent_claim(transaction):
             transaction.execute(
                 "insert or replace into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
             ).fetchall()
-        await self.db.run(_save_torrent)
+        await self.add_torrent(bt_infohash, length, name)
+        await self.db.run(_save_torrent_claim)
         # update corresponding ManagedEncryptedFileDownloader object
         if bt_infohash in self.content_claim_callbacks:
             await self.content_claim_callbacks[bt_infohash]()
