@@ -26,7 +26,7 @@ class TorrentHandle:
         self.started = asyncio.Event(loop=loop)
         self.finished = asyncio.Event(loop=loop)
         self.metadata_completed = asyncio.Event(loop=loop)
-        self.size = 0
+        self.size = handle.status().total_wanted
         self.total_wanted_done = 0
         self.name = ''
         self.tasks = []
@@ -70,10 +70,10 @@ class TorrentHandle:
 
     async def stream_range_as_completed(self, file_index, start, end):
         first_piece, final_piece = self.byte_range_to_piece_range(file_index, start, end)
-        start_piece_offset = final_piece.start
+        start_piece_offset = first_piece.start
         piece_size = self._torrent_info.piece_length()
-        log.info("Streaming torrent from piece %d to %d (bytes: %d -> %d): %s",
-                 first_piece.piece, final_piece.piece, start, end, self.name)
+        log.info("Streaming torrent from piece %d to %d (bytes: %d -> %d, piece size: %d): %s",
+                 first_piece.piece, final_piece.piece, start, end, piece_size, self.name)
         self.prioritize(file_index, start, end)
         await self.resume()
         for piece_index in range(first_piece.piece, final_piece.piece + 1):

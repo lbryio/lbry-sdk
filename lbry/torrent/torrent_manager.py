@@ -113,10 +113,11 @@ class TorrentSource(ManagedDownloadSource):
         with open(self.full_path, 'rb') as infile:
             infile.seek(start)
             async for read_size in self.torrent_session.stream_largest_file(self.identifier, start, end):
-                if start + read_size < end:
+                if infile.tell() + read_size < end:
                     await response.write(infile.read(read_size))
                 else:
-                    await response.write_eof(infile.read(end - infile.tell()))
+                    await response.write_eof(infile.read(end - infile.tell() + 1))
+        return response
 
     def _prepare_range_response_headers(self, get_range: str) -> typing.Tuple[typing.Dict[str, str], int, int]:
         if '=' in get_range:

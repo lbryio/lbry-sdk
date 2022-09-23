@@ -4,11 +4,14 @@ import asyncio
 import os
 from binascii import hexlify
 
+import aiohttp.web
+
 from lbry.schema import Claim
 from lbry.stream.background_downloader import BackgroundDownloader
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
+from lbry.utils import aiohttp_request
 from lbry.wallet import Transaction
 from lbry.torrent.tracker import UDPTrackerServerProtocol
 
@@ -51,6 +54,23 @@ class FileCommands(CommandTestCase):
         self.addCleanup(task.cancel)
         return tx, btih
 
+    async def assert_torrent_streaming_works(self, btih):
+        url = f'http://{self.daemon.conf.streaming_host}:{self.daemon.conf.streaming_port}/get/torrent'
+        if self.daemon.streaming_runner.server is None:
+            await self.daemon.streaming_runner.setup()
+            site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
+                                       self.daemon.conf.streaming_port)
+            await site.start()
+        async with aiohttp_request('get', url) as req:
+            self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
+            content_range = req.headers.get('Content-Range')
+            content_length = int(req.headers.get('Content-Length'))
+            streamed_bytes = await req.content.read()
+        expected_size = self.seeder_session.get_size(btih)
+        self.assertEqual(expected_size, len(streamed_bytes))
+        self.assertEqual(content_length, len(streamed_bytes))
+        self.assertEqual(f"bytes 0-{expected_size - 1}/{expected_size}", content_range)
+
     @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
         tx, btih = await self.initialize_torrent()
@@ -61,6 +81,10 @@ class FileCommands(CommandTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
         self.assertIn(btih, self.client_session._handles)
+
+        # stream over streaming API (full range of the largest file)
+        await self.assert_torrent_streaming_works(btih)
+
         tx, new_btih = await self.initialize_torrent(tx)
         self.assertNotEqual(btih, new_btih)
         # claim now points to another torrent, update to it
