@@ -32,7 +32,7 @@ class FileCommands(CommandTestCase):
             self.seeder_session = TorrentSession(self.loop, None)
             self.addCleanup(self.seeder_session.stop)
             await self.seeder_session.bind('127.0.0.1', port=4040)
-        btih = await self.seeder_session.add_fake_torrent()
+        btih = await self.seeder_session.add_fake_torrent(file_count=3)
         address = await self.account.receiving.get_or_create_usable_address()
         if not tx_to_update:
             claim = Claim()
@@ -66,7 +66,7 @@ class FileCommands(CommandTestCase):
             content_range = req.headers.get('Content-Range')
             content_length = int(req.headers.get('Content-Length'))
             streamed_bytes = await req.content.read()
-        expected_size = self.seeder_session.get_size(btih)
+        expected_size = os.path.getsize(self.seeder_session.full_path(btih))
         self.assertEqual(expected_size, len(streamed_bytes))
         self.assertEqual(content_length, len(streamed_bytes))
         self.assertEqual(f"bytes 0-{expected_size - 1}/{expected_size}", content_range)

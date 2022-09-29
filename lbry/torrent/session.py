@@ -42,16 +42,20 @@ class TorrentHandle:
         if self.torrent_file is None:
             return None
         index = self.largest_file_index
-        return os.path.join(self._base_path, self.torrent_file.file_path(index))
+        return os.path.join(self.save_path, self.torrent_file.file_path(index))
 
     @property
     def save_path(self) -> Optional[str]:
+        if not self._base_path:
+            self._base_path = self._handle.status().save_path
         return self._base_path
 
     @property
     def largest_file_index(self):
         largest_size, index = 0, 0
         for file_num in range(self.torrent_file.num_files()):
+            if '.pad' in self.torrent_file.file_path(file_num):
+                continue  # ignore padding files
             if self.torrent_file.file_size(file_num) > largest_size:
                 largest_size = self.torrent_file.file_size(file_num)
                 index = file_num
@@ -150,9 +154,9 @@ class TorrentSession:
         self.tasks = []
         self.wait_start = True
 
-    async def add_fake_torrent(self):
+    async def add_fake_torrent(self, file_count=1):
         tmpdir = mkdtemp()
-        info = _create_fake_torrent(tmpdir)
+        info = _create_fake_torrent(tmpdir, file_count=file_count)
         flags = libtorrent.add_torrent_params_flags_t.flag_seed_mode
         handle = self._session.add_torrent({
             'ti': info, 'save_path': tmpdir, 'flags': flags
@@ -260,14 +264,17 @@ def get_magnet_uri(btih):
     return f"magnet:?xt=urn:btih:{btih}"
 
 
-def _create_fake_torrent(tmpdir):
-    # beware, that's just for testing
-    path = os.path.join(tmpdir, 'tmp')
-    with open(path, 'wb') as myfile:
-        size = myfile.write(bytes([random.randint(0, 255) for _ in range(40)]) * 1024)
+def _create_fake_torrent(tmpdir, file_count=1):
+    # layout: subdir/tmp{0..file_count-1} 40k files. v1+v2. automatic piece size.
     file_storage = libtorrent.file_storage()
-    file_storage.add_file('tmp', size)
-    t = libtorrent.create_torrent(file_storage, 0, 4 * 1024 * 1024)
+    subfolder = os.path.join(tmpdir, "subdir")
+    os.mkdir(subfolder)
+    for file_number in range(file_count):
+        file_name = f"tmp{file_number}"
+        with open(os.path.join(subfolder, file_name), 'wb') as myfile:
+            size = myfile.write(bytes([random.randint(0, 255) for _ in range(40)]) * 1024)
+        file_storage.add_file(os.path.join("subdir", file_name), size)
+    t = libtorrent.create_torrent(file_storage, 0, 0)
     libtorrent.set_piece_hashes(t, tmpdir)
     return libtorrent.torrent_info(t.generate())
 
