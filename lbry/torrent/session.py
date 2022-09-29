@@ -4,7 +4,7 @@ import os
 import logging
 import random
 from tempfile import mkdtemp
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict
 
 import libtorrent
 
@@ -154,7 +154,7 @@ class TorrentSession:
         self.tasks = []
         self.wait_start = True
 
-    async def add_fake_torrent(self, file_count=1):
+    async def add_fake_torrent(self, file_count=3):
         tmpdir = mkdtemp()
         info = _create_fake_torrent(tmpdir, file_count=file_count)
         flags = libtorrent.add_torrent_params_flags_t.flag_seed_mode
@@ -259,20 +259,30 @@ class TorrentSession:
         handle = self._handles[btih]
         return handle.stream_range_as_completed(handle.largest_file_index, start, end)
 
+    def get_files(self, btih) -> Dict:
+        handle = self._handles[btih]
+        return {
+            handle.torrent_file.file_path(file_num): handle.torrent_file.file_size(file_num)
+            for file_num in range(handle.torrent_file.num_files())
+            if '.pad' not in handle.torrent_file.file_path(file_num)
+        }
+
 
 def get_magnet_uri(btih):
     return f"magnet:?xt=urn:btih:{btih}"
 
 
-def _create_fake_torrent(tmpdir, file_count=1):
-    # layout: subdir/tmp{0..file_count-1} 40k files. v1+v2. automatic piece size.
+def _create_fake_torrent(tmpdir, file_count=3, largest_index=1):
+    # layout: subdir/tmp{0..file_count-1} files. v1+v2. automatic piece size.
+    # largest_index: which file index {0 ... file_count} will be the largest file
     file_storage = libtorrent.file_storage()
     subfolder = os.path.join(tmpdir, "subdir")
     os.mkdir(subfolder)
     for file_number in range(file_count):
         file_name = f"tmp{file_number}"
         with open(os.path.join(subfolder, file_name), 'wb') as myfile:
-            size = myfile.write(bytes([random.randint(0, 255) for _ in range(40)]) * 1024)
+            size = myfile.write(
+                bytes([random.randint(0, 255) for _ in range(10 - abs(file_number - largest_index))]) * 1024)
         file_storage.add_file(os.path.join("subdir", file_name), size)
     t = libtorrent.create_torrent(file_storage, 0, 0)
     libtorrent.set_piece_hashes(t, tmpdir)

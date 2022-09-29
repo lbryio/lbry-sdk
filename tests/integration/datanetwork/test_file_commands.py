@@ -71,6 +71,8 @@ class FileCommands(CommandTestCase):
         self.assertEqual(content_length, len(streamed_bytes))
         self.assertEqual(f"bytes 0-{expected_size - 1}/{expected_size}", content_range)
 
+        self.assertEqual(len(streamed_bytes), max(self.seeder_session.get_files(btih).values()))
+
     @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
         tx, btih = await self.initialize_torrent()
