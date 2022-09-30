@@ -170,6 +170,7 @@ class TorrentManager(SourceManager):
             torrent_session=self.torrent_session
         )
         self.add(stream)
+        await stream.start()
 
     async def initialize_from_database(self):
         for file in await self.storage.get_all_torrent_files():
