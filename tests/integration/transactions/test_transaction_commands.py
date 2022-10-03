@@ -2,7 +2,7 @@ import asyncio
 import unittest
 
 from lbry.testcase import CommandTestCase
-
+from lbry.wallet import Transaction
 
 class TransactionCommandsTestCase(CommandTestCase):
 
@@ -29,17 +29,42 @@ class TransactionCommandsTestCase(CommandTestCase):
         # someone's tx
         change_address = await self.blockchain.get_raw_change_address()
         sendtxid = await self.blockchain.send_to_address(change_address, 10)
-        await asyncio.sleep(0.2)
-        tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
-        self.assertEqual(tx.id, sendtxid)
-        self.assertEqual(tx.height, -1)
+        # After a few tries, Hub should have the transaction (in mempool).
+        for i in range(5):
+            tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
+            # Retry if Hub is not aware of the transaction.
+            if isinstance(tx, dict):
+                # Fields: 'success', 'code', 'message'
+                self.assertFalse(tx['success'], tx)
+                self.assertEqual(tx['code'], 404, tx)
+                self.assertEqual(tx['message'], "transaction not found", tx)
+                await asyncio.sleep(0.1)
+                continue
+            break
+        # verify transaction show (in mempool)
+        self.assertTrue(isinstance(tx, Transaction), str(tx))
+        # Fields: 'txid', 'raw', 'height', 'position', 'is_verified', and more.
+        self.assertEqual(tx.id, sendtxid, vars(tx))
+        self.assertEqual(tx.height, -1, vars(tx))
+        self.assertEqual(tx.is_verified, False, vars(tx))
+
+        # transaction is confirmed and leaves mempool
         await self.generate(1)
+
+        # verify transaction show
         tx = await self.daemon.jsonrpc_transaction_show(sendtxid)
-        self.assertEqual(tx.height, self.ledger.headers.height)
+        self.assertTrue(isinstance(tx, Transaction), str(tx))
+        self.assertEqual(tx.id, sendtxid, vars(tx))
+        self.assertEqual(tx.height, self.ledger.headers.height, vars(tx))
+        self.assertEqual(tx.is_verified, True, vars(tx))
 
         # inexistent
         result = await self.daemon.jsonrpc_transaction_show('0'*64)
-        self.assertFalse(result['success'])
+        self.assertTrue(isinstance(result, dict), result)
+        # Fields: 'success', 'code', 'message'
+        self.assertFalse(result['success'], result)
+        self.assertEqual(result['code'], 404, result)
+        self.assertEqual(result['message'], "transaction not found", result)
 
     async def test_utxo_release(self):
         await self.send_to_address_and_wait(
