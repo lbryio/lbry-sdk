@@ -163,15 +163,19 @@ class Wallet:
             h.update(account.hash)
         return h.digest()
 
-    def pack(self, password):
+    def pack(self, password=None):
         assert not self.is_locked, "Cannot pack a wallet with locked/encrypted accounts."
         new_data = json.dumps(self.to_dict())
+        if password is None:
+            return new_data.encode()
         new_data_compressed = zlib.compress(new_data.encode())
         return better_aes_encrypt(password, new_data_compressed)
 
     @classmethod
-    def unpack(cls, password, encrypted):
-        decrypted = better_aes_decrypt(password, encrypted)
+    def unpack(cls, password, data):
+        if password is None:
+            return json.loads(data)
+        decrypted = better_aes_decrypt(password, data)
         try:
             decompressed = zlib.decompress(decrypted)
         except zlib.error as e:

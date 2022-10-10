@@ -1345,8 +1345,10 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) data
 
         """
-        assert password is not None, "passwordless use is not implemented yet"
+        # assert password is not None, "passwordless use is not implemented yet"
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
+        if (password is None):
+            return wallet.pack()
         encrypted = wallet.pack(password)
         return encrypted.decode()
 
@@ -1370,7 +1372,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) data
         """
-        assert not data.strip().startswith("{"), "unencrypted wallet import is not implemented yet"
+        # assert not data.strip().startswith("{"), "unencrypted wallet import is not implemented yet"
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
         for new_account in itertools.chain(added_accounts, merged_accounts):

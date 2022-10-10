@@ -491,3 +491,21 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
             daemon2.wallet_manager.default_account.channel_keys,
             daemon.wallet_manager.default_wallet.accounts[1].channel_keys
         )
+
+        # test without passwords
+        daemon2.jsonrpc_preference_set("three", "3")
+        jsondata = await daemon2.jsonrpc_wallet_export()
+        await daemon.jsonrpc_wallet_import(data=jsondata, blocking=True)
+        self.assertDictEqual(
+                    # "two" key added and "conflict" value changed to "2"
+                    daemon.jsonrpc_preference_get(),
+                    {
+                        "one": "1",
+                        "two": "2",
+                        "three": "3",
+                        "conflict": "2",
+                        "another": "B",
+                        "fruit": ["peach", "apricot"]
+                    }
+                )
+
