@@ -1345,7 +1345,6 @@ class Daemon(metaclass=JSONRPCServerType):
             (str) data
 
         """
-        # assert password is not None, "passwordless use is not implemented yet"
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         if (password is None):
             return wallet.pack()
@@ -1355,9 +1354,9 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires("wallet")
     async def jsonrpc_wallet_import(self, data, password=None, wallet_id=None, blocking=False):
         """
-        Import wallet data and merge accounts, preferences.
+        Import wallet data and merge accounts and preferences. 
 
-        Wallet must be unlocked to perform this operation.
+        Wallet must be unlocked to perform this operation. Data is expected to be JSON if password is not supplied.
 
         Usage:
             wallet_import (<data> | --data=<data>) [<password> | --password=<password>]
@@ -1372,7 +1371,7 @@ class Daemon(metaclass=JSONRPCServerType):
         Returns:
             (str) data
         """
-        # assert not data.strip().startswith("{"), "unencrypted wallet import is not implemented yet"
+
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
         for new_account in itertools.chain(added_accounts, merged_accounts):
