@@ -1332,7 +1332,7 @@ class Daemon(metaclass=JSONRPCServerType):
         """
         Export wallet data
 
-        Wallet must be unlocked to perform this operation.
+        Wallet must be unlocked to perform this operation. Exports JSON if password is not supplied.
 
         Usage:
             wallet_export [--password=<password>] [--wallet_id=<wallet_id>]
@@ -1342,7 +1342,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>       : (str) wallet being exported
 
         Returns:
-            (str) data
+            (str) data: Either base64-encoded encrypted wallet, or cleartext JSON
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
@@ -1354,7 +1354,7 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires("wallet")
     async def jsonrpc_wallet_import(self, data, password=None, wallet_id=None, blocking=False):
         """
-        Import wallet data and merge accounts and preferences. 
+        Import wallet data and merge accounts and preferences.
 
         Wallet must be unlocked to perform this operation. Data is expected to be JSON if password is not supplied.
 
@@ -1369,7 +1369,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --blocking                    : (bool) wait until any new accounts have merged
 
         Returns:
-            (str) data
+            (str) Either base64-encoded encrypted wallet, or cleartext JSON
         """
 
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
