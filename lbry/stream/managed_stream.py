@@ -86,11 +86,15 @@ class ManagedStream(ManagedDownloadSource):
 
     @property
     def suggested_file_name(self) -> Optional[str]:
-        if self.descriptor and self.descriptor.suggested_file_name and self.descriptor.suggested_file_name.strip():
-            return self.descriptor.suggested_file_name
-        elif self.stream_claim_info and self.stream_claim_info.claim:
-            return sanitize_file_name(self.stream_claim_info.claim.stream.source.name)
-        return "lbry_download"  # default replacement for invalid name. Ideally we should never get here
+        first_option = ((self.descriptor and self.descriptor.suggested_file_name) or '').strip()
+        return sanitize_file_name(first_option or (self.stream_claim_info and self.stream_claim_info.claim and
+                                                   self.stream_claim_info.claim.stream.source.name))
+
+    @property
+    def stream_name(self) -> Optional[str]:
+        first_option = ((self.descriptor and self.descriptor.stream_name) or '').strip()
+        return first_option or (self.stream_claim_info and self.stream_claim_info.claim and
+                                self.stream_claim_info.claim.stream.source.name)
 
     @property
     def written_bytes(self) -> int:
