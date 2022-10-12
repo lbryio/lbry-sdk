@@ -328,7 +328,7 @@ class JSONResponseEncoder(JSONEncoder):
             result.update({
                 'streaming_url': managed_stream.stream_url,
                 'stream_hash': managed_stream.stream_hash,
-                'stream_name': managed_stream.descriptor.stream_name,
+                'stream_name': managed_stream.stream_name,
                 'suggested_file_name': managed_stream.suggested_file_name,
                 'sd_hash': managed_stream.descriptor.sd_hash,
                 'mime_type': managed_stream.mime_type,
