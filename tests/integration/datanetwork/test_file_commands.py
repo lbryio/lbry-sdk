@@ -369,12 +369,12 @@ class FileCommands(CommandTestCase):
         await self.server.blob_manager.delete_blobs(all_except_sd)
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
-        self.assertEqual('Failed to download data blobs for sd hash %s within timeout.' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download data blobs for %s within timeout.' % sd_hash, resp['error'])
         self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didn't create a file")
         await self.server.blob_manager.delete_blobs([sd_hash])
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
-        self.assertEqual('Failed to download sd blob %s within timeout.' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download metadata for %s within timeout.' % sd_hash, resp['error'])
 
     async def wait_files_to_complete(self):
         while await self.file_list(status='running'):

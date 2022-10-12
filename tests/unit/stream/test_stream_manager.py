@@ -229,7 +229,7 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertEqual(event['properties']['connection_failures_count'],  1)
             self.assertEqual(
-                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout.'
+                event['properties']['error_message'], f'Failed to download metadata for {self.sd_hash} within timeout.'
             )
 
         await self._test_time_to_first_bytes(check_post, DownloadMetadataTimeoutError, after_setup=after_setup)
@@ -273,7 +273,7 @@ class TestStreamManager(BlobExchangeTestBase):
             self.assertFalse(event['properties']['added_fixed_peers'])
             self.assertIsNone(event['properties']['fixed_peer_delay'])
             self.assertEqual(
-                event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout.'
+                event['properties']['error_message'], f'Failed to download metadata for {self.sd_hash} within timeout.'
             )
 
         start = self.loop.time()
@@ -387,7 +387,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.server.stop_server()
         await self.setup_stream_manager()
         await self._test_download_error_analytics_on_start(
-            DownloadMetadataTimeoutError, f'Failed to download sd blob {self.sd_hash} within timeout.', timeout=1
+            DownloadMetadataTimeoutError, f'Failed to download metadata for {self.sd_hash} within timeout.', timeout=1
         )
 
     async def test_download_data_timeout(self):
@@ -396,7 +396,7 @@ class TestStreamManager(BlobExchangeTestBase):
             head_blob_hash = json.loads(sdf.read())['blobs'][0]['blob_hash']
         self.server_blob_manager.delete_blob(head_blob_hash)
         await self._test_download_error_analytics_on_start(
-            DownloadDataTimeoutError, f'Failed to download data blobs for sd hash {self.sd_hash} within timeout.', timeout=1
+            DownloadDataTimeoutError, f'Failed to download data blobs for {self.sd_hash} within timeout.', timeout=1
         )
 
     async def test_unexpected_error(self):
