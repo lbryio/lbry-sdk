@@ -11,7 +11,7 @@ from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
 from lbry.testcase import get_fake_exchange_rate_manager
 from lbry.utils import generate_id
 from lbry.error import InsufficientFundsError
-from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadSDTimeoutError, DownloadDataTimeoutError
+from lbry.error import KeyFeeAboveMaxAllowedError, ResolveError, DownloadMetadataTimeoutError, DownloadDataTimeoutError
 from lbry.wallet import WalletManager, Wallet, Ledger, Transaction, Input, Output, Database
 from lbry.wallet.constants import CENT, NULL_HASH32
 from lbry.wallet.network import ClientSession
@@ -232,7 +232,7 @@ class TestStreamManager(BlobExchangeTestBase):
                 event['properties']['error_message'], f'Failed to download sd blob {self.sd_hash} within timeout.'
             )
 
-        await self._test_time_to_first_bytes(check_post, DownloadSDTimeoutError, after_setup=after_setup)
+        await self._test_time_to_first_bytes(check_post, DownloadMetadataTimeoutError, after_setup=after_setup)
 
     async def test_override_fixed_peer_delay_dht_disabled(self):
         self.client_config.fixed_peers = [(self.server_from_client.address, self.server_from_client.tcp_port)]
@@ -266,7 +266,7 @@ class TestStreamManager(BlobExchangeTestBase):
 
         def check_post(event):
             self.assertEqual(event['event'], 'Time To First Bytes')
-            self.assertEqual(event['properties']['error'], 'DownloadSDTimeoutError')
+            self.assertEqual(event['properties']['error'], 'DownloadMetadataTimeoutError')
             self.assertEqual(event['properties']['tried_peers_count'], 0)
             self.assertEqual(event['properties']['active_peer_count'], 0)
             self.assertFalse(event['properties']['use_fixed_peers'])
@@ -277,7 +277,7 @@ class TestStreamManager(BlobExchangeTestBase):
             )
 
         start = self.loop.time()
-        await self._test_time_to_first_bytes(check_post, DownloadSDTimeoutError)
+        await self._test_time_to_first_bytes(check_post, DownloadMetadataTimeoutError)
         duration = self.loop.time() - start
         self.assertLessEqual(duration, 5)
         self.assertGreaterEqual(duration, 3.0)
@@ -387,7 +387,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.server.stop_server()
         await self.setup_stream_manager()
         await self._test_download_error_analytics_on_start(
-            DownloadSDTimeoutError, f'Failed to download sd blob {self.sd_hash} within timeout.', timeout=1
+            DownloadMetadataTimeoutError, f'Failed to download sd blob {self.sd_hash} within timeout.', timeout=1
         )
 
     async def test_download_data_timeout(self):

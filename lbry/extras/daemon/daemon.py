@@ -36,7 +36,7 @@ from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
-    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
+    DownloadMetadataTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
     ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError,
     InputValueError
@@ -1140,7 +1140,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 save_file=save_file, wallet=wallet
             )
             if not stream:
-                raise DownloadSDTimeoutError(uri)
+                raise DownloadMetadataTimeoutError(uri)
         except Exception as e:
             # TODO: use error from lbry.error
             log.warning("Error downloading %s: %s", uri, str(e))

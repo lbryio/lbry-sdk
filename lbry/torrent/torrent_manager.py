@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 
+from lbry.error import DownloadMetadataTimeoutError
 from lbry.file.source_manager import SourceManager
 from lbry.file.source import ManagedDownloadSource
 from lbry.schema.mime_types import guess_media_type
@@ -57,7 +58,12 @@ class TorrentSource(ManagedDownloadSource):
         return guess_media_type(os.path.basename(self.full_path))[0]
 
     async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
-        await self.torrent_session.add_torrent(self.identifier, self.download_directory)
+        try:
+            metadata_download = self.torrent_session.add_torrent(self.identifier, self.download_directory)
+            await asyncio.wait_for(metadata_download, timeout, loop=self.loop)
+        except asyncio.TimeoutError:
+            self.torrent_session.remove_torrent(btih=self.identifier)
+            raise DownloadMetadataTimeoutError(self.identifier)
         self.download_directory = self.torrent_session.save_path(self.identifier)
         self._file_name = Path(self.torrent_session.full_path(self.identifier)).name
         await self.storage.add_torrent(self.identifier, self.torrent_length, self.torrent_name)

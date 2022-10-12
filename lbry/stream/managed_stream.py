@@ -5,7 +5,7 @@ import typing
 import logging
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
-from lbry.error import DownloadSDTimeoutError
+from lbry.error import DownloadMetadataTimeoutError
 from lbry.schema.mime_types import guess_media_type
 from lbry.stream.downloader import StreamDownloader
 from lbry.stream.descriptor import StreamDescriptor, sanitize_file_name
@@ -160,7 +160,7 @@ class ManagedStream(ManagedDownloadSource):
             await asyncio.wait_for(self.downloader.start(), timeout)
         except asyncio.TimeoutError:
             self._running.clear()
-            raise DownloadSDTimeoutError(self.sd_hash)
+            raise DownloadMetadataTimeoutError(self.identifier)
 
         if self.delayed_stop_task and not self.delayed_stop_task.done():
             self.delayed_stop_task.cancel()

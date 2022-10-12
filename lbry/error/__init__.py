@@ -411,18 +411,18 @@ class DownloadCancelledError(BlobError):
         super().__init__("Download was canceled.")
 
 
-class DownloadSDTimeoutError(BlobError):
+class DownloadMetadataTimeoutError(BlobError):
 
     def __init__(self, download):
         self.download = download
-        super().__init__(f"Failed to download sd blob {download} within timeout.")
+        super().__init__(f"Failed to download metadata for {download} within timeout.")
 
 
 class DownloadDataTimeoutError(BlobError):
 
     def __init__(self, download):
         self.download = download
-        super().__init__(f"Failed to download data blobs for sd hash {download} within timeout.")
+        super().__init__(f"Failed to download data blobs for {download} within timeout.")
 
 
 class InvalidStreamDescriptorError(BlobError):

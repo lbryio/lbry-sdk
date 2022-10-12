@@ -3,7 +3,7 @@ import logging
 import typing
 from typing import Optional
 from aiohttp.web import Request
-from lbry.error import ResolveError, DownloadSDTimeoutError, InsufficientFundsError
+from lbry.error import ResolveError, DownloadMetadataTimeoutError, InsufficientFundsError
 from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
 from lbry.error import InvalidStreamURLError
 from lbry.stream.managed_stream import ManagedStream
@@ -247,10 +247,10 @@ class FileManager:
                 await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download))
             return stream
         except asyncio.TimeoutError:
-            error = DownloadDataTimeoutError(stream.sd_hash)
+            error = DownloadDataTimeoutError(stream.identifier)
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
-            expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
+            expected = (DownloadMetadataTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
                         KeyFeeAboveMaxAllowedError, ResolveError, InvalidStreamURLError)
             if isinstance(err, expected):
                 log.warning("Failed to download %s: %s", uri, str(err))
