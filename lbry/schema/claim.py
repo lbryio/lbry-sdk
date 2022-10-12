@@ -398,6 +398,12 @@ class Repost(BaseClaim):
 
     claim_type = Claim.REPOST
 
+    def to_dict(self):
+        claim = super().to_dict()
+        if claim.pop('claim_hash', None):
+            claim['claim_id'] = self.reference.claim_id
+        return claim
+
     @property
     def reference(self) -> ClaimReference:
         return ClaimReference(self.message)

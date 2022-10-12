@@ -1600,6 +1600,13 @@ class StreamCommands(ClaimTestCase):
         self.assertTrue(error['text'].startswith(f"Resolve of 'lbry://@some_channel#{some_channel_id[:1]}/bad_content#{bad_content_id[:1]}' was blocked"))
         self.assertTrue(error['censor']['short_url'].startswith('lbry://@blocking#'))
 
+        # local claim list still finds local reposted content that's blocked
+        claims = await self.claim_list(reposted_claim_id=bad_content_id)
+        self.assertEqual(claims[0]['name'], 'block1')
+        self.assertEqual(claims[0]['value']['claim_id'], bad_content_id)
+        self.assertEqual(claims[1]['name'], 'filter1')
+        self.assertEqual(claims[1]['value']['claim_id'], bad_content_id)
+
         # a filtered/blocked channel impacts all content inside it
         bad_channel_id = self.get_claim_id(
             await self.channel_create('@bad_channel', '0.1', tags=['bad-stuff'])
