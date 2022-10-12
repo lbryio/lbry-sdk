@@ -8,6 +8,8 @@ from lbry.blob_exchange.serialization import BlobResponse
 from lbry.blob_exchange.server import BlobServerProtocol
 from lbry.dht.node import Node
 from lbry.dht.peer import make_kademlia_peer
+from lbry.extras.daemon.storage import StoredContentClaim
+from lbry.schema import Claim
 from lbry.stream.managed_stream import ManagedStream
 from lbry.stream.descriptor import StreamDescriptor
 from tests.unit.blob_exchange.test_transfer_blob import BlobExchangeTestBase
@@ -23,7 +25,10 @@ class TestManagedStream(BlobExchangeTestBase):
         with open(file_path, 'wb') as f:
             f.write(self.stream_bytes)
         descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path)
-        self.sd_hash = descriptor.calculate_sd_hash()
+        descriptor.suggested_file_name = file_name
+        descriptor.stream_hash = descriptor.get_stream_hash()
+        self.sd_hash = descriptor.sd_hash = descriptor.calculate_sd_hash()
+        await descriptor.make_sd_blob()
         return descriptor
 
     async def setup_stream(self, blob_count: int = 10):
@@ -46,6 +51,19 @@ class TestManagedStream(BlobExchangeTestBase):
         self.assertTrue(os.path.isfile(self.stream.full_path))
         self.assertEqual(self.stream.full_path, os.path.join(self.client_dir, 'tt_f'))
         self.assertTrue(os.path.isfile(os.path.join(self.client_dir, 'tt_f')))
+
+    async def test_empty_name_fallback(self):
+        descriptor = await self.create_stream(file_name=" ")
+        descriptor.suggested_file_name = " "
+        claim = Claim()
+        claim.stream.source.name = "cool.mp4"
+        self.stream = ManagedStream(
+            self.loop, self.client_config, self.client_blob_manager, self.sd_hash, self.client_dir,
+            claim=StoredContentClaim(serialized=claim.to_bytes().hex())
+        )
+        await self._test_transfer_stream(10, skip_setup=True)
+        self.assertTrue(self.stream.completed)
+        self.assertEqual(self.stream.suggested_file_name, "cool.mp4")
 
     async def test_status_file_completed(self):
         await self._test_transfer_stream(10)

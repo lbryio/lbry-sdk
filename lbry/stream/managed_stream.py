@@ -82,7 +82,15 @@ class ManagedStream(ManagedDownloadSource):
 
     @property
     def file_name(self) -> Optional[str]:
-        return self._file_name or (self.descriptor.suggested_file_name if self.descriptor else None)
+        return self._file_name or self.suggested_file_name
+
+    @property
+    def suggested_file_name(self) -> Optional[str]:
+        if self.descriptor and self.descriptor.suggested_file_name and self.descriptor.suggested_file_name.strip():
+            return self.descriptor.suggested_file_name
+        elif self.stream_claim_info and self.stream_claim_info.claim:
+            return sanitize_file_name(self.stream_claim_info.claim.stream.source.name)
+        return "lbry_download"  # default replacement for invalid name. Ideally we should never get here
 
     @property
     def written_bytes(self) -> int:
@@ -116,7 +124,7 @@ class ManagedStream(ManagedDownloadSource):
 
     @property
     def mime_type(self):
-        return guess_media_type(os.path.basename(self.descriptor.suggested_file_name))[0]
+        return guess_media_type(os.path.basename(self.suggested_file_name))[0]
 
     @property
     def download_path(self):
@@ -162,7 +170,7 @@ class ManagedStream(ManagedDownloadSource):
                 if not self._file_name:
                     self._file_name = await get_next_available_file_name(
                         self.loop, self.download_directory,
-                        self._file_name or sanitize_file_name(self.descriptor.suggested_file_name)
+                        self._file_name or sanitize_file_name(self.suggested_file_name)
                     )
                 file_name, download_dir = self._file_name, self.download_directory
             else:
@@ -294,14 +302,14 @@ class ManagedStream(ManagedDownloadSource):
         self.download_directory = download_directory or self.download_directory or self.config.download_dir
         if not self.download_directory:
             raise ValueError("no directory to download to")
-        if not (file_name or self._file_name or self.descriptor.suggested_file_name):
+        if not (file_name or self._file_name or self.suggested_file_name):
             raise ValueError("no file name to download to")
         if not os.path.isdir(self.download_directory):
             log.warning("download directory '%s' does not exist, attempting to make it", self.download_directory)
             os.mkdir(self.download_directory)
         self._file_name = await get_next_available_file_name(
             self.loop, self.download_directory,
-            file_name or self._file_name or sanitize_file_name(self.descriptor.suggested_file_name)
+            file_name or self._file_name or sanitize_file_name(self.suggested_file_name)
         )
         await self.blob_manager.storage.change_file_download_dir_and_file_name(
             self.stream_hash, self.download_directory, self.file_name
