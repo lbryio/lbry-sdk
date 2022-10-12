@@ -65,6 +65,7 @@ class TestManagedStream(BlobExchangeTestBase):
         self.assertTrue(self.stream.completed)
         self.assertEqual(self.stream.suggested_file_name, "cool.mp4")
         self.assertEqual(self.stream.stream_name, "cool.mp4")
+        self.assertEqual(self.stream.mime_type, "video/mp4")
 
     async def test_status_file_completed(self):
         await self._test_transfer_stream(10)
