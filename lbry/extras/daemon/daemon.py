@@ -2409,6 +2409,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         Usage:
             claim_list [--claim_type=<claim_type>...] [--claim_id=<claim_id>...] [--name=<name>...] [--is_spent]
+                       [--reposted_claim_id=<reposted_claim_id>...]
                        [--channel_id=<channel_id>...] [--account_id=<account_id>] [--wallet_id=<wallet_id>]
                        [--has_source | --has_no_source] [--page=<page>] [--page_size=<page_size>]
                        [--resolve] [--order_by=<order_by>] [--no_totals] [--include_received_tips]
@@ -2419,6 +2420,7 @@ class Daemon(metaclass=JSONRPCServerType):
             --channel_id=<channel_id>  : (str or list) streams in this channel
             --name=<name>              : (str or list) claim name
             --is_spent                 : (bool) shows previous claim updates and abandons
+            --reposted_claim_id=<reposted_claim_id> : (str or list) reposted claim id
             --account_id=<account_id>  : (str) id of the account to query
             --wallet_id=<wallet_id>    : (str) restrict results to specific wallet
             --has_source               : (bool) list claims containing a source field
