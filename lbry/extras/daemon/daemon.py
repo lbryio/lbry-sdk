@@ -1346,7 +1346,7 @@ class Daemon(metaclass=JSONRPCServerType):
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if (password is None):
+        if password is None:
             return wallet.pack()
         encrypted = wallet.pack(password)
         return encrypted.decode()
