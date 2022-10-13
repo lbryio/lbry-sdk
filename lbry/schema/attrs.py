@@ -12,10 +12,12 @@ from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
 from lbry.error import MissingPublishedFileError, EmptyPublishedFileError
 
+import lbry.schema.claim as claim
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
 from lbry.schema.tags import clean_tags, normalize_tag
 from lbry.schema.types.v2.claim_pb2 import (
+    Claim as ClaimMessage,
     Fee as FeeMessage,
     Location as LocationMessage,
     Language as LanguageMessage
@@ -353,6 +355,96 @@ class ClaimReference(Metadata):
 
     __slots__ = ()
 
+    def _set_claim_type(self, claim_type: str = None):
+        """select the appropriate member (stream, channel, repost, or collection)"""
+        def _set_message(m):
+            old_type = claim.Claim(m).claim_type
+            if old_type and claim_type is None:
+                m.ClearField(old_type)
+                return
+            member = getattr(m, claim_type)
+            member.SetInParent()
+        _set_message(self.message.deletions)
+        _set_message(self.message.edits)
+
+    def update(self, claim_type: str, **kwargs) -> dict:
+        self._set_claim_type(claim_type)
+        print(f'update: {kwargs.items()}')
+        clear1 = dict(filter(lambda i: i[0].startswith('clear_'), kwargs.items()))
+        clear2 = dict(map(lambda i: (i[0][len('clear_'):], i[1]), clear1.items()))
+        self.deletions.update(**clear2)
+        edits1 = dict(filter(lambda i: not i[0].startswith('clear_'), kwargs.items()))
+        return self.edits.update(**edits1)
+
+    def apply(self, reposted: 'claim.Claim'):
+        # This mapping converts the full field names produced by
+        # flatten(claim.to_dict()) to the short names utilized by
+        # claim.update().
+        # TODO: Complete this...
+        short_name = {
+            'source_size': 'file_size',
+            'source_sd_hash': 'sd_hash',
+            'source_bt_infohash': 'bt_infohash',
+            'source_file_name': 'file_name',
+            'source_file_hash': 'file_hash',
+            'image_width': 'width',
+            'video_width': 'width',
+            'image_height': 'height',
+            'video_height': 'height',
+            'video_duration': 'duration',
+            'video_audio_duration': 'duration',
+            'audio_duration': 'duration',
+        }
+        def flatten(field, d, out):
+            if isinstance(d, dict):
+                for k, v in d.items():
+                    subfield = f'{field}_{k}' if field else k
+                    flatten(subfield, v, out)
+            else:
+                # d is a leaf value
+                try:
+                    out[short_name.get(field, field)] = int(d)
+                except (ValueError, TypeError):
+                    out[short_name.get(field, field)] = d
+        m = ClaimMessage()
+        m.CopyFrom(reposted.message)
+        result = claim.Claim(m)
+        if self.has_deletions and self.deletions.claim_type == reposted.claim_type:
+            clear1 = dict([(f'clear_{k}', v) for k, v in self.deletions.to_dict().items()])
+            print(f'{reposted.claim_type} deletions: {clear1}')
+            clear2 = dict()
+            flatten('', clear1, clear2)
+            print(f'{reposted.claim_type} deletions: {clear2}')
+            attr = getattr(result, result.claim_type)
+            attr.update(**clear2)
+        if self.has_edits and self.edits.claim_type == reposted.claim_type:
+            edits1 = self.edits.to_dict()
+            print(f'{reposted.claim_type} edits: {edits1}')
+            edits2 = dict()
+            flatten('', edits1, edits2)
+            print(f'{reposted.claim_type} edits: {edits2}')
+            attr = getattr(result, result.claim_type)
+            attr.update(**edits2)
+        return result
+
+    @property
+    def has_deletions(self) -> bool:
+        return self.message.HasField('deletions')
+
+    @property
+    def deletions(self) -> 'claim.BaseClaim':
+        c = claim.Claim(self.message.deletions)
+        return getattr(c, c.claim_type)
+
+    @property
+    def has_edits(self) -> bool:
+        return self.message.HasField('edits')
+
+    @property
+    def edits(self) -> 'claim.BaseClaim':
+        c = claim.Claim(self.message.edits)
+        return getattr(c, c.claim_type)
+
     @property
     def claim_id(self) -> str:
         return hexlify(self.claim_hash[::-1]).decode()
@@ -449,6 +541,13 @@ class LanguageList(BaseMessageList[Language]):
     def append(self, value: str):
         self.add().langtag = value
 
+    def remove(self, value: str) -> bool:
+        r = 0
+        for i, v in enumerate(self):
+            if v.langtag == value:
+                del self[i]
+                r += 1
+        return r > 0
 
 class Location(Metadata):
 

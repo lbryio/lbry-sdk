@@ -1526,6 +1526,55 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(searched_repost['amount'], '0.42')
         self.assertEqual(searched_repost['signing_channel']['claim_id'], spam_claim_id)
 
+    async def test_repost_with_modification(self):
+        tx = await self.channel_create('@goodies', '1.0')
+        goodies_claim_id = self.get_claim_id(tx)
+        tx = await self.channel_create('@spam', '1.0')
+        spam_claim_id = self.get_claim_id(tx)
+
+        tx = await self.stream_create('newstuff', '1.1', channel_name='@goodies', tags=['foo', 'gaming'], languages=['en','ko'])
+        claim_id = self.get_claim_id(tx)
+
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
+
+        tx = await self.stream_repost(
+            claim_id, 'newstuff-again', '1.1', channel_name='@spam',
+            title="repost title", description="repost desc", tags=["tag1", "tag2"]
+        )
+        repost_id = self.get_claim_id(tx)
+
+        # test inflating reposted channels works
+        repost_url = f'newstuff-again:{repost_id}'
+        self.ledger._tx_cache.clear()
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(["en", "ko"], repost['reposted_claim']['value']['languages'])
+        self.assertEqual("3", repost['reposted_claim']['value']['source']['size'])
+        self.assertEqual("repost title", repost["value"]["title"])
+        self.assertEqual("repost desc", repost["value"]["description"])
+        self.assertEqual(["tag1", "tag2"], repost["value"]["tags"])
+
+        await self.stream_update(
+            repost_id, title="title 2", description="desc 2", tags=["tag3"],
+            file_size=1000, clear_languages=['ko'], languages=['ja']
+        )
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        #log.error("repost: %s", repost)
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(["en"], repost['reposted_claim']['value']['languages'])
+        self.assertEqual("1000", repost['reposted_claim']['value']['source']['size'])
+        self.assertEqual("title 2", repost["value"]["title"])
+        self.assertEqual("desc 2", repost["value"]["description"])
+        self.assertEqual(["tag1", "tag2", "tag3"], repost["value"]["tags"])
+        # TODO: Should this be in reposted_claim instead?
+        self.assertEqual(["ja"], repost["value"]["languages"])
+
+        # TODO: More stuff.
+
     async def test_filtering_channels_for_removing_content(self):
         some_channel_id = self.get_claim_id(await self.channel_create('@some_channel', '0.1'))
         await self.stream_create('good_content', '0.1', channel_name='@some_channel', tags=['good'])

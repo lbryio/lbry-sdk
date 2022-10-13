@@ -124,7 +124,7 @@ class BaseClaim:
             if value is None:
                 raise InputValueIsNoneError(key)
 
-    def update(self, **kwargs):
+    def update(self, strict_update=True, **kwargs) -> dict:
         self.none_check(kwargs)
 
         for key in list(kwargs):
@@ -136,8 +136,22 @@ class BaseClaim:
 
         for l in self.repeat_fields:
             field = getattr(self, l)
-            if kwargs.pop(f'clear_{l}', False):
-                del field[:]
+            clear = kwargs.pop(f'clear_{l}', False)
+            if isinstance(clear, bool) and clear:
+                failed = []
+                if len(field) > 0:
+                    del field[:]
+                else:
+                    failed = clear
+                if failed:
+                    kwargs[f'clear_{l}'] = failed
+            if isinstance(clear, list):
+                failed = []
+                for c in clear:
+                    if not field.remove(c):
+                        failed.append(c)
+                if failed:
+                    kwargs[f'clear_{l}'] = failed
             items = kwargs.pop(l, None)
             if items is not None:
                 if isinstance(items, str):
@@ -147,8 +161,16 @@ class BaseClaim:
                 else:
                     raise ValueError(f"Unknown {l} value: {items}")
 
+        failed = dict()
         for key, value in kwargs.items():
-            setattr(self, key, value)
+            try:
+                setattr(self, key, value)
+            except AttributeError:
+                failed[key] = value
+                if strict_update:
+                    raise
+
+        return failed
 
     @property
     def title(self) -> str:
@@ -213,7 +235,7 @@ class Stream(BaseClaim):
             fee['amount'] = str(self.fee.amount)
         return claim
 
-    def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
+    def update(self, file_path=None, height=None, width=None, duration=None, **kwargs) -> dict:
 
         if kwargs.pop('clear_fee', False):
             self.message.ClearField('fee')
@@ -264,7 +286,7 @@ class Stream(BaseClaim):
                 media_args['width'] = width
             media.update(**media_args)
 
-        super().update(**kwargs)
+        return super().update(**kwargs)
 
     @property
     def author(self) -> str:
@@ -397,6 +419,18 @@ class Repost(BaseClaim):
     __slots__ = ()
 
     claim_type = Claim.REPOST
+
+    def update(self, **kwargs) -> dict:
+        claim_type = kwargs.pop('claim_type', None)
+        # Update common fields within BaseClaim.
+        kwargs = super().update(strict_update=False, **kwargs)
+        if claim_type:
+            # Remaining updates go into deletes/edits of ClaimReference.
+            kwargs = self.reference.update(claim_type, **kwargs)
+        return kwargs
+
+    def apply(self, reposted: 'Claim'):
+        return self.reference.apply(reposted)
 
     @property
     def reference(self) -> ClaimReference:
