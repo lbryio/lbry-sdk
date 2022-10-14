@@ -887,7 +887,7 @@ class Ledger(metaclass=LedgerRegistry):
                     modified_txo.claim.message.CopyFrom(modified_claim.message)
                     # Set the reposted_claim field reported in results.
                     txo.reposted_claim = modified_txo
-        print(f'*** done')
+        print('*** done')
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):
