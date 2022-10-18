@@ -189,10 +189,10 @@ class Wallet:
               password: str, data: str) -> (List['Account'], List['Account']):
         assert not self.is_locked, "Cannot sync apply on a locked wallet."
         added_accounts, merged_accounts = [], []
-        if password:
-            decrypted_data = self.unpack(password, data)
-        else:
+        if password is None:
             decrypted_data = json.loads(data)
+        else:
+            decrypted_data = self.unpack(password, data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
         for account_dict in decrypted_data['accounts']:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])

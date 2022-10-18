@@ -501,3 +501,11 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         json_data["preferences"]["four"] = {"value": 4, "ts": 0}
         await daemon.jsonrpc_wallet_import(data=json.dumps(json_data), blocking=True)
         self.assertEqual(daemon.jsonrpc_preference_get("four"), {"four": 4})
+
+        # if password is empty string, export is encrypted
+        data = await daemon2.jsonrpc_wallet_export(password="")
+        self.assertNotEqual(data[0], "{")
+
+        # if password is empty string, import is decrypted
+        await daemon.jsonrpc_wallet_import(data, password="")
+

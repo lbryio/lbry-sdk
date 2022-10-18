@@ -1346,9 +1346,9 @@ class Daemon(metaclass=JSONRPCServerType):
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if password:
-            return wallet.pack(password).decode()
-        return wallet.to_json()
+        if password is None:
+            return wallet.to_json()
+        return wallet.pack(password).decode()
 
     @requires("wallet")
     async def jsonrpc_wallet_import(self, data, password=None, wallet_id=None, blocking=False):
