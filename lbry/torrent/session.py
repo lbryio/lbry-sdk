@@ -22,9 +22,9 @@ class TorrentHandle:
         self._loop = loop
         self._executor = executor
         self._handle: libtorrent.torrent_handle = handle
-        self.started = asyncio.Event()
-        self.finished = asyncio.Event()
-        self.metadata_completed = asyncio.Event()
+        self.started = asyncio.Event(loop=loop)
+        self.finished = asyncio.Event(loop=loop)
+        self.metadata_completed = asyncio.Event(loop=loop)
         self.size = 0
         self.total_wanted_done = 0
         self.name = ''
