@@ -139,6 +139,10 @@ class Wallet:
             'accounts': [a.to_dict(encrypt_password) for a in self.accounts]
         }
 
+    def to_json(self):
+        assert not self.is_locked, "Cannot serialize a wallet with locked/encrypted accounts."
+        return json.dumps(self.to_dict())
+
     def save(self):
         if self.preferences.get(ENCRYPT_ON_DISK, False):
             if self.encryption_password is not None:
@@ -163,19 +167,14 @@ class Wallet:
             h.update(account.hash)
         return h.digest()
 
-    def pack(self, password=None):
+    def pack(self, password):
         assert not self.is_locked, "Cannot pack a wallet with locked/encrypted accounts."
-        new_data = json.dumps(self.to_dict())
-        if password is None:
-            return new_data.encode()
-        new_data_compressed = zlib.compress(new_data.encode())
+        new_data_compressed = zlib.compress(self.to_json().encode())
         return better_aes_encrypt(password, new_data_compressed)
 
     @classmethod
-    def unpack(cls, password, data):
-        if password is None:
-            return json.loads(data)
-        decrypted = better_aes_decrypt(password, data)
+    def unpack(cls, password, encrypted):
+        decrypted = better_aes_decrypt(password, encrypted)
         try:
             decompressed = zlib.decompress(decrypted)
         except zlib.error as e:
@@ -190,7 +189,10 @@ class Wallet:
               password: str, data: str) -> (List['Account'], List['Account']):
         assert not self.is_locked, "Cannot sync apply on a locked wallet."
         added_accounts, merged_accounts = [], []
-        decrypted_data = self.unpack(password, data)
+        if password:
+            decrypted_data = self.unpack(password, data)
+        else:
+            decrypted_data = json.loads(data)
         self.preferences.merge(decrypted_data.get('preferences', {}))
         for account_dict in decrypted_data['accounts']:
             ledger = manager.get_or_create_ledger(account_dict['ledger'])
