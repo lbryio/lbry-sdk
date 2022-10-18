@@ -1330,9 +1330,9 @@ class Daemon(metaclass=JSONRPCServerType):
     @requires("wallet")
     async def jsonrpc_wallet_export(self, password=None, wallet_id=None):
         """
-        Export wallet data
+        Exports encrypted wallet data if password is supplied; otherwise plain JSON.
 
-        Wallet must be unlocked to perform this operation. Exports JSON if password is not supplied.
+        Wallet must be unlocked to perform this operation.
 
         Usage:
             wallet_export [--password=<password>] [--wallet_id=<wallet_id>]
@@ -1342,21 +1342,21 @@ class Daemon(metaclass=JSONRPCServerType):
             --wallet_id=<wallet_id>       : (str) wallet being exported
 
         Returns:
-            (str) data: Either base64-encoded encrypted wallet, or cleartext JSON
+            (str) data: base64-encoded encrypted wallet, or cleartext JSON
 
         """
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
-        if password is None:
-            return wallet.pack()
-        encrypted = wallet.pack(password)
-        return encrypted.decode()
+        if password:
+            return wallet.pack(password).decode()
+        return wallet.to_json()
 
     @requires("wallet")
     async def jsonrpc_wallet_import(self, data, password=None, wallet_id=None, blocking=False):
         """
-        Import wallet data and merge accounts and preferences.
+        Import wallet data and merge accounts and preferences. Data is expected to be JSON if
+        password is not supplied.
 
-        Wallet must be unlocked to perform this operation. Data is expected to be JSON if password is not supplied.
+        Wallet must be unlocked to perform this operation.
 
         Usage:
             wallet_import (<data> | --data=<data>) [<password> | --password=<password>]
@@ -1369,9 +1369,8 @@ class Daemon(metaclass=JSONRPCServerType):
             --blocking                    : (bool) wait until any new accounts have merged
 
         Returns:
-            (str) Either base64-encoded encrypted wallet, or cleartext JSON
+            (str) base64-encoded encrypted wallet, or cleartext JSON
         """
-
         wallet = self.wallet_manager.get_wallet_or_default(wallet_id)
         added_accounts, merged_accounts = wallet.merge(self.wallet_manager, password, data)
         for new_account in itertools.chain(added_accounts, merged_accounts):
@@ -1385,8 +1384,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 for new_account in added_accounts:
                     asyncio.create_task(self.ledger.subscribe_account(new_account))
         wallet.save()
-        encrypted = wallet.pack(password)
-        return encrypted.decode()
+        return await self.jsonrpc_wallet_export(password=password, wallet_id=wallet_id)
 
     @requires("wallet")
     async def jsonrpc_wallet_add(self, wallet_id):

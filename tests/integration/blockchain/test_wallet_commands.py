@@ -493,19 +493,11 @@ class WalletEncryptionAndSynchronization(CommandTestCase):
         )
 
         # test without passwords
-        daemon2.jsonrpc_preference_set("three", "3")
-        jsondata = await daemon2.jsonrpc_wallet_export()
-        await daemon.jsonrpc_wallet_import(data=jsondata, blocking=True)
-        self.assertDictEqual(
-                    # "two" key added and "conflict" value changed to "2"
-                    daemon.jsonrpc_preference_get(),
-                    {
-                        "one": "1",
-                        "two": "2",
-                        "three": "3",
-                        "conflict": "2",
-                        "another": "B",
-                        "fruit": ["peach", "apricot"]
-                    }
-                )
+        data = await daemon2.jsonrpc_wallet_export()
+        json_data = json.loads(data)
+        self.assertEqual(json_data["name"], "Wallet")
+        self.assertNotIn("four", json_data["preferences"])
 
+        json_data["preferences"]["four"] = {"value": 4, "ts": 0}
+        await daemon.jsonrpc_wallet_import(data=json.dumps(json_data), blocking=True)
+        self.assertEqual(daemon.jsonrpc_preference_get("four"), {"four": 4})
