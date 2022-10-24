@@ -6,21 +6,28 @@ from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
-from google.protobuf.json_format import MessageToDict
+from binascii import Error as DecodeError
+from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.any_pb2 import Any as AnyMessage
+from google.protobuf import descriptor_pool as _descriptor_pool
+from google.protobuf.message import DecodeError as MessageDecodeError
+from google.protobuf.message_factory import MessageFactory
 
 from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
-from lbry.error import MissingPublishedFileError, EmptyPublishedFileError
+from lbry.error import MissingPublishedFileError, EmptyPublishedFileError, InputValueError
 
+import lbry.schema.claim as claim
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
 from lbry.schema.tags import clean_tags, normalize_tag
 from lbry.schema.types.v2.claim_pb2 import (
+    Claim as ClaimMessage,
     Fee as FeeMessage,
     Location as LocationMessage,
-    Language as LanguageMessage
+    Language as LanguageMessage,
+    Stream as StreamMessage,
 )
-
 
 log = logging.getLogger(__name__)
 
@@ -369,6 +376,85 @@ class ClaimReference(Metadata):
     def claim_hash(self, claim_hash: bytes):
         self.message.claim_hash = claim_hash
 
+class ModifyingClaimReference(ClaimReference):
+
+    __slots__ = ()
+
+    @property
+    def modification_type(self) -> str:
+        return self.message.WhichOneof('type')
+
+    @modification_type.setter
+    def modification_type(self, claim_type: str):
+        """Select the appropriate member (stream, channel, repost, or collection)"""
+        old_type = self.message.WhichOneof('type')
+        if old_type == claim_type:
+            return
+        if old_type and claim_type is None:
+            self.message.ClearField(old_type)
+            return
+        member = getattr(self.message, claim_type)
+        member.SetInParent()
+
+    def update(self, claim_type: str, **kwargs) -> dict:
+        """
+        Store updates to modifiable fields in deletions/edits.
+        Currently, only the "extensions" field (StreamExtensionList)
+        of a stream claim may be modified. Returns a dict containing
+        the unhandled portion of "kwargs".
+        """
+        if claim_type != 'stream':
+            return kwargs
+        self.modification_type = claim_type
+        if not self.modification_type == 'stream':
+            return kwargs
+
+        mods = getattr(self.message, self.modification_type)
+        print(f'update: {kwargs.items()}')
+
+        clr_exts = kwargs.pop('clear_extensions', None)
+        if clr_exts is not None:
+            print(f'clear extensions: {clr_exts}')
+            deletions = StreamModifiable(mods.deletions)
+            if not isinstance(clr_exts, list):
+                clr_exts = [clr_exts]
+            deletions.extensions.update(clr_exts)
+
+        set_exts = kwargs.pop('extensions', None)
+        if set_exts is not None:
+            print(f'set extensions: {set_exts}')
+            edits = StreamModifiable(mods.edits)
+            if not isinstance(set_exts, list):
+                set_exts = [set_exts]
+            edits.extensions.update(set_exts)
+
+        return kwargs
+
+    def apply(self, reposted: 'claim.Claim') -> 'claim.Claim':
+        """
+        Given a reposted claim, apply the stored deletions/edits, and return
+        the modified claim. Returns the original claim if the claim type has
+        changed such that the modifications are not relevant.
+        """
+        if not self.modification_type or self.modification_type != reposted.claim_type:
+            return result
+        if not reposted.claim_type == 'stream':
+            return result
+
+        m = ClaimMessage()
+        m.CopyFrom(reposted.message)
+        result = claim.Claim(m)
+
+        # only stream claims, and only stream extensions are handled
+        stream = getattr(result, result.claim_type)
+        exts = getattr(stream, 'extensions')
+
+        mods = getattr(self.message, self.modification_type)
+        # apply deletions
+        exts.update(StreamModifiable(mods.deletions).extensions, delete=True)
+        # apply edits
+        exts.update(StreamModifiable(mods.edits).extensions)
+        return result
 
 class ClaimList(BaseMessageList[ClaimReference]):
 
@@ -569,3 +655,129 @@ class TagList(BaseMessageList[str]):
         tag = normalize_tag(tag)
         if tag and tag not in self.message:
             self.message.append(tag)
+
+class StreamExtension(Metadata):
+    __slots__ = ()
+
+    VALID_STREAM_EXTENSION_NAMES = [
+        'pb.Stream.Extension.StringMap', # generic catch-all type used to test
+    ]
+
+    def from_value(self, value):
+        if isinstance(value, StreamExtension):
+            self.message.CopyFrom(value.message)
+            return
+
+        if isinstance(value, bytes):
+            try:
+                any = AnyMessage()
+                any.ParseFromString(value)
+                value = any
+            except MessageDecodeError:
+                pass
+
+        if isinstance(value, (str, bytes)):
+            try:
+                data = unhexlify(value)
+                any = AnyMessage()
+                any.ParseFromString(data)
+                value = any
+            except DecodeError:
+                pass
+
+        if isinstance(value, str) and value.startswith('{'):
+            value = json.loads(value)
+
+        if isinstance(value, dict):
+            msg = StreamMessage.Extension.StringMap()
+            msg = ParseDict(value, msg)
+            any = AnyMessage()
+            any.Pack(msg)
+            value = any
+
+        if isinstance(value, AnyMessage):
+            # Check contents of AnyMessage to ensure the type is known to us.
+            descriptor = _descriptor_pool.Default().FindMessageTypeByName(value.TypeName())
+            cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
+            if not cls:
+                raise InputValueError(f'unrecognized stream extension type: {value.TypeName()}')
+            inner_message = cls()
+            value.Unpack(inner_message)
+            # Message type is known to us. But is it a legal extension?
+            if value.TypeName() not in self.VALID_STREAM_EXTENSION_NAMES:
+                raise InputValueError(f'invalid stream extension type: {value.TypeName()}')
+            self.message.any.CopyFrom(value)
+        else:
+            raise ValueError(f'Could not parse StreamExtension value: {value}')
+
+    @property
+    def schema(self) -> str:
+        if not self.message.HasField('any'):
+            return None
+        descriptor = _descriptor_pool.Default().FindMessageTypeByName(self.message.any.TypeName())
+        cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
+        inner_message = cls()
+        self.message.any.Unpack(inner_message)
+        if self.message.any.TypeName() == 'pb.Stream.Extension.StringMap':
+            # The generic StringMap message may be used for many different applications.
+            # It has an embedded 'schema' field to distiguish between them.
+            return inner_message.schema
+        return self.message.any.TypeName()
+
+    @property
+    def fields(self):
+        if not self.message.HasField('any'):
+            return []
+        descriptor = _descriptor_pool.Default().FindMessageTypeByName(self.message.any.TypeName())
+        cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
+        inner_message = cls()
+        self.message.any.Unpack(inner_message)
+        if self.message.any.TypeName() == 'pb.Stream.Extension.StringMap':
+            # The special "schema" field of StringMap doesn't count.
+            return [f for f in filter(lambda f: f[0].name != 'schema', inner_message.ListFields())]
+        return inner_message.ListFields()
+
+    def merge(self, ext: 'StreamExtension', delete: bool = False):
+        if self.schema != ext.schema:
+            return
+        if delete:
+            for f in ext.message.DESCRIPTOR.fields:
+                if ext.message.HasField(f.name):
+                    self.message.ClearField(f.name)
+        else:
+            self.message.any.MergeFrom(ext.message.any)
+
+    def update(self, **kwargs):
+        extension = {'any': {'s': kwargs}}
+        ParseDict(extension, self.message)
+
+class StreamExtensionList(BaseMessageList[StreamExtension]):
+    __slots__ = ()
+    item_class = StreamExtension
+
+    def update(self, exts, delete: bool = False):
+        for ext in exts:
+            obj = StreamExtension(StreamMessage.Extension())
+            obj.from_value(ext)
+            found = False
+            for i, e in enumerate(self):
+                if e.schema == obj.schema:
+                    found = True
+                    print(f'obj schema: {obj.schema} fields: {obj.fields}')
+                    if delete and not len(obj.fields):
+                        print(f'deleting {i}')
+                        del self[i]
+                    else:
+                        e.merge(obj, delete=delete)
+            if not found:
+                self.append(obj)
+
+    def append(self, ext):
+        self.add().from_value(ext)
+
+class StreamModifiable(Metadata):
+    __slots__ = ()
+
+    @property
+    def extensions(self) -> StreamExtensionList:
+        return StreamExtensionList(self.message.extensions)

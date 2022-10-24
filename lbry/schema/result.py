@@ -150,7 +150,7 @@ class Outputs:
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
             if claim.HasField('repost'):
-                txo.reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
+                txo.original_reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
             try:
                 if txo.claim.is_channel:
                     txo.meta['claims_in_channel'] = claim.claims_in_channel

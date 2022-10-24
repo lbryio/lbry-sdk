@@ -212,7 +212,7 @@ class Output(InputOutput):
         'amount', 'script', 'is_internal_transfer', 'is_spent', 'is_my_output', 'is_my_input',
         'channel', 'private_key', 'meta', 'sent_supports', 'sent_tips', 'received_tips',
         'purchase', 'purchased_claim', 'purchase_receipt',
-        'reposted_claim', 'claims', '_signable'
+        'original_reposted_claim', 'reposted_claim', 'claims', '_signable'
     )
 
     def __init__(self, amount: int, script: OutputScript,
@@ -239,7 +239,8 @@ class Output(InputOutput):
         self.purchase: 'Output' = None  # txo containing purchase metadata
         self.purchased_claim: 'Output' = None  # resolved claim pointed to by purchase
         self.purchase_receipt: 'Output' = None  # txo representing purchase receipt for this claim
-        self.reposted_claim: 'Output' = None  # txo representing claim being reposted
+        self.original_reposted_claim: 'Output' = None  # txo representing claim being reposted
+        self.reposted_claim: 'Output' = None  # original_reposted_claim with deletions/edits applied
         self.claims: List['Output'] = None  # resolved claims for collection
         self._signable: Optional[Signable] = None
         self.meta = {}
