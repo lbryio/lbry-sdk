@@ -11,6 +11,7 @@ from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict, NamedTuple
 
 from lbry.schema.result import Outputs, INVALID, NOT_FOUND
+from lbry.schema.claim import Claim, Repost
 from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
@@ -865,6 +866,28 @@ class Ledger(metaclass=LedgerRegistry):
                             accounts=accounts
                         )
                         txo.received_tips = tips
+        # For reposts, apply any deletions/edits specified.
+        print(f'*** inflating {len(txos)} txos')
+        for txo in txos:
+            if isinstance(txo, Output) and txo.can_decode_claim:
+                assert isinstance(txo.claim, Claim)
+                if not txo.claim.is_repost:
+                    continue
+                reposted_txo = txo.original_reposted_claim
+                assert isinstance(reposted_txo, Output)
+                assert reposted_txo.can_decode_claim
+                if isinstance(reposted_txo, Output) and reposted_txo.can_decode_claim:
+                    assert isinstance(reposted_txo.claim, Claim)
+                    assert isinstance(txo.claim.repost, Repost)
+                    modified_claim = txo.claim.repost.apply(reposted_txo.claim)
+                    print(f'modified: {modified_claim.to_dict()}')
+                    # Make a deep copy so we can modify the txo without
+                    # disturbing the TX cache contents.
+                    modified_txo = copy.deepcopy(reposted_txo)
+                    modified_txo.claim.message.CopyFrom(modified_claim.message)
+                    # Set the reposted_claim field reported in results.
+                    txo.reposted_claim = modified_txo
+        print('*** done')
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):

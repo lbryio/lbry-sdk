@@ -16,7 +16,8 @@ from lbry.schema.base import Signable
 from lbry.schema.mime_types import guess_media_type, guess_stream_type
 from lbry.schema.attrs import (
     Source, Playable, Dimmensional, Fee, Image, Video, Audio,
-    LanguageList, LocationList, ClaimList, ClaimReference, TagList
+    LanguageList, LocationList, ClaimList, ModifyingClaimReference, TagList,
+    StreamExtensionList
 )
 from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
 from lbry.error import InputValueIsNoneError
@@ -264,7 +265,15 @@ class Stream(BaseClaim):
                 media_args['width'] = width
             media.update(**media_args)
 
-        super().update(**kwargs)
+        if kwargs.pop('clear_extensions', False):
+            self.message.ClearField('ext')
+        exts = kwargs.pop('extensions', None)
+        if exts:
+            if not isinstance(exts, list):
+                exts = [exts]
+            self.extensions.update(exts)
+
+        return super().update(**kwargs)
 
     @property
     def author(self) -> str:
@@ -329,6 +338,10 @@ class Stream(BaseClaim):
     @property
     def audio(self) -> Audio:
         return Audio(self.message.audio)
+
+    @property
+    def extensions(self) -> StreamExtensionList:
+        return StreamExtensionList(self.message.extensions)
 
 
 class Channel(BaseClaim):
@@ -398,9 +411,22 @@ class Repost(BaseClaim):
 
     claim_type = Claim.REPOST
 
+    def update(self, **kwargs):
+        claim_type = kwargs.pop('claim_type', None)
+        print(f'claim_type: {claim_type}')
+        if claim_type:
+            # Try to apply updates to ClaimReference.
+            kwargs = self.reference.update(claim_type, **kwargs)
+            print(f'remaining: {kwargs}')
+        # Update common fields within BaseClaim.
+        super().update(**kwargs)
+
+    def apply(self, reposted: 'Claim'):
+        return self.reference.apply(reposted)
+
     @property
-    def reference(self) -> ClaimReference:
-        return ClaimReference(self.message)
+    def reference(self) -> ModifyingClaimReference:
+        return ModifyingClaimReference(self.message)
 
 
 class Collection(BaseClaim):

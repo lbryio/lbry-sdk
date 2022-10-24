@@ -3352,8 +3352,13 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: use error from lbry.error
             raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
 
+        reposted_txo = await self.ledger.get_claim_by_claim_id(claim_id, include_is_my_output=True)
+        if not isinstance(reposted_txo, Output) or not reposted_txo.is_claim:
+            raise InputValueError(f"Could not find claim '{claim_id}'.")
+        if not reposted_txo.can_decode_claim:
+            raise InputValueError(f"A claim with id '{claim_id}' was found but could not be decoded.")
         claim = Claim()
-        claim.repost.update(**kwargs)
+        claim.repost.update(claim_type=reposted_txo.claim.claim_type, **kwargs)
         claim.repost.reference.claim_id = claim_id
         tx = await Transaction.claim_create(
             name, claim, amount, claim_address, funding_accounts, funding_accounts[0], channel
@@ -3735,7 +3740,13 @@ class Daemon(metaclass=JSONRPCServerType):
         if old_txo.claim.is_stream:
             claim.stream.update(file_path=file_path, **kwargs)
         elif old_txo.claim.is_repost:
-            claim.repost.update(**kwargs)
+            reposted_id = old_txo.claim.repost.reference.claim_id
+            reposted_txo = await self.ledger.get_claim_by_claim_id(reposted_id, include_is_my_output=True)
+            if not isinstance(reposted_txo, Output) or not reposted_txo.is_claim:
+                raise InputValueError(f"Could not find reposted claim '{reposted_id}'.")
+            if not reposted_txo.can_decode_claim:
+                raise InputValueError(f"A claim with id '{reposted_id}' was found but could not be decoded.")
+            claim.repost.update(claim_type=reposted_txo.claim.claim_type, **kwargs)
 
         if clear_channel:
             claim.clear_signature()

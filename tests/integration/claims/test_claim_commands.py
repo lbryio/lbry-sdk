@@ -2,10 +2,13 @@ import os.path
 import tempfile
 import logging
 import asyncio
-from binascii import unhexlify
+from binascii import unhexlify, hexlify
 from unittest import skip
 from urllib.request import urlopen
 import ecdsa
+
+from google.protobuf.any_pb2 import Any as AnyMessage
+from lbry.schema.types.v2.claim_pb2 import Stream as StreamMessage
 
 from lbry.error import InsufficientFundsError
 
@@ -1525,6 +1528,94 @@ class StreamCommands(ClaimTestCase):
         searched_repost = (await self.claim_search(claim_id=repost_id))[0]
         self.assertEqual(searched_repost['amount'], '0.42')
         self.assertEqual(searched_repost['signing_channel']['claim_id'], spam_claim_id)
+
+    async def test_repost_with_extensions(self):
+        tx = await self.channel_create('@goodies', '1.0')
+        goodies_claim_id = self.get_claim_id(tx)
+        tx = await self.channel_create('@spam', '1.0')
+        spam_claim_id = self.get_claim_id(tx)
+
+        m1 = StreamMessage.Extension.StringMap()
+        m1.schema = "cad"
+        m1.s['material'] = "PLA"
+        m1.s['cubic_cm'] = "5"
+        ext1 = AnyMessage()
+        ext1.Pack(m1, type_url_prefix='')
+
+        # create stream with extension adding "cad"
+        tx = await self.stream_create(
+            'newstuff', '1.1', channel_name='@goodies',
+            extensions=hexlify(ext1.SerializeToString())
+        )
+        claim_id = self.get_claim_id(tx)
+
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
+        self.assertEqual(
+            (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
+            [{'any': {'@type': f'/{ext1.TypeName()}', 's': {'material': 'PLA', 'cubic_cm': '5'}, 'schema': 'cad'}}]
+        )
+        """
+        self.assertEqual(
+            (await self.claim_search(extensions=[{"schema": "cad"}]))[0]['value'],
+            [{'any': {'@type': f'/{ext1.TypeName()}', 's': {'material': 'PLA', 'cubic_cm': '5'}, 'schema': 'cad'}}],
+            (await self.claim_search(extensions=[{"schema": "foo"}]))
+        )
+        """
+
+        m2 = StreamMessage.Extension.StringMap()
+        m2.schema = "music"
+        m2.s['genre'] = "classical"
+        m2.s['tempo'] = "allegro"
+        m2.s['venue'] = "studio"
+        ext2 = AnyMessage()
+        ext2.Pack(m2, type_url_prefix='')
+
+        # create repost adding extension "music"
+        tx = await self.stream_repost(
+            claim_id, 'newstuff-again', '1.1', channel_name='@spam',
+            extensions=hexlify(ext2.SerializeToString()),
+        )
+        repost_id = self.get_claim_id(tx)
+
+        # test inflating reposted channels works
+        repost_url = f'newstuff-again:{repost_id}'
+        self.ledger._tx_cache.clear()
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(
+            repost['reposted_claim']["value"]["extensions"],
+            [
+                {'any': {'@type': f'/{ext1.TypeName()}', 's': {'cubic_cm': '5', 'material': 'PLA'}, 'schema': 'cad'}},
+                {'any': {'@type': f'/{ext2.TypeName()}', 's': {"genre": "classical", "tempo": "allegro", "venue": "studio"}, 'schema': 'music'}},
+            ],
+        )
+
+        m3 = StreamMessage.Extension.StringMap()
+        m3.schema = "cad"
+        ext3 = AnyMessage()
+        ext3.Pack(m3, type_url_prefix='')
+
+        # update repost removing extension "cad"
+        await self.stream_update(
+            repost_id,
+            clear_extensions=[hexlify(ext3.SerializeToString())],
+        )
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(
+            repost['reposted_claim']["value"]["extensions"],
+            [{'any': {'@type': f'/{ext2.TypeName()}', 's': {"genre": "classical", "tempo": "allegro", "venue": "studio"}, 'schema': 'music'}}],
+        )
+
+        # original claim remains as created with extension "cad"
+        self.assertEqual(
+            (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
+            [{'any': {'@type': f'/{ext1.TypeName()}', 's': {'material': 'PLA', 'cubic_cm': '5'}, 'schema': 'cad'}}]
+        )
 
     async def test_filtering_channels_for_removing_content(self):
         some_channel_id = self.get_claim_id(await self.channel_create('@some_channel', '0.1'))
