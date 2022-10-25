@@ -405,6 +405,12 @@ class ModifyingClaimReference(ClaimReference):
         """
         if claim_type != 'stream':
             return kwargs
+
+        clr_exts = kwargs.pop('clear_extensions', None)
+        set_exts = kwargs.pop('extensions', None)
+        if clr_exts is None and set_exts is None:
+            return kwargs
+
         self.modification_type = claim_type
         if not self.modification_type == 'stream':
             return kwargs
@@ -412,7 +418,6 @@ class ModifyingClaimReference(ClaimReference):
         mods = getattr(self.message, self.modification_type)
         print(f'update: {kwargs.items()}')
 
-        clr_exts = kwargs.pop('clear_extensions', None)
         if clr_exts is not None:
             print(f'clear extensions: {clr_exts}')
             deletions = StreamModifiable(mods.deletions)
@@ -420,7 +425,6 @@ class ModifyingClaimReference(ClaimReference):
                 clr_exts = [clr_exts]
             deletions.extensions.update(clr_exts)
 
-        set_exts = kwargs.pop('extensions', None)
         if set_exts is not None:
             print(f'set extensions: {set_exts}')
             edits = StreamModifiable(mods.edits)
@@ -437,9 +441,9 @@ class ModifyingClaimReference(ClaimReference):
         changed such that the modifications are not relevant.
         """
         if not self.modification_type or self.modification_type != reposted.claim_type:
-            return result
+            return reposted
         if not reposted.claim_type == 'stream':
-            return result
+            return reposted
 
         m = ClaimMessage()
         m.CopyFrom(reposted.message)
