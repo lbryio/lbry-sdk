@@ -880,6 +880,11 @@ class Ledger(metaclass=LedgerRegistry):
                     assert isinstance(reposted_txo.claim, Claim)
                     assert isinstance(txo.claim.repost, Repost)
                     modified_claim = txo.claim.repost.apply(reposted_txo.claim)
+                    if modified_claim is reposted_txo.claim:
+                        # Claim was not modified. The reposted_claim is the
+                        # same as original_reposted_claim.
+                        txo.reposted_claim = txo.original_reposted_claim
+                        continue
                     print(f'modified: {modified_claim.to_dict()}')
                     # Make a deep copy so we can modify the txo without
                     # disturbing the TX cache contents.
