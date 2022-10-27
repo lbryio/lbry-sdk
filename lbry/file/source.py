@@ -97,6 +97,10 @@ class ManagedDownloadSource:
         return self._file_name
 
     @property
+    def stream_name(self):
+        return self.suggested_file_name
+
+    @property
     def status(self) -> str:
         return self._status
 
