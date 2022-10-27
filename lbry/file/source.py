@@ -93,6 +93,10 @@ class ManagedDownloadSource:
         return self._added_on
 
     @property
+    def suggested_file_name(self):
+        return self._file_name
+
+    @property
     def status(self) -> str:
         return self._status
 

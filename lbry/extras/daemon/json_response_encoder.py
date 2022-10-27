@@ -294,7 +294,7 @@ class JSONResponseEncoder(JSONEncoder):
             'stopped': not managed_stream.running,
             'stream_hash': None,
             'stream_name': None,
-            'suggested_file_name': None,
+            'suggested_file_name': managed_stream.suggested_file_name,
             'sd_hash': None,
             'mime_type': managed_stream.mime_type,
             'key': None,
@@ -328,7 +328,6 @@ class JSONResponseEncoder(JSONEncoder):
             result.update({
                 'stream_hash': managed_stream.stream_hash,
                 'stream_name': managed_stream.stream_name,
-                'suggested_file_name': managed_stream.suggested_file_name,
                 'sd_hash': managed_stream.descriptor.sd_hash,
                 'key': managed_stream.descriptor.key,
                 'blobs_completed': managed_stream.blobs_completed,

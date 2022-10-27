@@ -86,6 +86,7 @@ class FileCommands(CommandTestCase):
         self.assertEqual(btih, file['metadata']['source']['bt_infohash'])
         self.assertAlmostEqual(time.time(), file['added_on'], delta=2)
         self.assertEqual("application/octet-stream", file['mime_type'])
+        self.assertEqual("tmp1", file['suggested_file_name'])
         self.assertIn(btih, self.client_session._handles)
 
         # stream over streaming API (full range of the largest file)
