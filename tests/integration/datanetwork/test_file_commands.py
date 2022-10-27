@@ -82,9 +82,10 @@ class FileCommands(CommandTestCase):
         # second call, see its there and move on
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
-        file = (await self.daemon.jsonrpc_file_list())['items'][0]
-        self.assertEqual(btih, file.identifier)
-        self.assertAlmostEqual(time.time(), file.added_on, delta=2)
+        file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
+        self.assertEqual(btih, file['metadata']['source']['bt_infohash'])
+        self.assertAlmostEqual(time.time(), file['added_on'], delta=2)
+        self.assertEqual("application/octet-stream", file['mime_type'])
         self.assertIn(btih, self.client_session._handles)
 
         # stream over streaming API (full range of the largest file)
