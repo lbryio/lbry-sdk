@@ -1,5 +1,6 @@
 import os
 import asyncio
+import time
 import typing
 import logging
 import binascii
@@ -43,7 +44,7 @@ class ManagedDownloadSource:
         self.rowid = rowid
         self.content_fee = content_fee
         self.purchase_receipt = None
-        self._added_on = added_on
+        self._added_on = added_on or int(time.time())
         self.analytics_manager = analytics_manager
         self.downloader = None
 
