@@ -100,6 +100,9 @@ class FileCommands(CommandTestCase):
         self.assertEqual(file['total_bytes'], file['written_bytes'])
         self.assertEqual('finished', file['status'])
 
+        # filter by a field which is missing on torrent
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(stream_hash="abc"), 0)
+
         tx, new_btih = await self.initialize_torrent(tx)
         self.assertNotEqual(btih, new_btih)
         # claim now points to another torrent, update to it

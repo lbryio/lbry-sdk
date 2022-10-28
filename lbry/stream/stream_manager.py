@@ -32,7 +32,7 @@ def path_or_none(encoded_path) -> Optional[str]:
 class StreamManager(SourceManager):
     _sources: typing.Dict[str, ManagedStream]
 
-    filter_fields = SourceManager.filter_fields
+    filter_fields = set(SourceManager.filter_fields)
     filter_fields.update({
         'sd_hash',
         'stream_hash',

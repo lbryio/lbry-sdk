@@ -297,14 +297,17 @@ class FileManager:
 
     def get_filtered(self, *args, **kwargs) -> typing.List[ManagedDownloadSource]:
         """
-        Get a list of filtered and sorted ManagedStream objects
-
-        :param sort_by: field to sort by
-        :param reverse: reverse sorting
-        :param comparison: comparison operator used for filtering
-        :param search_by: fields and values to filter by
+        Get a list of filtered and sorted ManagedDownloadSource objects from all available source managers
         """
-        return sum((manager.get_filtered(*args, **kwargs) for manager in self.source_managers.values()), [])
+        result = last_error = None
+        for manager in self.source_managers.values():
+            try:
+                result = (result or []) + manager.get_filtered(*args, **kwargs)
+            except ValueError as error:
+                last_error = error
+        if result is not None:
+            return result
+        raise last_error
 
     async def delete(self, source: ManagedDownloadSource, delete_file=False):
         for manager in self.source_managers.values():
