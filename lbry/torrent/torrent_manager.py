@@ -1,5 +1,4 @@
 import asyncio
-import binascii
 import logging
 import os
 import typing
@@ -21,12 +20,6 @@ if typing.TYPE_CHECKING:
     from lbry.extras.daemon.storage import StoredContentClaim
 
 log = logging.getLogger(__name__)
-
-
-def path_or_none(encoded_path) -> Optional[str]:
-    if not encoded_path:
-        return
-    return binascii.unhexlify(encoded_path).decode()
 
 
 class TorrentSource(ManagedDownloadSource):
@@ -185,6 +178,8 @@ class TorrentManager(SourceManager):
     async def initialize_from_database(self):
         for file in await self.storage.get_all_torrent_files():
             claim = await self.storage.get_content_claim_for_torrent(file['bt_infohash'])
+            file['download_directory'] = bytes.fromhex(file['download_directory'] or '').decode() or None
+            file['file_name'] = bytes.fromhex(file['file_name'] or '').decode() or None
             await self._load_stream(None, claim=claim, **file)
 
     async def start(self):
