@@ -89,6 +89,21 @@ class FileCommands(CommandTestCase):
         await self.reflector.blob_manager.delete_blobs(all_except_sd)
         self.assertEqual(all_except_sd, await self.daemon.jsonrpc_file_reflect(sd_hash=sd_hash))
 
+    async def test_sd_blob_fields_fallback(self):
+        claim_id = self.get_claim_id(await self.stream_create('foo', '0.01', suffix='.txt'))
+        stream = (await self.daemon.jsonrpc_file_list())["items"][0]
+        stream.descriptor.suggested_file_name = ' '
+        stream.descriptor.stream_name = ' '
+        stream.descriptor.stream_hash = stream.descriptor.get_stream_hash()
+        sd_hash = stream.descriptor.sd_hash = stream.descriptor.calculate_sd_hash()
+        await stream.descriptor.make_sd_blob()
+        await self.daemon.jsonrpc_file_delete(claim_name='foo')
+        await self.stream_update(claim_id=claim_id, sd_hash=sd_hash)
+        file_dict = await self.out(self.daemon.jsonrpc_get('lbry://foo', save_file=True))
+        self.assertEqual(file_dict['suggested_file_name'], stream.file_name)
+        self.assertEqual(file_dict['stream_name'], stream.file_name)
+        self.assertEqual(file_dict['mime_type'], 'text/plain')
+
     async def test_file_management(self):
         await self.stream_create('foo', '0.01')
         await self.stream_create('foo2', '0.01')

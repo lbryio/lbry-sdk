@@ -13,11 +13,12 @@ from lbry.schema.url import URL
 from lbry.wallet.dewies import dewies_to_lbc
 from lbry.file.source_manager import SourceManager
 from lbry.file.source import ManagedDownloadSource
+from lbry.extras.daemon.storage import StoredContentClaim
 if typing.TYPE_CHECKING:
     from lbry.conf import Config
     from lbry.extras.daemon.analytics import AnalyticsManager
     from lbry.extras.daemon.storage import SQLiteStorage
-    from lbry.wallet import WalletManager, Output
+    from lbry.wallet import WalletManager
     from lbry.extras.daemon.exchange_rate_manager import ExchangeRateManager
 
 log = logging.getLogger(__name__)
@@ -194,21 +195,24 @@ class FileManager:
             ####################
             # make downloader and wait for start
             ####################
+            # temporary with fields we know so downloader can start. Missing fields are populated later.
+            stored_claim = StoredContentClaim(outpoint=outpoint, claim_id=txo.claim_id, name=txo.claim_name,
+                                              amount=txo.amount, height=txo.tx_ref.height,
+                                              serialized=claim.to_bytes().hex())
 
             if not claim.stream.source.bt_infohash:
                 # fixme: this shouldnt be here
                 stream = ManagedStream(
                     self.loop, self.config, source_manager.blob_manager, claim.stream.source.sd_hash,
                     download_directory, file_name, ManagedStream.STATUS_RUNNING, content_fee=payment,
-                    analytics_manager=self.analytics_manager
+                    analytics_manager=self.analytics_manager, claim=stored_claim
                 )
                 stream.downloader.node = source_manager.node
             else:
                 stream = TorrentSource(
                     self.loop, self.config, self.storage, identifier=claim.stream.source.bt_infohash,
                     file_name=file_name, download_directory=download_directory or self.config.download_dir,
-                    status=ManagedStream.STATUS_RUNNING,
-                    analytics_manager=self.analytics_manager,
+                    status=ManagedStream.STATUS_RUNNING, claim=stored_claim, analytics_manager=self.analytics_manager,
                     torrent_session=source_manager.torrent_session
                 )
             log.info("starting download for %s", uri)
