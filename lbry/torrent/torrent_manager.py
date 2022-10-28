@@ -104,6 +104,10 @@ class TorrentSource(ManagedDownloadSource):
     def completed(self):
         return self.torrent_session.is_completed(self.identifier)
 
+    @property
+    def status(self):
+        return self.STATUS_FINISHED if self.completed else self.STATUS_RUNNING
+
     async def stream_file(self, request):
         log.info("stream torrent to browser for lbry://%s#%s (btih %s...)", self.claim_name, self.claim_id,
                  self.identifier[:6])

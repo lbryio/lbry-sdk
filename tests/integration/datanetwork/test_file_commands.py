@@ -82,16 +82,23 @@ class FileCommands(CommandTestCase):
         # second call, see its there and move on
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        self.assertIn(btih, self.client_session._handles)
+
+        # stream over streaming API (full range of the largest file)
+        await self.assert_torrent_streaming_works(btih)
+
+        # check json encoder fields for torrent sources
         file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
         self.assertEqual(btih, file['metadata']['source']['bt_infohash'])
         self.assertAlmostEqual(time.time(), file['added_on'], delta=2)
         self.assertEqual("application/octet-stream", file['mime_type'])
         self.assertEqual("tmp1", file['suggested_file_name'])
         self.assertEqual("tmp1", file['stream_name'])
-        self.assertIn(btih, self.client_session._handles)
-
-        # stream over streaming API (full range of the largest file)
-        await self.assert_torrent_streaming_works(btih)
+        self.assertTrue(file['completed'])
+        self.assertGreater(file['total_bytes_lower_bound'], 0)
+        self.assertEqual(file['total_bytes_lower_bound'], file['total_bytes'])
+        self.assertEqual(file['total_bytes'], file['written_bytes'])
+        self.assertEqual('finished', file['status'])
 
         tx, new_btih = await self.initialize_torrent(tx)
         self.assertNotEqual(btih, new_btih)
