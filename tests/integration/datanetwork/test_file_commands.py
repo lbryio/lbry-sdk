@@ -115,6 +115,8 @@ class FileCommands(CommandTestCase):
         await self.daemon.file_manager.start()
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        # check it was saved properly, once
+        self.assertEqual(1, len(await self.daemon.storage.get_all_torrent_files()))
 
         self.assertIn(new_btih, self.client_session._handles)
         self.assertNotIn(btih, self.client_session._handles)

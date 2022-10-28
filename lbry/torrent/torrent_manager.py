@@ -50,7 +50,7 @@ class TorrentSource(ManagedDownloadSource):
     def mime_type(self) -> Optional[str]:
         return guess_media_type(os.path.basename(self.full_path))[0]
 
-    async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
+    async def setup(self, timeout: Optional[float] = None):
         try:
             metadata_download = self.torrent_session.add_torrent(self.identifier, self.download_directory)
             await asyncio.wait_for(metadata_download, timeout, loop=self.loop)
@@ -59,6 +59,9 @@ class TorrentSource(ManagedDownloadSource):
             raise DownloadMetadataTimeoutError(self.identifier)
         self.download_directory = self.torrent_session.save_path(self.identifier)
         self._file_name = Path(self.torrent_session.full_path(self.identifier)).name
+
+    async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
+        await self.setup(timeout)
         await self.storage.add_torrent(self.identifier, self.torrent_length, self.torrent_name)
         self.rowid = await self.storage.save_downloaded_file(
             self.identifier, self.file_name, self.download_directory, 0.0, added_on=self._added_on
@@ -173,7 +176,7 @@ class TorrentManager(SourceManager):
             torrent_session=self.torrent_session
         )
         self.add(stream)
-        await stream.start()
+        await stream.setup()
 
     async def initialize_from_database(self):
         for file in await self.storage.get_all_torrent_files():
