@@ -21,6 +21,7 @@ class FileCommands(CommandTestCase):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.skip_libtorrent = False
+        self.streaming_port = 60818
 
     async def add_forever(self):
         while True:
@@ -56,11 +57,11 @@ class FileCommands(CommandTestCase):
         return tx, btih
 
     async def assert_torrent_streaming_works(self, btih):
-        url = f'http://{self.daemon.conf.streaming_host}:{self.daemon.conf.streaming_port}/get/torrent'
+        url = f'http://{self.daemon.conf.streaming_host}:{self.streaming_port}/get/torrent'
         if self.daemon.streaming_runner.server is None:
             await self.daemon.streaming_runner.setup()
             site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
-                                       self.daemon.conf.streaming_port)
+                                       self.streaming_port)
             await site.start()
         async with aiohttp_request('get', url) as req:
             self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
