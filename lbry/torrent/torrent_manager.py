@@ -199,9 +199,6 @@ class TorrentManager(SourceManager):
 
     async def _delete(self, source: ManagedDownloadSource, delete_file: Optional[bool] = False):
         raise NotImplementedError
-        # blob_hashes = [source.sd_hash] + [b.blob_hash for b in source.descriptor.blobs[:-1]]
-        # await self.blob_manager.delete_blobs(blob_hashes, delete_from_db=False)
-        # await self.storage.delete_stream(source.descriptor)
 
     async def stream_partial_content(self, request: Request, identifier: str):
         return await self._sources[identifier].stream_file(request)
