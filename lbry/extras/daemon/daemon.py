@@ -2943,19 +2943,21 @@ class Daemon(metaclass=JSONRPCServerType):
 
     @requires(WALLET_COMPONENT)
     async def jsonrpc_channel_sign(
-            self, channel_name=None, channel_id=None, hexdata=None, channel_account_id=None, wallet_id=None):
+            self, channel_name=None, channel_id=None, hexdata=None, salt=None,
+            channel_account_id=None, wallet_id=None):
         """
         Signs data using the specified channel signing key.
 
         Usage:
-            channel_sign [<channel_name> | --channel_name=<channel_name>]
-                         [<channel_id> | --channel_id=<channel_id>] [<hexdata> | --hexdata=<hexdata>]
+            channel_sign [<channel_name> | --channel_name=<channel_name>] [<channel_id> | --channel_id=<channel_id>]
+                         [<hexdata> | --hexdata=<hexdata>] [<salt> | --salt=<salt>]
                          [--channel_account_id=<channel_account_id>...] [--wallet_id=<wallet_id>]
 
         Options:
             --channel_name=<channel_name>            : (str) name of channel used to sign (or use channel id)
             --channel_id=<channel_id>                : (str) claim id of channel used to sign (or use channel name)
             --hexdata=<hexdata>                      : (str) data to sign, encoded as hexadecimal
+            --salt=<salt>                            : (str) salt to use for signing, default is to use timestamp
             --channel_account_id=<channel_account_id>: (str) one or more account ids for accounts to look in
                                                              for channel certificates, defaults to all accounts.
             --wallet_id=<wallet_id>                  : (str) restrict operation to specific wallet
@@ -2972,11 +2974,13 @@ class Daemon(metaclass=JSONRPCServerType):
         signing_channel = await self.get_channel_or_error(
             wallet, channel_account_id, channel_id, channel_name, for_signing=True
         )
-        timestamp = str(int(time.time()))
-        signature = signing_channel.sign_data(unhexlify(str(hexdata)), timestamp)
+        if salt is None:
+            salt = str(int(time.time()))
+        signature = signing_channel.sign_data(unhexlify(str(hexdata)), salt)
         return {
             'signature': signature,
-            'signing_ts': timestamp
+            'signing_ts': salt,  # DEPRECATED
+            'salt': salt,
         }
 
     @requires(WALLET_COMPONENT)

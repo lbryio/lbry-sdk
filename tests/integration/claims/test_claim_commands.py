@@ -31,7 +31,7 @@ STREAM_TYPES = {
 
 def verify(channel, data, signature, channel_hash=None):
     pieces = [
-        signature['signing_ts'].encode(),
+        signature['salt'].encode(),
         channel_hash or channel.claim_hash,
         data
     ]
@@ -1239,8 +1239,13 @@ class ChannelCommands(CommandTestCase):
         channel = channel_tx.outputs[0]
         signature1 = await self.out(self.daemon.jsonrpc_channel_sign(channel_name='@signer', hexdata=data_to_sign))
         signature2 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=data_to_sign))
+        signature3 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=data_to_sign, salt='beef'))
+        signature4 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=data_to_sign, salt='beef'))
+        self.assertNotEqual(signature2, signature3)
+        self.assertEqual(signature3, signature4)
         self.assertTrue(verify(channel, unhexlify(data_to_sign), signature1))
         self.assertTrue(verify(channel, unhexlify(data_to_sign), signature2))
+        self.assertTrue(verify(channel, unhexlify(data_to_sign), signature3))
         signature3 = await self.out(self.daemon.jsonrpc_channel_sign(channel_id=channel.claim_id, hexdata=99))
         self.assertTrue(verify(channel, unhexlify('99'), signature3))
 
