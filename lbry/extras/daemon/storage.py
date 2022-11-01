@@ -638,7 +638,8 @@ class SQLiteStorage(SQLiteMixin):
 
     async def get_all_torrent_files(self) -> typing.List[typing.Dict]:
         def _get_all_torrent_files(transaction):
-            cursor = transaction.execute("select * from file join torrent on file.bt_infohash=torrent.bt_infohash")
+            cursor = transaction.execute(
+                "select file.ROWID as rowid, * from file join torrent on file.bt_infohash=torrent.bt_infohash")
             return map(lambda row: dict(zip(list(map(itemgetter(0), cursor.description)), row)), cursor.fetchall())
         return list(await self.db.run(_get_all_torrent_files))
 

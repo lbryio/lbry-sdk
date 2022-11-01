@@ -183,7 +183,7 @@ class TorrentManager(SourceManager):
             claim = await self.storage.get_content_claim_for_torrent(file['bt_infohash'])
             file['download_directory'] = bytes.fromhex(file['download_directory'] or '').decode() or None
             file['file_name'] = bytes.fromhex(file['file_name'] or '').decode() or None
-            await self._load_stream(None, claim=claim, **file)
+            await self._load_stream(claim=claim, **file)
 
     async def start(self):
         await super().start()
