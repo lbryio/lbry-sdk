@@ -1,8 +1,12 @@
 from unittest import TestCase
 from decimal import Decimal
+import json
 
 from lbry.schema.claim import Claim, Stream, Collection
+from lbry.schema.attrs import StreamExtension, StringMapMessage
 from lbry.error import InputValueIsNoneError
+from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.any_pb2 import Any as AnyMessage
 
 
 class TestClaimContainerAwareness(TestCase):
@@ -217,3 +221,206 @@ class TestStreamUpdating(TestCase):
             stream.update(file_name=None)
         with self.assertRaises(InputValueIsNoneError):
             stream.update(thumbnail_url=None)
+
+class TestExtensionUpdating(TestCase):
+
+    def setUp(self):
+        self.cad1 = StringMapMessage()
+        self.schema1 = 'cad'
+        self.cad1.s['material'].vs.append('PLA1')
+        self.cad1.s['material'].vs.append('PLA2')
+        self.cad1.s['cubic_cm'].vs.append('5')
+        self.schema1 = 'cad'
+        self.ext1 = AnyMessage()
+        self.ext1.Pack(self.cad1, type_url_prefix='')
+        self.ext1 = StreamExtension('cad', self.ext1)
+        self.ext1_dict = {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}}
+        self.ext1_json = json.dumps(self.ext1_dict)
+
+        self.mus1 = StringMapMessage()
+        self.schema2 = 'music'
+        self.mus1.s['venue'].vs.append('studio')
+        self.mus1.s['genre'].vs.append('metal')
+        self.mus1.s['instrument'].vs.append('drum')
+        self.mus1.s['instrument'].vs.append('cymbal')
+        self.mus1.s['instrument'].vs.append('guitar')
+        self.ext2 = AnyMessage()
+        self.ext2.Pack(self.mus1, type_url_prefix='')
+        self.ext2 = StreamExtension('music', self.ext2)
+        self.ext2_dict = {'music': {'genre': 'metal', 'venue': 'studio', 'instrument': ['drum', 'cymbal', 'guitar']}}
+        self.ext2_json = json.dumps(self.ext2_dict)
+
+        self.lit1 = StringMapMessage()
+        self.schema3 = 'lit'
+        self.lit1.s['pages'].vs.append('185')
+        self.lit1.s['genre'].vs.append('fiction')
+        self.lit1.s['genre'].vs.append('mystery')
+        self.lit1.s['format'].vs.append('epub')
+        self.ext3 = AnyMessage()
+        self.ext3.Pack(self.lit1, type_url_prefix='')
+        self.ext3 = StreamExtension('lit', self.ext3)
+        self.ext3_dict = {'lit': {'genre': ['fiction', 'mystery'], 'format': 'epub', 'pages': '185'}}
+        self.ext3_json = json.dumps(self.ext3_dict)
+
+    def test_extension_properties(self):
+        self.maxDiff = None
+        # Verify schema.
+        self.assertEqual(self.ext1.schema, 'cad')
+        self.assertEqual(self.ext2.schema, 'music')
+        self.assertEqual(self.ext3.schema, 'lit')
+        # Verify to_dict().
+        self.assertEqual(self.ext1.to_dict(), self.ext1_dict)
+        self.assertEqual(self.ext2.to_dict(), self.ext2_dict)
+        self.assertEqual(self.ext3.to_dict(), self.ext3_dict)
+        # Decode from dict.
+        parsed1 = StreamExtension(None, AnyMessage())
+        parsed1.from_value(self.ext1_dict)
+        self.assertEqual(parsed1.to_dict(), self.ext1_dict)
+        parsed2 = StreamExtension(None, AnyMessage())
+        parsed2.from_value(self.ext2_dict)
+        self.assertEqual(parsed2.to_dict(), self.ext2_dict)
+        parsed3 = StreamExtension(None, AnyMessage())
+        parsed3.from_value(self.ext3_dict)
+        self.assertEqual(parsed3.to_dict(), self.ext3_dict)
+        # Decode from str (JSON).
+        parsed1 = StreamExtension(None, AnyMessage())
+        parsed1.from_value(self.ext1_json)
+        self.assertEqual(parsed1.to_dict(), self.ext1_dict)
+        parsed2 = StreamExtension(None, AnyMessage())
+        parsed2.from_value(self.ext2_json)
+        self.assertEqual(parsed2.to_dict(), self.ext2_dict)
+        parsed3 = StreamExtension(None, AnyMessage())
+        parsed3.from_value(self.ext3_json)
+        self.assertEqual(parsed3.to_dict(), self.ext3_dict)
+
+    def test_extension_clear_field(self):
+        self.maxDiff = None
+        ext = StreamExtension(None, AnyMessage())
+        ext.from_value(self.ext1_dict)
+        mod = StreamExtension(None, AnyMessage())
+        # Delete non-existent item does nothing
+        mod.from_value({ext.schema: {'material': 'PLA3'}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), self.ext1_dict)
+        # Delete one item.
+        mod.from_value({ext.schema: {'material': 'PLA1'}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'cad': {'material': 'PLA2', 'cubic_cm': '5'}})
+        # Delete non-existent key.
+        mod.from_value({ext.schema: {'size': []}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'cad': {'material': 'PLA2', 'cubic_cm': '5'}})
+        # Delete one key.
+        mod.from_value({ext.schema: {'cubic_cm': []}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'cad': {'material': 'PLA2'}})
+        ext = StreamExtension(None, AnyMessage())
+        ext.from_value(self.ext2_dict)
+        mod = StreamExtension(None, AnyMessage())
+        # Delete non-existent item does nothing
+        mod.from_value({ext.schema: {'genre': 'rap'}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), self.ext2_dict)
+        # Delete one item.
+        mod.from_value({ext.schema: {'instrument': 'guitar'}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'music': {'genre': 'metal', 'venue': 'studio', 'instrument': ['drum', 'cymbal']}})
+        # Delete non-existent key.
+        mod.from_value({ext.schema: {'format': []}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'music': {'genre': 'metal', 'venue': 'studio', 'instrument': ['drum', 'cymbal']}})
+        # Delete one key.
+        mod.from_value({ext.schema: {'instrument': ['drum']}})
+        self.assertEqual(ext.merge(mod, delete=True).to_dict(), {'music': {'genre': 'metal', 'venue': 'studio', 'instrument': 'cymbal'}})
+
+    def test_extension_set_field(self):
+        self.maxDiff = None
+        ext = StreamExtension(None, AnyMessage())
+        ext.from_value(self.ext1_dict)
+        mod = StreamExtension(None, AnyMessage())
+        # Add item within existing key.
+        mod.from_value({ext.schema: {'material': 'PLA3'}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'cad': {'material': ['PLA1', 'PLA2', 'PLA3'], 'cubic_cm': '5'}})
+        # Add key with multiple items.
+        mod.from_value({ext.schema: {'tool': ['drill', 'printer']}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'cad': {'material': ['PLA1', 'PLA2', 'PLA3'], 'tool': ['drill', 'printer'], 'cubic_cm': '5'}})
+        # Add items within multiple keys.
+        mod.from_value({ext.schema: {'tool': 'file', 'material': 'glue'}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'cad': {'material': ['PLA1', 'PLA2', 'PLA3', 'glue'], 'tool': ['drill', 'printer', 'file'], 'cubic_cm': '5'}})
+        ext = StreamExtension(None, AnyMessage())
+        ext.from_value(self.ext3_dict)
+        mod = StreamExtension(None, AnyMessage())
+        # Add item within existing key.
+        mod.from_value({ext.schema: {'genre': 'scifi'}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'lit': {'genre': ['fiction', 'mystery', 'scifi'], 'format': 'epub', 'pages': '185'}})
+        # Add key with multiple items.
+        mod.from_value({ext.schema: {'toc': ['Intro', 'Chapter 1']}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'lit': {'genre': ['fiction', 'mystery', 'scifi'], 'format': 'epub', 'toc': ['Intro', 'Chapter 1'], 'pages': '185'}})
+        # Add items within multiple keys.
+        mod.from_value({ext.schema: {'toc': ['Chapter 2', 'Chapter 3'], 'genre': 'cyberpunk'}})
+        self.assertEqual(ext.merge(mod).to_dict(), {'lit': {'genre': ['fiction', 'mystery', 'scifi', 'cyberpunk'], 'format': 'epub', 'toc': ['Intro', 'Chapter 1', 'Chapter 2', 'Chapter 3'], 'pages': '185'}})
+
+    def test_stream_extension_update(self):
+        self.maxDiff = None
+        stream = Stream()
+
+        # Add "cad".
+        stream.update(extensions=self.ext1.to_dict())
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                }
+            }},
+            stream.to_dict()
+        )
+
+        # Add "music".
+        stream.update(extensions=self.ext2.to_dict())
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                },
+                'music': {
+                    'genre': 'metal',
+                    'venue': 'studio',
+                    'instrument': ['drum', 'cymbal', 'guitar'],
+                },
+            }},
+            stream.to_dict()
+        )
+
+        # Patch "music", changing "venue".
+        stream.update(
+            clear_extensions=['{"music": {"venue": ["studio"]}}'],
+            extensions=['{"music": {"venue": ["live"]}}'],
+        )
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                },
+                'music': {
+                    'genre': 'metal',
+                    'venue': 'studio',
+                    'instrument': ['drum', 'cymbal', 'guitar'],
+                },
+            }},
+            stream.to_dict()
+        )
+
+        # Remove "cad".
+        stream.update(
+            clear_extensions='{"cad": {}}',
+        )
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'music': {
+                    'genre': 'metal',
+                    'venue': 'studio',
+                    'instrument': ['drum', 'cymbal', 'guitar'],
+                },
+            }},
+            stream.to_dict()
+        )

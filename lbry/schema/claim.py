@@ -1,3 +1,4 @@
+import json
 import logging
 from typing import List
 from binascii import hexlify, unhexlify
@@ -17,7 +18,7 @@ from lbry.schema.mime_types import guess_media_type, guess_stream_type
 from lbry.schema.attrs import (
     Source, Playable, Dimmensional, Fee, Image, Video, Audio,
     LanguageList, LocationList, ClaimList, ModifyingClaimReference, TagList,
-    StreamExtensionList
+    StreamExtensionMap
 )
 from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
 from lbry.error import InputValueIsNoneError
@@ -212,6 +213,8 @@ class Stream(BaseClaim):
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = str(self.fee.amount)
+        print(f"raw extensions: {claim['extensions']}")
+        claim['extensions'] = self.extensions.to_dict()
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
@@ -265,13 +268,22 @@ class Stream(BaseClaim):
                 media_args['width'] = width
             media.update(**media_args)
 
-        if kwargs.pop('clear_extensions', False):
-            self.message.ClearField('ext')
-        exts = kwargs.pop('extensions', None)
-        if exts:
-            if not isinstance(exts, list):
-                exts = [exts]
-            self.extensions.update(exts)
+        clr_exts = kwargs.pop('clear_extensions', None)
+        if clr_exts:
+            if isinstance(clr_exts, list):
+                for e in clr_exts:
+                    self.extensions.merge(e, delete=True)
+            elif isinstance(clr_exts, (str, dict)):
+                self.extensions.merge(clr_exts, delete=True)
+            else:
+                self.message.ClearField('extensions')
+        set_exts = kwargs.pop('extensions', None)
+        if set_exts:
+            if isinstance(set_exts, list):
+                for e in set_exts:
+                    self.extensions.merge(e)
+            else:
+                self.extensions.merge(set_exts)
 
         return super().update(**kwargs)
 
@@ -340,8 +352,8 @@ class Stream(BaseClaim):
         return Audio(self.message.audio)
 
     @property
-    def extensions(self) -> StreamExtensionList:
-        return StreamExtensionList(self.message.extensions)
+    def extensions(self) -> StreamExtensionMap:
+        return StreamExtensionMap(self.message.extensions)
 
 
 class Channel(BaseClaim):

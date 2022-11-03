@@ -2,20 +2,23 @@ import json
 import logging
 import os.path
 import hashlib
+from collections.abc import MutableMapping, MutableSet, Iterable
 from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
 from binascii import Error as DecodeError
 from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import ParseError as MessageParseError
 from google.protobuf.any_pb2 import Any as AnyMessage
-from google.protobuf import descriptor_pool as _descriptor_pool
+from google.protobuf import descriptor_pool
 from google.protobuf.message import DecodeError as MessageDecodeError
 from google.protobuf.message_factory import MessageFactory
+from google.protobuf.descriptor import FieldDescriptor
 
 from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
-from lbry.error import MissingPublishedFileError, EmptyPublishedFileError, InputValueError
+from lbry.error import MissingPublishedFileError, EmptyPublishedFileError, StreamExtensionTypeUnresolved
 
 import lbry.schema.claim as claim
 from lbry.schema.mime_types import guess_media_type
@@ -28,6 +31,10 @@ from lbry.schema.types.v2.claim_pb2 import (
     Language as LanguageMessage,
     Stream as StreamMessage,
 )
+from lbry.schema.types.v2.stringmap_ext_pb2 import (
+    StringMap as StringMapMessage,
+)
+from lbry.schema.types.v2.descriptor_ext_pb2 import Descriptor as DescriptorMessage
 
 log = logging.getLogger(__name__)
 
@@ -421,16 +428,16 @@ class ModifyingClaimReference(ClaimReference):
         if clr_exts is not None:
             print(f'clear extensions: {clr_exts}')
             deletions = StreamModifiable(mods.deletions)
-            if not isinstance(clr_exts, list):
-                clr_exts = [clr_exts]
-            deletions.extensions.update(clr_exts)
+            if isinstance(clr_exts, str) and clr_exts.startswith('{'):
+                clr_exts = json.loads(clr_exts)
+            deletions.extensions.merge(clr_exts)
 
         if set_exts is not None:
             print(f'set extensions: {set_exts}')
             edits = StreamModifiable(mods.edits)
-            if not isinstance(set_exts, list):
-                set_exts = [set_exts]
-            edits.extensions.update(set_exts)
+            if isinstance(set_exts, str) and set_exts.startswith('{'):
+                set_exts = json.loads(set_exts)
+            edits.extensions.merge(set_exts)
 
         return kwargs
 
@@ -455,9 +462,9 @@ class ModifyingClaimReference(ClaimReference):
 
         mods = getattr(self.message, self.modification_type)
         # apply deletions
-        exts.update(StreamModifiable(mods.deletions).extensions, delete=True)
+        exts.merge(StreamModifiable(mods.deletions).extensions, delete=True)
         # apply edits
-        exts.update(StreamModifiable(mods.edits).extensions)
+        exts.merge(StreamModifiable(mods.edits).extensions)
         return result
 
 class ClaimList(BaseMessageList[ClaimReference]):
@@ -661,25 +668,57 @@ class TagList(BaseMessageList[str]):
             self.message.append(tag)
 
 class StreamExtension(Metadata):
-    __slots__ = ()
+    __slots__ = Metadata.__slots__ + ('extension_schema', 'unpacked_message',)
 
-    VALID_STREAM_EXTENSION_NAMES = [
-        'pb.Stream.Extension.StringMap', # generic catch-all type used to test
-    ]
+    # Built-in extensions are those that are known at build time.
+    # They don't need to be looked up via get_claim_by_claim_id().
+    BUILTIN_EXTENSIONS = {
+        'ext.Descriptor': DescriptorMessage.DESCRIPTOR.file.serialized_pb, # Protobuf descriptor
+        'ext.StringMap':  StringMapMessage.DESCRIPTOR.file.serialized_pb,  # Generic catch-all extension
+    }
+
+    # Protobuf descriptors for StreamExtension types discovered during execution.
+    DESCRIPTOR_POOL = descriptor_pool.DescriptorPool()
+
+    def __init__(self, schema, message):
+        super().__init__(message)
+        self.extension_schema = schema
+        if message.TypeName():
+            self._unpack_message()
+
+    def _unpack_message(self):
+        # Check AnyMessage type and unpack contents.
+        value = self.message
+        url_prefix, _, type_name = value.type_url.rpartition('/')
+        pool = self.DESCRIPTOR_POOL
+        descriptor = None
+        if type_name in self.BUILTIN_EXTENSIONS:
+            pool.AddSerializedFile(self.BUILTIN_EXTENSIONS[type_name])
+            del self.BUILTIN_EXTENSIONS[type_name]
+        try:
+            descriptor = pool.FindMessageTypeByName(type_name)
+        except KeyError:
+            raise StreamExtensionTypeUnresolved(url_prefix, type_name)
+        cls = MessageFactory(pool).GetPrototype(descriptor)
+        self.unpacked_message = cls()
+        value.Unpack(self.unpacked_message)
+
+    def to_dict(self, include_schema=True):
+        if self.message.TypeName() == 'ext.StringMap':
+            attrs = self.unpacked.to_dict()
+        else:
+            attrs = MessageToDict(self.unpacked_message, preserving_proto_field_name=True)
+        return  { f'{self.schema}': attrs } if include_schema else attrs
 
     def from_value(self, value):
+        schema = None
+
+        # If incoming is an extension, we have an AnyMessage.
         if isinstance(value, StreamExtension):
-            self.message.CopyFrom(value.message)
-            return
+            schema = value.schema
+            value = value.message
 
-        if isinstance(value, bytes):
-            try:
-                any = AnyMessage()
-                any.ParseFromString(value)
-                value = any
-            except MessageDecodeError:
-                pass
-
+        # Try to decode hexlified string -> bytes -> AnyMessage.
         if isinstance(value, (str, bytes)):
             try:
                 data = unhexlify(value)
@@ -689,99 +728,243 @@ class StreamExtension(Metadata):
             except DecodeError:
                 pass
 
+        # Try to decode bytes -> AnyMessage.
+        if isinstance(value, bytes):
+            try:
+                any = AnyMessage()
+                any.ParseFromString(value)
+                value = any
+            except MessageDecodeError:
+                pass
+
+        # Translate str -> (JSON) dict.
         if isinstance(value, str) and value.startswith('{'):
             value = json.loads(value)
 
+        # Try to decode (long form) dict -> StringMapMessage -> AnyMessage.
         if isinstance(value, dict):
-            msg = StreamMessage.Extension.StringMap()
-            msg = ParseDict(value, msg)
-            any = AnyMessage()
-            any.Pack(msg)
-            value = any
+            try:
+                msg = StringMapMessage()
+                msg = ParseDict(value, msg)
+                any = AnyMessage()
+                any.Pack(msg, type_url_prefix='')
+                value = any
+            except MessageParseError:
+                pass
 
+        # Try to decode (abbreviated) dict -> StringMapMessage -> AnyMessage.
+        if isinstance(value, dict) and len(value) == 1:
+            try:
+                any = AnyMessage()
+                for key, val in value.items():
+                    schema = key
+                    if isinstance(val, AnyMessage):
+                        # Payload is already an AnyMessage.
+                        any.CopyFrom(val)
+                        break
+                    msg = StringMapMessage()
+                    for k, v in val.items():
+                        if isinstance(v, list):
+                            msg.s[k].vs.extend(v)
+                        else:
+                            msg.s[k].vs.append(v)
+                    any.Pack(msg, type_url_prefix='')
+                    break
+                value = any
+            except (AttributeError, KeyError, IndexError):
+                pass
+
+        # Either we have an AnyMessage or decoding failed.
         if isinstance(value, AnyMessage):
-            # Check contents of AnyMessage to ensure the type is known to us.
-            descriptor = _descriptor_pool.Default().FindMessageTypeByName(value.TypeName())
-            cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
-            if not cls:
-                raise InputValueError(f'unrecognized stream extension type: {value.TypeName()}')
-            inner_message = cls()
-            value.Unpack(inner_message)
-            # Message type is known to us. But is it a legal extension?
-            if value.TypeName() not in self.VALID_STREAM_EXTENSION_NAMES:
-                raise InputValueError(f'invalid stream extension type: {value.TypeName()}')
-            self.message.any.CopyFrom(value)
+            if schema is not None:
+                self.extension_schema = schema
+            self.message.CopyFrom(value)
+            self._unpack_message()
         else:
             raise ValueError(f'Could not parse StreamExtension value: {value}')
 
     @property
-    def schema(self) -> str:
-        if not self.message.HasField('any'):
-            return None
-        descriptor = _descriptor_pool.Default().FindMessageTypeByName(self.message.any.TypeName())
-        cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
-        inner_message = cls()
-        self.message.any.Unpack(inner_message)
-        if self.message.any.TypeName() == 'pb.Stream.Extension.StringMap':
-            # The generic StringMap message may be used for many different applications.
-            # It has an embedded 'schema' field to distiguish between them.
-            return inner_message.schema
-        return self.message.any.TypeName()
+    def schema(self):
+        return self.extension_schema
 
     @property
-    def fields(self):
-        if not self.message.HasField('any'):
-            return []
-        descriptor = _descriptor_pool.Default().FindMessageTypeByName(self.message.any.TypeName())
-        cls = MessageFactory(_descriptor_pool).GetPrototype(descriptor)
-        inner_message = cls()
-        self.message.any.Unpack(inner_message)
-        if self.message.any.TypeName() == 'pb.Stream.Extension.StringMap':
-            # The special "schema" field of StringMap doesn't count.
-            return [f for f in filter(lambda f: f[0].name != 'schema', inner_message.ListFields())]
-        return inner_message.ListFields()
+    def unpacked(self):
+        if self.message.TypeName() == 'ext.StringMap':
+            return StringMap(self.unpacked_message)
+        return GenericExt(self.unpacked_message)
 
-    def merge(self, ext: 'StreamExtension', delete: bool = False):
-        if self.schema != ext.schema:
-            return
+    def merge(self, ext: 'StreamExtension', delete: bool = False) -> 'StreamExtension':
+        if not self.message.TypeName():
+            self.from_value(ext)
+            return self
+        self.unpacked.merge(ext.unpacked, delete=delete)
+        return self
+
+class StringMap(Metadata, MutableMapping, Iterable):
+    __slots__ = ()
+
+    def to_dict(self) -> dict:
+        """Generate short formdictionary {"<k1>": "<v1>", "<k2>": ["<v21>", "<v22>"], ...}}"""
+        attrs = {}
+        for k, v in self.items():
+            values = list(v)
+            if len(values) > 1:
+                attrs.update(**{k: values})
+            elif len(values) > 0:
+                attrs.update(**{k: values[0]})
+        return attrs
+
+    def merge(self, other: 'StringMap', delete: bool = False) -> 'StringMap':
+        for k, v in other.items():
+            if delete:
+                if k not in self:
+                    continue
+                elif len(v) > 0:
+                    self[k] -= v
+                else:
+                    del self[k]
+            else:
+                if k not in self:
+                    self[k] = v
+                else:
+                    self[k] |= v
+
+    def __getitem__(self, key):
+        if key in self.message.s:
+            return StringList(self.message.s[key])
+        raise KeyError(key)
+
+    def __setitem__(self, key, value):
+        self.message.s[key].CopyFrom(value.message)
+
+    def __delitem__(self, key):
+        del self.message.s[key]
+
+    def __iter__(self):
+        return iter(self.message.s)
+
+    def __len__(self):
+        return len(self.message.s)
+
+class StringList(Metadata, MutableSet, Iterable):
+    __slots__ = ()
+    item_class = str
+
+    def __contains__(self, x):
+        return x in self.message.vs
+
+    def __iter__(self):
+        return iter(self.message.vs)
+
+    def __len__(self):
+        return len(self.message.vs)
+
+    def add(self, x):
+        if x not in self:
+            self.message.vs.append(x)
+
+    def discard(self, x):
+        for i, v in enumerate(self.message.vs):
+            if v == x:
+                del self.message.vs[i]
+
+class GenericExt(Metadata, MutableMapping, Iterable):
+    __slots__ = Metadata.__slots__ + ( 'field_descriptor', )
+
+    def __init__(self, message):
+        super().__init__(message)
+        self.field_descriptor = {}
+        for f, v in message.ListFields():
+            self.field_descriptor[f.name] = f
+
+    def merge(self, other: 'GenericExt', delete: bool = False) -> 'GenericExt':
         if delete:
-            for f in ext.message.DESCRIPTOR.fields:
-                if ext.message.HasField(f.name):
+            for f in other.message.ListFields():
+                if other.message.HasField(f.name):
                     self.message.ClearField(f.name)
         else:
-            self.message.any.MergeFrom(ext.message.any)
+            self.message.MergeFrom(other.message)
+        return self
 
-    def update(self, **kwargs):
-        extension = {'any': {'s': kwargs}}
-        ParseDict(extension, self.message)
+    def __getitem__(self, key):
+        f = self.field_descriptor[key]
+        if f.type == FieldDescriptor.TYPE_MESSAGE and not self.message.HasField(key):
+            raise KeyError(key)
+        v = getattr(self.message, key)
+        return GenericExt(v) if f.type == FieldDescriptor.TYPE_MESSAGE else v
 
-class StreamExtensionList(BaseMessageList[StreamExtension]):
+    def __setitem__(self, key, value):
+        f = self.field_descriptor[key]
+        if f.type == FieldDescriptor.TYPE_MESSAGE:
+            msg = getattr(self.message, key)
+            msg.CopyFrom(value.message)
+        else:
+            setattr(self.message, key, value)
+
+    def __delitem__(self, key):
+        self.message.ClearField(key)
+
+    def __iter__(self):
+        present = filter(lambda f: self.message.HasField(f.name), self.message.ListFields())
+        return iter(map(lambda f: f.name, present))
+
+    def __len__(self):
+        present = filter(lambda f: self.message.HasField(f.name), self.message.ListFields())
+        return len(present)
+
+
+class StreamExtensionMap(Metadata, MutableMapping, Iterable):
     __slots__ = ()
     item_class = StreamExtension
 
-    def update(self, exts, delete: bool = False):
-        for ext in exts:
-            obj = StreamExtension(StreamMessage.Extension())
-            obj.from_value(ext)
-            found = False
-            for i, e in enumerate(self):
-                if e.schema == obj.schema:
-                    found = True
-                    print(f'obj schema: {obj.schema} fields: {obj.fields}')
-                    if delete and not len(obj.fields):
-                        print(f'deleting {i}')
-                        del self[i]
-                    else:
-                        e.merge(obj, delete=delete)
-            if not found:
-                self.append(obj)
+    def to_dict(self):
+        return { k: v.to_dict(include_schema=False) for k, v in self.items()}
 
-    def append(self, ext):
-        self.add().from_value(ext)
+    def merge(self, exts, delete: bool = False) -> 'StreamExtensionMap':
+        if isinstance(exts, StreamExtension):
+            exts = {exts.schema: exts}
+        if isinstance(exts, bytes):
+            obj = StreamExtension(None, AnyMessage())
+            obj.from_value(exts)
+            obj.extension_schema = obj.message.TypeName()
+            exts = obj.to_dict()
+        if isinstance(exts, str) and exts.startswith('{'):
+            exts = json.loads(exts)
+        for schema, ext in exts.items():
+            obj = StreamExtension(schema, AnyMessage())
+            if isinstance(ext, StreamExtension):
+                obj.from_value(ext)
+            else:
+                obj.from_value({schema: ext})
+            if delete and not len(obj.unpacked):
+                #print(f'deleting {schema}')
+                del self[schema]
+            else:
+                StreamExtension(schema, self.message[schema]).merge(obj, delete=delete)
+        return self
+
+    def __getitem__(self, key):
+        if key in self.message:
+            return StreamExtension(key, self.message[key])
+        raise KeyError(key)
+
+    def __setitem__(self, key, value):
+        del self.message[key]
+        self.message[key].CopyFrom(value)
+
+    def __delitem__(self, key):
+        del self.message[key]
+
+    def __iter__(self):
+        return self.message.__iter__()
+
+    def __len__(self):
+        return len(self.message)
+
 
 class StreamModifiable(Metadata):
     __slots__ = ()
 
     @property
-    def extensions(self) -> StreamExtensionList:
-        return StreamExtensionList(self.message.extensions)
+    def extensions(self) -> StreamExtensionMap:
+        return StreamExtensionMap(self.message.extensions)

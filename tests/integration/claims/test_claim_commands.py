@@ -8,7 +8,9 @@ from urllib.request import urlopen
 import ecdsa
 
 from google.protobuf.any_pb2 import Any as AnyMessage
-from lbry.schema.types.v2.claim_pb2 import Stream as StreamMessage
+from lbry.schema.types.v2.descriptor_ext_pb2 import Descriptor as DescriptorMessage
+from lbry.schema.types.v2.stringmap_ext_pb2 import StringMap as StringMapMessage
+from lbry.schema.attrs import StreamExtension
 
 from lbry.error import InsufficientFundsError
 
@@ -1540,17 +1542,39 @@ class StreamCommands(ClaimTestCase):
         tx = await self.channel_create('@spam', '1.0')
         spam_claim_id = self.get_claim_id(tx)
 
-        m1 = StreamMessage.Extension.StringMap()
-        m1.schema = "cad"
-        m1.s['material'] = "PLA"
-        m1.s['cubic_cm'] = "5"
+        # StringMap is defined in a stand-alone file, and the serialized form
+        # of the file is much smaller than that of claim.proto.
+        self.assertEqual(166, len(StringMapMessage.DESCRIPTOR.file.serialized_pb))
+
+        m0 = DescriptorMessage()
+        m0.descriptor = StringMapMessage.DESCRIPTOR.file.serialized_pb
+        ext0 = AnyMessage()
+        ext0.Pack(m0, type_url_prefix='')
+        ext0 = StreamExtension('descriptor', ext0)
+        self.assertEqual("ext.Descriptor", ext0.message.TypeName())
+
+        # create descriptor claim
+        tx = await self.stream_create(
+            f'{StringMapMessage.DESCRIPTOR.name}', '1.0', channel_name='@goodies',
+            extensions={ext0.schema: ext0},
+        )
+        string_map_claim = self.get_claim_id(tx)
+
+        m1 = StringMapMessage()
+        m1.s['cubic_cm'].vs.append("5")
+        m1.s['material'].vs.append("PLA1")
+        m1.s['material'].vs.append("PLA2")
         ext1 = AnyMessage()
-        ext1.Pack(m1, type_url_prefix='')
+        ext1.Pack(m1, type_url_prefix=string_map_claim)
+        #ext1 = StreamExtension('cad', ext1)
+        self.assertEqual(ext1.TypeName(), "ext.StringMap")
+        #self.assertEqual(ext1.schema, "cad")
+        #self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}})
 
         # create stream with extension adding "cad"
         tx = await self.stream_create(
             'newstuff', '1.1', channel_name='@goodies',
-            extensions=hexlify(ext1.SerializeToString())
+            extensions={'cad': ext1},
         )
         claim_id = self.get_claim_id(tx)
 
@@ -1559,7 +1583,7 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
         self.assertEqual(
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
-            [{'any': {'@type': f'/{ext1.TypeName()}', 's': {'material': 'PLA', 'cubic_cm': '5'}, 'schema': 'cad'}}]
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}}
         )
         """
         self.assertEqual(
@@ -1569,18 +1593,23 @@ class StreamCommands(ClaimTestCase):
         )
         """
 
-        m2 = StreamMessage.Extension.StringMap()
-        m2.schema = "music"
-        m2.s['genre'] = "classical"
-        m2.s['tempo'] = "allegro"
-        m2.s['venue'] = "studio"
+        m2 = StringMapMessage()
+        m2.s['genre'].vs.append("classical")
+        m2.s['tempo'].vs.append("allegro")
+        m2.s['venue'].vs.append("studio")
+        m2.s['instrument'].vs.append("flute")
+        m2.s['instrument'].vs.append("oboe")
         ext2 = AnyMessage()
-        ext2.Pack(m2, type_url_prefix='')
+        ext2.Pack(m2, type_url_prefix=string_map_claim)
+        ext2 = StreamExtension('music', ext2)
+        self.assertEqual(ext2.message.TypeName(), "ext.StringMap")
+        self.assertEqual(ext2.schema, "music")
+        self.assertEqual(ext2.to_dict(), {'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}})
 
         # create repost adding extension "music"
         tx = await self.stream_repost(
             claim_id, 'newstuff-again', '1.1', channel_name='@spam',
-            extensions=hexlify(ext2.SerializeToString()),
+            extensions=ext2.to_dict(),
         )
         repost_id = self.get_claim_id(tx)
 
@@ -1592,34 +1621,37 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
         self.assertEqual(
             repost['reposted_claim']["value"]["extensions"],
-            [
-                {'any': {'@type': f'/{ext1.TypeName()}', 's': {'cubic_cm': '5', 'material': 'PLA'}, 'schema': 'cad'}},
-                {'any': {'@type': f'/{ext2.TypeName()}', 's': {"genre": "classical", "tempo": "allegro", "venue": "studio"}, 'schema': 'music'}},
-            ],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'},
+                'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
         )
 
-        m3 = StreamMessage.Extension.StringMap()
-        m3.schema = "cad"
+        m3 = StringMapMessage()
         ext3 = AnyMessage()
-        ext3.Pack(m3, type_url_prefix='')
+        ext3.Pack(m3, type_url_prefix=string_map_claim)
+        ext3 = StreamExtension('cad', ext3)
+        self.assertEqual(ext3.message.TypeName(), "ext.StringMap")
+        self.assertEqual(ext3.schema, "cad")
+        self.assertEqual(ext3.to_dict(), {"cad": {}})
 
         # update repost removing extension "cad"
         await self.stream_update(
             repost_id,
-            clear_extensions=[hexlify(ext3.SerializeToString())],
+            clear_extensions=ext3.to_dict(),
         )
         repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
         repost = repost_resolve[repost_url]
         self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
         self.assertEqual(
             repost['reposted_claim']["value"]["extensions"],
-            [{'any': {'@type': f'/{ext2.TypeName()}', 's': {"genre": "classical", "tempo": "allegro", "venue": "studio"}, 'schema': 'music'}}],
+            {'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}},
         )
 
         # original claim remains as created with extension "cad"
         self.assertEqual(
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
-            [{'any': {'@type': f'/{ext1.TypeName()}', 's': {'material': 'PLA', 'cubic_cm': '5'}, 'schema': 'cad'}}]
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}}
         )
 
     async def test_filtering_channels_for_removing_content(self):
