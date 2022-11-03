@@ -213,8 +213,9 @@ class Stream(BaseClaim):
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = str(self.fee.amount)
-        print(f"raw extensions: {claim['extensions']}")
-        claim['extensions'] = self.extensions.to_dict()
+        if 'extensions' in claim:
+            print(f"raw extensions: {claim['extensions']}")
+            claim['extensions'] = self.extensions.to_dict()
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
