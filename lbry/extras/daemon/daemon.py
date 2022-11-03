@@ -19,7 +19,8 @@ from functools import wraps, partial
 import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
-from google.protobuf.any_pb2 import Any as AnyMessage
+# For pylint issue see: https://github.com/PyCQA/pylint/issues/6281
+from google.protobuf.any_pb2 import Any as AnyMessage # pylint: disable=no-name-in-module
 from google.protobuf.message import DecodeError
 
 from lbry.wallet import (
