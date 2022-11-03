@@ -1,5 +1,11 @@
 from .base import BaseError, claim_id
 
+class StreamExtensionTypeUnresolved(BaseError):
+    def __init__(self, url_prefix, name):
+        self.url_prefix = url_prefix
+        self.name = name
+        super().__init__(f"Stream extension type '{url_prefix}/{name}' could not be resolved.")
+    pass
 
 class UserInputError(BaseError):
     """
