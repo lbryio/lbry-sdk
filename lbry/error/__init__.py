@@ -5,7 +5,6 @@ class StreamExtensionTypeUnresolved(BaseError):
         self.url_prefix = url_prefix
         self.name = name
         super().__init__(f"Stream extension type '{url_prefix}/{name}' could not be resolved.")
-    pass
 
 class UserInputError(BaseError):
     """
