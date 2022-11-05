@@ -394,6 +394,7 @@ class CommandTestCase(IntegrationTestCase):
         logging.getLogger('lbry.blob_exchange').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.daemon').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.stream').setLevel(self.VERBOSITY)
+        logging.getLogger('lbry.torrent').setLevel(self.VERBOSITY)
         logging.getLogger('lbry.wallet').setLevel(self.VERBOSITY)
 
         await super().asyncSetUp()
