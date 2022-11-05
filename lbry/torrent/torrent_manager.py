@@ -39,12 +39,33 @@ class TorrentSource(ManagedDownloadSource):
         super().__init__(loop, config, storage, identifier, file_name, download_directory, status, claim, download_id,
                          rowid, content_fee, analytics_manager, added_on)
         self.torrent_session = torrent_session
+        self._suggested_file_name = None
+        self._full_path = None
 
     @property
     def full_path(self) -> Optional[str]:
-        full_path = self.torrent_session.full_path(self.identifier)
+        if not self._full_path:
+            self._full_path = self.select_path()
+            self._file_name = os.path.basename(self._full_path)
         self.download_directory = self.torrent_session.save_path(self.identifier)
-        return full_path
+        return self._full_path
+
+    def select_path(self):
+        wanted_name = (self.stream_claim_info and self.stream_claim_info.claim.stream.source.name) or ''
+        wanted_index = self.torrent_session.get_index_from_name(self.identifier, wanted_name)
+        if wanted_index is None:
+            # maybe warn?
+            largest = None
+            for (path, size) in self.torrent_session.get_files(self.identifier).items():
+                largest = (path, size) if not largest or size > largest[1] else largest
+            return largest[0]
+        else:
+            return self.torrent_session.full_path(self.identifier, wanted_index or 0)
+
+    @property
+    def suggested_file_name(self):
+        self._suggested_file_name = self._suggested_file_name or os.path.basename(self.select_path())
+        return self._suggested_file_name
 
     @property
     def mime_type(self) -> Optional[str]:
@@ -58,14 +79,15 @@ class TorrentSource(ManagedDownloadSource):
             self.torrent_session.remove_torrent(btih=self.identifier)
             raise DownloadMetadataTimeoutError(self.identifier)
         self.download_directory = self.torrent_session.save_path(self.identifier)
-        self._file_name = Path(self.torrent_session.full_path(self.identifier)).name
+        self._file_name = os.path.basename(self.full_path)
 
     async def start(self, timeout: Optional[float] = None, save_now: Optional[bool] = False):
         await self.setup(timeout)
-        await self.storage.add_torrent(self.identifier, self.torrent_length, self.torrent_name)
-        self.rowid = await self.storage.save_downloaded_file(
-            self.identifier, self.file_name, self.download_directory, 0.0, added_on=self._added_on
-        )
+        if not self.rowid:
+            await self.storage.add_torrent(self.identifier, self.torrent_length, self.torrent_name)
+            self.rowid = await self.storage.save_downloaded_file(
+                self.identifier, self.file_name, self.download_directory, 0.0, added_on=self._added_on
+            )
 
     async def stop(self, finished: bool = False):
         await self.torrent_session.remove_torrent(self.identifier)
@@ -75,11 +97,11 @@ class TorrentSource(ManagedDownloadSource):
 
     @property
     def torrent_length(self):
-        return self.torrent_session.get_size(self.identifier)
+        return self.torrent_session.get_total_size(self.identifier)
 
     @property
     def stream_length(self):
-        return os.path.getsize(self.full_path)
+        return self.torrent_session.get_size(self.identifier, self.file_name)
 
     @property
     def written_bytes(self):
@@ -110,15 +132,19 @@ class TorrentSource(ManagedDownloadSource):
         headers, start, end = self._prepare_range_response_headers(
             request.headers.get('range', 'bytes=0-')
         )
+        target = self.suggested_file_name
         await self.start()
         response = StreamResponse(
             status=206,
             headers=headers
         )
         await response.prepare(request)
+        while not os.path.exists(self.full_path):
+            async for _ in self.torrent_session.stream_file(self.identifier, target, start, end):
+                break
         with open(self.full_path, 'rb') as infile:
             infile.seek(start)
-            async for read_size in self.torrent_session.stream_largest_file(self.identifier, start, end):
+            async for read_size in self.torrent_session.stream_file(self.identifier, target, start, end):
                 if infile.tell() + read_size < end:
                     await response.write(infile.read(read_size))
                 else:
