@@ -22,62 +22,59 @@ class FileCommands(CommandTestCase):
         super().__init__(*a, **kw)
         self.skip_libtorrent = False
         self.streaming_port = 60818
+        self.seeder_session = None
 
-    async def add_forever(self):
-        while True:
-            for handle in self.client_session._handles.values():
-                handle._handle.connect_peer(('127.0.0.1', 4040))
-            await asyncio.sleep(.1)
-
-    async def initialize_torrent(self, tx_to_update=None):
-        if not hasattr(self, 'seeder_session'):
+    async def initialize_torrent(self, tx_to_update=None, pick_a_file=True, name=None):
+        assert name is None or tx_to_update is None
+        if not self.seeder_session:
             self.seeder_session = TorrentSession(self.loop, None)
             self.addCleanup(self.seeder_session.stop)
             await self.seeder_session.bind('127.0.0.1', port=4040)
         btih = await self.seeder_session.add_fake_torrent(file_count=3)
+        files = [(size, path) for (path, size) in self.seeder_session.get_files(btih).items()]
+        files.sort()
+        # picking a file will pick something in the middle, while automatic selection will pick largest
+        self.expected_size, self.expected_path = files[1] if pick_a_file else files[-1]
+
         address = await self.account.receiving.get_or_create_usable_address()
+        claim = tx_to_update.outputs[0].claim if tx_to_update else Claim()
+        claim.stream.update(bt_infohash=btih)
+        if pick_a_file:
+            claim.stream.source.name = os.path.basename(self.expected_path)
         if not tx_to_update:
-            claim = Claim()
-            claim.stream.update(bt_infohash=btih)
             tx = await Transaction.claim_create(
-                'torrent', claim, 1, address, [self.account], self.account
+                name or 'torrent', claim, 1, address, [self.account], self.account
             )
         else:
-            claim = tx_to_update.outputs[0].claim
-            claim.stream.update(bt_infohash=btih)
             tx = await Transaction.claim_update(
                 tx_to_update.outputs[0], claim, 1, address, [self.account], self.account
             )
         await tx.sign([self.account])
         await self.broadcast_and_confirm(tx)
         self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
-        self.client_session.wait_start = False  # fixme: this is super slow on tests
-        task = asyncio.create_task(self.add_forever())
-        self.addCleanup(task.cancel)
         return tx, btih
 
     async def assert_torrent_streaming_works(self, btih):
-        url = f'http://{self.daemon.conf.streaming_host}:{self.streaming_port}/get/torrent'
+        url = f'http://{self.daemon.conf.streaming_host}:{self.streaming_port}/stream/{btih}'
         if self.daemon.streaming_runner.server is None:
             await self.daemon.streaming_runner.setup()
             site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
                                        self.streaming_port)
             await site.start()
         async with aiohttp_request('get', url) as req:
+            self.assertEqual(req.status, 206)
             self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
             content_range = req.headers.get('Content-Range')
             content_length = int(req.headers.get('Content-Length'))
             streamed_bytes = await req.content.read()
-        expected_size = os.path.getsize(self.seeder_session.full_path(btih))
+        expected_size = self.expected_size
         self.assertEqual(expected_size, len(streamed_bytes))
         self.assertEqual(content_length, len(streamed_bytes))
         self.assertEqual(f"bytes 0-{expected_size - 1}/{expected_size}", content_range)
 
-        self.assertEqual(len(streamed_bytes), max(self.seeder_session.get_files(btih).values()))
-
     @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
-        tx, btih = await self.initialize_torrent()
+        tx, btih = await self.initialize_torrent(pick_a_file=False)
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         # second call, see its there and move on
@@ -91,10 +88,13 @@ class FileCommands(CommandTestCase):
         # check json encoder fields for torrent sources
         file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
         self.assertEqual(btih, file['metadata']['source']['bt_infohash'])
-        self.assertAlmostEqual(time.time(), file['added_on'], delta=2)
+        self.assertAlmostEqual(time.time(), file['added_on'], delta=12)
         self.assertEqual("application/octet-stream", file['mime_type'])
-        self.assertEqual("tmp1", file['suggested_file_name'])
-        self.assertEqual("tmp1", file['stream_name'])
+        self.assertEqual(os.path.basename(self.expected_path), file['suggested_file_name'])
+        self.assertEqual(os.path.basename(self.expected_path), file['stream_name'])
+        while not file['completed']:  # improve that
+            await asyncio.sleep(0.5)
+            file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
         self.assertTrue(file['completed'])
         self.assertGreater(file['total_bytes_lower_bound'], 0)
         self.assertEqual(file['total_bytes_lower_bound'], file['total_bytes'])
@@ -125,6 +125,11 @@ class FileCommands(CommandTestCase):
         await self.daemon.jsonrpc_file_delete(delete_all=True)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
         self.assertNotIn(new_btih, self.client_session._handles)
+
+        await self.initialize_torrent(name='torrent2')
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent2')))
+        file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
+        self.assertEqual(os.path.basename(self.expected_path), file['stream_name'])
 
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []
