@@ -19,8 +19,6 @@ from functools import wraps, partial
 import base58
 from aiohttp import web
 from prometheus_client import generate_latest as prom_generate_latest, Gauge, Histogram, Counter
-# For pylint issue see: https://github.com/PyCQA/pylint/issues/6281
-from google.protobuf.any_pb2 import Any as AnyMessage # pylint: disable=no-name-in-module
 from google.protobuf.message import DecodeError
 
 from lbry.wallet import (
@@ -41,7 +39,7 @@ from lbry.error import (
     DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
     ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError,
-    InputValueError, StreamExtensionTypeUnresolved
+    InputValueError
 )
 from lbry.extras import system_info
 from lbry.extras.daemon import analytics
@@ -55,7 +53,6 @@ from lbry.extras.daemon.undecorated import undecorated
 from lbry.extras.daemon.security import ensure_request_allowed
 from lbry.file_analysis import VideoFileAnalyzer
 from lbry.schema.claim import Claim
-from lbry.schema.attrs import StreamExtension
 from lbry.schema.url import URL
 
 
@@ -3355,22 +3352,6 @@ class Daemon(metaclass=JSONRPCServerType):
             # TODO: use error from lbry.error
             raise Exception('Invalid claim id. It is expected to be a 40 characters long hexadecimal string.')
 
-        extensions = kwargs.get('extensions', None)
-        if extensions:
-            # Resolve unknown extension types using get_claim_by_claim_id()
-            for schema, ext in extensions.items():
-                try:
-                    obj = StreamExtension(None, AnyMessage())
-                    if isinstance(ext, StreamExtension):
-                        obj.from_value(ext)
-                    else:
-                        obj.from_value({schema: ext})
-                except StreamExtensionTypeUnresolved as e:
-                    descriptor_txo = await self.ledger.get_claim_by_claim_id(e.url_prefix, include_is_my_output=True)
-                    ext = descriptor_txo.claim.stream.extensions['descriptor']
-                    pb_serialized = ext.unpacked['descriptor']
-                    StreamExtension.DESCRIPTOR_POOL.AddSerializedFile(pb_serialized)
-
         reposted_txo = await self.ledger.get_claim_by_claim_id(claim_id, include_is_my_output=True)
         if not isinstance(reposted_txo, Output) or not reposted_txo.is_claim:
             raise InputValueError(f"Could not find claim '{claim_id}'.")
@@ -3529,22 +3510,6 @@ class Daemon(metaclass=JSONRPCServerType):
                 validate_file, optimize_file, file_path, ignore_non_video=True
             )
             kwargs.update(spec)
-
-        extensions = kwargs.get('extensions', None)
-        if extensions:
-            # Resolve unknown extension types using get_claim_by_claim_id()
-            for schema, ext in extensions.items():
-                try:
-                    obj = StreamExtension(None, AnyMessage())
-                    if isinstance(ext, StreamExtension):
-                        obj.from_value(ext)
-                    else:
-                        obj.from_value({schema: ext})
-                except StreamExtensionTypeUnresolved as e:
-                    descriptor_txo = await self.ledger.get_claim_by_claim_id(e.url_prefix, include_is_my_output=True)
-                    ext = descriptor_txo.claim.stream.extensions['descriptor']
-                    pb_serialized = ext.unpacked['descriptor']
-                    StreamExtension.DESCRIPTOR_POOL.AddSerializedFile(pb_serialized)
 
         claim = Claim()
         if file_path is not None:

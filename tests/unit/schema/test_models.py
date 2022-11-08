@@ -7,7 +7,8 @@ from lbry.schema.attrs import StreamExtension, StringMapMessage
 from lbry.error import InputValueIsNoneError
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.any_pb2 import Any as AnyMessage
-
+from google.protobuf.proto_builder import MakeSimpleProtoClass
+from google.protobuf.descriptor_pb2 import FieldDescriptorProto
 
 class TestClaimContainerAwareness(TestCase):
 
@@ -261,6 +262,100 @@ class TestExtensionUpdating(TestCase):
         self.ext3 = StreamExtension('lit', self.ext3)
         self.ext3_dict = {'lit': {'genre': ['fiction', 'mystery'], 'format': 'epub', 'pages': '185'}}
         self.ext3_json = json.dumps(self.ext3_dict)
+
+    def test_extension_unresolved_type(self):
+        self.maxDiff = None
+
+        # Empty instance produces an error.
+        bad0 = StreamExtension(None, AnyMessage())
+        self.assertEqual(bad0.to_dict(), {'None': {'error': "Stream extension type '/' could not be resolved."}}, bad0.to_dict())
+        # Empty instance can be initialized.
+        bad0.from_value({'new': {'foo': '101'}})
+        self.assertEqual(bad0.to_dict(), {'new': {'foo': '101'}}, bad0.to_dict())
+
+        # Construct a new protobuf message according to a NEW schema
+        # not in our descriptor pool.
+        cls = MakeSimpleProtoClass(
+            {'a': FieldDescriptorProto.TYPE_INT64, 'b': FieldDescriptorProto.TYPE_STRING},
+            full_name='pb.NewMessage'
+        )
+        new = cls()
+        new.a = 101
+        new.b = 'property b value'
+        bad1 = AnyMessage()
+        bad1.Pack(new, type_url_prefix='')
+
+        # String representation with type_url and encoded value can be printed.
+        self.assertEqual(str(bad1), 'type_url: "/pb.NewMessage"\nvalue: "\\010e\\022\\020property b value"\n', str(bad1))
+        self.assertEqual(bad1.SerializeToString(), b'\n\x0e/pb.NewMessage\x12\x14\x08e\x12\x10property b value')
+
+        # Create a stream with a bad extension whose type is unknown to us.
+        stream = Stream()
+        stream.update(extensions=self.ext1.to_dict())
+        stream.update(extensions={'new': {}})
+        stream.message.extensions['new'].Pack(new, type_url_prefix='')
+        stream.update(extensions=self.ext3.to_dict())
+
+        # Although the bad extension can't be decoded the way we would like,
+        # it is still possible to see the other two extensions.
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                },
+                'lit': {
+                    'genre': ['fiction', 'mystery'],
+                    'format': 'epub',
+                    'pages': '185'
+                },
+                'new': {
+                    'error': "Stream extension type '/pb.NewMessage' could not be resolved."
+                }
+            }},
+            stream.to_dict()
+        )
+
+        # Updates to bad extension are ignored.
+        stream.update(extensions={'new': {'foo': '101'}})
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                },
+                'lit': {
+                    'genre': ['fiction', 'mystery'],
+                    'format': 'epub',
+                    'pages': '185'
+                },
+                'new': {
+                    'error': "Stream extension type '/pb.NewMessage' could not be resolved."
+                }
+            }},
+            stream.to_dict()
+        )
+
+        # Bad extension can be cleared.
+        stream.update(clear_extensions={'new': {}})
+        self.assertEqual(
+            stream.to_dict(),
+            {'extensions': {
+                'cad': {
+                    'material': ['PLA1', 'PLA2'],
+                    'cubic_cm': '5',
+                },
+                'lit': {
+                    'genre': ['fiction', 'mystery'],
+                    'format': 'epub',
+                    'pages': '185'
+                },
+            }},
+            stream.to_dict()
+        )
+
 
     def test_extension_properties(self):
         self.maxDiff = None
