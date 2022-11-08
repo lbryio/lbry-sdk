@@ -198,7 +198,26 @@ class Stream(BaseClaim):
     object_fields = BaseClaim.object_fields + ('source',)
 
     def to_dict(self):
+        # Convert extensions individually, handling any errors.
+        extensions = {}
+        error_extensions = {}
+        for schema in iter(self.extensions):
+            try:
+                ext = self.extensions[schema]
+            except Exception as e:
+                extensions[schema] = { 'error': str(e) }
+                error_extensions[schema] = self.extensions.message[schema]
+            else:
+                extensions[schema] = ext.to_dict(include_schema=False)
+
+        # Hide any bad extensions. Otherwise MessageToDict() fails.
+        for schema in error_extensions:
+            del self.extensions[schema]
         claim = super().to_dict()
+        # Restore the bad extensions.
+        for schema in error_extensions:
+            self.extensions.message[schema].CopyFrom(error_extensions[schema])
+
         if 'source' in claim:
             if 'hash' in claim['source']:
                 claim['source']['hash'] = self.source.file_hash
@@ -213,9 +232,8 @@ class Stream(BaseClaim):
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = str(self.fee.amount)
-        if 'extensions' in claim:
-            print(f"raw extensions: {claim['extensions']}")
-            claim['extensions'] = self.extensions.to_dict()
+        if extensions:
+            claim['extensions'] = extensions
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
@@ -432,11 +450,9 @@ class Repost(BaseClaim):
 
     def update(self, **kwargs):
         claim_type = kwargs.pop('claim_type', None)
-        print(f'claim_type: {claim_type}')
         if claim_type:
             # Try to apply updates to ClaimReference.
             kwargs = self.reference.update(claim_type, **kwargs)
-            print(f'remaining: {kwargs}')
         # Update common fields within BaseClaim.
         super().update(**kwargs)
 

@@ -8,7 +8,6 @@ from urllib.request import urlopen
 import ecdsa
 
 from google.protobuf.any_pb2 import Any as AnyMessage
-from lbry.schema.types.v2.descriptor_ext_pb2 import Descriptor as DescriptorMessage
 from lbry.schema.types.v2.stringmap_ext_pb2 import StringMap as StringMapMessage
 from lbry.schema.attrs import StreamExtension
 
@@ -1542,23 +1541,7 @@ class StreamCommands(ClaimTestCase):
         tx = await self.channel_create('@spam', '1.0')
         spam_claim_id = self.get_claim_id(tx)
 
-        # StringMap is defined in a stand-alone file, and the serialized form
-        # of the file is much smaller than that of claim.proto.
-        self.assertEqual(166, len(StringMapMessage.DESCRIPTOR.file.serialized_pb))
-
-        m0 = DescriptorMessage()
-        m0.descriptor = StringMapMessage.DESCRIPTOR.file.serialized_pb
-        ext0 = AnyMessage()
-        ext0.Pack(m0, type_url_prefix='')
-        ext0 = StreamExtension('descriptor', ext0)
-        self.assertEqual("ext.Descriptor", ext0.message.TypeName())
-
-        # create descriptor claim
-        tx = await self.stream_create(
-            f'{StringMapMessage.DESCRIPTOR.name}', '1.0', channel_name='@goodies',
-            extensions={ext0.schema: ext0},
-        )
-        string_map_claim = self.get_claim_id(tx)
+        string_map_claim = '' # StringMap is built in. No need for claimid.
 
         m1 = StringMapMessage()
         m1.s['cubic_cm'].vs.append("5")
@@ -1566,10 +1549,10 @@ class StreamCommands(ClaimTestCase):
         m1.s['material'].vs.append("PLA2")
         ext1 = AnyMessage()
         ext1.Pack(m1, type_url_prefix=string_map_claim)
-        #ext1 = StreamExtension('cad', ext1)
-        self.assertEqual(ext1.TypeName(), "ext.StringMap")
-        #self.assertEqual(ext1.schema, "cad")
-        #self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}})
+        ext1 = StreamExtension('cad', ext1)
+        self.assertEqual(ext1.message.TypeName(), "ext.StringMap")
+        self.assertEqual(ext1.schema, "cad")
+        self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': '5'}})
 
         # create stream with extension adding "cad"
         tx = await self.stream_create(
