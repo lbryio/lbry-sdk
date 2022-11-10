@@ -2,7 +2,7 @@ import json
 import logging
 import os.path
 import hashlib
-from collections.abc import MutableMapping, MutableSet, Iterable
+from collections.abc import MutableMapping, Iterable
 from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
@@ -659,13 +659,7 @@ class StreamExtension(Metadata):
     __slots__ = Metadata.__slots__ + ('extension_schema',)
 
     def __init__(self, schema, message):
-        if isinstance(message, StructMessage):
-            wrapper = ExtensionMessage()
-            wrapper.struct.CopyFrom(message)
-            super().__init__(wrapper)
-        else:
-            assert isinstance(message, ProtobufMessage) and message.DESCRIPTOR.full_name == 'pb.Extension'
-            super().__init__(message)
+        super().__init__(message)
         self.extension_schema = schema
 
     def to_dict(self, include_schema=True):

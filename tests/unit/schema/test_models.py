@@ -224,34 +224,30 @@ class TestStreamUpdating(TestCase):
 class TestExtensionUpdating(TestCase):
 
     def setUp(self):
-        self.cad1 = StructMessage()
-        self.schema1 = 'cad'
+        self.ext1 = StreamExtension('cad', ExtensionMessage())
+        self.cad1 = self.ext1.message.struct
         self.cad1.fields['material'].list_value.values.add().string_value = 'PLA1'
         self.cad1.fields['material'].list_value.values.add().string_value = 'PLA2'
         self.cad1.fields['cubic_cm'].number_value = 5
-        self.schema1 = 'cad'
-        self.ext1 = StreamExtension('cad', self.cad1)
-        self.ext1_dict = {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
+        self.ext1_dict = {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}}
         self.ext1_json = json.dumps(self.ext1_dict)
 
-        self.mus1 = StructMessage()
-        self.schema2 = 'music'
+        self.ext2 = StreamExtension('music', ExtensionMessage())
+        self.mus1 = self.ext2.message.struct
         self.mus1.fields['venue'].string_value = 'studio'
         self.mus1.fields['genre'].list_value.values.add().string_value = 'metal'
         self.mus1.fields['instrument'].list_value.values.add().string_value = 'drum'
         self.mus1.fields['instrument'].list_value.values.add().string_value = 'cymbal'
         self.mus1.fields['instrument'].list_value.values.add().string_value = 'guitar'
-        self.ext2 = StreamExtension('music', self.mus1)
         self.ext2_dict = {'music': {'genre': ['metal'], 'venue': 'studio', 'instrument': ['drum', 'cymbal', 'guitar']}}
         self.ext2_json = json.dumps(self.ext2_dict)
 
-        self.lit1 = StructMessage()
-        self.schema3 = 'lit'
+        self.ext3 = StreamExtension('lit', ExtensionMessage())
+        self.lit1 = self.ext3.message.struct
         self.lit1.fields['pages'].number_value = 185
         self.lit1.fields['genre'].list_value.values.add().string_value = 'fiction'
         self.lit1.fields['genre'].list_value.values.add().string_value = 'mystery'
         self.lit1.fields['format'].string_value = 'epub'
-        self.ext3 = StreamExtension('lit', self.lit1)
         self.ext3_dict = {'lit': {'genre': ['fiction', 'mystery'], 'format': 'epub', 'pages': 185}}
         self.ext3_json = json.dumps(self.ext3_dict)
 

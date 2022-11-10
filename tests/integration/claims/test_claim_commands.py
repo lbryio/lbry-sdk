@@ -2,7 +2,7 @@ import os.path
 import tempfile
 import logging
 import asyncio
-from binascii import unhexlify, hexlify
+from binascii import unhexlify
 from unittest import skip
 from urllib.request import urlopen
 import ecdsa
@@ -1541,11 +1541,11 @@ class StreamCommands(ClaimTestCase):
         tx = await self.channel_create('@spam', '1.0')
         spam_claim_id = self.get_claim_id(tx)
 
-        m1 = StructMessage()
-        m1.fields['cubic_cm'].number_value = 5
-        m1.fields['material'].list_value.values.add().string_value = "PLA1"
-        m1.fields['material'].list_value.values.add().string_value = "PLA2"
-        ext1 = StreamExtension('cad', m1)
+        ext1 = StreamExtension('cad', ExtensionMessage())
+        cad = ext1.message.struct
+        cad.fields['cubic_cm'].number_value = 5
+        cad.fields['material'].list_value.values.add().string_value = "PLA1"
+        cad.fields['material'].list_value.values.add().string_value = "PLA2"
         self.assertEqual(ext1.schema, "cad")
         self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}})
 
@@ -1569,13 +1569,13 @@ class StreamCommands(ClaimTestCase):
         #    {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}},
         #)
 
-        m2 = StructMessage()
-        m2.fields['genre'].list_value.values.add().string_value = "classical"
-        m2.fields['tempo'].string_value = "allegro"
-        m2.fields['venue'].string_value = "studio"
-        m2.fields['instrument'].list_value.values.add().string_value = "flute"
-        m2.fields['instrument'].list_value.values.add().string_value = "oboe"
-        ext2 = StreamExtension('music', m2)
+        ext2 = StreamExtension('music', ExtensionMessage())
+        mus = ext2.message.struct
+        mus.fields['genre'].list_value.values.add().string_value = "classical"
+        mus.fields['tempo'].string_value = "allegro"
+        mus.fields['venue'].string_value = "studio"
+        mus.fields['instrument'].list_value.values.add().string_value = "flute"
+        mus.fields['instrument'].list_value.values.add().string_value = "oboe"
         self.assertEqual(ext2.schema, "music")
         self.assertEqual(ext2.to_dict(), {'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}})
 
@@ -1600,8 +1600,7 @@ class StreamCommands(ClaimTestCase):
             },
         )
 
-        m3 = StructMessage()
-        ext3 = StreamExtension('cad', m3)
+        ext3 = StreamExtension('cad', ExtensionMessage())
         self.assertEqual(ext3.schema, "cad")
         self.assertEqual(ext3.to_dict(), {"cad": {}})
 

@@ -1,5 +1,6 @@
 from .base import BaseError, claim_id
 
+
 class UserInputError(BaseError):
     """
     User input errors.
