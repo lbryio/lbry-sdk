@@ -7,7 +7,7 @@ from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
 from binascii import hexlify, unhexlify
-from google.protobuf.json_format import MessageToDict
+from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
 
 from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
@@ -23,12 +23,9 @@ from lbry.schema.types.v2.claim_pb2 import (
     Fee as FeeMessage,
     Location as LocationMessage,
     Language as LanguageMessage,
-    Stream as StreamMessage,
 )
-from lbry.schema.types.v2.extension_pb2 import (
-    StringMap as StringMapMessage,
-    Extension as ExtensionMessage,
-)
+from google.protobuf.struct_pb2 import Struct as StructMessage
+from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
 
 log = logging.getLogger(__name__)
 
@@ -400,7 +397,7 @@ class ModifyingClaimReference(ClaimReference):
     def update(self, claim_type: str, **kwargs) -> dict:
         """
         Store updates to modifiable fields in deletions/edits.
-        Currently, only the "extensions" field (StreamExtensionList)
+        Currently, only the "extensions" field (StreamExtensionMap)
         of a stream claim may be modified. Returns a dict containing
         the unhandled portion of "kwargs".
         """
@@ -662,9 +659,9 @@ class StreamExtension(Metadata):
     __slots__ = Metadata.__slots__ + ('extension_schema',)
 
     def __init__(self, schema, message):
-        if isinstance(message, StringMapMessage):
+        if isinstance(message, StructMessage):
             wrapper = ExtensionMessage()
-            wrapper.map.CopyFrom(message)
+            wrapper.struct.CopyFrom(message)
             super().__init__(wrapper)
         else:
             assert isinstance(message, ProtobufMessage) and message.DESCRIPTOR.full_name == 'pb.Extension'
@@ -694,28 +691,21 @@ class StreamExtension(Metadata):
                 schema = k
                 value = value[schema]
 
-        # Try to decode attrs dict -> Extension message containing StringMap.
+        # Try to decode attrs dict -> Extension message containing protobuf.Struct.
         if isinstance(value, dict):
             try:
                 ext = StreamExtension(schema, ExtensionMessage())
-                map = StringMap(ext.message.map)
-                for k, v in value.items():
-                    vs = StringMapValues(StringMapMessage.Values())
-                    if not isinstance(v, list):
-                        v = [v]
-                    for e in v:
-                       vs.add(e)
-                    map.update(**{k: vs})
+                ParseDict(value, ext.message.struct)
                 value = ext
-            except:
-                log.info('Could not parse StreamExtension value: %s', value, exc_info=True)
+            except ParseError:
+                pass
 
         # Either we have an Extension message or decoding failed.
         if isinstance(value, StreamExtension):
             self.extension_schema = value.schema or schema
             self.message.CopyFrom(value.message)
         else:
-            log.info('Could not parse StreamExtension value: %s class: %s', value, value.__class__.__name__)
+            log.info('Could not parse StreamExtension value: %s type: %s', value, type(value))
             raise ValueError(f'Could not parse StreamExtension value: {value}')
 
     @property
@@ -724,84 +714,56 @@ class StreamExtension(Metadata):
 
     @property
     def unpacked(self):
-        return StringMap(self.message.map)
+        return Struct(self.message.struct)
 
     def merge(self, ext: 'StreamExtension', delete: bool = False) -> 'StreamExtension':
         self.unpacked.merge(ext.unpacked, delete=delete)
         return self
 
-class StringMapValue(Metadata):
+class Struct(Metadata, MutableMapping, Iterable):
     __slots__ = ()
-
-    @property
-    def unpacked(self):
-        return getattr(self.message, self.message.WhichOneof('type'))
-
-    @unpacked.setter
-    def unpacked(self, x):
-        if isinstance(x, str):
-            setattr(self.message, 'str', x)
-        elif isinstance(x, int):
-            setattr(self.message, 'int', x)
-        else:
-            raise TypeError(f'Cannot encode {type(x)} as a StreamExtension property.')
-class StringMapValues(Metadata, MutableSet, Iterable):
-    __slots__ = ()
-    item_class = StringMapValue
-
-    def __contains__(self, x):
-        return x in map(lambda x: StringMapValue(x).unpacked, self.message.vs)
-
-    def __iter__(self):
-        return iter(map(lambda x: StringMapValue(x).unpacked, self.message.vs))
-
-    def __len__(self):
-        return len(self.message.vs)
-
-    def add(self, x):
-        if x not in self:
-            v = StringMapValue(self.message.vs.add())
-            v.unpacked = x
-
-    def discard(self, x):
-        for i, v in enumerate(map(lambda x: StringMapValue(x).unpacked, self.message.vs)):
-            if v == x:
-                del self.message.vs[i]
-
-class StringMap(Metadata, MutableMapping, Iterable):
-    __slots__ = ()
-    item_class = StringMapValues
 
     def to_dict(self) -> dict:
-        """Generate short form dictionary {"<k1>": "<v1>", "<k2>": ["<v21>", "<v22>"], ...}}"""
-        attrs = {}
-        for k, v in self.items():
-            values = list(v)
-            if len(values) > 1:
-                attrs.update(**{k: values})
-            elif len(values) > 0:
-                attrs.update(**{k: values[0]})
-        return attrs
+        return MessageToDict(self.message)
 
-    def merge(self, other: 'StringMap', delete: bool = False) -> 'StringMap':
-        for k, v in other.items():
-            if delete:
-                if k not in self:
-                    continue
-                elif len(v) > 0:
-                    self[k] -= v
-                else:
-                    del self[k]
-            else:
-                if k not in self:
-                    self[k] = v
-                else:
-                    self[k] |= v
+    def merge(self, other: 'Struct', delete: bool = False) -> 'Struct':
+        for k, v in other.message.fields.items():
+            if k not in self.message.fields:
+                if not delete:
+                    self.message.fields[k].CopyFrom(v)
+                continue
+            my_value = self.message.fields[k]
+            my_kind = my_value.WhichOneof('kind')
+            kind = v.WhichOneof('kind')
+            if kind != my_kind:
+                continue
+            if kind == 'struct_value':
+                if len(v.struct_value.fields) > 0:
+                    Struct(my_value).merge(v.struct_value, delete=delete)
+                elif delete:
+                    del self.message.fields[k]
+            elif kind == 'list_value':
+                if len(v.list_value.values) > 0:
+                    for _, o in enumerate(v.list_value.values):
+                        for i, v in enumerate(my_value.list_value.values):
+                            if v == o:
+                                if delete:
+                                    del my_value.list_value.values[i]
+                                break
+                        if not delete:
+                            if isinstance(o, ProtobufMessage):
+                                my_value.list_value.values.add().CopyFrom(o)
+                            else:
+                                my_value.list_value.values.append(o)
+                elif delete:
+                    del self.message.fields[k]
+            elif getattr(my_value, my_kind) == getattr(v, kind):
+                del self.message.fields[k]
         return self
 
     def __getitem__(self, key):
         if key in self.message.fields:
-            return StringMapValues(self.message.fields[key])
+            return self.message.fields[key]
         raise KeyError(key)
 
     def __setitem__(self, key, value):
@@ -848,7 +810,7 @@ class StreamExtensionMap(Metadata, MutableMapping, Iterable):
 
     def __setitem__(self, key, value):
         del self.message[key]
-        self.message[key].CopyFrom(value)
+        self.message[key].CopyFrom(value.message)
 
     def __delitem__(self, key):
         del self.message[key]

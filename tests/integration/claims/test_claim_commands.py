@@ -8,7 +8,8 @@ from urllib.request import urlopen
 import ecdsa
 
 from lbry.schema.attrs import StreamExtension
-from lbry.schema.types.v2.extension_pb2 import StringMap as StringMapMessage
+from google.protobuf.struct_pb2 import Struct as StructMessage
+from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
 
 from lbry.error import InsufficientFundsError
 
@@ -1540,15 +1541,13 @@ class StreamCommands(ClaimTestCase):
         tx = await self.channel_create('@spam', '1.0')
         spam_claim_id = self.get_claim_id(tx)
 
-        string_map_claim = '' # StringMap is built in. No need for claimid.
-
-        m1 = StringMapMessage()
-        m1.fields['cubic_cm'].vs.add().int = 5
-        m1.fields['material'].vs.add().str = "PLA1"
-        m1.fields['material'].vs.add().str = "PLA2"
+        m1 = StructMessage()
+        m1.fields['cubic_cm'].number_value = 5
+        m1.fields['material'].list_value.values.add().string_value = "PLA1"
+        m1.fields['material'].list_value.values.add().string_value = "PLA2"
         ext1 = StreamExtension('cad', m1)
         self.assertEqual(ext1.schema, "cad")
-        self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}})
+        self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}})
 
         # create stream with extension adding "cad"
         tx = await self.stream_create(
@@ -1562,7 +1561,7 @@ class StreamCommands(ClaimTestCase):
         self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
         self.assertEqual(
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
-            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}}
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
         )
         # TODO: Test claim_search() for extension types...
         #self.assertEqual(
@@ -1570,15 +1569,15 @@ class StreamCommands(ClaimTestCase):
         #    {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}},
         #)
 
-        m2 = StringMapMessage()
-        m2.fields['genre'].vs.add().str = "classical"
-        m2.fields['tempo'].vs.add().str = "allegro"
-        m2.fields['venue'].vs.add().str = "studio"
-        m2.fields['instrument'].vs.add().str = "flute"
-        m2.fields['instrument'].vs.add().str = "oboe"
+        m2 = StructMessage()
+        m2.fields['genre'].list_value.values.add().string_value = "classical"
+        m2.fields['tempo'].string_value = "allegro"
+        m2.fields['venue'].string_value = "studio"
+        m2.fields['instrument'].list_value.values.add().string_value = "flute"
+        m2.fields['instrument'].list_value.values.add().string_value = "oboe"
         ext2 = StreamExtension('music', m2)
         self.assertEqual(ext2.schema, "music")
-        self.assertEqual(ext2.to_dict(), {'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}})
+        self.assertEqual(ext2.to_dict(), {'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}})
 
         # create repost adding extension "music"
         tx = await self.stream_repost(
@@ -1596,12 +1595,12 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(
             repost['reposted_claim']["value"]["extensions"],
             {
-                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5},
-                'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
             },
         )
 
-        m3 = StringMapMessage()
+        m3 = StructMessage()
         ext3 = StreamExtension('cad', m3)
         self.assertEqual(ext3.schema, "cad")
         self.assertEqual(ext3.to_dict(), {"cad": {}})
@@ -1616,13 +1615,13 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
         self.assertEqual(
             repost['reposted_claim']["value"]["extensions"],
-            {'music': {"genre": "classical", "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}},
+            {'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}},
         )
 
         # original claim remains as created with extension "cad"
         self.assertEqual(
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
-            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}}
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
         )
 
     async def test_filtering_channels_for_removing_content(self):
