@@ -11,7 +11,6 @@ from binascii import hexlify, unhexlify
 from typing import Dict, Tuple, Type, Iterable, List, Optional, DefaultDict, NamedTuple
 
 from lbry.schema.result import Outputs, INVALID, NOT_FOUND
-from lbry.schema.claim import Claim, Repost
 from lbry.schema.url import URL
 from lbry.crypto.hash import hash160, double_sha256, sha256
 from lbry.crypto.base58 import Base58
