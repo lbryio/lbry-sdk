@@ -214,6 +214,7 @@ class SPVNode:
         self.port = 50001 + node_number  # avoid conflict with default daemon
         self.udp_port = self.port
         self.elastic_notifier_port = 19080 + node_number
+        self.elastic_services = f'localhost:9200/localhost:{self.elastic_notifier_port}'
         self.session_timeout = 600
         self.stopped = True
         self.index_name = uuid4().hex
@@ -235,7 +236,7 @@ class SPVNode:
                 'host': self.hostname,
                 'tcp_port': self.port,
                 'udp_port': self.udp_port,
-                'elastic_notifier_port': self.elastic_notifier_port,
+                'elastic_services': self.elastic_services,
                 'session_timeout': self.session_timeout,
                 'max_query_workers': 0,
                 'es_index_prefix': self.index_name,
