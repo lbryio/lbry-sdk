@@ -182,6 +182,8 @@ class Wallet:
                 raise InvalidPasswordError()
             if "unknown compression method" in e.args[0].lower():
                 raise InvalidPasswordError()
+            if "invalid window size" in e.args[0].lower():
+                raise InvalidPasswordError()
             raise
         return json.loads(decompressed)
 
