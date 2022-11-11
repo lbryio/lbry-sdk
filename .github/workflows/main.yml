@@ -160,7 +160,7 @@ jobs:
           path: ${{ steps.pip-cache.outputs.dir }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
-      - run: pip install pyinstaller==4.4
+      - run: pip install pyinstaller==4.6
       - run: pip install -e .
       - if: startsWith(github.ref, 'refs/tags/v')
         run: python docker/set_build.py
