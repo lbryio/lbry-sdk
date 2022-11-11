@@ -1508,27 +1508,27 @@ class ResolveClaimTakeovers(BaseResolveTestCase):
         COIN = int(1E8)
 
         self.assertEqual(self.conductor.spv_node.writer.height, 207)
-        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stash_put(
             (208, bytes.fromhex(claim_id1)), (0, 10 * COIN)
         )
         await self.generate(1)
         self.assertEqual(self.conductor.spv_node.writer.height, 208)
 
         self.assertEqual(1.7090807854206793, await get_trending_score(claim_id1))
-        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stash_put(
             (209, bytes.fromhex(claim_id1)), (10 * COIN, 100 * COIN)
         )
         await self.generate(1)
         self.assertEqual(self.conductor.spv_node.writer.height, 209)
         self.assertEqual(2.2437974397778886, await get_trending_score(claim_id1))
-        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stash_put(
             (309, bytes.fromhex(claim_id1)), (100 * COIN, 1000000 * COIN)
         )
         await self.generate(100)
         self.assertEqual(self.conductor.spv_node.writer.height, 309)
         self.assertEqual(5.157053472135866, await get_trending_score(claim_id1))
 
-        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stage_put(
+        self.conductor.spv_node.writer.db.prefix_db.trending_notification.stash_put(
             (409, bytes.fromhex(claim_id1)), (1000000 * COIN, 1 * COIN)
         )
 
