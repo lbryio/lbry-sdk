@@ -2,7 +2,7 @@ import json
 import logging
 import os.path
 import hashlib
-from collections.abc import MutableMapping, Iterable
+from collections.abc import Mapping, Iterable
 from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
@@ -24,7 +24,6 @@ from lbry.schema.types.v2.claim_pb2 import (
     Location as LocationMessage,
     Language as LanguageMessage,
 )
-from google.protobuf.struct_pb2 import Struct as StructMessage
 from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
 
 log = logging.getLogger(__name__)
@@ -714,7 +713,7 @@ class StreamExtension(Metadata):
         self.unpacked.merge(ext.unpacked, delete=delete)
         return self
 
-class Struct(Metadata, MutableMapping, Iterable):
+class Struct(Metadata, Mapping, Iterable):
     __slots__ = ()
 
     def to_dict(self) -> dict:
@@ -756,15 +755,20 @@ class Struct(Metadata, MutableMapping, Iterable):
         return self
 
     def __getitem__(self, key):
+        def extract(val):
+            if not isinstance(val, ProtobufMessage):
+                return val
+            kind = val.WhichOneof('kind')
+            if kind == 'struct_value':
+                return dict(Struct(val.struct_value))
+            elif kind == 'list_value':
+                return list(map(extract, val.list_value.values))
+            else:
+                return getattr(val, kind)
         if key in self.message.fields:
-            return self.message.fields[key]
+            val = self.message.fields[key]
+            return extract(val)
         raise KeyError(key)
-
-    def __setitem__(self, key, value):
-        self.message.fields[key].CopyFrom(value.message)
-
-    def __delitem__(self, key):
-        del self.message.fields[key]
 
     def __iter__(self):
         return iter(self.message.fields)
@@ -772,7 +776,7 @@ class Struct(Metadata, MutableMapping, Iterable):
     def __len__(self):
         return len(self.message.fields)
 
-class StreamExtensionMap(Metadata, MutableMapping, Iterable):
+class StreamExtensionMap(Metadata, Mapping, Iterable):
     __slots__ = ()
     item_class = StreamExtension
 
@@ -791,7 +795,7 @@ class StreamExtensionMap(Metadata, MutableMapping, Iterable):
             else:
                 obj.from_value({schema: ext})
             if delete and not len(obj.unpacked):
-                del self[schema]
+                del self.message[schema]
                 continue
             existing = StreamExtension(schema, self.message[schema])
             existing.merge(obj, delete=delete)
@@ -802,15 +806,8 @@ class StreamExtensionMap(Metadata, MutableMapping, Iterable):
             return StreamExtension(key, self.message[key])
         raise KeyError(key)
 
-    def __setitem__(self, key, value):
-        del self.message[key]
-        self.message[key].CopyFrom(value.message)
-
-    def __delitem__(self, key):
-        del self.message[key]
-
     def __iter__(self):
-        return self.message.__iter__()
+        return iter(self.message)
 
     def __len__(self):
         return len(self.message)

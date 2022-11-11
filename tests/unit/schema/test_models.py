@@ -3,7 +3,7 @@ from decimal import Decimal
 import json
 
 from lbry.schema.claim import Claim, Stream, Collection
-from lbry.schema.attrs import StreamExtension
+from lbry.schema.attrs import StreamExtension, Struct
 from google.protobuf.struct_pb2 import Struct as StructMessage
 from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
 from lbry.error import InputValueIsNoneError
@@ -253,14 +253,17 @@ class TestExtensionUpdating(TestCase):
 
     def test_extension_properties(self):
         self.maxDiff = None
+
         # Verify schema.
         self.assertEqual(self.ext1.schema, 'cad')
         self.assertEqual(self.ext2.schema, 'music')
         self.assertEqual(self.ext3.schema, 'lit')
+
         # Verify to_dict().
         self.assertEqual(self.ext1.to_dict(), self.ext1_dict)
         self.assertEqual(self.ext2.to_dict(), self.ext2_dict)
         self.assertEqual(self.ext3.to_dict(), self.ext3_dict)
+
         # Decode from dict.
         parsed1 = StreamExtension(None, ExtensionMessage())
         parsed1.from_value(self.ext1_dict)
@@ -271,6 +274,7 @@ class TestExtensionUpdating(TestCase):
         parsed3 = StreamExtension(None, ExtensionMessage())
         parsed3.from_value(self.ext3_dict)
         self.assertEqual(parsed3.to_dict(), self.ext3_dict)
+
         # Decode from str (JSON).
         parsed1 = StreamExtension(None, ExtensionMessage())
         parsed1.from_value(self.ext1_json)
@@ -281,6 +285,35 @@ class TestExtensionUpdating(TestCase):
         parsed3 = StreamExtension(None, ExtensionMessage())
         parsed3.from_value(self.ext3_json)
         self.assertEqual(parsed3.to_dict(), self.ext3_dict)
+
+        # Verify Mapping functionality.
+        self.assertEqual(self.ext1.unpacked['material'], ['PLA1', 'PLA2'])
+        self.assertEqual(self.ext1.unpacked['cubic_cm'], 5)
+        self.assertEqual(self.ext2.unpacked['venue'], 'studio')
+        self.assertEqual(self.ext2.unpacked['genre'], ['metal'])
+        self.assertEqual(self.ext2.unpacked['instrument'], ['drum', 'cymbal', 'guitar'])
+        self.assertEqual(self.ext3.unpacked['pages'], 185)
+        self.assertEqual(self.ext3.unpacked['genre'], ['fiction', 'mystery'])
+        self.assertEqual(self.ext3.unpacked['format'], 'epub')
+
+        # Verify Iterable functionality.
+        self.assertEqual(len(self.ext1.unpacked), 2)
+        for k, v in self.ext1.unpacked.items():
+            self.assertIn(k, self.ext1.unpacked)
+            self.assertTrue(isinstance(v, (str, list, float)), type(v))
+            self.assertEqual(v, self.ext1.unpacked[k])
+        self.assertEqual(len(self.ext2.unpacked), 3)
+        for k, v in self.ext2.unpacked.items():
+            self.assertIn(k, self.ext2.unpacked)
+            self.assertTrue(isinstance(v, (str, list, float)), type(v))
+            self.assertEqual(v, self.ext2.unpacked[k])
+        self.assertEqual(len(self.ext3.unpacked), 3)
+        for k, v in self.ext3.unpacked.items():
+            self.assertIn(k, self.ext3.unpacked)
+            self.assertTrue(isinstance(v, (str, list, float)), type(v))
+            self.assertEqual(v, self.ext3.unpacked[k])
+
+
 
     def test_extension_clear_field(self):
         self.maxDiff = None
