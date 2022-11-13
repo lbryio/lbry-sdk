@@ -305,6 +305,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.assertEqual(stored_status, "running")
 
         await stream.stop()
+        await asyncio.sleep(1)  # TODO: should not be needed
 
         self.assertFalse(stream.finished)
         self.assertFalse(stream.running)
@@ -340,8 +341,6 @@ class TestStreamManager(BlobExchangeTestBase):
         try:
             await self.file_manager.download_from_uri(self.uri, self.exchange_rate_manager, timeout)
         except Exception as err:
-            if isinstance(err, asyncio.CancelledError):  # TODO: remove when updated to 3.8
-                raise
             error = err
         self.assertEqual(expected_error, type(error))
 

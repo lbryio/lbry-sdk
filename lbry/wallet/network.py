@@ -117,7 +117,7 @@ class ClientSession(BaseClientSession):
                     )
                 else:
                     await asyncio.sleep(max(0, max_idle - (now - self.last_send)))
-        except Exception as err:
+        except (Exception, asyncio.CancelledError) as err:
             if isinstance(err, asyncio.CancelledError):
                 log.info("closing connection to %s:%i", *self.server)
             else:

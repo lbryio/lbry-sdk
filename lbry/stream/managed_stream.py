@@ -279,7 +279,7 @@ class ManagedStream(ManagedDownloadSource):
             log.info("finished saving file for lbry://%s#%s (sd hash %s...) -> %s", self.claim_name, self.claim_id,
                      self.sd_hash[:6], self.full_path)
             await self.blob_manager.storage.set_saved_file(self.stream_hash)
-        except Exception as err:
+        except (Exception, asyncio.CancelledError) as err:
             if os.path.isfile(output_path):
                 log.warning("removing incomplete download %s for %s", output_path, self.sd_hash)
                 os.remove(output_path)
@@ -366,7 +366,7 @@ class ManagedStream(ManagedDownloadSource):
             return sent
         except ConnectionError:
             return sent
-        except (OSError, Exception) as err:
+        except (OSError, Exception, asyncio.CancelledError) as err:
             if isinstance(err, asyncio.CancelledError):
                 log.warning("stopped uploading %s#%s to reflector", self.claim_name, self.claim_id)
             elif isinstance(err, OSError):
