@@ -1563,11 +1563,18 @@ class StreamCommands(ClaimTestCase):
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
             {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
         )
-        # TODO: Test claim_search() for extension types...
-        #self.assertEqual(
-        #    (await self.claim_search(extensions=[{"schema": "cad"}]))[0]['value']['extensions'],
-        #    {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5}},
-        #)
+
+        # search for extension type cad with material 'PLA2' expecting 1 result
+        results = await self.claim_search(extensions={"cad": {'material': ['PLA2']}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[0]['value']['extensions'],
+        )
+        # search for extension type cad with material 'wood' expecting 0 results
+        results = await self.claim_search(extensions={"cad": {'material': ['wood']}})
+        self.assertEqual(len(results), 0, results)
 
         ext2 = StreamExtension('music', ExtensionMessage())
         mus = ext2.message.struct
@@ -1600,6 +1607,33 @@ class StreamCommands(ClaimTestCase):
             },
         )
 
+        # search for extension types expecting 2 "cad" and 1 "music"
+        results = await self.claim_search(extensions={"cad": {}})
+        self.assertEqual(len(results), 2, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
+        )
+        self.assertEqual(
+            results[1]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[1]['value']['extensions'],
+        )
+        results = await self.claim_search(extensions={"music": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
+        )
+
         ext3 = StreamExtension('cad', ExtensionMessage())
         self.assertEqual(ext3.schema, "cad")
         self.assertEqual(ext3.to_dict(), {"cad": {}})
@@ -1621,6 +1655,24 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual(
             (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
             {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
+        )
+
+        # search for extension types expecting 1 "cad" and 1 "music"
+        results = await self.claim_search(extensions={"cad": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[0]['value']['extensions'],
+        )
+        results = await self.claim_search(extensions={"music": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
         )
 
     async def test_filtering_channels_for_removing_content(self):
