@@ -6,7 +6,6 @@ from collections.abc import Mapping, Iterable
 from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
-from binascii import hexlify, unhexlify
 from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
 
 from lbry.crypto.base58 import Base58
@@ -16,7 +15,7 @@ from lbry.error import MissingPublishedFileError, EmptyPublishedFileError
 import lbry.schema.claim as claim
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
-from lbry.schema.tags import clean_tags, normalize_tag
+from lbry.schema.tags import normalize_tag
 from google.protobuf.message import Message as ProtobufMessage
 from lbry.schema.types.v2.claim_pb2 import (
     Claim as ClaimMessage,
@@ -177,11 +176,11 @@ class Source(Metadata):
 
     @property
     def file_hash(self) -> str:
-        return hexlify(self.message.hash).decode()
+        return self.message.hash.hex()
 
     @file_hash.setter
     def file_hash(self, file_hash: str):
-        self.message.hash = unhexlify(file_hash.encode())
+        self.message.hash = bytes.fromhex(file_hash)
 
     @property
     def file_hash_bytes(self) -> bytes:
@@ -193,11 +192,11 @@ class Source(Metadata):
 
     @property
     def sd_hash(self) -> str:
-        return hexlify(self.message.sd_hash).decode()
+        return self.message.sd_hash.hex()
 
     @sd_hash.setter
     def sd_hash(self, sd_hash: str):
-        self.message.sd_hash = unhexlify(sd_hash.encode())
+        self.message.sd_hash = bytes.fromhex(sd_hash)
 
     @property
     def sd_hash_bytes(self) -> bytes:
@@ -209,11 +208,11 @@ class Source(Metadata):
 
     @property
     def bt_infohash(self) -> str:
-        return hexlify(self.message.bt_infohash).decode()
+        return self.message.bt_infohash.hex()
 
     @bt_infohash.setter
     def bt_infohash(self, bt_infohash: str):
-        self.message.bt_infohash = unhexlify(bt_infohash.encode())
+        self.message.bt_infohash = bytes.fromhex(bt_infohash)
 
     @property
     def bt_infohash_bytes(self) -> bytes:
@@ -359,11 +358,11 @@ class ClaimReference(Metadata):
 
     @property
     def claim_id(self) -> str:
-        return hexlify(self.claim_hash[::-1]).decode()
+        return self.claim_hash[::-1].hex()
 
     @claim_id.setter
     def claim_id(self, claim_id: str):
-        self.claim_hash = unhexlify(claim_id)[::-1]
+        self.claim_hash = bytes.fromhex(claim_id)[::-1]
 
     @property
     def claim_hash(self) -> bytes:
