@@ -5,7 +5,7 @@ jobs:
 
   lint:
     name: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-python@v1
@@ -26,7 +26,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
+          - ubuntu-20.04
           - macos-latest
           - windows-latest
     runs-on: ${{ matrix.os }}
@@ -72,7 +72,7 @@ jobs:
 
   tests-integration:
     name: "tests / integration"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       matrix:
         test:
@@ -123,7 +123,7 @@ jobs:
 
   coverage:
     needs: ["tests-unit", "tests-integration"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: finalize coverage report submission
         env:
@@ -184,7 +184,7 @@ jobs:
     name: "release"
     if: startsWith(github.ref, 'refs/tags/v')
     needs: ["build"]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v1
       - uses: actions/download-artifact@v2
