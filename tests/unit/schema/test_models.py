@@ -5,7 +5,7 @@ import json
 from lbry.schema.claim import Claim, Stream, Collection
 from lbry.schema.attrs import StreamExtension, Struct
 from google.protobuf.struct_pb2 import Struct as StructMessage
-from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
+from lbry_types.v2.extension_pb2 import Extension as ExtensionMessage
 from lbry.error import InputValueIsNoneError
 
 class TestClaimContainerAwareness(TestCase):

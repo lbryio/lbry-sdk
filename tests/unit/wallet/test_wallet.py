@@ -4,7 +4,7 @@ import os
 import tempfile
 from binascii import hexlify
 
-import lbry.schema.types.v2 as schema_v2
+import lbry_types.v2 as schema_v2
 from unittest import TestCase, mock
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet import (

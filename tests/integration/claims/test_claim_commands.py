@@ -9,7 +9,7 @@ import ecdsa
 
 from lbry.schema.attrs import StreamExtension
 from google.protobuf.struct_pb2 import Struct as StructMessage
-from lbry.schema.types.v2.extension_pb2 import Extension as ExtensionMessage
+from lbry_types.v2.extension_pb2 import Extension as ExtensionMessage
 
 from lbry.error import InsufficientFundsError
 

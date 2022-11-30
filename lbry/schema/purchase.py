@@ -1,6 +1,6 @@
 from google.protobuf.message import DecodeError
 from google.protobuf.json_format import MessageToDict
-from lbry.schema.types.v2.purchase_pb2 import Purchase as PurchaseMessage
+from lbry_types.v2.purchase_pb2 import Purchase as PurchaseMessage
 from .attrs import ClaimReference
 
 
