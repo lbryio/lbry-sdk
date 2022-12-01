@@ -8,6 +8,7 @@ from prometheus_client import Gauge
 
 from lbry import utils
 from lbry.dht import constants
+from lbry.dht.error import RemoteException
 from lbry.dht.protocol.distance import Distance
 if typing.TYPE_CHECKING:
     from lbry.dht.peer import KademliaPeer, PeerManager
@@ -395,7 +396,7 @@ class TreeRoutingTable:
             try:
                 await probe(to_replace)
                 return False
-            except asyncio.TimeoutError:
+            except (asyncio.TimeoutError, RemoteException):
                 log.debug("Replacing dead contact in bucket %i: %s:%i with %s:%i ", bucket_index,
                           to_replace.address, to_replace.udp_port, peer.address, peer.udp_port)
                 if to_replace in self.buckets[bucket_index]:
