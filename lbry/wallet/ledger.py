@@ -30,6 +30,7 @@ from lbry.wallet.bip32 import PublicKey, PrivateKey
 from lbry.wallet.coinselection import CoinSelector
 
 log = logging.getLogger(__name__)
+log.setLevel("DEBUG")
 
 LedgerType = Type['BaseLedger']
 
@@ -506,6 +507,7 @@ class Ledger(metaclass=LedgerRegistry):
 
     def process_status_update(self, update):
         address, remote_status = update
+        print(f"**** status update {address} {remote_status}")
         self._update_tasks.add(self.update_history(address, remote_status))
 
     async def update_history(self, address, remote_status, address_manager: AddressManager = None,
@@ -518,6 +520,7 @@ class Ledger(metaclass=LedgerRegistry):
                 return True
 
             remote_history = await self.network.retriable_call(self.network.get_history, address)
+            print(f'>>>>>> {remote_history}')
             remote_history = list(map(itemgetter('tx_hash', 'height'), remote_history))
             we_need = set(remote_history) - set(local_history)
             if not we_need:
@@ -549,7 +552,7 @@ class Ledger(metaclass=LedgerRegistry):
                     continue
                 to_request[i] = (txid, remote_height)
 
-            log.debug(
+            log.warning(
                 "request %i transactions, %i/%i for %s are already synced", len(to_request), len(already_synced),
                 len(remote_history), address
             )
@@ -558,8 +561,8 @@ class Ledger(metaclass=LedgerRegistry):
                 self.maybe_has_channel_key(tx)
                 pending_synced_history[tx_indexes[tx.id]] = f"{tx.id}:{tx.height}:"
                 if len(pending_synced_history) % 100 == 0:
-                    log.info("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
-            log.info("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
+                    log.warning("Syncing address %s: %d/%d", address, len(pending_synced_history), len(to_request))
+            log.warning("Sync finished for address %s: %d/%d", address, len(pending_synced_history), len(to_request))
 
             assert len(pending_synced_history) == len(remote_history), \
                 f"{len(pending_synced_history)} vs {len(remote_history)} for {address}"
@@ -606,7 +609,7 @@ class Ledger(metaclass=LedgerRegistry):
                 self._known_addresses_out_of_sync.add(address)
                 return False
             else:
-                log.debug("finished syncing transaction history for %s, %i known txs", address, len(local_history))
+                log.warning("finished syncing transaction history for %s, %i known txs", address, len(local_history))
                 return True
 
     async def maybe_verify_transaction(self, tx, remote_height, merkle=None):
@@ -621,6 +624,8 @@ class Ledger(metaclass=LedgerRegistry):
             header = await self.headers.get(remote_height)
             tx.position = merkle['pos']
             tx.is_verified = merkle_root == header['merkle_root']
+            if not tx.is_verified:
+                print(f"&&&&&&& {tx.height}: {merkle_root} != {header['merkle_root']}")
         return tx
 
     def maybe_has_channel_key(self, tx):

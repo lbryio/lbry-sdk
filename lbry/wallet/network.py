@@ -76,7 +76,9 @@ class ClientSession(BaseClientSession):
                     raise asyncio.TimeoutError
                 if done:
                     try:
-                        return request.result()
+                        result = request.result()
+                        log.warning("sent %s%s to %s:%i (%i timeout) result: %s", method, tuple(args), self.server[0], self.server[1], self.timeout, result)
+                        return result
                     except ConnectionResetError:
                         log.error(
                             "wallet server (%s) reset connection upon our %s request, json of %i args is %i bytes",
@@ -304,7 +306,7 @@ class Network:
                 await client.ensure_server_version()
                 return client
             except (asyncio.TimeoutError, ConnectionError, OSError, IncompatibleWalletServerError, RPCError):
-                log.warning("Connecting to %s:%d failed", host, port)
+                log.exception("Connecting to %s:%d failed", host, port)
                 client._close()
         return
 
@@ -328,7 +330,8 @@ class Network:
                 features = await client.send_request('server.features', [])
                 self.client, self.server_features = client, features
                 log.debug("discover other hubs %s:%i", *client.server)
-                await self._update_hubs(await client.send_request('server.peers.subscribe', []))
+                # TODO: Enable this after herald.go supports 'server.peers.subscribe'.
+                #await self._update_hubs(await client.send_request('server.peers.subscribe', []))
                 log.info("subscribe to headers %s:%i", *client.server)
                 self._update_remote_height((await self.subscribe_headers(),))
                 self._on_connected_controller.add(True)
