@@ -309,47 +309,46 @@ class Network:
         return
 
     async def network_loop(self):
-        sleep_delay = 30
+        sleep_delay = 15
         while self.running:
             await asyncio.wait(
-                [asyncio.sleep(30), self._urgent_need_reconnect.wait()], return_when=asyncio.FIRST_COMPLETED
+                [asyncio.sleep(sleep_delay), self._urgent_need_reconnect.wait()],
+                return_when=asyncio.FIRST_COMPLETED
             )
             if self._urgent_need_reconnect.is_set():
-                sleep_delay = 30
+                sleep_delay = 10 + random.uniform(0, 5)
             self._urgent_need_reconnect.clear()
             if not self.is_connected:
                 client = await self.connect_to_fastest()
                 if not client:
-                    log.warning("failed to connect to any spv servers, retrying later")
                     sleep_delay *= 2
-                    sleep_delay = min(sleep_delay, 300)
+                    sleep_delay = min(sleep_delay, 120)
+                    log.warning("failed to connect to any spv servers, retrying after %.2fs", sleep_delay)
                     continue
-                log.debug("get spv server features %s:%i", *client.server)
-                features = await client.send_request('server.features', [])
-                self.client, self.server_features = client, features
-                log.debug("discover other hubs %s:%i", *client.server)
-                await self._update_hubs(await client.send_request('server.peers.subscribe', []))
-                log.info("subscribe to headers %s:%i", *client.server)
-                self._update_remote_height((await self.subscribe_headers(),))
-                self._on_connected_controller.add(True)
-                server_str = "%s:%i" % client.server
-                log.info("maintaining connection to spv server %s", server_str)
-                self._keepalive_task = asyncio.create_task(self.client.keepalive_loop())
                 try:
-                    if not self._urgent_need_reconnect.is_set():
-                        await asyncio.wait(
-                            [self._keepalive_task, self._urgent_need_reconnect.wait()],
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                    else:
-                        await self._keepalive_task
+                    log.debug("get spv server features %s:%i", *client.server)
+                    features = await client.send_request('server.features', [])
+                    self.client, self.server_features = client, features
+                    log.debug("discover other hubs %s:%i", *client.server)
+                    await self._update_hubs(await client.send_request('server.peers.subscribe', []))
+                    log.info("subscribe to headers %s:%i", *client.server)
+                    self._update_remote_height((await self.subscribe_headers(),))
+                    self._on_connected_controller.add(True)
+                    sleep_delay = 15
+                    server_str = "%s:%i" % client.server
+                    log.info("maintaining connection to spv server %s", server_str)
+                    self._keepalive_task = asyncio.create_task(self.client.keepalive_loop())
+                    await asyncio.wait(
+                        [self._keepalive_task, self._urgent_need_reconnect.wait()],
+                        return_when=asyncio.FIRST_COMPLETED
+                    )
                     if self._urgent_need_reconnect.is_set():
                         log.warning("urgent reconnect needed")
-                    if self._keepalive_task and not self._keepalive_task.done():
-                        self._keepalive_task.cancel()
-                except asyncio.CancelledError:
+                except (asyncio.TimeoutError, ConnectionResetError, ConnectionError, RPCError, ProtocolError):
                     pass
                 finally:
+                    if self._keepalive_task and not self._keepalive_task.done():
+                        self._keepalive_task.cancel()
                     self._keepalive_task = None
                     self.client = None
                     self.server_features = None
@@ -381,9 +380,10 @@ class Network:
     async def retriable_call(self, function, *args, **kwargs):
         while self.running:
             if not self.is_connected:
-                log.warning("Wallet server unavailable, waiting for it to come back and retry.")
+                log.warning("%s: Wallet server unavailable, waiting for it to come back and retry.", function.__name__)
                 self._urgent_need_reconnect.set()
                 await self.on_connected.first
+                log.warning("%s: Wallet server available, proceeding.", function.__name__)
             try:
                 return await function(*args, **kwargs)
             except asyncio.TimeoutError:
