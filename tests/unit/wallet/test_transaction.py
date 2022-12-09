@@ -5,10 +5,10 @@ import shutil
 from binascii import hexlify, unhexlify
 from itertools import cycle
 
+from lbry.error import InsufficientFundsError
 from lbry.testcase import AsyncioTestCase
-from lbry.wallet.constants import CENT, COIN, NULL_HASH32
+from lbry.wallet.constants import CENT, COIN, DUST, NULL_HASH32
 from lbry.wallet import Wallet, Account, Ledger, Database, Headers, Transaction, Output, Input
-
 
 NULL_HASH = b'\x00'*32
 FEE_PER_BYTE = 50
@@ -395,12 +395,12 @@ class TransactionIOBalancing(AsyncioTestCase):
         return utxos
 
     @staticmethod
-    def inputs(tx):
-        return [round(i.amount/COIN, 2) for i in tx.inputs]
+    def inputs(tx, precision=2):
+        return [round(i.amount/COIN, precision) for i in tx.inputs]
 
     @staticmethod
-    def outputs(tx):
-        return [round(o.amount/COIN, 2) for o in tx.outputs]
+    def outputs(tx, precision=2):
+        return [round(o.amount/COIN, precision) for o in tx.outputs]
 
     async def test_basic_use_cases(self):
         self.ledger.fee_per_byte = int(.01*CENT)
@@ -532,3 +532,42 @@ class TransactionIOBalancing(AsyncioTestCase):
         self.assertListEqual([0.01, 1], self.inputs(tx))
         # change is now needed to consume extra input
         self.assertListEqual([0.97], self.outputs(tx))
+
+    async def test_liquidate_at_loss(self):
+        #self.ledger.coin_selection_strategy = 'sqlite'
+        self.ledger.fee_per_byte = int(0.01*CENT)
+
+        # Create UTXOs with values large enough that they can be spent.
+        utxos = await self.create_utxos([a/COIN for a in range(1490*DUST, 1510*DUST, int(DUST/10))])
+
+        tx = await self.tx(
+            [self.txi(self.txo(0.01))],  # inputs
+            []                           # outputs
+        )
+
+        # A very tiny amount of change is generated as the only output.
+        self.assertListEqual([1100], [o.amount for o in tx.outputs])
+        # A large number of additional UTXOs are added to cover fees.
+        self.assertListEqual([
+            1000000, 1509900, 1509800, 1509700, 1509600, 1509500, 1509400, 1509300, 1509200, 1509100,
+            1509000, 1508900, 1508800, 1508700, 1508600, 1508500, 1508400, 1508300, 1508200, 1508100,
+            1494600, 1494400, 1508000, 1507900, 1507800, 1507700, 1507600, 1507500, 1507400, 1507300,
+            1507200, 1507100, 1507000, 1506900, 1506800, 1506700, 1506600, 1506300, 1492700, 1492600],
+            [i.amount for i in tx.inputs])
+        self.assertIn(tx.size, range(5920, 5970))
+        self.assertEqual(59760000, tx.fee)
+        await self.ledger.release_outputs(utxos)
+
+    async def test_liquidate_at_loss_tiny_utxos(self):
+        #self.ledger.coin_selection_strategy = 'sqlite'
+        self.ledger.fee_per_byte = int(0.01*CENT)
+
+        # Create UTXOs with values so tiny that they cannot be spent.
+        utxos = await self.create_utxos([a/COIN for a in range(1460*DUST, 1490*DUST, int(DUST/10))])
+
+        with self.assertRaises(InsufficientFundsError):
+            tx = await self.tx(
+                [self.txi(self.txo(0.01))],  # inputs
+                []                           # outputs
+            )
+            self.assertFalse([i.amount for i in tx.inputs])
