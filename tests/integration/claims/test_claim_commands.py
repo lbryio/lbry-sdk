@@ -2119,7 +2119,7 @@ class StreamCommands(ClaimTestCase):
         tx = await self.stream_create(bid='0.0001')
         await self.assertBalance(self.account, '9.979793')
         await self.stream_abandon(self.get_claim_id(tx))
-        await self.assertBalance(self.account, '9.97968399')
+        await self.assertBalance(self.account, '9.979712')
 
     async def test_publish(self):
 
