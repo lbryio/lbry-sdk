@@ -809,6 +809,7 @@ class Transaction:
             tx.get_total_output_sum(ledger)
         )
         cost_of_change = (
+            tx.get_base_fee(ledger) +
             Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
         )
         # value of the inputs less the cost to spend those inputs
