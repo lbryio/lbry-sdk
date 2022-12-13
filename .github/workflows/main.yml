@@ -36,11 +36,11 @@ jobs:
         with:
           python-version: '3.7'
       - name: set pip cache dir (linux/mac)
-        if: runner.os != 'Windows'
+        if: (!startsWith(runner.os, 'windows'))
         id: pip-cache-nix
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: set pip cache dir (windows)
-        if: runner.os == 'Windows'
+        if: startsWith(runner.os, 'windows')
         id: pip-cache-win
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
@@ -52,7 +52,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - id: os-name
-        uses: ASzc/change-string-case-action@v1
+        uses: ASzc/change-string-case-action@v5
         with:
           string: ${{ runner.os }}
       - run: python -m pip install --user --upgrade pip wheel
@@ -155,15 +155,15 @@ jobs:
         with:
           python-version: '3.7'
       - id: os-name
-        uses: ASzc/change-string-case-action@v1
+        uses: ASzc/change-string-case-action@v5
         with:
           string: ${{ runner.os }}
       - name: set pip cache dir (linux/mac)
-        if: runner.os != 'Windows'
+        if: (!startsWith(runner.os, 'windows'))
         id: pip-cache-nix
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: set pip cache dir (windows)
-        if: runner.os == 'Windows'
+        if: startsWith(runner.os, 'windows')
         id: pip-cache-win
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
