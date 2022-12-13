@@ -189,7 +189,7 @@ jobs:
           pip install pywin32==301
           pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/extras/cli.py
           dist/lbrynet.exe --version
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: lbrynet-${{ steps.os-name.outputs.lowercase }}
           path: dist/
