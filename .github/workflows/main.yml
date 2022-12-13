@@ -37,18 +37,18 @@ jobs:
           python-version: '3.7'
       - name: set pip cache dir (linux/mac)
         if: runner.os != 'Windows'
-        id: pip-cache
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_OUTPUT
+        id: pip-cache-nix
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: set pip cache dir (windows)
         if: runner.os == 'Windows'
-        id: pip-cache
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_OUTPUT
+        id: pip-cache-win
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
-        run: echo "PIP_CACHE_DIR=${{ steps.pip-cache.outputs.PIP_CACHE_DIR }}"
+        run: echo "PIP_CACHE_DIR=${{ env.PIP_CACHE_DIR }}"
       - name: extract pip cache
         uses: actions/cache@v3
         with:
-          path: ${{ steps.pip-cache.outputs.PIP_CACHE_DIR }}
+          path: ${{ env.PIP_CACHE_DIR }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - id: os-name
@@ -160,18 +160,18 @@ jobs:
           string: ${{ runner.os }}
       - name: set pip cache dir (linux/mac)
         if: runner.os != 'Windows'
-        id: pip-cache
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_OUTPUT
+        id: pip-cache-nix
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: set pip cache dir (windows)
         if: runner.os == 'Windows'
-        id: pip-cache
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_OUTPUT
+        id: pip-cache-win
+        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
-        run: echo "PIP_CACHE_DIR=${{ steps.pip-cache.outputs.PIP_CACHE_DIR }}"
+        run: echo "PIP_CACHE_DIR=${{ env.PIP_CACHE_DIR }}"
       - name: extract pip cache
         uses: actions/cache@v3
         with:
-          path: ${{ steps.pip-cache.outputs.PIP_CACHE_DIR }}
+          path: ${{ env.PIP_CACHE_DIR }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - run: pip install pyinstaller==4.6
