@@ -2,7 +2,6 @@ import asyncio
 import logging
 import os
 import typing
-from pathlib import Path
 from typing import Optional
 from aiohttp.web import Request, StreamResponse, HTTPRequestRangeNotSatisfiable
 
@@ -51,13 +50,13 @@ class TorrentSource(ManagedDownloadSource):
         return self._full_path
 
     def select_path(self):
-        wanted_name = (self.stream_claim_info and self.stream_claim_info.claim.stream.source.name) or ''
+        wanted_name = (self.stream_claim_info.claim.stream.source.name or '') if self.stream_claim_info else ''
         wanted_index = self.torrent_session.get_index_from_name(self.identifier, wanted_name)
         if wanted_index is None:
             # maybe warn?
-            largest = None
+            largest = (None, -1)
             for (path, size) in self.torrent_session.get_files(self.identifier).items():
-                largest = (path, size) if not largest or size > largest[1] else largest
+                largest = (path, size) if size > largest[1] else largest
             return largest[0]
         else:
             return self.torrent_session.full_path(self.identifier, wanted_index or 0)
