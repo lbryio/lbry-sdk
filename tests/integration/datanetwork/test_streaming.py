@@ -31,10 +31,10 @@ class RangeRequests(CommandTestCase):
         self.data = data
         await self.stream_create('foo', '0.01', data=self.data, file_size=file_size)
         if save_blobs:
-            self.assertGreater(len(os.listdir(self.daemon.blob_manager.blob_dir)), 1)
+            self.assertGreater(len(self.daemon.blob_manager.list_blobs()), 1)
         await (await self.daemon.jsonrpc_file_list())['items'][0].fully_reflected.wait()
         await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, claim_name='foo')
-        self.assertEqual(0, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(0, len(self.daemon.blob_manager.list_blobs()))
         # await self._restart_stream_manager()
         await self.daemon.streaming_runner.setup()
         site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
@@ -313,20 +313,20 @@ class RangeRequests(CommandTestCase):
         self.daemon.conf.save_blobs = True
         blobs_in_stream = (await self.daemon.jsonrpc_file_list())['items'][0].blobs_in_stream
         sd_hash = (await self.daemon.jsonrpc_file_list())['items'][0].sd_hash
-        start_file_count = len(os.listdir(self.daemon.blob_manager.blob_dir))
+        start_file_count = len(self.daemon.blob_manager.list_blobs())
         await self._test_range_requests()
-        self.assertEqual(start_file_count + blobs_in_stream, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(start_file_count + blobs_in_stream, len(self.daemon.blob_manager.list_blobs()))
         self.assertEqual(0, (await self.daemon.jsonrpc_file_list())['items'][0].blobs_remaining)
 
         # switch back
         self.daemon.conf.save_blobs = False
         await self._test_range_requests()
-        self.assertEqual(start_file_count + blobs_in_stream, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(start_file_count + blobs_in_stream, len(self.daemon.blob_manager.list_blobs()))
         self.assertEqual(0, (await self.daemon.jsonrpc_file_list())['items'][0].blobs_remaining)
         await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, sd_hash=sd_hash)
-        self.assertEqual(start_file_count, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(start_file_count, len(self.daemon.blob_manager.list_blobs()))
         await self._test_range_requests()
-        self.assertEqual(start_file_count, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(start_file_count, len(self.daemon.blob_manager.list_blobs()))
         self.assertEqual(blobs_in_stream, (await self.daemon.jsonrpc_file_list())['items'][0].blobs_remaining)
 
     async def test_file_save_streaming_only_save_blobs(self):
@@ -400,7 +400,7 @@ class RangeRequestsLRUCache(CommandTestCase):
         await self.stream_create('foo', '0.01', data=self.data, file_size=0)
         await (await self.daemon.jsonrpc_file_list())['items'][0].fully_reflected.wait()
         await self.daemon.jsonrpc_file_delete(delete_from_download_dir=True, claim_name='foo')
-        self.assertEqual(0, len(os.listdir(self.daemon.blob_manager.blob_dir)))
+        self.assertEqual(0, len(self.daemon.blob_manager.list_blobs()))
 
         await self.daemon.streaming_runner.setup()
         site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,

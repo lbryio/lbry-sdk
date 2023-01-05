@@ -19,6 +19,9 @@ from lbry.blob import MAX_BLOB_SIZE, BLOBHASH_LENGTH
 from lbry.blob.blob_info import BlobInfo
 from lbry.blob.writer import HashBlobWriter
 
+if typing.TYPE_CHECKING:
+    from lbry.blob.blob_manager import BlobManager
+
 log = logging.getLogger(__name__)
 
 
@@ -79,13 +82,20 @@ class AbstractBlob:
     def __init__(
         self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False,
+        blob_manager: typing.Optional['BlobManager'] = None,
+        added_on: typing.Optional[int] = None, is_mine: bool = False,
     ):
+        if not is_valid_blobhash(blob_hash):
+            raise InvalidBlobHashError(blob_hash)
+        from lbry.blob.blob_manager import BlobManager # pylint: disable=import-outside-toplevel
+        if not isinstance(blob_manager, BlobManager):
+            raise TypeError(f"{type(blob_manager)} not instance of BlobManager")
+
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
         self.blob_completed_callback = blob_completed_callback
-        self.blob_directory = blob_directory
+        self.blob_directory, _ = blob_manager._blob_dir(blob_hash)
         self.writers: typing.Dict[typing.Tuple[typing.Optional[str], typing.Optional[int]], HashBlobWriter] = {}
         self.verified: asyncio.Event = asyncio.Event()
         self.writing: asyncio.Event = asyncio.Event()
@@ -93,8 +103,8 @@ class AbstractBlob:
         self.added_on = added_on or time.time()
         self.is_mine = is_mine
 
-        if not is_valid_blobhash(blob_hash):
-            raise InvalidBlobHashError(blob_hash)
+        if not self.blob_directory or not os.path.isdir(self.blob_directory):
+            raise OSError(f"cannot create blob in directory: '{self.blob_directory}'")
 
     def __del__(self):
         if self.writers or self.readers:
@@ -187,7 +197,7 @@ class AbstractBlob:
 
     @classmethod
     async def create_from_unencrypted(
-        cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+        cls, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', key: bytes, iv: bytes,
         unencrypted: bytes, blob_num: int, added_on: int, is_mine: bool,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], None]] = None,
     ) -> BlobInfo:
@@ -197,7 +207,7 @@ class AbstractBlob:
 
         blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
         length = len(blob_bytes)
-        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_dir, added_on, is_mine)
+        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine)
         writer = blob.get_blob_writer()
         writer.write(blob_bytes)
         await blob.verified.wait()
@@ -259,10 +269,11 @@ class BlobBuffer(AbstractBlob):
     def __init__(
         self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False
+        blob_manager: typing.Optional['BlobManager'] = None,
+        added_on: typing.Optional[int] = None, is_mine: bool = False
     ):
         self._verified_bytes: typing.Optional[BytesIO] = None
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory, added_on, is_mine)
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine)
 
     @contextlib.contextmanager
     def _reader_context(self) -> typing.ContextManager[typing.BinaryIO]:
@@ -302,11 +313,10 @@ class BlobFile(AbstractBlob):
     def __init__(
         self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
-        blob_directory: typing.Optional[str] = None, added_on: typing.Optional[int] = None, is_mine: bool = False
+        blob_manager: typing.Optional['BlobManager'] = None,
+        added_on: typing.Optional[int] = None, is_mine: bool = False
     ):
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_directory, added_on, is_mine)
-        if not blob_directory or not os.path.isdir(blob_directory):
-            raise OSError(f"invalid blob directory '{blob_directory}'")
+        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine)
         self.file_path = os.path.join(self.blob_directory, self.blob_hash)
         if self.file_exists:
             file_size = int(os.stat(self.file_path).st_size)
@@ -355,12 +365,10 @@ class BlobFile(AbstractBlob):
 
     @classmethod
     async def create_from_unencrypted(
-        cls, loop: asyncio.AbstractEventLoop, blob_dir: typing.Optional[str], key: bytes, iv: bytes,
+        cls, loop: asyncio.AbstractEventLoop, blob_manager: 'BlobManager', key: bytes, iv: bytes,
         unencrypted: bytes, blob_num: int, added_on: float, is_mine: bool,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None
     ) -> BlobInfo:
-        if not blob_dir or not os.path.isdir(blob_dir):
-            raise OSError(f"cannot create blob in directory: '{blob_dir}'")
         return await super().create_from_unencrypted(
-            loop, blob_dir, key, iv, unencrypted, blob_num, added_on, is_mine, blob_completed_callback
+            loop, blob_manager, key, iv, unencrypted, blob_num, added_on, is_mine, blob_completed_callback
         )

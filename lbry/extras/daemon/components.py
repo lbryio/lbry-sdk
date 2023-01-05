@@ -222,10 +222,28 @@ class BlobComponent(Component):
             dht_node: Node = self.component_manager.get_component(DHT_COMPONENT)
             if dht_node:
                 data_store = dht_node.protocol.data_store
-        blob_dir = os.path.join(self.conf.data_dir, 'blobfiles')
-        if not os.path.isdir(blob_dir):
-            os.mkdir(blob_dir)
-        self.blob_manager = BlobManager(self.component_manager.loop, blob_dir, storage, self.conf, data_store)
+
+        # Each blob dir should have 3 levels of subdirs corresponding to hash prefixes.
+        def setup_subdirs(path, depth):
+            if depth <= 0:
+                return
+            for prefix in '0123456789abcdef':
+                subdir = os.path.join(path, prefix)
+                if not os.path.isdir(subdir):
+                    os.mkdir(subdir)
+                    #print(f'created blob subdir: {subdir}')
+                setup_subdirs(subdir, depth-1)
+
+        # Set up any explict blob dirs plus a default <data_dir>/blobfiles.
+        blob_dirs = self.conf.blob_dirs + [os.path.join(self.conf.data_dir, 'blobfiles')]
+        #print(f'blob dirs: {blob_dirs}')
+        for blob_dir in blob_dirs:
+            if not os.path.isdir(blob_dir):
+                os.mkdir(blob_dir)
+                #print(f'created blob dir: {blob_dir}')
+            setup_subdirs(blob_dir, 3)
+
+        self.blob_manager = BlobManager(self.component_manager.loop, blob_dirs, storage, self.conf, data_store)
         return await self.blob_manager.setup()
 
     async def stop(self):

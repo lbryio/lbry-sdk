@@ -284,6 +284,20 @@ class Strings(ListSetting):
                 f"Value of '{string}' at index {idx} in setting " \
                 f"'{self.name}' must be a string."
 
+class Paths(Strings):
+
+    def validate(self, value):
+        super().validate(value)
+        for idx, path in enumerate(value):
+            assert os.path.isdir(path), \
+                f"Path '{path}' at index {idx} in setting " \
+                f"'{self.name}' must be a path to a directory."
+
+    def __get__(self, obj, owner) -> List[str]:
+        values = super().__get__(obj, owner)
+        if isinstance(values, list):
+            return [os.path.expanduser(os.path.expandvars(path)) for path in values]
+        return values
 
 class KnownHubsList:
 
@@ -593,7 +607,7 @@ class Config(CLIConfig):
     jurisdiction = String("Limit interactions to wallet server in this jurisdiction.")
 
     # directories
-    data_dir = Path("Directory path to store blobs.", metavar='DIR')
+    data_dir = Path("Directory path for daemon settings, blobs, logs, etc.", metavar='DIR')
     download_dir = Path(
         "Directory path to place assembled files downloaded from LBRY.",
         previous_names=['download_directory'], metavar='DIR'
@@ -638,6 +652,7 @@ class Config(CLIConfig):
 
     # blob announcement and download
     save_blobs = Toggle("Save encrypted blob files for hosting, otherwise download blobs to memory only.", True)
+    blob_dirs = Paths("Additional directory path(s) for storing blobs.", [], metavar='DIR')
     network_storage_limit = Integer("Disk space in MB to be allocated for helping the P2P network. 0 = disable", 0)
     blob_storage_limit = Integer("Disk space in MB to be allocated for blob storage. 0 = no limit", 0)
     blob_lru_cache_size = Integer(
