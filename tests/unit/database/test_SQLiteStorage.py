@@ -86,7 +86,7 @@ class StorageTest(AsyncioTestCase):
     async def store_fake_stream(self, stream_hash, blobs=None, file_name="fake_file", key="DEADBEEF"):
         blobs = blobs or [BlobInfo(1, 100, "DEADBEEF", 0, random_lbry_hash())]
         descriptor = StreamDescriptor(
-            asyncio.get_event_loop(), self.blob_dir, file_name, key, file_name, blobs, stream_hash
+            asyncio.get_event_loop(), self.blob_manager, file_name, key, file_name, blobs, stream_hash
         )
         sd_blob = await descriptor.make_sd_blob()
         await self.storage.store_stream(sd_blob, descriptor)
