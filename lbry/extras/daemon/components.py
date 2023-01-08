@@ -241,6 +241,9 @@ class BlobComponent(Component):
             if not os.path.isdir(blob_dir):
                 os.mkdir(blob_dir)
                 #print(f'created blob dir: {blob_dir}')
+            # TODO: Should subdir setup be done for new or empty blob dirs only?
+            # Setting up the subdirs will not relocate existing blobs and
+            # will just slow down lookups until & unless the subdirs fill up.
             setup_subdirs(blob_dir, 3)
 
         self.blob_manager = BlobManager(self.component_manager.loop, blob_dirs, storage, self.conf, data_store)
