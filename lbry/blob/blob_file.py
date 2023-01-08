@@ -84,6 +84,7 @@ class AbstractBlob:
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
         blob_manager: typing.Optional['BlobManager'] = None,
         added_on: typing.Optional[int] = None, is_mine: bool = False,
+        error_fmt: str = "invalid blob directory '%s'",
     ):
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)
@@ -104,7 +105,7 @@ class AbstractBlob:
         self.is_mine = is_mine
 
         if not self.blob_directory or not os.path.isdir(self.blob_directory):
-            raise OSError(f"cannot create blob in directory: '{self.blob_directory}'")
+            raise OSError(error_fmt%(self.blob_directory))
 
     def __del__(self):
         if self.writers or self.readers:
@@ -207,7 +208,10 @@ class AbstractBlob:
 
         blob_bytes, blob_hash = encrypt_blob_bytes(key, iv, unencrypted)
         length = len(blob_bytes)
-        blob = cls(loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine)
+        blob = cls(
+            loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine,
+            error_fmt="cannot create blob in directory: '%s'",
+        )
         writer = blob.get_blob_writer()
         writer.write(blob_bytes)
         await blob.verified.wait()
@@ -314,9 +318,13 @@ class BlobFile(AbstractBlob):
         self, loop: asyncio.AbstractEventLoop, blob_hash: str, length: typing.Optional[int] = None,
         blob_completed_callback: typing.Optional[typing.Callable[['AbstractBlob'], asyncio.Task]] = None,
         blob_manager: typing.Optional['BlobManager'] = None,
-        added_on: typing.Optional[int] = None, is_mine: bool = False
+        added_on: typing.Optional[int] = None, is_mine: bool = False,
+        error_fmt: str = "invalid blob directory '%s'",
     ):
-        super().__init__(loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine)
+        super().__init__(
+            loop, blob_hash, length, blob_completed_callback, blob_manager, added_on, is_mine,
+            error_fmt,
+        )
         self.file_path = os.path.join(self.blob_directory, self.blob_hash)
         if self.file_exists:
             file_size = int(os.stat(self.file_path).st_size)

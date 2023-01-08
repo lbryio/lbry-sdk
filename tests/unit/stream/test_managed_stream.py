@@ -24,7 +24,7 @@ class TestManagedStream(BlobExchangeTestBase):
         file_path = os.path.join(self.server_dir, file_name)
         with open(file_path, 'wb') as f:
             f.write(self.stream_bytes)
-        descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager.blob_dir, file_path)
+        descriptor = await StreamDescriptor.create_stream(self.loop, self.server_blob_manager, file_path)
         descriptor.suggested_file_name = file_name
         descriptor.stream_hash = descriptor.get_stream_hash()
         self.sd_hash = descriptor.sd_hash = descriptor.calculate_sd_hash()
@@ -166,16 +166,16 @@ class TestManagedStream(BlobExchangeTestBase):
         descriptor = await self.create_stream(blobs)
 
         # copy blob files
-        shutil.copy(os.path.join(self.server_blob_manager.blob_dir, self.sd_hash),
-                    os.path.join(self.client_blob_manager.blob_dir, self.sd_hash))
+        shutil.copy(os.path.join(self.server_blob_manager._blob_dir(self.sd_hash)[0], self.sd_hash),
+                    os.path.join(self.client_blob_manager._blob_dir(self.sd_hash)[0], self.sd_hash))
         self.stream = ManagedStream(self.loop, self.client_config, self.client_blob_manager, self.sd_hash,
                                     self.client_dir)
 
         for blob_info in descriptor.blobs[:-1]:
-            shutil.copy(os.path.join(self.server_blob_manager.blob_dir, blob_info.blob_hash),
-                        os.path.join(self.client_blob_manager.blob_dir, blob_info.blob_hash))
+            shutil.copy(os.path.join(self.server_blob_manager._blob_dir(blob_info.blob_hash)[0], blob_info.blob_hash),
+                        os.path.join(self.client_blob_manager._blob_dir(blob_info.blob_hash)[0], blob_info.blob_hash))
             if corrupt and blob_info.length == MAX_BLOB_SIZE:
-                with open(os.path.join(self.client_blob_manager.blob_dir, blob_info.blob_hash), "rb+") as handle:
+                with open(os.path.join(self.client_blob_manager._blob_dir(blob_info.blob_hash)[0], blob_info.blob_hash), "rb+") as handle:
                     handle.truncate()
                     handle.flush()
         await self.stream.save_file()
