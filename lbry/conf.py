@@ -688,6 +688,7 @@ class Config(CLIConfig):
     tracker_servers = Servers("BitTorrent-compatible (BEP15) UDP trackers for helping P2P discovery", [
         ('tracker.lbry.com', 9252),
         ('tracker.lbry.grin.io', 9252),
+        ('tracker.lbry.pigg.es', 9252),
     ])
 
     lbryum_servers = Servers("SPV wallet servers", [
@@ -704,6 +705,7 @@ class Config(CLIConfig):
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('dht.lbry.grin.io', 4444),  # Grin
         ('dht.lbry.madiator.com', 4444),  # Madiator
+        ('dht.lbry.pigg.es', 4444), # Pigges
         ('lbrynet1.lbry.com', 4444),  # US EAST
         ('lbrynet2.lbry.com', 4444),  # US WEST
         ('lbrynet3.lbry.com', 4444),  # EU
