@@ -23,15 +23,17 @@ class TestBlob(AsyncioTestCase):
         self.blob_manager = BlobManager(self.loop, self.tmp_dir, self.storage, self.config)
         await self.storage.open()
 
-    def _get_blob(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = blob_class(self.loop, self.blob_hash, len(self.blob_bytes), self.blob_manager.blob_completed,
-                          blob_directory=blob_directory)
+    def _get_blob(self, blob_class=AbstractBlob, blob_manager=None):
+        blob = blob_class(
+            self.loop, self.blob_hash, len(self.blob_bytes), self.blob_manager.blob_completed,
+            blob_manager=blob_manager
+        )
         self.assertFalse(blob.get_is_verified())
         self.addCleanup(blob.close)
         return blob
 
-    async def _test_create_blob(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = self._get_blob(blob_class, blob_directory)
+    async def _test_create_blob(self, blob_class=AbstractBlob, blob_manager=None):
+        blob = self._get_blob(blob_class, blob_manager)
         writer = blob.get_blob_writer()
         writer.write(self.blob_bytes)
         await blob.verified.wait()
@@ -39,8 +41,8 @@ class TestBlob(AsyncioTestCase):
         await asyncio.sleep(0)  # wait for the db save task
         return blob
 
-    async def _test_close_writers_on_finished(self, blob_class=AbstractBlob, blob_directory=None):
-        blob = self._get_blob(blob_class, blob_directory=blob_directory)
+    async def _test_close_writers_on_finished(self, blob_class=AbstractBlob, blob_manager=None):
+        blob = self._get_blob(blob_class, blob_manager=blob_manager)
         writers = [blob.get_blob_writer('1.2.3.4', port) for port in range(5)]
         self.assertEqual(5, len(blob.writers))
 
@@ -61,20 +63,20 @@ class TestBlob(AsyncioTestCase):
         with self.assertRaises(IOError):
             other.write(self.blob_bytes)
 
-    def _test_ioerror_if_length_not_set(self, blob_class=AbstractBlob, blob_directory=None):
+    def _test_ioerror_if_length_not_set(self, blob_class=AbstractBlob, blob_manager=None):
         blob = blob_class(
             self.loop, self.blob_hash, blob_completed_callback=self.blob_manager.blob_completed,
-            blob_directory=blob_directory
+            blob_manager=blob_manager
         )
         self.addCleanup(blob.close)
         writer = blob.get_blob_writer()
         with self.assertRaises(IOError):
             writer.write(b'')
 
-    async def _test_invalid_blob_bytes(self, blob_class=AbstractBlob, blob_directory=None):
+    async def _test_invalid_blob_bytes(self, blob_class=AbstractBlob, blob_manager=None):
         blob = blob_class(
             self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
-            blob_directory=blob_directory
+            blob_manager=blob_manager
         )
         self.addCleanup(blob.close)
         writer = blob.get_blob_writer()
@@ -88,24 +90,20 @@ class TestBlob(AsyncioTestCase):
         self.assertEqual(db_status, 'pending')
 
     async def test_add_blob_file_to_db(self):
-        blob = await self._test_create_blob(BlobFile, self.tmp_dir)
+        blob = await self._test_create_blob(BlobFile, self.blob_manager)
         db_status = await self.storage.get_blob_status(blob.blob_hash)
         self.assertEqual(db_status, 'finished')
 
     async def test_invalid_blob_bytes(self):
         await self._test_invalid_blob_bytes(BlobBuffer)
-        await self._test_invalid_blob_bytes(BlobFile, self.tmp_dir)
+        await self._test_invalid_blob_bytes(BlobFile, self.blob_manager)
 
     def test_ioerror_if_length_not_set(self):
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         self._test_ioerror_if_length_not_set(BlobBuffer)
-        self._test_ioerror_if_length_not_set(BlobFile, tmp_dir)
+        self._test_ioerror_if_length_not_set(BlobFile, self.blob_manager)
 
     async def test_create_blob_file(self):
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-        blob = await self._test_create_blob(BlobFile, tmp_dir)
+        blob = await self._test_create_blob(BlobFile, self.blob_manager)
         self.assertIsInstance(blob, BlobFile)
         self.assertTrue(os.path.isfile(blob.file_path))
 
@@ -128,15 +126,11 @@ class TestBlob(AsyncioTestCase):
         self.assertIsNone(blob._verified_bytes)
 
     async def test_close_writers_on_finished(self):
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         await self._test_close_writers_on_finished(BlobBuffer)
-        await self._test_close_writers_on_finished(BlobFile, tmp_dir)
+        await self._test_close_writers_on_finished(BlobFile, self.blob_manager)
 
     async def test_concurrency_and_premature_closes(self):
-        blob_directory = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(blob_directory))
-        blob = self._get_blob(BlobBuffer, blob_directory=blob_directory)
+        blob = self._get_blob(BlobBuffer, blob_manager=self.blob_manager)
         writer = blob.get_blob_writer('1.1.1.1', 1337)
         self.assertEqual(1, len(blob.writers))
         with self.assertRaises(OSError):
@@ -158,10 +152,7 @@ class TestBlob(AsyncioTestCase):
         self.assertIsNone(blob_buffer._verified_bytes)
         self.assertFalse(blob_buffer.get_is_verified())
 
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
-
-        blob_file = await self._test_create_blob(BlobFile, tmp_dir)
+        blob_file = await self._test_create_blob(BlobFile, self.blob_manager)
         self.assertIsInstance(blob_file, BlobFile)
         self.assertTrue(os.path.isfile(blob_file.file_path))
         self.assertTrue(blob_file.get_is_verified())
@@ -174,7 +165,7 @@ class TestBlob(AsyncioTestCase):
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         blob = BlobFile(
             self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
-            blob_directory=tmp_dir
+            blob_manager=self.blob_manager
         )
         writer = blob.get_blob_writer()
         writer.write(self.blob_bytes)
@@ -182,7 +173,7 @@ class TestBlob(AsyncioTestCase):
         blob.close()
         blob = BlobFile(
             self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
-            blob_directory=tmp_dir
+            blob_manager=self.blob_manager
         )
         self.assertTrue(blob.get_is_verified())
 
@@ -190,7 +181,7 @@ class TestBlob(AsyncioTestCase):
             f.write(b'\x00')
         blob = BlobFile(
             self.loop, self.blob_hash, len(self.blob_bytes), blob_completed_callback=self.blob_manager.blob_completed,
-            blob_directory=tmp_dir
+            blob_manager=self.blob_manager
         )
         self.assertFalse(blob.get_is_verified())
         self.assertFalse(os.path.isfile(blob.file_path))
@@ -219,7 +210,5 @@ class TestBlob(AsyncioTestCase):
             self.assertEqual(err.exception, ValueError("I/O operation on closed file"))
 
     async def test_close_reader(self):
-        tmp_dir = tempfile.mkdtemp()
-        self.addCleanup(lambda: shutil.rmtree(tmp_dir))
         await self._test_close_reader(BlobBuffer)
-        await self._test_close_reader(BlobFile, tmp_dir)
+        await self._test_close_reader(BlobFile, self.blob_manager)

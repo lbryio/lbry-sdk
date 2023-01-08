@@ -89,14 +89,14 @@ class AbstractBlob:
         if not is_valid_blobhash(blob_hash):
             raise InvalidBlobHashError(blob_hash)
         from lbry.blob.blob_manager import BlobManager # pylint: disable=import-outside-toplevel
-        if not isinstance(blob_manager, BlobManager):
+        if not isinstance(blob_manager, (BlobManager, type(None))):
             raise TypeError(f"{type(blob_manager)} not instance of BlobManager")
 
         self.loop = loop
         self.blob_hash = blob_hash
         self.length = length
         self.blob_completed_callback = blob_completed_callback
-        self.blob_directory, _ = blob_manager._blob_dir(blob_hash)
+        self.blob_directory, _ = blob_manager._blob_dir(blob_hash) if blob_manager is not None else (None, None)
         self.writers: typing.Dict[typing.Tuple[typing.Optional[str], typing.Optional[int]], HashBlobWriter] = {}
         self.verified: asyncio.Event = asyncio.Event()
         self.writing: asyncio.Event = asyncio.Event()
@@ -104,10 +104,13 @@ class AbstractBlob:
         self.added_on = added_on or time.time()
         self.is_mine = is_mine
 
-        if not self.blob_directory or not os.path.isdir(self.blob_directory):
+        if blob_manager and (not self.blob_directory or not os.path.isdir(self.blob_directory)):
             raise OSError(error_fmt%(self.blob_directory))
 
     def __del__(self):
+        if not hasattr(self, 'writers') and not hasattr(self, 'readers'):
+            # object initialization failed
+            return
         if self.writers or self.readers:
             log.warning("%s not closed before being garbage collected", self.blob_hash)
             self.close()

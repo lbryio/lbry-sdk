@@ -35,7 +35,7 @@ class TestBlobManager(AsyncioTestCase):
         # add a blob file
         blob_hash = "7f5ab2def99f0ddd008da71db3a3772135f4002b19b7605840ed1034c8955431bd7079549e65e6b2a3b9c17c773073ed"
         blob_bytes = b'1' * ((2 * 2 ** 20) - 1)
-        with open(os.path.join(self.blob_manager.blob_dir, blob_hash), 'wb') as f:
+        with open(os.path.join(self.blob_manager._blob_dir(blob_hash)[0], blob_hash), 'wb') as f:
             f.write(blob_bytes)
 
         # it should not have been added automatically on startup
@@ -57,7 +57,7 @@ class TestBlobManager(AsyncioTestCase):
         self.blob_manager.stop()
 
         # manually delete the blob file and restart the blob manager
-        os.remove(os.path.join(self.blob_manager.blob_dir, blob_hash))
+        os.remove(os.path.join(self.blob_manager._blob_dir(blob_hash)[0], blob_hash))
         await self.blob_manager.setup()
         self.assertSetEqual(self.blob_manager.completed_blob_hashes, set())
 
