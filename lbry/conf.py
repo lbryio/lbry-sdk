@@ -689,6 +689,7 @@ class Config(CLIConfig):
         ('tracker.lbry.com', 9252),
         ('tracker.lbry.grin.io', 9252),
         ('tracker.lbry.pigg.es', 9252),
+        ('tracker.lizard.technology', 9252),
     ])
 
     lbryum_servers = Servers("SPV wallet servers", [
@@ -702,6 +703,7 @@ class Config(CLIConfig):
         ('spv18.lbry.com', 50001),
         ('spv19.lbry.com', 50001),
         ('hub.lbry.grin.io', 50001),
+        ('hub.lizard.technology', 50001),
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('dht.lbry.grin.io', 4444),  # Grin
@@ -710,7 +712,8 @@ class Config(CLIConfig):
         ('lbrynet1.lbry.com', 4444),  # US EAST
         ('lbrynet2.lbry.com', 4444),  # US WEST
         ('lbrynet3.lbry.com', 4444),  # EU
-        ('lbrynet4.lbry.com', 4444)  # ASIA
+        ('lbrynet4.lbry.com', 4444),  # ASIA
+        ('dht.lizard.technology', 4444),  # Jack
     ])
 
     # blockchain
