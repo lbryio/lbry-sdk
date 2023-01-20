@@ -286,13 +286,6 @@ class Strings(ListSetting):
 
 class Paths(Strings):
 
-    def validate(self, value):
-        super().validate(value)
-        for idx, path in enumerate(value):
-            assert os.path.isdir(path), \
-                f"Path '{path}' at index {idx} in setting " \
-                f"'{self.name}' must be a path to a directory."
-
     def __get__(self, obj, owner) -> List[str]:
         values = super().__get__(obj, owner)
         if isinstance(values, list):

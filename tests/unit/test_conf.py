@@ -331,3 +331,42 @@ class ConfigurationTests(unittest.TestCase):
                 ('new.hub.io', 99): {'jurisdiction': 'us'},
                 ('any.hub.io', 99): {}
             })
+
+    def test_blob_dirs_from_yaml(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = os.path.join(temp_dir, 'settings.yml')
+            with open(config, 'w') as fd:
+                fd.write(
+                    f"blob_dirs:\n"
+                    f" - {os.path.join('~', 'dir0', 'dir1')}\n"
+                    f" - {os.path.join('~', 'dir0', 'dir2')}\n"
+                )
+            c = Config.create_from_arguments(
+                types.SimpleNamespace(config=config)
+            )
+            self.assertEqual(len(c.blob_dirs), 2)
+            self.assertRegex(c.blob_dirs[0], f"^.+{os.path.join('dir0', 'dir1')}$")
+            self.assertRegex(c.blob_dirs[1], f"^.+{os.path.join('dir0', 'dir2')}$")
+            with c.update_config():
+                c.blob_dirs = []
+            with open(config, 'r') as fd:
+                self.assertEqual(fd.read(), 'blob_dirs: []\n')
+
+    def test_blob_dirs_from_args(self):
+        parser = argparse.ArgumentParser()
+        Config.contribute_to_argparse(parser)
+
+        # default
+        args = parser.parse_args([])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(c.blob_dirs, [])
+
+        # two dirs
+        args = parser.parse_args([
+            f"--blob-dirs={os.path.join('~', 'dir0', 'dir1')}",
+            f"--blob-dirs={os.path.join('~', 'dir0', 'dir2')}",
+        ])
+        c = Config.create_from_arguments(args)
+        self.assertEqual(len(c.blob_dirs), 2)
+        self.assertRegex(c.blob_dirs[0], f"^.+{os.path.join('dir0', 'dir1')}$")
+        self.assertRegex(c.blob_dirs[1], f"^.+{os.path.join('dir0', 'dir2')}$")
