@@ -716,7 +716,7 @@ class Config(CLIConfig):
         ('lbrynet3.lbry.com', 4444),  # EU
         ('lbrynet4.lbry.com', 4444),  # ASIA
         ('dht.lizard.technology', 4444),  # Jack
-        ('s1.lbry.network', 4444),
+        ('s2.lbry.network', 4444),
     ])
 
     # blockchain
