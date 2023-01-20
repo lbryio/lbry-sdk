@@ -345,8 +345,8 @@ class ConfigurationTests(unittest.TestCase):
                 types.SimpleNamespace(config=config)
             )
             self.assertEqual(len(c.blob_dirs), 2)
-            self.assertRegex(c.blob_dirs[0], f"^.+{os.path.join('dir0', 'dir1')}$")
-            self.assertRegex(c.blob_dirs[1], f"^.+{os.path.join('dir0', 'dir2')}$")
+            self.assertTrue(c.blob_dirs[0].endswith(os.path.join('dir0', 'dir1')))
+            self.assertTrue(c.blob_dirs[1].endswith(os.path.join('dir0', 'dir2')))
             with c.update_config():
                 c.blob_dirs = []
             with open(config, 'r') as fd:
@@ -368,5 +368,5 @@ class ConfigurationTests(unittest.TestCase):
         ])
         c = Config.create_from_arguments(args)
         self.assertEqual(len(c.blob_dirs), 2)
-        self.assertRegex(c.blob_dirs[0], f"^.+{os.path.join('dir0', 'dir1')}$")
-        self.assertRegex(c.blob_dirs[1], f"^.+{os.path.join('dir0', 'dir2')}$")
+        self.assertTrue(c.blob_dirs[0].endswith(os.path.join('dir0', 'dir1')))
+        self.assertTrue(c.blob_dirs[1].endswith(os.path.join('dir0', 'dir2')))
