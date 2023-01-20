@@ -701,6 +701,7 @@ class Config(CLIConfig):
         ('spv17.lbry.com', 50001),
         ('spv18.lbry.com', 50001),
         ('spv19.lbry.com', 50001),
+        ('hub.lbry.grin.io', 50001),
     ])
     known_dht_nodes = Servers("Known nodes for bootstrapping connection to the DHT", [
         ('dht.lbry.grin.io', 4444),  # Grin
