@@ -35,14 +35,11 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
-      - name: set pip cache dir (linux/mac)
-        if: (!startsWith(runner.os, 'windows'))
-        id: pip-cache-nix
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
-      - name: set pip cache dir (windows)
-        if: startsWith(runner.os, 'windows')
-        id: pip-cache-win
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
+      - name: set pip cache dir
+        - if: (!startsWith(runner.os, 'windows'))
+          run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
+        - if: startsWith(runner.os, 'windows')
+          run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
         run: echo "PIP_CACHE_DIR=${{ env.PIP_CACHE_DIR }}"
       - name: extract pip cache
@@ -158,14 +155,11 @@ jobs:
         uses: ASzc/change-string-case-action@v5
         with:
           string: ${{ runner.os }}
-      - name: set pip cache dir (linux/mac)
-        if: (!startsWith(runner.os, 'windows'))
-        id: pip-cache-nix
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
-      - name: set pip cache dir (windows)
-        if: startsWith(runner.os, 'windows')
-        id: pip-cache-win
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
+      - name: set pip cache dir
+        - if: (!startsWith(runner.os, 'windows'))
+          run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
+        - if: startsWith(runner.os, 'windows')
+          run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: debug pip cache
         run: echo "PIP_CACHE_DIR=${{ env.PIP_CACHE_DIR }}"
       - name: extract pip cache
