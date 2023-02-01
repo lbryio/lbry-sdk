@@ -35,10 +35,9 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
-      - if: (!startsWith(runner.os, 'windows'))
+      - name: set pip cache dir
+        shell: bash
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
-      - if: startsWith(runner.os, 'windows')
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: extract pip cache
         uses: actions/cache@v3
         with:
@@ -152,10 +151,9 @@ jobs:
         uses: ASzc/change-string-case-action@v5
         with:
           string: ${{ runner.os }}
-      - if: (!startsWith(runner.os, 'windows'))
+      - name: set pip cache dir
+        shell: bash
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
-      - if: startsWith(runner.os, 'windows')
-        run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $env:GITHUB_ENV
       - name: extract pip cache
         uses: actions/cache@v3
         with:
