@@ -3,7 +3,7 @@ import logging
 import typing
 from typing import Optional
 from aiohttp.web import Request
-from lbry.error import ResolveError, DownloadSDTimeoutError, InsufficientFundsError
+from lbry.error import ResolveError, DownloadMetadataTimeoutError, InsufficientFundsError
 from lbry.error import ResolveTimeoutError, DownloadDataTimeoutError, KeyFeeAboveMaxAllowedError
 from lbry.error import InvalidStreamURLError
 from lbry.stream.managed_stream import ManagedStream
@@ -139,7 +139,7 @@ class FileManager:
                         existing[0].identifier, outpoint, existing[0].torrent_length, existing[0].torrent_name
                     )
                     claim_info = await self.storage.get_content_claim_for_torrent(existing[0].identifier)
-                    existing[0].set_claim(claim_info, claim)
+                    existing[0].set_claim(claim_info.as_dict() if claim_info else None, claim)
                 else:
                     await self.storage.save_content_claim(
                         existing[0].stream_hash, outpoint
@@ -242,15 +242,15 @@ class FileManager:
                     stream.identifier, outpoint, stream.torrent_length, stream.torrent_name
                 )
                 claim_info = await self.storage.get_content_claim_for_torrent(stream.identifier)
-                stream.set_claim(claim_info, claim)
+                stream.set_claim(claim_info.as_dict() if claim_info else None, claim)
             if save_file:
                 await asyncio.wait_for(stream.save_file(), timeout - (self.loop.time() - before_download))
             return stream
         except asyncio.TimeoutError:
-            error = DownloadDataTimeoutError(stream.sd_hash)
+            error = DownloadDataTimeoutError(stream.identifier)
             raise error
         except Exception as err:  # forgive data timeout, don't delete stream
-            expected = (DownloadSDTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
+            expected = (DownloadMetadataTimeoutError, DownloadDataTimeoutError, InsufficientFundsError,
                         KeyFeeAboveMaxAllowedError, ResolveError, InvalidStreamURLError)
             if isinstance(err, expected):
                 log.warning("Failed to download %s: %s", uri, str(err))
@@ -290,19 +290,24 @@ class FileManager:
                     )
                 )
 
-    async def stream_partial_content(self, request: Request, sd_hash: str):
-        return await self.source_managers['stream'].stream_partial_content(request, sd_hash)
+    async def stream_partial_content(self, request: Request, identifier: str):
+        for source_manager in self.source_managers.values():
+            if source_manager.get_filtered(identifier=identifier):
+                return await source_manager.stream_partial_content(request, identifier)
 
     def get_filtered(self, *args, **kwargs) -> typing.List[ManagedDownloadSource]:
         """
-        Get a list of filtered and sorted ManagedStream objects
-
-        :param sort_by: field to sort by
-        :param reverse: reverse sorting
-        :param comparison: comparison operator used for filtering
-        :param search_by: fields and values to filter by
+        Get a list of filtered and sorted ManagedDownloadSource objects from all available source managers
         """
-        return sum((manager.get_filtered(*args, **kwargs) for manager in self.source_managers.values()), [])
+        result = last_error = None
+        for manager in self.source_managers.values():
+            try:
+                result = (result or []) + manager.get_filtered(*args, **kwargs)
+            except ValueError as error:
+                last_error = error
+        if result is not None:
+            return result
+        raise last_error
 
     async def delete(self, source: ManagedDownloadSource, delete_file=False):
         for manager in self.source_managers.values():

@@ -36,7 +36,7 @@ from lbry.blob.blob_file import is_valid_blobhash, BlobBuffer
 from lbry.blob_exchange.downloader import download_blob
 from lbry.dht.peer import make_kademlia_peer
 from lbry.error import (
-    DownloadSDTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
+    DownloadMetadataTimeoutError, ComponentsNotStartedError, ComponentStartConditionNotMetError,
     CommandDoesNotExistError, BaseError, WalletNotFoundError, WalletAlreadyLoadedError, WalletAlreadyExistsError,
     ConflictingInputValueError, AlreadyPurchasedError, PrivateKeyNotFoundError, InputStringIsBlankError,
     InputValueError
@@ -639,7 +639,7 @@ class Daemon(metaclass=JSONRPCServerType):
         stream = await self.jsonrpc_get(uri)
         if isinstance(stream, dict):
             raise web.HTTPServerError(text=stream['error'])
-        raise web.HTTPFound(f"/stream/{stream.sd_hash}")
+        raise web.HTTPFound(f"/stream/{stream.identifier}")
 
     async def handle_stream_range_request(self, request: web.Request):
         try:
@@ -658,12 +658,13 @@ class Daemon(metaclass=JSONRPCServerType):
             log.debug("finished handling /stream range request")
 
     async def _handle_stream_range_request(self, request: web.Request):
-        sd_hash = request.path.split("/stream/")[1]
+        identifier = request.path.split("/stream/")[1]
         if not self.file_manager.started.is_set():
             await self.file_manager.started.wait()
-        if sd_hash not in self.file_manager.streams:
+        stream = self.file_manager.get_filtered(identifier=identifier)
+        if not stream:
             return web.HTTPNotFound()
-        return await self.file_manager.stream_partial_content(request, sd_hash)
+        return await self.file_manager.stream_partial_content(request, identifier)
 
     async def _process_rpc_call(self, data):
         args = data.get('params', {})
@@ -1139,7 +1140,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 save_file=save_file, wallet=wallet
             )
             if not stream:
-                raise DownloadSDTimeoutError(uri)
+                raise DownloadMetadataTimeoutError(uri)
         except Exception as e:
             # TODO: use error from lbry.error
             log.warning("Error downloading %s: %s", uri, str(e))

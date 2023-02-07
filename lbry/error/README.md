@@ -81,8 +81,8 @@ Code | Name | Message
 511 | CorruptBlob | Blobs is corrupted.
 520 | BlobFailedEncryption | Failed to encrypt blob.
 531 | DownloadCancelled | Download was canceled.
-532 | DownloadSDTimeout | Failed to download sd blob {download} within timeout.
-533 | DownloadDataTimeout | Failed to download data blobs for sd hash {download} within timeout.
+532 | DownloadMetadataTimeout | Failed to download metadata for {download} within timeout.
+533 | DownloadDataTimeout | Failed to download data blobs for {download} within timeout.
 534 | InvalidStreamDescriptor | {message}
 535 | InvalidData | {message}
 536 | InvalidBlobHash | {message}

@@ -4,7 +4,7 @@ import logging
 import binascii
 
 from lbry.dht.node import get_kademlia_peers_from_hosts
-from lbry.error import DownloadSDTimeoutError
+from lbry.error import DownloadMetadataTimeoutError
 from lbry.utils import lru_cache_concurrent
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.blob_exchange.downloader import BlobDownloader
@@ -77,7 +77,7 @@ class StreamDownloader:
                 log.info("downloaded sd blob %s", self.sd_hash)
                 self.time_to_descriptor = self.loop.time() - now
             except asyncio.TimeoutError:
-                raise DownloadSDTimeoutError(self.sd_hash)
+                raise DownloadMetadataTimeoutError(self.sd_hash)
 
         # parse the descriptor
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(

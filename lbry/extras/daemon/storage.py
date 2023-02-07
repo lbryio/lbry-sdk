@@ -5,6 +5,7 @@ import typing
 import asyncio
 import binascii
 import time
+from operator import itemgetter
 from typing import Optional
 from lbry.wallet import SQLiteMixin
 from lbry.conf import Config
@@ -211,7 +212,7 @@ def delete_torrent(transaction: sqlite3.Connection, bt_infohash: str):
     transaction.execute("delete from torrent where bt_infohash=?", (bt_infohash,)).fetchall()
 
 
-def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typing.Optional[str],
+def store_file(transaction: sqlite3.Connection, identifier_value: str, file_name: typing.Optional[str],
                download_directory: typing.Optional[str], data_payment_rate: float, status: str,
                content_fee: typing.Optional[Transaction], added_on: typing.Optional[int] = None) -> int:
     if not file_name and not download_directory:
@@ -219,15 +220,18 @@ def store_file(transaction: sqlite3.Connection, stream_hash: str, file_name: typ
     else:
         encoded_file_name = binascii.hexlify(file_name.encode()).decode()
         encoded_download_dir = binascii.hexlify(download_directory.encode()).decode()
+    is_torrent = len(identifier_value) == 40
     time_added = added_on or int(time.time())
     transaction.execute(
-        "insert or replace into file values (?, NULL, ?, ?, ?, ?, ?, ?, ?)",
-        (stream_hash, encoded_file_name, encoded_download_dir, data_payment_rate, status,
+        f"insert or replace into file values ({'NULL, ?' if is_torrent else '?, NULL'}, ?, ?, ?, ?, ?, ?, ?)",
+        (identifier_value, encoded_file_name, encoded_download_dir, data_payment_rate, status,
          1 if (file_name and download_directory and os.path.isfile(os.path.join(download_directory, file_name))) else 0,
          None if not content_fee else binascii.hexlify(content_fee.raw).decode(), time_added)
     ).fetchall()
 
-    return transaction.execute("select rowid from file where stream_hash=?", (stream_hash, )).fetchone()[0]
+    return transaction.execute(
+        f"select rowid from file where {'bt_infohash' if is_torrent else 'stream_hash'}=?",
+        (identifier_value, )).fetchone()[0]
 
 
 class SQLiteStorage(SQLiteMixin):
@@ -632,6 +636,13 @@ class SQLiteStorage(SQLiteMixin):
     def get_all_lbry_files(self) -> typing.Awaitable[typing.List[typing.Dict]]:
         return self.db.run(get_all_lbry_files)
 
+    async def get_all_torrent_files(self) -> typing.List[typing.Dict]:
+        def _get_all_torrent_files(transaction):
+            cursor = transaction.execute(
+                "select file.ROWID as rowid, * from file join torrent on file.bt_infohash=torrent.bt_infohash")
+            return map(lambda row: dict(zip(list(map(itemgetter(0), cursor.description)), row)), cursor.fetchall())
+        return list(await self.db.run(_get_all_torrent_files))
+
     def change_file_status(self, stream_hash: str, new_status: str):
         log.debug("update file status %s -> %s", stream_hash, new_status)
         return self.db.execute_fetchall("update file set status=? where stream_hash=?", (new_status, stream_hash))
@@ -872,15 +883,20 @@ class SQLiteStorage(SQLiteMixin):
         if stream_hash in self.content_claim_callbacks:
             await self.content_claim_callbacks[stream_hash]()
 
-    async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
-        def _save_torrent(transaction):
+    async def add_torrent(self, bt_infohash, length, name):
+        def _save_torrent(transaction, bt_infohash, length, name):
             transaction.execute(
                 "insert or replace into torrent values (?, NULL, ?, ?)", (bt_infohash, length, name)
             ).fetchall()
+        return await self.db.run(_save_torrent, bt_infohash, length, name)
+
+    async def save_torrent_content_claim(self, bt_infohash, claim_outpoint, length, name):
+        def _save_torrent_claim(transaction):
             transaction.execute(
                 "insert or replace into content_claim values (NULL, ?, ?)", (bt_infohash, claim_outpoint)
             ).fetchall()
-        await self.db.run(_save_torrent)
+        await self.add_torrent(bt_infohash, length, name)
+        await self.db.run(_save_torrent_claim)
         # update corresponding ManagedEncryptedFileDownloader object
         if bt_infohash in self.content_claim_callbacks:
             await self.content_claim_callbacks[bt_infohash]()
@@ -898,7 +914,7 @@ class SQLiteStorage(SQLiteMixin):
 
     async def get_content_claim_for_torrent(self, bt_infohash):
         claims = await self.db.run(get_claims_from_torrent_info_hashes, [bt_infohash])
-        return claims[bt_infohash].as_dict() if claims else None
+        return claims[bt_infohash] if claims else None
 
     # # # # # # # # # reflector functions # # # # # # # # #
 

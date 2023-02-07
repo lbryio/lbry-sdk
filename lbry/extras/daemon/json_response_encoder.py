@@ -285,7 +285,7 @@ class JSONResponseEncoder(JSONEncoder):
         else:
             total_bytes_lower_bound = total_bytes = managed_stream.torrent_length
         result = {
-            'streaming_url': None,
+            'streaming_url': managed_stream.stream_url,
             'completed': managed_stream.completed,
             'file_name': None,
             'download_directory': None,
@@ -293,10 +293,10 @@ class JSONResponseEncoder(JSONEncoder):
             'points_paid': 0.0,
             'stopped': not managed_stream.running,
             'stream_hash': None,
-            'stream_name': None,
-            'suggested_file_name': None,
+            'stream_name': managed_stream.stream_name,
+            'suggested_file_name': managed_stream.suggested_file_name,
             'sd_hash': None,
-            'mime_type': None,
+            'mime_type': managed_stream.mime_type,
             'key': None,
             'total_bytes_lower_bound': total_bytes_lower_bound,
             'total_bytes': total_bytes,
@@ -326,12 +326,8 @@ class JSONResponseEncoder(JSONEncoder):
         }
         if is_stream:
             result.update({
-                'streaming_url': managed_stream.stream_url,
                 'stream_hash': managed_stream.stream_hash,
-                'stream_name': managed_stream.stream_name,
-                'suggested_file_name': managed_stream.suggested_file_name,
                 'sd_hash': managed_stream.descriptor.sd_hash,
-                'mime_type': managed_stream.mime_type,
                 'key': managed_stream.descriptor.key,
                 'blobs_completed': managed_stream.blobs_completed,
                 'blobs_in_stream': managed_stream.blobs_in_stream,
@@ -339,10 +335,6 @@ class JSONResponseEncoder(JSONEncoder):
                 'is_fully_reflected': managed_stream.is_fully_reflected,
                 'reflector_progress': managed_stream.reflector_progress,
                 'uploading_to_reflector': managed_stream.uploading_to_reflector
-            })
-        else:
-            result.update({
-                'streaming_url': f'file://{managed_stream.full_path}',
             })
         if output_exists:
             result.update({

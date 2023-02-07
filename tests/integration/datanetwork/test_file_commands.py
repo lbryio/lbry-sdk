@@ -1,14 +1,18 @@
+import time
 import unittest
 from unittest import skipIf
 import asyncio
 import os
 from binascii import hexlify
 
+import aiohttp.web
+
 from lbry.schema import Claim
 from lbry.stream.background_downloader import BackgroundDownloader
 from lbry.stream.descriptor import StreamDescriptor
 from lbry.testcase import CommandTestCase
 from lbry.extras.daemon.components import TorrentSession, BACKGROUND_DOWNLOADER_COMPONENT
+from lbry.utils import aiohttp_request
 from lbry.wallet import Transaction
 from lbry.torrent.tracker import UDPTrackerServerProtocol
 
@@ -17,61 +21,115 @@ class FileCommands(CommandTestCase):
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.skip_libtorrent = False
+        self.streaming_port = 60818
+        self.seeder_session = None
 
-    async def add_forever(self):
-        while True:
-            for handle in self.client_session._handles.values():
-                handle._handle.connect_peer(('127.0.0.1', 4040))
-            await asyncio.sleep(.1)
-
-    async def initialize_torrent(self, tx_to_update=None):
-        if not hasattr(self, 'seeder_session'):
+    async def initialize_torrent(self, tx_to_update=None, pick_a_file=True, name=None):
+        assert name is None or tx_to_update is None
+        if not self.seeder_session:
             self.seeder_session = TorrentSession(self.loop, None)
             self.addCleanup(self.seeder_session.stop)
             await self.seeder_session.bind('127.0.0.1', port=4040)
-        btih = await self.seeder_session.add_fake_torrent()
+        btih = await self.seeder_session.add_fake_torrent(file_count=3)
+        files = [(size, path) for (path, size) in self.seeder_session.get_files(btih).items()]
+        files.sort()
+        # picking a file will pick something in the middle, while automatic selection will pick largest
+        self.expected_size, self.expected_path = files[1] if pick_a_file else files[-1]
+
         address = await self.account.receiving.get_or_create_usable_address()
+        claim = tx_to_update.outputs[0].claim if tx_to_update else Claim()
+        claim.stream.update(bt_infohash=btih)
+        if pick_a_file:
+            claim.stream.source.name = os.path.basename(self.expected_path)
         if not tx_to_update:
-            claim = Claim()
-            claim.stream.update(bt_infohash=btih)
             tx = await Transaction.claim_create(
-                'torrent', claim, 1, address, [self.account], self.account
+                name or 'torrent', claim, 1, address, [self.account], self.account
             )
         else:
-            claim = tx_to_update.outputs[0].claim
-            claim.stream.update(bt_infohash=btih)
             tx = await Transaction.claim_update(
                 tx_to_update.outputs[0], claim, 1, address, [self.account], self.account
             )
         await tx.sign([self.account])
         await self.broadcast_and_confirm(tx)
         self.client_session = self.daemon.file_manager.source_managers['torrent'].torrent_session
-        self.client_session.wait_start = False  # fixme: this is super slow on tests
-        task = asyncio.create_task(self.add_forever())
-        self.addCleanup(task.cancel)
         return tx, btih
+
+    async def assert_torrent_streaming_works(self, btih):
+        url = f'http://{self.daemon.conf.streaming_host}:{self.streaming_port}/stream/{btih}'
+        if self.daemon.streaming_runner.server is None:
+            await self.daemon.streaming_runner.setup()
+            site = aiohttp.web.TCPSite(self.daemon.streaming_runner, self.daemon.conf.streaming_host,
+                                       self.streaming_port)
+            await site.start()
+        async with aiohttp_request('get', url) as req:
+            self.assertEqual(req.status, 206)
+            self.assertEqual(req.headers.get('Content-Type'), 'application/octet-stream')
+            content_range = req.headers.get('Content-Range')
+            content_length = int(req.headers.get('Content-Length'))
+            streamed_bytes = await req.content.read()
+        expected_size = self.expected_size
+        self.assertEqual(expected_size, len(streamed_bytes))
+        self.assertEqual(content_length, len(streamed_bytes))
+        self.assertEqual(f"bytes 0-{expected_size - 1}/{expected_size}", content_range)
 
     @skipIf(TorrentSession is None, "libtorrent not installed")
     async def test_download_torrent(self):
-        tx, btih = await self.initialize_torrent()
+        tx, btih = await self.initialize_torrent(pick_a_file=False)
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         # second call, see its there and move on
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
-        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, btih)
         self.assertIn(btih, self.client_session._handles)
+
+        # stream over streaming API (full range of the largest file)
+        await self.assert_torrent_streaming_works(btih)
+
+        # check json encoder fields for torrent sources
+        file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
+        self.assertEqual(btih, file['metadata']['source']['bt_infohash'])
+        self.assertAlmostEqual(time.time(), file['added_on'], delta=12)
+        self.assertEqual("application/octet-stream", file['mime_type'])
+        self.assertEqual(os.path.basename(self.expected_path), file['suggested_file_name'])
+        self.assertEqual(os.path.basename(self.expected_path), file['stream_name'])
+        while not file['completed']:  # improve that
+            await asyncio.sleep(0.5)
+            file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
+        self.assertTrue(file['completed'])
+        self.assertGreater(file['total_bytes_lower_bound'], 0)
+        self.assertEqual(file['total_bytes_lower_bound'], file['total_bytes'])
+        self.assertEqual(file['total_bytes'], file['written_bytes'])
+        self.assertEqual('finished', file['status'])
+
+        # filter by a field which is missing on torrent
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(stream_hash="abc"), 0)
+
         tx, new_btih = await self.initialize_torrent(tx)
         self.assertNotEqual(btih, new_btih)
         # claim now points to another torrent, update to it
         self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent')))
         self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+
+        # restart and verify that only one updated stream was recovered
+        self.daemon.file_manager.stop()
+        await self.daemon.file_manager.start()
+        self.assertEqual((await self.daemon.jsonrpc_file_list())['items'][0].identifier, new_btih)
+        self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
+        # check it was saved properly, once
+        self.assertEqual(1, len(await self.daemon.storage.get_all_torrent_files()))
+
         self.assertIn(new_btih, self.client_session._handles)
         self.assertNotIn(btih, self.client_session._handles)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 1)
         await self.daemon.jsonrpc_file_delete(delete_all=True)
         self.assertItemCount(await self.daemon.jsonrpc_file_list(), 0)
         self.assertNotIn(new_btih, self.client_session._handles)
+
+        await self.initialize_torrent(name='torrent2')
+        self.assertNotIn('error', await self.out(self.daemon.jsonrpc_get('torrent2')))
+        file = (await self.out(self.daemon.jsonrpc_file_list()))['items'][0]
+        self.assertEqual(os.path.basename(self.expected_path), file['stream_name'])
 
     async def create_streams_in_range(self, *args, **kwargs):
         self.stream_claim_ids = []
@@ -335,12 +393,12 @@ class FileCommands(CommandTestCase):
         await self.server.blob_manager.delete_blobs(all_except_sd)
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
-        self.assertEqual('Failed to download data blobs for sd hash %s within timeout.' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download data blobs for %s within timeout.' % sd_hash, resp['error'])
         self.assertTrue(await self.daemon.jsonrpc_file_delete(claim_name='foo'), "data timeout didn't create a file")
         await self.server.blob_manager.delete_blobs([sd_hash])
         resp = await self.daemon.jsonrpc_get('lbry://foo', timeout=2, save_file=True)
         self.assertIn('error', resp)
-        self.assertEqual('Failed to download sd blob %s within timeout.' % sd_hash, resp['error'])
+        self.assertEqual('Failed to download metadata for %s within timeout.' % sd_hash, resp['error'])
 
     async def wait_files_to_complete(self):
         while await self.file_list(status='running'):
