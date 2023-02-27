@@ -2,25 +2,28 @@ import json
 import logging
 import os.path
 import hashlib
+from collections.abc import Mapping, Iterable
 from typing import Tuple, List
 from string import ascii_letters
 from decimal import Decimal, ROUND_UP
-from binascii import hexlify, unhexlify
-from google.protobuf.json_format import MessageToDict
+from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
 
 from lbry.crypto.base58 import Base58
 from lbry.constants import COIN
 from lbry.error import MissingPublishedFileError, EmptyPublishedFileError
 
+import lbry.schema.claim as claim
 from lbry.schema.mime_types import guess_media_type
 from lbry.schema.base import Metadata, BaseMessageList
-from lbry.schema.tags import clean_tags, normalize_tag
-from lbry.schema.types.v2.claim_pb2 import (
+from lbry.schema.tags import normalize_tag
+from google.protobuf.message import Message as ProtobufMessage
+from lbry_types.v2.claim_pb2 import (
+    Claim as ClaimMessage,
     Fee as FeeMessage,
     Location as LocationMessage,
-    Language as LanguageMessage
+    Language as LanguageMessage,
 )
-
+from lbry_types.v2.extension_pb2 import Extension as ExtensionMessage
 
 log = logging.getLogger(__name__)
 
@@ -173,11 +176,11 @@ class Source(Metadata):
 
     @property
     def file_hash(self) -> str:
-        return hexlify(self.message.hash).decode()
+        return self.message.hash.hex()
 
     @file_hash.setter
     def file_hash(self, file_hash: str):
-        self.message.hash = unhexlify(file_hash.encode())
+        self.message.hash = bytes.fromhex(file_hash)
 
     @property
     def file_hash_bytes(self) -> bytes:
@@ -189,11 +192,11 @@ class Source(Metadata):
 
     @property
     def sd_hash(self) -> str:
-        return hexlify(self.message.sd_hash).decode()
+        return self.message.sd_hash.hex()
 
     @sd_hash.setter
     def sd_hash(self, sd_hash: str):
-        self.message.sd_hash = unhexlify(sd_hash.encode())
+        self.message.sd_hash = bytes.fromhex(sd_hash)
 
     @property
     def sd_hash_bytes(self) -> bytes:
@@ -205,11 +208,11 @@ class Source(Metadata):
 
     @property
     def bt_infohash(self) -> str:
-        return hexlify(self.message.bt_infohash).decode()
+        return self.message.bt_infohash.hex()
 
     @bt_infohash.setter
     def bt_infohash(self, bt_infohash: str):
-        self.message.bt_infohash = unhexlify(bt_infohash.encode())
+        self.message.bt_infohash = bytes.fromhex(bt_infohash)
 
     @property
     def bt_infohash_bytes(self) -> bytes:
@@ -355,11 +358,11 @@ class ClaimReference(Metadata):
 
     @property
     def claim_id(self) -> str:
-        return hexlify(self.claim_hash[::-1]).decode()
+        return self.claim_hash[::-1].hex()
 
     @claim_id.setter
     def claim_id(self, claim_id: str):
-        self.claim_hash = unhexlify(claim_id)[::-1]
+        self.claim_hash = bytes.fromhex(claim_id)[::-1]
 
     @property
     def claim_hash(self) -> bytes:
@@ -369,6 +372,86 @@ class ClaimReference(Metadata):
     def claim_hash(self, claim_hash: bytes):
         self.message.claim_hash = claim_hash
 
+class ModifyingClaimReference(ClaimReference):
+
+    __slots__ = ()
+
+    @property
+    def modification_type(self) -> str:
+        return self.message.WhichOneof('type')
+
+    @modification_type.setter
+    def modification_type(self, claim_type: str):
+        """Select the appropriate member (stream, channel, repost, or collection)"""
+        old_type = self.message.WhichOneof('type')
+        if old_type == claim_type:
+            return
+        if old_type and claim_type is None:
+            self.message.ClearField(old_type)
+            return
+        member = getattr(self.message, claim_type)
+        member.SetInParent()
+
+    def update(self, claim_type: str, **kwargs) -> dict:
+        """
+        Store updates to modifiable fields in deletions/edits.
+        Currently, only the "extensions" field (StreamExtensionMap)
+        of a stream claim may be modified. Returns a dict containing
+        the unhandled portion of "kwargs".
+        """
+        if claim_type != 'stream':
+            return kwargs
+
+        clr_exts = kwargs.pop('clear_extensions', None)
+        set_exts = kwargs.pop('extensions', None)
+        if clr_exts is None and set_exts is None:
+            return kwargs
+
+        self.modification_type = claim_type
+        if not self.modification_type == 'stream':
+            return kwargs
+
+        mods = getattr(self.message, self.modification_type)
+
+        if clr_exts is not None:
+            deletions = StreamModifiable(mods.deletions)
+            if isinstance(clr_exts, str) and clr_exts.startswith('{'):
+                clr_exts = json.loads(clr_exts)
+            deletions.extensions.merge(clr_exts)
+
+        if set_exts is not None:
+            edits = StreamModifiable(mods.edits)
+            if isinstance(set_exts, str) and set_exts.startswith('{'):
+                set_exts = json.loads(set_exts)
+            edits.extensions.merge(set_exts)
+
+        return kwargs
+
+    def apply(self, reposted: 'claim.Claim') -> 'claim.Claim':
+        """
+        Given a reposted claim, apply the stored deletions/edits, and return
+        the modified claim. Returns the original claim if the claim type has
+        changed such that the modifications are not relevant.
+        """
+        if not self.modification_type or self.modification_type != reposted.claim_type:
+            return reposted
+        if not reposted.claim_type == 'stream':
+            return reposted
+
+        m = ClaimMessage()
+        m.CopyFrom(reposted.message)
+        result = claim.Claim(m)
+
+        # only stream claims, and only stream extensions are handled
+        stream = getattr(result, result.claim_type)
+        exts = getattr(stream, 'extensions')
+
+        mods = getattr(self.message, self.modification_type)
+        # apply deletions
+        exts.merge(StreamModifiable(mods.deletions).extensions, delete=True)
+        # apply edits
+        exts.merge(StreamModifiable(mods.edits).extensions)
+        return result
 
 class ClaimList(BaseMessageList[ClaimReference]):
 
@@ -569,3 +652,169 @@ class TagList(BaseMessageList[str]):
         tag = normalize_tag(tag)
         if tag and tag not in self.message:
             self.message.append(tag)
+
+class StreamExtension(Metadata):
+    __slots__ = Metadata.__slots__ + ('extension_schema',)
+
+    def __init__(self, schema, message):
+        super().__init__(message)
+        self.extension_schema = schema
+
+    def to_dict(self, include_schema=True):
+        attrs = self.unpacked.to_dict()
+        return { f'{self.schema}': attrs } if include_schema else attrs
+
+    def from_value(self, value):
+        schema = self.schema
+
+        # If incoming is an extension, we have an Extension message.
+        if isinstance(value, StreamExtension):
+            schema = value.schema or schema
+
+        # Translate str -> (JSON) dict.
+        if isinstance(value, str) and value.startswith('{'):
+            value = json.loads(value)
+
+        # Check for 1-element dictionary at top level: {<schema>: <attrs>}.
+        if isinstance(value, dict) and len(value) == 1:
+            k = next(iter(value.keys()))
+            if self.schema is None or self.schema == k:
+                # Schema is determined. Extract dict containining attrs.
+                schema = k
+                value = value[schema]
+
+        # Try to decode attrs dict -> Extension message containing protobuf.Struct.
+        if isinstance(value, dict):
+            try:
+                ext = StreamExtension(schema, ExtensionMessage())
+                ParseDict(value, ext.message.struct)
+                value = ext
+            except ParseError:
+                pass
+
+        # Either we have an Extension message or decoding failed.
+        if isinstance(value, StreamExtension):
+            self.extension_schema = value.schema or schema
+            self.message.CopyFrom(value.message)
+        else:
+            log.info('Could not parse StreamExtension value: %s type: %s', value, type(value))
+            raise ValueError(f'Could not parse StreamExtension value: {value}')
+
+    @property
+    def schema(self):
+        return self.extension_schema
+
+    @property
+    def unpacked(self):
+        return Struct(self.message.struct)
+
+    def merge(self, ext: 'StreamExtension', delete: bool = False) -> 'StreamExtension':
+        self.unpacked.merge(ext.unpacked, delete=delete)
+        return self
+
+class Struct(Metadata, Mapping, Iterable):
+    __slots__ = ()
+
+    def to_dict(self) -> dict:
+        return MessageToDict(self.message)
+
+    def merge(self, other: 'Struct', delete: bool = False) -> 'Struct':
+        for k, v in other.message.fields.items():
+            if k not in self.message.fields:
+                if not delete:
+                    self.message.fields[k].CopyFrom(v)
+                continue
+            my_value = self.message.fields[k]
+            my_kind = my_value.WhichOneof('kind')
+            kind = v.WhichOneof('kind')
+            if kind != my_kind:
+                continue
+            if kind == 'struct_value':
+                if len(v.struct_value.fields) > 0:
+                    Struct(my_value).merge(v.struct_value, delete=delete)
+                elif delete:
+                    del self.message.fields[k]
+            elif kind == 'list_value':
+                if len(v.list_value.values) > 0:
+                    for _, o in enumerate(v.list_value.values):
+                        for i, v in enumerate(my_value.list_value.values):
+                            if v == o:
+                                if delete:
+                                    del my_value.list_value.values[i]
+                                break
+                        if not delete:
+                            if isinstance(o, ProtobufMessage):
+                                my_value.list_value.values.add().CopyFrom(o)
+                            else:
+                                my_value.list_value.values.append(o)
+                elif delete:
+                    del self.message.fields[k]
+            elif getattr(my_value, my_kind) == getattr(v, kind):
+                del self.message.fields[k]
+        return self
+
+    def __getitem__(self, key):
+        def extract(val):
+            if not isinstance(val, ProtobufMessage):
+                return val
+            kind = val.WhichOneof('kind')
+            if kind == 'struct_value':
+                return dict(Struct(val.struct_value))
+            elif kind == 'list_value':
+                return list(map(extract, val.list_value.values))
+            else:
+                return getattr(val, kind)
+        if key in self.message.fields:
+            val = self.message.fields[key]
+            return extract(val)
+        raise KeyError(key)
+
+    def __iter__(self):
+        return iter(self.message.fields)
+
+    def __len__(self):
+        return len(self.message.fields)
+
+class StreamExtensionMap(Metadata, Mapping, Iterable):
+    __slots__ = ()
+    item_class = StreamExtension
+
+    def to_dict(self):
+        return { k: v.to_dict(include_schema=False) for k, v in self.items() }
+
+    def merge(self, exts, delete: bool = False) -> 'StreamExtensionMap':
+        if isinstance(exts, StreamExtension):
+            exts = {exts.schema: exts}
+        if isinstance(exts, str) and exts.startswith('{'):
+            exts = json.loads(exts)
+        for schema, ext in exts.items():
+            obj = StreamExtension(schema, ExtensionMessage())
+            if isinstance(ext, StreamExtension):
+                obj.from_value(ext)
+            else:
+                obj.from_value({schema: ext})
+            if delete and not len(obj.unpacked):
+                del self.message[schema]
+                continue
+            existing = StreamExtension(schema, self.message[schema])
+            existing.merge(obj, delete=delete)
+        return self
+
+    def __getitem__(self, key):
+        if key in self.message:
+            return StreamExtension(key, self.message[key])
+        raise KeyError(key)
+
+    def __iter__(self):
+        return iter(self.message)
+
+    def __len__(self):
+        return len(self.message)
+
+
+class StreamModifiable(Metadata):
+    __slots__ = ()
+
+    @property
+    def extensions(self) -> StreamExtensionMap:
+        return StreamExtensionMap(self.message.extensions)

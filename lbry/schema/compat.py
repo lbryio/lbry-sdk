@@ -3,9 +3,9 @@ from decimal import Decimal
 
 from google.protobuf.message import DecodeError
 
-from lbry.schema.types.v1.legacy_claim_pb2 import Claim as OldClaimMessage
-from lbry.schema.types.v1.certificate_pb2 import KeyType
-from lbry.schema.types.v1.fee_pb2 import Fee as FeeMessage
+from lbry_types.v1.legacy_claim_pb2 import Claim as OldClaimMessage
+from lbry_types.v1.certificate_pb2 import KeyType
+from lbry_types.v1.fee_pb2 import Fee as FeeMessage
 
 
 def from_old_json_schema(claim, payload: bytes):

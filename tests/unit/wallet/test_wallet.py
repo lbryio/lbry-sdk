@@ -4,7 +4,7 @@ import os
 import tempfile
 from binascii import hexlify
 
-import lbry.schema.types.v2 as schema_v2
+import lbry.schema as schema
 from unittest import TestCase, mock
 from lbry.testcase import AsyncioTestCase
 from lbry.wallet import (
@@ -130,7 +130,7 @@ class TestWalletCreation(AsyncioTestCase):
         storage = WalletStorage(default=wallet_dict)
         wallet = Wallet.from_storage(storage, self.manager)
         self.assertDictEqual(wallet_dict, wallet.to_dict())
-        with open(os.path.join(*schema_v2.__path__, 'wallet.json')) as f:
+        with open(os.path.join(*schema.__path__, 'types', 'v2', 'wallet.json')) as f:
             wallet_schema = json.load(f)
         jsonschema.validate(schema=wallet_schema, instance=wallet.to_dict())
 

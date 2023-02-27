@@ -865,6 +865,25 @@ class Ledger(metaclass=LedgerRegistry):
                             accounts=accounts
                         )
                         txo.received_tips = tips
+        # For reposts, apply any deletions/edits specified.
+        for txo in txos:
+            if isinstance(txo, Output) and txo.can_decode_claim:
+                if not txo.claim.is_repost:
+                    continue
+                reposted_txo = txo.original_reposted_claim
+                if isinstance(reposted_txo, Output) and reposted_txo.can_decode_claim:
+                    modified_claim = txo.claim.repost.apply(reposted_txo.claim)
+                    if modified_claim is reposted_txo.claim:
+                        # Claim was not modified. The reposted_claim is the
+                        # same as original_reposted_claim.
+                        txo.reposted_claim = txo.original_reposted_claim
+                        continue
+                    # Make a deep copy so we can modify the txo without
+                    # disturbing the TX cache contents.
+                    modified_txo = copy.deepcopy(reposted_txo)
+                    modified_txo.claim.message.CopyFrom(modified_claim.message)
+                    # Set the reposted_claim field reported in results.
+                    txo.reposted_claim = modified_txo
         return txos, blocked, outputs.offset, outputs.total
 
     async def resolve(self, accounts, urls, **kwargs):

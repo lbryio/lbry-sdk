@@ -7,6 +7,10 @@ from unittest import skip
 from urllib.request import urlopen
 import ecdsa
 
+from lbry.schema.attrs import StreamExtension
+from google.protobuf.struct_pb2 import Struct as StructMessage
+from lbry_types.v2.extension_pb2 import Extension as ExtensionMessage
+
 from lbry.error import InsufficientFundsError
 
 from lbry.extras.daemon.daemon import DEFAULT_PAGE_SIZE
@@ -1530,6 +1534,146 @@ class StreamCommands(ClaimTestCase):
         searched_repost = (await self.claim_search(claim_id=repost_id))[0]
         self.assertEqual(searched_repost['amount'], '0.42')
         self.assertEqual(searched_repost['signing_channel']['claim_id'], spam_claim_id)
+
+    async def test_repost_with_extensions(self):
+        tx = await self.channel_create('@goodies', '1.0')
+        goodies_claim_id = self.get_claim_id(tx)
+        tx = await self.channel_create('@spam', '1.0')
+        spam_claim_id = self.get_claim_id(tx)
+
+        ext1 = StreamExtension('cad', ExtensionMessage())
+        cad = ext1.message.struct
+        cad.fields['cubic_cm'].number_value = 5
+        cad.fields['material'].list_value.values.add().string_value = "PLA1"
+        cad.fields['material'].list_value.values.add().string_value = "PLA2"
+        self.assertEqual(ext1.schema, "cad")
+        self.assertEqual(ext1.to_dict(), {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}})
+
+        # create stream with extension adding "cad"
+        tx = await self.stream_create(
+            'newstuff', '1.1', channel_name='@goodies',
+            extensions=ext1.to_dict(),
+        )
+        claim_id = self.get_claim_id(tx)
+
+        self.assertEqual((await self.claim_search(name='newstuff'))[0]['meta']['reposted'], 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(reposted_claim_id=claim_id), 0)
+        self.assertItemCount(await self.daemon.jsonrpc_txo_list(type='repost'), 0)
+        self.assertEqual(
+            (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
+        )
+
+        # search for extension type cad with material 'PLA2' expecting 1 result
+        results = await self.claim_search(extensions={"cad": {'material': ['PLA2']}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[0]['value']['extensions'],
+        )
+        # search for extension type cad with material 'wood' expecting 0 results
+        results = await self.claim_search(extensions={"cad": {'material': ['wood']}})
+        self.assertEqual(len(results), 0, results)
+
+        ext2 = StreamExtension('music', ExtensionMessage())
+        mus = ext2.message.struct
+        mus.fields['genre'].list_value.values.add().string_value = "classical"
+        mus.fields['tempo'].string_value = "allegro"
+        mus.fields['venue'].string_value = "studio"
+        mus.fields['instrument'].list_value.values.add().string_value = "flute"
+        mus.fields['instrument'].list_value.values.add().string_value = "oboe"
+        self.assertEqual(ext2.schema, "music")
+        self.assertEqual(ext2.to_dict(), {'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}})
+
+        # create repost adding extension "music"
+        tx = await self.stream_repost(
+            claim_id, 'newstuff-again', '1.1', channel_name='@spam',
+            extensions=ext2.to_dict(),
+        )
+        repost_id = self.get_claim_id(tx)
+
+        # test inflating reposted channels works
+        repost_url = f'newstuff-again:{repost_id}'
+        self.ledger._tx_cache.clear()
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(
+            repost['reposted_claim']["value"]["extensions"],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+        )
+
+        # search for extension types expecting 2 "cad" and 1 "music"
+        results = await self.claim_search(extensions={"cad": {}})
+        self.assertEqual(len(results), 2, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
+        )
+        self.assertEqual(
+            results[1]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[1]['value']['extensions'],
+        )
+        results = await self.claim_search(extensions={"music": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0},
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
+        )
+
+        ext3 = StreamExtension('cad', ExtensionMessage())
+        self.assertEqual(ext3.schema, "cad")
+        self.assertEqual(ext3.to_dict(), {"cad": {}})
+
+        # update repost removing extension "cad"
+        await self.stream_update(
+            repost_id,
+            clear_extensions=ext3.to_dict(),
+        )
+        repost_resolve = await self.out(self.daemon.jsonrpc_resolve(repost_url))
+        repost = repost_resolve[repost_url]
+        self.assertEqual(goodies_claim_id, repost['reposted_claim']['signing_channel']['claim_id'])
+        self.assertEqual(
+            repost['reposted_claim']["value"]["extensions"],
+            {'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"}},
+        )
+
+        # original claim remains as created with extension "cad"
+        self.assertEqual(
+            (await self.claim_search(name='newstuff'))[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}}
+        )
+
+        # search for extension types expecting 1 "cad" and 1 "music"
+        results = await self.claim_search(extensions={"cad": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['value']['extensions'],
+            {'cad': {'material': ['PLA1', 'PLA2'], 'cubic_cm': 5.0}},
+            results[0]['value']['extensions'],
+        )
+        results = await self.claim_search(extensions={"music": {}})
+        self.assertEqual(len(results), 1, results)
+        self.assertEqual(
+            results[0]['reposted_claim']['value']['extensions'],
+            {
+                'music': {"genre": ["classical"], "instrument": ["flute", "oboe"], "tempo": "allegro", "venue": "studio"},
+            },
+            results[0]['reposted_claim']['value']['extensions'],
+        )
 
     async def test_filtering_channels_for_removing_content(self):
         some_channel_id = self.get_claim_id(await self.channel_create('@some_channel', '0.1'))

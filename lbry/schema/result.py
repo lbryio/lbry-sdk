@@ -4,8 +4,8 @@ from binascii import hexlify
 from itertools import chain
 
 from lbry.error import ResolveCensoredError
-from lbry.schema.types.v2.result_pb2 import Outputs as OutputsMessage
-from lbry.schema.types.v2.result_pb2 import Error as ErrorMessage
+from lbry_types.v2.result_pb2 import Outputs as OutputsMessage
+from lbry_types.v2.result_pb2 import Error as ErrorMessage
 
 INVALID = ErrorMessage.Code.Name(ErrorMessage.INVALID)
 NOT_FOUND = ErrorMessage.Code.Name(ErrorMessage.NOT_FOUND)
@@ -150,7 +150,7 @@ class Outputs:
             if claim.HasField('channel'):
                 txo.channel = tx_map[claim.channel.tx_hash].outputs[claim.channel.nout]
             if claim.HasField('repost'):
-                txo.reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
+                txo.original_reposted_claim = tx_map[claim.repost.tx_hash].outputs[claim.repost.nout]
             try:
                 if txo.claim.is_channel:
                     txo.meta['claims_in_channel'] = claim.claims_in_channel

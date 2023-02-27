@@ -37,7 +37,7 @@ setup(
         'base58==1.0.0',
         'cffi==1.13.2',
         'cryptography==2.5',
-        'protobuf==3.17.2',
+        'protobuf==3.20.1',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
         'pyyaml==5.3.1',
@@ -47,6 +47,7 @@ setup(
         'pbkdf2==1.3',
         'filetype==1.0.9',
         'libtorrent==2.0.6',
+        'lbry-types@git+https://github.com/moodyjon/types@repost_modify',
     ],
     extras_require={
         'lint': [
@@ -57,7 +58,7 @@ setup(
             'jsonschema==4.4.0',
         ],
         'hub': [
-            'hub@git+https://github.com/lbryio/hub.git@929448d64bcbe6c5e476757ec78456beaa85e56a'
+            'hub@git+https://github.com/moodyjon/hub.git@limited_repost'
         ]
     },
     classifiers=[

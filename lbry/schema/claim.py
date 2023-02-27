@@ -16,9 +16,10 @@ from lbry.schema.base import Signable
 from lbry.schema.mime_types import guess_media_type, guess_stream_type
 from lbry.schema.attrs import (
     Source, Playable, Dimmensional, Fee, Image, Video, Audio,
-    LanguageList, LocationList, ClaimList, ClaimReference, TagList
+    LanguageList, LocationList, ClaimList, ModifyingClaimReference, TagList,
+    StreamExtensionMap
 )
-from lbry.schema.types.v2.claim_pb2 import Claim as ClaimMessage
+from lbry_types.v2.claim_pb2 import Claim as ClaimMessage
 from lbry.error import InputValueIsNoneError
 
 
@@ -211,6 +212,8 @@ class Stream(BaseClaim):
             fee['address'] = self.fee.address
         if 'amount' in fee:
             fee['amount'] = str(self.fee.amount)
+        if 'extensions' in claim:
+            claim['extensions'] = self.extensions.to_dict()
         return claim
 
     def update(self, file_path=None, height=None, width=None, duration=None, **kwargs):
@@ -264,7 +267,24 @@ class Stream(BaseClaim):
                 media_args['width'] = width
             media.update(**media_args)
 
-        super().update(**kwargs)
+        clr_exts = kwargs.pop('clear_extensions', None)
+        if clr_exts:
+            if isinstance(clr_exts, list):
+                for e in clr_exts:
+                    self.extensions.merge(e, delete=True)
+            elif isinstance(clr_exts, (str, dict)):
+                self.extensions.merge(clr_exts, delete=True)
+            else:
+                self.message.ClearField('extensions')
+        set_exts = kwargs.pop('extensions', None)
+        if set_exts:
+            if isinstance(set_exts, list):
+                for e in set_exts:
+                    self.extensions.merge(e)
+            else:
+                self.extensions.merge(set_exts)
+
+        return super().update(**kwargs)
 
     @property
     def author(self) -> str:
@@ -329,6 +349,10 @@ class Stream(BaseClaim):
     @property
     def audio(self) -> Audio:
         return Audio(self.message.audio)
+
+    @property
+    def extensions(self) -> StreamExtensionMap:
+        return StreamExtensionMap(self.message.extensions)
 
 
 class Channel(BaseClaim):
@@ -404,9 +428,20 @@ class Repost(BaseClaim):
             claim['claim_id'] = self.reference.claim_id
         return claim
 
+    def update(self, **kwargs):
+        claim_type = kwargs.pop('claim_type', None)
+        if claim_type:
+            # Try to apply updates to ClaimReference.
+            kwargs = self.reference.update(claim_type, **kwargs)
+        # Update common fields within BaseClaim.
+        super().update(**kwargs)
+
+    def apply(self, reposted: 'Claim'):
+        return self.reference.apply(reposted)
+
     @property
-    def reference(self) -> ClaimReference:
-        return ClaimReference(self.message)
+    def reference(self) -> ModifyingClaimReference:
+        return ModifyingClaimReference(self.message)
 
 
 class Collection(BaseClaim):
