@@ -3,6 +3,7 @@ import asyncio
 import json
 import socket
 import random
+import sys
 from time import perf_counter
 from collections import defaultdict
 from typing import Dict, Optional, Tuple
@@ -197,6 +198,10 @@ class Network:
     def jurisdiction(self):
         return self.config.get("jurisdiction")
 
+    @property
+    def exit_on_disconnect(self):
+        return self.config["exit_on_disconnect"]
+
     def disconnect(self):
         if self._keepalive_task and not self._keepalive_task.done():
             self._keepalive_task.cancel()
@@ -374,7 +379,13 @@ class Network:
     def rpc(self, list_or_method, args, restricted=True, session: Optional[ClientSession] = None):
         if session or self.is_connected:
             session = session or self.client
-            return session.send_request(list_or_method, args)
+            try:
+                return session.send_request(list_or_method, args)
+            except asyncio.TimeoutError:
+                if self.exit_on_disconnect:
+                    log.error("exiting on server disconnect")
+                    sys.exit(1)
+                raise
         else:
             self._urgent_need_reconnect.set()
             raise ConnectionError("Attempting to send rpc request when connection is not available.")
@@ -388,9 +399,16 @@ class Network:
             try:
                 return await function(*args, **kwargs)
             except asyncio.TimeoutError:
-                log.warning("Wallet server call timed out, retrying.")
+                if self.exit_on_disconnect:
+                    log.error("Wallet server call timed out, exiting on server disconnect.")
+                    sys.exit(1)
+                else:
+                    log.warning("Wallet server call timed out, retrying.")
             except ConnectionError:
                 log.warning("connection error")
+                if self.exit_on_disconnect:
+                    log.error("exiting on server disconnect")
+                    sys.exit(1)
         raise asyncio.CancelledError()  # if we got here, we are shutting down
 
     def _update_remote_height(self, header_args):
