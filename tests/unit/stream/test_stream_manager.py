@@ -136,7 +136,7 @@ class TestStreamManager(BlobExchangeTestBase):
         with open(file_path, 'wb') as f:
             f.write(os.urandom(20000000))
         descriptor = await StreamDescriptor.create_stream(
-            self.loop, self.server_blob_manager.blob_dir, file_path, old_sort=old_sort
+            self.loop, self.server_blob_manager, file_path, old_sort=old_sort
         )
         self.sd_hash = descriptor.sd_hash
         self.mock_wallet, self.uri = await get_mock_wallet(self.sd_hash, self.client_storage, self.client_wallet_dir,
@@ -453,7 +453,7 @@ class TestStreamManager(BlobExchangeTestBase):
         self.client_blob_manager.stop()
         # partial removal, only sd blob is missing.
         # in this case, we recover the sd blob while the other blobs are kept untouched as 'finished'
-        os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
+        os.remove(os.path.join(self.client_blob_manager._blob_dir(stream.sd_hash)[0], stream.sd_hash))
         await self.client_blob_manager.setup()
         await self.stream_manager.start()
         self.assertEqual(1, len(self.stream_manager.streams))
@@ -470,9 +470,9 @@ class TestStreamManager(BlobExchangeTestBase):
 
         # full removal, check that status is preserved (except sd blob, which was written)
         self.client_blob_manager.stop()
-        os.remove(os.path.join(self.client_blob_manager.blob_dir, stream.sd_hash))
+        os.remove(os.path.join(self.client_blob_manager._blob_dir(stream.sd_hash)[0], stream.sd_hash))
         for blob in stream.descriptor.blobs[:-1]:
-            os.remove(os.path.join(self.client_blob_manager.blob_dir, blob.blob_hash))
+            os.remove(os.path.join(self.client_blob_manager._blob_dir(blob.blob_hash)[0], blob.blob_hash))
         await self.client_blob_manager.setup()
         await self.stream_manager.start()
         for blob_hash in [b.blob_hash for b in stream.descriptor.blobs[:-1]]:

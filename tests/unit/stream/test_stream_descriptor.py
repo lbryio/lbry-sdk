@@ -29,7 +29,7 @@ class TestStreamDescriptor(AsyncioTestCase):
         with open(self.file_path, 'wb') as f:
             f.write(self.cleartext)
 
-        self.descriptor = await StreamDescriptor.create_stream(self.loop, self.tmp_dir, self.file_path, key=self.key)
+        self.descriptor = await StreamDescriptor.create_stream(self.loop, self.blob_manager, self.file_path, key=self.key)
         self.sd_hash = self.descriptor.calculate_sd_hash()
         self.sd_dict = json.loads(self.descriptor.as_json())
 
@@ -114,7 +114,7 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
         writer.write(sd_bytes)
         await blob.verified.wait()
         descriptor = await StreamDescriptor.from_stream_descriptor_blob(
-            loop, blob_manager.blob_dir, blob
+            loop, blob_manager, blob
         )
         self.assertEqual(stream_hash, descriptor.get_stream_hash())
         self.assertEqual(sd_hash, descriptor.calculate_old_sort_sd_hash())
@@ -124,10 +124,15 @@ class TestRecoverOldStreamDescriptors(AsyncioTestCase):
         loop = asyncio.get_event_loop()
         tmp_dir = tempfile.mkdtemp()
         self.addCleanup(lambda: shutil.rmtree(tmp_dir))
+        self.conf = Config()
+        storage = SQLiteStorage(self.conf, ":memory:")
+        await storage.open()
+        blob_manager = BlobManager(loop, tmp_dir, storage, self.conf)
+
         sd_hash = '9313d1807551186126acc3662e74d9de29cede78d4f133349ace846273ef116b9bb86be86c54509eb84840e4b032f6b2'
         with open(os.path.join(tmp_dir, sd_hash), 'wb') as handle:
             handle.write(b'doesnt work')
-        blob = BlobFile(loop, sd_hash, blob_directory=tmp_dir)
+        blob = BlobFile(loop, sd_hash, blob_manager=blob_manager)
         self.assertTrue(blob.file_exists)
         self.assertIsNotNone(blob.length)
         with self.assertRaises(InvalidStreamDescriptorError):
