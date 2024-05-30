@@ -27,8 +27,8 @@ jobs:
       matrix:
         os:
           - ubuntu-20.04
-          - macos-latest
-          - windows-latest
+          - macos-13
+          - windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
@@ -139,8 +139,8 @@ jobs:
       matrix:
         os:
           - ubuntu-20.04
-          - macos-latest
-          - windows-latest
+          - macos-13
+          - windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
