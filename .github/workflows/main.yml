@@ -45,7 +45,7 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - id: os-name
-        uses: ASzc/change-string-case-action@v5
+        uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ runner.os }}
       - run: python -m pip install --user --upgrade pip wheel
@@ -148,7 +148,7 @@ jobs:
         with:
           python-version: '3.9'
       - id: os-name
-        uses: ASzc/change-string-case-action@v5
+        uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ runner.os }}
       - name: set pip cache dir
@@ -186,7 +186,7 @@ jobs:
     needs: ["build"]
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
       - name: upload binaries
         env:
