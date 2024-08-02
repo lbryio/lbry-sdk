@@ -7,12 +7,12 @@ jobs:
     name: lint
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - name: extract pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
@@ -27,25 +27,25 @@ jobs:
       matrix:
         os:
           - ubuntu-20.04
-          - macos-latest
-          - windows-latest
+          - macos-13
+          - windows-2022
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - name: set pip cache dir
         shell: bash
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: extract pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.PIP_CACHE_DIR }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
       - id: os-name
-        uses: ASzc/change-string-case-action@v5
+        uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ runner.os }}
       - run: python -m pip install --user --upgrade pip wheel
@@ -93,8 +93,8 @@ jobs:
         uses: elastic/elastic-github-actions/elasticsearch@master
         with:
           stack-version: 7.12.1
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - if: matrix.test == 'other'
@@ -102,7 +102,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
       - name: extract pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ./.tox
           key: tox-integration-${{ matrix.test }}-${{ hashFiles('setup.py') }}
@@ -139,28 +139,28 @@ jobs:
       matrix:
         os:
           - ubuntu-20.04
-          - macos-latest
-          - windows-latest
+          - macos-13
+          - windows-2022
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - id: os-name
-        uses: ASzc/change-string-case-action@v5
+        uses: ASzc/change-string-case-action@v6
         with:
           string: ${{ runner.os }}
       - name: set pip cache dir
         shell: bash
         run: echo "PIP_CACHE_DIR=$(pip cache dir)" >> $GITHUB_ENV
       - name: extract pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ${{ env.PIP_CACHE_DIR }}
           key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: ${{ runner.os }}-pip-
-      - run: pip install pyinstaller==4.6
+      - run: pip install pyinstaller==6.0
       - run: pip install -e .
       - if: startsWith(github.ref, 'refs/tags/v')
         run: python docker/set_build.py
@@ -175,7 +175,7 @@ jobs:
           pip install pywin32==301
           pyinstaller --additional-hooks-dir=scripts/. --icon=icons/lbry256.ico --onefile --name lbrynet lbry/extras/cli.py
           dist/lbrynet.exe --version
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: lbrynet-${{ steps.os-name.outputs.lowercase }}
           path: dist/
@@ -186,8 +186,8 @@ jobs:
     needs: ["build"]
     runs-on: ubuntu-20.04
     steps:
-      - uses: actions/checkout@v1
-      - uses: actions/download-artifact@v2
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
       - name: upload binaries
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_API_TOKEN }}

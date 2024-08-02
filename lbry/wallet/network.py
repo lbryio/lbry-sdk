@@ -99,13 +99,13 @@ class ClientSession(BaseClientSession):
             self._concurrency.release()
 
     async def ensure_server_version(self, required=None, timeout=3):
-        required = required or self.network.PROTOCOL_VERSION
+        required = required or self.network.PROTOCOL_MAX_VERSION
         response = await asyncio.wait_for(
-            self.send_request('server.version', [__version__, required]), timeout=timeout
+            self.send_request('server.version', [self.network.CLIENT_NAME, required]), timeout=timeout
         )
-        if tuple(int(piece) for piece in response[0].split(".")) < self.network.MINIMUM_REQUIRED:
-            raise IncompatibleWalletServerError(*self.server)
-        return response
+        if tuple(int(piece) for piece in response[1].split(".")) >= self.network.PROTOCOL_MIN_VERSION:
+            return response
+        raise IncompatibleWalletServerError(*self.server)
 
     async def keepalive_loop(self, timeout=3, max_idle=60):
         try:
@@ -149,8 +149,11 @@ class ClientSession(BaseClientSession):
 
 class Network:
 
-    PROTOCOL_VERSION = __version__
-    MINIMUM_REQUIRED = (0, 65, 0)
+    CLIENT_VERSION = __version__
+    CLIENT_NAME = "LBRY SDK " + CLIENT_VERSION
+
+    PROTOCOL_MIN_VERSION = (0, 65, 0)
+    PROTOCOL_MAX_VERSION = __version__
 
     def __init__(self, ledger):
         self.ledger = ledger
