@@ -63,7 +63,7 @@ class BasicTransactionTests(IntegrationTestCase):
         # 10 of the UTXOs have been split into a 1 coin UTXO and a 9 UTXO change
         self.assertEqual(30, await self.account.get_utxo_count())
 
-        # spend all 30 UTXOs into a a 199 coin UTXO and change
+        # spend all 30 UTXOs into a 199 coin UTXO and change
         tx = await Transaction.create(
             [],
             [Output.pay_pubkey_hash(

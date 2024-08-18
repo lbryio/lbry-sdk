@@ -640,7 +640,7 @@ class TestBackgroundDownloaderComponent(CommandTestCase):
         return descriptor.blobs
 
     async def assertBlobs(self, *sd_hashes, no_files=True):
-        # checks that we have ony the finished blobs needed for the the referenced streams
+        # checks that we have ony the finished blobs needed for the referenced streams
         seen = set(sd_hashes)
         for sd_hash in sd_hashes:
             sd_blob = self.daemon.blob_manager.get_blob(sd_hash)

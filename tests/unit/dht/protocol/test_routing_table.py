@@ -198,7 +198,7 @@ class TestRouting(AsyncioTestCase):
 #
 #     @defer.inlineCallbacks
 #     def test_split_bucket(self):
-#         """ Tests if the the routing table correctly dynamically splits k-buckets """
+#         """ Tests if the routing table correctly dynamically splits k-buckets """
 #         self.assertEqual(self.routingTable._buckets[0].rangeMax, 2**384,
 #                              'Initial k-bucket range should be 0 <= range < 2**384')
 #         # Add k contacts
