@@ -43,7 +43,7 @@ class DiskSpaceManager:
             space_used_mb = space_used_mb['content_storage'] + space_used_mb['private_storage']
         storage_limit_mb = self.config.network_storage_limit if is_network_blob else self.config.blob_storage_limit
         if self.analytics:
-            asyncio.create_task(
+            task = asyncio.create_task(
                 self.analytics.send_disk_space_used(space_used_mb, storage_limit_mb, is_network_blob)
             )
         delete = []

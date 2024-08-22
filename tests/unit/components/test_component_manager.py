@@ -170,7 +170,7 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
         )
 
     async def test_proper_starting_of_components(self):
-        asyncio.create_task(self.component_manager.start())
+        task = asyncio.create_task(self.component_manager.start())
 
         await self.advance(0)
         self.assertTrue(self.component_manager.get_component('wallet').running)
@@ -188,7 +188,7 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
         self.assertTrue(self.component_manager.get_component('file_manager').running)
 
     async def test_proper_stopping_of_components(self):
-        asyncio.create_task(self.component_manager.start())
+        task = asyncio.create_task(self.component_manager.start())
         await self.advance(0)
         await self.advance(1)
         await self.advance(1)
@@ -196,7 +196,7 @@ class TestComponentManagerProperStart(AdvanceTimeTestCase):
         self.assertTrue(self.component_manager.get_component('blob_manager').running)
         self.assertTrue(self.component_manager.get_component('file_manager').running)
 
-        asyncio.create_task(self.component_manager.stop())
+        task = asyncio.create_task(self.component_manager.stop())
         await self.advance(0)
         self.assertFalse(self.component_manager.get_component('file_manager').running)
         self.assertTrue(self.component_manager.get_component('blob_manager').running)

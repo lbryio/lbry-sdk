@@ -1383,7 +1383,7 @@ class Daemon(metaclass=JSONRPCServerType):
                 ])
             else:
                 for new_account in added_accounts:
-                    asyncio.create_task(self.ledger.subscribe_account(new_account))
+                    task = asyncio.create_task(self.ledger.subscribe_account(new_account))
         wallet.save()
         return await self.jsonrpc_wallet_export(password=password, wallet_id=wallet_id)
 
@@ -2001,7 +2001,7 @@ class Daemon(metaclass=JSONRPCServerType):
                     ])
                 else:
                     for new_account in added_accounts:
-                        asyncio.create_task(self.ledger.subscribe_account(new_account))
+                        task = asyncio.create_task(self.ledger.subscribe_account(new_account))
             wallet_changed = True
         if wallet.preferences.get(ENCRYPT_ON_DISK, False) and password != wallet.encryption_password:
             wallet.encryption_password = password
