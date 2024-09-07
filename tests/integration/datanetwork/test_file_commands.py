@@ -635,7 +635,7 @@ class DiskSpaceManagement(CommandTestCase):
 class TestBackgroundDownloaderComponent(CommandTestCase):
     async def get_blobs_from_sd_blob(self, sd_blob):
         descriptor = await StreamDescriptor.from_stream_descriptor_blob(
-            asyncio.get_running_loop(), self.daemon.blob_manager.blob_dir, sd_blob
+            asyncio.get_running_loop(), self.daemon.blob_manager, sd_blob
         )
         return descriptor.blobs
 

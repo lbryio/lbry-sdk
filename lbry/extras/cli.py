@@ -296,6 +296,8 @@ def main(argv=None):
     conf = Config.create_from_arguments(args)
     for directory in (conf.data_dir, conf.download_dir, conf.wallet_dir):
         ensure_directory_exists(directory)
+    for directory in conf.blob_dirs:
+        ensure_directory_exists(directory)
 
     if args.cli_version:
         print(f"lbrynet {lbrynet_version}")

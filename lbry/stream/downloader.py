@@ -81,7 +81,7 @@ class StreamDownloader:
 
         # parse the descriptor
         self.descriptor = await StreamDescriptor.from_stream_descriptor_blob(
-            self.loop, self.blob_manager.blob_dir, sd_blob
+            self.loop, self.blob_manager, sd_blob
         )
         log.info("loaded stream manifest %s", self.sd_hash)
 

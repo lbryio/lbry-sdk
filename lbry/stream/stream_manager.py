@@ -78,7 +78,7 @@ class StreamManager(SourceManager):
             sd_blob = self.blob_manager.get_blob(sd_hash)
             blobs = await self.storage.get_blobs_for_stream(stream_hash)
             descriptor = await StreamDescriptor.recover(
-                self.blob_manager.blob_dir, sd_blob, stream_hash, stream_name, suggested_file_name, key, blobs
+                self.blob_manager, sd_blob, stream_hash, stream_name, suggested_file_name, key, blobs
             )
             if not descriptor:
                 return
@@ -235,7 +235,7 @@ class StreamManager(SourceManager):
     async def create(self, file_path: str, key: Optional[bytes] = None,
                      iv_generator: Optional[typing.Generator[bytes, None, None]] = None) -> ManagedStream:
         descriptor = await StreamDescriptor.create_stream(
-            self.loop, self.blob_manager.blob_dir, file_path, key=key, iv_generator=iv_generator,
+            self.loop, self.blob_manager, file_path, key=key, iv_generator=iv_generator,
             blob_completed_callback=self.blob_manager.blob_completed
         )
         await self.storage.store_stream(

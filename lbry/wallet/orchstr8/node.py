@@ -199,7 +199,8 @@ class WalletNode:
             cleanup and self.cleanup()
 
     def cleanup(self):
-        shutil.rmtree(self.data_path, ignore_errors=True)
+        log.warning("skipping cleanup of data_path: %s", self.data_path)
+        #shutil.rmtree(self.data_path, ignore_errors=True)
 
 
 class SPVNode:
