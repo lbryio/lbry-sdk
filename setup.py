@@ -36,7 +36,7 @@ setup(
         'distro==1.4.0',
         'base58==1.0.0',
         'cffi==1.13.2',
-        'cryptography==3.4.7',
+        'cryptography==39.0.1',
         'protobuf==3.17.2',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
