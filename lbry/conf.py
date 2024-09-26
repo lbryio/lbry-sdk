@@ -574,6 +574,9 @@ class TranscodeConfig(BaseConfig):
 class CLIConfig(TranscodeConfig):
 
     api = String('Host name and port for lbrynet daemon API.', 'localhost:5279', metavar='HOST:PORT')
+    exit_on_disconnect = Toggle(
+        'Shutdown daemon when connection to wallet server closes.', False
+    )
 
     @property
     def api_connection_url(self) -> str:
