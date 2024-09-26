@@ -808,25 +808,34 @@ class Transaction:
             tx.get_base_fee(ledger) +
             tx.get_total_output_sum(ledger)
         )
+        cost_of_change = (
+            tx.get_base_fee(ledger) +
+            Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
+        )
         # value of the inputs less the cost to spend those inputs
         payment = tx.get_effective_input_sum(ledger)
 
         try:
 
-            for _ in range(5):
+            for i in range(2):
 
-                if payment < cost:
+                if payment < cost or (i > 0 and not tx._outputs):
                     deficit = cost - payment
+                    # this condition and the outer range(2) loop cover an edge case
+                    # whereby a single input is just enough to cover the fee and
+                    # has some change left over, but the change left over is less
+                    # than the cost_of_change: thus the input is completely
+                    # consumed and no output is added, which is an invalid tx.
+                    # to be able to spend this input we must increase the cost
+                    # in order to make a change output > DUST.
+                    if i > 0 and not tx._outputs:
+                        deficit += (cost_of_change + DUST + 1)
                     spendables = await ledger.get_spendable_utxos(deficit, funding_accounts)
                     if not spendables:
                         raise InsufficientFundsError()
                     payment += sum(s.effective_amount for s in spendables)
                     tx.add_inputs(s.txi for s in spendables)
 
-                cost_of_change = (
-                    tx.get_base_fee(ledger) +
-                    Output.pay_pubkey_hash(COIN, NULL_HASH32).get_fee(ledger)
-                )
                 if payment > cost:
                     change = payment - cost
                     change_amount = change - cost_of_change
@@ -839,17 +848,11 @@ class Transaction:
 
                 if tx._outputs:
                     break
-                # this condition and the outer range(5) loop cover an edge case
-                # whereby a single input is just enough to cover the fee and
-                # has some change left over, but the change left over is less
-                # than the cost_of_change: thus the input is completely
-                # consumed and no output is added, which is an invalid tx.
-                # to be able to spend this input we must increase the cost
-                # of the TX and run through the balance algorithm a second time
-                # adding an extra input and change output, making tx valid.
-                # we do this 5 times in case the other UTXOs added are also
-                # less than the fee, after 5 attempts we give up and go home
-                cost += cost_of_change + 1
+                # We need to run through the balance algorithm a second time
+                # adding extra inputs and change output, making tx valid.
+
+            if not tx._outputs:
+                raise InsufficientFundsError()
 
             if sign:
                 await tx.sign(funding_accounts)
