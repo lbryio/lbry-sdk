@@ -1655,7 +1655,9 @@ class StreamCommands(ClaimTestCase):
 
         # block channel
         self.assertEqual(0, len(self.conductor.spv_node.server.db.blocked_channels))
-        await self.stream_repost(bad_channel_id, 'block2', '0.1', channel_name='@blocking')
+        blocked_repost_id = self.get_claim_id(
+            await self.stream_repost(bad_channel_id, 'block2', '0.1', channel_name='@blocking')
+        )
         self.assertEqual(1, len(self.conductor.spv_node.server.db.blocked_channels))
 
         # channel, claim in channel or claim individually no longer resolve
@@ -1667,6 +1669,10 @@ class StreamCommands(ClaimTestCase):
         self.assertEqual((await self.resolve('lbry://@bad_channel'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://worse_content'))['error']['name'], 'BLOCKED')
         self.assertEqual((await self.resolve('lbry://@bad_channel/worse_content'))['error']['name'], 'BLOCKED')
+
+        # blocked claim should still show in local claim list
+        claims = await self.claim_list(claim_id=blocked_repost_id, resolve=True)
+        self.assertIn('blocked_repost', claims[0]['meta'])
 
     async def test_publish_updates_file_list(self):
         tx = await self.stream_create(title='created')

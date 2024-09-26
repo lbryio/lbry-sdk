@@ -989,7 +989,13 @@ class Ledger(metaclass=LedgerRegistry):
                 results.append(resolved)
             else:
                 if isinstance(resolved, dict) and 'error' in resolved:
-                    txo.meta['error'] = resolved['error']
+                    if resolved['error'].get('name') == 'BLOCKED' and txo.is_claim and txo.claim.is_repost:
+                        txo.meta['blocked_repost'] = await self.get_claim_by_claim_id(
+                            txo.claim.repost.reference.claim_id,
+                            accounts=accounts
+                        )
+                    else:
+                        txo.meta['error'] = resolved['error']
                 results.append(txo)
         return results
 
