@@ -37,7 +37,7 @@ setup(
         'base58==1.0.0',
         'cffi==1.13.2',
         'cryptography==3.4.7',
-        'protobuf==3.17.2',
+        'protobuf==3.18.3',
         'prometheus_client==0.7.1',
         'ecdsa==0.13.3',
         'pyyaml==5.3.1',
