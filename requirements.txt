@@ -1,0 +1,15 @@
+protobuf==3.17.2
+appdirs==1.4.3
+certifi>=2021.10.8
+colorama==0.3.7
+distro==1.4.0
+aiohttp==3.7.4
+base58==1.0.0
+cffi==1.13.2
+coincurve==15.0.0
+cryptography==3.4.7
+ecdsa==0.13.3
+filetype==1.0.9
+hachoir==3.1.2
+prometheus_client==0.7.1
+pyyaml==5.3.1
