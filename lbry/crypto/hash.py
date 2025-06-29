@@ -15,9 +15,16 @@ def sha512(x):
 
 def ripemd160(x):
     """ Simple wrapper of hashlib ripemd160. """
-    h = hashlib.new('ripemd160')
+    try:
+        h = hashlib.new('ripemd160')
+    except ValueError as e:
+        raise RuntimeError(
+            "Your Python/OpenSSL installation does not support RIPEMD160. "
+            "Try reinstalling Python with full OpenSSL support."
+        ) from e
     h.update(x)
     return h.digest()
+
 
 
 def double_sha256(x):

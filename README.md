@@ -54,3 +54,16 @@ The documentation for the API can be found [here](https://lbry.tech/api/sdk).
 Daemon defaults, ports, and other settings are documented [here](https://lbry.tech/resources/daemon-settings).
 
 Settings can be configured using a daemon-settings.yml file. An example can be found [here](https://github.com/lbryio/lbry-sdk/blob/master/example_daemon_settings.yml).
+
+## Troubleshooting
+
+### Error: unsupported hash type 'ripemd160'
+
+If you see this error when running `lbrynet start`, it likely means your OpenSSL or Python installation is missing RIPEMD160 support.
+
+To fix it:
+
+- Ensure you are using a version of Python compiled with OpenSSL support.
+- On Ubuntu/Debian, try: `sudo apt install libssl-dev` and reinstall Python.
+- Alternatively, use a precompiled Python version (e.g., via `pyenv install 3.8.18` after `libssl-dev` is installed).
+
